@@ -359,6 +359,7 @@ export class ProgramBuilder {
                 await this.logger.time(LogLevel.log, [`Creating package at ${this.options.outFile}`], async () => {
                     await rokuDeploy.zipPackage({
                         ...this.options,
+                        logLevel: this.options.logLevel as LogLevel,
                         outDir: util.getOutDir(this.options),
                         outFile: path.basename(this.options.outFile)
                     });
@@ -374,6 +375,7 @@ export class ProgramBuilder {
         let options = util.cwdWork(this.options.cwd, () => {
             return rokuDeploy.getOptions({
                 ...this.options,
+                logLevel: this.options.logLevel as LogLevel,
                 outDir: util.getOutDir(this.options),
                 outFile: path.basename(this.options.outFile)
             });
@@ -417,6 +419,7 @@ export class ProgramBuilder {
             await this.logger.time(LogLevel.log, ['Deploying package to', this.options.host], async () => {
                 await rokuDeploy.publish({
                     ...this.options,
+                    logLevel: this.options.logLevel as LogLevel,
                     outDir: util.getOutDir(this.options),
                     outFile: path.basename(this.options.outFile)
                 });
