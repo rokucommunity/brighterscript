@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.39.2] - 2021-05-28
+### Changed
+ - upgraded to [roku-deploy@3.4.0](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#340---2021-05-28) which brings significant zip speed improvements
+
+
+
+## [0.39.1] - 2021-05-24
+[0.39.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.39.0...v0.39.1
+### Changed
+ - re-export `CodeActionKind` so plugins don't need to import from vscode-brightscript-language directly.
+### Fixed
+ - code action for "replace" tasks bug
+ - include missing information in the CodeAction construction
+
+
+
 ## [0.39.0] - 2021-05-18
 [0.39.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.38.2...v0.39.0
 ### Added
@@ -1126,3 +1142,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.37.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.2...v0.37.3
 [0.37.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.3...v0.37.4
 [0.38.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.4...v0.38.0
+[0.39.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.38.0...v0.39.0
+[0.39.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.39.0...v0.39.1
+[0.39.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.39.1...v0.39.2
