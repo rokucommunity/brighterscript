@@ -153,6 +153,7 @@ export enum TokenKind {
     New = 'New',
     Override = 'Override',
     Import = 'Import',
+    EndInterface = 'EndInterface',
 
     //brighterscript source literals
     LineNumLiteral = 'LineNumLiteral',
@@ -304,7 +305,9 @@ export const Keywords: Record<string, TokenKind> = {
     catch: TokenKind.Catch,
     endtry: TokenKind.EndTry,
     'end try': TokenKind.EndTry,
-    throw: TokenKind.Throw
+    throw: TokenKind.Throw,
+    'end interface': TokenKind.EndInterface,
+    endinterface: TokenKind.EndInterface
 };
 //hide the constructor prototype method because it causes issues
 Keywords.constructor = undefined;
@@ -319,6 +322,7 @@ export type BlockTerminator =
     | TokenKind.EndSub
     | TokenKind.EndFunction
     | TokenKind.EndNamespace
+    | TokenKind.EndInterface
     | TokenKind.Catch
     | TokenKind.EndTry;
 
@@ -423,7 +427,8 @@ export const AllowedProperties = [
     TokenKind.Try,
     TokenKind.Catch,
     TokenKind.EndTry,
-    TokenKind.Throw
+    TokenKind.Throw,
+    TokenKind.EndInterface
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */

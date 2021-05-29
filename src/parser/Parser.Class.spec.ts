@@ -78,7 +78,7 @@ describe('parser class', () => {
             end sub
         `);
 
-        expect(parser.diagnostics[0]?.message).to.eql(DiagnosticMessages.foundUnexpectedToken('=').message);
+        expect(parser.diagnostics[0]?.message).to.eql(DiagnosticMessages.unexpectedToken('=').message);
     });
 
     it('does not allow function named "throw"', () => {

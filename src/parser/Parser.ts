@@ -15,12 +15,16 @@ import {
     isToken,
     DeclarableTypes
 } from '../lexer';
+
 import type {
     Statement,
     PrintSeparatorTab,
     PrintSeparatorSpace
 } from './Statement';
 import {
+    InterfaceStatement,
+    InterfaceMethodStatement,
+    InterfaceFieldStatement,
     AssignmentStatement,
     Block,
     Body,
@@ -316,6 +320,10 @@ export class Parser {
                 return this.classDeclaration();
             }
 
+            if (this.check(TokenKind.Interface)) {
+                return this.interfaceDeclaration();
+            }
+
             if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
                 return this.functionDeclaration(false);
             }
@@ -351,6 +359,150 @@ export class Parser {
         }
     }
 
+    private identifier(...additionalTokenKinds: TokenKind[]) {
+        const identifier = this.consume(
+            DiagnosticMessages.expectedIdentifier(),
+            TokenKind.Identifier,
+            ...additionalTokenKinds
+        ) as Identifier;
+        // force the name into an identifier so the AST makes some sense
+        identifier.kind = TokenKind.Identifier;
+        return identifier;
+    }
+
+    /**
+     * Create a new InterfaceMethodStatement. This should only be called from within `interfaceDeclaration`
+     */
+    private interfaceFieldStatement() {
+        const name = this.identifier(...AllowedProperties);
+        let asToken = this.consumeToken(TokenKind.As);
+        let typeToken = this.typeToken();
+        const type = util.tokenToBscType(typeToken);
+
+        if (!type) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, typeToken.text),
+                range: typeToken.range
+            });
+            throw this.lastDiagnosticAsError();
+        }
+
+        return new InterfaceFieldStatement(name, asToken, typeToken, type);
+    }
+
+    /**
+     * Create a new InterfaceMethodStatement. This should only be called from within `interfaceDeclaration()`
+     */
+    private interfaceMethodStatement() {
+        const functionType = this.advance();
+        const name = this.identifier(...AllowedProperties);
+        const leftParen = this.consumeToken(TokenKind.LeftParen);
+
+        const params = [];
+        const rightParen = this.consumeToken(TokenKind.RightParen);
+        let asToken = null as Token;
+        let returnTypeToken = null as Token;
+        if (this.check(TokenKind.As)) {
+            asToken = this.advance();
+            returnTypeToken = this.typeToken();
+            const returnType = util.tokenToBscType(returnTypeToken);
+            if (!returnType) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, returnTypeToken.text),
+                    range: returnTypeToken.range
+                });
+                throw this.lastDiagnosticAsError();
+            }
+        }
+
+        return new InterfaceMethodStatement(
+            functionType,
+            name,
+            leftParen,
+            params,
+            rightParen,
+            asToken,
+            returnTypeToken,
+            util.tokenToBscType(returnTypeToken)
+        );
+    }
+
+    private interfaceDeclaration(): InterfaceStatement {
+        this.warnIfNotBrighterScriptMode('interface declarations');
+        const interfaceToken = this.consume(
+            DiagnosticMessages.expectedKeyword(TokenKind.Interface),
+            TokenKind.Interface
+        );
+        const nameToken = this.identifier();
+
+        let extendsToken: Token;
+        let parentInterfaceName: NamespacedVariableNameExpression;
+
+        if (this.peek().text.toLowerCase() === 'extends') {
+            extendsToken = this.advance();
+            parentInterfaceName = this.getNamespacedVariableNameExpression();
+        }
+        this.consumeStatementSeparators();
+        //gather up all interface members (Fields, Methods)
+        let body = [] as Statement[];
+        while (this.checkAny(TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
+            try {
+                let decl: Statement;
+
+                //collect leading annotations
+                if (this.check(TokenKind.At)) {
+                    this.annotationExpression();
+                }
+
+                //fields
+                if (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.As)) {
+                    decl = this.interfaceFieldStatement();
+
+                    //methods (function/sub keyword followed by opening paren)
+                } else if (this.checkAny(TokenKind.Function, TokenKind.Sub) && this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
+                    decl = this.interfaceMethodStatement();
+
+                    //comments
+                } else if (this.check(TokenKind.Comment)) {
+                    decl = this.commentStatement();
+                }
+
+                if (decl) {
+                    this.consumePendingAnnotations(decl);
+                    body.push(decl);
+                } else {
+                    //we didn't find a declaration...flag tokens until next line
+                    this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
+                }
+            } catch (e) {
+                //throw out any failed members and move on to the next line
+                this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
+            }
+
+            //ensure statement separator
+            this.consumeStatementSeparators();
+            //break out of this loop if we encountered the `EndInterface` token not followed by `as`
+            if (this.check(TokenKind.EndInterface) && !this.checkNext(TokenKind.As)) {
+                break;
+            }
+        }
+
+        //consume the final `end interface` token
+        const endInterfaceToken = this.consumeToken(TokenKind.EndInterface);
+
+        this.consumeStatementSeparators();
+
+        const statement = new InterfaceStatement(
+            interfaceToken,
+            nameToken,
+            extendsToken,
+            parentInterfaceName,
+            body,
+            endInterfaceToken
+        );
+        return statement;
+    }
+
     /**
      * A BrighterScript class declaration
      */
@@ -360,7 +512,7 @@ export class Parser {
         const parentAnnotations = this.enterAnnotationBlock();
 
         let classKeyword = this.consume(
-            DiagnosticMessages.expectedClassKeyword(),
+            DiagnosticMessages.expectedKeyword(TokenKind.Class),
             TokenKind.Class
         );
         let extendsKeyword: Token;
@@ -1099,7 +1251,7 @@ export class Parser {
             //consume multiple dot identifiers (i.e. `Name.Space.Can.Have.Many.Parts`)
             while (this.check(TokenKind.Dot)) {
                 let dot = this.tryConsume(
-                    DiagnosticMessages.foundUnexpectedToken(this.peek().text),
+                    DiagnosticMessages.unexpectedToken(this.peek().text),
                     TokenKind.Dot
                 );
                 if (!dot) {
@@ -1130,7 +1282,7 @@ export class Parser {
         while (!this.checkAny(...stopTokens) && !this.isAtEnd()) {
             let token = this.advance();
             this.diagnostics.push({
-                ...DiagnosticMessages.foundUnexpectedToken(token.text),
+                ...DiagnosticMessages.unexpectedToken(token.text),
                 range: token.range
             });
         }
@@ -1218,7 +1370,7 @@ export class Parser {
             this.advance();
         }
 
-        const colonToken = this.tryConsume(DiagnosticMessages.expectedTokenAButFoundTokenB(TokenKind.Colon, this.peek().text), TokenKind.Colon);
+        const colonToken = this.tryConsumeToken(TokenKind.Colon);
 
         //consume newlines
         while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
@@ -1657,7 +1809,7 @@ export class Parser {
                 //error: colon before next keyword
                 const colon = this.previous();
                 this.diagnostics.push({
-                    ...DiagnosticMessages.foundUnexpectedToken(colon.text),
+                    ...DiagnosticMessages.unexpectedToken(colon.text),
                     range: colon.range
                 });
             }
@@ -2069,7 +2221,7 @@ export class Parser {
 
         let nameExpr = this.getNamespacedVariableNameExpression();
         let leftParen = this.consume(
-            DiagnosticMessages.foundUnexpectedToken(this.peek().text),
+            DiagnosticMessages.unexpectedToken(this.peek().text),
             TokenKind.LeftParen
         );
         let call = this.finishCall(leftParen, nameExpr);
@@ -2187,7 +2339,7 @@ export class Parser {
     /**
      * Tries to get the next token as a type
      * Allows for built-in types (double, string, etc.) or namespaced custom types in Brighterscript mode
-     * Will always return a token of whatever is next to be parsed
+     * Will  return a token of whatever is next to be parsed (unless `advanceIfUnknown` is false, in which case undefined will be returned instead
      */
     private typeToken(): Token {
         let typeToken: Token;
@@ -2387,7 +2539,7 @@ export class Parser {
                     //something went wrong...throw an error so the upstream processor can scrap this line and move on
                 } else {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.foundUnexpectedToken(this.peek().text),
+                        ...DiagnosticMessages.unexpectedToken(this.peek().text),
                         range: this.peek().range
                     });
                     throw this.lastDiagnosticAsError();
@@ -2434,6 +2586,13 @@ export class Parser {
         }
     }
 
+    private consumeToken(tokenKind: TokenKind) {
+        return this.consume(
+            DiagnosticMessages.expectedToken(tokenKind),
+            tokenKind
+        );
+    }
+
     /**
      * Consume, or add a message if not found. But then continue and return undefined
      */
@@ -2448,6 +2607,13 @@ export class Parser {
             ...diagnostic,
             range: this.peek().range
         });
+    }
+
+    private tryConsumeToken(tokenKind: TokenKind) {
+        return this.tryConsume(
+            DiagnosticMessages.expectedToken(tokenKind),
+            tokenKind
+        );
     }
 
     private consumeStatementSeparators(optional = false) {
