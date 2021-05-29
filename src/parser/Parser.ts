@@ -316,24 +316,12 @@ export class Parser {
 
     private declaration(): Statement | AnnotationExpression | undefined {
         try {
-            if (this.check(TokenKind.Class)) {
-                return this.classDeclaration();
-            }
-
-            if (this.check(TokenKind.Interface)) {
-                return this.interfaceDeclaration();
-            }
-
             if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
                 return this.functionDeclaration(false);
             }
 
             if (this.checkLibrary()) {
                 return this.libraryStatement();
-            }
-
-            if (this.check(TokenKind.Namespace)) {
-                return this.namespaceStatement();
             }
 
             if (this.check(TokenKind.At) && this.checkNext(TokenKind.Identifier)) {
@@ -1037,6 +1025,19 @@ export class Parser {
             this.checkAnyNext(...AssignmentOperators)
         ) {
             return this.assignment();
+        }
+
+        //some BrighterScript keywords are allowed as a local identifiers, so we need to check for them AFTER the assignment check
+        if (this.check(TokenKind.Interface)) {
+            return this.interfaceDeclaration();
+        }
+
+        if (this.check(TokenKind.Class)) {
+            return this.classDeclaration();
+        }
+
+        if (this.check(TokenKind.Namespace)) {
+            return this.namespaceStatement();
         }
 
         // TODO: support multi-statements
