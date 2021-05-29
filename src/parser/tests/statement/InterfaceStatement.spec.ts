@@ -1,10 +1,8 @@
-import { expect } from 'chai';
-import { expectZeroDiagnostics, getTestGetTypedef } from '../../../testHelpers.spec';
-import { InterfaceStatement } from '../../Statement';
+import { getTestGetTypedef } from '../../../testHelpers.spec';
 import { standardizePath as s } from '../../../util';
 import { Program } from '../../../Program';
 
-describe.only('InterfaceStatement', () => {
+describe('InterfaceStatement', () => {
     const rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
     beforeEach(() => {
