@@ -429,6 +429,9 @@ export class Parser {
 
     private interfaceDeclaration(): InterfaceStatement {
         this.warnIfNotBrighterScriptMode('interface declarations');
+
+        const parentAnnotations = this.enterAnnotationBlock();
+
         const interfaceToken = this.consume(
             DiagnosticMessages.expectedKeyword(TokenKind.Interface),
             TokenKind.Interface
@@ -498,8 +501,11 @@ export class Parser {
             extendsToken,
             parentInterfaceName,
             body,
-            endInterfaceToken
+            endInterfaceToken,
+            this.currentNamespaceName
         );
+        this._references.interfaceStatements.push(statement);
+        this.exitAnnotationBlock(parentAnnotations);
         return statement;
     }
 
@@ -2829,6 +2835,20 @@ export class References {
         return this._functionStatementLookup;
     }
     private _functionStatementLookup: Map<string, FunctionStatement>;
+
+    public interfaceStatements = [] as InterfaceStatement[];
+
+    public get interfaceStatementLookup() {
+        if (!this._interfaceStatementLookup) {
+            this._interfaceStatementLookup = new Map();
+            for (const stmt of this.interfaceStatements) {
+                this._interfaceStatementLookup.set(stmt.fullName.toLowerCase(), stmt);
+            }
+        }
+        return this._interfaceStatementLookup;
+    }
+    private _interfaceStatementLookup: Map<string, InterfaceStatement>;
+
     public importStatements = [] as ImportStatement[];
     public libraryStatements = [] as LibraryStatement[];
     public namespaceStatements = [] as NamespaceStatement[];

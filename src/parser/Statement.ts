@@ -1223,7 +1223,8 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         extendsToken: Token,
         public parentInterfaceName: NamespacedVariableNameExpression,
         public body: Statement[],
-        endInterfaceToken: Token
+        endInterfaceToken: Token,
+        public namespaceName: NamespacedVariableNameExpression
     ) {
         super();
         this.tokens.interface = interfaceToken;
@@ -1249,13 +1250,45 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         return this.body.filter(x => isInterfaceMethodStatement(x));
     }
 
+    /**
+     * The name of the interface WITH its leading namespace (if applicable)
+     */
+    public get fullName() {
+        const name = this.tokens.name?.text;
+        if (name) {
+            if (this.namespaceName) {
+                let namespaceName = this.namespaceName.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this interface doesn't have a name
+            return undefined;
+        }
+    }
+
+    /**
+     * The name of the interface (without the namespace prefix)
+     */
+    public get name() {
+        return this.tokens.name?.text;
+    }
+
     public transpile(state: BrsTranspileState): TranspileResult {
         //interfaces should completely disappear at runtime
         return [];
     }
 
-    getTypedef(state: TranspileState) {
+    getTypedef(state: BrsTranspileState) {
         const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
         result.push(
             this.tokens.interface.text,
             ' ',
@@ -1283,7 +1316,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
                 result.push(
                     state.newline,
                     state.indent(),
-                    ...statement.transpile(state as BrsTranspileState)
+                    ...statement.transpile(state)
                 );
             }
         }
@@ -1344,10 +1377,19 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         //nothing to walk
     }
 
-    getTypedef(state: TranspileState): (string | SourceNode)[] {
-        const result = [
+    getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
+        const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+
+        result.push(
             this.tokens.name.text
-        ];
+        );
         if (this.tokens.type?.text?.length > 0) {
             result.push(
                 ' as ',
@@ -1410,13 +1452,22 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         //nothing to walk
     }
 
-    getTypedef(state: TranspileState) {
-        const result = [
+    getTypedef(state: BrsTranspileState) {
+        const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+
+        result.push(
             this.tokens.functionType.text,
             ' ',
             this.tokens.name.text,
             '('
-        ];
+        );
         const params = this.params ?? [];
         for (let i = 0; i < params.length; i++) {
             if (i > 0) {

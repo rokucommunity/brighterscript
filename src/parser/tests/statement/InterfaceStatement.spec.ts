@@ -51,4 +51,16 @@ describe.only('InterfaceStatement', () => {
             end interface
         `, undefined, undefined, undefined, true);
     });
+
+    it('includes annotations', () => {
+        testGetTypedef(`
+            @IFace
+            interface Person
+                @Method
+                sub someFunc() as string
+                @Field
+                someField as string
+            end interface
+        `, undefined, undefined, undefined, true);
+    });
 });
