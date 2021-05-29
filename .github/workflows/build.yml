@@ -58,5 +58,7 @@ jobs:
         with:
           asset_paths: '["./*.tgz"]'
 
+      #If there's a dash followed by an alpha character, this is a prerelease and should be tagged "next". Otherwise tag as "latest"
+      - run: if [[ "${{ github.ref }}" =~ -[a-zA-Z] ]]; then echo "DIST_TAG=next" >> $GITHUB_ENV; else echo "DIST_TAG=latest" >> $GITHUB_ENV; fi
       #upload to npm
-      - run: npm publish
+      - run: npm publish --tag ${{env.DIST_TAG}}
