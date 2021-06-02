@@ -18,17 +18,17 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isCustomType, isDynamicType } from '../astUtils/reflection';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isCustomType, isDynamicType, isObjectType, isArrayType, isIntegerType, isPrimitiveType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
-import type { BscType } from '../types/BscType';
+import type { BscType, SymbolContainer } from '../types/BscType';
 import { getTypeFromContext } from '../types/BscType';
-import type { CustomType } from '../types/CustomType';
 import { UninitializedType } from '../types/UninitializedType';
 import { InvalidType } from '../types/InvalidType';
 import { globalCallableMap } from '../globalCallables';
 import { DynamicType } from '../types/DynamicType';
+
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -696,10 +696,15 @@ export class BrsFile {
      * @returns A fileLink of the ClassStatement, if it is a class, otherwise undefined
      */
     public getClassFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): FileLink<ClassStatement> | undefined {
-        const currentClass = this.getSymbolTypeFromToken(currentToken, functionExpression, scope)?.currentClass;
+        const currentClass = this.getSymbolTypeFromToken(currentToken, functionExpression, scope)?.symbolContainer;
 
-        if (currentClass) {
-            return { item: currentClass, file: this };
+        if (isClassStatement(currentClass as any)) {
+            return { item: currentClass as ClassStatement, file: this };
+        } else if (isCustomType(currentClass)) {
+            const foundClass = scope.getClass(currentClass.name);
+            if (foundClass) {
+                return { item: foundClass, file: this };
+            }
         }
         return undefined;
     }
@@ -755,30 +760,22 @@ export class BrsFile {
             } else if (func?.functionStatement?.name === currentToken) {
                 // check if this is a method declaration
                 currentClassRef = containingClass;
-                symbolType = containingClass?.symbolTable.getSymbolType(currentTokenLower, true, { file: this, scope: scope });
+                symbolType = containingClass?.memberTable.getSymbolType(currentTokenLower, true, { file: this, scope: scope });
                 expandedText = [containingClass.getName(ParseMode.BrighterScript), currentToken.text].join('.');
             } else if (!func) {
                 // check if this is a field  declaration
                 currentClassRef = containingClass;
-                symbolType = containingClass?.symbolTable.getSymbolType(currentTokenLower, true, { file: this, scope: scope });
+                symbolType = containingClass?.memberTable.getSymbolType(currentTokenLower, true, { file: this, scope: scope });
                 expandedText = [containingClass.getName(ParseMode.BrighterScript), currentToken.text].join('.');
             }
             if (symbolType) {
-                return { type: symbolType, expandedTokenText: expandedText, currentClass: currentClassRef, useExpandedTextOnly: useExpandedTextOnly };
+                return { type: symbolType, expandedTokenText: expandedText, symbolContainer: currentClassRef, useExpandedTextOnly: useExpandedTextOnly };
             }
         }
     }
 
-    /**
-     * Checks previous tokens for the start of a symbol chain (eg. m.property.subProperty.method())
-     * @param currentToken  The token to check
-     * @param functionExpression The current function context
-     * @param scope use this scope for finding class maps
-     * @returns the BscType, expanded text (e.g <Class.field>) and classStatement (if available) for the token
-     */
-    public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): TokenSymbolLookup {
-        const nameSpacedTokenChain = this.findNamespaceFromTokenChain(this.parser.getTokenChain(currentToken), scope);
-        const tokenChain = nameSpacedTokenChain.tokenChain;
+    private checkForSpecialCaseToken(nameSpacedTokenChain: NamespacedTokenChain, functionExpression: FunctionExpression, scope: Scope): TokenSymbolLookup {
+        const tokenChain = nameSpacedTokenChain.tokenChain ?? [];
         if (nameSpacedTokenChain.namespaceContainer && tokenChain.length === 0) {
             //currentToken was part of a namespace
             return {
@@ -791,34 +788,43 @@ export class BrsFile {
         if (specialCase) {
             return specialCase;
         }
+    }
 
-        let containingClass = this.parser.references.getContainingClass(currentToken);
+    /**
+     * Checks previous tokens for the start of a symbol chain (eg. m.property.subProperty.method())
+     * @param currentToken  The token to check
+     * @param functionExpression The current function context
+     * @param scope use this scope for finding class maps
+     * @returns the BscType, expanded text (e.g <Class.field>) and classStatement (if available) for the token
+     */
+    public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): TokenSymbolLookup {
+        const nameSpacedTokenChain = this.findNamespaceFromTokenChain(this.parser.getTokenChain(currentToken), scope);
+        const specialCase = this.checkForSpecialCaseToken(nameSpacedTokenChain, functionExpression, scope);
+        if (specialCase) {
+            return specialCase;
+        }
+        const tokenChain = nameSpacedTokenChain.tokenChain;
+        let symbolContainer: SymbolContainer = this.parser.references.getContainingAA(currentToken) || this.parser.references.getContainingClass(currentToken);
         let currentSymbolTable = nameSpacedTokenChain.namespaceContainer?.symbolTable ?? functionExpression?.symbolTable;
         let tokenFoundCount = 0;
+        let symbolTypeBeforeReference: BscType;
         let symbolType: BscType;
         let tokenText = [];
         const typeContext = { file: this, scope: scope };
-        let currentClassRef: ClassStatement;
 
         for (const token of tokenChain) {
             const tokenLowerText = token.text.toLowerCase();
 
-            if (containingClass && tokenFoundCount === 0) {
+            if (tokenLowerText === 'super' && isClassStatement(symbolContainer as any) && tokenFoundCount === 0) {
                 /// Special cases for first item in chain inside a class
-                if (tokenLowerText === 'm') {
-                    // find the current class for tokenChains starting with "m" - e.g. m.someMethod()
-                    // use the position in the file to determine the current class
-                    currentClassRef = containingClass;
-                    currentSymbolTable = currentClassRef.symbolTable;
-                } else if (tokenLowerText === 'super') {
-                    currentClassRef = scope?.getParentClass(containingClass);
-                    currentSymbolTable = currentClassRef?.symbolTable;
-                    if (currentClassRef && currentSymbolTable) {
-                        tokenText.push(currentClassRef.getName(ParseMode.BrighterScript));
-                        tokenFoundCount++;
-                        continue;
-                    }
+                symbolContainer = scope?.getParentClass(symbolContainer as ClassStatement);
+                currentSymbolTable = (symbolContainer as ClassStatement)?.memberTable;
+                if (symbolContainer && currentSymbolTable) {
+                    tokenText.push((symbolContainer as ClassStatement).getName(ParseMode.BrighterScript));
+                    tokenFoundCount++;
+                    continue;
                 }
+
             }
             if (!currentSymbolTable) {
                 // uh oh... no symbol table to continue to check
@@ -833,31 +839,28 @@ export class BrsFile {
                 // found this symbol, and it's valid. increase found counter
                 tokenFoundCount++;
             }
-            let funcReturnType: BscType;
+            symbolTypeBeforeReference = symbolType;
             if (isFunctionType(symbolType)) {
                 // this is a function, and it is in the start or middle of the chain
                 // the next symbol to check will be the return value of this function
-                funcReturnType = getTypeFromContext(symbolType.returnType, typeContext);
+                symbolType = getTypeFromContext(symbolType.returnType, typeContext);
 
             }
-            if (isCustomType(symbolType) || isCustomType(funcReturnType)) {
-                const classSymbolType = (funcReturnType || symbolType) as CustomType;
-                // we're currently looking at a customType, that has it's own symbol table
-                if (tokenLowerText === 'm' && tokenChain.length === 1) {
-                    // put "m" as the text for chains that are only "m"
-                    tokenText.push(tokenLowerText);
-                } else {
-                    // else use the name of the custom type
-                    // TODO: get proper parent name for methods/fields defined in super classes
-                    tokenText.push(tokenChain.length === 1 ? token.text : classSymbolType.name);
 
-                    // this is a CustomType and it is not "m", so we need to look up the class from the classMap
-                    currentClassRef = scope?.getClassMap().get(classSymbolType.name.toLowerCase())?.item;
-                    currentSymbolTable = currentClassRef?.symbolTable;
+            if (symbolType?.memberTable) {
+                if (isCustomType(symbolType)) {
+                    // we're currently looking at a customType, that has it's own symbol table
+                    // use the name of the custom type
+                    // TODO: get proper parent name for methods/fields defined in super classes
+                    tokenText.push(tokenChain.length === 1 ? token.text : symbolType.name);
+                } else {
+                    tokenText.push(tokenLowerText);
                 }
+                symbolContainer = symbolType as SymbolContainer;
+                currentSymbolTable = symbolContainer?.memberTable;
             } else {
-                // This is not a customType, so there is no class
-                currentClassRef = undefined;
+                // No further symbol tables were found
+                symbolContainer = undefined;
                 tokenText.push(token.text);
                 break;
             }
@@ -869,11 +872,15 @@ export class BrsFile {
         let backUpReturnType: BscType;
         if (tokenFoundCount === tokenChain.length) {
             // did we complete the chain? if so, we have a valid token at the end
-            return { type: symbolType, expandedTokenText: expandedTokenText, currentClass: currentClassRef };
+            return { type: symbolTypeBeforeReference, expandedTokenText: tokenText.join('.'), symbolContainer: symbolContainer };
         }
-        if (isDynamicType(symbolType)) {
+        if (isDynamicType(symbolTypeBeforeReference) || isArrayType(symbolTypeBeforeReference)) {
             // last type in chain is dynamic... so currentToken could be anything.
-            backUpReturnType = symbolType;
+            backUpReturnType = new DynamicType();
+            expandedTokenText = currentToken.text;
+        } else if (isPrimitiveType(symbolTypeBeforeReference)) {
+            // last type in chain is dynamic... so currentToken could be anything.
+            backUpReturnType = new DynamicType();
             expandedTokenText = currentToken.text;
         } else if (tokenChain.length === 1) {
             // variable that has not been assigned
@@ -881,11 +888,13 @@ export class BrsFile {
             backUpReturnType = new UninitializedType();
         } else if (tokenFoundCount === tokenChain.length - 1) {
             // member field that is not known
-            if (currentClassRef) {
+            if (symbolContainer) {
                 backUpReturnType = new InvalidType();
             } else {
-                // TODO: once we have stricter object/node member type checking, we could say this is invalid, but until then, call t dynamic
+                // TODO: once we have stricter object/node member type checking, we could say this is invalid, but until then, call it dynamic
                 backUpReturnType = new DynamicType();
+                expandedTokenText = currentToken.text;
+
             }
         }
         return { type: backUpReturnType, expandedTokenText: expandedTokenText };
@@ -1640,6 +1649,6 @@ interface NamespacedTokenChain {
 interface TokenSymbolLookup {
     type: BscType;
     expandedTokenText: string;
-    currentClass?: ClassStatement;
+    symbolContainer?: SymbolContainer;
     useExpandedTextOnly?: boolean;
 }

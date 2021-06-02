@@ -20,6 +20,7 @@ import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
 import { CustomType } from '../types/CustomType';
 import type { Scope } from '../Scope';
+import type { SymbolContainer } from '../types/BscType';
 
 /**
  * A BrightScript statement
@@ -1104,7 +1105,7 @@ export class LibraryStatement extends Statement implements TypedefProvider {
     }
 }
 
-export class NamespaceStatement extends Statement implements TypedefProvider {
+export class NamespaceStatement extends Statement implements TypedefProvider, SymbolContainer {
     readonly symbolTable: SymbolTable;
 
     constructor(
@@ -1502,8 +1503,9 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 }
 
-export class ClassStatement extends Statement implements TypedefProvider {
+export class ClassStatement extends Statement implements TypedefProvider, SymbolContainer {
     readonly symbolTable: SymbolTable = new SymbolTable();
+    readonly memberTable: SymbolTable = new SymbolTable();
 
     constructor(
         readonly classKeyword: Token,
@@ -1515,10 +1517,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
         readonly end: Token,
         readonly extendsKeyword?: Token,
         readonly parentClassName?: NamespacedVariableNameExpression,
-        readonly namespaceName?: NamespacedVariableNameExpression
+        readonly namespaceName?: NamespacedVariableNameExpression,
+        readonly currentSymbolTable?: SymbolTable
     ) {
         super();
         this.body = this.body ?? [];
+        this.symbolTable.setParent(currentSymbolTable);
 
         this.range = util.createRangeFromPositions(this.classKeyword.range.start, this.end.range.end);
 
@@ -1526,13 +1530,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
             if (isClassMethodStatement(statement)) {
                 this.methods.push(statement);
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
-                const funcType = statement?.func.getFunctionType();
-                funcType.setName(this.getName(ParseMode.BrighterScript) + '.' + statement?.name?.text);
-                this.symbolTable.addSymbol(statement?.name?.text, statement?.range, funcType);
             } else if (isClassFieldStatement(statement)) {
                 this.fields.push(statement);
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
-                this.symbolTable.addSymbol(statement?.name?.text, statement?.range, statement.getType());
             }
         }
 
@@ -1562,7 +1562,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     public readonly range: Range;
 
     public getCustomType(): CustomType {
-        return new CustomType(this.getName(ParseMode.BrighterScript));
+        return new CustomType(this.getName(ParseMode.BrighterScript), this.memberTable);
     }
 
     public getConstructorFunctionType() {
@@ -1573,20 +1573,23 @@ export class ClassStatement extends Statement implements TypedefProvider {
         return constructorFuncType;
     }
 
-    public buildSymbolTable(scope: Scope) {
+    public buildSymbolTable(parentClass?: ClassStatement) {
         this.symbolTable.clear();
         this.symbolTable.addSymbol('m', this.name?.range, this.getCustomType());
-        if (this.parentClassName) {
-            this.symbolTable.addSymbol('super', this.parentClassName?.range, scope?.getParentClass(this)?.getConstructorFunctionType());
+        this.memberTable.clear();
+        if (parentClass) {
+            this.symbolTable.addSymbol('super', this.parentClassName?.range, parentClass.getConstructorFunctionType());
+            this.memberTable.setParent(parentClass?.memberTable);
         }
 
         for (const statement of this.methods) {
+            statement?.func.symbolTable.setParent(this.symbolTable);
             const funcType = statement?.func.getFunctionType();
             funcType.setName(this.getName(ParseMode.BrighterScript) + '.' + statement?.name?.text);
-            this.symbolTable.addSymbol(statement?.name?.text, statement?.range, funcType);
+            this.memberTable.addSymbol(statement?.name?.text, statement?.range, funcType);
         }
         for (const statement of this.fields) {
-            this.symbolTable.addSymbol(statement?.name?.text, statement?.range, statement.getType());
+            this.memberTable.addSymbol(statement?.name?.text, statement?.range, statement.getType());
         }
     }
 

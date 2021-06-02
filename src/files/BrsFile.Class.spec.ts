@@ -13,7 +13,8 @@ import * as fsExtra from 'fs-extra';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { doesNotThrow } from 'assert';
 import type { Scope } from '../Scope';
-import { isFunctionType } from '../astUtils/reflection';
+import { isCustomType, isFunctionType } from '../astUtils/reflection';
+import type { CustomType } from '../types/CustomType';
 
 let sinon = sinonImport.createSandbox();
 
@@ -1458,7 +1459,7 @@ describe('BrsFile BrighterScript classes', () => {
                 const token = klassCode.parser.getTokenAt(position);
                 expect(token.text).to.equal('m');
                 const func = klassCode.getFunctionExpressionAtPosition(position);
-                let klass = klassCode.getSymbolTypeFromToken(token, func, mainScope)?.currentClass;
+                let klass = klassCode.getClassFromToken(token, func, mainScope)?.item;
                 expect(klass).to.exist;
                 expect(klass.getName(ParseMode.BrighterScript)).to.equal('KlassC');
             });
@@ -1468,7 +1469,7 @@ describe('BrsFile BrighterScript classes', () => {
                 const token = klassCode.parser.getTokenAt(position);
                 expect(token.text).to.equal('b');
                 const func = klassCode.getFunctionExpressionAtPosition(position);
-                let klass = klassCode.getSymbolTypeFromToken(token, func, mainScope)?.currentClass;
+                let klass = klassCode.getClassFromToken(token, func, mainScope)?.item;
                 expect(klass).to.exist;
                 expect(klass.getName(ParseMode.BrighterScript)).to.equal('KlassB');
             });
@@ -1478,7 +1479,7 @@ describe('BrsFile BrighterScript classes', () => {
                 const token = klassCode.parser.getTokenAt(position);
                 expect(token.text).to.equal('c');
                 const func = klassCode.getFunctionExpressionAtPosition(position);
-                let klass = klassCode.getSymbolTypeFromToken(token, func, mainScope)?.currentClass;
+                let klass = klassCode.getClassFromToken(token, func, mainScope)?.item;
                 expect(klass).to.exist;
                 expect(klass.getName(ParseMode.BrighterScript)).to.equal('KlassC');
             });
@@ -1488,7 +1489,7 @@ describe('BrsFile BrighterScript classes', () => {
                 const token = klassCode.parser.getTokenAt(position);
                 expect(token.text).to.equal('b');
                 const func = klassCode.getFunctionExpressionAtPosition(position);
-                let klass = klassCode.getSymbolTypeFromToken(token, func, mainScope)?.currentClass;
+                let klass = klassCode.getClassFromToken(token, func, mainScope)?.item;
                 expect(klass).to.exist;
                 expect(klass.getName(ParseMode.BrighterScript)).to.equal('KlassB');
             });
@@ -1499,11 +1500,12 @@ describe('BrsFile BrighterScript classes', () => {
                 const token = klassCode.parser.getTokenAt(position);
                 expect(token.text).to.equal('getA');
                 const func = klassCode.getFunctionExpressionAtPosition(position);
-                let { type, currentClass } = klassCode.getSymbolTypeFromToken(token, func, mainScope);
+                let { type, symbolContainer } = klassCode.getSymbolTypeFromToken(token, func, mainScope);
                 expect(type).to.exist;
                 expect(isFunctionType(type)).to.be.true;
-                expect(currentClass).to.exist;
-                expect(currentClass.getName(ParseMode.BrighterScript)).to.equal('KlassA');
+                expect(symbolContainer).to.exist;
+                expect(isCustomType(symbolContainer)).to.be.true;
+                expect((symbolContainer as CustomType).name).to.equal('KlassA');
             });
 
             it('gets type and class for field from return value of function', () => {
@@ -1511,10 +1513,10 @@ describe('BrsFile BrighterScript classes', () => {
                 const token = klassCode.parser.getTokenAt(position);
                 expect(token.text).to.equal('getInt');
                 const func = klassCode.getFunctionExpressionAtPosition(position);
-                let { type, currentClass } = klassCode.getSymbolTypeFromToken(token, func, mainScope);
+                let { type, symbolContainer } = klassCode.getSymbolTypeFromToken(token, func, mainScope);
                 expect(type).to.exist;
                 expect(isFunctionType(type)).to.be.true;
-                expect(currentClass).to.be.undefined; // getInt() returns integer - no class reference at this point
+                expect(symbolContainer).to.be.undefined; // getInt() returns integer - no class reference at this point
             });
 
         });

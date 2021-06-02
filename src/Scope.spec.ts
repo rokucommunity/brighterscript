@@ -414,12 +414,39 @@ describe('Scope', () => {
             expect(program.getDiagnostics().length).to.equal(0);
         });
 
-        //We don't currently support someObj.callSomething() format, so don't throw errors on those
         it('does not fail on object callables', () => {
             expect(program.getDiagnostics().length).to.equal(0);
             program.setFile('source/file.brs', `
                function DoB()
+                    m.doSomething = sub()
+                    end sub
                     m.doSomething()
+                end function
+            `);
+            //validate the scope
+            program.validate();
+            //shouldn't have any errors
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([]);
+        });
+
+        it('does not fail on primitive type callables', () => {
+            expect(program.getDiagnostics().length).to.equal(0);
+            program.setFile('source/file.brs', `
+                sub takesInt(i as integer)
+                end sub
+
+                sub takesString(s as string)
+                end sub
+
+                function test()
+                    myStr = "1234"
+                    print myStr.toInt()
+                    print myStr.toInt().toStr().trim()
+                    takesString(myStr.toInt().toStr().trim())
+                    myInt = 1234
+                    print myInt.toStr()
+                    print myInt.trim()
+                    takesInt(myInt.trim().toInt())
                 end function
             `);
             //validate the scope
@@ -1253,6 +1280,7 @@ describe('Scope', () => {
                 mainFile = (sourceScope.getAllFiles()[0] as BrsFile);
                 expect(mainFile).not.to.be.undefined;
                 const mainFunc = mainFile.parser.references.functionStatementLookup.get('main').func;
+                sourceScope.linkSymbolTable();
                 mainSymbolTable = mainFunc.symbolTable;
             });
 

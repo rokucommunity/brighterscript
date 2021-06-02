@@ -1,9 +1,11 @@
 import { isBrsFile, isCallExpression, isFunctionType } from '../astUtils/reflection';
-import type { CallExpression, DottedGetExpression, FunctionExpression, VariableExpression } from '../parser/Expression';
+import type { CallExpression, DottedGetExpression, FunctionExpression, NewExpression, VariableExpression } from '../parser/Expression';
 import type { BscType, TypeContext } from './BscType';
 import { LazyType } from './LazyType';
 import type { Token } from '../lexer/Token';
 import { UninitializedType } from './UninitializedType';
+import { ParseMode } from '../parser/Parser';
+import { CustomType } from './CustomType';
 
 /**
  * Gets the return type of a function, taking into account that the function may not have been declared yet
@@ -30,21 +32,7 @@ export function getTypeFromCallExpression(call: CallExpression, functionExpressi
             let futureType = functionExpression.symbolTable.getSymbolType(calleeName.text);
             if (isBrsFile(context?.file)) {
                 const file = context.file;
-                if (context.scope) {
-                    // Scope was passed in.. it is already linked
-                    futureType = file.getSymbolTypeFromToken(calleeName, functionExpression, context.scope)?.type;
-                } else {
-                    const scopes = file.program.getScopesForFile(file);
-                    for (const scope of scopes) {
-                        scope.linkSymbolTable();
-                        futureType = file.getSymbolTypeFromToken(calleeName, functionExpression, scope)?.type;
-                        scope.unlinkSymbolTable();
-                        if (futureType) {
-                            break;
-                        }
-                    }
-                }
-
+                futureType = file.getSymbolTypeFromToken(calleeName, functionExpression, context.scope)?.type;
             }
             if (isFunctionType(futureType)) {
                 return futureType.returnType;
@@ -75,26 +63,29 @@ export function getTypeFromVariableExpression(variable: VariableExpression, func
     });
 }
 
+/**
+ * Gets the type of a variable
+ * if it already exists in symbol table, use that type
+ * otherwise defer the type until first read, which will allow us to derive types from variables defined after this one (like from a loop perhaps)
+ *
+ * @param newExp the Expression to process
+ * @param functionExpression the wrapping function expression
+ * @return the best guess type of that expression
+ */
+export function getTypeFromNewExpression(newExp: NewExpression, functionExpression: FunctionExpression): BscType {
+    let className = newExp.className.getName(ParseMode.BrighterScript);
+    return new LazyType((context?: TypeContext) => {
+        return new CustomType(className, context?.scope?.getClass(className, functionExpression.namespaceName?.getName())?.memberTable);
+    });
+}
+
 
 function resolveLazyType(currentToken: Token, functionExpression: FunctionExpression) {
     return new LazyType((context?: TypeContext) => {
         let futureType = new UninitializedType();
         if (isBrsFile(context?.file)) {
             const file = context.file;
-            if (context.scope) {
-                // Scope was passed in.. it is already linked
-                futureType = file.getSymbolTypeFromToken(currentToken, functionExpression, context.scope)?.type;
-            } else {
-                const scopes = file.program.getScopesForFile(file);
-                for (const scope of scopes) {
-                    scope.linkSymbolTable();
-                    futureType = file.getSymbolTypeFromToken(currentToken, functionExpression, scope)?.type;
-                    scope.unlinkSymbolTable();
-                    if (futureType) {
-                        break;
-                    }
-                }
-            }
+            futureType = file.getSymbolTypeFromToken(currentToken, functionExpression, context.scope)?.type;
         }
         return futureType;
     });

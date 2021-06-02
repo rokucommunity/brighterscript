@@ -5,7 +5,7 @@ import { Parser, ParseMode } from './Parser';
 import type { FunctionStatement, AssignmentStatement, ClassFieldStatement } from './Statement';
 import { ClassStatement } from './Statement';
 import { NewExpression } from './Expression';
-import { isBooleanType, isFunctionType, isIntegerType, isStringType } from '../astUtils/reflection';
+import { isBooleanType, isCustomType, isFunctionType, isIntegerType, isStringType } from '../astUtils/reflection';
 
 describe('parser class', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -433,7 +433,7 @@ describe('parser class', () => {
             expect(parser.symbolTable.getSymbolType('sleep')).to.be.undefined;
         });
 
-        it('adds methods to class statement symbol table', () => {
+        it('adds m to class statement symbol table after building', () => {
             let parser = Parser.parse(`
                 class Animal
 
@@ -446,12 +446,59 @@ describe('parser class', () => {
                 end class
             `, { mode: ParseMode.BrighterScript });
             let classStatement = parser.statements[0] as ClassStatement;
+            classStatement.buildSymbolTable();
             expect(classStatement.symbolTable).to.exist;
-            expect(isFunctionType(classStatement.symbolTable.getSymbolType('eat'))).to.be.true;
-            expect(isFunctionType(classStatement.symbolTable.getSymbolType('sleep'))).to.be.true;
+            expect(isCustomType(classStatement.symbolTable.getSymbolType('m'))).to.be.true;
         });
 
-        it('adds fields to class statement symbol table', () => {
+        it('adds super for sub classes to class statement symbol table after building', () => {
+            let parser = Parser.parse(`
+                class Animal
+
+                    sub eat()
+                    end sub
+
+                    sub sleep()
+                    end sub
+
+                end class
+
+                class Dog
+
+                    sub woof()
+                    end sub
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            let animalClassStmt = parser.statements[0] as ClassStatement;
+            let dogClassStmt = parser.statements[1] as ClassStatement;
+            animalClassStmt.buildSymbolTable();
+            dogClassStmt.buildSymbolTable(animalClassStmt);
+            expect(dogClassStmt.symbolTable).to.exist;
+            expect(isFunctionType(dogClassStmt.symbolTable.getSymbolType('super'))).to.be.true;
+            expect(isFunctionType(dogClassStmt.memberTable.getSymbolType('woof'))).to.be.true;
+            expect(isFunctionType(dogClassStmt.memberTable.getSymbolType('sleep'))).to.be.true;
+        });
+
+        it('adds methods to class statement member symbol table after building', () => {
+            let parser = Parser.parse(`
+                class Animal
+
+                    sub eat()
+                    end sub
+
+                    sub sleep()
+                    end sub
+
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            let classStatement = parser.statements[0] as ClassStatement;
+            classStatement.buildSymbolTable();
+            expect(classStatement.memberTable).to.exist;
+            expect(isFunctionType(classStatement.memberTable.getSymbolType('eat'))).to.be.true;
+            expect(isFunctionType(classStatement.memberTable.getSymbolType('sleep'))).to.be.true;
+        });
+
+        it('adds fields to class statement member symbol table after building', () => {
             let parser = Parser.parse(`
                 class Animal
 
@@ -462,10 +509,11 @@ describe('parser class', () => {
                 end class
             `, { mode: ParseMode.BrighterScript });
             let classStatement = parser.statements[0] as ClassStatement;
-            expect(classStatement.symbolTable).to.exist;
-            expect(isIntegerType(classStatement.symbolTable.getSymbolType('teethCount'))).to.be.true;
-            expect(isStringType(classStatement.symbolTable.getSymbolType('furType'))).to.be.true;
-            expect(isBooleanType(classStatement.symbolTable.getSymbolType('hasWings'))).to.be.true;
+            classStatement.buildSymbolTable();
+            expect(classStatement.memberTable).to.exist;
+            expect(isIntegerType(classStatement.memberTable.getSymbolType('teethCount'))).to.be.true;
+            expect(isStringType(classStatement.memberTable.getSymbolType('furType'))).to.be.true;
+            expect(isBooleanType(classStatement.memberTable.getSymbolType('hasWings'))).to.be.true;
         });
     });
 });

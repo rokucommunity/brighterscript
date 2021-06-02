@@ -7,14 +7,14 @@ import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableC
 import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
-import { ParseMode } from './parser';
+import { ParseMode, getBscTypeFromExpression } from './parser';
 import { standardizePath as s, util } from './util';
 import type { MinMax } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isInvalidType, isDynamicType } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isInvalidType, isDynamicType, isVariableExpression } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { SymbolTable } from './SymbolTable';
@@ -517,7 +517,8 @@ export class Scope {
     public get symbolTable() {
         if (!this._symbolTable) {
             this._symbolTable = new SymbolTable(this.getParentScope()?.symbolTable);
-            this._symbolTable.addSymbol('m', null, new ObjectType());
+            this._memberTable = new SymbolTable(this.getParentScope()?.memberTable);
+            this._symbolTable.addSymbol('m', null, new ObjectType(this._memberTable));
 
             for (let file of this.getOwnFiles()) {
                 if (isBrsFile(file)) {
@@ -528,6 +529,11 @@ export class Scope {
         return this._symbolTable;
     }
     private _symbolTable: SymbolTable;
+    private _memberTable: SymbolTable;
+
+    public get memberTable() {
+        return this._memberTable;
+    }
 
     private clearSymbolTable() {
         this._symbolTable = null;
@@ -541,12 +547,23 @@ export class Scope {
     public linkSymbolTable() {
         for (const file of this.getOwnFiles()) {
             if (isBrsFile(file)) {
-                file.parser?.symbolTable.setParent(this.symbolTable);
+                file.parser.symbolTable.setParent(this.symbolTable);
 
                 for (const namespace of file.parser.references.namespaceStatements) {
                     const namespaceNameLower = namespace.nameExpression.getName(ParseMode.BrighterScript).toLowerCase();
                     const namespaceSymbolTable = this.namespaceLookup[namespaceNameLower].symbolTable;
                     namespace.symbolTable.setParent(namespaceSymbolTable);
+                }
+                //TODO: build symbol tables for dotted set assignments?
+                // eg. m.key = "value"
+
+                for (const dotSetStmt of file.parser.references.dottedSetStatements) {
+                    if (isVariableExpression(dotSetStmt.obj)) {
+                        if (dotSetStmt.obj.getName(ParseMode.BrighterScript).toLowerCase() === 'm') {
+                            this.memberTable.addSymbol(dotSetStmt.name.text, dotSetStmt.range,
+                                getBscTypeFromExpression(dotSetStmt.value, file.parser.references.getContainingFunctionExpression(dotSetStmt.name)));
+                        }
+                    }
                 }
             }
         }
@@ -554,12 +571,7 @@ export class Scope {
         const classMap = this.getClassMap();
         for (const pair of classMap) {
             const classStmt = pair[1]?.item;
-            classStmt.buildSymbolTable(this);
-            if (classStmt?.hasParentClass()) {
-                const parentClass = this.getParentClass(classStmt);
-                // set the parent of the class's symbol table to the symbol table of the class it extends
-                classStmt.symbolTable.setParent(parentClass?.symbolTable);
-            }
+            classStmt.buildSymbolTable(this.getParentClass(classStmt));
         }
     }
 
@@ -574,12 +586,6 @@ export class Scope {
             }
         }
 
-        // also unlink classes
-        const classMap = this.getClassMap();
-        for (const pair of classMap) {
-            const fileLink = pair[1];
-            fileLink?.item.symbolTable.setParent(null);
-        }
     }
 
     private detectVariableNamespaceCollisions(file: BrsFile) {

@@ -1,5 +1,5 @@
 import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement } from '../parser/Statement';
-import type { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression } from '../parser/Expression';
+import type { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { BscFile } from '../interfaces';
@@ -192,6 +192,9 @@ export function isArrayLiteralExpression(element: Statement | Expression | undef
 export function isAALiteralExpression(element: Statement | Expression | undefined): element is AALiteralExpression {
     return element?.constructor.name === 'AALiteralExpression';
 }
+export function isAAMemberExpression(element: Statement | Expression | undefined): element is AAMemberExpression {
+    return element?.constructor.name === 'AAMemberExpression';
+}
 export function isUnaryExpression(element: Statement | Expression | undefined): element is UnaryExpression {
     return element?.constructor.name === 'UnaryExpression';
 }
@@ -245,6 +248,9 @@ export function isFloatType(e: any): e is FloatType {
 }
 export function isDoubleType(e: any): e is DoubleType {
     return e?.constructor.name === 'DoubleType';
+}
+export function isPrimitiveType(e: any) {
+    return isBooleanType(e) || isIntegerType(e) || isFloatType(e) || isDoubleType(e) || isStringType(e) || isLongIntegerType(e);
 }
 export function isInvalidType(e: any): e is InvalidType {
     return e?.constructor.name === 'InvalidType';

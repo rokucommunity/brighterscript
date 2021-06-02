@@ -97,9 +97,8 @@ import type { BscType } from '../types/BscType';
 import { DynamicType } from '../types/DynamicType';
 import { SymbolTable } from '../SymbolTable';
 import { ObjectType } from '../types/ObjectType';
-import { CustomType } from '../types/CustomType';
 import { ArrayType } from '../types/ArrayType';
-import { getTypeFromCallExpression, getTypeFromDottedGetExpression, getTypeFromVariableExpression } from '../types/helpers';
+import { getTypeFromCallExpression, getTypeFromDottedGetExpression, getTypeFromNewExpression, getTypeFromVariableExpression } from '../types/helpers';
 
 export class Parser {
     /**
@@ -632,7 +631,8 @@ export class Parser {
             endingKeyword,
             extendsKeyword,
             parentClassName,
-            this.currentNamespaceName
+            this.currentNamespaceName,
+            this.currentSymbolTable
         );
         if (className) {
             this.currentSymbolTable.addSymbol(className.text, className.range, result.getConstructorFunctionType());
@@ -1940,13 +1940,15 @@ export class Parser {
                     left.closingSquare
                 );
             } else if (isDottedGetExpression(left)) {
-                return new DottedSetStatement(
+                const dottedSetStmt = new DottedSetStatement(
                     left.obj,
                     left.name,
                     operator.kind === TokenKind.Equal
                         ? right
                         : new BinaryExpression(left, operator, right)
                 );
+                this._references.dottedSetStatements.push(dottedSetStmt);
+                return dottedSetStmt;
             }
         }
         return this.expressionStatement(expr);
@@ -2545,7 +2547,8 @@ export class Parser {
                         lastAAMember = new AAMemberExpression(
                             k.keyToken,
                             k.colonToken,
-                            expr
+                            expr,
+                            getBscTypeFromExpression(expr, this.currentFunctionExpression)
                         );
                         members.push(lastAAMember);
                     }
@@ -2579,7 +2582,8 @@ export class Parser {
                             lastAAMember = new AAMemberExpression(
                                 k.keyToken,
                                 k.colonToken,
-                                expr
+                                expr,
+                                getBscTypeFromExpression(expr, this.currentFunctionExpression)
                             );
                             members.push(lastAAMember);
                         }
@@ -2593,7 +2597,8 @@ export class Parser {
 
                 let closingBrace = this.previous();
 
-                const aaExpr = new AALiteralExpression(members, openingBrace, closingBrace);
+                const aaExpr = new AALiteralExpression(members, openingBrace, closingBrace, this.currentFunctionExpression);
+                this._references.aaLiterals.push(aaExpr);
                 this.addPropertyHints(aaExpr);
                 return aaExpr;
             case this.matchAny(TokenKind.Pos, TokenKind.Tab):
@@ -3041,6 +3046,8 @@ export interface ParseOptions {
 export class References {
     public assignmentStatements = [] as AssignmentStatement[];
     public classStatements = [] as ClassStatement[];
+    public dottedSetStatements = [] as DottedSetStatement[];
+    public aaLiterals = [] as AALiteralExpression[];
 
     public get classStatementLookup() {
         if (!this._classStatementLookup) {
@@ -3091,8 +3098,14 @@ export class References {
     public getContainingClass(currentToken: Token): ClassStatement {
         return this.classStatements.find((cs) => util.rangeContains(cs.range, currentToken.range.start));
     }
+    public getContainingAA(currentToken: Token): AALiteralExpression {
+        return this.aaLiterals.find((aa) => util.rangeContains(aa.range, currentToken.range.start));
+    }
     public getContainingNamespace(currentToken: Token): NamespaceStatement {
         return this.namespaceStatements.find((cs) => util.rangeContains(cs.range, currentToken.range.start));
+    }
+    public getContainingFunctionExpression(currentToken: Token): FunctionExpression {
+        return this.functionExpressions.find((fe) => util.rangeContains(fe.range, currentToken.range.start));
     }
 }
 
@@ -3124,13 +3137,13 @@ export function getBscTypeFromExpression(expression: Expression, functionExpress
             return expression.type;
             //Associative array literal
         } else if (isAALiteralExpression(expression)) {
-            return new ObjectType();
+            return new ObjectType(expression.symbolTable);
             //Array literal
         } else if (isArrayLiteralExpression(expression)) {
             return new ArrayType();
             //function call
         } else if (isNewExpression(expression)) {
-            return new CustomType(expression.className.getName(ParseMode.BrighterScript));
+            return getTypeFromNewExpression(expression, functionExpression); // new CustomType(expression.className.getName(ParseMode.BrighterScript));
             //Function call
         } else if (isCallExpression(expression)) {
             return getTypeFromCallExpression(expression, functionExpression);

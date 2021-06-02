@@ -772,7 +772,7 @@ describe('parser', () => {
             expect(statements[0]).to.be.instanceof(ImportStatement);
         });
 
-        it('catchs missing file path', () => {
+        it('catches missing file path', () => {
             let { statements, diagnostics } = parse(`
                 import
             `, ParseMode.BrighterScript);
