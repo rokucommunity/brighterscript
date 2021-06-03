@@ -2916,15 +2916,23 @@ export class Parser {
             currentToken = this.getPreviousToken(currentToken);
         }
         let functionParenCount = 0;
-        if (currentToken?.kind === TokenKind.RightParen) {
+
+        function isRightBracket(token: Token): boolean {
+            return token?.kind === TokenKind.RightParen || token?.kind === TokenKind.RightSquareBracket;
+        }
+        function isLeftBracket(token: Token): boolean {
+            return token?.kind === TokenKind.LeftParen || token?.kind === TokenKind.LeftSquareBracket;
+        }
+
+        if (isRightBracket(currentToken)) {
             functionParenCount++;
         }
         while (currentToken && functionParenCount > 0) {
             currentToken = this.getPreviousToken(currentToken);
-            if (currentToken?.kind === TokenKind.RightParen) {
+            if (isRightBracket(currentToken)) {
                 functionParenCount++;
             }
-            if (currentToken?.kind === TokenKind.LeftParen) {
+            if (isLeftBracket(currentToken)) {
                 functionParenCount--;
                 currentToken = this.getPreviousToken(currentToken);
             }

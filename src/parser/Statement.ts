@@ -19,7 +19,6 @@ import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
 import { CustomType } from '../types/CustomType';
-import type { Scope } from '../Scope';
 import type { SymbolContainer } from '../types/BscType';
 
 /**
@@ -1105,7 +1104,7 @@ export class LibraryStatement extends Statement implements TypedefProvider {
     }
 }
 
-export class NamespaceStatement extends Statement implements TypedefProvider, SymbolContainer {
+export class NamespaceStatement extends Statement implements TypedefProvider {
     readonly symbolTable: SymbolTable;
 
     constructor(

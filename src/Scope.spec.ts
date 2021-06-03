@@ -455,6 +455,76 @@ describe('Scope', () => {
             expect(program.getDiagnostics().map(x => x.message)).to.eql([]);
         });
 
+        it('does not fail on using fields of objects', () => {
+            expect(program.getDiagnostics().length).to.equal(0);
+            program.setFile('source/file.brs', `
+                sub takesInt(i as integer)
+                end sub
+
+                sub takesObj(obj as object)
+                  age = obj.age
+                  takesInt(obj.age)
+                  takesInt(age)
+                end sub
+            `);
+            //validate the scope
+            program.validate();
+            //shouldn't have any errors
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([]);
+        });
+
+
+        it('does not fail on using array values ', () => {
+            expect(program.getDiagnostics().length).to.equal(0);
+            program.setFile('source/file.brs', `
+                sub takesInt(i as integer)
+                end sub
+
+                sub takesArray(arr as object)
+                    myArray = [1,2,3]
+                    takesInt(arr[2])
+                    takesInt(myArray[2])
+                    arrVal = arr[2]
+                    myArrayVal = myArray[2]
+                    takesInt(arrVal)
+                    takesInt(myArrayVal)
+                end sub
+            `);
+            //validate the scope
+            program.validate();
+            //shouldn't have any errors
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([]);
+        });
+
+        it('does not fail on calling functions on objects', () => {
+            expect(program.getDiagnostics().length).to.equal(0);
+            program.setFile('source/file.brs', `
+                sub takesObj(obj as object)
+                  obj.someFunc()
+                  obj.field.SomeFunc()
+                end sub
+            `);
+            //validate the scope
+            program.validate();
+            //shouldn't have any errors
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([]);
+        });
+
+        it('does not fail on calling functions on array objects', () => {
+            expect(program.getDiagnostics().length).to.equal(0);
+            program.setFile('source/file.brs', `
+                sub takesArray(arr as object)
+                  arr.someFunc()
+                  arr[0].anotherFunc()
+                  arr[0].field.anotherFunc()
+                end sub
+            `);
+            //validate the scope
+            program.validate();
+            //shouldn't have any errors
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([]);
+        });
+
         it('detects calling functions with too many parameters', () => {
             program.setFile('source/file.brs', `
                 sub a()

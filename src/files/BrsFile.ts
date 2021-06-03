@@ -18,7 +18,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isCustomType, isDynamicType, isObjectType, isArrayType, isIntegerType, isPrimitiveType } from '../astUtils/reflection';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isCustomType, isDynamicType, isObjectType, isArrayType, isPrimitiveType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -810,6 +810,7 @@ export class BrsFile {
         let symbolTypeBeforeReference: BscType;
         let symbolType: BscType;
         let tokenText = [];
+        let justReturnDynamic = false;
         const typeContext = { file: this, scope: scope };
 
         for (const token of tokenChain) {
@@ -858,6 +859,14 @@ export class BrsFile {
                 }
                 symbolContainer = symbolType as SymbolContainer;
                 currentSymbolTable = symbolContainer?.memberTable;
+            } else if (isObjectType(symbolType) || isArrayType(symbolType)) {
+                // this is an object that has no member table
+                // this could happen if a parameter is marked as object
+                // assume all fields are dynamic
+                symbolContainer = undefined;
+                tokenText.push(token.text);
+                justReturnDynamic = true;
+                break;
             } else {
                 // No further symbol tables were found
                 symbolContainer = undefined;
@@ -874,7 +883,7 @@ export class BrsFile {
             // did we complete the chain? if so, we have a valid token at the end
             return { type: symbolTypeBeforeReference, expandedTokenText: tokenText.join('.'), symbolContainer: symbolContainer };
         }
-        if (isDynamicType(symbolTypeBeforeReference) || isArrayType(symbolTypeBeforeReference)) {
+        if (isDynamicType(symbolTypeBeforeReference) || isArrayType(symbolTypeBeforeReference) || justReturnDynamic) {
             // last type in chain is dynamic... so currentToken could be anything.
             backUpReturnType = new DynamicType();
             expandedTokenText = currentToken.text;

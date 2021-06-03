@@ -6,7 +6,7 @@ import type { AssignmentStatement, ClassStatement, Statement } from './Statement
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isLazyType } from '../astUtils/reflection';
+import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isLazyType, isUninitializedType } from '../astUtils/reflection';
 import { expectSymbolTableEquals, expectZeroDiagnostics } from '../testHelpers.spec';
 import { VoidType } from '../types/VoidType';
 import { FunctionType } from '../types/FunctionType';
@@ -1235,7 +1235,7 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(parser.diagnostics);
             const addOneSymbolTable = parser.references.functionExpressions[0].childFunctionExpressions[0].symbolTable;
-            expect(addOneSymbolTable.getSymbolType('oldVal')).to.be.undefined;
+            expect(isUninitializedType(addOneSymbolTable.getSymbolType('oldVal'))).to.be.true;
         });
 
         it('finds params', () => {
@@ -1329,6 +1329,18 @@ describe('parser', () => {
             const tokenChain = parser.getTokenChain(childFieldToken);
             expect(tokenChain.length).to.equal(4);
             expect(tokenChain.map(token => token.text)).to.eql(['var', 'field', 'funcCall', 'childField']);
+        });
+
+        it('can find a chain of tokens with array references inside', () => {
+            const parser = parse(`
+            sub someFunc()
+                print var.field.myArray[0].childField
+            end sub
+            `, ParseMode.BrighterScript);
+            const childFieldToken = parser.getTokenAt(Position.create(2, 50));
+            const tokenChain = parser.getTokenChain(childFieldToken);
+            expect(tokenChain.length).to.equal(4);
+            expect(tokenChain.map(token => token.text)).to.eql(['var', 'field', 'myArray', 'childField']);
         });
     });
 });
