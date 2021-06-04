@@ -27,6 +27,17 @@ export class SymbolTable {
     }
 
     /**
+     * Get list of all symbols declared in this SymbolTable (includes parent SymbolTable).
+     */
+    public get allSymbols(): BscSymbol[] {
+        let symbols = this.ownSymbols;
+        if (this.parent) {
+            symbols = symbols.concat(this.parent.allSymbols);
+        }
+        return symbols;
+    }
+
+    /**
      * Sets the parent table for lookups
      *
      * @param [parent]
@@ -135,7 +146,6 @@ export class SymbolTable {
             }
         }
     }
-
 
     clear() {
         this.symbolMap.clear();

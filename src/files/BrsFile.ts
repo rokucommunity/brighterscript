@@ -28,6 +28,7 @@ import { UninitializedType } from '../types/UninitializedType';
 import { InvalidType } from '../types/InvalidType';
 import { globalCallableMap } from '../globalCallables';
 import { DynamicType } from '../types/DynamicType';
+import type { SymbolTable } from '../SymbolTable';
 
 
 /**
@@ -596,7 +597,11 @@ export class BrsFile {
             if (selfClassMemberCompletions.size > 0) {
                 return [...selfClassMemberCompletions.values()].filter((i) => i.label !== 'new');
             }
-            const foundClassLink = this.getClassFromToken(currentToken, functionExpression, scope);
+            const tokenLookup = this.getSymbolTypeFromToken(currentToken, functionExpression, scope);
+            if (tokenLookup.symbolContainer?.memberTable) {
+                return this.getCompletionsFromSymbolTable(tokenLookup.symbolContainer.memberTable);
+            }
+            const foundClassLink = this.getClassFromTokenLookup(tokenLookup, scope);
             if (!foundClassLink) {
                 //and anything from any class in scope to a non m class
                 let classMemberCompletions = scope.getAllClassMemberCompletions();
@@ -661,6 +666,15 @@ export class BrsFile {
         return result;
     }
 
+    private getCompletionsFromSymbolTable(symbolTable: SymbolTable) {
+        return symbolTable.allSymbols.map(bscType => {
+            return {
+                label: bscType.name,
+                kind: isFunctionType(bscType.type) ? CompletionItemKind.Method : CompletionItemKind.Field
+            };
+        });
+    }
+
     private getLabelCompletion(func: FunctionExpression) {
         return func.labelStatements.map(label => ({
             label: label.tokens.identifier.text,
@@ -696,7 +710,19 @@ export class BrsFile {
      * @returns A fileLink of the ClassStatement, if it is a class, otherwise undefined
      */
     public getClassFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): FileLink<ClassStatement> | undefined {
-        const currentClass = this.getSymbolTypeFromToken(currentToken, functionExpression, scope)?.symbolContainer;
+        const tokenLookup = this.getSymbolTypeFromToken(currentToken, functionExpression, scope);
+        return this.getClassFromTokenLookup(tokenLookup, scope);
+    }
+
+    /**
+     * Gets the class (if any) of a given token based on the scope
+     * @param currentToken token in question
+     * @param functionExpression current functionExpression
+     * @param scope the current scope
+     * @returns A fileLink of the ClassStatement, if it is a class, otherwise undefined
+     */
+    public getClassFromTokenLookup(tokenLookup: TokenSymbolLookup, scope: Scope): FileLink<ClassStatement> | undefined {
+        const currentClass = tokenLookup?.symbolContainer;
 
         if (isClassStatement(currentClass as any)) {
             return { item: currentClass as ClassStatement, file: this };
@@ -855,7 +881,7 @@ export class BrsFile {
                     // TODO: get proper parent name for methods/fields defined in super classes
                     tokenText.push(tokenChain.length === 1 ? token.text : symbolType.name);
                 } else {
-                    tokenText.push(tokenLowerText);
+                    tokenText.push(token.text);
                 }
                 symbolContainer = symbolType as SymbolContainer;
                 currentSymbolTable = symbolContainer?.memberTable;

@@ -846,7 +846,12 @@ export class Program {
 
         //get the completions from all scopes for this file
         let allCompletions = util.flatMap(
-            scopes.map(ctx => file.getCompletions(position, ctx)),
+            scopes.map(ctx => {
+                ctx.linkSymbolTable();
+                const completions = file.getCompletions(position, ctx);
+                ctx.unlinkSymbolTable();
+                return completions;
+            }),
             c => c
         );
 
@@ -987,9 +992,10 @@ export class Program {
             //if m class reference.. then
             //only get statements from the class I am in..
             if (functionExpression) {
+                const currentToken = file.parser.getTokenAt(position);
                 for (let scope of this.getScopesForFile(file)) {
                     scope.linkSymbolTable();
-                    let myClass = file.getClassFromToken(file.parser.getTokenAt(position), functionExpression, scope);
+                    let myClass = file.getClassFromToken(currentToken, functionExpression, scope);
                     if (myClass) {
                         let classes = scope.getClassHierarchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
                         //and anything from any class in scope to a non m class

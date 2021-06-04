@@ -3145,7 +3145,7 @@ export function getBscTypeFromExpression(expression: Expression, functionExpress
             return expression.type;
             //Associative array literal
         } else if (isAALiteralExpression(expression)) {
-            return new ObjectType(expression.symbolTable);
+            return new ObjectType(expression.memberTable);
             //Array literal
         } else if (isArrayLiteralExpression(expression)) {
             return new ArrayType();

@@ -285,6 +285,37 @@ describe('BrsFile', () => {
             expect(results.length).to.equal(1);
             expect(results[0]?.label).to.equal('something');
         });
+
+
+        it('includes properties of objects', () => {
+            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+            program.setFile('source/main.brs', `
+                sub Main()
+                    myObj = {name:"Bob", age: 34, height:6.0}
+                    myObj.
+                end sub
+            `);
+
+            let result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 26));
+            let names = result.map(x => x.label);
+            expect(names).to.contain('name');
+            expect(names).to.contain('age');
+            expect(names).to.contain('height');
+        });
+
+        it('includes properties of m', () => {
+            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+            program.setFile('source/main.brs', `
+                sub Main()
+                    m.someField= "hello"
+                    m.
+                end sub
+            `);
+
+            let result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 22));
+            let names = result.map(x => x.label);
+            expect(names).to.contain('someField');
+        });
     });
 
     describe('comment flags', () => {
