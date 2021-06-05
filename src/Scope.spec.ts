@@ -1370,6 +1370,69 @@ describe('Scope', () => {
             });
         });
 
+        it('can get fields on m from various files in component', () => {
+            program = new Program({ rootDir: rootDir });
+
+            program.setFile('components/comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp" extends="Scene">
+                    <script uri="comp.brs"/>
+                    <script uri="comp.file1.brs"/>
+                    <script uri="comp.file2.brs"/>
+                    <script uri="comp.file3.brs"/>
+                    <script uri="comp.helpers.brs"/>
+                    <children>
+                      <Label id="myLabel" />
+                    </children>
+                </component>
+            `);
+            program.setFile(s`components/comp.brs`, `
+                sub init()
+                  m.name = "hello"
+                  m.label = m.top.findNode("myLabel")
+                  m.assignedTwice = "test"
+                  m.someObj = {foo: "bar"}
+                end sub
+            `);
+            program.setFile(s`components/comp.file1.brs`, `
+                sub func1()
+                  m.age = 13
+                  m.pi = getPi()
+                end sub
+            `);
+            program.setFile(s`components/comp.file2.brs`, `
+                sub func2()
+                  m.someObj.foo = getString()
+                end sub
+
+            `);
+            program.setFile(s`components/comp.file3.brs`, `
+                sub func3()
+                  m.assignedTwice = 123
+                end sub
+            `);
+            program.setFile(s`components/comp.helpers.brs`, `
+                function getPi() as float
+                    return 3.14
+                end function
+
+                function getString() as string
+                    return "hello"
+                end function
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            let result = program.getCompletions(`${rootDir}/components/comp.file3.brs`, Position.create(2, 20));
+            let properties = result.map(x => x.label);
+            expect(properties).to.contain('top');
+            expect(properties).to.contain('name');
+            expect(properties).to.contain('someObj');
+            expect(properties).to.contain('assignedTwice');
+            expect(properties).to.contain('label');
+            expect(properties).to.contain('pi');
+        });
+
     });
     describe('buildNamespaceLookup', () => {
         it('does not crash when class statement is missing `name` prop', () => {

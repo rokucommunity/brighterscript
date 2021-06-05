@@ -514,12 +514,11 @@ export class Scope {
         this.clearSymbolTable();
     }
 
+
     public get symbolTable() {
         if (!this._symbolTable) {
             this._symbolTable = new SymbolTable(this.getParentScope()?.symbolTable);
-            this._memberTable = new SymbolTable(this.getParentScope()?.memberTable);
-            this._symbolTable.addSymbol('m', null, new ObjectType(this._memberTable));
-
+            this._symbolTable.addSymbol('m', null, new ObjectType(this.memberTable));
             for (let file of this.getOwnFiles()) {
                 if (isBrsFile(file)) {
                     this._symbolTable.mergeSymbolTable(file.parser?.symbolTable);
@@ -529,9 +528,12 @@ export class Scope {
         return this._symbolTable;
     }
     private _symbolTable: SymbolTable;
-    private _memberTable: SymbolTable;
+    protected _memberTable: SymbolTable;
 
     public get memberTable() {
+        if (!this._memberTable) {
+            this._memberTable = new SymbolTable(this.getParentScope()?.memberTable);
+        }
         return this._memberTable;
     }
 

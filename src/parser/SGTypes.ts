@@ -3,6 +3,13 @@ import type { Range } from 'vscode-languageserver';
 import { createSGInterface } from '../astUtils';
 import { createSGAttribute, createSGInterfaceField, createSGInterfaceFunction } from '../astUtils/creators';
 import type { FileReference } from '../interfaces';
+import { BooleanType } from '../types/BooleanType';
+import { DynamicType } from '../types/DynamicType';
+import { FloatType } from '../types/FloatType';
+import { FunctionType } from '../types/FunctionType';
+import { IntegerType } from '../types/IntegerType';
+import { LongIntegerType } from '../types/LongIntegerType';
+import { StringType } from '../types/StringType';
 import util from '../util';
 import type { TranspileState } from './TranspileState';
 
@@ -435,6 +442,9 @@ export class SGInterfaceField extends SGTag {
     set alwaysNotify(value: string) {
         this.setAttributeValue('alwaysNotify', value);
     }
+    get bscType() {
+        return getBscTypeFromSGFieldType(this.type);
+    }
 }
 
 export const SGFieldTypes = [
@@ -444,12 +454,44 @@ export const SGFieldTypes = [
     'array', 'roarray', 'rect2d', 'rect2darray'
 ];
 
+export function getBscTypeFromSGFieldType(sgFieldType: string) {
+    switch (sgFieldType) {
+        case 'integer':
+        case 'int': {
+            return new IntegerType();
+        }
+        case 'longinteger': {
+            return new LongIntegerType();
+        }
+        case 'float': {
+            return new FloatType();
+        }
+        case 'string':
+        case 'str': {
+            return new StringType();
+        }
+        case 'boolean':
+        case 'bool': {
+            return new BooleanType();
+        }
+        default: {
+            return new DynamicType();
+        }
+    }
+}
+
 export class SGInterfaceFunction extends SGTag {
     get name() {
         return this.getAttributeValue('name');
     }
     set name(value: string) {
         this.setAttributeValue('name', value);
+    }
+
+    get functionType(): FunctionType {
+        const funcType = new FunctionType(new DynamicType());
+        funcType.name = this.name;
+        return funcType;
     }
 }
 
