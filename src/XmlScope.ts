@@ -65,7 +65,7 @@ export class XmlScope extends Scope {
                     if (member.name) {
                         this.topTable.addSymbol(member.name, member.range, member.functionType);
                     }
-                } else if (isSGInterfaceField(member)) {
+                } else if (isSGInterfaceField(member) && member?.id) {
                     this.topTable.addSymbol(member.id, member.range, member.bscType);
                 }
             }
