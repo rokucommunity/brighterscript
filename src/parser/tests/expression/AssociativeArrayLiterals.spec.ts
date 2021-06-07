@@ -4,8 +4,8 @@ import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
-import { AssignmentStatement } from '../../Statement';
-import { AALiteralExpression } from '../../Expression';
+import type { AssignmentStatement } from '../../Statement';
+import type { AALiteralExpression } from '../../Expression';
 import { isCommentStatement } from '../../../astUtils';
 
 describe('parser associative array literals', () => {
