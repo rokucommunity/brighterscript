@@ -2334,14 +2334,16 @@ export class Parser {
                     }
 
                     while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
+                        // collect comma at end of expression
+                        if (lastAAMember && this.checkPrevious(TokenKind.Comma)) {
+                            lastAAMember.commaToken = this.previous();
+                        }
+
                         //check for comment at the end of the current line
                         if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
                             let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
                             members.push(new CommentStatement([token]));
                         } else {
-                            if (lastAAMember && this.checkPrevious(TokenKind.Comma)) {
-                                lastAAMember.commaToken = this.previous();
-                            }
                             this.consumeStatementSeparators(true);
 
                             //check for a comment on its own line
