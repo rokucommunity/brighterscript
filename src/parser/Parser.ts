@@ -200,8 +200,6 @@ export class Parser {
     /**
      * Static wrapper around creating a new parser and parsing a list of tokens
      */
-    public static parse(source: string, options?: ParseOptions): Parser;
-    public static parse(tokens: Token[], options?: ParseOptions): Parser;
     public static parse(toParse: Token[] | string, options?: ParseOptions): Parser {
         let tokens: Token[];
         if (typeof toParse === 'string') {
