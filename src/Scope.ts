@@ -539,6 +539,7 @@ export class Scope {
 
     private clearSymbolTable() {
         this._symbolTable = null;
+        this._memberTable = null;
     }
 
     /**
@@ -573,7 +574,7 @@ export class Scope {
         const classMap = this.getClassMap();
         for (const pair of classMap) {
             const classStmt = pair[1]?.item;
-            classStmt.buildSymbolTable(this.getParentClass(classStmt));
+            classStmt?.buildSymbolTable(this.getParentClass(classStmt));
         }
     }
 

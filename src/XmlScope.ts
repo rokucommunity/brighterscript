@@ -43,6 +43,11 @@ export class XmlScope extends Scope {
     }
     private _topTable: SymbolTable;
 
+    protected clearSymbolTable() {
+        super.clearSymbolTable();
+        this._topTable = null;
+    }
+
     public get topTable() {
         if (!this._topTable) {
             const parentScope = this.program.getComponentScope(this.xmlFile.parentComponentName?.text);
