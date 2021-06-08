@@ -28,11 +28,13 @@ export function getTypeFromCallExpression(call: CallExpression, functionExpressi
             return currentKnownType;
         }
         return new LazyType((context?: TypeContext) => {
-            // Give best guess if there is no file context
-            let futureType = functionExpression.symbolTable.getSymbolType(calleeName.text);
+            let futureType: BscType;
             if (isBrsFile(context?.file)) {
                 const file = context.file;
                 futureType = file.getSymbolTypeFromToken(calleeName, functionExpression, context.scope)?.type;
+            } else {
+                // Give best guess if there is no file context
+                futureType = functionExpression.symbolTable.getSymbolType(calleeName.text);
             }
             if (isFunctionType(futureType)) {
                 return futureType.returnType;
@@ -81,10 +83,13 @@ export function getTypeFromNewExpression(newExp: NewExpression, functionExpressi
 
 function resolveLazyType(currentToken: Token, functionExpression: FunctionExpression) {
     return new LazyType((context?: TypeContext) => {
-        let futureType = new UninitializedType();
+        let futureType: BscType;
         if (isBrsFile(context?.file)) {
             const file = context.file;
             futureType = file.getSymbolTypeFromToken(currentToken, functionExpression, context.scope)?.type;
+        } else {
+            // Give best guess if there is no file context
+            futureType = functionExpression.symbolTable.getSymbolType(currentToken.text) ?? new UninitializedType();
         }
         return futureType;
     });

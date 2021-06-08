@@ -760,7 +760,7 @@ export class BrsFile {
     }
 
     private checkForSpecialClassSymbol(currentToken: Token, scope: Scope, func?: FunctionExpression): TokenSymbolLookup {
-        let containingClass = this.parser.references.getContainingClass(currentToken);
+        const containingClass = this.parser.references.getContainingClass(currentToken);
         let symbolType: BscType;
         let currentClassRef: ClassStatement;
         const currentTokenLower = currentToken.text.toLowerCase();

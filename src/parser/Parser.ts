@@ -2901,19 +2901,30 @@ export class Parser {
         return this.tokens[idx - 1];
     }
 
+    public getPreviousTokenFromIndex(idx: number): TokenWithIndex {
+        return { token: this.tokens[idx - 1], index: idx - 1 };
+    }
+
     /**
      * Finds the previous identifier in a chain (e.g. 'm.obj.func(someFunc()).value'), skipping over any arguments of function calls
      * If this function was called with the token at 'value' above, the previous identifier in the chain is 'func'
-     * @param currentToken token to start from
+     * @param currentTokenIndex token index to start from
      * @param allowCurrent can the current token be the token that's the identifier?
      * @returns the previous identifer
      */
-    public getPreviousIdentifierInChain(currentToken: Token, allowCurrent = false): Token {
+    public getPreviousIdentifierInChain(currentTokenIndex: number, allowCurrent = false): TokenWithIndex {
+        let currentToken = this.tokens[currentTokenIndex];
+        let previousTokenResult: TokenWithIndex;
         if (!allowCurrent) {
-            currentToken = this.getPreviousToken(currentToken);
+            previousTokenResult = this.getPreviousTokenFromIndex(currentTokenIndex);
+            currentToken = previousTokenResult?.token;
+            currentTokenIndex = previousTokenResult?.index;
+
         }
         if (currentToken?.kind === TokenKind.Dot) {
-            currentToken = this.getPreviousToken(currentToken);
+            previousTokenResult = this.getPreviousTokenFromIndex(currentTokenIndex);
+            currentToken = previousTokenResult.token;
+            currentTokenIndex = previousTokenResult.index;
         }
         let functionParenCount = 0;
 
@@ -2928,17 +2939,21 @@ export class Parser {
             functionParenCount++;
         }
         while (currentToken && functionParenCount > 0) {
-            currentToken = this.getPreviousToken(currentToken);
+            previousTokenResult = this.getPreviousTokenFromIndex(currentTokenIndex);
+            currentToken = previousTokenResult?.token;
+            currentTokenIndex = previousTokenResult?.index;
             if (isRightBracket(currentToken)) {
                 functionParenCount++;
             }
             if (isLeftBracket(currentToken)) {
                 functionParenCount--;
-                currentToken = this.getPreviousToken(currentToken);
+                previousTokenResult = this.getPreviousTokenFromIndex(currentTokenIndex);
+                currentToken = previousTokenResult?.token;
+                currentTokenIndex = previousTokenResult?.index;
             }
         }
         if (currentToken?.kind === TokenKind.Identifier) {
-            return currentToken;
+            return { token: currentToken, index: currentTokenIndex };
         }
         return undefined;
     }
@@ -2951,15 +2966,22 @@ export class Parser {
      */
     public getTokenChain(currentToken: Token): Token[] {
         const tokenChain: Token[] = [];
-
-        currentToken = this.getPreviousIdentifierInChain(currentToken, true);
+        let currentTokenIndex = this.tokens.indexOf(currentToken);
+        let previousTokenResult: TokenWithIndex;
+        previousTokenResult = this.getPreviousIdentifierInChain(currentTokenIndex, true);
+        currentToken = previousTokenResult?.token;
+        currentTokenIndex = previousTokenResult?.index;
         if (currentToken?.kind === TokenKind.Identifier) {
             tokenChain.push(currentToken);
         }
-        currentToken = this.getPreviousIdentifierInChain(currentToken);
+        previousTokenResult = this.getPreviousIdentifierInChain(currentTokenIndex);
+        currentToken = previousTokenResult?.token;
+        currentTokenIndex = previousTokenResult?.index;
         while (currentToken?.kind === TokenKind.Identifier) {
             tokenChain.push(currentToken);
-            currentToken = this.getPreviousIdentifierInChain(currentToken);
+            previousTokenResult = this.getPreviousIdentifierInChain(currentTokenIndex);
+            currentToken = previousTokenResult?.token;
+            currentTokenIndex = previousTokenResult?.index;
         }
         tokenChain.reverse();
         return tokenChain;
@@ -3121,6 +3143,11 @@ export interface LocalVarEntry {
     lowerName: string;
     nameToken: Identifier;
     type: BscType;
+}
+
+export interface TokenWithIndex {
+    token: Token;
+    index: number;
 }
 
 class CancelStatementError extends Error {
