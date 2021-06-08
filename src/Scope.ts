@@ -537,7 +537,7 @@ export class Scope {
         return this._memberTable;
     }
 
-    private clearSymbolTable() {
+    protected clearSymbolTable() {
         this._symbolTable = null;
         this._memberTable = null;
     }
