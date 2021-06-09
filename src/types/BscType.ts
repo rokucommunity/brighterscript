@@ -1,3 +1,4 @@
+import type { Position } from '../astUtils';
 import { isLazyType } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
 import type { Scope } from '../Scope';
@@ -20,6 +21,7 @@ export interface SymbolContainer {
 export interface TypeContext {
     file: BrsFile;
     scope: Scope;
+    position?: Position;
 }
 
 export function getTypeFromContext(type: BscType, context?: TypeContext) {

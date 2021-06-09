@@ -41,7 +41,9 @@
             "resolveSourceMapLocations": [
                 "${workspaceFolder}/**",
                 "!**/node_modules/typescript/**",
-                "!**/node_modules/vscode-languageserver/**"
+                "!**/node_modules/vscode-languageserver/**",
+                "!**/node_modules/vscode-languageserver-protocol/**",
+                "!**/node_modules/vscode-languageserver-types/**"
             ]
         },
         {

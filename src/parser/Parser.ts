@@ -90,7 +90,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Position, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isLiteralExpression, isVariableExpression, isAALiteralExpression, isArrayLiteralExpression, isNewExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isLiteralExpression, isVariableExpression, isAALiteralExpression, isArrayLiteralExpression, isNewExpression, isInvalidType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { BscType } from '../types/BscType';
@@ -927,6 +927,9 @@ export class Parser {
             type = util.tokenToBscType(typeToken, true, this.currentNamespaceName);
         } else if (defaultValue) {
             type = getBscTypeFromExpression(defaultValue, this.currentFunctionExpression);
+            if (isInvalidType(type)) {
+                type = new DynamicType();
+            }
         } else {
             type = new DynamicType();
         }

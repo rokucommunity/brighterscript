@@ -31,6 +31,6 @@ export class DoubleType implements BscType {
     }
 
     public equals(targetType: BscType): boolean {
-        return this.toString() === targetType.toString();
+        return this.toString() === targetType?.toString();
     }
 }

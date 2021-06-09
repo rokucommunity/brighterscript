@@ -1381,6 +1381,10 @@ describe('Scope', () => {
                     <script uri="comp.file2.brs"/>
                     <script uri="comp.file3.brs"/>
                     <script uri="comp.helpers.brs"/>
+                    <interface>
+                      <field id="intField" type="integer" />
+                      <function name="func1" />
+                    </interface>
                     <children>
                       <Label id="myLabel" />
                     </children>
@@ -1392,6 +1396,7 @@ describe('Scope', () => {
                   m.label = m.top.findNode("myLabel")
                   m.assignedTwice = "test"
                   m.someObj = {foo: "bar"}
+
                 end sub
             `);
             program.setFile(s`components/comp.file1.brs`, `
@@ -1423,7 +1428,7 @@ describe('Scope', () => {
 
             program.validate();
             expectZeroDiagnostics(program);
-            let result = program.getCompletions(`${rootDir}/components/comp.file3.brs`, Position.create(2, 20));
+            let result = program.getCompletions(`${rootDir}/components/comp.file3.brs`, Position.create(2, 20)); // completions on 'm.'
             let properties = result.map(x => x.label);
             expect(properties).to.contain('top');
             expect(properties).to.contain('name');
@@ -1431,6 +1436,233 @@ describe('Scope', () => {
             expect(properties).to.contain('assignedTwice');
             expect(properties).to.contain('label');
             expect(properties).to.contain('pi');
+
+            let topResult = program.getCompletions(`${rootDir}/components/comp.brs`, Position.create(3, 34)); // completions on 'm.top.'
+            let topProperties = topResult.map(x => x.label);
+            expect(topProperties).to.contain('intField');
+            expect(topProperties).to.contain('func1');
+        });
+
+
+        it('can resolve self referential values', () => {
+            program = new Program({ rootDir: rootDir });
+            program.setFile(s`source/main.brs`, `
+                function trimName(name as string) as string
+                    name = name.trim()
+                    return name
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('can resolve self referential values in a loop', () => {
+            program = new Program({ rootDir: rootDir });
+            program.setFile(s`source/main.brs`, `
+                function trimName(names as object) as string
+                    allNames = ""
+                    for each name in names
+                        name = name.trim()
+                        allNames +=name
+                    end for
+                    return allNames
+                end function
+
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('can call functions on object properties of m that extend from a parent', () => {
+            program = new Program({ rootDir: rootDir });
+            program.setFile('components/child.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="child" extends="parent">
+                    <script uri="child.brs"/>
+                </component>
+            `);
+            program.setFile(s`components/child.brs`, `
+                sub init()
+                    m.name = getName()
+                    m.pi = m.objProp.getPi()
+                    print m.pi
+                end sub
+
+                function getName() as string
+                    return "Bob"
+                end function
+            `);
+            program.setFile('components/parent.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="parent" extends="Scene">
+                    <script uri="parent.brs"/>
+                </component>
+            `);
+            program.setFile(s`components/parent.brs`, `
+                sub init()
+                  m.objProp = getObj()
+                end sub
+
+                function getObj()
+                    return {
+                        getPi: function () as float
+                          return 3.14
+                        end function
+                    }
+                end function
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('can call functions on properties of m that extend from a parent', () => {
+            program = new Program({ rootDir: rootDir });
+            program.setFile('components/comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp" extends="Scene">
+                    <script uri="comp.1.brs"/>
+                    <script uri="comp.2.brs"/>
+                </component>
+            `);
+            program.setFile(s`components/comp.1.brs`, `
+                sub init()
+                    m.pi = getPi()
+                    piStr = m.pi.toStr()
+                    print piStr
+                end sub
+            `);
+            program.setFile(s`components/comp.2.brs`, `
+                function getName()
+                    return "Bob"
+                end function
+
+                function getPi()
+                    return 3.14
+                end function
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('can call functions on m.top', () => {
+            program = new Program({ rootDir: rootDir });
+            program.setFile('components/comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp" extends="Scene">
+                    <script uri="comp.brs"/>
+                    <children>
+                      <Label id="myLabel" />
+                    </children>
+                </component>
+            `);
+            program.setFile(s`components/comp.brs`, `
+                sub init()
+                    m.label = m.top.findNode("myLabel")
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('can validate shared functions between components', () => {
+            program = new Program({ rootDir: rootDir });
+            program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Group">
+                    <script uri="comp1.brs"/>
+                    <script type="text/brightscript" uri="pkg:/source/helpers.brs" />
+                    <children>
+                      <Label id="myLabel" />
+                    </children>
+                </component>
+            `);
+            program.setFile(s`components/comp1.brs`, `
+                sub init()
+                    m.foo = "foo"
+                    printFoo(3)
+                end sub
+            `);
+            program.setFile('components/comp2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp2" extends="Group">
+                    <script uri="comp2.brs"/>
+                    <script type="text/brightscript" uri="pkg:/source/helpers.brs" />
+                    <children>
+                        <Label id="myLabel" />
+                    </children>
+                </component>
+            `);
+            program.setFile(s`components/comp2.brs`, `
+                sub init()
+                    m.foo ="bar"
+                    printFoo(2)
+                    printFoo("test") ' this is invalid
+                end sub
+            `);
+            program.setFile(s`source/helpers.brs`, `
+                sub printFoo(num as integer)
+                    print lcase(m.foo)+num.toStr()
+                end sub
+            `);
+
+            program.validate();
+            const diagnostics = program.getDiagnostics();
+            expect(diagnostics.length).to.equal(1);
+            expect(diagnostics.map(x => x.message)).to.eql([
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message]);
+        });
+
+        it('can determine properties on m from grand-parent components', () => {
+            program = new Program({ rootDir: rootDir });
+            program.setFile('components/comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp" extends="Group">
+                    <script uri="comp.brs"/>
+                    <children>
+                      <Label id="myLabel" />
+                    </children>
+                </component>
+            `);
+            program.setFile(s`components/comp.brs`, `
+                sub init()
+                    m.label = m.top.findNode("myLabel")
+                end sub
+            `);
+            program.setFile('components/compChild.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="compChild" extends="comp">
+                    <script uri="compChild.brs"/>
+                </component>
+            `);
+            program.setFile(s`components/compChild.brs`, `
+                sub init()
+                    m.foo = "foo"
+                end sub
+            `);
+            program.setFile('components/compGrandChild.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="compGrandChild" extends="CompChild">
+                    <script uri="compGrandChild.brs"/>
+                </component>
+            `);
+            program.setFile(s`components/compGrandChild.brs`, `
+                sub init()
+                    m.obj = {name: "Bill", age: 44}
+                    m.label.callFunc("") ' below checks for completions on this line
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            let result = program.getCompletions(`${rootDir}/components/compGrandChild.brs`, Position.create(3, 22)); // completions on 'm.'
+            let properties = result.map(x => x.label);
+            expect(properties).to.contain('top');
+            expect(properties).to.contain('obj');
+            expect(properties).to.contain('label');
+            expect(properties).to.contain('foo');
         });
 
     });

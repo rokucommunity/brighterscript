@@ -1,4 +1,4 @@
-import type { Range } from './astUtils';
+import type { Position, Range } from './astUtils';
 import { getTypeFromContext } from './types/BscType';
 import { DynamicType } from './types/DynamicType';
 import type { BscType, TypeContext } from './types/BscType';
@@ -111,10 +111,15 @@ export class SymbolTable {
             //Check if each time it was set, it was set to the same type
             // TODO handle union types
             let sameImpliedType = true;
-            const impliedType = getTypeFromContext(symbols[0].type, context);
+            let impliedType: BscType;
             for (const symbol of symbols) {
-                const existingType = getTypeFromContext(symbol.type, context);
-                sameImpliedType = (impliedType?.equals(existingType, context));
+                if ((context?.position && isPositionBefore(symbol.range?.end, context.position)) || !context?.position) {
+                    // if we're looking at context with a position, only look at types that were set before
+                    const existingType = getTypeFromContext(symbol.type, context);
+                    // if the type is not known yet, imply that the first assignment is the type
+                    impliedType = impliedType ?? existingType;
+                    sameImpliedType = (impliedType?.equals(existingType, context));
+                }
                 if (!sameImpliedType) {
                     break;
                 }
@@ -124,7 +129,8 @@ export class SymbolTable {
             return getTypeFromContext(symbols[0].type, context);
         }
         if (searchParent) {
-            return this.parent?.getSymbolType(name, true, context) ?? undefined;
+            const parentContext = context ? { file: context?.file, scope: context?.scope } : undefined;
+            return this.parent?.getSymbolType(name, true, parentContext) ?? undefined;
         } else {
             return undefined;
         }
@@ -157,4 +163,12 @@ export interface BscSymbol {
     name: string;
     range: Range;
     type: BscType;
+}
+
+
+function isPositionBefore(pos1: Position, pos2: Position): boolean {
+    if (pos1?.line < pos2?.line) {
+        return true;
+    }
+    return false;
 }

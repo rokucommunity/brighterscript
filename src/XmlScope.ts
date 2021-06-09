@@ -50,7 +50,7 @@ export class XmlScope extends Scope {
 
     public get topTable() {
         if (!this._topTable) {
-            const parentScope = this.program.getComponentScope(this.xmlFile.parentComponentName?.text);
+            const parentScope = this.getParentScope();
             this._topTable = new SymbolTable();
             if (isXmlScope(parentScope)) {
                 this._topTable.setParent(parentScope.topTable);

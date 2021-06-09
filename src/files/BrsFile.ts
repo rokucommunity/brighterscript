@@ -764,7 +764,7 @@ export class BrsFile {
         let symbolType: BscType;
         let currentClassRef: ClassStatement;
         const currentTokenLower = currentToken.text.toLowerCase();
-        const typeContext = { file: this, scope: scope };
+        const typeContext = { file: this, scope: scope, position: currentToken.range.start };
         if (containingClass) {
             // Special cases for a single token inside a class
             let expandedText = '';
@@ -837,8 +837,7 @@ export class BrsFile {
         let symbolType: BscType;
         let tokenText = [];
         let justReturnDynamic = false;
-        const typeContext = { file: this, scope: scope };
-
+        const typeContext = { file: this, scope: scope, position: tokenChain[0]?.range.start };
         for (const token of tokenChain) {
             const tokenLowerText = token.text.toLowerCase();
 
@@ -881,11 +880,13 @@ export class BrsFile {
                     // TODO: get proper parent name for methods/fields defined in super classes
                     tokenText.push(tokenChain.length === 1 ? token.text : symbolType.name);
                 } else {
+                    justReturnDynamic = true;
                     tokenText.push(token.text);
                 }
+
                 symbolContainer = symbolType as SymbolContainer;
                 currentSymbolTable = symbolContainer?.memberTable;
-            } else if (isObjectType(symbolType) || isArrayType(symbolType)) {
+            } else if (isObjectType(symbolType) || isArrayType(symbolType) || isDynamicType(symbolType)) {
                 // this is an object that has no member table
                 // this could happen if a parameter is marked as object
                 // assume all fields are dynamic

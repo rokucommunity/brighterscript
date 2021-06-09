@@ -7,7 +7,7 @@ import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableC
 import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
-import { ParseMode, getBscTypeFromExpression } from './parser';
+import { ParseMode } from './parser';
 import { standardizePath as s, util } from './util';
 import type { MinMax } from './util';
 import { globalCallableMap } from './globalCallables';
@@ -22,6 +22,7 @@ import type { CustomType } from './types/CustomType';
 import { UninitializedType } from './types/UninitializedType';
 import { ObjectType } from './types/ObjectType';
 import { getTypeFromContext } from './types/BscType';
+import { DynamicType } from './types/DynamicType';
 
 
 /**
@@ -533,6 +534,9 @@ export class Scope {
     public get memberTable() {
         if (!this._memberTable) {
             this._memberTable = new SymbolTable(this.getParentScope()?.memberTable);
+            if (!this.getParentScope()) {
+                this._memberTable.addSymbol('global', null, new ObjectType());
+            }
         }
         return this._memberTable;
     }
@@ -548,7 +552,7 @@ export class Scope {
     * This will only rebuilt if the symbol table has not been built before
     */
     public linkSymbolTable() {
-        for (const file of this.getOwnFiles()) {
+        for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
                 file.parser.symbolTable.setParent(this.symbolTable);
 
@@ -557,15 +561,18 @@ export class Scope {
                     const namespaceSymbolTable = this.namespaceLookup[namespaceNameLower].symbolTable;
                     namespace.symbolTable.setParent(namespaceSymbolTable);
                 }
-                //TODO: build symbol tables for dotted set assignments?
+                //TODO: build symbol tables for dotted set assignments using actual values
+                // Currently this is prone to call-stack issues.
                 // eg. m.key = "value"
 
                 for (const dotSetStmt of file.parser.references.dottedSetStatements) {
                     if (isVariableExpression(dotSetStmt.obj)) {
                         if (dotSetStmt.obj.getName(ParseMode.BrighterScript).toLowerCase() === 'm') {
-                            this.memberTable.addSymbol(dotSetStmt.name.text, dotSetStmt.range,
-                                getBscTypeFromExpression(dotSetStmt.value, file.parser.references.getContainingFunctionExpression(dotSetStmt.name)));
+                            this.memberTable.addSymbol(dotSetStmt.name.text, dotSetStmt.range, new DynamicType());
+                            // TODO: get actual types: getBscTypeFromExpression(dotSetStmt.value, file.parser.references.getContainingFunctionExpression(dotSetStmt.name)));
                         }
+                    } else {
+                        // TODO: What other types of expressions could these be?
                     }
                 }
             }
@@ -671,7 +678,7 @@ export class Scope {
     */
     private diagnosticDetectInvalidFunctionExpressionTypes(file: BrsFile) {
         for (let func of file.parser.references.functionExpressions) {
-            const returnType = getTypeFromContext(func.returnType, { file: file, scope: this });
+            const returnType = getTypeFromContext(func.returnType, { file: file, scope: this, position: func.range?.start });
             if (!returnType && func.returnTypeToken) {
                 // check if this custom type is in our class map
                 const returnTypeName = func.returnTypeToken.text;
@@ -686,7 +693,7 @@ export class Scope {
             }
 
             for (let param of func.parameters) {
-                const paramType = getTypeFromContext(param.type, { file: file, scope: this });
+                const paramType = getTypeFromContext(param.type, { file: file, scope: this, position: param.range?.start });
                 if (!paramType && param.typeToken) {
                     const paramTypeName = param.typeToken.text;
                     const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
@@ -711,7 +718,7 @@ export class Scope {
             for (let expCall of file.functionCalls) {
                 const symbolTypeInfo = file.getSymbolTypeFromToken(expCall.name, expCall.functionExpression, this);
                 let funcType = symbolTypeInfo.type;
-                if (!isFunctionType(funcType)) {
+                if (!isFunctionType(funcType) && !isDynamicType(funcType)) {
                     // We don't know if this is a function. Try seeing if it is a global
                     const callableContainer = util.getCallableContainerByFunctionCall(callableContainersByLowerName, expCall);
                     if (callableContainer) {
@@ -735,6 +742,8 @@ export class Scope {
                     }
 
                     // Check for Argument type mismatch.
+                    const paramTypeContext = { file: file, scope: this, position: expCall.functionExpression.range?.start };
+                    const argTypeContext = { file: file, scope: this, position: expCall.range?.start };
                     for (let index = 0; index < funcType.params.length; index++) {
                         const param = funcType.params[index];
                         const arg = expCall.args[index];
@@ -744,26 +753,25 @@ export class Scope {
                         }
                         let argType = arg.type ?? new UninitializedType();
                         let assignable = false;
-                        const typeContext = { file: file, scope: this };
-                        const paramType = getTypeFromContext(param.type, typeContext);
+                        const paramType = getTypeFromContext(param.type, paramTypeContext);
                         if (!paramType) {
                             // other error - can not determine what type this parameter should be
                             continue;
                         }
-                        argType = getTypeFromContext(argType, typeContext);
+                        argType = getTypeFromContext(argType, argTypeContext);
                         if (isCustomType(argType)) {
                             const lowerNamespaceName = expCall.functionExpression.namespaceName?.getName().toLowerCase();
-                            assignable = argType.isAssignableTo(paramType, typeContext, this.getAncestorTypeList(argType.name, lowerNamespaceName));
+                            assignable = argType.isAssignableTo(paramType, argTypeContext, this.getAncestorTypeList(argType.name, lowerNamespaceName));
                         } else {
-                            assignable = argType?.isAssignableTo(paramType, typeContext);
+                            assignable = argType?.isAssignableTo(paramType, argTypeContext);
                         }
                         if (!assignable) {
                             // TODO: perhaps this should be a strict mode setting?
-                            assignable = argType?.isConvertibleTo(paramType, typeContext);
+                            assignable = argType?.isConvertibleTo(paramType, argTypeContext);
                         }
                         if (!assignable) {
                             this.diagnostics.push({
-                                ...DiagnosticMessages.argumentTypeMismatch(argType?.toString(typeContext), paramType.toString(typeContext)),
+                                ...DiagnosticMessages.argumentTypeMismatch(argType?.toString(argTypeContext), paramType.toString(paramTypeContext)),
                                 range: arg?.range,
                                 file: file
                             });
@@ -774,8 +782,9 @@ export class Scope {
                 } else if (isDynamicType(symbolTypeInfo.type)) {
                     // maybe this is a function? who knows
                 } else {
+                    const functionNameText = symbolTypeInfo.expandedTokenText;
                     this.diagnostics.push({
-                        ...DiagnosticMessages.callToUnknownFunction(symbolTypeInfo.expandedTokenText, this.name),
+                        ...DiagnosticMessages.callToUnknownFunction(functionNameText, this.name),
                         range: expCall.nameRange,
                         //TODO detect end of expression call
                         file: file
