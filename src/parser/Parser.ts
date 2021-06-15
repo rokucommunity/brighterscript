@@ -2908,6 +2908,46 @@ export class Parser {
         return { token: this.tokens[idx - 1], index: idx - 1 };
     }
 
+    public getPreviousTokenIgnoreNests(currentTokenIndex: number, leftBracketType: TokenKind, rightBracketType: TokenKind): TokenWithIndex {
+        let currentToken = this.tokens[currentTokenIndex];
+        let previousTokenResult: TokenWithIndex;
+        function isRightBracket(token: Token): boolean {
+            return token?.kind === rightBracketType;
+        }
+        function isLeftBracket(token: Token): boolean {
+            return token?.kind === leftBracketType;
+        }
+        function isIdentifier(token: Token): boolean {
+            return token?.kind === TokenKind.Identifier;
+        }
+        let lastTokenWasLeftBracket = false;
+        let bracketNestCount = 0;
+        // check for nested function call
+        if (isRightBracket(currentToken)) {
+            bracketNestCount++;
+        }
+        while (currentToken && bracketNestCount > 0) {
+            previousTokenResult = this.getPreviousTokenFromIndex(currentTokenIndex);
+            currentToken = previousTokenResult?.token;
+            currentTokenIndex = previousTokenResult?.index;
+            lastTokenWasLeftBracket = false;
+
+            if (isRightBracket(currentToken)) {
+                bracketNestCount++;
+            }
+            if (isLeftBracket(currentToken)) {
+                bracketNestCount--;
+                lastTokenWasLeftBracket = true;
+                previousTokenResult = this.getPreviousTokenFromIndex(currentTokenIndex);
+                currentToken = previousTokenResult?.token;
+                currentTokenIndex = previousTokenResult?.index;
+            }
+        }
+        let isUnknown = lastTokenWasLeftBracket && !isIdentifier(currentToken);
+        return { token: currentToken, index: currentTokenIndex, isUnknown: isUnknown };
+
+    }
+
     /**
      * Finds the previous identifier in a chain (e.g. 'm.obj.func(someFunc()).value'), skipping over any arguments of function calls
      * If this function was called with the token at 'value' above, the previous identifier in the chain is 'func'
@@ -2929,34 +2969,20 @@ export class Parser {
             currentToken = previousTokenResult.token;
             currentTokenIndex = previousTokenResult.index;
         }
-        let functionParenCount = 0;
-
-        function isRightBracket(token: Token): boolean {
-            return token?.kind === TokenKind.RightParen || token?.kind === TokenKind.RightSquareBracket;
-        }
-        function isLeftBracket(token: Token): boolean {
-            return token?.kind === TokenKind.LeftParen || token?.kind === TokenKind.LeftSquareBracket;
-        }
-
-        if (isRightBracket(currentToken)) {
-            functionParenCount++;
-        }
-        while (currentToken && functionParenCount > 0) {
-            previousTokenResult = this.getPreviousTokenFromIndex(currentTokenIndex);
+        previousTokenResult = this.getPreviousTokenIgnoreNests(currentTokenIndex, TokenKind.LeftParen, TokenKind.RightParen);
+        currentToken = previousTokenResult?.token;
+        currentTokenIndex = previousTokenResult?.index;
+        let isUnknown = previousTokenResult?.isUnknown;
+        if (currentTokenIndex) {
+            previousTokenResult = this.getPreviousTokenIgnoreNests(currentTokenIndex, TokenKind.LeftSquareBracket, TokenKind.RightSquareBracket);
             currentToken = previousTokenResult?.token;
             currentTokenIndex = previousTokenResult?.index;
-            if (isRightBracket(currentToken)) {
-                functionParenCount++;
-            }
-            if (isLeftBracket(currentToken)) {
-                functionParenCount--;
-                previousTokenResult = this.getPreviousTokenFromIndex(currentTokenIndex);
-                currentToken = previousTokenResult?.token;
-                currentTokenIndex = previousTokenResult?.index;
-            }
         }
+        isUnknown = isUnknown || previousTokenResult?.isUnknown;
         if (currentToken?.kind === TokenKind.Identifier) {
-            return { token: currentToken, index: currentTokenIndex };
+            return { token: currentToken, index: currentTokenIndex, isUnknown: isUnknown };
+        } else if (isUnknown) {
+            return { token: currentToken, index: currentTokenIndex, isUnknown: isUnknown };
         }
         return undefined;
     }
@@ -2967,7 +2993,7 @@ export class Parser {
      * @param currentToken the token that is the end of the chain
      * @returns array of tokens
      */
-    public getTokenChain(currentToken: Token): Token[] {
+    public getTokenChain(currentToken: Token): TokenChain {
         const tokenChain: Token[] = [];
         let currentTokenIndex = this.tokens.indexOf(currentToken);
         let previousTokenResult: TokenWithIndex;
@@ -2980,14 +3006,17 @@ export class Parser {
         previousTokenResult = this.getPreviousIdentifierInChain(currentTokenIndex);
         currentToken = previousTokenResult?.token;
         currentTokenIndex = previousTokenResult?.index;
-        while (currentToken?.kind === TokenKind.Identifier) {
+        let includesUnknown = !!previousTokenResult?.isUnknown;
+        while (!includesUnknown && currentToken?.kind === TokenKind.Identifier) {
             tokenChain.push(currentToken);
             previousTokenResult = this.getPreviousIdentifierInChain(currentTokenIndex);
             currentToken = previousTokenResult?.token;
             currentTokenIndex = previousTokenResult?.index;
+            includesUnknown = previousTokenResult?.isUnknown;
+
         }
         tokenChain.reverse();
-        return tokenChain;
+        return { chain: tokenChain, includesUnknown: !!includesUnknown };
     }
 
     /**
@@ -3151,6 +3180,12 @@ export interface LocalVarEntry {
 export interface TokenWithIndex {
     token: Token;
     index: number;
+    isUnknown?: boolean;
+}
+
+export interface TokenChain {
+    chain: Token[];
+    includesUnknown?: boolean;
 }
 
 class CancelStatementError extends Error {

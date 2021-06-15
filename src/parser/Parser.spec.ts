@@ -1290,7 +1290,7 @@ describe('parser', () => {
             end sub
             `, ParseMode.BrighterScript);
             const childFieldToken = parser.getTokenAt(Position.create(2, 38));
-            const tokenChain = parser.getTokenChain(childFieldToken);
+            const tokenChain = parser.getTokenChain(childFieldToken).chain;
             expect(tokenChain.length).to.equal(3);
             expect(tokenChain.map(token => token.text)).to.eql(['m', 'field', 'childField']);
         });
@@ -1302,7 +1302,7 @@ describe('parser', () => {
             end sub
             `, ParseMode.BrighterScript);
             const childFieldToken = parser.getTokenAt(Position.create(2, 49));
-            const tokenChain = parser.getTokenChain(childFieldToken);
+            const tokenChain = parser.getTokenChain(childFieldToken).chain;
             expect(tokenChain.length).to.equal(4);
             expect(tokenChain.map(token => token.text)).to.eql(['var', 'field', 'funcCall', 'childField']);
         });
@@ -1314,7 +1314,7 @@ describe('parser', () => {
             end sub
             `, ParseMode.BrighterScript);
             const childFieldToken = parser.getTokenAt(Position.create(2, 75));
-            const tokenChain = parser.getTokenChain(childFieldToken);
+            const tokenChain = parser.getTokenChain(childFieldToken).chain;
             expect(tokenChain.length).to.equal(4);
             expect(tokenChain.map(token => token.text)).to.eql(['var', 'field', 'funcCall', 'childField']);
         });
@@ -1326,7 +1326,7 @@ describe('parser', () => {
             end sub
             `, ParseMode.BrighterScript);
             const childFieldToken = parser.getTokenAt(Position.create(2, 90));
-            const tokenChain = parser.getTokenChain(childFieldToken);
+            const tokenChain = parser.getTokenChain(childFieldToken).chain;
             expect(tokenChain.length).to.equal(4);
             expect(tokenChain.map(token => token.text)).to.eql(['var', 'field', 'funcCall', 'childField']);
         });
@@ -1338,10 +1338,43 @@ describe('parser', () => {
             end sub
             `, ParseMode.BrighterScript);
             const childFieldToken = parser.getTokenAt(Position.create(2, 50));
-            const tokenChain = parser.getTokenChain(childFieldToken);
+            const tokenChain = parser.getTokenChain(childFieldToken).chain;
             expect(tokenChain.length).to.equal(4);
             expect(tokenChain.map(token => token.text)).to.eql(['var', 'field', 'myArray', 'childField']);
         });
+
+        const parser = parse(`
+            sub someFunc()
+                print (1 + 1).toStr()
+            end sub
+            `, ParseMode.BrighterScript);
+        const toStrToken = parser.getTokenAt(Position.create(2, 34));
+        const tokenChainResponse = parser.getTokenChain(toStrToken);
+        expect(tokenChainResponse.includesUnknown).to.be.true;
+    });
+
+    it('includes unknown when property is referenced via brackets', () => {
+        const parser = parse(`
+            sub someFunc()
+                complexObj = {prop: "hello", subObj: {prop: "foo", grandChildObj:{prop:"bar"}}}
+                print complexObj.subObj.prop
+                print complexObj["subObj"].prop
+                print complexObj["subObj"]["grandChildObj"].prop
+            end sub
+            `, ParseMode.BrighterScript);
+        const propAsChainToken = parser.getTokenAt(Position.create(3, 44)); // complexObj.subObj.prop
+        const propAsAsBracketToken = parser.getTokenAt(Position.create(4, 47)); // complexObj["subObj"].prop
+        const propAsAsDoubleBracketToken = parser.getTokenAt(Position.create(5, 64)); // complexObj["subObj"]["grandChildObj"].prop
+
+        let tokenChainResponse = parser.getTokenChain(propAsChainToken);
+        expect(tokenChainResponse.includesUnknown).to.be.false;
+        expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['complexObj', 'subObj', 'prop']);
+
+        tokenChainResponse = parser.getTokenChain(propAsAsBracketToken);
+        expect(tokenChainResponse.includesUnknown).to.be.false;
+
+        tokenChainResponse = parser.getTokenChain(propAsAsDoubleBracketToken);
+        expect(tokenChainResponse.includesUnknown).to.be.true;
     });
 });
 

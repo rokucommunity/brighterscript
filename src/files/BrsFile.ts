@@ -824,7 +824,11 @@ export class BrsFile {
      * @returns the BscType, expanded text (e.g <Class.field>) and classStatement (if available) for the token
      */
     public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): TokenSymbolLookup {
-        const nameSpacedTokenChain = this.findNamespaceFromTokenChain(this.parser.getTokenChain(currentToken), scope);
+        const tokenChainResponse = this.parser.getTokenChain(currentToken);
+        if (tokenChainResponse.includesUnknown) {
+            return { type: new DynamicType(), expandedTokenText: currentToken.text };
+        }
+        const nameSpacedTokenChain = this.findNamespaceFromTokenChain(tokenChainResponse.chain, scope);
         const specialCase = this.checkForSpecialCaseToken(nameSpacedTokenChain, functionExpression, scope);
         if (specialCase) {
             return specialCase;
