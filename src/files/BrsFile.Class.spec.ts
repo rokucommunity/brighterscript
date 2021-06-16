@@ -1288,7 +1288,7 @@ describe('BrsFile BrighterScript classes', () => {
             program.validate();
             let hover = animalCode.getHover(Position.create(46, 29));
             expect(hover).to.exist;
-            //TODO: This should probably say 'Animal.isHungry ...' because that field is defined in Animal
+            //TODO TYPES: This should probably say 'Animal.isHungry ...' because that field is defined in Animal
             expect(hover.contents).to.equal('Dog.isHungry as boolean');
         });
 

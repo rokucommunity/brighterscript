@@ -1216,7 +1216,7 @@ export class Parser {
         }
 
         let endFor = this.advance();
-        //TODO infer type from `target`
+        //TODO TYPES infer type from `target`
         const itemType = new DynamicType();
 
         this.currentSymbolTable.addSymbol(name.text, name.range, itemType);
@@ -2917,9 +2917,7 @@ export class Parser {
         function isLeftBracket(token: Token): boolean {
             return token?.kind === leftBracketType;
         }
-        function isIdentifier(token: Token): boolean {
-            return token?.kind === TokenKind.Identifier;
-        }
+        let lastTokenHadLeadingWhitespace = currentToken?.leadingWhitespace.length > 0;
         let lastTokenWasLeftBracket = false;
         let bracketNestCount = 0;
         // check for nested function call
@@ -2935,27 +2933,28 @@ export class Parser {
             if (isRightBracket(currentToken)) {
                 bracketNestCount++;
             }
-            if (isLeftBracket(currentToken)) {
+            while (isLeftBracket(currentToken)) {
                 bracketNestCount--;
                 lastTokenWasLeftBracket = true;
+                lastTokenHadLeadingWhitespace = currentToken?.leadingWhitespace.length > 0;
                 previousTokenResult = this.getPreviousTokenFromIndex(currentTokenIndex);
                 currentToken = previousTokenResult?.token;
                 currentTokenIndex = previousTokenResult?.index;
             }
         }
-        let isUnknown = lastTokenWasLeftBracket && !isIdentifier(currentToken);
+        let isUnknown = (lastTokenWasLeftBracket && (lastTokenHadLeadingWhitespace || !this.isAcceptableChainToken(currentToken)));
         return { token: currentToken, index: currentTokenIndex, isUnknown: isUnknown };
 
     }
 
     /**
-     * Finds the previous identifier in a chain (e.g. 'm.obj.func(someFunc()).value'), skipping over any arguments of function calls
+     * Finds the previous token in a chain (e.g. 'm.obj.func(someFunc()).value'), skipping over any arguments of function calls
      * If this function was called with the token at 'value' above, the previous identifier in the chain is 'func'
      * @param currentTokenIndex token index to start from
      * @param allowCurrent can the current token be the token that's the identifier?
      * @returns the previous identifer
      */
-    public getPreviousIdentifierInChain(currentTokenIndex: number, allowCurrent = false): TokenWithIndex {
+    public getPreviousTokenInChain(currentTokenIndex: number, allowCurrent = false): TokenWithIndex {
         let currentToken = this.tokens[currentTokenIndex];
         let previousTokenResult: TokenWithIndex;
         if (!allowCurrent) {
@@ -2979,14 +2978,25 @@ export class Parser {
             currentTokenIndex = previousTokenResult?.index;
         }
         isUnknown = isUnknown || previousTokenResult?.isUnknown;
-        if (currentToken?.kind === TokenKind.Identifier) {
-            return { token: currentToken, index: currentTokenIndex, isUnknown: isUnknown };
-        } else if (isUnknown) {
+        if (isUnknown || this.isAcceptableChainToken(currentToken)) {
             return { token: currentToken, index: currentTokenIndex, isUnknown: isUnknown };
         }
         return undefined;
     }
-
+    private isAcceptableChainToken(currentToken: Token, lastTokenHasWhitespace = false): boolean {
+        if (!currentToken || lastTokenHasWhitespace) {
+            return false;
+        }
+        if (currentToken.kind === TokenKind.Identifier) {
+            return true;
+        }
+        if (currentToken.leadingWhitespace.length === 0) {
+            // start of the chain
+            return AllowedLocalIdentifiers.includes(currentToken.kind);
+        }
+        // not the start of the chain
+        return AllowedProperties.includes(currentToken.kind);
+    }
     /**
      * Builds up a chain of tokens, starting with the first in the chain, and ending with currentToken
      * e.g. m.prop.method().field (with 'field' as currentToken) -> ["m", "prop", "method", "field"], with each element as a token
@@ -2997,23 +3007,30 @@ export class Parser {
         const tokenChain: Token[] = [];
         let currentTokenIndex = this.tokens.indexOf(currentToken);
         let previousTokenResult: TokenWithIndex;
-        previousTokenResult = this.getPreviousIdentifierInChain(currentTokenIndex, true);
+        let lastTokenHasWhitespace = false;
+        let includesUnknown = false;
+        previousTokenResult = this.getPreviousTokenInChain(currentTokenIndex, true);
         currentToken = previousTokenResult?.token;
         currentTokenIndex = previousTokenResult?.index;
-        if (currentToken?.kind === TokenKind.Identifier) {
+        if (this.isAcceptableChainToken(currentToken)) {
             tokenChain.push(currentToken);
+            lastTokenHasWhitespace = currentToken?.leadingWhitespace.length > 0;
         }
-        previousTokenResult = this.getPreviousIdentifierInChain(currentTokenIndex);
-        currentToken = previousTokenResult?.token;
-        currentTokenIndex = previousTokenResult?.index;
-        let includesUnknown = !!previousTokenResult?.isUnknown;
-        while (!includesUnknown && currentToken?.kind === TokenKind.Identifier) {
-            tokenChain.push(currentToken);
-            previousTokenResult = this.getPreviousIdentifierInChain(currentTokenIndex);
+        if (!lastTokenHasWhitespace) {
+            previousTokenResult = this.getPreviousTokenInChain(currentTokenIndex);
             currentToken = previousTokenResult?.token;
             currentTokenIndex = previousTokenResult?.index;
-            includesUnknown = previousTokenResult?.isUnknown;
-
+            includesUnknown = !!previousTokenResult?.isUnknown;
+            while (!includesUnknown && this.isAcceptableChainToken(currentToken, lastTokenHasWhitespace)) {
+                tokenChain.push(currentToken);
+                lastTokenHasWhitespace = currentToken?.leadingWhitespace.length > 0;
+                if (!lastTokenHasWhitespace) {
+                    previousTokenResult = this.getPreviousTokenInChain(currentTokenIndex);
+                    currentToken = previousTokenResult?.token;
+                    currentTokenIndex = previousTokenResult?.index;
+                    includesUnknown = previousTokenResult?.isUnknown;
+                }
+            }
         }
         tokenChain.reverse();
         return { chain: tokenChain, includesUnknown: !!includesUnknown };

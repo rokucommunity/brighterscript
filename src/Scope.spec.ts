@@ -1440,7 +1440,7 @@ describe('Scope', () => {
             let topResult = program.getCompletions(`${rootDir}/components/comp.brs`, Position.create(3, 34)); // completions on 'm.top.'
             let topProperties = topResult.map(x => x.label);
             expect(topProperties).to.contain('intField');
-            expect(topProperties).to.contain('func1');
+            expect(topProperties).not.to.contain('func1'); // TODO Types -  add functions from interface
         });
 
 
@@ -1469,6 +1469,21 @@ describe('Scope', () => {
                 end function
 
             `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('handles when the same loop variable is used in multiple places from function calls', () => {
+            program.setFile(s`source/main.brs`, `
+            sub doLoop(someObj)
+                for each datum in someObj.getArray()
+                  print datum
+                end for
+
+                for each datum in someObj.getArray()
+                  print datum
+                end for
+            end sub`);
             program.validate();
             expectZeroDiagnostics(program);
         });

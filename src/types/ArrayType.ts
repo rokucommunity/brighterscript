@@ -15,7 +15,7 @@ export class ArrayType implements BscType {
                 //find this inner type in the target
                 // eslint-disable-next-line no-unreachable-loop
                 for (let targetInnerType of targetType.innerTypes) {
-                    //TODO is this loop correct? It ends after 1 iteration but we might need to do more iterations
+                    //TODO TYPES is this loop correct? It ends after 1 iteration but we might need to do more iterations
 
                     if (innerType.isAssignableTo(targetInnerType)) {
                         continue outer;

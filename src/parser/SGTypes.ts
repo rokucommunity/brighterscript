@@ -491,6 +491,7 @@ export class SGInterfaceFunction extends SGTag {
     get functionType(): FunctionType {
         const funcType = new FunctionType(new DynamicType());
         funcType.name = this.name;
+        // TODO TYPES: Need to get parameter count/type for these functions for @callFunc usage
         return funcType;
     }
 }

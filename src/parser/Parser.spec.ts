@@ -1343,14 +1343,39 @@ describe('parser', () => {
             expect(tokenChain.map(token => token.text)).to.eql(['var', 'field', 'myArray', 'childField']);
         });
 
-        const parser = parse(`
+        it('includes unknown when an expression in brackets is part of the chain', () => {
+            const parser = parse(`
             sub someFunc()
                 print (1 + 1).toStr()
             end sub
             `, ParseMode.BrighterScript);
-        const toStrToken = parser.getTokenAt(Position.create(2, 34));
-        const tokenChainResponse = parser.getTokenChain(toStrToken);
-        expect(tokenChainResponse.includesUnknown).to.be.true;
+            const toStrToken = parser.getTokenAt(Position.create(2, 34));
+            const tokenChainResponse = parser.getTokenChain(toStrToken);
+            expect(tokenChainResponse.includesUnknown).to.be.true;
+        });
+
+        it('includes unknown when an expression in double brackets is part of the chain', () => {
+            const parser = parse(`
+            sub someFunc()
+                print ((2 + 1)*3).toStr()
+            end sub
+            `, ParseMode.BrighterScript);
+            const toStrToken = parser.getTokenAt(Position.create(2, 38));
+            const tokenChainResponse = parser.getTokenChain(toStrToken);
+            expect(tokenChainResponse.includesUnknown).to.be.true;
+        });
+
+        it('includes unknown when a complicated expression in brackets is part of the chain', () => {
+            const parser = parse(`
+            sub someFunc(currentDate, lastUpdate)
+                print (INT((currentDate.asSeconds() - lastUpdate) / 86400)).toStr()
+            end sub
+            `, ParseMode.BrighterScript);
+            const toStrToken = parser.getTokenAt(Position.create(2, 81));
+            const tokenChainResponse = parser.getTokenChain(toStrToken);
+            expect(tokenChainResponse.includesUnknown).to.be.true;
+        });
+
     });
 
     it('includes unknown when property is referenced via brackets', () => {
@@ -1375,6 +1400,57 @@ describe('parser', () => {
 
         tokenChainResponse = parser.getTokenChain(propAsAsDoubleBracketToken);
         expect(tokenChainResponse.includesUnknown).to.be.true;
+    });
+
+    it('allows token kinds from AllowedLocalIdentifiers as start of a chain', () => {
+        const parser = parse(`
+            sub testLocalIdentifiers(override, string, float)
+                override.someProp.someFunc()
+                string.someProp.someFunc()
+                float.someProp.someFunc()
+            end sub
+            `, ParseMode.BrightScript);
+        const overrideFuncToken = parser.getTokenAt(Position.create(2, 40)); // override.someProp.someFunc()
+        const stringFuncToken = parser.getTokenAt(Position.create(3, 40)); // string.someProp.someFunc()
+        const floatFuncToken = parser.getTokenAt(Position.create(4, 38)); // float.someProp.someFunc()
+
+        let tokenChainResponse = parser.getTokenChain(overrideFuncToken);
+        expect(tokenChainResponse.includesUnknown).to.be.false;
+        expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['override', 'someProp', 'someFunc']);
+
+        tokenChainResponse = parser.getTokenChain(stringFuncToken);
+        expect(tokenChainResponse.includesUnknown).to.be.false;
+        expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['string', 'someProp', 'someFunc']);
+
+        tokenChainResponse = parser.getTokenChain(floatFuncToken);
+        expect(tokenChainResponse.includesUnknown).to.be.false;
+        expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['float', 'someProp', 'someFunc']);
+    });
+
+    it('allows token kinds from AllowedProperties in middle of a chain', () => {
+        const parser = parse(`
+            sub testAllowedProperties(someObj)
+                someObj.override.someFunc()
+                someObj.string.someFunc()
+                someObj.float.someFunc()
+            end sub
+            `, ParseMode.BrightScript);
+        const overrideFuncToken = parser.getTokenAt(Position.create(2, 36)); // someObj.override.someFunc()
+        const stringFuncToken = parser.getTokenAt(Position.create(3, 36)); // someObj.string.someFunc()
+        const floatFuncToken = parser.getTokenAt(Position.create(4, 36)); // someObj.float.someFunc()
+
+        let tokenChainResponse = parser.getTokenChain(overrideFuncToken);
+        expect(tokenChainResponse.includesUnknown).to.be.false;
+        expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['someObj', 'override', 'someFunc']);
+
+        tokenChainResponse = parser.getTokenChain(stringFuncToken);
+        expect(tokenChainResponse.includesUnknown).to.be.false;
+        expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['someObj', 'string', 'someFunc']);
+
+        tokenChainResponse = parser.getTokenChain(floatFuncToken);
+        expect(tokenChainResponse.includesUnknown).to.be.false;
+        expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['someObj', 'float', 'someFunc']);
+
     });
 });
 

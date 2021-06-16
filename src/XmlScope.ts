@@ -68,7 +68,8 @@ export class XmlScope extends Scope {
                 //validate functions
                 if (isSGInterfaceFunction(member)) {
                     if (member.name) {
-                        this.topTable.addSymbol(member.name, member.range, member.functionType);
+                        // TODO TYPES: Should add something here for @callFunc types?
+                        // this.callFuncTable.addSymbol(member.name, member.range, member.functionType);
                     }
                 } else if (isSGInterfaceField(member) && member?.id) {
                     this.topTable.addSymbol(member.id, member.range, member.bscType);

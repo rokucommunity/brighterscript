@@ -637,12 +637,15 @@ export class BrsFile {
                     continue;
                 }
                 names[symbolNameLower] = true;
+                // TODO TYPES (This may be a performance hit?)
+                // const foundType = getTypeFromContext(symbol.type, { scope: scope, file: this });
+
                 result.push({
                     //TODO does this work?
                     label: symbol.name,
-                    //TODO find type for local vars
+                    //TODO TYPES find type for local vars - SEE above
                     kind: CompletionItemKind.Variable
-                    // kind: isFunctionType(variable.type) ? CompletionItemKind.Function : CompletionItemKind.Variable
+                    // kind: isFunctionType(foundType) ? CompletionItemKind.Function : CompletionItemKind.Variable
                 });
             }
 
@@ -881,7 +884,7 @@ export class BrsFile {
                 if (isCustomType(symbolType)) {
                     // we're currently looking at a customType, that has it's own symbol table
                     // use the name of the custom type
-                    // TODO: get proper parent name for methods/fields defined in super classes
+                    // TODO TYPES: get proper parent name for methods/fields defined in super classes
                     tokenText.push(tokenChain.length === 1 ? token.text : symbolType.name);
                 } else {
                     justReturnDynamic = true;
@@ -931,7 +934,7 @@ export class BrsFile {
             if (symbolContainer) {
                 backUpReturnType = new InvalidType();
             } else {
-                // TODO: once we have stricter object/node member type checking, we could say this is invalid, but until then, call it dynamic
+                // TODO TYPES: once we have stricter object/node member type checking, we could say this is invalid, but until then, call it dynamic
                 backUpReturnType = new DynamicType();
                 expandedTokenText = currentToken.text;
 
@@ -1554,7 +1557,7 @@ export class BrsFile {
 
     private getClassMethod(classStatement: ClassStatement, name: string, walkParents = true): ClassMethodStatement | undefined {
         //TODO - would like to write this with getClassHierarchy; but got stuck on working out the scopes to use... :(
-        //TODO - this could be solved with symbolTable?
+        //TODO types - this could be solved with symbolTable?
         let statement;
         const statementHandler = (e) => {
             if (!statement && e.name.text.toLowerCase() === name.toLowerCase()) {

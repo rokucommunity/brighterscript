@@ -62,7 +62,7 @@ describe('SymbolTable', () => {
         });
 
         it('returns dynamic if multiple assignments of different type', () => {
-            // TODO - union types
+            // TODO TYPES - union types
             const st = new SymbolTable();
             st.addSymbol('foo', null, new StringType());
             st.addSymbol('foo', null, new IntegerType());

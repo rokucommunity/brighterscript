@@ -109,7 +109,7 @@ export class SymbolTable {
         const symbols = this.symbolMap.get(key);
         if (symbols?.length > 1) {
             //Check if each time it was set, it was set to the same type
-            // TODO handle union types
+            // TODO TYPES handle union types
             let sameImpliedType = true;
             let impliedType: BscType;
             for (const symbol of symbols) {

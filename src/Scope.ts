@@ -146,7 +146,7 @@ export class Scope {
             currentClass = this.getParentClass(currentClass);
             ancestors.push(currentClass?.getCustomType());
         }
-        //TODO: this should probably be cached
+        // TODO TYPES: this should probably be cached
         return ancestors;
     }
 
@@ -561,7 +561,7 @@ export class Scope {
                     const namespaceSymbolTable = this.namespaceLookup[namespaceNameLower].symbolTable;
                     namespace.symbolTable.setParent(namespaceSymbolTable);
                 }
-                //TODO: build symbol tables for dotted set assignments using actual values
+                //TODO TYPES: build symbol tables for dotted set assignments using actual values
                 // Currently this is prone to call-stack issues.
                 // eg. m.key = "value"
 
@@ -569,10 +569,10 @@ export class Scope {
                     if (isVariableExpression(dotSetStmt.obj)) {
                         if (dotSetStmt.obj.getName(ParseMode.BrighterScript).toLowerCase() === 'm') {
                             this.memberTable.addSymbol(dotSetStmt.name.text, dotSetStmt.range, new DynamicType());
-                            // TODO: get actual types: getBscTypeFromExpression(dotSetStmt.value, file.parser.references.getContainingFunctionExpression(dotSetStmt.name)));
+                            // TODO TYPES: get actual types: getBscTypeFromExpression(dotSetStmt.value, file.parser.references.getContainingFunctionExpression(dotSetStmt.name)));
                         }
                     } else {
-                        // TODO: What other types of expressions could these be?
+                        // TODO TYPES: What other types of expressions could these be?
                     }
                 }
             }
@@ -766,7 +766,7 @@ export class Scope {
                             assignable = argType?.isAssignableTo(paramType, argTypeContext);
                         }
                         if (!assignable) {
-                            // TODO: perhaps this should be a strict mode setting?
+                            // TODO TYPES: perhaps this should be a strict mode setting?
                             assignable = argType?.isConvertibleTo(paramType, argTypeContext);
                         }
                         if (!assignable) {
@@ -778,7 +778,7 @@ export class Scope {
                         }
                     }
                 } else if (isInvalidType(symbolTypeInfo.type)) {
-                    // TODO: standard member functions like integer.ToStr() are not detectable yet.
+                    // TODO TYPES: standard member functions like integer.ToStr() are not detectable yet.
                 } else if (isDynamicType(symbolTypeInfo.type)) {
                     // maybe this is a function? who knows
                 } else {
