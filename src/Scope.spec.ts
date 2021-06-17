@@ -364,6 +364,30 @@ describe('Scope', () => {
             });
         });
 
+        it('properly validates function chains on global callables', () => {
+            program.setFile('source/file.brs', `
+                sub testFunctionChainOnGlobalCallable()
+                    print str(123).replace("1", "").trim()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('properly validates function chains on functions returning primitives', () => {
+            program.setFile('source/file.brs', `
+                function getStr(num as integer) as string
+                    return num.toStr()
+                end function
+
+                sub testFunctionChainOnGlobalCallable()
+                    print getStr(123).replace("1", "").trim()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('does not error with calls to callables in same namespace', () => {
             program.setFile('source/file.bs', `
                 namespace Name.Space

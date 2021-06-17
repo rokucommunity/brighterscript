@@ -877,7 +877,10 @@ export class BrsFile {
                 // this is a function, and it is in the start or middle of the chain
                 // the next symbol to check will be the return value of this function
                 symbolType = getTypeFromContext(symbolType.returnType, typeContext);
-
+                if (tokenFoundCount < tokenChain.length) {
+                    // We're still
+                    symbolTypeBeforeReference = symbolType;
+                }
             }
 
             if (symbolType?.memberTable) {
