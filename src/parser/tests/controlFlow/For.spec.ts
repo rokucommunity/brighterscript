@@ -128,8 +128,8 @@ describe('parser for loops', () => {
                 text: 'to',
                 isReserved: false,
                 range: {
-                    start: { line: 0, column: 10 },
-                    end: { start: 0, column: 12 }
+                    start: { line: 0, character: 10 },
+                    end: { line: 0, character: 12 }
                 }
             },
             {
