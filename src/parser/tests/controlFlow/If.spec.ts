@@ -3,8 +3,9 @@ import * as assert from 'assert';
 
 import { Parser } from '../../Parser';
 import { TokenKind, Lexer } from '../../../lexer';
-import { EOF, identifier, token } from '../Parser.spec';
+import { EOF, identifier, rangeMatch, token } from '../Parser.spec';
 import { isBlock, isCommentStatement, isIfStatement } from '../../../astUtils';
+import type { Block, IfStatement } from '../../Statement';
 
 describe('parser if statements', () => {
     it('allows empty if blocks', () => {
@@ -601,5 +602,25 @@ describe('parser if statements', () => {
         let { statements, diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
+    });
+
+    it('single-line if block statements have correct range', () => {
+        let { tokens } = Lexer.scan(`
+            if false then print "true"
+            if false then print "true": a = 10
+            if false then print "true" else print "false"
+            if false then print "true" else print "false": a = 20
+        `);
+        let { statements, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(0);
+
+        const then1 = (statements[0] as IfStatement).thenBranch;
+        expect(rangeMatch(then1.range, then1.statements)).to.be.true;
+        const then2 = (statements[1] as IfStatement).thenBranch;
+        expect(rangeMatch(then2.range, then2.statements)).to.be.true;
+        const else1 = (statements[2] as IfStatement).elseBranch as Block;
+        expect(rangeMatch(else1.range, else1.statements)).to.be.true;
+        const else2 = (statements[3] as IfStatement).elseBranch as Block;
+        expect(rangeMatch(else2.range, else2.statements)).to.be.true;
     });
 });
