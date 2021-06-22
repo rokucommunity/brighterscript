@@ -2317,30 +2317,38 @@ export class Parser {
                 }
 
                 if (!this.match(TokenKind.RightCurlyBrace)) {
+                    let lastAAMember: AAMemberExpression;
                     if (this.check(TokenKind.Comment)) {
+                        lastAAMember = null;
                         members.push(new CommentStatement([this.advance()]));
                     } else {
                         let k = key();
                         let expr = this.expression();
-                        members.push(new AAMemberExpression(
+                        lastAAMember = new AAMemberExpression(
                             k.keyToken,
                             k.colonToken,
                             expr
-                        ));
+                        );
+                        members.push(lastAAMember);
                     }
 
                     while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
+                        // collect comma at end of expression
+                        if (lastAAMember && this.checkPrevious(TokenKind.Comma)) {
+                            lastAAMember.commaToken = this.previous();
+                        }
+
                         //check for comment at the end of the current line
                         if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
                             let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
                             members.push(new CommentStatement([token]));
                         } else {
-                            while (this.matchAny(TokenKind.Newline, TokenKind.Colon)) {
+                            this.consumeStatementSeparators(true);
 
-                            }
                             //check for a comment on its own line
                             if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
                                 let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
+                                lastAAMember = null;
                                 members.push(new CommentStatement([token]));
                                 continue;
                             }
@@ -2350,11 +2358,12 @@ export class Parser {
                             }
                             let k = key();
                             let expr = this.expression();
-                            members.push(new AAMemberExpression(
+                            lastAAMember = new AAMemberExpression(
                                 k.keyToken,
                                 k.colonToken,
                                 expr
-                            ));
+                            );
+                            members.push(lastAAMember);
                         }
                     }
 
