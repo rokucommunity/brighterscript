@@ -204,8 +204,6 @@ export class Parser {
     /**
      * Static wrapper around creating a new parser and parsing a list of tokens
      */
-    public static parse(source: string, options?: ParseOptions): Parser;
-    public static parse(tokens: Token[], options?: ParseOptions): Parser;
     public static parse(toParse: Token[] | string, options?: ParseOptions): Parser {
         let tokens: Token[];
         if (typeof toParse === 'string') {
@@ -1796,6 +1794,7 @@ export class Parser {
             return undefined;
         }
         statements.push(statement);
+        const startingRange = statement.range;
 
         //look for colon statement separator
         let foundColon = false;
@@ -1821,7 +1820,7 @@ export class Parser {
                 });
             }
         }
-        return new Block(statements, this.peek().range);
+        return new Block(statements, startingRange);
     }
 
     private expressionStatement(expr: Expression): ExpressionStatement | IncrementStatement {
@@ -2477,30 +2476,38 @@ export class Parser {
                 }
 
                 if (!this.match(TokenKind.RightCurlyBrace)) {
+                    let lastAAMember: AAMemberExpression;
                     if (this.check(TokenKind.Comment)) {
+                        lastAAMember = null;
                         members.push(new CommentStatement([this.advance()]));
                     } else {
                         let k = key();
                         let expr = this.expression();
-                        members.push(new AAMemberExpression(
+                        lastAAMember = new AAMemberExpression(
                             k.keyToken,
                             k.colonToken,
                             expr
-                        ));
+                        );
+                        members.push(lastAAMember);
                     }
 
                     while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
+                        // collect comma at end of expression
+                        if (lastAAMember && this.checkPrevious(TokenKind.Comma)) {
+                            lastAAMember.commaToken = this.previous();
+                        }
+
                         //check for comment at the end of the current line
                         if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
                             let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
                             members.push(new CommentStatement([token]));
                         } else {
-                            while (this.matchAny(TokenKind.Newline, TokenKind.Colon)) {
+                            this.consumeStatementSeparators(true);
 
-                            }
                             //check for a comment on its own line
                             if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
                                 let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
+                                lastAAMember = null;
                                 members.push(new CommentStatement([token]));
                                 continue;
                             }
@@ -2510,11 +2517,12 @@ export class Parser {
                             }
                             let k = key();
                             let expr = this.expression();
-                            members.push(new AAMemberExpression(
+                            lastAAMember = new AAMemberExpression(
                                 k.keyToken,
                                 k.colonToken,
                                 expr
-                            ));
+                            );
+                            members.push(lastAAMember);
                         }
                     }
 
