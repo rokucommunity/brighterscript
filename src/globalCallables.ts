@@ -190,6 +190,14 @@ let runtimeFunctions = [{
         name: 'param4',
         type: new DynamicType(),
         isOptional: true
+    }, {
+        name: 'param5',
+        type: new DynamicType(),
+        isOptional: true
+    }, {
+        name: 'param6',
+        type: new DynamicType(),
+        isOptional: true
     }]
 }, {
     name: 'Type',
