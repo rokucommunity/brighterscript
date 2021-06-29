@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.39.4] - 2021-06-27
+[0.39.4]: https://github.com/RokuCommunity/roku-debug/compare/v0.8.3...v0.8.4
+### Fixed
+ - incorrect block range for inline if/then branch ([#424](https://github.com/rokucommunity/brighterscript/pull/424))
+ - extract associative array comma when parsing ([#427](https://github.com/rokucommunity/brighterscript/pull/424))
+ - allow up to 6 arguments in `CreateObject` function signature ([#430](https://github.com/rokucommunity/brighterscript/pull/430))
+ - add v30/bslCore library functions to global callables ([#433](https://github.com/rokucommunity/brighterscript/pull/433))
+
+
 ## [0.39.3] - 2021-06-01
 [0.39.3]: https://github.com/RokuCommunity/roku-debug/compare/v0.8.2...v0.8.3
 ### Changed
