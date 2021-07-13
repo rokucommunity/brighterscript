@@ -2490,6 +2490,1576 @@
                     "default": "invalid",
                     "type": "string"
                 }
+            ],
+            "implementors": [],
+            "methods": []
+        },
+        "ifAppInfo": {
+            "name": "ifAppInfo",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifappinfo.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roAppInfo",
+                    "description": "Returns information about the application",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roappinfo.md"
+                }
+            ]
+        },
+        "ifAppManager": {
+            "name": "ifAppManager",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifappmanager.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roAppManager",
+                    "description": "Returns information about the application",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roappmanager.md"
+                }
+            ]
+        },
+        "ifArray": {
+            "name": "ifArray",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarray.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roArray",
+                    "description": "An array stores an indexed collection of BrightScript objects. Each entry of an array can be a different type, or they may all of the same type",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roarray.md"
+                },
+                {
+                    "name": "roByteArray",
+                    "description": "The byte array component is used to contain and manipulate an arbitrary array of bytes",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/robytearray.md"
+                },
+                {
+                    "name": "roList",
+                    "description": "The list object implements the interfaces: ifList, ifArray, ifEnum and therefore can behave like an array that can dynamically add members",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolist.md"
+                },
+                {
+                    "name": "roXMLList",
+                    "description": "Contains a list of roXML objects",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmllist.md"
+                }
+            ]
+        },
+        "ifArrayGet": {
+            "name": "ifArrayGet",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarrayget.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roArray",
+                    "description": "An array stores an indexed collection of BrightScript objects. Each entry of an array can be a different type, or they may all of the same type",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roarray.md"
+                },
+                {
+                    "name": "roByteArray",
+                    "description": "The byte array component is used to contain and manipulate an arbitrary array of bytes",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/robytearray.md"
+                },
+                {
+                    "name": "roList",
+                    "description": "The list object implements the interfaces: ifList, ifArray, ifEnum and therefore can behave like an array that can dynamically add members",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolist.md"
+                },
+                {
+                    "name": "roXMLList",
+                    "description": "Contains a list of roXML objects",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmllist.md"
+                }
+            ]
+        },
+        "ifArrayJoin": {
+            "name": "ifArrayJoin",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarrayjoin.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roArray",
+                    "description": "Returns information about the application",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roarray.md"
+                }
+            ]
+        },
+        "ifArraySet": {
+            "name": "ifArraySet",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarrayset.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roArray",
+                    "description": "An array stores an indexed collection of BrightScript objects. Each entry of an array can be a different type, or they may all of the same type",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roarray.md"
+                },
+                {
+                    "name": "roByteArray",
+                    "description": "The byte array component is used to contain and manipulate an arbitrary array of bytes",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/robytearray.md"
+                },
+                {
+                    "name": "roList",
+                    "description": "The list object implements the interfaces: ifList, ifArray, ifEnum and therefore can behave like an array that can dynamically add members",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolist.md"
+                },
+                {
+                    "name": "roXMLList",
+                    "description": "Contains a list of roXML objects",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmllist.md"
+                }
+            ]
+        },
+        "ifArraySort": {
+            "name": "ifArraySort",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarraysort.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roArray",
+                    "description": "Returns information about the application",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roarray.md"
+                }
+            ]
+        },
+        "ifAssociativeArray": {
+            "name": "ifAssociativeArray",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifassociativearray.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roAssociativeArray",
+                    "description": "An associative array allows objects to be associated with string keys",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roassociativearray.md"
+                },
+                {
+                    "name": "roSGNode",
+                    "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md"
+                }
+            ]
+        },
+        "ifAudioGuide": {
+            "name": "ifAudioGuide",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifaudioguide.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roAudioGuide",
+                    "description": "Returns information about the application",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roaudioguide.md"
+                }
+            ]
+        },
+        "ifAudioMetaData": {
+            "name": "ifAudioMetaData",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifaudiometadata.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roAudioMetadata",
+                    "description": "This component provides developers access to audio file metadata included in many audio files",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roaudiometadata.md"
+                }
+            ]
+        },
+        "ifAudioPlayer": {
+            "name": "ifAudioPlayer",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifaudioplayer.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roAudioMetadata",
+                    "description": "The Audio Player object provides the ability to setup the playing of a series of audio streams",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roaudiometadata.md"
+                }
+            ]
+        },
+        "ifAudioResource": {
+            "name": "ifAudioResource",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifaudioresource.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roAudioResource",
+                    "description": "The roAudioResouce allows .wav files to be cached to memory and quickly played at any time",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roaudioresource.md"
+                }
+            ]
+        },
+        "ifBoolean": {
+            "name": "ifBoolean",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifboolean.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roBoolean",
+                    "description": "Object equivalent for intrinsic type Boolean",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roboolean.md"
+                }
+            ]
+        },
+        "ifByteArray": {
+            "name": "ifByteArray",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifbytearray.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roByteArray",
+                    "description": "The byte array component is used to contain and manipulate an arbitrary array of bytes",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/robytearray.md"
+                }
+            ]
+        },
+        "ifCaptionRenderer": {
+            "name": "ifCaptionRenderer",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifcaptionrenderer.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roCaptionRenderer",
+                    "description": "Returns information about the application",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rocaptionrenderer.md"
+                }
+            ]
+        },
+        "ifChannelStore": {
+            "name": "ifChannelStore",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifchannelstore.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roChannelStore",
+                    "description": "allows the application to perform a purchase of an In-Channel Product or upgrade a channel",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rochannelstore.md"
+                }
+            ]
+        },
+        "ifCodeRegistrationScreen": {
+            "name": "ifCodeRegistrationScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifcoderegistrationscreen.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roCodeRegistrationScreen",
+                    "description": "The Code Registration Screen is designed to present the user a registration code, and the information required to instruct the user on how to register with a service provider",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rocoderegistrationscreen.md"
+                }
+            ]
+        },
+        "ifCompositor": {
+            "name": "ifCompositor",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifcompositor.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roCompositor",
+                    "description": "The roCompositor allows the composition and animation of multiple roBitmaps and roRegions",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rocompositor.md"
+                }
+            ]
+        },
+        "ifDateTime": {
+            "name": "ifDateTime",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifdatetime.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roDateTime",
+                    "description": "The roDateTime provides an interface to obtain the current date/time for the player and manipulate date/times",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodatetime.md"
+                }
+            ]
+        },
+        "ifDeviceInfo": {
+            "name": "ifDeviceInfo",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifdeviceinfo.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roDeviceInfo",
+                    "description": "The roDeviceInfo component provides an interface to obtain attributes about the device",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodeviceinfo.md"
+                }
+            ]
+        },
+        "ifDeviceCrypto": {
+            "name": "ifDeviceCrypto",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifdevicecrypto.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roDeviceCrypto",
+                    "description": "Encrypts and decrypts data on a device using a key that is unique per channel, device, or model.",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodevicecrypto.md"
+                }
+            ]
+        },
+        "ifDouble": {
+            "name": "ifDouble",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifdouble.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roDouble",
+                    "description": "roDouble is a legacy object name, corresponding to the intrinsic Double object",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodouble.md"
+                }
+            ]
+        },
+        "ifDraw2D": {
+            "name": "ifDraw2D",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifdraw2d.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roBitmap",
+                    "description": "The roBitmap component contains image data and provides an interface (ifDraw2D) for drawing",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/robitmap.md"
+                },
+                {
+                    "name": "roRegion",
+                    "description": "The roRegion component is used to represent a subsection of a bitmap",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roregion.md"
+                },
+                {
+                    "name": "roScreen",
+                    "description": "The roScreen component provides a full screen drawing surface that can be stacked and that you can receive input events from",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roscreen.md"
+                }
+            ]
+        },
+        "ifEnum": {
+            "name": "ifEnum",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifenum.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roArray",
+                    "description": "An array stores an indexed collection of BrightScript objects",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roarray.md"
+                },
+                {
+                    "name": "roAssociativeArray",
+                    "description": "An associative array (also known as a map, dictionary or hash table) allows objects to be associated with string keys",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roassociativearray.md"
+                },
+                {
+                    "name": "roByteArray",
+                    "description": "The byte array component is used to contain and manipulate an arbitrary array of bytes",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/robytearray.md"
+                },
+                {
+                    "name": "roList",
+                    "description": "The list object implements the interfaces: ifList, ifArray, ifEnum and therefore can behave like an array that can dynamically add members",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolist.md"
+                },
+                {
+                    "name": "roMessagePort",
+                    "description": "A Message Port is the place messages (events) are sent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/romessageport.md"
+                },
+                {
+                    "name": "roXMLList",
+                    "description": "Contains a list of roXML objects",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmllist.md"
+                }
+            ]
+        },
+        "ifEVPCipher": {
+            "name": "ifEVPCipher",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifevpcipher.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roEVPCipher",
+                    "description": "The EVP Cipher component provides an interface to the OpenSSL EVP library of symmetric cipher commands",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roevpcipher.md"
+                }
+            ]
+        },
+        "ifEVPDigest": {
+            "name": "ifEVPDigest",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifevpdigest.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roEVPDigest",
+                    "description": "The EVP Digest component provides an interface to the OpenSSL EVP library of message digest algorithms",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roevpdigest.md"
+                }
+            ]
+        },
+        "ifFileSystem": {
+            "name": "ifFileSystem",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iffilesystem.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roFile System",
+                    "description": "The roFilesystem component implements common filesystem inspection and modification routines"
+                }
+            ]
+        },
+        "ifFloat": {
+            "name": "ifFloat",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iffloat.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roFloat",
+                    "description": "Object equivalent for intrinsic type 'Float'",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofloat.md"
+                }
+            ]
+        },
+        "ifFont": {
+            "name": "ifFont",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iffont.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roFont",
+                    "description": "roFont represents a particular font, from a font-family (eg. Arial), with a particular pixel size (e.g 20), and a particular boldness or italicness",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofont.md"
+                }
+            ]
+        },
+        "ifFontMetrics": {
+            "name": "ifFontMetrics",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iffontmetrics.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roFontMetrics",
+                    "description": "The roFontMetrics object allows you to get display size information for a specific font returned by the roFontRegistry.Get() method",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofontmetrics.md"
+                }
+            ]
+        },
+        "ifFontRegistry": {
+            "name": "ifFontRegistry",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iffontregistry.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roFontRegistry",
+                    "description": "The roFontRegistry object allows you to create roFont objects, either using the default font or using fonts in TrueType or OpenType files packaged with your application",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofontregistry.md"
+                }
+            ]
+        },
+        "ifFunction": {
+            "name": "ifFunction",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iffunction.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roFunction",
+                    "description": "Object equivalent for intrinsic type Function",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofunction.md"
+                }
+            ]
+        },
+        "ifGetMessagePort": {
+            "name": "ifGetMessagePort",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roHdmiStatus",
+                    "description": "The HDMI status component provides an interface to the current HDMI operational status",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rohdmistatus.md"
+                },
+                {
+                    "name": "roScreen",
+                    "description": "The roScreen component provides a full screen drawing surface that can be stacked and that you can receive input events from",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roscreen.md"
+                },
+                {
+                    "name": "roUrlTransfer",
+                    "description": "A roUrlTransfer object transfers data to or from remote servers specified by URLs",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rourltransfer.md"
+                },
+                {
+                    "name": "roTextToSpeech",
+                    "description": "The roTextToSpeech component provides text to speech capabilities to applications",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotexttospeech.md"
+                }
+            ]
+        },
+        "ifGridScreen": {
+            "name": "ifGridScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgridscreen.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roGridScreen",
+                    "description": "The Grid Screen provides a graphical display of poster art from multiple content categories from within a single screen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rogridscreen.md"
+                }
+            ]
+        },
+        "ifHdmiStatus": {
+            "name": "ifHdmiStatus",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhdmistatus.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roHdmiStatus",
+                    "description": "The HDMI status component provides an interface to the current HDMI operational status",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rohdmistatus.md"
+                }
+            ]
+        },
+        "ifHMAC": {
+            "name": "ifHMAC",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhmac.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roHMAC",
+                    "description": "The HMAC component provides an interface to the OpenSSL HMAC functions",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rohmac.md"
+                }
+            ]
+        },
+        "ifHttpAgent": {
+            "name": "ifHttpAgent",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roAppManager",
+                    "description": "The Application Manager APIs set application level attributes, which mostly affect the look-and-feel of the application",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roappmanager.md"
+                },
+                {
+                    "name": "roAudioPlayer",
+                    "description": "The Audio Player object provides the ability to setup the playing of a series of audio streams",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roaudioplayer.md"
+                },
+                {
+                    "name": "roGridScreen",
+                    "description": "The Grid Screen provides a graphical display of poster art from multiple content categories from within a single screen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rogridscreen.md"
+                },
+                {
+                    "name": "roImageCanvas",
+                    "description": "The roImageCanvas component provides an interface to render graphic elements at specific spots on the screen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roimagecanvas.md"
+                },
+                {
+                    "name": "roListScreen",
+                    "description": "The List Screen provides a graphical display of content in a vertical list within a single screen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolistscreen.md"
+                },
+                {
+                    "name": "roParagraphScreen",
+                    "description": "The Paragraph Screen provides a way to display text and selection choices to the user",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roparagraphscreen.md"
+                },
+                {
+                    "name": "roPosterScreen",
+                    "description": "The Poster Screen provides a graphical display of poster art for content selection or can be used as a submenu to provide hierarchical structure to the application",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roposterscreen.md"
+                },
+                {
+                    "name": "roSGNode",
+                    "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md"
+                },
+                {
+                    "name": "roSlideShow",
+                    "description": "The Slide Show screen provides the ability to setup a photo slide show to playback a series of images",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roslideshow.md"
+                },
+                {
+                    "name": "roSpringboardScreen",
+                    "description": "The Springboard Screen shows detailed information about an individual piece of content and provides options for actions that may be taken on that content",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rospringboardscreen.md"
+                },
+                {
+                    "name": "roTextScreen",
+                    "description": "roTextScreen provides a way of displaying large amounts of scrollable text",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotextscreen.md"
+                },
+                {
+                    "name": "roTextureManager",
+                    "description": "The Texture Manager provides a set of API's for managing an roBitmap cache.",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotexturemanager.md"
+                },
+                {
+                    "name": "roTextureRequest",
+                    "description": "An roTextureRequest is used to make requests to the roTextureManager",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotexturerequest.md"
+                },
+                {
+                    "name": "roUrlTransfer",
+                    "description": "A roUrlTransfer object transfers data to or from remote servers specified by URLs",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rourltransfer.md"
+                },
+                {
+                    "name": "roVideoPlayer",
+                    "description": "The roVideoPlayer component implements a video player with more programmatic control, but less user control than the roVideoScreen component",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rovideoplayer.md"
+                },
+                {
+                    "name": "roVideoScreen",
+                    "description": "The Video Screen object implements the video playback portion of the user interface",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rovideoscreen.md"
+                }
+            ]
+        },
+        "ifImageCanvas": {
+            "name": "ifImageCanvas",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifimagecanvas.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roImageCanvas",
+                    "description": "The roImageCanvas component provides an interface to render graphic elements at specific spots on the screen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roimagecanvas.md"
+                }
+            ]
+        },
+        "ifImageMetaData": {
+            "name": "ifImageMetaData",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifimagemetadata.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roImageMetadata",
+                    "description": "The roImageMetadata component provides developers access to image file metadata included in many .jpg EXIF headers"
+                }
+            ]
+        },
+        "ifInput": {
+            "name": "ifInput",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifinput.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roInput",
+                    "description": "An roInput object can be used to receive events sent from a network client using the External Control Protocol (ECP), as described in External Control API",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roinput.md"
+                }
+            ]
+        },
+        "ifInt": {
+            "name": "ifInt",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifint.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roInt",
+                    "description": "Object equivalent for intrinsic type Integer",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roint.md"
+                }
+            ]
+        },
+        "ifIntOps": {
+            "name": "ifIntOps",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifintops.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roInt",
+                    "description": "Object equivalent for intrinsic type Integer",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roint.md"
+                }
+            ]
+        },
+        "ifKeyboardScreen": {
+            "name": "ifKeyboardScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifkeyboardscreen.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roKeyboardScreen",
+                    "description": "The Keyboard Screen is designed to allow the user to enter an alpha-numeric string for searching, username/password registration or other purposes",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rokeyboardscreen.md"
+                }
+            ]
+        },
+        "ifList": {
+            "name": "ifList",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iflist.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roList",
+                    "description": "The list object implements the interfaces: ifList, ifArray, ifEnum and therefore can behave like an array that can dynamically add members",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolist.md"
+                },
+                {
+                    "name": "roXMLList",
+                    "description": "Contains a list of roXML objects",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmllist.md"
+                }
+            ]
+        },
+        "ifListScreen": {
+            "name": "ifListScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iflistscreen.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roListScreen",
+                    "description": "The List Screen provides a graphical display of content in a vertical list within a single screen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolistscreen.md"
+                }
+            ]
+        },
+        "ifListToArray": {
+            "name": "ifListToArray",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iflisttoarray.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roList",
+                    "description": "The list object implements the interfaces: ifList, ifArray, ifEnum and therefore can behave like an array that can dynamically add members",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolist.md"
+                },
+                {
+                    "name": "roXMLList",
+                    "description": "Contains a list of roXML objects",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmllist.md"
+                }
+            ]
+        },
+        "ifLocalization": {
+            "name": "ifLocalization",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iflocalization.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roLocalization",
+                    "description": "The roLocalization object provides functions to assist in localization",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolocalization.md"
+                }
+            ]
+        },
+        "ifLongInt": {
+            "name": "ifLongInt",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iflongint.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roLongInteger",
+                    "description": "Object equivalent for intrinsic type LongInteger",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolonginteger.md"
+                }
+            ]
+        },
+        "ifMessageDialog": {
+            "name": "ifMessageDialog",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifmessagedialog.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roMessageDialog",
+                    "description": "The Message Dialog component is used to display a formatted, multi-line text message to the user",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/romessagedialog.md"
+                }
+            ]
+        },
+        "ifMessagePort": {
+            "name": "ifMessagePort",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifmessageport.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roMessagePort",
+                    "description": "A Message Port is the place messages (events) are sent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/romessageport.md"
+                }
+            ]
+        },
+        "ifMicrophone": {
+            "name": "ifMicrophone",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifmicrophone.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roMicrophone",
+                    "description": "The roMicrophone API allows channel applications to receive audio data from the user’s microphone-supported remote control device or mobile phone",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/romicrophone.md"
+                }
+            ]
+        },
+        "ifOneLineDialog": {
+            "name": "ifOneLineDialog",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifonelinedialog.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roOneLineDialog",
+                    "description": "The One Line Dialog is a special type of dialog optimized for single line text",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roonelinedialog.md"
+                }
+            ]
+        },
+        "ifParagraphScreen": {
+            "name": "ifParagraphScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifparagraphscreen.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roParagraphScreen",
+                    "description": "The Paragraph Screen provides a way to display text and selection choices to the user",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roparagraphscreen.md"
+                }
+            ]
+        },
+        "ifPath": {
+            "name": "ifPath",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifpath.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roPath",
+                    "description": "The roPath component provides developers an easy way to create valid file system paths",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/ropath.md"
+                }
+            ]
+        },
+        "ifPinEntryDialog": {
+            "name": "ifPinEntryDialog",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifpinentrydialog.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roPinEntryDialog",
+                    "description": "The Pin Entry Dialog is designed to allow the user to enter a numeric PIN for purchasing content",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/ropinentrydialog.md"
+                }
+            ]
+        },
+        "ifPosterScreen": {
+            "name": "ifPosterScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifposterscreen.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roPosterScreen",
+                    "description": "The Poster Screen provides a graphical display of poster art for content selection or can be used as a submenu to provide hierarchical structure to the application",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roposterscreen.md"
+                }
+            ]
+        },
+        "ifProgramGuide": {
+            "name": "ifProgramGuide",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifprogramguide.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roProgramGuide",
+                    "description": "Represents Electronic Program Guide (EPG) information from the tuner.",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roprogramguide.md"
+                }
+            ]
+        },
+        "ifRegex": {
+            "name": "ifRegex",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifregex.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roRegex",
+                    "description": "The roRegex component provides the powerful regular expression processing of the PCRE library to Brightscript strings",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roregex.md"
+                }
+            ]
+        },
+        "ifRegion": {
+            "name": "ifRegion",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifregion.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roRegion",
+                    "description": "The roRegion component is used to represent a subsection of a bitmap",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roregion.md"
+                }
+            ]
+        },
+        "ifRegistry": {
+            "name": "ifRegistry",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifregistry.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roRegistry",
+                    "description": "The Registry is an area of non-volatile storage where a small number of persistent settings can be stored",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roregistry.md"
+                }
+            ]
+        },
+        "ifRegistrySection": {
+            "name": "ifRegistrySection",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifregistrysection.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roRegistrySection",
+                    "description": "A Registry Section enables the organization of settings within the registry",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roregistrysection.md"
+                }
+            ]
+        },
+        "ifSGScreen": {
+            "name": "ifSGScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgscreen.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roSGScreen",
+                    "description": "The roSGScreen object is a SceneGraph canvas that displays the contents of a SceneGraph Scene node tree",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgscreen.md"
+                }
+            ]
+        },
+        "ifRSA": {
+            "name": "ifRSA",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifrsa.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roRSA",
+                    "description": "The RSA component provides an interface to the OpenSSL RSA library of signing algorithms",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rorsa.md"
+                }
+            ]
+        },
+        "ifScreen": {
+            "name": "ifScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifscreen.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roScreen",
+                    "description": "The roScreen component provides a full screen drawing surface that can be stacked and that you can receive input events from",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roscreen.md"
+                }
+            ]
+        },
+        "ifSearchhistory": {
+            "name": "ifSearchhistory",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsearchhistory.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roSearchHistory",
+                    "description": "The Search History object implements the system-wide storage of search terms for use in implementing the roSearchScreen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosearchhistory.md"
+                }
+            ]
+        },
+        "ifSearchScreen": {
+            "name": "ifSearchScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsearchscreen.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roSearchScreen",
+                    "description": "The Search Screen provides a standard way to allow users to enter text for searching",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosearchscreen.md"
+                }
+            ]
+        },
+        "ifSetMessagePort": {
+            "name": "ifSetMessagePort",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roHdmiStatus",
+                    "description": "The HDMI status component provides an interface to the current HDMI operational status",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rohdmistatus.md"
+                },
+                {
+                    "name": "roScreen",
+                    "description": "The roScreen component provides a full screen drawing surface that can be stacked and that you can receive input events from",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roscreen.md"
+                },
+                {
+                    "name": "roUrlTransfer",
+                    "description": "A roUrlTransfer object transfers data to or from remote servers specified by URLs. It can perform mutual authentication with a web server",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rourltransfer.md"
+                },
+                {
+                    "name": "roTextToSpeech",
+                    "description": "The roTextToSpeech component provides text to speech capabilities to applications",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotexttospeech.md"
+                }
+            ]
+        },
+        "ifSGNodeBoundingRect": {
+            "name": "ifSGNodeBoundingRect",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgnodeboundingrect.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roSGNode",
+                    "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md"
+                }
+            ]
+        },
+        "ifSGNodeChildren": {
+            "name": "ifSGNodeChildren",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgnodechildren.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roSGNode",
+                    "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md"
+                }
+            ]
+        },
+        "ifSGNodeDict": {
+            "name": "ifSGNodeDict",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgnodedict.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roSGNode",
+                    "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md"
+                }
+            ]
+        },
+        "ifSGNodeField": {
+            "name": "ifSGNodeField",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgnodefield.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roSGNode",
+                    "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md"
+                }
+            ]
+        },
+        "ifSGNodeFocus": {
+            "name": "ifSGNodeFocus",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgnodefocus.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roSGNode",
+                    "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md"
+                }
+            ]
+        },
+        "ifSGNodeHttpAgentAccess": {
+            "name": "ifSGNodeHttpAgentAccess",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgnodehttpagentaccess.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roSGNode",
+                    "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md"
+                }
+            ]
+        },
+        "ifSlideshow": {
+            "name": "ifSlideshow",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifslideshow.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roSlideShow",
+                    "description": "The Slide Show screen provides the ability to setup a photo slide show to playback a series of images",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roslideshow.md"
+                }
+            ]
+        },
+        "ifSocket": {
+            "name": "ifSocket",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocket.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roDataGramSocket",
+                    "description": "The roDataGramSocket component enables Brightscript apps to send and receive UDP packets",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodatagramsocket.md"
+                },
+                {
+                    "name": "roStreamSocket",
+                    "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostreamsocket.md"
+                }
+            ]
+        },
+        "ifSocketAddress": {
+            "name": "ifSocketAddress",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketaddress.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roSocketAddress",
+                    "description": "The roSocketAddress is used by the roStreamSocket and roDataGramSocket components for TCP and UDP traffic respectively",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosocketaddress.md"
+                }
+            ]
+        },
+        "ifSocketAsync": {
+            "name": "ifSocketAsync",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketasync.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roDataGramSocket",
+                    "description": "The roDataGramSocket component enables Brightscript apps to send and receive UDP packets",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodatagramsocket.md"
+                },
+                {
+                    "name": "roStreamSocket",
+                    "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostreamsocket.md"
+                }
+            ]
+        },
+        "ifSocketCastOption": {
+            "name": "ifSocketCastOption",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketcastoption.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roDataGramSocket",
+                    "description": "The roDataGramSocket component enables Brightscript apps to send and receive UDP packets",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodatagramsocket.md"
+                }
+            ]
+        },
+        "ifSocketConnection": {
+            "name": "ifSocketConnection",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketconnection.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roStreamSocket",
+                    "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostreamsocket.md"
+                }
+            ]
+        },
+        "ifSocketConnectionoption": {
+            "name": "ifSocketConnectionoption",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketconnectionoption.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roStreamSocket",
+                    "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostreamsocket.md"
+                }
+            ]
+        },
+        "ifSocketConnectionstatus": {
+            "name": "ifSocketConnectionstatus",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketconnectionstatus.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roStreamSocket",
+                    "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostreamsocket.md"
+                }
+            ]
+        },
+        "ifSocketOption": {
+            "name": "ifSocketOption",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketoption.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roDataGramSocket",
+                    "description": "The roDataGramSocket component enables Brightscript apps to send and receive UDP packets",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodatagramsocket.md"
+                },
+                {
+                    "name": "roStreamSocket",
+                    "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostreamsocket.md"
+                }
+            ]
+        },
+        "ifSocketStatus": {
+            "name": "ifSocketStatus",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketstatus.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roDataGramSocket",
+                    "description": "The roDataGramSocket component enables Brightscript apps to send and receive UDP packets",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodatagramsocket.md"
+                },
+                {
+                    "name": "roStreamSocket",
+                    "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostreamsocket.md"
+                }
+            ]
+        },
+        "ifSourceIdentity": {
+            "name": "ifSourceIdentity",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsourceidentity.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roChannelStoreEvent",
+                    "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get* methods in ifChannelStore"
+                },
+                {
+                    "name": "roUrlEvent",
+                    "description": "The roUrlTransfer component sends the roUrlEvent"
+                }
+            ]
+        },
+        "ifSpringboardScreen": {
+            "name": "ifSpringboardScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifspringboardscreen.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roSpringboardScreen",
+                    "description": "The Springboard Screen shows detailed information about an individual piece of content and provides options for actions that may be taken on that content",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rospringboardscreen.md"
+                }
+            ]
+        },
+        "ifSprite": {
+            "name": "ifSprite",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsprite.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roSprite",
+                    "description": "This component is associated with a managing roCompositor object",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosprite.md"
+                }
+            ]
+        },
+        "ifString": {
+            "name": "ifString",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifstring.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roChannelStoreEvent",
+                    "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get* methods in ifChannelStore"
+                },
+                {
+                    "name": "roPath",
+                    "description": "The roPath component provides developers an easy way to create valid file system paths",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/ropath.md"
+                },
+                {
+                    "name": "roString",
+                    "description": "Object equivalent for intrinsic type 'String'",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostring.md"
+                },
+                {
+                    "name": "roUrlEvent",
+                    "description": "The roUrlTransfer component sends the roUrlEvent component"
+                }
+            ]
+        },
+        "ifStringOps": {
+            "name": "ifStringOps",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifstringops.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roString",
+                    "description": "Object equivalent for intrinsic type 'String'",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostring.md"
+                }
+            ]
+        },
+        "ifSystemLog": {
+            "name": "ifSystemLog",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsystemlog.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roSystemLog",
+                    "description": "The roSystemLog component enables the application to receive events from the Roku Streaming Player that are intended for reporting errors and trends, rather than trigger a response to a user action"
+                }
+            ]
+        },
+        "ifTextScreen": {
+            "name": "ifTextScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftextscreen.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roTextScreen",
+                    "description": "roTextScreen provides a way of displaying large amounts of scrollable text",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotextscreen.md"
+                }
+            ]
+        },
+        "ifTextToSpeech": {
+            "name": "ifTextToSpeech",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftexttospeech.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roTextToSpeech",
+                    "description": "The roTextToSpeech component provides text to speech capabilities to applications",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotexttospeech.md"
+                }
+            ]
+        },
+        "ifTextureManager": {
+            "name": "ifTextureManager",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftexturemanager.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roTextureManager",
+                    "description": "The Texture Manager provides a set of API's for managing an roBitmap cache",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotexturemanager.md"
+                }
+            ]
+        },
+        "ifTextureRequest": {
+            "name": "ifTextureRequest",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftexturerequest.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roTextureRequest",
+                    "description": "An roTextureRequest is used to make requests to the roTextureManager",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotexturerequest.md"
+                }
+            ]
+        },
+        "ifTimeSpan": {
+            "name": "ifTimeSpan",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftimespan.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roTimespan",
+                    "description": "The Timespan object provides an interface to a simple timer for tracking the duration of activities",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotimespan.md"
+                }
+            ]
+        },
+        "ifToStr": {
+            "name": "ifToStr",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roBoolean",
+                    "description": "Object equivalent for intrinsic type Boolean",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roboolean.md"
+                },
+                {
+                    "name": "roDouble",
+                    "description": "Object equivalent for intrinsic type 'Double'",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodouble.md"
+                },
+                {
+                    "name": "roFloat",
+                    "description": "Object equivalent for intrinsic type 'Float'",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofloat.md"
+                },
+                {
+                    "name": "roFunction",
+                    "description": "Object equivalent for intrinsic type Function",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofunction.md"
+                },
+                {
+                    "name": "roInt",
+                    "description": "Object equivalent for intrinsic type Integer",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roint.md"
+                },
+                {
+                    "name": "roInvalid",
+                    "description": "Object equivalent for intrinsic type 'Invalid'",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roinvalid.md"
+                },
+                {
+                    "name": "roLongInteger",
+                    "description": "Object equivalent for intrinsic type LongInteger",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolonginteger.md"
+                },
+                {
+                    "name": "roString",
+                    "description": "Object equivalent for intrinsic type 'String'",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostring.md"
+                }
+            ]
+        },
+        "ifUrlTransfer": {
+            "name": "ifUrlTransfer",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifurltransfer.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roUrlTransfer",
+                    "description": "A roUrlTransfer object transfers data to or from remote servers specified by URLs. It can perform mutual authentication with a web server",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rourltransfer.md"
+                }
+            ]
+        },
+        "ifVideoPlayer": {
+            "name": "ifVideoPlayer",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifvideoplayer.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roVideoPlayer",
+                    "description": "The roVideoPlayer component implements a video player with more programmatic control, but less user control than the roVideoScreen component",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rovideoplayer.md"
+                }
+            ]
+        },
+        "ifVideoScreen": {
+            "name": "ifVideoScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifvideoscreen.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roVideoScreen",
+                    "description": "The Video Screen object implements the video playback portion of the user interface",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rovideoscreen.md"
+                }
+            ]
+        },
+        "ifXMLElement": {
+            "name": "ifXMLElement",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifxmlelement.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roXMLElement",
+                    "description": "roXMLElement is used to contain an XML tree",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmlelement.md"
+                }
+            ]
+        },
+        "ifXMLList": {
+            "name": "ifXMLList",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifxmllist.md",
+            "methods": [],
+            "properties": [],
+            "implementors": [
+                {
+                    "name": "roXMLList",
+                    "description": "Contains a list of roXML objects",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmllist.md"
+                }
             ]
         }
     }
