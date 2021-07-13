@@ -23,9 +23,35 @@ class ComponentListBuilder {
         //load the base level roku docs data
         await this.loadReferences();
         await this.buildComponents();
+        await this.buildInterfaces();
+
+        //certain references are missing hyperlinks. this attempts to repair them
+        this.linkMissingReferences();
 
         //store the output
         fsExtra.outputFileSync(outPath, JSON.stringify(this.result, null, 4));
+    }
+
+    /**
+     * Repair missing urls
+     */
+    public linkMissingReferences() {
+        //components
+        for (const component of Object.values(this.result.components)) {
+            for (const ref of component.interfaces) {
+                if (!ref.url) {
+                    ref.url = this.result.interfaces[ref.name]?.url;
+                }
+            }
+        }
+        //interfaces
+        for (const iface of Object.values(this.result.interfaces)) {
+            for (const ref of iface.implementors ?? []) {
+                if (!ref.url) {
+                    ref.url = this.result.components[ref.name]?.url;
+                }
+            }
+        }
     }
 
     public buildRoSGNodeList() {
@@ -33,12 +59,12 @@ class ComponentListBuilder {
     }
 
     private async buildComponents() {
-        const interfaceDocs = this.references.BrightScript.Components;
-        const count = Object.values(interfaceDocs).length;
+        const componentDocs = this.references.BrightScript.Components;
+        const count = Object.values(componentDocs).length;
         let i = 1;
-        for (const name in interfaceDocs) {
+        for (const name in componentDocs) {
             console.log(`Processing component ${i++} of ${count}`);
-            const docPath = interfaceDocs[name];
+            const docPath = componentDocs[name];
             const dom = await this.getDom(this.getDocApiUrl(docPath));
             const document = dom.window.document;
 
@@ -98,6 +124,43 @@ class ComponentListBuilder {
         }
     }
 
+    private async buildInterfaces() {
+        const interfaceDocs = this.references.BrightScript.Interfaces;
+        const count = Object.values(interfaceDocs).length;
+        let i = 1;
+        for (const name in interfaceDocs) {
+            console.log(`Processing interface ${i++} of ${count}`);
+            const docPath = interfaceDocs[name];
+            const dom = await this.getDom(this.getDocApiUrl(docPath));
+            const document = dom.window.document;
+
+            const iface = {
+                name: name,
+                url: this.getDocUrl(docPath),
+                methods: [],
+                properties: [],
+                implementors: this.getTableData<Implementor>(document, ['name', 'description']).map((x) => {
+                    //some name columns are a hyperlink
+                    if (x.name?.trim().startsWith('<a')) {
+                        x.name = />(.*)?<\/a>/.exec(x.name)?.[1];
+                        x.url = /href\s*=\s*"(.*)?"/.exec(x.name)?.[1];
+                    }
+                    return x;
+                })
+            };
+
+            //TODO build the list of methods
+
+            //if there is a custom handler for this doc, call it
+            if (this[name]) {
+                console.log(`calling custom handler for ${name}`);
+                this[name](iface, document);
+            }
+
+            this.result.interfaces[name] = iface as any;
+        }
+    }
+
     private reduceSignatures(signatures: Array<Signature>) {
         //remove duplicate signatures
         const keys = {};
@@ -121,7 +184,10 @@ class ComponentListBuilder {
     private roAppManager(component: Component, document: Document) {
         const iface = {
             name: 'AppManagerTheme',
-            properties: []
+            properties: [],
+            implementors: [],
+            methods: [],
+            url: undefined
         } as RokuInterface;
 
         for (const row of this.getTableData(document, ['attribute', 'screen types', 'values', 'example', 'version'])) {
@@ -151,7 +217,9 @@ class ComponentListBuilder {
         });
     }
 
-    private getTableData<T extends string, U = { [K in T]?: string }>(document: Document, searchHeaders: T[]) {
+    private getTableData<T extends string, U = { [K in T]?: string }>(document: Document, searchHeaders: T[]): U[];
+    private getTableData<T, U = T>(document: Document, searchHeaders: string[]): U[];
+    private getTableData<T, U>(document: Document, searchHeaders: string[]) {
         const table = this.getTableByHeaders(document, searchHeaders);
         //get the header names
         const headerNames = [...table.getElementsByTagName('tr')?.[0].getElementsByTagName('th')].map(x => x.innerHTML.toLowerCase());
@@ -243,11 +311,23 @@ interface Reference {
     url: string;
 }
 
+interface Implementor extends Reference {
+    /**
+     * A description of that this interface implementor does (i.e. describes a component)
+     */
+    description: string;
+}
+
 interface RokuInterface {
     name: string;
     url: string;
+    /**
+     * Standard roku interfaces don't have properties, but we occasionally need to store properties
+     * for complicated parameter values for certain methods
+     */
     properties: Prop[];
     methods: Func[];
+    implementors: Implementor[];
 }
 
 interface Func {
