@@ -89,6 +89,7 @@
         "chai": "^4.2.0",
         "chai-files": "^1.4.0",
         "coveralls": "^3.0.0",
+        "dedent": "^0.7.0",
         "eslint": "^7.11.0",
         "eslint-plugin-github": "^4.1.1",
         "eslint-plugin-no-only-tests": "^2.4.0",
