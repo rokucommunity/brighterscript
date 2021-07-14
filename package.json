@@ -16,7 +16,7 @@
         "dep-graph": "madge --image graph.svg --extensions ts ./src/parser",
         "docs": "ts-node scripts/compile-doc-examples.ts",
         "benchmark": "node ./benchmarks/index.js",
-        "build-component-list": "ts-node scripts/build-component-list.ts"
+        "scrape-roku-docs": "ts-node scripts/scrape-roku-docs.ts"
     },
     "mocha": {
         "spec": "src/**/*.spec.ts",
