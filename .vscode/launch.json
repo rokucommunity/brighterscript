@@ -68,7 +68,7 @@
             ]
         },
         {
-            "name": "Debug component list builder",
+            "name": "Debug Roku Docs Scraper",
             "type": "node",
             "request": "launch",
             "runtimeExecutable": "node",
@@ -78,7 +78,7 @@
                 "ts-node/register/transpile-only"
             ],
             "args": [
-                "scripts/build-component-list.ts"
+                "scripts/scrape-roku-docs.ts"
             ],
             "cwd": "${workspaceRoot}",
             "internalConsoleOptions": "openOnSessionStart",

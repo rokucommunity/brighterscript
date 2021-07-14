@@ -209,5 +209,11 @@ module.exports = {
             '@typescript-eslint/no-require-imports': 'off',
             '@typescript-eslint/no-var-requires': 'off'
         }
+    }, {
+        files: ['src/roku-types/data.ts'],
+        rules: {
+            '@typescript-eslint/quotes': 'off',
+            'no-template-curly-in-string': 'off'
+        }
     }]
 };
