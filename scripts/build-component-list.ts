@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 /* eslint-disable no-cond-assign */
 import { JSDOM } from 'jsdom';
 import * as phin from 'phin';
@@ -6,7 +7,10 @@ import * as fsExtra from 'fs-extra';
 import { standardizePath as s } from '../src/util';
 import { Parser } from '../src/parser/Parser';
 import type { CallExpression, LiteralExpression } from '../src/parser/Expression';
-import type { ExpressionStatement } from '../src/parser/Statement';
+import type { ExpressionStatement, FunctionStatement } from '../src/parser/Statement';
+import { TranspileState } from '../src/parser/TranspileState';
+import { BrsFile, Program } from '../src';
+import { string } from 'yargs';
 
 class ComponentListBuilder {
     private references: any;
@@ -79,7 +83,8 @@ class ComponentListBuilder {
             if (document.body.innerHTML.match(/this object is created with no parameters/)) {
                 component.signatures.push({
                     params: [],
-                    returnType: name
+                    returnType: name,
+                    returnDescription: undefined
                 });
                 //scan the text for the constructor signatures
             } else {
@@ -103,8 +108,9 @@ class ComponentListBuilder {
                                 signature.params.push({
                                     name: `param${i}`,
                                     default: 'invalid',
-                                    isRequred: true,
-                                    type: (arg as any).type?.toString() ?? 'dynamic'
+                                    isRequired: true,
+                                    type: (arg as any).type?.toString() ?? 'dynamic',
+                                    description: undefined
                                 });
                             }
                             component.signatures.push(signature);
@@ -124,6 +130,35 @@ class ComponentListBuilder {
         }
     }
 
+    private isTable(element) {
+        return element?.nodeName?.toLowerCase() === 'table';
+    }
+
+    private getInterfaceImplementors(document: Document) {
+        //there are serveral different ways the interface "implemented by" table can be found in the html, so get them all and keep the first one
+        let table = [
+            document.getElementById('implemented-by')?.nextElementSibling,
+            document.getElementById('implemented-by')?.nextElementSibling?.firstElementChild,
+            document.getElementById('implemented-by')?.nextElementSibling?.nextElementSibling,
+            document.getElementById('implemented-by')?.nextElementSibling?.nextElementSibling?.firstElementChild,
+            document.querySelectorAll('h1')[1]?.nextElementSibling,
+            document.querySelectorAll('h1')[1]?.nextElementSibling?.firstElementChild,
+            document.querySelectorAll('h1')[1]?.nextElementSibling?.nextElementSibling,
+            document.querySelectorAll('h1')[1]?.nextElementSibling?.nextElementSibling?.firstElementChild,
+            this.getTableByHeaders(document, ['name', 'description'], true)
+        ].find(x => this.isTable(x));
+
+        const result = this.getTableData<Implementor>(table).map((x) => {
+            //some name columns are a hyperlink
+            if (x.name?.trim().startsWith('<a')) {
+                x.name = />(.*)?<\/a>/.exec(x.name)?.[1];
+                x.url = /href\s*=\s*"(.*)?"/.exec(x.name)?.[1];
+            }
+            return x;
+        });
+        return result;
+    }
+
     private async buildInterfaces() {
         const interfaceDocs = this.references.BrightScript.Interfaces;
         const count = Object.values(interfaceDocs).length;
@@ -131,33 +166,31 @@ class ComponentListBuilder {
         for (const name in interfaceDocs) {
             console.log(`Processing interface ${i++} of ${count}`);
             const docPath = interfaceDocs[name];
-            const dom = await this.getDom(this.getDocApiUrl(docPath));
-            const document = dom.window.document;
+            const docUrl = this.getDocApiUrl(docPath);
+            try {
 
-            const iface = {
-                name: name,
-                url: this.getDocUrl(docPath),
-                methods: [],
-                properties: [],
-                implementors: this.getTableData<Implementor>(document, ['name', 'description']).map((x) => {
-                    //some name columns are a hyperlink
-                    if (x.name?.trim().startsWith('<a')) {
-                        x.name = />(.*)?<\/a>/.exec(x.name)?.[1];
-                        x.url = /href\s*=\s*"(.*)?"/.exec(x.name)?.[1];
-                    }
-                    return x;
-                })
-            };
+                const dom = await this.getDom(docUrl);
+                const document = dom.window.document;
 
-            //TODO build the list of methods
 
-            //if there is a custom handler for this doc, call it
-            if (this[name]) {
-                console.log(`calling custom handler for ${name}`);
-                this[name](iface, document);
+                const iface = {
+                    name: name,
+                    url: this.getDocUrl(docPath),
+                    methods: this.buildInterfaceMethods(document),
+                    properties: [],
+                    implementors: this.getInterfaceImplementors(document)
+                };
+
+                //if there is a custom handler for this doc, call it
+                if (this[name]) {
+                    console.log(`calling custom handler for ${name}`);
+                    this[name](iface, document);
+                }
+
+                this.result.interfaces[name] = iface as any;
+            } catch (e) {
+                console.error(`Error processing interface ${docUrl}`, e);
             }
-
-            this.result.interfaces[name] = iface as any;
         }
     }
 
@@ -166,7 +199,7 @@ class ComponentListBuilder {
         const keys = {};
         for (let i = signatures.length - 1; i >= 0; i--) {
             const signature = signatures[i];
-            const paramKeys = signature.params.map(x => `${x.name}-${x.type}-${x.default}-${x.isRequred}`);
+            const paramKeys = signature.params.map(x => `${x.name}-${x.type}-${x.default}-${x.isRequired}`);
             const key = `${signature.returnType}-${paramKeys.join('-')}`;
             //if we already have this key, remove this signature from the list
             if (keys[key]) {
@@ -190,7 +223,7 @@ class ComponentListBuilder {
             url: undefined
         } as RokuInterface;
 
-        for (const row of this.getTableData(document, ['attribute', 'screen types', 'values', 'example', 'version'])) {
+        for (const row of this.getTableDataByHeaders(document, ['attribute', 'screen types', 'values', 'example', 'version'])) {
             iface.properties.push({
                 name: row.attribute,
                 description: `${row.values}. Screen types: ${row['screen types']}. Example: ${row.example}`,
@@ -201,10 +234,9 @@ class ComponentListBuilder {
         this.result.interfaces[iface.name] = iface;
     }
 
-    private getTableByHeaders(document: Document, searchHeaders: string[]) {
+    private getTableByHeaders(document: Document, searchHeaders: string[], exclusive = false) {
         //find the attributes table
         return [...document.getElementsByTagName('table')].find(x => {
-            //does this table have a header called "Attribute"?
             const headerNames = [...x.getElementsByTagName('tr')?.[0].getElementsByTagName('th')].map(x => x.innerHTML.toLowerCase());
 
             //match all of the headers provided
@@ -213,20 +245,35 @@ class ComponentListBuilder {
                     return false;
                 }
             }
+            //enforce that the table ONLY has these headers
+            if (exclusive) {
+                for (const tableHeader of headerNames) {
+                    if (searchHeaders.includes(tableHeader)) {
+                        return false;
+                    }
+                }
+            }
             return true;
         });
     }
 
-    private getTableData<T extends string, U = { [K in T]?: string }>(document: Document, searchHeaders: T[]): U[];
-    private getTableData<T, U = T>(document: Document, searchHeaders: string[]): U[];
-    private getTableData<T, U>(document: Document, searchHeaders: string[]) {
-        const table = this.getTableByHeaders(document, searchHeaders);
+    private getTableDataByHeaders<T extends string, U = { [K in T]?: string }>(document: Document, searchHeaders: T[]) {
+        return this.getTableData<U>(
+            this.getTableByHeaders(document, searchHeaders)
+        );
+    }
+
+    private getTableData<T>(table: any) {
+        if (!this.isTable(table)) {
+            console.error('Element is not a table', table);
+            return [];
+        }
         //get the header names
         const headerNames = [...table.getElementsByTagName('tr')?.[0].getElementsByTagName('th')].map(x => x.innerHTML.toLowerCase());
-        const result = [] as Array<U>;
+        const result = [] as Array<T>;
         for (const row of [...table.getElementsByTagName('tbody')[0].getElementsByTagName('tr')]) {
             const columns = [...row.getElementsByTagName('td')];
-            const rowData = {} as U;
+            const rowData = {} as T;
             for (let i = 0; i < columns.length; i++) {
                 const column = columns[i];
                 rowData[headerNames[i]] = column.innerHTML;
@@ -234,6 +281,82 @@ class ComponentListBuilder {
             result.push(rowData);
         }
         return result;
+    }
+    private findNextElement<T = HTMLElement>(start: HTMLElement, matchFilter: ElementFilter, stopFilter?: ElementFilter): T {
+
+        function doFilter(item: HTMLElement, filter) {
+            return item?.id === filter?.id ||
+                item?.textContent?.toLowerCase() === filter?.text ||
+                item?.nodeName?.toString()?.toLowerCase() === filter?.type?.toLowerCase() ||
+                item?.classList.contains(filter?.class);
+        }
+
+        let current = start;
+        do {
+            current = current?.nextElementSibling as HTMLElement;
+            //return the first element that matches the filter
+            if (doFilter(current, matchFilter)) {
+                return current as unknown as T;
+                //if we found a not-match filter, stop searching
+            } else if (doFilter(current, stopFilter)) {
+                return;
+            }
+        } while (current);
+    }
+
+    private buildInterfaceMethods(document: Document) {
+        const result = [] as Func[];
+        //the element right before the start of a method group
+        let previous = document.getElementById('supported-methods');
+        //let's hope all the interface methods are structured the same way!
+
+        while (previous) {
+            const signatureEl = this.findNextElement(previous, { type: 'h3' }, { id: 'toc-full' });
+            const descriptionEl = this.findNextElement(signatureEl, { text: 'description' }, { type: 'h3' })?.nextElementSibling;
+            const paramsTableEl = this.findNextElement(signatureEl, { text: 'parameters' }, { type: 'h3' })?.nextElementSibling?.firstElementChild;
+            const returnValueEl = this.findNextElement(signatureEl, { text: 'return value' }, { type: 'h3' })?.nextElementSibling;
+            if (signatureEl) {
+                const method = this.getMethod(signatureEl.innerHTML);
+                method.description = descriptionEl?.innerHTML;
+                if (paramsTableEl) {
+                    const paramsFromTable = this.getTableData<{ name: string; type: string; description: string }>(paramsTableEl) ?? [];
+                    //augment any scanned signature info with data from the table
+                    for (const param of paramsFromTable) {
+                        const methodParam = method.signatures[0].params.find(x => x?.name && param.name && x.name?.toLowerCase() === param.name?.toLowerCase());
+                        if (methodParam) {
+                            methodParam.name = param.name;
+                            methodParam.type = param.type;
+                            methodParam.description = param.description;
+                        }
+                    }
+                }
+                method.signatures[0].returnDescription = returnValueEl?.innerHTML;
+                result.push(method);
+            }
+
+            previous = (returnValueEl ?? paramsTableEl?.parentElement ?? descriptionEl ?? signatureEl) as any;
+        }
+        return result;
+    }
+
+    private getMethod(text: string) {
+        // var state = new TranspileState(new BrsFile('', '', new Program({}));
+        const { statements } = Parser.parse(`function ${text}\nend function`);
+        if (statements.length > 0) {
+            const func = statements[0] as FunctionStatement;
+            return {
+                name: func.name?.text,
+                signatures: [{
+                    params: func.func.parameters.map(x => ({
+                        name: x.name?.text,
+                        isRequired: !x.defaultValue,
+                        default: null, //x.defaultValue.transpile(state)
+                        type: x.typeToken?.text
+                    })),
+                    returnType: func.func.returnTypeToken?.text
+                }]
+            } as Func;
+        }
     }
 
     private getUlData(document: Document, elementId: string) {
@@ -332,11 +455,13 @@ interface RokuInterface {
 
 interface Func {
     name: string;
+    description: string;
     signatures: Array<Signature>;
 }
 interface Param {
     name: string;
-    isRequred: boolean;
+    isRequired: boolean;
+    description: string;
     default: string;
     type: string;
 }
@@ -349,7 +474,15 @@ interface Prop {
 interface Signature {
     params: Param[];
     returnType: string;
+    returnDescription: string;
 }
+interface ElementFilter {
+    id?: string;
+    text?: string;
+    type?: string;
+    class?: string;
+}
+
 
 //run the builder
 new ComponentListBuilder().run().catch((e) => console.error(e));
