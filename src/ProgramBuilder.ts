@@ -2,7 +2,7 @@ import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
 import type { BsConfig } from './BsConfig';
-import type { BsDiagnostic, File, FileObj, FileResolver } from './interfaces';
+import type { BscFile, BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
@@ -65,7 +65,7 @@ export class ProgramBuilder {
     private staticDiagnostics = [] as BsDiagnostic[];
 
     public addDiagnostic(filePathAbsolute: string, diagnostic: Partial<BsDiagnostic>) {
-        let file: File = this.program.getFileByPathAbsolute(filePathAbsolute);
+        let file: BscFile = this.program.getFileByPathAbsolute(filePathAbsolute);
         if (!file) {
             file = {
                 pkgPath: this.program.getPkgPath(filePathAbsolute),
@@ -73,7 +73,7 @@ export class ProgramBuilder {
                 getDiagnostics: () => {
                     return [<any>diagnostic];
                 }
-            };
+            } as BscFile;
         }
         diagnostic.file = file;
         this.staticDiagnostics.push(<any>diagnostic);
@@ -82,7 +82,7 @@ export class ProgramBuilder {
     public getDiagnostics() {
         return [
             ...this.staticDiagnostics,
-            ...this.program ? this.program.getDiagnostics() : []
+            ...(this.program?.getDiagnostics() ?? [])
         ];
     }
 
@@ -94,7 +94,12 @@ export class ProgramBuilder {
         }
         this.isRunning = true;
         try {
-            this.options = await util.normalizeAndResolveConfig(options);
+            this.options = util.normalizeAndResolveConfig(options);
+            if (this.options.project) {
+                this.logger.log(`Using config file: "${this.options.project}"`);
+            } else {
+                this.logger.log(`No bsconfig.json file found, using default options`);
+            }
             this.loadPlugins();
         } catch (e) {
             if (e?.file && e.message && e.code) {
@@ -115,7 +120,6 @@ export class ProgramBuilder {
         this.program = this.createProgram();
 
         //parse every file in the entire project
-        this.logger.log('Parsing files');
         await this.loadAllFilesAST();
 
         if (this.options.watch) {
@@ -155,10 +159,19 @@ export class ProgramBuilder {
         }
     }
 
+    /**
+     * A handle for the watch mode interval that keeps the process alive.
+     * We need this so we can clear it if the builder is disposed
+     */
+    private watchInterval: NodeJS.Timer;
+
     public enableWatchMode() {
         this.watcher = new Watcher(this.options);
+        if (this.watchInterval) {
+            clearInterval(this.watchInterval);
+        }
         //keep the process alive indefinitely by setting an interval that runs once every 12 days
-        setInterval(() => { }, 1073741824);
+        this.watchInterval = setInterval(() => { }, 1073741824);
 
         //clear the console
         this.clearConsole();
@@ -176,8 +189,7 @@ export class ProgramBuilder {
         let debouncedRunOnce = debounce(async () => {
             this.logger.log('File change detected. Starting incremental compilation...');
             await this.runOnce();
-            let errorCount = this.getDiagnostics().length;
-            this.logger.log(`Found ${errorCount} errors. Watching for file changes.`);
+            this.logger.log(`Watching for file changes.`);
         }, 50);
 
         //on any file watcher event
@@ -186,11 +198,15 @@ export class ProgramBuilder {
             if (event === 'add' || event === 'change') {
                 const fileObj = {
                     src: thePath,
-                    dest: rokuDeploy.getDestPath(thePath, this.program.options.files, this.rootDir)
+                    dest: rokuDeploy.getDestPath(
+                        thePath,
+                        this.program.options.files,
+                        //some shells will toTowerCase the drive letter, so do it to rootDir for consistency
+                        util.driveLetterToLower(this.rootDir)
+                    )
                 };
                 this.program.addOrReplaceFile(
                     fileObj,
-                    //load the file synchronously because that's faster than async for a small number of filies
                     await this.getFileContents(fileObj.src)
                 );
             } else if (event === 'unlink') {
@@ -237,11 +253,13 @@ export class ProgramBuilder {
         return runPromise;
     }
 
-    private printDiagnostics() {
+    private printDiagnostics(diagnostics?: BsDiagnostic[]) {
         if (this.options.showDiagnosticsInConsole === false) {
             return;
         }
-        let diagnostics = this.getDiagnostics();
+        if (!diagnostics) {
+            diagnostics = this.getDiagnostics();
+        }
 
         //group the diagnostics by file
         let diagnosticsByFile = {} as Record<string, BsDiagnostic[]>;
@@ -297,7 +315,6 @@ export class ProgramBuilder {
             if (cancellationToken.isCanceled === true) {
                 return -1;
             }
-            this.logger.log('Validating project');
             //validate program
             this.validateProject();
 
@@ -306,9 +323,10 @@ export class ProgramBuilder {
                 return -1;
             }
 
-            this.printDiagnostics();
+            const diagnostics = this.getDiagnostics();
+            this.printDiagnostics(diagnostics);
             wereDiagnosticsPrinted = true;
-            let errorCount = this.getDiagnostics().filter(x => x.severity === DiagnosticSeverity.Error).length;
+            let errorCount = diagnostics.filter(x => x.severity === DiagnosticSeverity.Error).length;
 
             if (errorCount > 0) {
                 this.logger.log(`Found ${errorCount} ${errorCount === 1 ? 'error' : 'errors'}`);
@@ -346,6 +364,7 @@ export class ProgramBuilder {
                 await this.logger.time(LogLevel.log, [`Creating package at ${this.options.outFile}`], async () => {
                     await rokuDeploy.zipPackage({
                         ...this.options,
+                        logLevel: this.options.logLevel as LogLevel,
                         outDir: util.getOutDir(this.options),
                         outFile: path.basename(this.options.outFile)
                     });
@@ -361,6 +380,7 @@ export class ProgramBuilder {
         let options = util.cwdWork(this.options.cwd, () => {
             return rokuDeploy.getOptions({
                 ...this.options,
+                logLevel: this.options.logLevel as LogLevel,
                 outDir: util.getOutDir(this.options),
                 outFile: path.basename(this.options.outFile)
             });
@@ -404,6 +424,7 @@ export class ProgramBuilder {
             await this.logger.time(LogLevel.log, ['Deploying package to', this.options.host], async () => {
                 await rokuDeploy.publish({
                     ...this.options,
+                    logLevel: this.options.logLevel as LogLevel,
                     outDir: util.getOutDir(this.options),
                     outFile: path.basename(this.options.outFile)
                 });
@@ -415,59 +436,61 @@ export class ProgramBuilder {
      * Parse and load the AST for every file in the project
      */
     private async loadAllFilesAST() {
-        let errorCount = 0;
-        let files = await this.logger.time(LogLevel.debug, ['ProgramBuilder.loadAllFilesAST()'], async () => {
-            return util.getFilePaths(this.options);
-        });
-        this.logger.debug('ProgramBuilder.loadAllFilesAST() files:', files);
+        await this.logger.time(LogLevel.log, ['Parsing files'], async () => {
+            let errorCount = 0;
+            let files = await this.logger.time(LogLevel.debug, ['getFlePaths'], async () => {
+                return util.getFilePaths(this.options);
+            });
+            this.logger.trace('ProgramBuilder.loadAllFilesAST() files:', files);
 
-        const typedefFiles = [] as FileObj[];
-        const nonTypedefFiles = [] as FileObj[];
-        for (const file of files) {
-            const srcLower = file.src.toLowerCase();
-            if (srcLower.endsWith('.d.bs')) {
-                typedefFiles.push(file);
-            } else {
-                nonTypedefFiles.push(file);
-            }
-        }
-
-        //preload every type definition file first, which eliminates duplicate file loading
-        await Promise.all(
-            typedefFiles.map(async (fileObj) => {
-                try {
-                    this.program.addOrReplaceFile(
-                        fileObj,
-                        await this.getFileContents(fileObj.src)
-                    );
-                } catch (e) {
-                    //log the error, but don't fail this process because the file might be fixable later
-                    this.logger.log(e);
+            const typedefFiles = [] as FileObj[];
+            const nonTypedefFiles = [] as FileObj[];
+            for (const file of files) {
+                const srcLower = file.src.toLowerCase();
+                if (srcLower.endsWith('.d.bs')) {
+                    typedefFiles.push(file);
+                } else {
+                    nonTypedefFiles.push(file);
                 }
-            })
-        );
+            }
 
-        const acceptableExtensions = ['.bs', '.brs', '.xml'];
-        //parse every file other than the type definitions
-        await Promise.all(
-            nonTypedefFiles.map(async (fileObj) => {
-                try {
-                    let fileExtension = path.extname(fileObj.src).toLowerCase();
-
-                    //only process certain file types
-                    if (acceptableExtensions.includes(fileExtension)) {
+            //preload every type definition file first, which eliminates duplicate file loading
+            await Promise.all(
+                typedefFiles.map(async (fileObj) => {
+                    try {
                         this.program.addOrReplaceFile(
                             fileObj,
                             await this.getFileContents(fileObj.src)
                         );
+                    } catch (e) {
+                        //log the error, but don't fail this process because the file might be fixable later
+                        this.logger.log(e);
                     }
-                } catch (e) {
-                    //log the error, but don't fail this process because the file might be fixable later
-                    this.logger.log(e);
-                }
-            })
-        );
-        return errorCount;
+                })
+            );
+
+            const acceptableExtensions = ['.bs', '.brs', '.xml'];
+            //parse every file other than the type definitions
+            await Promise.all(
+                nonTypedefFiles.map(async (fileObj) => {
+                    try {
+                        let fileExtension = path.extname(fileObj.src).toLowerCase();
+
+                        //only process certain file types
+                        if (acceptableExtensions.includes(fileExtension)) {
+                            this.program.addOrReplaceFile(
+                                fileObj,
+                                await this.getFileContents(fileObj.src)
+                            );
+                        }
+                    } catch (e) {
+                        //log the error, but don't fail this process because the file might be fixable later
+                        this.logger.log(e);
+                    }
+                })
+            );
+            return errorCount;
+        });
     }
 
     /**
@@ -497,6 +520,9 @@ export class ProgramBuilder {
         }
         if (this.program) {
             this.program.dispose?.();
+        }
+        if (this.watchInterval) {
+            clearInterval(this.watchInterval);
         }
     }
 }

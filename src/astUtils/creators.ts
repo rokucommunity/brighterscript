@@ -3,6 +3,7 @@ import type { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Expression, NamespacedVariableNameExpression } from '../parser/Expression';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression } from '../parser/Expression';
+import type { SGAttribute } from '../parser/SGTypes';
 
 /**
  * A range that points to nowhere. Used to give non-null ranges to programmatically-added source code.
@@ -38,7 +39,16 @@ export function createDottedIdentifier(path: string[], range?: Range, namespaceN
     return new DottedGetExpression(obj, createToken(TokenKind.Identifier, ident, range), createToken(TokenKind.Dot, '.', range));
 }
 
+/**
+ * Create a StringLiteralExpression. The TokenKind.StringLiteral token value includes the leading and trailing doublequote during lexing.
+ * Since brightscript doesn't support strings with quotes in them, we can safely auto-detect and wrap the value in quotes in this function.
+ * @param value - the string value. (value will be wrapped in quotes if they are missing)
+ */
 export function createStringLiteral(value: string, range?: Range) {
+    //wrap the value in double quotes
+    if (!value.startsWith('"') && !value.endsWith('"')) {
+        value = '"' + value + '"';
+    }
     return new LiteralExpression(createToken(TokenKind.StringLiteral, value, range));
 }
 export function createIntegerLiteral(value: string, range?: Range) {
@@ -62,4 +72,18 @@ export function createCall(callee: Expression, args?: Expression[], namespaceNam
         args || [],
         namespaceName
     );
+}
+
+/**
+ * Create an SGAttribute without any ranges
+ */
+export function createSGAttribute(keyName: string, value: string) {
+    return {
+        key: {
+            text: keyName
+        },
+        value: {
+            text: value
+        }
+    } as SGAttribute;
 }

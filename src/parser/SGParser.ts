@@ -14,6 +14,8 @@ export default class SGParser {
      */
     public ast: SGAst = new SGAst();
 
+    public tokens: IToken[];
+
     /**
      * The list of diagnostics found during the parse process
      */
@@ -81,6 +83,7 @@ export default class SGParser {
         this.diagnostics = [];
 
         const { cst, tokenVector, lexErrors, parseErrors } = parser.parse(fileContents);
+        this.tokens = tokenVector;
 
         if (lexErrors.length) {
             for (const err of lexErrors) {
@@ -250,14 +253,18 @@ function mapElements(content: ContentCstNode, allow: string[], diagnostics: Diag
     if (element) {
         for (const entry of element) {
             const name = entry.children.Name?.[0];
-            if (name && allow.includes(name.image)) {
-                tags.push(mapElement(entry, diagnostics));
+            if (name?.image) {
+                if (allow.includes(name.image)) {
+                    tags.push(mapElement(entry, diagnostics));
+                } else {
+                    //unexpected tag
+                    diagnostics.push({
+                        ...DiagnosticMessages.xmlUnexpectedTag(name.image),
+                        range: rangeFromTokens(name)
+                    });
+                }
             } else {
-                //unexpected tag
-                diagnostics.push({
-                    ...DiagnosticMessages.xmlUnexpectedTag(name.image),
-                    range: rangeFromTokens(name)
-                });
+                //bad xml syntax...
             }
         }
     }
@@ -320,7 +327,7 @@ function rangeFromTokens(start: IToken, end?: IToken) {
 }
 
 //make range not including quotes
-function rangeFromTokenValue(token: IToken) {
+export function rangeFromTokenValue(token: IToken) {
     if (!token) {
         return undefined;
     }

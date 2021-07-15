@@ -1,7 +1,6 @@
-/* eslint-disable camelcase */
-
 import type { Position } from 'vscode-languageserver';
 import { DiagnosticSeverity } from 'vscode-languageserver';
+import type { BsDiagnostic } from './interfaces';
 import type { TokenKind } from './lexer/TokenKind';
 
 /**
@@ -17,6 +16,9 @@ export let DiagnosticMessages = {
     callToUnknownFunction: (name: string, scopeName: string) => ({
         message: `Cannot find function with name '${name}' when this file is included in scope '${scopeName}'`,
         code: 1001,
+        data: {
+            functionName: name
+        },
         severity: DiagnosticSeverity.Error
     }),
     mismatchArgumentCount: (expectedCount: number | string, actualCount: number) => ({
@@ -158,7 +160,10 @@ export let DiagnosticMessages = {
     classCouldNotBeFound: (className: string, scopeName: string) => ({
         message: `Class '${className}' could not be found when this file is included in scope '${scopeName}'`,
         code: 1029,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        data: {
+            className: className
+        }
     }),
     expectedClassFieldIdentifier: () => ({
         message: `Expected identifier in class body`,
@@ -170,8 +175,8 @@ export let DiagnosticMessages = {
         code: 1031,
         severity: DiagnosticSeverity.Error
     }),
-    expectedClassKeyword: () => ({
-        message: `Expected 'class' keyword`,
+    expectedKeyword: (kind: TokenKind) => ({
+        message: `Expected '${kind}' keyword`,
         code: 1032,
         severity: DiagnosticSeverity.Error
     }),
@@ -418,8 +423,8 @@ export let DiagnosticMessages = {
         code: 1080,
         severity: DiagnosticSeverity.Error
     }),
-    foundUnexpectedToken: (text: string) => ({
-        message: `Found unexpected token '${text}'`,
+    unexpectedToken: (text: string) => ({
+        message: `Unexpected token '${text}'`,
         code: 1081,
         severity: DiagnosticSeverity.Error
     }),
@@ -506,8 +511,8 @@ export let DiagnosticMessages = {
         code: 1097,
         severity: DiagnosticSeverity.Error
     }),
-    memberAlreadyExistsInParentClass: (memberType: string, parentClassName: string) => ({
-        message: `A ${memberType} with this name already exists in inherited class '${parentClassName}'`,
+    childFieldTypeNotAssignableToBaseProperty: (childTypeName: string, baseTypeName: string, fieldName: string, childFieldType: string, parentFieldType: string) => ({
+        message: `Field '${fieldName}' in class '${childTypeName}' is not assignable to the same field in base class '${baseTypeName}'. Type '${childFieldType}' is not assignable to type '${parentFieldType}'.`,
         code: 1098,
         severity: DiagnosticSeverity.Error
     }),
@@ -561,8 +566,8 @@ export let DiagnosticMessages = {
         code: 1108,
         severity: DiagnosticSeverity.Error
     }),
-    __unused1109: () => ({
-        message: ``,
+    expectedToken: (tokenKind: string) => ({
+        message: `Expected '${tokenKind}'`,
         code: 1109,
         severity: DiagnosticSeverity.Error
     }),
@@ -605,18 +610,53 @@ export let DiagnosticMessages = {
         message: `Missing exception expression after 'throw' keyword`,
         code: 1118,
         severity: DiagnosticSeverity.Error
+    }),
+    missingLeftSquareBracketAfterDimIdentifier: () => ({
+        message: `Missing left square bracket after 'dim' identifier`,
+        code: 1119,
+        severity: DiagnosticSeverity.Error
+    }),
+    missingRightSquareBracketAfterDimIdentifier: () => ({
+        message: `Missing right square bracket after 'dim' identifier`,
+        code: 1120,
+        severity: DiagnosticSeverity.Error
+    }),
+    missingExpressionsInDimStatement: () => ({
+        message: `Missing expression(s) in 'dim' statement`,
+        code: 1121,
+        severity: DiagnosticSeverity.Error
+    }),
+    mismatchedOverriddenMemberVisibility: (childClassName: string, memberName: string, childAccessModifier: string, ancestorAccessModifier: string, ancestorClassName: string) => ({
+        message: `Access modifier mismatch: '${memberName}' is ${childAccessModifier} in type '${childClassName}' but is ${ancestorAccessModifier} in base type '${ancestorClassName}'.`,
+        code: 1122,
+        severity: DiagnosticSeverity.Error
+    }),
+    cannotFindType: (typeName: string) => ({
+        message: `Cannot find type with name '${typeName}'`,
+        code: 1123,
+        severity: DiagnosticSeverity.Error
     })
 };
 
-let allCodes = [] as number[];
+export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
+export let diagnosticCodes = [] as number[];
 for (let key in DiagnosticMessages) {
-    allCodes.push(DiagnosticMessages[key]().code);
+    diagnosticCodes.push(DiagnosticMessages[key]().code);
+    DiagnosticCodeMap[key] = DiagnosticMessages[key]().code;
 }
-
-export let diagnosticCodes = allCodes;
 
 export interface DiagnosticInfo {
     message: string;
     code: number;
     severity: DiagnosticSeverity;
 }
+
+/**
+ * Provides easy type support for the return value of any DiagnosticMessage function.
+ * The second type parameter is optional, but allows plugins to pass in their own
+ * DiagnosticMessages-like object in order to get the same type support
+ */
+export type DiagnosticMessageType<K extends keyof D, D extends Record<string, (...args: any) => any> = typeof DiagnosticMessages> =
+    ReturnType<D[K]> &
+    //include the missing properties from BsDiagnostic
+    Pick<BsDiagnostic, 'range' | 'file' | 'relatedInformation' | 'tags'>;

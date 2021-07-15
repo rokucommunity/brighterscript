@@ -1,4 +1,4 @@
-import type { Range, Diagnostic } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -7,13 +7,17 @@ import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program, SourceObj, TranspileObj } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { FunctionStatement } from './parser';
+import type { Expression, FunctionStatement } from './parser';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 
 export interface BsDiagnostic extends Diagnostic {
-    file: File;
+    file: BscFile;
+    /**
+     * A generic data container where additional details of the diagnostic can be stored. These are stripped out before being sent to a languageclient, and not printed to the console.
+     */
+    data?: any;
 }
 
 export type BscFile = BrsFile | XmlFile;
@@ -136,6 +140,18 @@ export interface VariableDeclaration {
     lineIndex: number;
 }
 
+export interface LabelDeclaration {
+    name: string;
+    /**
+     * The range for the label name
+     */
+    nameRange: Range;
+    /**
+     * The line of the label
+     */
+    lineIndex: number;
+}
+
 /**
  * A wrapper around a callable to provide more information about where it came from
  */
@@ -147,7 +163,7 @@ export interface CallableContainer {
 export type CallableContainerMap = Map<string, CallableContainer[]>;
 
 export interface CommentFlag {
-    file: BrsFile;
+    file: BscFile;
     /**
      * The location of the ignore comment.
      */
@@ -156,7 +172,7 @@ export interface CommentFlag {
      * The range that this flag applies to (i.e. the lines that should be suppressed/re-enabled)
      */
     affectedRange: Range;
-    codes: number[] | null;
+    codes: DiagnosticCode[] | null;
 }
 
 type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
@@ -165,6 +181,7 @@ export type CompilerPluginFactory = () => CompilerPlugin;
 
 export interface CompilerPlugin {
     name: string;
+    //program events
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
     beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
@@ -175,11 +192,15 @@ export interface CompilerPlugin {
     afterProgramValidate?: (program: Program) => void;
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
+    //scope events
     afterScopeCreate?: (scope: Scope) => void;
     beforeScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
     afterScopeValidate?: ValidateHandler;
+    //file events
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: BscFile) => void;
     afterFileValidate?: (file: BscFile) => void;
@@ -187,6 +208,32 @@ export interface CompilerPlugin {
     afterFileTranspile?: (entry: TranspileObj) => void;
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
+}
+export type PluginHandler<T> = (event: T) => void;
+
+export interface OnGetCodeActionsEvent {
+    program: Program;
+    file: BscFile;
+    range: Range;
+    scopes: Scope[];
+    diagnostics: BsDiagnostic[];
+    codeActions: CodeAction[];
+}
+
+export interface OnGetSemanticTokensEvent {
+    program: Program;
+    file: BscFile;
+    scopes: Scope[];
+    semanticTokens: SemanticToken[];
+}
+
+export interface SemanticToken {
+    range: Range;
+    tokenType: SemanticTokenTypes;
+    /**
+     * An optional array of modifiers for this token
+     */
+    tokenModifiers?: SemanticTokenModifiers[];
 }
 
 export interface TypedefProvider {
@@ -196,3 +243,11 @@ export interface TypedefProvider {
 export type TranspileResult = Array<(string | SourceNode)>;
 
 export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined> | void;
+
+export interface ExpressionInfo {
+    expressions: Expression[];
+    varExpressions: Expression[];
+    uniqueVarNames: string[];
+}
+
+export type DiagnosticCode = number | string;

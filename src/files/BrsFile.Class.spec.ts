@@ -1,17 +1,16 @@
 import * as sinonImport from 'sinon';
 
 import { Program } from '../Program';
-import { getTestTranspile } from './BrsFile.spec';
 import type { BrsFile } from './BrsFile';
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { Diagnostic } from 'vscode-languageserver';
 import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 import { ParseMode } from '../parser/Parser';
-import { expectZeroDiagnostics } from '../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile } from '../testHelpers.spec';
 import { standardizePath as s } from '../util';
 import * as fsExtra from 'fs-extra';
-import { TranspileState } from '../parser/TranspileState';
+import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { doesNotThrow } from 'assert';
 
 let sinon = sinonImport.createSandbox();
@@ -199,13 +198,13 @@ describe('BrsFile BrighterScript classes', () => {
         it('follows correct sequence for property initializers', () => {
             testTranspile(`
                 class Animal
-                    species = "Animal"
+                    species1 = "Animal"
                     sub new()
                         print "From Animal: " + m.species
                     end sub
                 end class
                 class Duck extends Animal
-                    species = "Duck"
+                    species2 = "Duck"
                     sub new()
                         super()
                         print "From Duck: " + m.species
@@ -215,7 +214,7 @@ describe('BrsFile BrighterScript classes', () => {
                 function __Animal_builder()
                     instance = {}
                     instance.new = sub()
-                        m.species = "Animal"
+                        m.species1 = "Animal"
                         print "From Animal: " + m.species
                     end sub
                     return instance
@@ -230,7 +229,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.super0_new = instance.new
                     instance.new = sub()
                         m.super0_new()
-                        m.species = "Duck"
+                        m.species2 = "Duck"
                         print "From Duck: " + m.species
                     end sub
                     return instance
@@ -246,19 +245,19 @@ describe('BrsFile BrighterScript classes', () => {
         it('handles class inheritance inferred constructor calls', () => {
             testTranspile(`
                 class Animal
-                    className = "Animal"
+                    className1 = "Animal"
                 end class
                 class Duck extends Animal
-                    className = "Duck"
+                    className2 = "Duck"
                 end class
                 class BabyDuck extends Duck
-                    className = "BabyDuck"
+                    className3 = "BabyDuck"
                 end class
             `, `
                 function __Animal_builder()
                     instance = {}
                     instance.new = sub()
-                        m.className = "Animal"
+                        m.className1 = "Animal"
                     end sub
                     return instance
                 end function
@@ -272,7 +271,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.super0_new = instance.new
                     instance.new = sub()
                         m.super0_new()
-                        m.className = "Duck"
+                        m.className2 = "Duck"
                     end sub
                     return instance
                 end function
@@ -286,7 +285,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.super1_new = instance.new
                     instance.new = sub()
                         m.super1_new()
-                        m.className = "BabyDuck"
+                        m.className3 = "BabyDuck"
                     end sub
                     return instance
                 end function
@@ -417,6 +416,63 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
+        it('transpiles super in nested blocks', () => {
+            testTranspile(`
+                class Creature
+                    sub new(name as string)
+                    end sub
+                    function sayHello(text)
+                    ? text
+                    end function
+                end class
+
+                class Duck extends Creature
+                    override function sayHello(text)
+                        text = "The duck says " + text
+                        if text <> invalid
+                            super.sayHello(text)
+                        end if
+                    end function
+                end class
+            `, `
+                function __Creature_builder()
+                    instance = {}
+                    instance.new = sub(name as string)
+                    end sub
+                    instance.sayHello = function(text)
+                        ? text
+                    end function
+                    return instance
+                end function
+                function Creature(name as string)
+                    instance = __Creature_builder()
+                    instance.new(name)
+                    return instance
+                end function
+                function __Duck_builder()
+                    instance = __Creature_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub()
+                        m.super0_new()
+                    end sub
+                    instance.super0_sayHello = instance.sayHello
+                    instance.sayHello = function(text)
+                        text = "The duck says " + text
+                        if text <> invalid then
+                            m.super0_sayHello(text)
+                        end if
+                    end function
+                    return instance
+                end function
+                function Duck()
+                    instance = __Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs'
+            );
+        });
+
         it('properly transpiles classes from outside current namespace', () => {
             addFile('source/Animals.bs', `
                 namespace Animals
@@ -452,7 +508,7 @@ describe('BrsFile BrighterScript classes', () => {
                 sub main()
                     bob = Human()
                 end sub
-            `, undefined, 'source/main.bs');
+            `, undefined, 'source/main.bs', false);
         });
 
         it('new keyword transpiles correctly', () => {
@@ -741,7 +797,7 @@ describe('BrsFile BrighterScript classes', () => {
         );
     });
 
-    it('detects overridden property name in child class', () => {
+    it('allows untyped overridden field in child class', () => {
         program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
                 public name
@@ -751,9 +807,41 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
-        let diagnostics = program.getDiagnostics().map(x => x.message);
-        expect(diagnostics).to.eql([
-            DiagnosticMessages.memberAlreadyExistsInParentClass('field', 'Animal').message
+        expectZeroDiagnostics(program);
+    });
+
+    it('allows overridden property name in child class', () => {
+        program.addOrReplaceFile('source/main.bs', `
+            class Bird
+                public name = "bird"
+            end class
+            class Duck extends Bird
+                public name = "duck"
+            end class
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('flags incompatible child field type changes', () => {
+        program.addOrReplaceFile('source/main.bs', `
+            class Bird
+                public age = 12
+                public name = "bird"
+                public owner as Person
+            end class
+            class Duck extends Bird
+                public age = 12.2 'should be integer but is float
+                public name = 12 'should be string but is integer
+                public owner as string
+            end class
+        `);
+        program.validate();
+        expect(program.getDiagnostics().map(x => x.message).sort()).to.eql([
+            DiagnosticMessages.cannotFindType('Person').message,
+            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'age', 'float', 'integer').message,
+            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'name', 'integer', 'string').message,
+            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'owner', 'string', 'Person').message
         ]);
     });
 
@@ -772,6 +860,59 @@ describe('BrsFile BrighterScript classes', () => {
         expect(program.getDiagnostics()[0]).to.exist.and.to.include({
             ...DiagnosticMessages.missingOverrideKeyword('Animal')
         });
+    });
+
+    it('detects overridden methods with different visibility', () => {
+        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            class Animal
+                sub speakInPublic()
+                end sub
+                protected sub speakWithFriends()
+                end sub
+                private sub speakWithFamily()
+                end sub
+            end class
+            class Duck extends Animal
+                private override sub speakInPublic()
+                end sub
+                public override sub speakWithFriends()
+                end sub
+                override sub speakWithFamily()
+                end sub
+            end class
+        `);
+        program.validate();
+        expect(program.getDiagnostics()[0]).to.exist.and.to.include({
+            ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakInPublic', 'private', 'public', 'Animal')
+        });
+        expect(program.getDiagnostics()[1]).to.exist.and.to.include({
+            ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakWithFriends', 'public', 'protected', 'Animal')
+        });
+        expect(program.getDiagnostics()[2]).to.exist.and.to.include({
+            ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakWithFamily', 'public', 'private', 'Animal')
+        });
+    });
+    it('allows overridden methods with matching visibility', () => {
+        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            class Animal
+                sub speakInPublic()
+                end sub
+                protected sub speakWithFriends()
+                end sub
+                private sub speakWithFamily()
+                end sub
+            end class
+            class Duck extends Animal
+                override sub speakInPublic()
+                end sub
+                protected override sub speakWithFriends()
+                end sub
+                private override sub speakWithFamily()
+                end sub
+            end class
+        `);
+        program.validate();
+        expect(program.getDiagnostics()).to.be.empty;
     });
 
     it('detects extending unknown parent class', () => {
@@ -1034,7 +1175,7 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         doesNotThrow(() => {
-            file.parser.references.classStatements[0].getParentClassIndex(new TranspileState(file));
+            file.parser.references.classStatements[0].getParentClassIndex(new BrsTranspileState(file));
         });
     });
 });

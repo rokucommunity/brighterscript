@@ -7,6 +7,7 @@ import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement 
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils';
+import { expectZeroDiagnostics } from '../testHelpers.spec';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -95,6 +96,40 @@ describe('parser', () => {
     });
 
     describe('parse', () => {
+        it('supports ungrouped iife in assignment', () => {
+            const parser = parse(`
+                sub main()
+                    result = sub()
+                    end sub()
+                    result = function()
+                    end function()
+                end sub
+            `);
+            expectZeroDiagnostics(parser);
+        });
+
+        it('supports grouped iife in assignment', () => {
+            const parser = parse(`
+                sub main()
+                    result = (sub()
+                    end sub)()
+                    result = (function()
+                    end function)()
+                end sub
+            `);
+            expectZeroDiagnostics(parser);
+        });
+
+        it('supports returning iife call', () => {
+            const parser = parse(`
+                sub main()
+                    return (sub()
+                    end sub)()
+                end sub
+            `);
+            expectZeroDiagnostics(parser);
+        });
+
         it('supports using "interface" as parameter name', () => {
             expect(parse(`
                 sub main(interface as object)
@@ -644,7 +679,19 @@ describe('parser', () => {
                 sub main()
                 end sub
             `, ParseMode.BrighterScript);
-            expect(diagnostics[0]?.code).to.equal(1081); //unexpected token '@'
+            expect(diagnostics[0]?.message).to.equal(DiagnosticMessages.unexpectedToken('@').message);
+        });
+
+        it('properly handles empty annotation above class method', () => {
+            //this code used to cause an infinite loop, so the fact that the test passes/fails on its own is a success!
+            let { diagnostics } = parse(`
+                class Person
+                    @
+                    sub new()
+                    end sub
+                end class
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).to.equal(DiagnosticMessages.expectedIdentifier().message);
         });
 
         it('parses with error if annotation is not followed by a statement', () => {
@@ -951,6 +998,22 @@ describe('parser', () => {
             ]);
             let allArgs = fn.annotations[0].getArguments(false);
             expect(allArgs.pop()).to.be.instanceOf(FunctionExpression);
+        });
+
+        it('can handle negative numbers', () => {
+            let { statements, diagnostics } = parse(`
+                @meta(-100)
+                function main()
+                end function
+
+                sub init()
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            expect(statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = statements[0] as FunctionStatement;
+            expect(fn.annotations).to.exist;
+            expect(fn.annotations[0].getArguments()).to.deep.equal([-100]);
         });
     });
 });

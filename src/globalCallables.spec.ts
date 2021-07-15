@@ -1,6 +1,7 @@
 import { standardizePath as s } from './util';
 import { Program } from './Program';
 import { expect } from 'chai';
+import { expectZeroDiagnostics } from './testHelpers.spec';
 
 let tmpPath = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tmpPath}/rootDir`;
@@ -16,6 +17,34 @@ describe('globalCallables', () => {
     });
     afterEach(() => {
         program.dispose();
+    });
+
+    describe('Roku_ads', () => {
+        it('exists', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    adIface = Roku_Ads()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
+    describe('bslCore', () => {
+        it('exists', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                Library "v30/bslCore.brs"
+
+                sub main()
+                    print bslBrightScriptErrorCodes()
+                    print bslUniversalControlEventCodes()
+                    print HexToAscii(AsciiToHex("Hi"))
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('val', () => {
@@ -55,6 +84,28 @@ describe('globalCallables', () => {
             program.addOrReplaceFile('source/main.brs', `
                 sub main()
                     print StrI(2, 10)
+                end sub
+            `);
+            program.validate();
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        });
+    });
+
+    describe('parseJson', () => {
+        it('allows single parameter', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print ParseJson("{}")
+                end sub
+            `);
+            program.validate();
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        });
+
+        it('allows 2 parameters', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                print ParseJson("{}", "i")
                 end sub
             `);
             program.validate();

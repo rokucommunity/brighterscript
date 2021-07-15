@@ -4,12 +4,12 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import type { Position, Range } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -22,12 +22,14 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { DottedGetExpression, VariableExpression } from './parser/Expression';
+import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
-import type { Token } from './lexer';
+import type { Locatable, Token } from './lexer';
 import { TokenKind } from './lexer';
-import { isBrsFile, isDottedGetExpression, isVariableExpression } from './astUtils';
+import { isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
 import { CustomType } from './types/CustomType';
+import { SourceNode } from 'source-map';
+import type { SGAttribute } from './parser/SGTypes';
 
 export class Util {
     public clearConsole() {
@@ -90,12 +92,12 @@ export class Util {
      * If the config file path doesn't exist
      * @param configFilePath
      */
-    public async getConfigFilePath(cwd?: string) {
+    public getConfigFilePath(cwd?: string) {
         cwd = cwd ?? process.cwd();
         let configPath = path.join(cwd, 'bsconfig.json');
         //find the nearest config file path
         for (let i = 0; i < 100; i++) {
-            if (await this.pathExists(configPath)) {
+            if (this.pathExistsSync(configPath)) {
                 return configPath;
             } else {
                 let parentDirPath = path.dirname(path.dirname(configPath));
@@ -130,13 +132,13 @@ export class Util {
      * @param configFilePath
      * @param parentProjectPaths
      */
-    public async loadConfigFile(configFilePath: string, parentProjectPaths?: string[], cwd = process.cwd()) {
+    public loadConfigFile(configFilePath: string, parentProjectPaths?: string[], cwd = process.cwd()) {
         if (configFilePath) {
             //if the config file path starts with question mark, then it's optional. return undefined if it doesn't exist
             if (configFilePath.startsWith('?')) {
                 //remove leading question mark
                 configFilePath = configFilePath.substring(1);
-                if (await fsExtra.pathExists(path.resolve(cwd, configFilePath)) === false) {
+                if (fsExtra.pathExistsSync(path.resolve(cwd, configFilePath)) === false) {
                     return undefined;
                 }
             }
@@ -149,7 +151,7 @@ export class Util {
                 throw new Error('Circular dependency detected: "' + parentProjectPaths.join('" => ') + '"');
             }
             //load the project file
-            let projectFileContents = (await fsExtra.readFile(configFilePath)).toString();
+            let projectFileContents = fsExtra.readFileSync(configFilePath).toString();
             let parseErrors = [] as ParseError[];
             let projectConfig = parseJsonc(projectFileContents, parseErrors) as BsConfig;
             if (parseErrors.length > 0) {
@@ -170,7 +172,7 @@ export class Util {
             let result: BsConfig;
             //if the project has a base file, load it
             if (projectConfig && typeof projectConfig.extends === 'string') {
-                let baseProjectConfig = await this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
+                let baseProjectConfig = this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
                 //extend the base config with the current project settings
                 result = { ...baseProjectConfig, ...projectConfig };
             } else {
@@ -253,18 +255,18 @@ export class Util {
      * merge with bsconfig.json and the provided options.
      * @param config
      */
-    public async normalizeAndResolveConfig(config: BsConfig) {
+    public normalizeAndResolveConfig(config: BsConfig) {
         let result = this.normalizeConfig({});
 
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
-            result.project = await this.getConfigFilePath(config?.cwd);
+            result.project = this.getConfigFilePath(config?.cwd);
         } else {
             //use the config's project link
             result.project = config.project;
         }
         if (result.project) {
-            let configFile = await this.loadConfigFile(result.project, null, config?.cwd);
+            let configFile = this.loadConfigFile(result.project, null, config?.cwd);
             result = Object.assign(result, configFile);
         }
 
@@ -465,6 +467,24 @@ export class Util {
     }
 
     /**
+     * Does a touch b in any way?
+     */
+    public rangesIntersect(a: Range, b: Range) {
+        // Check if `a` is before `b`
+        if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character <= b.start.character)) {
+            return false;
+        }
+
+        // Check if `b` is before `a`
+        if (b.end.line < a.start.line || (b.end.line === a.start.line && b.end.character <= a.start.character)) {
+            return false;
+        }
+
+        // These ranges must intersect
+        return true;
+    }
+
+    /**
      * Test if `position` is in `range`. If the position is at the edges, will return true.
      * Adapted from core vscode
      * @param range
@@ -622,115 +642,15 @@ export class Util {
      * @param diagnostic
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
-        //for now, we only support suppressing brs file diagnostics
-        if (isBrsFile(diagnostic.file)) {
-            for (let flag of diagnostic.file.commentFlags) {
-                //this diagnostic is affected by this flag
-                if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
-                    //if the flag acts upon this diagnostic's code
-                    if (flag.codes === null || flag.codes.includes(diagnostic.code as number)) {
-                        return true;
-                    }
+        for (let flag of diagnostic.file?.commentFlags ?? []) {
+            //this diagnostic is affected by this flag
+            if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
+                //if the flag acts upon this diagnostic's code
+                if (flag.codes === null || flag.codes.includes(diagnostic.code as number)) {
+                    return true;
                 }
             }
         }
-    }
-
-    /**
-     * Small tokenizer for bs:disable comments
-     */
-    public tokenizeBsDisableComment(token: Token) {
-        if (token.kind !== TokenKind.Comment) {
-            return null;
-        }
-        let lowerText = token.text.toLowerCase();
-        let offset = 0;
-        let commentTokenText: string;
-
-        if (token.text.startsWith(`'`)) {
-            commentTokenText = `'`;
-            offset = 1;
-            lowerText = lowerText.substring(1);
-        } else if (lowerText.startsWith('rem')) {
-            commentTokenText = lowerText.substring(0, 3);
-            offset = 3;
-            lowerText = lowerText.substring(3);
-        }
-
-        let disableType: 'line' | 'next-line';
-        //trim leading/trailing whitespace
-        let len = lowerText.length;
-        lowerText = lowerText.trimLeft();
-        offset += len - lowerText.length;
-        if (lowerText.startsWith('bs:disable-line')) {
-            lowerText = lowerText.substring('bs:disable-line'.length);
-            offset += 'bs:disable-line'.length;
-            disableType = 'line';
-        } else if (lowerText.startsWith('bs:disable-next-line')) {
-            lowerText = lowerText.substring('bs:disable-next-line'.length);
-            offset += 'bs:disable-next-line'.length;
-            disableType = 'next-line';
-        } else {
-            return null;
-        }
-        //do something with the colon
-        if (lowerText.startsWith(':')) {
-            lowerText = lowerText.substring(1);
-            offset += 1;
-        }
-
-        let items = this.tokenizeByWhitespace(lowerText);
-        let codes = [] as Array<{ code: string; range: Range }>;
-        for (let item of items) {
-            codes.push({
-                code: item.text,
-                range: util.createRange(
-                    token.range.start.line,
-                    token.range.start.character + offset + item.startIndex,
-                    token.range.start.line,
-                    token.range.start.character + offset + item.startIndex + item.text.length
-                )
-            });
-        }
-
-        return {
-            commentTokenText: commentTokenText,
-            disableType: disableType,
-            codes: codes
-        };
-    }
-
-    /**
-     * Given a string, extract each item split by whitespace
-     * @param text
-     */
-    public tokenizeByWhitespace(text: string) {
-        let tokens = [] as Array<{ startIndex: number; text: string }>;
-        let currentToken = null;
-        for (let i = 0; i < text.length; i++) {
-            let char = text[i];
-            //if we hit whitespace
-            if (char === ' ' || char === '\t') {
-                if (currentToken) {
-                    tokens.push(currentToken);
-                    currentToken = null;
-                }
-
-                //we hit non-whitespace
-            } else {
-                if (!currentToken) {
-                    currentToken = {
-                        startIndex: i,
-                        text: ''
-                    };
-                }
-                currentToken.text += char;
-            }
-        }
-        if (currentToken) {
-            tokens.push(currentToken);
-        }
-        return tokens;
     }
 
     /**
@@ -1111,6 +1031,174 @@ export class Util {
         }
         // eslint-disable-next-line
         return require(target);
+    }
+
+    /**
+     * Gathers expressions, variables, and unique names from an expression.
+     * This is mostly used for the ternary expression
+     */
+    public getExpressionInfo(expression: Expression): ExpressionInfo {
+        const expressions = [expression];
+        const variableExpressions = [] as VariableExpression[];
+        const uniqueVarNames = new Set<string>();
+
+        // Collect all expressions. Most of these expressions are fairly small so this should be quick!
+        // This should only be called during transpile time and only when we actually need it.
+        expression?.walk((expression) => {
+            if (isExpression(expression)) {
+                expressions.push(expression);
+            }
+            if (isVariableExpression(expression)) {
+                variableExpressions.push(expression);
+                uniqueVarNames.add(expression.name.text);
+            }
+        }, {
+            walkMode: WalkMode.visitExpressions
+        });
+        return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: [...uniqueVarNames] };
+    }
+
+
+    /**
+     * Create a SourceNode that maps every line to itself. Useful for creating maps for files
+     * that haven't changed at all, but we still need the map
+     */
+    public simpleMap(source: string, src: string) {
+        //create a source map from the original source code
+        let chunks = [] as (SourceNode | string)[];
+        let lines = src.split(/\r?\n/g);
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            let line = lines[lineIndex];
+            chunks.push(
+                lineIndex > 0 ? '\n' : '',
+                new SourceNode(lineIndex + 1, 0, source, line)
+            );
+        }
+        return new SourceNode(null, null, source, chunks);
+    }
+
+    /**
+     * Creates a new SGAttribute object, but keeps the existing Range references (since those shouldn't ever get changed directly)
+     */
+    public cloneSGAttribute(attr: SGAttribute, value: string) {
+        return {
+            key: {
+                text: attr.key.text,
+                range: attr.range
+            },
+            value: {
+                text: value,
+                range: attr.value.range
+            },
+            range: attr.range
+        } as SGAttribute;
+    }
+
+    /**
+     * Copy the version of bslib from local node_modules to the staging folder
+     */
+    public async copyBslibToStaging(stagingDir: string) {
+        //copy bslib to the output directory
+        await fsExtra.ensureDir(standardizePath(`${stagingDir}/source`));
+        // eslint-disable-next-line
+        const bslib = require('@rokucommunity/bslib');
+        let source = bslib.source as string;
+
+        //apply the `bslib_` prefix to the functions
+        let match: RegExpExecArray;
+        const positions = [] as number[];
+        const regexp = /^(\s*(?:function|sub)\s+)([a-z0-9_]+)/mg;
+        // eslint-disable-next-line no-cond-assign
+        while (match = regexp.exec(source)) {
+            positions.push(match.index + match[1].length);
+        }
+
+        for (let i = positions.length - 1; i >= 0; i--) {
+            const position = positions[i];
+            source = source.slice(0, position) + 'bslib_' + source.slice(position);
+        }
+        await fsExtra.writeFile(`${stagingDir}/source/bslib.brs`, source);
+    }
+
+    /**
+     * Given a Diagnostic or BsDiagnostic, return a copy of the diagnostic
+     */
+    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic) {
+        return {
+            severity: diagnostic.severity,
+            range: diagnostic.range,
+            message: diagnostic.message,
+            relatedInformation: diagnostic.relatedInformation?.map(x => {
+                //clone related information just in case a plugin added circular ref info here
+                return { ...x };
+            }),
+            code: diagnostic.code,
+            source: 'brs'
+        };
+    }
+
+    /**
+     * Sort an array of objects that have a Range
+     */
+    public sortByRange(locatables: Locatable[]) {
+        //sort the tokens by range
+        return locatables.sort((a, b) => {
+            //start line
+            if (a.range.start.line < b.range.start.line) {
+                return -1;
+            }
+            if (a.range.start.line > b.range.start.line) {
+                return 1;
+            }
+            //start char
+            if (a.range.start.character < b.range.start.character) {
+                return -1;
+            }
+            if (a.range.start.character > b.range.start.character) {
+                return 1;
+            }
+            //end line
+            if (a.range.end.line < b.range.end.line) {
+                return -1;
+            }
+            if (a.range.end.line > b.range.end.line) {
+                return 1;
+            }
+            //end char
+            if (a.range.end.character < b.range.end.character) {
+                return -1;
+            } else if (a.range.end.character > b.range.end.character) {
+                return 1;
+            }
+            return 0;
+        });
+    }
+
+    /**
+     * Split the given text and return ranges for each chunk.
+     * Only works for single-line strings
+     */
+    public splitGetRange(separator: string, text: string, range: Range) {
+        const chunks = text.split(separator);
+        const result = [] as Array<{ text: string; range: Range }>;
+        let offset = 0;
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
+            //only keep nonzero chunks
+            if (chunk.length > 0) {
+                result.push({
+                    text: chunk,
+                    range: this.createRange(
+                        range.start.line,
+                        range.start.character + offset,
+                        range.end.line,
+                        range.start.character + offset + chunk.length
+                    )
+                });
+            }
+            offset += chunk.length + separator.length;
+        }
+        return result;
     }
 }
 

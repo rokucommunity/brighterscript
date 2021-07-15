@@ -1,24 +1,23 @@
-
 const fsExtra = require('fs-extra');
 const syncRequest = require('sync-request');
 const path = require('path');
 const { spawnSync, execSync } = require('child_process');
 const yargs = require('yargs');
 const readline = require('readline');
+const rimraf = require('rimraf');
+const glob = require('glob');
 
 class Runner {
     constructor(options) {
         this.versions = options.versions;
         this.targets = options.targets;
-        this.iterations = options.iterations;
         this.noprepare = options.noprepare;
         this.project = options.project;
+        this.quick = options.quick;
+        this.profile = options.profile;
     }
     run() {
         this.downloadFiles();
-
-        console.log('benchmark: Clearing previous benchmark results');
-        fsExtra.outputFileSync(path.join(__dirname, 'results.json'), '{}');
 
         if (!this.noprepare) {
             this.prepare();
@@ -114,58 +113,52 @@ class Runner {
     }
 
     runBenchmarks() {
+        console.log('benchmark: Running benchmarks: \n');
+        const maxVersionLength = this.versions.reduce((acc, curr) => {
+            return curr.length > acc ? curr.length : acc;
+        }, 0);
+
+        const maxTargetLength = this.targets.reduce((acc, curr) => {
+            return curr.length > acc ? curr.length : acc;
+        }, 0);
+
+        if (this.profile) {
+            console.log('Deleting previous profile runs\n');
+            rimraf.sync(path.join(__dirname, 'isolate-*'));
+        }
+
         //run one target at a time
         for (const target of this.targets) {
             //run each of the versions within this target
             for (let versionIndex = 0; versionIndex < this.versions.length; versionIndex++) {
                 const version = this.versions[versionIndex];
-                //run the same test several times and take an average
-                for (let iteration = 0; iteration < this.iterations; iteration++) {
-                    readline.clearLine(process.stdout);
-                    readline.cursorTo(process.stdout, 0);
-                    const opsPerSecondText = iteration > 0 ? ` (${this.getLatestOpsPerSecond(target, version).toFixed(3).toLocaleString('en')} ops/sec)` : '';
-                    process.stdout.write(`Benchmarking ${target}@${version} (${iteration + 1} of ${this.iterations})${opsPerSecondText}`);
+                process.stdout.write(`Benchmarking ${target}@${version}`);
+                const alias = `brighterscript${versionIndex + 1}`;
 
-                    execSync(`node target-runner.js "${version}" "${target}" "brighterscript${versionIndex + 1}" "${this.project}"`, {
-                        cwd: path.join(__dirname),
-                        stdio: 'inherit'
+                //get the list of current profiler logs
+                const beforeLogs = glob.sync('isolate-*.log', {
+                    cwd: __dirname
+                });
+
+                execSync(`node ${this.profile ? '--prof ' : ''}target-runner.js "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.project}" "${this.quick}"`, {
+                    cwd: path.join(__dirname),
+                    stdio: 'inherit'
+                });
+                if (this.profile) {
+                    const logFile = glob.sync('isolate-*.log', {
+                        cwd: __dirname
+                    }).filter(x => !beforeLogs.includes(x))[0];
+
+                    execSync(`node --prof-process ${logFile} > "${logFile.replace(/\.log$/, '')} (${target} ${version}).txt"`, {
+                        cwd: path.join(__dirname)
+                    });
+                    execSync(`node --prof-process --preprocess -j ${logFile} > "${logFile.replace(/\.log$/, '')} (${target} ${version}).json"`, {
+                        cwd: path.join(__dirname)
                     });
                 }
-                readline.clearLine(process.stdout);
-                readline.cursorTo(process.stdout, 0);
-
-                process.stdout.write(`Benchmarking ${target}@${version} (done)`);
             }
-            readline.clearLine(process.stdout);
-            readline.cursorTo(process.stdout, 0);
-            //log the final results to the console
-            this.logTargetResults(target);
-            process.stdout.write('\n');
-        }
-    }
-
-    /**
-     * Walk through the result list, and find the most recent result added
-     */
-    getLatestOpsPerSecond(target, version) {
-        const results = fsExtra.readJsonSync(path.join(__dirname, 'results.json'));
-        const targetData = results[target];
-        if (targetData) {
-            const versionData = targetData[version];
-            if (versionData && versionData.length > 0) {
-                return versionData[versionData.length - 1];
-            }
-        }
-    }
-
-    logTargetResults(target) {
-        const results = fsExtra.readJsonSync(path.join(__dirname, 'results.json'));
-        for (let version of this.versions) {
-            const versionResults = results[target][version];
-            const average = versionResults.reduce((a, b) => {
-                return a + b;
-            }, 0) / versionResults.length;
-            console.log(`${target}@${version} x ${average.toFixed(3).toLocaleString('en')} ops/sec`);
+            //print a newline to separate the targets
+            console.log('');
         }
     }
 }
@@ -187,19 +180,27 @@ let options = yargs
         description: 'Which benchmark targets should be run',
         defaultDescription: JSON.stringify(targets)
     })
-    .option('iterations', {
-        type: 'number',
-        description: 'The number of times the test should be run.',
-        default: 3
-    })
     .option('noprepare', {
         type: 'boolean',
+        alias: 'noinstall',
         description: 'Skip running npm install. Use this to speed up subsequent runs of the same test',
         default: false
     })
     .option('project', {
         type: 'string',
         description: 'File path to a project that should be used for complex benchmarking (like validation). If omitted, the tool will download and use https://github.com/chtaylo2/Roku-GooglePhotos'
+    })
+    .option('quick', {
+        type: 'boolean',
+        alias: 'fast',
+        description: 'run a quick benchmark rather than the lower more precise version',
+        default: false
+    })
+    .option('profile', {
+        type: 'boolean',
+        alias: 'prof',
+        description: 'Enable nodejs profiling of each benchmark run',
+        default: false
     })
     .strict()
     .check(argv => {

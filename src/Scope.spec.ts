@@ -7,6 +7,9 @@ import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
 import { trim } from './testHelpers.spec';
+import { Logger } from './Logger';
+import type { BrsFile } from './files/BrsFile';
+import type { FunctionStatement, NamespaceStatement } from './parser';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -373,6 +376,23 @@ describe('Scope', () => {
             ]);
         });
 
+        it('does not error with calls to callables in same namespace', () => {
+            program.addOrReplaceFile('source/file.bs', `
+                namespace Name.Space
+                    sub a(param as string)
+                        print param
+                    end sub
+
+                    sub b()
+                        a("hello")
+                    end sub
+                end namespace
+            `);
+            //validate the scope
+            program.validate();
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+
         //We don't currently support someObj.callSomething() format, so don't throw errors on those
         it('does not fail on object callables', () => {
             expect(program.getDiagnostics().length).to.equal(0);
@@ -502,7 +522,7 @@ describe('Scope', () => {
                 name: 'Emits validation events',
                 beforeScopeValidate: validateStartScope,
                 afterScopeValidate: validateEndScope
-            }], undefined);
+            }], new Logger());
             program.validate();
             expect(validateStartScope.callCount).to.equal(2);
             expect(validateStartScope.calledWith(sourceScope)).to.be.true;
@@ -581,8 +601,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                    DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message,
-                    DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message
+                    DiagnosticMessages.cannotFindType('unknownType').message,
+                    DiagnosticMessages.cannotFindType('unknownType').message
                 ]);
             });
 
@@ -803,6 +823,29 @@ describe('Scope', () => {
             expect(completions).to.be.length.greaterThan(0);
             //it should find documentation for completions
             expect(completions.filter(x => !!x.documentation)).to.have.length.greaterThan(0);
+        });
+    });
+
+    describe('buildNamespaceLookup', () => {
+        it('does not crash when class statement is missing `name` prop', () => {
+            program.addOrReplaceFile<BrsFile>('source/main.bs', `
+                namespace NameA
+                    class
+                    end class
+                end namespace
+            `);
+            program['scopes']['source'].buildNamespaceLookup();
+        });
+
+        it('does not crash when function statement is missing `name` prop', () => {
+            const file = program.addOrReplaceFile<BrsFile>('source/main.bs', `
+                namespace NameA
+                    function doSomething()
+                    end function
+                end namespace
+            `);
+            delete ((file.ast.statements[0] as NamespaceStatement).body.statements[0] as FunctionStatement).name;
+            program['scopes']['source'].buildNamespaceLookup();
         });
     });
 });

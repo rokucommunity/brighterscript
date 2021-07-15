@@ -6,6 +6,289 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.39.4] - 2021-06-27
+[0.39.4]: https://github.com/RokuCommunity/roku-debug/compare/v0.8.3...v0.8.4
+### Fixed
+ - incorrect block range for inline if/then branch ([#424](https://github.com/rokucommunity/brighterscript/pull/424))
+ - extract associative array comma when parsing ([#427](https://github.com/rokucommunity/brighterscript/pull/424))
+ - allow up to 6 arguments in `CreateObject` function signature ([#430](https://github.com/rokucommunity/brighterscript/pull/430))
+ - add v30/bslCore library functions to global callables ([#433](https://github.com/rokucommunity/brighterscript/pull/433))
+
+
+## [0.39.3] - 2021-06-01
+[0.39.3]: https://github.com/RokuCommunity/roku-debug/compare/v0.8.2...v0.8.3
+### Changed
+ - upgraded to [roku-deploy@3.4.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#341---2021-06-01) which fixes bugs introduced in roku-deploy@3.4.0
+
+
+
+## [0.39.2] - 2021-05-28
+[0.39.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.39.1...v0.39.2
+### Changed
+ - upgraded to [roku-deploy@3.4.0](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#340---2021-05-28) which brings significant zip speed improvements
+
+
+
+## [0.39.1] - 2021-05-24
+[0.39.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.39.0...v0.39.1
+### Changed
+ - re-export `CodeActionKind` so plugins don't need to import from vscode-brightscript-language directly.
+### Fixed
+ - code action for "replace" tasks bug
+ - include missing information in the CodeAction construction
+
+
+
+## [0.39.0] - 2021-05-18
+[0.39.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.38.2...v0.39.0
+### Added
+ - semantic token support for plugins
+ - basic semantic tokens for `new` statements and namespace usage
+
+
+
+## [0.38.2] - 2021-05-17
+[0.38.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.38.1...v0.38.2
+### Fixed
+ - language server crash when namespaced function or class didn't have a name ([#419](https://github.com/rokucommunity/brighterscript/pull/419))
+
+
+
+## [0.38.1] - 2021-05-14
+[0.38.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.38.0...v0.38.1
+### Changed
+ - SOURCE_FILE_PATH and SOURCE_LOCATION source literals are now string concatenations in order to avoid triggering Roku's static analysis rule against `file:/` protocol strings ([#415](https://github.com/rokucommunity/brighterscript/pull/415))
+### Fixed
+ - ParseJson function signature to include second parameter ([#418](https://github.com/rokucommunity/brighterscript/pull/418))
+ - bsconfig.schema.json support for string diagnostic codes ([#416](https://github.com/rokucommunity/brighterscript/pull/416))
+ - upgrade chokidar to add `--watch` cli support for M1 mac computers  ([#386](https://github.com/rokucommunity/brighterscript/pull/386))
+ - several dependency vulnerability fixes ([#413](https://github.com/rokucommunity/brighterscript/pull/413), [#410](https://github.com/rokucommunity/brighterscript/pull/410), [#411](https://github.com/rokucommunity/brighterscript/pull/411))
+
+
+
+## [0.38.0] - 2021-05-04
+### Added
+ - warning for mismatched class method accessibility ([#402](https://github.com/rokucommunity/brighterscript/pull/402))
+ - allow class field overrides in child classes as long as they are the same type ([#394](https://github.com/rokucommunity/brighterscript/pull/394))
+
+
+
+## [0.37.4] - 2021-04-20
+### Fixed
+ - bug validating namespace function calls ([#390](https://github.com/rokucommunity/brighterscript/pull/390))
+
+
+
+## [0.37.3] - 2021-04-12
+### Fixed
+ - bug where having multiple components with the same name would cause issues in the program, normally requiring a language server or watcher restart. ([#353](https://github.com/rokucommunity/brighterscript/pull/353))
+ - bug in xml file ignoring `needsTranspiled` flag when set by plugins ([#384](https://github.com/rokucommunity/brighterscript/pull/384))
+
+
+
+## [0.37.2] - 2021-04-08
+### Fixed
+ - erraneous syntax issue when concatenating a template string and a regular string. ([#383](https://github.com/rokucommunity/brighterscript/pull/383))
+ - prevent circular import causing stack overflow crash. ([#381](https://github.com/rokucommunity/brighterscript/pull/381))
+
+
+
+## [0.37.1] - 2021-03-30
+### Fixed
+ - bug when transpiling print statements that wouldn't retain the existing separators (semicolon, comma, no separator) which all have unique uses ([#373](https://github.com/rokucommunity/brighterscript/pull/373))
+
+
+
+## [0.37.0] - 2021-03-18
+### Added
+ - support for `bs:disable` comments in xml files ([#363](https://github.com/rokucommunity/brighterscript/pull/363))
+
+
+
+## [0.36.0] - 2021-03-15
+### Added
+ - class import code actions ([#365](https://github.com/rokucommunity/brighterscript/pull/365))
+### Changed
+ - append stack trace to every language server error ([#354)](https://github.com/rokucommunity/brighterscript/pull/354))
+### Fixed
+ - restrict function and class imports to .bs files only ([#365)](https://github.com/rokucommunity/brighterscript/pull/365))
+ - language server crashes due to unsafe property access in callfunc expressions ([#360)](https://github.com/rokucommunity/brighterscript/pull/360))
+ - crashes in signature help ([#358)](https://github.com/rokucommunity/brighterscript/pull/358))
+ - template string transpile bug when two expressions were next to each other ([#361)](https://github.com/rokucommunity/brighterscript/pull/361))
+
+
+
+## [0.35.0] - 2021-03-09
+### Added
+ - code actions for suggesting import statements in brighterscript files ([#347](https://github.com/rokucommunity/brighterscript/pull/347))
+### Fixed
+ - safer access to nullable callables and values during certain language server operations ([#328](https://github.com/rokucommunity/brighterscript/pull/328))
+
+
+
+## [0.34.3] -2021-03-05
+### Fixed
+ - bug when transpiling bsc with custom function and parameter return types
+
+
+
+## [0.34.2] - 2021-03-04
+### Added
+ - support for loading bslib without alias (i.e. `@rokucommunity/bslib`).
+### Fixed
+ - bslib npm alias bug crashing npm install on nodeJS < 12
+ - infinite loop during transpile when copying bslib
+ - bug where bslib.brs functions were not properly prefixed during transpile
+
+
+
+## [0.34.1] - 2021-03-02
+### Fixed
+ - syntax parsing bugs within single-line if statements
+
+
+
+## [0.34.0] - 2021-02-28
+### Added
+ - language server file path completions inside strings that start with `pkg:` or `libpkg:`
+
+
+
+## [0.33.0] - 2021-02-27
+### Added
+ - support for ropm version of bslib.([#334](https://github.com/rokucommunity/brighterscript/pull/334))
+### Fixed
+ - parse crash when encountering immediately-invoked function expressions (IIFEs) ([#343](https://github.com/rokucommunity/brighterscript/pull/343))
+ - error during language server completions when activated on the first token in the file ([#342](https://github.com/rokucommunity/brighterscript/pull/342))
+ - refactored BrsFile.parseMode to be a property instead of a getter since there was no reason it needed to be a getter ([#341](https://github.com/rokucommunity/brighterscript/pull/341))
+
+
+
+## [0.32.3] - 2021-02-25
+### Fixed
+ - fix significant performance bug in diagnostic filtering
+ - tweaks to the logging system to make `logLevel=verbose` less chatty
+ - null reference error in `Scope.getFileByRelativePath()`
+ - fix class fields that were missing in getSymbol requests
+
+
+
+## [0.32.2] - 2021-02-20
+### Fixed
+ - transpile bug when a template string starts with an expression ([#327](https://github.com/rokucommunity/brighterscript/pull/327))
+
+
+
+## [0.31.2] - 2021-02-18
+### Changed
+ - parent class names in typedefs for class `extends` expressions now always include their full namespace name.
+
+
+
+## [0.31.1] - 2021-02-18
+### Fixed
+ - prevent exception in codeAction functionality when file cannot be found in a `Program`
+
+
+
+## [0.31.0] - 2021-02-17
+### Added
+ - plugin and language server support for [codeActions](https://microsoft.github.io/language-server-protocol/specifications/specification-current/#textDocument_codeAction)
+ - codeAction to add missing `extends` attribute in components
+### Fixed
+ - wrong line numbers in certain sourcemaps generated during transpile
+ - include annotations in emitted type definitions
+
+
+
+## [0.30.9] - 2021-02-15
+### Fixed
+ - prevent excess validations when non-workspace files are changed  ([#315](https://github.com/rokucommunity/brighterscript/pull/315))
+ - catch errors when getting signatures ([#285](https://github.com/rokucommunity/brighterscript/pull/285))
+ - missing `Roku_Ads` function in global functions list. ([#312](https://github.com/rokucommunity/brighterscript/pull/312))
+
+
+
+## [0.30.8] - 2021-02-12
+### Changed
+ - add additional logging in `Program.removeFile`
+### Fixed
+ - Fix watcher bug on windows devices
+ - Don't mangle xml scripts during transpile
+
+
+
+## [0.30.7] - 2021-02-11
+### Fixed
+ - bug in `getSignatureHelp` that wouldn't work for function calls with no leading whitespace. ([#307](https://github.com/rokucommunity/brighterscript/issues/307))
+
+
+
+## [0.30.6] - 2021-02-07
+### Fixed
+ - bad transpile for nested class method super calls
+ - SceneGraph node attributes being wrongly removed when modifying attributes
+
+
+
+## [0.30.5] - 2021-02-03
+### Added
+ - syntax support for dim statements
+ - completion and code navigation for labels
+### Fixed
+ - exception related to signature help when writing comments
+
+
+
+## [0.30.4] - 2021-02-02
+### Fixed
+ - fixed crash during validation caused by a missing function body when parsing malformed code
+
+
+
+## [0.30.3] - 2021-02-01
+### Fixed
+ - performance issue when transpiling larger projects, even when no brighterscript code was used
+
+
+
+## [0.30.2] - 2021-01-31
+### Fixed
+ - xml parse error crashing validation ((#294)[https://github.com/rokucommunity/brighterscript/pull/294])
+ - better handling for `createStringLiteral` ((#292)[https://github.com/rokucommunity/brighterscript/pull/292])
+
+
+
+## [0.30.1] - 2021-01-29
+### Fixed
+ - bug that would crash while transpiling if a script tag didn't have a `type` attribute
+ - XML transpile now honors the `sourceMap` option
+
+
+
+## [0.30.0] - 2021-01-26
+### Added
+ - null coalescing operator (see [the docs](https://github.com/rokucommunity/brighterscript/blob/master/docs/null-coalescing-operator.md) for more information)
+### Fixed
+ - infinite loop when encountering annotations without an identifier above a class method ([#291](https://github.com/rokucommunity/brighterscript/pull/291))
+
+
+
+## [0.29.0] - 2021-01-25
+### Added
+ - ternary operator (see [the docs](https://github.com/rokucommunity/brighterscript/blob/master/docs/ternary-operator.md) for more information)
+
+
+
+## [0.28.2] - 2021-01-22
+### Changed
+ - config loading functions from `util.ts` are now run synchronously
+### Fixed
+ - missing variable from `for each` statement in completions for language server
+ - bug when running the CLI that wouldn't properly read the `sourceMap` property from bsconfig.json
+
+
+
 ## [0.28.1] - 2021-01-19
 ### Changed
  - (For plugin authors) refactored many async methods into sync methods to simplify file creation/management. ([#278](https://github.com/rokucommunity/brighterscript/pull/278))
@@ -846,3 +1129,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.27.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.26.0...v0.27.0
 [0.28.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.27.0...v0.28.0
 [0.28.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.0...v0.28.1
+[0.28.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.1...v0.28.2
+[0.29.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.2...v0.29.0
+[0.30.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.29.0...v0.30.0
+[0.30.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.0...v0.30.1
+[0.30.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.1...v0.30.2
+[0.30.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.2...v0.30.3
+[0.30.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.3...v0.30.4
+[0.30.5]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.4...v0.30.5
+[0.30.6]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.5...v0.30.6
+[0.30.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.6...v0.30.7
+[0.30.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.7...v0.30.8
+[0.30.9]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.8...v0.30.9
+[0.31.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.9...v0.31.0
+[0.31.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.0...v0.31.1
+[0.31.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.1...v0.31.2
+[0.32.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.2...v0.32.2
+[0.32.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.32.2...v0.32.3
+[0.33.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.32.3...v0.33.0
+[0.34.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.33.0...v0.34.0
+[0.34.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.0...v0.34.1
+[0.34.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.1...v0.34.2
+[0.34.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.2...v0.34.3
+[0.35.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.3...v0.35.0
+[0.36.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.35.0...v0.36.0
+[0.37.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.36.0...v0.37.0
+[0.37.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.0...v0.37.1
+[0.37.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.1...v0.37.2
+[0.37.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.2...v0.37.3
+[0.37.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.3...v0.37.4
+[0.38.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.4...v0.38.0

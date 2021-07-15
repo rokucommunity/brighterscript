@@ -1,4 +1,4 @@
-import type { VariableDeclaration } from './interfaces';
+import type { LabelDeclaration, VariableDeclaration } from './interfaces';
 import type { FunctionExpression } from './parser/Expression';
 
 //TODO I think this class can be eliminated in favor of moving some of these onto the FunctionExpression AST node
@@ -24,6 +24,7 @@ export class FunctionScope {
      */
     public parentScope: FunctionScope;
     public variableDeclarations = [] as VariableDeclaration[];
+    public labelStatements = [] as LabelDeclaration[];
 
     /**
      * Find all variable declarations above the given line index
