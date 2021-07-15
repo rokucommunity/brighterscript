@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
-/* eslint-disable @typescript-eslint/no-var-requires */
-const data = require('./data.json');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import data = require('./data.json');
 
 //apply any transforms/overrides before exporting
 
