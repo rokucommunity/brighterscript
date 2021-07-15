@@ -2,13 +2,11 @@
 /* eslint-disable no-cond-assign */
 import { JSDOM } from 'jsdom';
 import * as phin from 'phin';
-import * as path from 'path';
 import * as fsExtra from 'fs-extra';
 import { standardizePath as s } from '../src/util';
 import { Parser } from '../src/parser/Parser';
 import type { CallExpression, LiteralExpression } from '../src/parser/Expression';
 import type { ExpressionStatement, FunctionStatement } from '../src/parser/Statement';
-import * as dedent from 'dedent';
 
 class ComponentListBuilder {
     private references: any;
@@ -74,12 +72,15 @@ class ComponentListBuilder {
             const dom = await this.getDom(this.getDocApiUrl(docPath));
             const document = dom.window.document;
 
+            const descriptionEl = this.findNextElement(document.getElementsByTagName('h1')[0], { type: 'p' });
+
             const component = {
                 name: name,
                 url: this.getDocUrl(docPath),
                 interfaces: this.getUlData(document, 'supported-interfaces'),
                 events: this.getUlData(document, 'supported-events'),
-                constructors: []
+                constructors: [],
+                description: descriptionEl?.innerHTML
             } as BrightScriptComponent;
 
             if (document.body.innerHTML.match(/this object is created with no parameters/)) {
@@ -132,6 +133,79 @@ class ComponentListBuilder {
         }
     }
 
+    private async buildInterfaces() {
+        const interfaceDocs = this.references.BrightScript.Interfaces;
+        const count = Object.values(interfaceDocs).length;
+        let i = 1;
+        for (const name in interfaceDocs) {
+            console.log(`Processing interface ${i++} of ${count}`);
+            const docPath = interfaceDocs[name];
+            const docUrl = this.getDocApiUrl(docPath);
+            try {
+
+                const dom = await this.getDom(docUrl);
+                const document = dom.window.document;
+                const descriptionEl = this.findNextElement(document.getElementsByTagName('h1')[0], { type: 'p' });
+
+
+                const iface = {
+                    name: name,
+                    url: this.getDocUrl(docPath),
+                    methods: this.buildInterfaceMethods(document),
+                    properties: [],
+                    implementors: this.getInterfaceImplementors(document),
+                    desription: descriptionEl?.innerHTML
+                };
+
+                //if there is a custom handler for this doc, call it
+                if (this[name]) {
+                    console.log(`calling custom handler for ${name}`);
+                    this[name](iface, document);
+                }
+
+                this.result.interfaces[name] = iface as any;
+            } catch (e) {
+                console.error(`Error processing interface ${docUrl}`, e);
+            }
+        }
+    }
+
+    private async buildEvents() {
+        const eventDocs = this.references.BrightScript.Events;
+        const count = Object.values(eventDocs).length;
+        let i = 1;
+        for (const name in eventDocs) {
+            console.log(`Processing event ${i++} of ${count}`);
+            const docPath = eventDocs[name];
+            const docUrl = this.getDocApiUrl(docPath);
+            try {
+
+                const dom = await this.getDom(docUrl);
+                const document = dom.window.document;
+                const descriptionEl = this.findNextElement(document.getElementsByTagName('h1')[0], { type: 'p' });
+
+                const evt = {
+                    name: name,
+                    url: this.getDocUrl(docPath),
+                    description: descriptionEl?.innerHTML,
+                    methods: this.buildInterfaceMethods(document),
+                    properties: [],
+                    implementors: this.getInterfaceImplementors(document)
+                };
+
+                //if there is a custom handler for this doc, call it
+                if (this[name]) {
+                    console.log(`calling custom handler for ${name}`);
+                    this[name](evt, document);
+                }
+
+                this.result.events[name] = evt as any;
+            } catch (e) {
+                console.error(`Error processing interface ${docUrl}`, e);
+            }
+        }
+    }
+
     private isTable(element) {
         return element?.nodeName?.toLowerCase() === 'table';
     }
@@ -163,75 +237,6 @@ class ComponentListBuilder {
             return x;
         });
         return result;
-    }
-
-    private async buildInterfaces() {
-        const interfaceDocs = this.references.BrightScript.Interfaces;
-        const count = Object.values(interfaceDocs).length;
-        let i = 1;
-        for (const name in interfaceDocs) {
-            console.log(`Processing interface ${i++} of ${count}`);
-            const docPath = interfaceDocs[name];
-            const docUrl = this.getDocApiUrl(docPath);
-            try {
-
-                const dom = await this.getDom(docUrl);
-                const document = dom.window.document;
-
-
-                const iface = {
-                    name: name,
-                    url: this.getDocUrl(docPath),
-                    methods: this.buildInterfaceMethods(document),
-                    properties: [],
-                    implementors: this.getInterfaceImplementors(document)
-                };
-
-                //if there is a custom handler for this doc, call it
-                if (this[name]) {
-                    console.log(`calling custom handler for ${name}`);
-                    this[name](iface, document);
-                }
-
-                this.result.interfaces[name] = iface as any;
-            } catch (e) {
-                console.error(`Error processing interface ${docUrl}`, e);
-            }
-        }
-    }
-
-    private async buildEvents() {
-        const eventDocs = this.references.BrightScript.Events;
-        const count = Object.values(eventDocs).length;
-        let i = 1;
-        for (const name in eventDocs) {
-            console.log(`Processing event ${i++} of ${count}`);
-            const docPath = eventDocs[name];
-            const docUrl = this.getDocApiUrl(docPath);
-            try {
-
-                const dom = await this.getDom(docUrl);
-                const document = dom.window.document;
-
-                const evt = {
-                    name: name,
-                    url: this.getDocUrl(docPath),
-                    methods: this.buildInterfaceMethods(document),
-                    properties: [],
-                    implementors: this.getInterfaceImplementors(document)
-                };
-
-                //if there is a custom handler for this doc, call it
-                if (this[name]) {
-                    console.log(`calling custom handler for ${name}`);
-                    this[name](evt, document);
-                }
-
-                this.result.events[name] = evt as any;
-            } catch (e) {
-                console.error(`Error processing interface ${docUrl}`, e);
-            }
-        }
     }
 
     private reduceSignatures(signatures: Array<Signature>) {

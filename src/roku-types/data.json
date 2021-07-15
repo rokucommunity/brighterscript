@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2021-07-15T10:54:53.247Z",
+    "generatedDate": "2021-07-15T11:51:04.245Z",
     "nodes": {},
     "components": {
         "roAppInfo": {
@@ -17,7 +17,8 @@
                     "params": [],
                     "returnType": "roAppInfo"
                 }
-            ]
+            ],
+            "description": "roAppInfo retrieves the developer ID, which can be useful during development. It also retrieves manifest values, such as the title and version number, avoiding the need to parse the manifest file from BrightScript.\nThis object is created with no parameters."
         },
         "roAppManager": {
             "name": "roAppManager",
@@ -34,7 +35,8 @@
                     "params": [],
                     "returnType": "roAppManager"
                 }
-            ]
+            ],
+            "description": "The Application Manager APIs set application level attributes, which mostly affect the look-and-feel of the application. The use of screen styles gives each application a consistent look-and-feel, but it's often desirable to customize attributes such as colors, fonts, and logos for each application. Setting artwork and colors allows the developer to specify a theme for their application. If these values are not set, the application will use default values."
         },
         "roArray": {
             "name": "roArray",
@@ -66,7 +68,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "An array stores an indexed collection of BrightScript objects. Each entry of an array can be a different type, or they may all of the same type."
         },
         "roAssociativeArray": {
             "name": "roAssociativeArray",
@@ -87,7 +90,8 @@
                     "params": [],
                     "returnType": "roAssociativeArray"
                 }
-            ]
+            ],
+            "description": "An associative array (also known as a map, dictionary or hash table) allows objects to be associated with string keys. Associative arrays are built into the language. They can be accessed implicitly by using the dot or bracket operators, or by calling functions from the <a href=\"/docs/references/brightscript/interfaces/ifassociativearray.md\" title=\"ifAssociativeArray\">ifAssociativeArray</a> interface. For example, the last three lines in this example are equivalent:"
         },
         "roAudioGuide": {
             "name": "roAudioGuide",
@@ -99,7 +103,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "The roAudioGuide component provides Audio Guide support for applications that require custom speech beyond what is provided by automatic Audio Guide in SDK and Scene Graph components."
         },
         "roAudioMetadata": {
             "name": "roAudioMetadata",
@@ -116,7 +121,8 @@
                     "params": [],
                     "returnType": "roAudioMetadata"
                 }
-            ]
+            ],
+            "description": "The roAudioMetadata component provides developers access to audio file metadata included in many audio files. This should enable some audiofiles to deliver the information needed to fill out an roSpringboard screen without passing the info in a separate xml feed. roAudioMetadata currently only works with local file URLs. "
         },
         "roAudioPlayer": {
             "name": "roAudioPlayer",
@@ -150,7 +156,8 @@
                     "params": [],
                     "returnType": "roAudioPlayer"
                 }
-            ]
+            ],
+            "description": "The Audio Player object provides the ability to setup the playing of a series of audio streams. The object accepts an array of content meta-data objects, describing the audio and providing URLs for accessing each stream. The component understands the following streamformat values: \"mp3\", \"wma\", \"mp4\", \"hls\", \"es.aac-adts\", \"flac.\""
         },
         "roAudioResource": {
             "name": "roAudioResource",
@@ -185,7 +192,8 @@
                     ],
                     "returnType": "roAudioResource"
                 }
-            ]
+            ],
+            "description": "The roAudioResouce allows .wav files to be cached to memory and quickly played at any time. roAudioResource is intended to support short audio clips which need to be played with very little latency. The system caches the entire wav file in memory so that playback can begin very quickly."
         },
         "roBitmap": {
             "name": "roBitmap",
@@ -220,7 +228,8 @@
                     ],
                     "returnType": "roBitmap"
                 }
-            ]
+            ],
+            "description": "The roBitmap component contains image data and provides an interface (ifDraw2D) for drawing. Bitmaps can be used for a variety of purposes, such as for sprites, compositing, or as double buffers."
         },
         "roBoolean": {
             "name": "roBoolean",
@@ -236,7 +245,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "roBoolean is the object equivalent for intrinsic type Boolean. "
         },
         "roByteArray": {
             "name": "roByteArray",
@@ -269,7 +279,8 @@
                     "params": [],
                     "returnType": "roByteArray"
                 }
-            ]
+            ],
+            "description": "The byte array component is used to contain and manipulate an arbitrary array of bytes. "
         },
         "roCaptionRenderer": {
             "name": "roCaptionRenderer",
@@ -286,7 +297,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/event/rocaptionrendererevent.md"
                 }
             ],
-            "constructors": []
+            "constructors": [],
+            "description": "The roCaptionRenderer component provides a mechanism for BrightScript channels to render closed captions in video played back with the roVideoPlayer. Prior to the v 5.2 Roku firmware, captions could only be rendered in roVideoScreen."
         },
         "roChannelStore": {
             "name": "roChannelStore",
@@ -316,7 +328,8 @@
                     "params": [],
                     "returnType": "roChannelStore"
                 }
-            ]
+            ],
+            "description": "The roChannelStore component allows the application to perform a purchase of an In-Channel Product or upgrade a channel. Most of the purchase flow, screens and messaging associated with the financial transaction are handled by the Roku OS outside of control or monitoring by BrightScript code. The BrightScript code merely initiates the purchase and receives a final result. This will engender trust with users and give them confidence that they are dealing with the Roku Channel Store."
         },
         "roCodeRegistrationScreen": {
             "name": "roCodeRegistrationScreen",
@@ -346,7 +359,8 @@
                     "params": [],
                     "returnType": "roCodeRegistrationScreen"
                 }
-            ]
+            ],
+            "description": "The Code Registration Screen is designed to present the user a registration code, and the information required to instruct the user on how to register with a service provider. This screen is designed for a rendezvous registration process, where the user is presented a code and the URL for a registration site. The user goes to the site and enters their code, which causes the device and the account to be linked. In the background, the script is polling for completion and the screen is closed to display an activation successful screen when done."
         },
         "roCompositor": {
             "name": "roCompositor",
@@ -363,7 +377,8 @@
                     "params": [],
                     "returnType": "roCompositor"
                 }
-            ]
+            ],
+            "description": "The roCompositor allows the composition and animation of multiple roBitmaps and roRegions."
         },
         "roDataGramSocket": {
             "name": "roDataGramSocket",
@@ -401,7 +416,8 @@
                     "params": [],
                     "returnType": "roDataGramSocket"
                 }
-            ]
+            ],
+            "description": "The roDataGramSocket component enables Brightscript apps to send and receive UDP packets. The interface is modeled on and works much like standard Berkeley sockets."
         },
         "roDateTime": {
             "name": "roDateTime",
@@ -418,7 +434,8 @@
                     "params": [],
                     "returnType": "roDateTime"
                 }
-            ]
+            ],
+            "description": "The roDateTime provides an interface to obtain the current date/time for the player and manipulate date/times."
         },
         "roDeviceInfo": {
             "name": "roDeviceInfo",
@@ -448,7 +465,8 @@
                     "params": [],
                     "returnType": "roDeviceInfo"
                 }
-            ]
+            ],
+            "description": "The Device Info provides an interface to obtain attributes about the device."
         },
         "roDouble": {
             "name": "roDouble",
@@ -464,7 +482,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "roDouble is the object equivalent for intrinsic type 'Double'."
         },
         "roDeviceCrypto": {
             "name": "roDeviceCrypto",
@@ -481,7 +500,8 @@
                     "params": [],
                     "returnType": "roDeviceCrypto"
                 }
-            ]
+            ],
+            "description": "The roDeviceCrypto component enables you to encrypt and decrypt data on a device using a key that is unique per channel, device, or model. Using a channel key for example, you can encrypt data for a channel so that it may only be decrypted by that same channel. In this case, you could provision credentials or an API key from the cloud to devices securely. With a device key for example, you could implement a secure-storage like algorithm."
         },
         "roEVPCipher": {
             "name": "roEVPCipher",
@@ -493,7 +513,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "The EVP Cipher component provides an interface to the OpenSSL EVP library of symmetric cipher commands. The EVP library provides a high-level interface to cryptographic functions to implement digital \"envelopes\"."
         },
         "roEVPDigest": {
             "name": "roEVPDigest",
@@ -510,7 +531,8 @@
                     "params": [],
                     "returnType": "roEVPDigest"
                 }
-            ]
+            ],
+            "description": "The EVP Digest component provides an interface to the OpenSSL EVP library of message digest algorithms. The EVP library provides a high-level interface to cryptographic hash functions."
         },
         "roFileSystem": {
             "name": "roFileSystem",
@@ -540,7 +562,8 @@
                     "params": [],
                     "returnType": "roFileSystem"
                 }
-            ]
+            ],
+            "description": "The roFilesystem component implements common filesystem inspection and modificationroutines."
         },
         "roFloat": {
             "name": "roFloat",
@@ -556,7 +579,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "roFloat is the object equivalent for intrinsic type 'Float'."
         },
         "roFont": {
             "name": "roFont",
@@ -568,7 +592,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "roFont represents a particular font, from a font-family (eg. Arial), with a particular pixel size (e.g 20), and a particular boldness or italicness. "
         },
         "roFontMetrics": {
             "name": "roFontMetrics",
@@ -592,7 +617,8 @@
                     ],
                     "returnType": "roFontMetrics"
                 }
-            ]
+            ],
+            "description": "The roFontMetrics object allows you to get display size information for a specific font returned by the roFontRegistry.Get() method."
         },
         "roFontRegistry": {
             "name": "roFontRegistry",
@@ -609,7 +635,8 @@
                     "params": [],
                     "returnType": "roFontRegistry"
                 }
-            ]
+            ],
+            "description": "The roFontRegistry object allows you to create roFont objects, either using the default font or using fonts in TrueType or OpenType files packaged with your application."
         },
         "roFunction": {
             "name": "roFunction",
@@ -625,7 +652,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "roFunction is the object equivalent for intrinsic type Function."
         },
         "roGridScreen": {
             "name": "roGridScreen",
@@ -659,7 +687,8 @@
                     "params": [],
                     "returnType": "roGridScreen"
                 }
-            ]
+            ],
+            "description": "The Grid Screen provides a graphical display of poster art from multiple content categories from within a single screen."
         },
         "roHdmiStatus": {
             "name": "roHdmiStatus",
@@ -675,7 +704,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "The HDMI status component provides an interface to the current HDMI operational status."
         },
         "roHMAC": {
             "name": "roHMAC",
@@ -692,7 +722,8 @@
                     "params": [],
                     "returnType": "roHMAC"
                 }
-            ]
+            ],
+            "description": "The HMAC component provides an interface to the OpenSSL HMAC functions. These functions generate a Message Authentication Code (MAC) based on a key, in such a way that no one without the key could plausibly generate the MAC. HMAC uses a digest (hash) algorithm to generate the MAC."
         },
         "roHttpAgent": {
             "name": "roHttpAgent",
@@ -709,7 +740,8 @@
                     "params": [],
                     "returnType": "roHttpAgent"
                 }
-            ]
+            ],
+            "description": "All SceneGraph nodes can use the roHttpAgent component to support cookies, custom HTTP headers, and support secure HTTP file transfer protocols, such as passing certificates to the server as part of a URL transfer. An roHttpAgent component object is created by default for all SceneGraph nodes for this purpose. The roHttpAgent object supports the <a href=\"/docs/references/brightscript/interfaces/ifhttpagent.md\" title=\"ifHttpAgent\">ifHttpAgent</a> interface used by many BrightScript components to allow secure HTTP file transfer protocols. Child nodes of a SceneGraph node automatically inherit the parent roHttpAgent object, unless a new roHttpAgent object is created, or an existing roHttpAgent is set for a child node. There are two roSGNode <a href=\"/docs/references/brightscript/interfaces/ifsgnodehttpagentaccess.md\" title=\"ifSGNodeHttpAgentAccess\">ifSGNodeHttpAgentAccess</a> interface methods that allow a specific roHttpAgent object to be selected and set for a specific SceneGraph node."
         },
         "roImageCanvas": {
             "name": "roImageCanvas",
@@ -735,7 +767,8 @@
                     "params": [],
                     "returnType": "roImageCanvas"
                 }
-            ]
+            ],
+            "description": "The roImageCanvas component provides an interface to render graphic elements at specific spots on the screen."
         },
         "roImageMetaData": {
             "name": "roImageMetaData",
@@ -747,7 +780,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "The roImageMetadata component provides developers access to image file metadata included in many .jpg EXIF headers."
         },
         "roInput": {
             "name": "roInput",
@@ -769,7 +803,8 @@
                     "params": [],
                     "returnType": "roInput"
                 }
-            ]
+            ],
+            "description": "An roInput object can be used to receive events sent from a network client using the External Control Protocol (ECP), as described in <a href=\"/docs/developer-program/debugging/external-control-api.md\" title=\"External Control API\">External Control API</a>."
         },
         "roInt": {
             "name": "roInt",
@@ -794,7 +829,8 @@
                     "params": [],
                     "returnType": "roInt"
                 }
-            ]
+            ],
+            "description": "roInt is the object equivalent for intrinsic type Integer."
         },
         "roInvalid": {
             "name": "roInvalid",
@@ -806,7 +842,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "roInvalid is the object equivalent for intrinsic type 'Invalid'."
         },
         "roKeyboardScreen": {
             "name": "roKeyboardScreen",
@@ -836,7 +873,8 @@
                     "params": [],
                     "returnType": "roKeyboardScreen"
                 }
-            ]
+            ],
+            "description": "The Keyboard Screen is designed to allow the user to enter an alpha-numeric string for searching, username/password registration or other purposes."
         },
         "roList": {
             "name": "roList",
@@ -873,7 +911,8 @@
                     "params": [],
                     "returnType": "roList"
                 }
-            ]
+            ],
+            "description": "The list object implements the interfaces: ifList, ifArray, ifEnum and therefore can behave like an array that can dynamically add members. The array operator [ ] can be used to access any element in the ordered list."
         },
         "roListScreen": {
             "name": "roListScreen",
@@ -902,7 +941,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rolistscreenevent.md"
                 }
             ],
-            "constructors": []
+            "constructors": [],
+            "description": "The List Screen provides a graphical display of content in a vertical list within a single screen."
         },
         "roLocalization": {
             "name": "roLocalization",
@@ -919,7 +959,8 @@
                     "params": [],
                     "returnType": "roLocalization"
                 }
-            ]
+            ],
+            "description": "The roLocalization object provides functions to assist in localization. This object provides functions to assist in localization."
         },
         "roLongInteger": {
             "name": "roLongInteger",
@@ -935,7 +976,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "roLongInteger is the object name corresponding to the intrinsic LongInteger object."
         },
         "roMessageDialog": {
             "name": "roMessageDialog",
@@ -965,7 +1007,8 @@
                     "params": [],
                     "returnType": "roMessageDialog"
                 }
-            ]
+            ],
+            "description": "The Message Dialog displays a formatted, multi-line text message to the user. The dialog may optionally be displayed with a busy animation to indicate progress on a long running operation. The dialog will automatically handle formatting of text and resize to fit. It may also display buttons to get user acknowledgment or a selection choice."
         },
         "roMessagePort": {
             "name": "roMessagePort",
@@ -982,7 +1025,8 @@
                     "params": [],
                     "returnType": "roMessagePort"
                 }
-            ]
+            ],
+            "description": "A Message Port is the place messages (<a href=\"/docs/developer-program/core-concepts/event-loops.md\">events</a>) are sent. "
         },
         "roMicrophone": {
             "name": "roMicrophone",
@@ -1007,7 +1051,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/romicrophoneevent.md"
                 }
             ],
-            "constructors": []
+            "constructors": [],
+            "description": "The roMicrophone API allows channel applications to receive audio data from the user’s microphone-supported remote control device or mobile phone. When a user initiates recording on their remote control device or mobile phone (via the Roku Mobile App) for the first time within the application, the application will request the user’s permission for the application to access the microphone by displaying a UI dialog box."
         },
         "roOneLineDialog": {
             "name": "roOneLineDialog",
@@ -1032,7 +1077,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roonelinedialogevent.md"
                 }
             ],
-            "constructors": []
+            "constructors": [],
+            "description": "The One Line Dialog is a special type of dialog optimized for single line text."
         },
         "roParagraphScreen": {
             "name": "roParagraphScreen",
@@ -1062,7 +1108,8 @@
                     "params": [],
                     "returnType": "roParagraphScreen"
                 }
-            ]
+            ],
+            "description": "The Paragraph Screen provides a way to display text and selection choices to the user."
         },
         "roPath": {
             "name": "roPath",
@@ -1101,7 +1148,8 @@
                     ],
                     "returnType": "roPath"
                 }
-            ]
+            ],
+            "description": "The roPath component provides developers an easy way to create valid file system paths. "
         },
         "roPinEntryDialog": {
             "name": "roPinEntryDialog",
@@ -1126,7 +1174,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/ropinentrydialogevent.md"
                 }
             ],
-            "constructors": []
+            "constructors": [],
+            "description": "The Pin Entry Dialog is designed to allow the user to enter a numeric PIN for purchasing content."
         },
         "roPosterScreen": {
             "name": "roPosterScreen",
@@ -1152,7 +1201,8 @@
                     "params": [],
                     "returnType": "roPosterScreen"
                 }
-            ]
+            ],
+            "description": "This object is created with no parameters:"
         },
         "roProgramGuide": {
             "name": "roProgramGuide",
@@ -1164,7 +1214,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "Represents Electronic Program Guide (EPG) information from the tuner. "
         },
         "roRegex": {
             "name": "roRegex",
@@ -1194,7 +1245,8 @@
                     ],
                     "returnType": "roRegex"
                 }
-            ]
+            ],
+            "description": "The roRegex component provides the powerful regular expression processing of the PCRE library to Brightscript strings."
         },
         "roRegion": {
             "name": "roRegion",
@@ -1206,7 +1258,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "The roRegion component is used to represent a subsection of a bitmap."
         },
         "roRegistry": {
             "name": "roRegistry",
@@ -1223,7 +1276,8 @@
                     "params": [],
                     "returnType": "roRegistry"
                 }
-            ]
+            ],
+            "description": "The Registry is an area of non-volatile storage where a small number of persistent settings can be stored."
         },
         "roRegistrySection": {
             "name": "roRegistrySection",
@@ -1247,7 +1301,8 @@
                     ],
                     "returnType": "roRegistrySection"
                 }
-            ]
+            ],
+            "description": "A Registry Section enables the organization of settings within the registry. Different registry sections may have their own keys with the same name. In other words, key names are scoped within the registry section to which they belong."
         },
         "roRSA": {
             "name": "roRSA",
@@ -1264,7 +1319,8 @@
                     "params": [],
                     "returnType": "roRSA"
                 }
-            ]
+            ],
+            "description": "The RSA component provides an interface to the OpenSSL RSA library of signing algorithms."
         },
         "roScreen": {
             "name": "roScreen",
@@ -1332,7 +1388,8 @@
                     "params": [],
                     "returnType": "roScreen"
                 }
-            ]
+            ],
+            "description": "The roScreen component provides a full screen drawing surface that can be stacked and that you can receive input events from."
         },
         "roSearchHistory": {
             "name": "roSearchHistory",
@@ -1349,7 +1406,8 @@
                     "params": [],
                     "returnType": "roSearchHistory"
                 }
-            ]
+            ],
+            "description": "The Search History object implements the system wide storage of search terms for use in implementing the roSearchScreen."
         },
         "roSearchScreen": {
             "name": "roSearchScreen",
@@ -1379,7 +1437,8 @@
                     "params": [],
                     "returnType": "roSearchScreen"
                 }
-            ]
+            ],
+            "description": "The Search Screen provides a standard way to allow users to enter text for searching."
         },
         "roSGNode": {
             "name": "roSGNode",
@@ -1432,7 +1491,8 @@
                     ],
                     "returnType": "roSGNode"
                 }
-            ]
+            ],
+            "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML\nfile node creation. To create an roSGNode object for a specific node\nclass, call:"
         },
         "roSGScreen": {
             "name": "roSGScreen",
@@ -1454,7 +1514,8 @@
                     "params": [],
                     "returnType": "roSGScreen"
                 }
-            ]
+            ],
+            "description": "The roSGScreen object is a SceneGraph canvas that displays the\ncontents of a SceneGraph Scene node instance. The object is created\nby calling:"
         },
         "roSlideShow": {
             "name": "roSlideShow",
@@ -1480,7 +1541,8 @@
                     "params": [],
                     "returnType": "roSlideShow"
                 }
-            ]
+            ],
+            "description": "The Slide Show screen provides the ability to setup a photo slide show to playback a series of images."
         },
         "roSocketAddress": {
             "name": "roSocketAddress",
@@ -1497,7 +1559,8 @@
                     "params": [],
                     "returnType": "roSocketAddress"
                 }
-            ]
+            ],
+            "description": "The roSocketAddress is used by the roStreamSocket and roDataGramSocket components for TCP and UDP traffic respectively."
         },
         "roSpringboardScreen": {
             "name": "roSpringboardScreen",
@@ -1531,7 +1594,8 @@
                     "params": [],
                     "returnType": "roSpringboardScreen"
                 }
-            ]
+            ],
+            "description": "The Springboard Screen shows detailed information about an individual piece of content and provides options for actions that may be taken on that content."
         },
         "roSprite": {
             "name": "roSprite",
@@ -1543,7 +1607,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "The roSprite object cannot be created directly with a CreateObject() call. It must be associated with a managing roCompositor object. This association is implicitly created by creating an roSprite object with the roCompositor methods NewSprite() or NewAnimatedSprite()."
         },
         "roStreamSocket": {
             "name": "roStreamSocket",
@@ -1585,7 +1650,8 @@
                     "params": [],
                     "returnType": "roStreamSocket"
                 }
-            ]
+            ],
+            "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them. The interface is modeled on and works much like standard Berkeley sockets."
         },
         "roString": {
             "name": "roString",
@@ -1605,7 +1671,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "roString is the object equivalent for intrinsic type 'String'."
         },
         "roSystemlog": {
             "name": "roSystemlog",
@@ -1617,7 +1684,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "The roSystemLog component enables the application to receive events from the Roku Streaming Player that are intended for reporting errors and trends, rather than trigger a response to a user action."
         },
         "roTextScreen": {
             "name": "roTextScreen",
@@ -1642,7 +1710,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rotextscreenevent.md"
                 }
             ],
-            "constructors": []
+            "constructors": [],
+            "description": "roTextScreen provides a way of displaying large amounts of scrollable text."
         },
         "roTextToSpeech": {
             "name": "roTextToSpeech",
@@ -1672,7 +1741,8 @@
                     "params": [],
                     "returnType": "roTextToSpeech"
                 }
-            ]
+            ],
+            "description": "The roTextToSpeech component provides text to speech capabilities to applications."
         },
         "roTextureManager": {
             "name": "roTextureManager",
@@ -1706,7 +1776,8 @@
                     "params": [],
                     "returnType": "roTextureManager"
                 }
-            ]
+            ],
+            "description": "The Texture Manager provides a set of API's for managing an roBitmap cache."
         },
         "roTextureRequest": {
             "name": "roTextureRequest",
@@ -1734,7 +1805,8 @@
                     ],
                     "returnType": "roTextureRequest"
                 }
-            ]
+            ],
+            "description": "An roTextureRequest is used to make requests to the roTextureManager."
         },
         "roTimespan": {
             "name": "roTimespan",
@@ -1751,7 +1823,8 @@
                     "params": [],
                     "returnType": "roTimespan"
                 }
-            ]
+            ],
+            "description": "The Timespan object provides an interface to a simple timer for tracking the duration of activities. It's useful for tracking how an action has taken or if a specified time has elapsed from some starting event."
         },
         "roUrlTransfer": {
             "name": "roUrlTransfer",
@@ -1785,7 +1858,8 @@
                     "params": [],
                     "returnType": "roUrlTransfer"
                 }
-            ]
+            ],
+            "description": "A roUrlTransfer object transfers data to or from remote servers specified by URLs. It can perform mutual authentication with a web server."
         },
         "roVideoPlayer": {
             "name": "roVideoPlayer",
@@ -1819,7 +1893,8 @@
                     "params": [],
                     "returnType": "roVideoPlayer"
                 }
-            ]
+            ],
+            "description": "The roVideoPlayer component implements a video player with more programmatic control, but less user control than the roVideoScreen component."
         },
         "roVideoScreen": {
             "name": "roVideoScreen",
@@ -1853,7 +1928,8 @@
                     "params": [],
                     "returnType": "roVideoScreen"
                 }
-            ]
+            ],
+            "description": "The Video Screen object implements the video playback portion of the user interface."
         },
         "roXMLElement": {
             "name": "roXMLElement",
@@ -1865,7 +1941,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "roXMLElement is used to contain an XML tree. "
         },
         "roXMLList": {
             "name": "roXMLList",
@@ -1885,7 +1962,8 @@
                 }
             ],
             "events": [],
-            "constructors": []
+            "constructors": [],
+            "description": "Contains a list of roXML objects."
         }
     },
     "interfaces": {
@@ -2593,7 +2671,8 @@
                     "description": "Returns information about the application",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roappinfo.md"
                 }
-            ]
+            ],
+            "desription": "Returns the app's channel ID."
         },
         "ifAppManager": {
             "name": "ifAppManager",
@@ -2625,7 +2704,8 @@
                     "description": "Returns information about the application",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roappmanager.md"
                 }
-            ]
+            ],
+            "desription": "Sets a group of theme attributes for the application."
         },
         "ifArray": {
             "name": "ifArray",
@@ -2694,7 +2774,8 @@
                     "description": "Contains a list of roXML objects",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmllist.md"
                 }
-            ]
+            ],
+            "desription": "Returns the last (highest index) array entry without removing it. If the array is empty, returns invalid"
         },
         "ifArrayGet": {
             "name": "ifArrayGet",
@@ -2742,7 +2823,8 @@
                     "description": "Contains a list of roXML objects",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmllist.md"
                 }
-            ]
+            ],
+            "desription": "The ifArrayGet interface supports the array indexing operator [ ]"
         },
         "ifArrayJoin": {
             "name": "ifArrayJoin",
@@ -2775,7 +2857,8 @@
                     "description": "Returns information about the application",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roarray.md"
                 }
-            ]
+            ],
+            "desription": "Creates a string by joining all array elements together separated by the specified separator. All elements must be of type string; otherwise, an empty string is returned"
         },
         "ifArraySet": {
             "name": "ifArraySet",
@@ -2829,7 +2912,8 @@
                     "description": "Contains a list of roXML objects",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmllist.md"
                 }
-            ]
+            ],
+            "desription": "The ifArraySet interface supports the array indexing operator []."
         },
         "ifArraySort": {
             "name": "ifArraySort",
@@ -2860,7 +2944,8 @@
                     "description": "Returns information about the application",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roarray.md"
                 }
-            ]
+            ],
+            "desription": " Performs a stable sort on an array. "
         },
         "ifAssociativeArray": {
             "name": "ifAssociativeArray",
@@ -2904,7 +2989,8 @@
                     "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md"
                 }
-            ]
+            ],
+            "desription": "Adds a new entry to the array associating the supplied value with the supplied key string. Only one value may be associated with a key. If the key is already associated with a value, the existing value is discarded."
         },
         "ifAudioGuide": {
             "name": "ifAudioGuide",
@@ -2979,7 +3065,8 @@
                     "description": "Returns information about the application",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roaudioguide.md"
                 }
-            ]
+            ],
+            "desription": "Returns an ID for the spoken string to notify observer callbacks about a specific spoken string. This ID can be used with the <a href=\"/docs/references/brightscript/events/rotexttospeechevent.md\" title=\"roTextToSpeechEvent\">roTextToSpeechEvent</a>.This method will automatically split up text to reduce lag. Due to this automatic splitting, the roTextToSpeechEvent 0 (\"Started speech\") event for the returned ID may not be sent until later than expected. The roTextToSpeechEvents 1 (\"Speech has completed\") and 2 (\"Speech has been flushed\") events are sent at the expected times."
         },
         "ifAudioMetaData": {
             "name": "ifAudioMetaData",
@@ -3011,7 +3098,8 @@
                     "description": "This component provides developers access to audio file metadata included in many audio files",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roaudiometadata.md"
                 }
-            ]
+            ],
+            "desription": "Sets the URL to the audio file. Only file URLs are initially supported"
         },
         "ifAudioPlayer": {
             "name": "ifAudioPlayer",
@@ -3060,7 +3148,8 @@
                     "description": "The Audio Player object provides the ability to setup the playing of a series of audio streams",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roaudiometadata.md"
                 }
-            ]
+            ],
+            "desription": "Sets the content list to be played by the Audio Player."
         },
         "ifAudioResource": {
             "name": "ifAudioResource",
@@ -3092,7 +3181,8 @@
                     "description": "The roAudioResouce allows .wav files to be cached to memory and quickly played at any time",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roaudioresource.md"
                 }
-            ]
+            ],
+            "desription": "This method triggers the start of the audio resource sound playback. The effect of Trigger(volume) is identical to Trigger(volume, 0)."
         },
         "ifBoolean": {
             "name": "ifBoolean",
@@ -3135,7 +3225,8 @@
                     "description": "Object equivalent for intrinsic type Boolean",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roboolean.md"
                 }
-            ]
+            ],
+            "desription": "Interface equivalent for intrinsic type Boolean."
         },
         "ifByteArray": {
             "name": "ifByteArray",
@@ -3330,7 +3421,8 @@
                     "description": "The byte array component is used to contain and manipulate an arbitrary array of bytes",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/robytearray.md"
                 }
-            ]
+            ],
+            "desription": "Writes the bytes contained in the Byte Array to the specified file."
         },
         "ifCaptionRenderer": {
             "name": "ifCaptionRenderer",
@@ -3379,7 +3471,8 @@
                     "description": "Returns information about the application",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rocaptionrenderer.md"
                 }
-            ]
+            ],
+            "desription": "Sets the rendering mode for the <a href=\"/docs/references/brightscript/components/rocaptionrenderer.md\" title=\"roCaptionRenderer\">roCaptionRenderer</a>."
         },
         "ifChannelStore": {
             "name": "ifChannelStore",
@@ -3459,7 +3552,8 @@
                     "description": "allows the application to perform a purchase of an In-Channel Product or upgrade a channel",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rochannelstore.md"
                 }
-            ]
+            ],
+            "desription": "Returns a unique number for this object that can be used to identify whether a roChannelStoreEvent event originated from this object, by comparing with the roChannelStoreEvent object's GetSourceIdentity() value."
         },
         "ifCodeRegistrationScreen": {
             "name": "ifCodeRegistrationScreen",
@@ -3491,7 +3585,8 @@
                     "description": "The Code Registration Screen is designed to present the user a registration code, and the information required to instruct the user on how to register with a service provider",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rocoderegistrationscreen.md"
                 }
-            ]
+            ],
+            "desription": "Sets the title for the screen to the specified string. "
         },
         "ifCompositor": {
             "name": "ifCompositor",
@@ -3530,7 +3625,8 @@
                     "description": "The roCompositor allows the composition and animation of multiple roBitmaps and roRegions",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rocompositor.md"
                 }
-            ]
+            ],
+            "desription": "Sets the destBitmap (<a href=\"/docs/references/brightscript/components/robitmap.md\" title=\"roBitmap\">roBitmap</a> or <a href=\"/docs/references/brightscript/components/roscreen.md\" title=\"roScreen\">roScreen</a>) and the background color."
         },
         "ifDateTime": {
             "name": "ifDateTime",
@@ -3604,7 +3700,8 @@
                     "description": "The roDateTime provides an interface to obtain the current date/time for the player and manipulate date/times",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodatetime.md"
                 }
-            ]
+            ],
+            "desription": "Sets the date/time value to the current UTC date and time."
         },
         "ifDeviceInfo": {
             "name": "ifDeviceInfo",
@@ -3806,7 +3903,8 @@
                     "description": "The roDeviceInfo component provides an interface to obtain attributes about the device",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodeviceinfo.md"
                 }
-            ]
+            ],
+            "desription": "Returns the model name of the Roku device. See the <a href=\"/docs/specs/hardware.md\">Hardware Specification</a> for the list of the current, updatable, and legacy Roku models."
         },
         "ifDeviceCrypto": {
             "name": "ifDeviceCrypto",
@@ -3819,7 +3917,8 @@
                     "description": "Encrypts and decrypts data on a device using a key that is unique per channel, device, or model.",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodevicecrypto.md"
                 }
-            ]
+            ],
+            "desription": "Encrypts data on a device that is unique per device, channel, or model. "
         },
         "ifDouble": {
             "name": "ifDouble",
@@ -3862,7 +3961,8 @@
                     "description": "roDouble is a legacy object name, corresponding to the intrinsic Double object",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodouble.md"
                 }
-            ]
+            ],
+            "desription": "Gets the double value stored in the calling Double object. "
         },
         "ifDraw2D": {
             "name": "ifDraw2D",
@@ -3904,7 +4004,8 @@
                     "description": "The roScreen component provides a full screen drawing surface that can be stacked and that you can receive input events from",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roscreen.md"
                 }
-            ]
+            ],
+            "desription": "Coordinates (x,y) for this interface are based on an origin (0,0) at the top, left. (This is common for 2D drawing APIs, but is different than OpenGL's default coordinate system)."
         },
         "ifEnum": {
             "name": "ifEnum",
@@ -3986,7 +4087,8 @@
                     "description": "Contains a list of roXML objects",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmllist.md"
                 }
-            ]
+            ],
+            "desription": "Resets the current position to the first element of the enumeration."
         },
         "ifEVPCipher": {
             "name": "ifEVPCipher",
@@ -4107,7 +4209,8 @@
                     "description": "The EVP Cipher component provides an interface to the OpenSSL EVP library of symmetric cipher commands",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roevpcipher.md"
                 }
-            ]
+            ],
+            "desription": "Configures and initializes a new cipher context."
         },
         "ifEVPDigest": {
             "name": "ifEVPDigest",
@@ -4187,7 +4290,8 @@
                     "description": "The EVP Digest component provides an interface to the OpenSSL EVP library of message digest algorithms",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roevpdigest.md"
                 }
-            ]
+            ],
+            "desription": "Initializes a new message digest context. "
         },
         "ifFileSystem": {
             "name": "ifFileSystem",
@@ -4455,7 +4559,8 @@
                     "name": "roFile System",
                     "description": "The roFilesystem component implements common filesystem inspection and modification routines"
                 }
-            ]
+            ],
+            "desription": "The format of file and directory pathnames is described on the <a href=\"/docs/developer-program/getting-started/architecture/file-system.md\" title=\"File System\">File System</a> page."
         },
         "ifFloat": {
             "name": "ifFloat",
@@ -4498,7 +4603,8 @@
                     "description": "Object equivalent for intrinsic type 'Float'",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofloat.md"
                 }
-            ]
+            ],
+            "desription": "Interface equivalent for intrinsic type Float"
         },
         "ifFont": {
             "name": "ifFont",
@@ -4577,7 +4683,8 @@
                     "description": "roFont represents a particular font, from a font-family (eg. Arial), with a particular pixel size (e.g 20), and a particular boldness or italicness",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofont.md"
                 }
-            ]
+            ],
+            "desription": "Returns the number of pixels from one line to the next when drawing with this font."
         },
         "ifFontMetrics": {
             "name": "ifFontMetrics",
@@ -4610,7 +4717,8 @@
                     "description": "The roFontMetrics object allows you to get display size information for a specific font returned by the roFontRegistry.Get() method",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofontmetrics.md"
                 }
-            ]
+            ],
+            "desription": "Returns the width and height of the <strong>stringToDraw</strong> parameter rendered in the font passed on the CreateObject() call."
         },
         "ifFontRegistry": {
             "name": "ifFontRegistry",
@@ -4788,7 +4896,8 @@
                     "description": "The roFontRegistry object allows you to create roFont objects, either using the default font or using fonts in TrueType or OpenType files packaged with your application",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofontregistry.md"
                 }
-            ]
+            ],
+            "desription": "Registers a font file (.ttf or .otf format). Each font file defines one or more font families (usually one)."
         },
         "ifFunction": {
             "name": "ifFunction",
@@ -4829,7 +4938,8 @@
                     "description": "Object equivalent for intrinsic type Function",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofunction.md"
                 }
-            ]
+            ],
+            "desription": "Interface equivalent for intrinsic type Function."
         },
         "ifGetMessagePort": {
             "name": "ifGetMessagePort",
@@ -4869,7 +4979,8 @@
                     "description": "The roTextToSpeech component provides text to speech capabilities to applications",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotexttospeech.md"
                 }
-            ]
+            ],
+            "desription": "Returns the message port (if any) currently associated with the object"
         },
         "ifGridScreen": {
             "name": "ifGridScreen",
@@ -4901,7 +5012,8 @@
                     "description": "The Grid Screen provides a graphical display of poster art from multiple content categories from within a single screen",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rogridscreen.md"
                 }
-            ]
+            ],
+            "desription": "Sets the number of rows in the grid. The number of rows must be set before calling other functions to populate grid data."
         },
         "ifHdmiStatus": {
             "name": "ifHdmiStatus",
@@ -4956,7 +5068,8 @@
                     "description": "The HDMI status component provides an interface to the current HDMI operational status",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rohdmistatus.md"
                 }
-            ]
+            ],
+            "desription": "Checks whether the HDMI or MHL output is connected to an HDMI device."
         },
         "ifHMAC": {
             "name": "ifHMAC",
@@ -5044,7 +5157,8 @@
                     "description": "The HMAC component provides an interface to the OpenSSL HMAC functions",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rohmac.md"
                 }
-            ]
+            ],
+            "desription": "Initializes new HMAC context. "
         },
         "ifHttpAgent": {
             "name": "ifHttpAgent",
@@ -5226,7 +5340,8 @@
                     "description": "The Video Screen object implements the video playback portion of the user interface",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rovideoscreen.md"
                 }
-            ]
+            ],
+            "desription": "The ifHttpAgent methods modify the way that URLs are accessed"
         },
         "ifImageCanvas": {
             "name": "ifImageCanvas",
@@ -5258,7 +5373,8 @@
                     "description": "The roImageCanvas component provides an interface to render graphic elements at specific spots on the screen",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roimagecanvas.md"
                 }
-            ]
+            ],
+            "desription": "Turns updates on or off. Surrounding changes to several layers with AllowUpdates(false) and AllowUpdates(true) calls makes complex display modification atomic. This gives the application protection against the image canvas trying to render a partial update"
         },
         "ifImageMetaData": {
             "name": "ifImageMetaData",
@@ -5289,7 +5405,8 @@
                     "name": "roImageMetadata",
                     "description": "The roImageMetadata component provides developers access to image file metadata included in many .jpg EXIF headers"
                 }
-            ]
+            ],
+            "desription": "Sets the URL to the image. Only file URLs are supported"
         },
         "ifInput": {
             "name": "ifInput",
@@ -5332,7 +5449,8 @@
                     "description": "An roInput object can be used to receive events sent from a network client using the External Control Protocol (ECP), as described in External Control API",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roinput.md"
                 }
-            ]
+            ],
+            "desription": "Returns the message port (if any) currently associated with the object."
         },
         "ifInt": {
             "name": "ifInt",
@@ -5375,7 +5493,8 @@
                     "description": "Object equivalent for intrinsic type Integer",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roint.md"
                 }
-            ]
+            ],
+            "desription": "Gets the integer value stored in the calling Integer object. "
         },
         "ifIntOps": {
             "name": "ifIntOps",
@@ -5400,7 +5519,8 @@
                     "description": "Object equivalent for intrinsic type Integer",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roint.md"
                 }
-            ]
+            ],
+            "desription": "Returns the integer value formatted as a decimal string. No leading space is appended for non-negative numbers."
         },
         "ifKeyboardScreen": {
             "name": "ifKeyboardScreen",
@@ -5432,7 +5552,8 @@
                     "description": "The Keyboard Screen is designed to allow the user to enter an alpha-numeric string for searching, username/password registration or other purposes",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rokeyboardscreen.md"
                 }
-            ]
+            ],
+            "desription": "Sets the title for the screen to the specified string."
         },
         "ifList": {
             "name": "ifList",
@@ -5479,7 +5600,8 @@
                     "description": "Contains a list of roXML objects",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmllist.md"
                 }
-            ]
+            ],
+            "desription": "Resets the current index or position in list to the head element."
         },
         "ifListScreen": {
             "name": "ifListScreen",
@@ -5510,7 +5632,8 @@
                     "description": "The List Screen provides a graphical display of content in a vertical list within a single screen",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolistscreen.md"
                 }
-            ]
+            ],
+            "desription": "Sets the list of content to be displayed on the screen. See “Content Meta-Data” for details on the attributes for each element. The screen is responsible for fetching the poster art from the URL’s specified."
         },
         "ifListToArray": {
             "name": "ifListToArray",
@@ -5540,7 +5663,8 @@
                     "description": "Contains a list of roXML objects",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmllist.md"
                 }
-            ]
+            ],
+            "desription": "Returns an roArray containing the same elements as the list."
         },
         "ifLocalization": {
             "name": "ifLocalization",
@@ -5616,7 +5740,8 @@
                     "description": "The roLocalization object provides functions to assist in localization",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolocalization.md"
                 }
-            ]
+            ],
+            "desription": "Replaces \"^n\" in pluralString with count and returns the result."
         },
         "ifLongInt": {
             "name": "ifLongInt",
@@ -5659,7 +5784,8 @@
                     "description": "Object equivalent for intrinsic type LongInteger",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolonginteger.md"
                 }
-            ]
+            ],
+            "desription": "Gets the longinteger value stored in the calling Longinteger object. "
         },
         "ifMessageDialog": {
             "name": "ifMessageDialog",
@@ -5691,7 +5817,8 @@
                     "description": "The Message Dialog component is used to display a formatted, multi-line text message to the user",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/romessagedialog.md"
                 }
-            ]
+            ],
+            "desription": "Sets the title for the dialog to the specified string."
         },
         "ifMessagePort": {
             "name": "ifMessagePort",
@@ -5746,7 +5873,8 @@
                     "description": "A Message Port is the place messages (events) are sent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/romessageport.md"
                 }
-            ]
+            ],
+            "desription": "Waits until an event object is available or timeout milliseconds have passed."
         },
         "ifMicrophone": {
             "name": "ifMicrophone",
@@ -5789,7 +5917,8 @@
                     "description": "The roMicrophone API allows channel applications to receive audio data from the user’s microphone-supported remote control device or mobile phone",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/romicrophone.md"
                 }
-            ]
+            ],
+            "desription": "Indicates whether the platform and paired remote control can be requested to open the microphone."
         },
         "ifOneLineDialog": {
             "name": "ifOneLineDialog",
@@ -5821,7 +5950,8 @@
                     "description": "The One Line Dialog is a special type of dialog optimized for single line text",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roonelinedialog.md"
                 }
-            ]
+            ],
+            "desription": "Sets the title to be displayed in the upper right-hand corner of the screen in the overhang area."
         },
         "ifParagraphScreen": {
             "name": "ifParagraphScreen",
@@ -5853,7 +5983,8 @@
                     "description": "The Paragraph Screen provides a way to display text and selection choices to the user",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roparagraphscreen.md"
                 }
-            ]
+            ],
+            "desription": "Adds a string of bold, high visibility text to the screen as a header to introduce the subsequent paragraph(s)."
         },
         "ifPath": {
             "name": "ifPath",
@@ -5907,7 +6038,8 @@
                     "description": "The roPath component provides developers an easy way to create valid file system paths",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/ropath.md"
                 }
-            ]
+            ],
+            "desription": "Modifies or changes the current path via the specified relative or absolute path."
         },
         "ifPinEntryDialog": {
             "name": "ifPinEntryDialog",
@@ -5945,7 +6077,8 @@
                     "description": "The Pin Entry Dialog is designed to allow the user to enter a numeric PIN for purchasing content",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/ropinentrydialog.md"
                 }
-            ]
+            ],
+            "desription": "Adds a button to the pin entry dialog, with the specified title displayed on the button. The buttons are aligned at the bottom of the screen and appear in the order added. When a button is pressed, the script will receive an <a href=\"/docs/references/brightscript/events/ropinentrydialogevent.md\" title=\"roPinEntryDialogEvent\">roPinEntryDialogEvent</a> from the application indicating the ID of the button pressed."
         },
         "ifPosterScreen": {
             "name": "ifPosterScreen",
@@ -5977,7 +6110,8 @@
                     "description": "The Poster Screen provides a graphical display of poster art for content selection or can be used as a submenu to provide hierarchical structure to the application",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roposterscreen.md"
                 }
-            ]
+            ],
+            "desription": "Sets the title for the poster screen."
         },
         "ifProgramGuide": {
             "name": "ifProgramGuide",
@@ -6009,7 +6143,8 @@
                     "description": "Represents Electronic Program Guide (EPG) information from the tuner.",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roprogramguide.md"
                 }
-            ]
+            ],
+            "desription": "Returns the list of logical channel numbers on which the given program ID can be found."
         },
         "ifRegex": {
             "name": "ifRegex",
@@ -6151,7 +6286,8 @@
                     "description": "The roRegex component provides the powerful regular expression processing of the PCRE library to Brightscript strings",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roregex.md"
                 }
-            ]
+            ],
+            "desription": "Checks if a string matches the matching pattern."
         },
         "ifRegion": {
             "name": "ifRegion",
@@ -6259,7 +6395,8 @@
                     "description": "The roRegion component is used to represent a subsection of a bitmap",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roregion.md"
                 }
-            ]
+            ],
+            "desription": "Returns the roBitmap object of the bitmap to which this region refers. A region is always a section of a bitmap."
         },
         "ifRegistry": {
             "name": "ifRegistry",
@@ -6325,7 +6462,8 @@
                     "description": "The Registry is an area of non-volatile storage where a small number of persistent settings can be stored",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roregistry.md"
                 }
-            ]
+            ],
+            "desription": "Returns the number of bytes available in the channel application's device registry (16K minus current file size). This function can be used, for example, to check the remaining space and remove older entries before writing newer ones. The following code demonstrates how to do this:"
         },
         "ifRegistrySection": {
             "name": "ifRegistrySection",
@@ -6482,7 +6620,8 @@
                     "description": "A Registry Section enables the organization of settings within the registry",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roregistrysection.md"
                 }
-            ]
+            ],
+            "desription": "Reads and returns the value of the specified key."
         },
         "ifSGScreen": {
             "name": "ifSGScreen",
@@ -6495,7 +6634,8 @@
                     "description": "The roSGScreen object is a SceneGraph canvas that displays the contents of a SceneGraph Scene node tree",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgscreen.md"
                 }
-            ]
+            ],
+            "desription": "Specifies the roMessagePort object for the roSGScreen object"
         },
         "ifRSA": {
             "name": "ifRSA",
@@ -6610,7 +6750,8 @@
                     "description": "The RSA component provides an interface to the OpenSSL RSA library of signing algorithms",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rorsa.md"
                 }
-            ]
+            ],
+            "desription": "Specifies the private key to use for signing. "
         },
         "ifScreen": {
             "name": "ifScreen",
@@ -6634,7 +6775,8 @@
                     "description": "The roScreen component provides a full screen drawing surface that can be stacked and that you can receive input events from",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roscreen.md"
                 }
-            ]
+            ],
+            "desription": "This function first operates the same as a call to <a href=\"/docs/references/brightscript/interfaces/ifdraw2d.md\" title=\"ifDraw2D\">ifDraw2D</a>, completing all queued drawing operations on the back buffer (draw surface)."
         },
         "ifSearchhistory": {
             "name": "ifSearchhistory",
@@ -6676,7 +6818,8 @@
                     "description": "The Search History object implements the system-wide storage of search terms for use in implementing the roSearchScreen",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosearchhistory.md"
                 }
-            ]
+            ],
+            "desription": "Clears all elements from the search history."
         },
         "ifSearchScreen": {
             "name": "ifSearchScreen",
@@ -6708,7 +6851,8 @@
                     "description": "The Search Screen provides a standard way to allow users to enter text for searching",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosearchscreen.md"
                 }
-            ]
+            ],
+            "desription": "Sets the text to be displayed for the header in the list area. This area could contain a list of search terms previously used as a search history or partial results in the case of a progressive disclosure search"
         },
         "ifSetMessagePort": {
             "name": "ifSetMessagePort",
@@ -6755,7 +6899,8 @@
                     "description": "The roTextToSpeech component provides text to speech capabilities to applications",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotexttospeech.md"
                 }
-            ]
+            ],
+            "desription": "Sets the <a href=\"/docs/references/brightscript/components/romessageport.md\" title=\"roMessagePort\">roMessagePort</a> to be used for all events from the screen."
         },
         "ifSGNodeBoundingRect": {
             "name": "ifSGNodeBoundingRect",
@@ -6859,7 +7004,8 @@
                     "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md"
                 }
-            ]
+            ],
+            "desription": "The ifSGNodeBoundingRect interface can be used to query the bounding rectangle of subject node. The ifSGNodeBoundingRect interface methods return a node bounding rectangle as an associative array with four elements:"
         },
         "ifSGNodeChildren": {
             "name": "ifSGNodeChildren",
@@ -7042,7 +7188,8 @@
                     "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md"
                 }
-            ]
+            ],
+            "desription": "The ifSGNodeChildren interface allows querying and manipulation of nodes in a SceneGraph node tree, such as creating new nodes, placing them at certain positions in the tree, and removing them."
         },
         "ifSGNodeDict": {
             "name": "ifSGNodeDict",
@@ -7160,7 +7307,8 @@
                     "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md"
                 }
-            ]
+            ],
+            "desription": "The ifSGNodeDict interface allows you access information about the nodes in a SceneGraph node tree, and find and return a node with a specific ID."
         },
         "ifSGNodeField": {
             "name": "ifSGNodeField",
@@ -7574,7 +7722,8 @@
                     "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md"
                 }
-            ]
+            ],
+            "desription": "The ifSGNodeField interface allows querying, getting, setting, and performing other similar manipulation operations on Scene Graph node fields. This interface also allows you to set and unset event observers on a subject node field."
         },
         "ifSGNodeFocus": {
             "name": "ifSGNodeFocus",
@@ -7629,7 +7778,8 @@
                     "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md"
                 }
-            ]
+            ],
+            "desription": "The ifSGNodeFocus interface is used to query and manipulate the remote control focus of the nodes in a SceneGraph node tree."
         },
         "ifSGNodeHttpAgentAccess": {
             "name": "ifSGNodeHttpAgentAccess",
@@ -7673,7 +7823,8 @@
                     "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md"
                 }
-            ]
+            ],
+            "desription": "The ifSGNodeHttpAgentAccess interface allows you to get an <a href=\"/docs/references/brightscript/components/rohttpagent.md\" title=\"roHttpAgent\">roHttpAgent</a> object from a SceneGraph node, and set an roHttpAgent object for a nod"
         },
         "ifSlideshow": {
             "name": "ifSlideshow",
@@ -7705,7 +7856,8 @@
                     "description": "The Slide Show screen provides the ability to setup a photo slide show to playback a series of images",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roslideshow.md"
                 }
-            ]
+            ],
+            "desription": "Set the content to be played by the slide show. "
         },
         "ifSocket": {
             "name": "ifSocket",
@@ -7942,7 +8094,8 @@
                     "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostreamsocket.md"
                 }
-            ]
+            ],
+            "desription": "These are the basic binding and data transfer operations used on both <a href=\"/docs/references/brightscript/components/rostreamsocket.md\" title=\"roStreamSocket\">roStreamSocket</a> and <a href=\"/docs/references/brightscript/components/rodatagramsocket.md\" title=\"roDataGramSocket\">roDataGramSocket</a>. They are synchronous or asynchronous as determined by the socket's blocking behavior. If there is a valid assigned <a href=\"/docs/references/brightscript/components/romessageport.md\" title=\"roMessagePort\">roMessagePort</a>, the blocking behavior is considered asynchronous (non-blocking). Otherwise, the blocking behavior is considered synchronous."
         },
         "ifSocketAddress": {
             "name": "ifSocketAddress",
@@ -8057,7 +8210,8 @@
                     "description": "The roSocketAddress is used by the roStreamSocket and roDataGramSocket components for TCP and UDP traffic respectively",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosocketaddress.md"
                 }
-            ]
+            ],
+            "desription": "Sets the IPV4 address. "
         },
         "ifSocketAsync": {
             "name": "ifSocketAsync",
@@ -8127,7 +8281,8 @@
                     "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostreamsocket.md"
                 }
-            ]
+            ],
+            "desription": "The ifSocketAsync interface provides asynchronous socket features that utilize a full-featured select loop in the Roku OS that communicates to the application using a BrightScript <a href=\"/docs/references/brightscript/components/romessageport.md\" title=\"roMessagePort\">roMessagePort</a>. This interface is valid on roStreamSocket and roDataGramSocket objects that were assigned a BrightScript port via SetMessagePort()."
         },
         "ifSocketCastOption": {
             "name": "ifSocketCastOption",
@@ -8269,7 +8424,8 @@
                     "description": "The roDataGramSocket component enables Brightscript apps to send and receive UDP packets",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodatagramsocket.md"
                 }
-            ]
+            ],
+            "desription": "Only the <a href=\"/docs/references/brightscript/components/rodatagramsocket.md\" title=\"roDataGramSocket\">roDataGramSocket</a> component supports the ifSocketCastOption multicast interface. The <a href=\"/docs/references/brightscript/components/rostreamsocket.md\" title=\"roStreamSocket\">roStreamSocket</a> component does not support multicast."
         },
         "ifSocketConnection": {
             "name": "ifSocketConnection",
@@ -8346,7 +8502,8 @@
                     "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostreamsocket.md"
                 }
-            ]
+            ],
+            "desription": "Each of these operations except listen() is either synchronous or asynchronous as determined by the socket's blocking behavior. If there is a valid assigned roMessagePort, the blocking behavior is considered asynchronous (non-blocking). Otherwise, the blocking behavior is considered synchronous."
         },
         "ifSocketConnectionoption": {
             "name": "ifSocketConnectionoption",
@@ -8480,7 +8637,8 @@
                     "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostreamsocket.md"
                 }
-            ]
+            ],
+            "desription": "Checks whether keep alive is set. If keep alive is set, occasional no-data packets are sent to keep the connection alive. "
         },
         "ifSocketConnectionstatus": {
             "name": "ifSocketConnectionstatus",
@@ -8549,7 +8707,8 @@
                     "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostreamsocket.md"
                 }
-            ]
+            ],
+            "desription": "Checks whether a connection aborted error (ECONNABORTED) has occurred. "
         },
         "ifSocketOption": {
             "name": "ifSocketOption",
@@ -8687,7 +8846,8 @@
                     "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostreamsocket.md"
                 }
-            ]
+            ],
+            "desription": "Returns the TTL (Time To Live) value for all IP packets on the socket."
         },
         "ifSocketStatus": {
             "name": "ifSocketStatus",
@@ -8815,7 +8975,8 @@
                     "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostreamsocket.md"
                 }
-            ]
+            ],
+            "desription": "Checks whether an EAGAIN error has occurred. "
         },
         "ifSourceIdentity": {
             "name": "ifSourceIdentity",
@@ -8843,7 +9004,8 @@
                     "name": "roUrlEvent",
                     "description": "The roUrlTransfer component sends the roUrlEvent"
                 }
-            ]
+            ],
+            "desription": "Returns the ID currently associated with this source (event generating) or event object"
         },
         "ifSpringboardScreen": {
             "name": "ifSpringboardScreen",
@@ -8875,7 +9037,8 @@
                     "description": "The Springboard Screen shows detailed information about an individual piece of content and provides options for actions that may be taken on that content",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rospringboardscreen.md"
                 }
-            ]
+            ],
+            "desription": "Sets the content to be displayed on the Springboard Screen. "
         },
         "ifSprite": {
             "name": "ifSprite",
@@ -8914,7 +9077,8 @@
                     "description": "This component is associated with a managing roCompositor object",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosprite.md"
                 }
-            ]
+            ],
+            "desription": "Move the sprite to a new set of coordinates. "
         },
         "ifString": {
             "name": "ifString",
@@ -8970,7 +9134,8 @@
                     "name": "roUrlEvent",
                     "description": "The roUrlTransfer component sends the roUrlEvent component"
                 }
-            ]
+            ],
+            "desription": "Interface equivalent for intrinsic type String."
         },
         "ifStringOps": {
             "name": "ifStringOps",
@@ -9009,7 +9174,8 @@
                     "description": "Object equivalent for intrinsic type 'String'",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostring.md"
                 }
-            ]
+            ],
+            "desription": "Sets the roString object to the specified first set of characters of the provided string."
         },
         "ifSystemLog": {
             "name": "ifSystemLog",
@@ -9040,7 +9206,8 @@
                     "name": "roSystemLog",
                     "description": "The roSystemLog component enables the application to receive events from the Roku Streaming Player that are intended for reporting errors and trends, rather than trigger a response to a user action"
                 }
-            ]
+            ],
+            "desription": "Enables log message of type logType. When a log type is enabled, system log messages of that type are sent to the message port that was set using SetMessagePort().  "
         },
         "ifTextScreen": {
             "name": "ifTextScreen",
@@ -9072,7 +9239,8 @@
                     "description": "roTextScreen provides a way of displaying large amounts of scrollable text",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotextscreen.md"
                 }
-            ]
+            ],
+            "desription": "Sets the title for the screen, which appears in the overhang"
         },
         "ifTextToSpeech": {
             "name": "ifTextToSpeech",
@@ -9174,7 +9342,8 @@
                     "description": "The roTextToSpeech component provides text to speech capabilities to applications",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotexttospeech.md"
                 }
-            ]
+            ],
+            "desription": "Returns an ID for the spoken string to notify observer callbacks about a specific spoken string."
         },
         "ifTextureManager": {
             "name": "ifTextureManager",
@@ -9206,7 +9375,8 @@
                     "description": "The Texture Manager provides a set of API's for managing an roBitmap cache",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotexturemanager.md"
                 }
-            ]
+            ],
+            "desription": "Makes a request for an roBitmap with the attributes specified by the roTextureRequest. The roTextureManager will pass an roTextureRequestEvent to the message port when completed."
         },
         "ifTextureRequest": {
             "name": "ifTextureRequest",
@@ -9259,7 +9429,8 @@
                     "description": "An roTextureRequest is used to make requests to the roTextureManager",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotexturerequest.md"
                 }
-            ]
+            ],
+            "desription": "Returns a unique id for the request."
         },
         "ifTimeSpan": {
             "name": "ifTimeSpan",
@@ -9323,7 +9494,8 @@
                     "description": "The Timespan object provides an interface to a simple timer for tracking the duration of activities",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotimespan.md"
                 }
-            ]
+            ],
+            "desription": "Sets the \"Mark\" point to the current time. The Mark point is also automatically set to the current time when an roTimespan object is created."
         },
         "ifToStr": {
             "name": "ifToStr",
@@ -9383,7 +9555,8 @@
                     "description": "Object equivalent for intrinsic type 'String'",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostring.md"
                 }
-            ]
+            ],
+            "desription": "Returns the value as a string."
         },
         "ifUrlTransfer": {
             "name": "ifUrlTransfer",
@@ -9426,7 +9599,8 @@
                     "description": "A roUrlTransfer object transfers data to or from remote servers specified by URLs. It can perform mutual authentication with a web server",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rourltransfer.md"
                 }
-            ]
+            ],
+            "desription": "Returns a unique number for this object that can be used to identify whether events originated from this object. The value can be any arbitrary value as assigned by the Roku OS, and should only be used for comparison purposes. For example, the value should not be used as an array index. For use as a look-up key, one option would be to use <code>GetIdentity().ToStr()</code> as an associative array key."
         },
         "ifVideoPlayer": {
             "name": "ifVideoPlayer",
@@ -9458,7 +9632,8 @@
                     "description": "The roVideoPlayer component implements a video player with more programmatic control, but less user control than the roVideoScreen component",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rovideoplayer.md"
                 }
-            ]
+            ],
+            "desription": "Sets the content to be played by the roVideoPlayer."
         },
         "ifVideoScreen": {
             "name": "ifVideoScreen",
@@ -9490,7 +9665,8 @@
                     "description": "The Video Screen object implements the video playback portion of the user interface",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rovideoscreen.md"
                 }
-            ]
+            ],
+            "desription": "Sets the content to be played in the <a href=\"/docs/references/brightscript/components/rovideoscreen.md\" title=\"roVideoScreen\">roVideoScreen</a>. You can call this method while playing video, and it will use the new data (release date, length, and title) when showing the program info in the Heads Up Display (HUD)."
         },
         "ifXMLElement": {
             "name": "ifXMLElement",
@@ -9683,7 +9859,8 @@
                     "description": "roXMLElement is used to contain an XML tree",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmlelement.md"
                 }
-            ]
+            ],
+            "desription": "Parses a string of XML. "
         },
         "ifXMLList": {
             "name": "ifXMLList",
@@ -9779,12 +9956,14 @@
                     "description": "Contains a list of roXML objects",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmllist.md"
                 }
-            ]
+            ],
+            "desription": "Returns a new XMLList that contains all roXMLElements that matched the passed in name (case-sensitive matching is used). This is the same as using the dot operator on an roXMLList."
         }
     },
     "events": {
         "roAudioPlayerEvent": {
             "name": "roAudioPlayerEvent",
+            "description": "The roAudioPlayer sends the roAudioPlayerEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roaudioplayerevent.md",
             "methods": [
                 {
@@ -9883,6 +10062,7 @@
         },
         "roCaptionRendererEvent": {
             "name": "roCaptionRendererEvent",
+            "description": "roCaptionRenderer events are sent by the roCaptionRenderer to notify a BrightScript channel when caption data needs to be rendered. Specifically, one of two events, isCaptionText and isUpdateCaptionRequest, will be fired depending on the mode that the caption renderer is in.  The mode is set by calling the <a href=\"/docs/references/brightscript/interfaces/ifcaptionrenderer.md#setmodemode-as-integer-as-void\" title=\"ifCaptionRenderer.SetMode()\">ifCaptionRenderer.SetMode()</a> function.",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rocaptionrendererevent.md",
             "methods": [
                 {
@@ -9911,6 +10091,7 @@
         },
         "roCECStatusEvent": {
             "name": "roCECStatusEvent",
+            "description": "<em>Available since Roku OS 8</em>",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rocecstatusevent.md",
             "methods": [
                 {
@@ -9929,6 +10110,7 @@
         },
         "roChannelStoreEvent": {
             "name": "roChannelStoreEvent",
+            "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get* methods in <a href=\"/docs/references/brightscript/interfaces/ifchannelstore.md\" title=\"ifChannelStore\">ifChannelStore</a>. The following predicates indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rochannelstoreevent.md",
             "methods": [
                 {
@@ -9988,6 +10170,7 @@
         },
         "roCodeRegistrationScreenEvent": {
             "name": "roCodeRegistrationScreenEvent",
+            "description": "The roCodeRegistrationScreen sends the roCodeRegistrationScreenEvent with the following predicates that indicate its valid event types: ",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rocoderegistrationscreenevent.md",
             "methods": [
                 {
@@ -10016,6 +10199,7 @@
         },
         "roDeviceInfoEvent": {
             "name": "roDeviceInfoEvent",
+            "description": "<em>Available since Roku OS 8</em>",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rodeviceinfoevent.md",
             "methods": [
                 {
@@ -10044,6 +10228,7 @@
         },
         "roFileSystemEvent": {
             "name": "roFileSystemEvent",
+            "description": "The roFileSystem component sends the roFileSystemEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rofilesystemevent.md",
             "methods": [
                 {
@@ -10072,6 +10257,7 @@
         },
         "roGridScreenEvent": {
             "name": "roGridScreenEvent",
+            "description": "The roGridScreen sends the roGridScreenEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rogridscreenevent.md",
             "methods": [
                 {
@@ -10120,6 +10306,7 @@
         },
         "roHdmiHotPlugEvent": {
             "name": "roHdmiHotPlugEvent",
+            "description": "The roHdmiStatus sends the roHdmiHotPlugEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rohdmihotplugevent.md",
             "methods": [
                 {
@@ -10138,6 +10325,7 @@
         },
         "roHdmiStatusEvent": {
             "name": "roHdmiStatusEvent",
+            "description": "The roHdmiStatus sends the roHdmiStatusEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rohdmistatusevent.md",
             "methods": [
                 {
@@ -10156,6 +10344,7 @@
         },
         "roImageCanvasEvent": {
             "name": "roImageCanvasEvent",
+            "description": "The roImageCanvas sends the roImageCanvasEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roimagecanvasevent.md",
             "methods": [
                 {
@@ -10194,6 +10383,7 @@
         },
         "roInputEvent": {
             "name": "roInputEvent",
+            "description": "The roInput component sends the roInputEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roinputevent.md",
             "methods": [
                 {
@@ -10222,6 +10412,7 @@
         },
         "roKeyboardScreenEvent": {
             "name": "roKeyboardScreenEvent",
+            "description": "The roKeyboardScreen sends the roKeyboardScreenEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rokeyboardscreenevent.md",
             "methods": [
                 {
@@ -10250,6 +10441,7 @@
         },
         "roListScreenEvent": {
             "name": "roListScreenEvent",
+            "description": "The roListScreen sends the roListScreenEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rolistscreenevent.md",
             "methods": [
                 {
@@ -10298,6 +10490,7 @@
         },
         "roMessageDialogEvent": {
             "name": "roMessageDialogEvent",
+            "description": "The roMessageDialog sends the roMessageDialogEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/romessagedialogevent.md",
             "methods": [
                 {
@@ -10336,6 +10529,7 @@
         },
         "roMicrophoneEvent": {
             "name": "roMicrophoneEvent",
+            "description": "The <a href=\"/docs/references/brightscript/components/romicrophone.md\" title=\"roMicrophone\">roMicrophone</a> component sends the <code>roMicrophoneEvent</code> with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/romicrophoneevent.md",
             "methods": [
                 {
@@ -10364,6 +10558,7 @@
         },
         "roOneLineDialogEvent": {
             "name": "roOneLineDialogEvent",
+            "description": "Sends the roOneLineDialogEvent with the following predicates that indicate its valid event types: ",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roonelinedialogevent.md",
             "methods": [
                 {
@@ -10382,6 +10577,7 @@
         },
         "roParagraphScreenEvent": {
             "name": "roParagraphScreenEvent",
+            "description": "The roParagraphScreen sends the roParagraphScreenEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roparagraphscreenevent.md",
             "methods": [
                 {
@@ -10410,6 +10606,7 @@
         },
         "roPinEntryDialogEvent": {
             "name": "roPinEntryDialogEvent",
+            "description": "The roPinEntryDialog sends the roPinEntryDialogEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/ropinentrydialogevent.md",
             "methods": [
                 {
@@ -10438,6 +10635,7 @@
         },
         "roPosterScreenEvent": {
             "name": "roPosterScreenEvent",
+            "description": "The roPosterScreen sends the roPosterScreenEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roposterscreenevent.md",
             "methods": [
                 {
@@ -10526,6 +10724,7 @@
         },
         "roSearchScreenEvent": {
             "name": "roSearchScreenEvent",
+            "description": "The roSearchScreen sends the roSearchScreenEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rosearchscreenevent.md",
             "methods": [
                 {
@@ -10584,6 +10783,7 @@
         },
         "roSGNodeEvent": {
             "name": "roSGNodeEvent",
+            "description": "An roSGNode object sends roSGNodeEvent messages to a specified port when changes occur in nodes.  An roSGNodeEvent is also sent as the argument of field observer callback functions.  Both of these cases allow a SceneGraph application to respond to events.  roSGNodeEvent supports the following methods.",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rosgnodeevent.md",
             "methods": [
                 {
@@ -10642,6 +10842,7 @@
         },
         "roSGScreenEvent": {
             "name": "roSGScreenEvent",
+            "description": "<strong>roSGScreenEvents</strong> are events sent to a scene graph <strong>roSGScreen</strong> by the framework.  Other than when notifying the channel's main BrightScript thread that the screen is being closed, and thus that the channel should be terminated, channels do not generally handle these events.",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rosgscreenevent.md",
             "methods": [
                 {
@@ -10660,6 +10861,7 @@
         },
         "roSlideShowEvent": {
             "name": "roSlideShowEvent",
+            "description": "The roSlideShow sends the roSlideShowEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roslideshowevent.md",
             "methods": [
                 {
@@ -10758,6 +10960,7 @@
         },
         "roSocketEvent": {
             "name": "roSocketEvent",
+            "description": "An roStreamSocket or roDataGramSocket object sends the roSocketEvent to indicate a change in the status of the socket. The socket must enable specific event notifications via the notify methods of ifSocketAsync.",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rosocketevent.md",
             "methods": [
                 {
@@ -10776,6 +10979,7 @@
         },
         "roSpringboardScreenEvent": {
             "name": "roSpringboardScreenEvent",
+            "description": "The roSpringboardScreen sends the roSpringboardScreenEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rospringboardscreenevent.md",
             "methods": [
                 {
@@ -10824,6 +11028,7 @@
         },
         "roSystemLogEvent": {
             "name": "roSystemLogEvent",
+            "description": "roSystemLogEvents are sent when enabled via <a href=\"/docs/references/brightscript/components/rosystemlog.md\" title=\"roSystemLog\">roSystemLog</a>. roSystemLogEvent has the following method:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rosystemlogevent.md",
             "methods": [
                 {
@@ -10842,6 +11047,7 @@
         },
         "roTextScreenEvent": {
             "name": "roTextScreenEvent",
+            "description": "The roTextScreen sends the roTextScreenEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rotextscreenevent.md",
             "methods": [
                 {
@@ -10870,6 +11076,7 @@
         },
         "roTextToSpeechEvent": {
             "name": "roTextToSpeechEvent",
+            "description": "The <a href=\"/docs/references/brightscript/components/rotexttospeech.md\" title=\"roTextToSpeech\">roTextToSpeech</a> component sends the roTextToSpeechEvent with the following predicates that indicate its valid event types.",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rotexttospeechevent.md",
             "methods": [
                 {
@@ -10908,6 +11115,7 @@
         },
         "roTextureRequestEvent": {
             "name": "roTextureRequestEvent",
+            "description": "The <a href=\"/docs/references/brightscript/components/rotexturemanager.md\" title=\"roTextureManager\">roTextureManager</a> sends the roTextureRequestEvent after completing a request.",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rotexturerequestevent.md",
             "methods": [
                 {
@@ -10956,6 +11164,7 @@
         },
         "roUniversalControlEvent": {
             "name": "roUniversalControlEvent",
+            "description": "The roScreen object sends the roUniversalControlEvent with the following related methods. If an app constrains the events processed to just the roUniversalControlEvent, the app will work with any controller. The GetID(), GetChar(), GetKey(), and IsPress() methods can be used instead of parsing the GetInt() return value to more effectively distinguish between remote control and keyboard key presses, and the key press and release events.",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rouniversalcontrolevent.md",
             "methods": [
                 {
@@ -11024,6 +11233,7 @@
         },
         "roUrlEvent": {
             "name": "roUrlEvent",
+            "description": "The roUrlTransfer component sends the roUrlEvent with the following methods:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rourlevent.md",
             "methods": [
                 {
@@ -11112,6 +11322,7 @@
         },
         "roVideoPlayerEvent": {
             "name": "roVideoPlayerEvent",
+            "description": "The roVideoPlayer sends the roVideoPlayerEvent with the following predicates that indicate its valid event types:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rovideoplayerevent.md",
             "methods": [
                 {
@@ -11290,6 +11501,7 @@
         },
         "roVideoScreenEvent": {
             "name": "roVideoScreenEvent",
+            "description": "The roVideoScreen sends the roVideoScreenEvent with the same predicates as in <a href=\"/docs/references/brightscript/events/rovideoplayerevent.md\" title=\"roVideoPlayerEvent\">roVideoPlayerEvent</a>. In addition to the events listed in roVideoPlayerEvent, the following events are also supported:",
             "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rovideoscreenevent.md",
             "methods": [
                 {
