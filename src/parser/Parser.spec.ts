@@ -1351,7 +1351,7 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             const toStrToken = parser.getTokenAt(Position.create(2, 34));
             const tokenChainResponse = parser.getTokenChain(toStrToken);
-            expect(tokenChainResponse.includesUnknown).to.be.true;
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.true;
         });
 
         it('includes unknown when an expression in double brackets is part of the chain', () => {
@@ -1362,7 +1362,7 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             const toStrToken = parser.getTokenAt(Position.create(2, 38));
             const tokenChainResponse = parser.getTokenChain(toStrToken);
-            expect(tokenChainResponse.includesUnknown).to.be.true;
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.true;
         });
 
         it('includes unknown when a complicated expression in brackets is part of the chain', () => {
@@ -1373,7 +1373,7 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             const toStrToken = parser.getTokenAt(Position.create(2, 81));
             const tokenChainResponse = parser.getTokenChain(toStrToken);
-            expect(tokenChainResponse.includesUnknown).to.be.true;
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.true;
         });
 
     });
@@ -1392,14 +1392,14 @@ describe('parser', () => {
         const propAsAsDoubleBracketToken = parser.getTokenAt(Position.create(5, 64)); // complexObj["subObj"]["grandChildObj"].prop
 
         let tokenChainResponse = parser.getTokenChain(propAsChainToken);
-        expect(tokenChainResponse.includesUnknown).to.be.false;
+        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
         expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['complexObj', 'subObj', 'prop']);
 
         tokenChainResponse = parser.getTokenChain(propAsAsBracketToken);
-        expect(tokenChainResponse.includesUnknown).to.be.false;
+        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
 
         tokenChainResponse = parser.getTokenChain(propAsAsDoubleBracketToken);
-        expect(tokenChainResponse.includesUnknown).to.be.true;
+        expect(tokenChainResponse.includesUnknowableTokenType).to.be.true;
     });
 
     it('allows token kinds from AllowedLocalIdentifiers as start of a chain', () => {
@@ -1415,15 +1415,15 @@ describe('parser', () => {
         const floatFuncToken = parser.getTokenAt(Position.create(4, 38)); // float.someProp.someFunc()
 
         let tokenChainResponse = parser.getTokenChain(overrideFuncToken);
-        expect(tokenChainResponse.includesUnknown).to.be.false;
+        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
         expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['override', 'someProp', 'someFunc']);
 
         tokenChainResponse = parser.getTokenChain(stringFuncToken);
-        expect(tokenChainResponse.includesUnknown).to.be.false;
+        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
         expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['string', 'someProp', 'someFunc']);
 
         tokenChainResponse = parser.getTokenChain(floatFuncToken);
-        expect(tokenChainResponse.includesUnknown).to.be.false;
+        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
         expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['float', 'someProp', 'someFunc']);
     });
 
@@ -1440,15 +1440,15 @@ describe('parser', () => {
         const floatFuncToken = parser.getTokenAt(Position.create(4, 36)); // someObj.float.someFunc()
 
         let tokenChainResponse = parser.getTokenChain(overrideFuncToken);
-        expect(tokenChainResponse.includesUnknown).to.be.false;
+        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
         expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['someObj', 'override', 'someFunc']);
 
         tokenChainResponse = parser.getTokenChain(stringFuncToken);
-        expect(tokenChainResponse.includesUnknown).to.be.false;
+        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
         expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['someObj', 'string', 'someFunc']);
 
         tokenChainResponse = parser.getTokenChain(floatFuncToken);
-        expect(tokenChainResponse.includesUnknown).to.be.false;
+        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
         expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['someObj', 'float', 'someFunc']);
 
     });

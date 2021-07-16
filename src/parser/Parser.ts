@@ -2942,8 +2942,10 @@ export class Parser {
                 currentTokenIndex = previousTokenResult?.index;
             }
         }
+        // We will not be able to decipher the token type if it was in brackets
+        // e.g (someVar+otherVar).toStr() -- we don't bother trying to decipher what "(someVar+otherVar)" is
         let isUnknown = (lastTokenWasLeftBracket && (lastTokenHadLeadingWhitespace || !this.isAcceptableChainToken(currentToken)));
-        return { token: currentToken, index: currentTokenIndex, isUnknown: isUnknown };
+        return { token: currentToken, index: currentTokenIndex, tokenTypeIsNotKnowable: isUnknown };
 
     }
 
@@ -2971,15 +2973,16 @@ export class Parser {
         previousTokenResult = this.getPreviousTokenIgnoreNests(currentTokenIndex, TokenKind.LeftParen, TokenKind.RightParen);
         currentToken = previousTokenResult?.token;
         currentTokenIndex = previousTokenResult?.index;
-        let isUnknown = previousTokenResult?.isUnknown;
+        let tokenTypeIsNotKnowable = previousTokenResult?.tokenTypeIsNotKnowable;
         if (currentTokenIndex) {
             previousTokenResult = this.getPreviousTokenIgnoreNests(currentTokenIndex, TokenKind.LeftSquareBracket, TokenKind.RightSquareBracket);
             currentToken = previousTokenResult?.token;
             currentTokenIndex = previousTokenResult?.index;
         }
-        isUnknown = isUnknown || previousTokenResult?.isUnknown;
-        if (isUnknown || this.isAcceptableChainToken(currentToken)) {
-            return { token: currentToken, index: currentTokenIndex, isUnknown: isUnknown };
+        tokenTypeIsNotKnowable = tokenTypeIsNotKnowable || previousTokenResult?.tokenTypeIsNotKnowable;
+        if (tokenTypeIsNotKnowable || this.isAcceptableChainToken(currentToken)) {
+            // either we have a valid chain token, or we can't know what the token type is
+            return { token: currentToken, index: currentTokenIndex, tokenTypeIsNotKnowable: tokenTypeIsNotKnowable };
         }
         return undefined;
     }
@@ -3020,7 +3023,7 @@ export class Parser {
             previousTokenResult = this.getPreviousTokenInChain(currentTokenIndex);
             currentToken = previousTokenResult?.token;
             currentTokenIndex = previousTokenResult?.index;
-            includesUnknown = !!previousTokenResult?.isUnknown;
+            includesUnknown = !!previousTokenResult?.tokenTypeIsNotKnowable;
             while (!includesUnknown && this.isAcceptableChainToken(currentToken, lastTokenHasWhitespace)) {
                 tokenChain.push(currentToken);
                 lastTokenHasWhitespace = currentToken?.leadingWhitespace.length > 0;
@@ -3028,12 +3031,12 @@ export class Parser {
                     previousTokenResult = this.getPreviousTokenInChain(currentTokenIndex);
                     currentToken = previousTokenResult?.token;
                     currentTokenIndex = previousTokenResult?.index;
-                    includesUnknown = previousTokenResult?.isUnknown;
+                    includesUnknown = includesUnknown || previousTokenResult?.tokenTypeIsNotKnowable;
                 }
             }
         }
         tokenChain.reverse();
-        return { chain: tokenChain, includesUnknown: !!includesUnknown };
+        return { chain: tokenChain, includesUnknowableTokenType: !!includesUnknown };
     }
 
     /**
@@ -3194,15 +3197,20 @@ export interface LocalVarEntry {
     type: BscType;
 }
 
+/**
+ * A token paired with the index it is at in the file
+ * Used for when we need to get a token, but may also need the previous or next token
+ * This way, we can access the adjacent tokens via their index instead of search
+ */
 export interface TokenWithIndex {
-    token: Token;
-    index: number;
-    isUnknown?: boolean;
+    token: Token; // The token
+    index: number; // Index of teh token in the parser's token list
+    tokenTypeIsNotKnowable?: boolean;
 }
 
 export interface TokenChain {
     chain: Token[];
-    includesUnknown?: boolean;
+    includesUnknowableTokenType?: boolean;
 }
 
 class CancelStatementError extends Error {
