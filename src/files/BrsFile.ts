@@ -441,7 +441,7 @@ export class BrsFile {
                 //TODO convert if stmts to use instanceof instead
                 for (let arg of expression.args as any) {
 
-                    let impliedType = getBscTypeFromExpression(arg, func);
+                    let inferredType = getBscTypeFromExpression(arg, func);
                     let argText = '';
 
                     // Get the text to display for the arg
@@ -462,13 +462,13 @@ export class BrsFile {
                         }
 
                         //wrap the value in quotes because that's how it appears in the code
-                        if (argText && isStringType(impliedType)) {
+                        if (argText && isStringType(inferredType)) {
                             argText = '"' + argText + '"';
                         }
                     }
                     args.push({
                         range: arg.range,
-                        type: impliedType,
+                        type: inferredType,
                         text: argText
                     });
                 }
