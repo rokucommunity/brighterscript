@@ -110,21 +110,21 @@ export class SymbolTable {
         if (symbols?.length > 1) {
             //Check if each time it was set, it was set to the same type
             // TODO TYPES handle union types
-            let sameImpliedType = true;
-            let impliedType: BscType;
+            let sameInferredType = true;
+            let inferredType: BscType;
             for (const symbol of symbols) {
                 if ((context?.position && isPositionBefore(symbol.range?.end, context.position)) || !context?.position) {
                     // if we're looking at context with a position, only look at types that were set before
                     const existingType = getTypeFromContext(symbol.type, context);
                     // if the type is not known yet, imply that the first assignment is the type
-                    impliedType = impliedType ?? existingType;
-                    sameImpliedType = (impliedType?.equals(existingType, context));
+                    inferredType = inferredType ?? existingType;
+                    sameInferredType = (inferredType?.equals(existingType, context));
                 }
-                if (!sameImpliedType) {
+                if (!sameInferredType) {
                     break;
                 }
             }
-            return sameImpliedType ? impliedType : new DynamicType();
+            return sameInferredType ? inferredType : new DynamicType();
         } else if (symbols?.length === 1) {
             return getTypeFromContext(symbols[0].type, context);
         }
