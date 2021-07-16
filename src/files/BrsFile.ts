@@ -828,7 +828,7 @@ export class BrsFile {
      */
     public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): TokenSymbolLookup {
         const tokenChainResponse = this.parser.getTokenChain(currentToken);
-        if (tokenChainResponse.includesUnknown) {
+        if (tokenChainResponse.includesUnknowableTokenType) {
             return { type: new DynamicType(), expandedTokenText: currentToken.text };
         }
         const nameSpacedTokenChain = this.findNamespaceFromTokenChain(tokenChainResponse.chain, scope);
@@ -1631,7 +1631,7 @@ export class BrsFile {
     /**
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
-    public transpile(scope?: Scope): CodeWithSourceMap {
+    public transpile(): CodeWithSourceMap {
         const state = new BrsTranspileState(this);
         let transpileResult: SourceNode | undefined;
 
