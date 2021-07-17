@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
+/* eslint-disable @typescript-eslint/no-require-imports */
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 /* eslint-disable no-cond-assign */
 import { JSDOM } from 'jsdom';
@@ -7,8 +9,21 @@ import { standardizePath as s } from '../src/util';
 import { Parser } from '../src/parser/Parser';
 import type { CallExpression, LiteralExpression } from '../src/parser/Expression';
 import type { ExpressionStatement, FunctionStatement } from '../src/parser/Statement';
+import TurndownService = require('turndown');
+import { gfm } from 'turndown-plugin-gfm';
+import * as marked from 'marked';
 
 class ComponentListBuilder {
+    constructor() {
+        this.turndownService = new TurndownService({
+            headingStyle: 'atx',
+            codeBlockStyle: 'fenced'
+        });
+        this.turndownService.use(gfm);
+    }
+
+    private turndownService: TurndownService;
+
     private references: any;
 
     private result = {
@@ -25,6 +40,8 @@ class ComponentListBuilder {
         this.loadCache();
         //load the base level roku docs data
         await this.loadReferences();
+
+        //build the various types of docs
         await this.buildComponents();
         await this.buildInterfaces();
         await this.buildEvents();
@@ -58,8 +75,76 @@ class ComponentListBuilder {
         }
     }
 
+    public async getMarkdownTokens(url: string) {
+        const html = (await this.getJson(url)).content;
+        const markdown = this.turndownService.turndown(html);
+        const tokens = marked.lexer(markdown);
+        return {
+            html: html,
+            tokens: tokens
+        };
+    }
+
     public buildRoSGNodeList() {
         // const asdf = this.httpGet('https://devtools.web.roku.com/schema/RokuSceneGraph.xsd');
+    }
+
+    /**
+     * Search through the list of markdown tokens, and keep the first matched token
+     */
+    private findToken(tokens: Token[], start: Token, filter: TokenFilter, stopFilter?: TokenFilter) {
+        let idx = tokens.indexOf(start);
+        idx = idx < 0 ? 0 : idx;
+
+        for (let i = idx; i < tokens.length; i++) {
+            const token = tokens[i];
+            if (match(token, filter)) {
+                return token;
+            }
+            if (match(token, stopFilter)) {
+                return;
+            }
+        }
+
+        function match(token: Token, filter: TokenFilter) {
+            if (
+                token?.type === filter?.type ||
+                token?.depth === filter?.depth ||
+                token?.text?.toLowerCase() === filter?.text?.toLowerCase()
+            ) {
+                return true;
+            }
+        }
+    }
+
+    /**
+     * Get the name of this page (i.e. the text in the h1 tag)
+     */
+    private getName(tokens: Token[]) {
+        return tokens.find(x => x.type === 'heading' && x.depth === 1)?.text;
+    }
+
+    /**
+     * Used by `buildComponents`
+     */
+    private getSupportedEvents(tokens: Token[]) {
+        const result = [] as Reference[];
+        const headerIndex = tokens.indexOf(
+            tokens.find(x => x.text?.toLowerCase() === 'supported events')
+        );
+        if (headerIndex > -1) {
+            //the next token should be the list
+            const list = tokens[headerIndex + 1];
+            for (const item of list?.items ?? []) {
+                //find the link
+                const link = deepSearch(item, 'type', (key, value) => value === 'link');
+                result.push({
+                    name: link.text,
+                    url: this.getDocUrl(link.href)
+                });
+            }
+        }
+        return result;
     }
 
     private async buildComponents() {
@@ -69,16 +154,18 @@ class ComponentListBuilder {
         for (const name in componentDocs) {
             console.log(`Processing component ${i++} of ${count}`);
             const docPath = componentDocs[name];
-            const dom = await this.getDom(this.getDocApiUrl(docPath));
+            const docUrl = this.getDocApiUrl(docPath);
+            const { html, tokens } = await this.getMarkdownTokens(docUrl);
+            const dom = await this.getDom(docUrl);
             const document = dom.window.document;
 
             const descriptionEl = this.findNextElement(document.getElementsByTagName('h1')[0], { type: 'p' });
 
             const component = {
-                name: name,
+                name: this.getName(tokens),
                 url: this.getDocUrl(docPath),
                 interfaces: this.getUlData(document, 'supported-interfaces'),
-                events: this.getUlData(document, 'supported-events'),
+                events: this.getSupportedEvents(tokens),
                 constructors: [],
                 description: descriptionEl?.innerHTML
             } as BrightScriptComponent;
@@ -141,6 +228,8 @@ class ComponentListBuilder {
             console.log(`Processing interface ${i++} of ${count}`);
             const docPath = interfaceDocs[name];
             const docUrl = this.getDocApiUrl(docPath);
+            const { html, tokens } = await this.getMarkdownTokens(docUrl);
+
             try {
 
                 const dom = await this.getDom(docUrl);
@@ -451,7 +540,7 @@ class ComponentListBuilder {
     }
 
     private getDocUrl(docRelativePath: string) {
-        return `https://developer.roku.com/en-ca${docRelativePath}`;
+        return `https://developer.roku.com/docs${docRelativePath}`;
     }
 
     private async loadReferences() {
@@ -562,6 +651,36 @@ interface ElementFilter {
     class?: string;
 }
 
+interface Token {
+    type: string;
+    text: string;
+    //for header tokens
+    depth?: number;
+    tokens?: Token[];
+    items?: Token[];
+}
 
+interface TokenFilter {
+    type?: string;
+    depth?: number;
+    text?: string;
+}
 //run the builder
 new ComponentListBuilder().run().catch((e) => console.error(e));
+
+function deepSearch(object, key, predicate) {
+    if (object.hasOwnProperty(key) && predicate(key, object[key]) === true) {
+        return object;
+    }
+
+    for (let i = 0; i < Object.keys(object).length; i++) {
+        let value = object[Object.keys(object)[i]];
+        if (typeof value === 'object' && value) {
+            let o = deepSearch(object[Object.keys(object)[i]], key, predicate);
+            if (o) {
+                return o;
+            }
+        }
+    }
+    return null;
+}
