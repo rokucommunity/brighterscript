@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2021-07-16T23:43:57.250Z",
+    "generatedDate": "2021-07-17T02:59:30.584Z",
     "nodes": {},
     "components": {
         "roAppInfo": {
@@ -313,7 +313,7 @@
                     "url": "https://developer.roku.com/docs/docs/references/brightscript/interfaces/ifsetmessageport.md"
                 },
                 {
-                    "name": "ifGetMessagePort ",
+                    "name": "ifGetMessagePort",
                     "url": "https://developer.roku.com/docs/docs/references/brightscript/interfaces/ifgetmessageport.md"
                 }
             ],
@@ -401,7 +401,7 @@
                     "url": "https://developer.roku.com/docs/docs/references/brightscript/interfaces/ifsocketoption.md"
                 },
                 {
-                    "name": "ifSocketCastOption ",
+                    "name": "ifSocketCastOption",
                     "url": "https://developer.roku.com/docs/docs/references/brightscript/interfaces/ifsocketcastoption.md"
                 }
             ],
@@ -992,7 +992,7 @@
                     "url": "https://developer.roku.com/docs/docs/references/brightscript/interfaces/ifsetmessageport.md"
                 },
                 {
-                    "name": "ifGetMessagePort ",
+                    "name": "ifGetMessagePort",
                     "url": "https://developer.roku.com/docs/docs/references/brightscript/interfaces/ifgetmessageport.md"
                 }
             ],
@@ -4207,7 +4207,7 @@
                 {
                     "name": "roEVPCipher",
                     "description": "The EVP Cipher component provides an interface to the OpenSSL EVP library of symmetric cipher commands",
-                    "url": "https://developer.roku.com/docs/docs/references/brightscript/components/roevpcipher.md"
+                    "url": "https://developer.roku.com/docs/docs/references/brightscript/components/roevpdigest.md"
                 }
             ],
             "desription": "Configures and initializes a new cipher context."
@@ -4557,7 +4557,8 @@
             "implementors": [
                 {
                     "name": "roFile System",
-                    "description": "The roFilesystem component implements common filesystem inspection and modification routines"
+                    "description": "The roFilesystem component implements common filesystem inspection and modification routines",
+                    "url": "https://developer.roku.com/docs/docs/developer-program/getting-started/architecture/file-system.md"
                 }
             ],
             "desription": "The format of file and directory pathnames is described on the <a href=\"/docs/developer-program/getting-started/architecture/file-system.md\" title=\"File System\">File System</a> page."
@@ -5263,7 +5264,7 @@
                 {
                     "name": "roAppManager",
                     "description": "The Application Manager APIs set application level attributes, which mostly affect the look-and-feel of the application",
-                    "url": "https://developer.roku.com/docs/docs/references/brightscript/components/roappmanager.md"
+                    "url": "https://developer.roku.com/docs/docs/references/brightscript/interfaces/ifappmanager.md"
                 },
                 {
                     "name": "roAudioPlayer",
@@ -5403,7 +5404,8 @@
             "implementors": [
                 {
                     "name": "roImageMetadata",
-                    "description": "The roImageMetadata component provides developers access to image file metadata included in many .jpg EXIF headers"
+                    "description": "The roImageMetadata component provides developers access to image file metadata included in many .jpg EXIF headers",
+                    "url": "https://developer.roku.com/docs/docs/references/brightscript/components/roimagemetadata.md"
                 }
             ],
             "desription": "Sets the URL to the image. Only file URLs are supported"
@@ -6141,7 +6143,7 @@
                 {
                     "name": "roProgramGuide",
                     "description": "Represents Electronic Program Guide (EPG) information from the tuner.",
-                    "url": "https://developer.roku.com/docs/docs/references/brightscript/components/roprogramguide.md"
+                    "url": "https://developer.roku.com/docs/docs/references/brightscript/interfaces/roprogramguide.md"
                 }
             ],
             "desription": "Returns the list of logical channel numbers on which the given program ID can be found."
@@ -6632,7 +6634,7 @@
                 {
                     "name": "roSGScreen",
                     "description": "The roSGScreen object is a SceneGraph canvas that displays the contents of a SceneGraph Scene node tree",
-                    "url": "https://developer.roku.com/docs/docs/references/brightscript/components/rosgscreen.md"
+                    "url": "https://developer.roku.com/docs/docs/references/brightscript/components/rosgnode.md"
                 }
             ],
             "desription": "Specifies the roMessagePort object for the roSGScreen object"
@@ -8998,11 +9000,13 @@
             "implementors": [
                 {
                     "name": "roChannelStoreEvent",
-                    "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get* methods in ifChannelStore"
+                    "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get",
+                    "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rochannelstoreevent.md"
                 },
                 {
                     "name": "roUrlEvent",
-                    "description": "The roUrlTransfer component sends the roUrlEvent"
+                    "description": "The roUrlTransfer component sends the roUrlEvent",
+                    "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rourlevent.md"
                 }
             ],
             "desription": "Returns the ID currently associated with this source (event generating) or event object"
@@ -9118,7 +9122,8 @@
             "implementors": [
                 {
                     "name": "roChannelStoreEvent",
-                    "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get* methods in ifChannelStore"
+                    "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get",
+                    "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rochannelstoreevent.md"
                 },
                 {
                     "name": "roPath",
@@ -9132,7 +9137,8 @@
                 },
                 {
                     "name": "roUrlEvent",
-                    "description": "The roUrlTransfer component sends the roUrlEvent component"
+                    "description": "The roUrlTransfer component sends the roUrlEvent component",
+                    "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rourlevent.md"
                 }
             ],
             "desription": "Interface equivalent for intrinsic type String."
@@ -9204,7 +9210,8 @@
             "implementors": [
                 {
                     "name": "roSystemLog",
-                    "description": "The roSystemLog component enables the application to receive events from the Roku Streaming Player that are intended for reporting errors and trends, rather than trigger a response to a user action"
+                    "description": "The roSystemLog component enables the application to receive events from the Roku Streaming Player that are intended for reporting errors and trends, rather than trigger a response to a user action",
+                    "url": "https://developer.roku.com/docs/docs/references/brightscript/components/rosystemlog.md"
                 }
             ],
             "desription": "Enables log message of type logType. When a log type is enabled, system log messages of that type are sent to the message port that was set using SetMessagePort().  "
