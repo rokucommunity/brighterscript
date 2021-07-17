@@ -11,19 +11,16 @@ import type { CallExpression, LiteralExpression } from '../src/parser/Expression
 import type { ExpressionStatement, FunctionStatement } from '../src/parser/Statement';
 import TurndownService = require('turndown');
 import { gfm } from 'turndown-plugin-gfm';
-import * as marked from 'marked';
+import { TokensList, Tokens, lexer as markedLexer } from 'marked';
+import * as he from 'he';
+
+const turndownService = new TurndownService({
+    headingStyle: 'atx',
+    codeBlockStyle: 'fenced'
+});
+turndownService.use(gfm);
 
 class ComponentListBuilder {
-    constructor() {
-        this.turndownService = new TurndownService({
-            headingStyle: 'atx',
-            codeBlockStyle: 'fenced'
-        });
-        this.turndownService.use(gfm);
-    }
-
-    private turndownService: TurndownService;
-
     private references: any;
 
     private result = {
@@ -37,7 +34,7 @@ class ComponentListBuilder {
     public async run() {
         const outPath = s`${__dirname}/../src/roku-types/data.json`;
         fsExtra.removeSync(outPath);
-        this.loadCache();
+        loadCache();
         //load the base level roku docs data
         await this.loadReferences();
 
@@ -54,7 +51,7 @@ class ComponentListBuilder {
     }
 
     /**
-     * Repair missing urls
+     * Repair references that are missing a hyperlink (usually because the roku docs were incomplete)
      */
     public linkMissingReferences() {
         //components
@@ -75,72 +72,23 @@ class ComponentListBuilder {
         }
     }
 
-    public async getMarkdownTokens(url: string) {
-        const html = (await this.getJson(url)).content;
-        const markdown = this.turndownService.turndown(html);
-        const tokens = marked.lexer(markdown);
-        return {
-            html: html,
-            tokens: tokens
-        };
-    }
-
     public buildRoSGNodeList() {
         // const asdf = this.httpGet('https://devtools.web.roku.com/schema/RokuSceneGraph.xsd');
     }
 
-    /**
-     * Search through the list of markdown tokens, and keep the first matched token
-     */
-    private findToken(tokens: Token[], start: Token, filter: TokenFilter, stopFilter?: TokenFilter) {
-        let idx = tokens.indexOf(start);
-        idx = idx < 0 ? 0 : idx;
-
-        for (let i = idx; i < tokens.length; i++) {
-            const token = tokens[i];
-            if (match(token, filter)) {
-                return token;
-            }
-            if (match(token, stopFilter)) {
-                return;
-            }
-        }
-
-        function match(token: Token, filter: TokenFilter) {
-            if (
-                token?.type === filter?.type ||
-                token?.depth === filter?.depth ||
-                token?.text?.toLowerCase() === filter?.text?.toLowerCase()
-            ) {
-                return true;
-            }
-        }
-    }
-
-    /**
-     * Get the name of this page (i.e. the text in the h1 tag)
-     */
-    private getName(tokens: Token[]) {
-        return tokens.find(x => x.type === 'heading' && x.depth === 1)?.text;
-    }
-
-    /**
-     * Used by `buildComponents`
-     */
-    private getSupportedEvents(tokens: Token[]) {
-        const result = [] as Reference[];
-        const headerIndex = tokens.indexOf(
-            tokens.find(x => x.text?.toLowerCase() === 'supported events')
-        );
-        if (headerIndex > -1) {
-            //the next token should be the list
-            const list = tokens[headerIndex + 1];
-            for (const item of list?.items ?? []) {
-                //find the link
-                const link = deepSearch(item, 'type', (key, value) => value === 'link');
+    private getImplementors(manager: TokenManager) {
+        const result = [] as Implementor[];
+        const table = manager.getTableByHeaders(['name', 'description']);
+        if (table?.type === 'table') {
+            for (const row of table?.tokens?.cells ?? []) {
+                const firstTokenInRow = row?.[0]?.[0];
+                //find the link, or default to the cell itself (assume it's a text node?)
+                const token = deepSearch(firstTokenInRow, 'type', (key, value) => value === 'link') ?? firstTokenInRow;
                 result.push({
-                    name: link.text,
-                    url: this.getDocUrl(link.href)
+                    name: token.text,
+                    description: he.decode(row?.[1]?.[0].text ?? '') || undefined,
+                    //if this is not a link, we'll just get back `undefined`, and we will repair this link at the end of the script
+                    url: getDocUrl(token?.href)
                 });
             }
         }
@@ -155,17 +103,17 @@ class ComponentListBuilder {
             console.log(`Processing component ${i++} of ${count}`);
             const docPath = componentDocs[name];
             const docUrl = this.getDocApiUrl(docPath);
-            const { html, tokens } = await this.getMarkdownTokens(docUrl);
+            const manager = await new TokenManager().process(docUrl);
             const dom = await this.getDom(docUrl);
             const document = dom.window.document;
 
             const descriptionEl = this.findNextElement(document.getElementsByTagName('h1')[0], { type: 'p' });
 
             const component = {
-                name: this.getName(tokens),
-                url: this.getDocUrl(docPath),
-                interfaces: this.getUlData(document, 'supported-interfaces'),
-                events: this.getSupportedEvents(tokens),
+                name: manager.getHeading(1)?.text,
+                url: getDocUrl(docPath),
+                interfaces: manager.getListReferences('supported interfaces'),
+                events: manager.getListReferences('supported events'),
                 constructors: [],
                 description: descriptionEl?.innerHTML
             } as BrightScriptComponent;
@@ -228,7 +176,7 @@ class ComponentListBuilder {
             console.log(`Processing interface ${i++} of ${count}`);
             const docPath = interfaceDocs[name];
             const docUrl = this.getDocApiUrl(docPath);
-            const { html, tokens } = await this.getMarkdownTokens(docUrl);
+            const manager = await new TokenManager().process(docUrl);
 
             try {
 
@@ -236,13 +184,12 @@ class ComponentListBuilder {
                 const document = dom.window.document;
                 const descriptionEl = this.findNextElement(document.getElementsByTagName('h1')[0], { type: 'p' });
 
-
                 const iface = {
                     name: name,
-                    url: this.getDocUrl(docPath),
+                    url: getDocUrl(docPath),
                     methods: this.buildInterfaceMethods(document),
                     properties: [],
-                    implementors: this.getInterfaceImplementors(document),
+                    implementors: this.getImplementors(manager),
                     desription: descriptionEl?.innerHTML
                 };
 
@@ -275,7 +222,7 @@ class ComponentListBuilder {
 
                 const evt = {
                     name: name,
-                    url: this.getDocUrl(docPath),
+                    url: getDocUrl(docPath),
                     description: descriptionEl?.innerHTML,
                     methods: this.buildInterfaceMethods(document),
                     properties: [],
@@ -501,36 +448,8 @@ class ComponentListBuilder {
         }
     }
 
-    private getUlData(document: Document, elementId: string) {
-        const result = [] as Reference[];
-        //get "Supported Interfaces" element
-        const header = document.getElementById(elementId);
-        if (header) {
-            //find the <ul> (there's a random #text node between them)
-            const children = (header.nextSibling?.nextSibling as any)?.children ?? [];
-            for (const child of children as Array<HTMLLIElement>) {
-                result.push({
-                    name: child.children[0].innerHTML,
-                    url: this.getDocUrl(child.children[0].attributes.getNamedItem('href').value)
-                });
-            }
-        }
-        return result;
-    }
-
-    private async getJson(url: string) {
-        if (!this.cache[url]) {
-            console.log('Fetching from web', url);
-            this.cache[url] = (await phin(url)).body.toString();
-            this.saveCache();
-        } else {
-            console.log('Fetching from cache', url);
-        }
-        return JSON.parse(this.cache[url]);
-    }
-
     private async getDom(apiUrl: string) {
-        const html = (await this.getJson(apiUrl)).content;
+        const html = (await getJson(apiUrl)).content;
         const dom = new JSDOM(html);
         return dom;
     }
@@ -539,27 +458,40 @@ class ComponentListBuilder {
         return `https://developer.roku.com/api/v1/get-dev-cms-doc?locale=en-us&filePath=${docRelativePath.replace(/^\/docs\//, '')}`;
     }
 
-    private getDocUrl(docRelativePath: string) {
-        return `https://developer.roku.com/docs${docRelativePath}`;
-    }
-
     private async loadReferences() {
-        const response = await this.getJson('https://developer.roku.com/api/v1/get-dev-cms-doc?filePath=left-nav%2Freferences.json&locale=en-us');
+        const response = await getJson('https://developer.roku.com/api/v1/get-dev-cms-doc?filePath=left-nav%2Freferences.json&locale=en-us');
         this.references = JSON.parse(response.content);
     }
+}
 
-    private cache: Record<string, string>;
-    private loadCache() {
-        const cachePath = s`${__dirname}/.cache.json`;
-        if (fsExtra.pathExistsSync(cachePath)) {
-            this.cache = fsExtra.readJsonSync(cachePath);
-        } else {
-            this.cache = {};
-        }
+let cache: Record<string, string>;
+function loadCache() {
+    const cachePath = s`${__dirname}/.cache.json`;
+    if (fsExtra.pathExistsSync(cachePath)) {
+        cache = fsExtra.readJsonSync(cachePath);
+    } else {
+        cache = {};
     }
+}
 
-    private saveCache() {
-        fsExtra.writeJsonSync(s`${__dirname}/.cache.json`, this.cache);
+function saveCache() {
+    fsExtra.writeJsonSync(s`${__dirname}/.cache.json`, cache);
+}
+
+async function getJson(url: string) {
+    if (!cache[url]) {
+        console.log('Fetching from web', url);
+        cache[url] = (await phin(url)).body.toString();
+        saveCache();
+    } else {
+        console.log('Fetching from cache', url);
+    }
+    return JSON.parse(cache[url]);
+}
+
+function getDocUrl(docRelativePath: string) {
+    if (docRelativePath) {
+        return `https://developer.roku.com/docs${docRelativePath}`;
     }
 }
 
@@ -651,20 +583,6 @@ interface ElementFilter {
     class?: string;
 }
 
-interface Token {
-    type: string;
-    text: string;
-    //for header tokens
-    depth?: number;
-    tokens?: Token[];
-    items?: Token[];
-}
-
-interface TokenFilter {
-    type?: string;
-    depth?: number;
-    text?: string;
-}
 //run the builder
 new ComponentListBuilder().run().catch((e) => console.error(e));
 
@@ -683,4 +601,78 @@ function deepSearch(object, key, predicate) {
         }
     }
     return null;
+}
+
+
+/**
+ * A class to help manage the parsed markdown tokens
+ */
+class TokenManager {
+    public html: string;
+    public markdown: string;
+    public tokens: TokensList;
+
+    public async process(url: string) {
+        this.html = (await getJson(url)).content;
+        this.markdown = turndownService.turndown(this.html);
+        this.tokens = markedLexer(this.markdown);
+        return this;
+    }
+
+    /**
+     * Find a heading tag
+     */
+    public getHeading(depth: number, text?: string) {
+        for (const token of this.tokens) {
+            if (token?.type === 'heading' && token?.depth === 1) {
+                //if we have a text filter, and the text does not match, then skip
+                if (text && token?.text?.toLowerCase() !== text) {
+                    continue;
+                }
+                return token;
+            }
+        }
+    }
+
+    /**
+     * Scan the tokens and find the first the top-level table based on the header names
+     */
+    public getTableByHeaders(searchHeaders: string[]) {
+        for (const token of this.tokens) {
+            if (token?.type === 'table') {
+                const headers = token?.header?.map(x => x.toLowerCase());
+                if (
+                    headers.every(x => searchHeaders.includes(x)) &&
+                    searchHeaders.every(x => headers.includes(x))
+                ) {
+                    return token;
+                }
+            }
+        }
+    }
+
+    /**
+     * Get a list of `Reference` objects from a markdown list found immediately after a header
+     */
+    public getListReferences(headerText: string) {
+        const result = [] as Reference[];
+        const headerIndex = this.tokens.indexOf(
+            this.tokens.find(x => (x as any).text?.toLowerCase() === headerText)
+        );
+        if (headerIndex > -1) {
+            //the next token should be the list
+            const list = this.tokens[headerIndex + 1];
+            if (list?.type === 'list') {
+                for (const item of list?.items ?? []) {
+                    //find the link
+                    const link = deepSearch(item, 'type', (key, value) => value === 'link');
+                    result.push({
+                        name: link.text,
+                        url: getDocUrl(link.href)
+                    });
+                }
+            }
+        }
+        return result;
+    }
 }
