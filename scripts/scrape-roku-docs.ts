@@ -11,7 +11,8 @@ import type { CallExpression, LiteralExpression } from '../src/parser/Expression
 import type { ExpressionStatement, FunctionStatement } from '../src/parser/Statement';
 import TurndownService = require('turndown');
 import { gfm } from 'turndown-plugin-gfm';
-import { TokensList, Tokens, lexer as markedLexer } from 'marked';
+import type { TokensList, Tokens } from 'marked';
+import { lexer as markedLexer } from 'marked';
 import * as he from 'he';
 
 const turndownService = new TurndownService({
@@ -86,7 +87,7 @@ class ComponentListBuilder {
                 const token = deepSearch(firstTokenInRow, 'type', (key, value) => value === 'link') ?? firstTokenInRow;
                 result.push({
                     name: token.text,
-                    description: he.decode(row?.[1]?.[0].text ?? '') || undefined,
+                    description: he.decode((row?.[1]?.[0] as Tokens.Text).text ?? '') || undefined,
                     //if this is not a link, we'll just get back `undefined`, and we will repair this link at the end of the script
                     url: getDocUrl(token?.href)
                 });
@@ -637,7 +638,7 @@ class TokenManager {
     /**
      * Scan the tokens and find the first the top-level table based on the header names
      */
-    public getTableByHeaders(searchHeaders: string[]) {
+    public getTableByHeaders(searchHeaders: string[]): TableEnhanced {
         for (const token of this.tokens) {
             if (token?.type === 'table') {
                 const headers = token?.header?.map(x => x.toLowerCase());
@@ -645,7 +646,7 @@ class TokenManager {
                     headers.every(x => searchHeaders.includes(x)) &&
                     searchHeaders.every(x => headers.includes(x))
                 ) {
-                    return token;
+                    return token as TableEnhanced;
                 }
             }
         }
@@ -675,4 +676,11 @@ class TokenManager {
         }
         return result;
     }
+}
+
+interface TableEnhanced extends Tokens.Table {
+    tokens: {
+        header: Array<Array<TokensList>>;
+        cells: Array<Array<TokensList>>;
+    };
 }
