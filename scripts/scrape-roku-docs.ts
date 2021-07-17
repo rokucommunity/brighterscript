@@ -411,7 +411,7 @@ class ComponentListBuilder {
                         const paramsFromTable = this.getTableData<{ name: string; type: string; description: string }>(paramsTableEl) ?? [];
                         //augment any scanned signature info with data from the table
                         for (const param of paramsFromTable) {
-                            const methodParam = method.signatures[0].params.find(x => x?.name && param.name && x.name?.toLowerCase() === param.name?.toLowerCase());
+                            const methodParam = method.params.find(x => x?.name && param.name && x.name?.toLowerCase() === param.name?.toLowerCase());
                             if (methodParam) {
                                 methodParam.name = param.name;
                                 methodParam.type = param.type;
@@ -419,7 +419,7 @@ class ComponentListBuilder {
                             }
                         }
                     }
-                    method.signatures[0].returnDescription = returnValueEl?.innerHTML;
+                    method.returnDescription = returnValueEl?.innerHTML;
                     result.push(method);
                 }
             }
@@ -436,7 +436,6 @@ class ComponentListBuilder {
             const func = statements[0] as FunctionStatement;
             return {
                 name: func.name?.text,
-                signatures: [{
                     params: func.func.parameters.map(x => ({
                         name: x.name?.text,
                         isRequired: !x.defaultValue,
@@ -444,7 +443,6 @@ class ComponentListBuilder {
                         type: x.typeToken?.text
                     })),
                     returnType: func.func.returnTypeToken?.text
-                }]
             } as Func;
         }
     }
@@ -554,10 +552,9 @@ interface RokuEvent {
     implementors: Implementor[];
 }
 
-interface Func {
+interface Func extends Signature {
     name: string;
     description: string;
-    signatures: Array<Signature>;
 }
 interface Param {
     name: string;
