@@ -11,7 +11,7 @@ import type { CallExpression, LiteralExpression } from '../src/parser/Expression
 import type { ExpressionStatement, FunctionStatement } from '../src/parser/Statement';
 import TurndownService = require('turndown');
 import { gfm } from 'turndown-plugin-gfm';
-import type { TokensList, Tokens } from 'marked';
+import type { TokensList, Tokens, Token } from 'marked';
 import { lexer as markedLexer } from 'marked';
 import * as he from 'he';
 
@@ -188,7 +188,7 @@ class ComponentListBuilder {
                 const iface = {
                     name: name,
                     url: getDocUrl(docPath),
-                    methods: this.buildInterfaceMethods(document),
+                    methods: this.buildInterfaceMethods(manager),
                     properties: [],
                     implementors: this.getImplementors(manager),
                     desription: descriptionEl?.innerHTML
@@ -215,6 +215,7 @@ class ComponentListBuilder {
             console.log(`Processing event ${i++} of ${count}`);
             const docPath = eventDocs[name];
             const docUrl = this.getDocApiUrl(docPath);
+            const manager = await new TokenManager().process(docUrl);
             try {
 
                 const dom = await this.getDom(docUrl);
@@ -225,7 +226,7 @@ class ComponentListBuilder {
                     name: name,
                     url: getDocUrl(docPath),
                     description: descriptionEl?.innerHTML,
-                    methods: this.buildInterfaceMethods(document),
+                    methods: this.buildInterfaceMethods(manager),
                     properties: [],
                     implementors: this.getInterfaceImplementors(document)
                 };
@@ -386,45 +387,37 @@ class ComponentListBuilder {
         } while (current);
     }
 
-    private buildInterfaceMethods(document: Document) {
+    private buildInterfaceMethods(manager: TokenManager) {
         const result = [] as Func[];
-        //the element right before the start of a method group
-        let previous = document.getElementById('supported-methods');
-        //let's hope all the interface methods are structured the same way!
+        //find every h3
+        const methodHeaders = manager.getByType<Tokens.Heading>('heading').filter(x => x.depth === 3);
+        for (let i = 0; i < methodHeaders.length; i++) {
+            const methodHeader = methodHeaders[i];
+            const nextMethodHeader = methodHeaders[i + 1];
+            const method = this.getMethod(methodHeader.text);
+            if (method) {
+                method.description = manager.getNextToken<Tokens.Paragraph>(
+                    manager.find(x => !!/description/i.exec(x?.text), methodHeader, nextMethodHeader)
+                )?.text;
 
-        while (previous) {
-            const signatureEl = this.findNextElement(previous, { type: 'h3' }, { id: 'toc-full' });
-            const descriptionEl = [
-                this.findNextElement(signatureEl, { text: 'description' }, { type: 'h3' })?.nextElementSibling,
-                signatureEl?.nextElementSibling
-            ].find(x => x?.nodeName?.toLowerCase() === 'p');
-            const paramsTableEl = [
-                this.findNextElement(signatureEl, { text: 'parameters' }, { type: 'h3' })?.nextElementSibling,
-                this.findNextElement(signatureEl, { text: 'parameters' }, { type: 'h3' })?.nextElementSibling?.firstElementChild
-            ].find(x => this.isTable(x));
-            const returnValueEl = this.findNextElement(signatureEl, { text: 'return value' }, { type: 'h3' })?.nextElementSibling;
-            if (signatureEl) {
-                const method = this.getMethod(signatureEl.innerHTML);
-                if (method) {
-                    method.description = descriptionEl?.innerHTML;
-                    if (paramsTableEl) {
-                        const paramsFromTable = this.getTableData<{ name: string; type: string; description: string }>(paramsTableEl) ?? [];
-                        //augment any scanned signature info with data from the table
-                        for (const param of paramsFromTable) {
-                            const methodParam = method.params.find(x => x?.name && param.name && x.name?.toLowerCase() === param.name?.toLowerCase());
-                            if (methodParam) {
-                                methodParam.name = param.name;
-                                methodParam.type = param.type;
-                                methodParam.description = param.description;
-                            }
-                        }
+                method.returnDescription = manager.getNextToken<Tokens.Paragraph>(
+                    manager.find(x => !!/return\s*value/i.exec(x?.text), methodHeader, nextMethodHeader)
+                )?.text;
+
+                //augment parameter info from optional parameters table
+                const parameterObjects = manager.tableToObjects(
+                    manager.getTableByHeaders(['name', 'type', 'description'], methodHeader, nextMethodHeader)
+                );
+                for (const row of parameterObjects ?? []) {
+                    const methodParam = method.params.find(p => p?.name && p.name?.toLowerCase() === row.name?.toLowerCase());
+                    if (methodParam) {
+                        methodParam.type = row.type ?? methodParam.type;
+                        methodParam.description = row.description ?? methodParam.description;
                     }
-                    method.returnDescription = returnValueEl?.innerHTML;
-                    result.push(method);
                 }
-            }
 
-            previous = (returnValueEl ?? paramsTableEl?.parentElement ?? descriptionEl ?? signatureEl) as any;
+                result.push(method);
+            }
         }
         return result;
     }
@@ -436,13 +429,13 @@ class ComponentListBuilder {
             const func = statements[0] as FunctionStatement;
             return {
                 name: func.name?.text,
-                    params: func.func.parameters.map(x => ({
-                        name: x.name?.text,
-                        isRequired: !x.defaultValue,
-                        default: null, //x.defaultValue.transpile(state)
-                        type: x.typeToken?.text
-                    })),
-                    returnType: func.func.returnTypeToken?.text
+                params: func.func.parameters.map(x => ({
+                    name: x.name?.text,
+                    isRequired: !x.defaultValue,
+                    default: null, //x.defaultValue.transpile(state)
+                    type: x.typeToken?.text
+                })),
+                returnType: func.func.returnTypeToken?.text
             } as Func;
         }
     }
@@ -635,8 +628,15 @@ class TokenManager {
     /**
      * Scan the tokens and find the first the top-level table based on the header names
      */
-    public getTableByHeaders(searchHeaders: string[]): TableEnhanced {
-        for (const token of this.tokens) {
+    public getTableByHeaders(searchHeaders: string[], startAt?: Token, stopAt?: Token): TableEnhanced {
+        let startIndex = this.tokens.indexOf(startAt);
+        startIndex = startIndex > -1 ? startIndex : 0;
+
+        let stopIndex = this.tokens.indexOf(stopAt);
+        stopIndex = stopIndex > -1 ? stopIndex : this.tokens.length;
+
+        for (let i = startIndex; i < stopIndex; i++) {
+            const token = this.tokens[i];
             if (token?.type === 'table') {
                 const headers = token?.header?.map(x => x.toLowerCase());
                 if (
@@ -647,6 +647,22 @@ class TokenManager {
                 }
             }
         }
+    }
+
+    /**
+     * Convert a markdown table token into an array of objects with the headers as keys, and the cell values as values
+     */
+    public tableToObjects(table: Tokens.Table) {
+        const result = [] as Record<string, string>[];
+        const headers = table?.header?.map(x => x.toLowerCase());
+        for (const row of table?.cells ?? []) {
+            const data = {};
+            for (let i = 0; i < headers.length; i++) {
+                data[headers[i]] = row[i];
+            }
+            result.push(data);
+        }
+        return result;
     }
 
     /**
@@ -672,6 +688,47 @@ class TokenManager {
             }
         }
         return result;
+    }
+
+    /**
+     * Get all tokens of the specified type from the top-level tokens list
+     */
+    public getByType<T extends Token>(type: Token['type']): T[] {
+        const result = [] as T[];
+        for (const token of this.tokens) {
+            if (token.type === type) {
+                result.push(token as T);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Find a token that matches, starting and stopping at given tokens if specified
+     */
+    public find<T extends Token = Token>(func: (x: any) => boolean | undefined, startAt?: Token, stopAt?: Token) {
+        let startIndex = this.tokens.indexOf(startAt);
+        startIndex = startIndex > -1 ? startIndex : 0;
+
+        let stopIndex = this.tokens.indexOf(stopAt);
+        stopIndex = stopIndex > -1 ? stopIndex : this.tokens.length;
+
+        for (let i = startIndex; i < stopIndex; i++) {
+            const token = this.tokens[i];
+            if (func(token) === true) {
+                return token as T;
+            }
+        }
+    }
+
+    /**
+     * Get the token directly after the given token
+     */
+    public getNextToken<T extends Token = Token>(currentToken: Token) {
+        let idx = this.tokens.indexOf(currentToken);
+        if (idx > -1) {
+            return this.tokens[idx + 1] as T;
+        }
     }
 }
 
