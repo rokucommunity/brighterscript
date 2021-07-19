@@ -131,7 +131,7 @@ class ComponentListBuilder {
                 //find all createObject calls
                 const regexp = /CreateObject\(.*?\)/g;
                 let match;
-                while (match = regexp.exec(document.body.innerHTML)) {
+                while (match = regexp.exec(manager.markdown)) {
                     const { statements } = Parser.parse(match[0]);
                     if (statements.length > 0) {
                         const signature = {
@@ -146,7 +146,7 @@ class ComponentListBuilder {
                                 const arg = call.args[i];
                                 signature.params.push({
                                     name: `param${i}`,
-                                    default: 'invalid',
+                                    default: undefined,
                                     isRequired: true,
                                     type: (arg as any).type?.toString() ?? 'dynamic',
                                     description: undefined

@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2021-07-17T18:59:34.638Z",
+    "generatedDate": "2021-07-19T14:16:01.669Z",
     "nodes": {},
     "components": {
         "roAppInfo": {
@@ -174,7 +174,6 @@
                     "params": [
                         {
                             "name": "param1",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "dynamic"
                         }
@@ -185,7 +184,6 @@
                     "params": [
                         {
                             "name": "param1",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "string"
                         }
@@ -210,7 +208,6 @@
                     "params": [
                         {
                             "name": "param1",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "string"
                         }
@@ -221,7 +218,6 @@
                     "params": [
                         {
                             "name": "param1",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "dynamic"
                         }
@@ -610,7 +606,6 @@
                     "params": [
                         {
                             "name": "param1",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "dynamic"
                         }
@@ -1130,7 +1125,6 @@
                     "params": [
                         {
                             "name": "param1",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "string"
                         }
@@ -1141,7 +1135,6 @@
                     "params": [
                         {
                             "name": "param1",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "dynamic"
                         }
@@ -1232,13 +1225,11 @@
                     "params": [
                         {
                             "name": "param1",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "string"
                         },
                         {
                             "name": "param2",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "string"
                         }
@@ -1294,7 +1285,6 @@
                     "params": [
                         {
                             "name": "param1",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "string"
                         }
@@ -1354,7 +1344,6 @@
                     "params": [
                         {
                             "name": "param1",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "boolean"
                         }
@@ -1365,19 +1354,16 @@
                     "params": [
                         {
                             "name": "param1",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "boolean"
                         },
                         {
                             "name": "param2",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "integer"
                         },
                         {
                             "name": "param3",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "integer"
                         }
@@ -1484,7 +1470,6 @@
                     "params": [
                         {
                             "name": "param1",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "string"
                         }
@@ -1798,7 +1783,6 @@
                     "params": [
                         {
                             "name": "param1",
-                            "default": "invalid",
                             "isRequired": true,
                             "type": "string"
                         }
