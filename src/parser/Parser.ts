@@ -3205,8 +3205,17 @@ export interface LocalVarEntry {
  * This way, we can access the adjacent tokens via their index instead of search
  */
 export interface TokenWithIndex {
-    token: Token; // The token
-    index: number; // Index of teh token in the parser's token list
+    /**
+     * The token
+     * */
+    token: Token;
+    /**
+     * Index of the token in the parser's token list
+     *  */
+    index: number;
+    /**
+     * Is it impossible to know the the type of this token (for now)
+     */
     tokenTypeIsNotKnowable?: boolean;
 }
 
