@@ -3,20 +3,28 @@ import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FunctionCall } from './interfaces';
 import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
-import { ParseMode, CallExpression } from './parser';
+import { ParseMode } from './parser';
 import { standardizePath as s, util } from './util';
+import type { MinMax } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isInvalidType, isDynamicType, isVariableExpression } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { SymbolTable } from './SymbolTable';
+import type { CustomType } from './types/CustomType';
+import { UninitializedType } from './types/UninitializedType';
+import { ObjectType } from './types/ObjectType';
+import { getTypeFromContext } from './types/BscType';
+import { DynamicType } from './types/DynamicType';
+
+
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
  */
@@ -30,6 +38,7 @@ export class Scope {
         //used for improved logging performance
         this._debugLogComponentName = `Scope '${chalk.redBright(this.name)}'`;
     }
+
 
     /**
      * Indicates whether this scope needs to be validated.
@@ -81,9 +90,25 @@ export class Scope {
     }
 
     /**
+   * Gets the parent class of the given class
+   * @param klass - The class to get the parent of, if possible
+   */
+    public getParentClass(klass: ClassStatement): ClassStatement {
+        if (klass?.hasParentClass()) {
+            const lowerParentClassNames = klass.getPossibleFullParentNames().map(name => name.toLowerCase());
+            for (const lowerParentClassName of lowerParentClassNames) {
+                const foundParent = this.getClassMap().get(lowerParentClassName);
+                if (foundParent) {
+                    return foundParent.item;
+                }
+            }
+        }
+    }
+
+    /**
     * Tests if a class exists with the specified name
     * @param className - the all-lower-case namespace-included class name
-    * @param containingNamespace - The namespace used to resolve relative class names. (i.e. the namespace around the current statement trying to find a class)
+    * @param namespaceName - the current namespace name
     */
     public hasClass(className: string, namespaceName?: string): boolean {
         return !!this.getClass(className, namespaceName);
@@ -109,6 +134,20 @@ export class Scope {
             });
             return map;
         });
+    }
+
+    public getAncestorTypeList(className: string, namespaceName?: string): CustomType[] {
+        const ancestors: CustomType[] = [];
+        let currentClass = this.getClassFileLink(className, namespaceName)?.item;
+        if (currentClass) {
+            ancestors.push(currentClass?.getCustomType());
+        }
+        while (currentClass?.hasParentClass()) {
+            currentClass = this.getParentClass(currentClass);
+            ancestors.push(currentClass?.getCustomType());
+        }
+        // TODO TYPES: this should probably be cached
+        return ancestors;
     }
 
     /**
@@ -152,7 +191,7 @@ export class Scope {
      */
     public getParentScope() {
         let scope: Scope;
-        //use the global scope if we didn't find a sope and this is not the global scope
+        //use the global scope if we didn't find a scope and this is not the global scope
         if (this.program.globalScope !== this) {
             scope = this.program.globalScope;
         }
@@ -453,18 +492,16 @@ export class Scope {
         //detect missing and incorrect-case script imports
         this.diagnosticValidateScriptImportPaths();
 
-        //enforce a series of checks on the bodies of class methods
-        this.validateClasses();
 
         //do many per-file checks
         this.enumerateBrsFiles((file) => {
-            this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
-            this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
+            //enforce a series of checks on the bodies of class methods
+            this.validateClasses(file);
             this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.diagnosticDetectInvalidFunctionExpressionTypes(file);
-            this.diagnosticDetectInvalidFunctionCalls(file);
+            this.diagnosticDetectInvalidFunctionCalls(file, callableContainerMap);
         });
     }
 
@@ -478,9 +515,11 @@ export class Scope {
         this.clearSymbolTable();
     }
 
+
     public get symbolTable() {
         if (!this._symbolTable) {
             this._symbolTable = new SymbolTable(this.getParentScope()?.symbolTable);
+            this._symbolTable.addSymbol('m', null, new ObjectType(this.memberTable));
             for (let file of this.getOwnFiles()) {
                 if (isBrsFile(file)) {
                     this._symbolTable.mergeSymbolTable(file.parser?.symbolTable);
@@ -490,9 +529,21 @@ export class Scope {
         return this._symbolTable;
     }
     private _symbolTable: SymbolTable;
+    protected _memberTable: SymbolTable;
 
-    private clearSymbolTable() {
+    public get memberTable() {
+        if (!this._memberTable) {
+            this._memberTable = new SymbolTable(this.getParentScope()?.memberTable);
+            if (!this.getParentScope()) {
+                this._memberTable.addSymbol('global', null, new ObjectType());
+            }
+        }
+        return this._memberTable;
+    }
+
+    protected clearSymbolTable() {
         this._symbolTable = null;
+        this._memberTable = null;
     }
 
     /**
@@ -501,16 +552,36 @@ export class Scope {
     * This will only rebuilt if the symbol table has not been built before
     */
     public linkSymbolTable() {
-        for (const file of this.getOwnFiles()) {
+        for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
-                file.parser?.symbolTable.setParent(this.symbolTable);
+                file.parser.symbolTable.setParent(this.symbolTable);
 
                 for (const namespace of file.parser.references.namespaceStatements) {
                     const namespaceNameLower = namespace.nameExpression.getName(ParseMode.BrighterScript).toLowerCase();
                     const namespaceSymbolTable = this.namespaceLookup[namespaceNameLower].symbolTable;
                     namespace.symbolTable.setParent(namespaceSymbolTable);
                 }
+                //TODO TYPES: build symbol tables for dotted set assignments using actual values
+                // Currently this is prone to call-stack issues.
+                // eg. m.key = "value"
+
+                for (const dotSetStmt of file.parser.references.dottedSetStatements) {
+                    if (isVariableExpression(dotSetStmt.obj)) {
+                        if (dotSetStmt.obj.getName(ParseMode.BrighterScript).toLowerCase() === 'm') {
+                            this.memberTable.addSymbol(dotSetStmt.name.text, dotSetStmt.range, new DynamicType());
+                            // TODO TYPES: get actual types: getBscTypeFromExpression(dotSetStmt.value, file.parser.references.getContainingFunctionExpression(dotSetStmt.name)));
+                        }
+                    } else {
+                        // TODO TYPES: What other types of expressions could these be?
+                    }
+                }
             }
+        }
+        // also link classes
+        const classMap = this.getClassMap();
+        for (const pair of classMap) {
+            const classStmt = pair[1]?.item;
+            classStmt?.buildSymbolTable(this.getParentClass(classStmt));
         }
     }
 
@@ -524,6 +595,7 @@ export class Scope {
                 }
             }
         }
+
     }
 
     private detectVariableNamespaceCollisions(file: BrsFile) {
@@ -606,9 +678,10 @@ export class Scope {
     */
     private diagnosticDetectInvalidFunctionExpressionTypes(file: BrsFile) {
         for (let func of file.parser.references.functionExpressions) {
-            if (isCustomType(func.returnType) && func.returnTypeToken) {
+            const returnType = getTypeFromContext(func.returnType, { file: file, scope: this, position: func.range?.start });
+            if (!returnType && func.returnTypeToken) {
                 // check if this custom type is in our class map
-                const returnTypeName = func.returnType.name;
+                const returnTypeName = func.returnTypeToken.text;
                 const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
                 if (!this.hasClass(returnTypeName, currentNamespaceName)) {
                     this.diagnostics.push({
@@ -620,8 +693,9 @@ export class Scope {
             }
 
             for (let param of func.parameters) {
-                if (isCustomType(param.type) && param.typeToken) {
-                    const paramTypeName = param.type.name;
+                const paramType = getTypeFromContext(param.type, { file: file, scope: this, position: param.range?.start });
+                if (!paramType && param.typeToken) {
+                    const paramTypeName = param.typeToken.text;
                     const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
                     if (!this.hasClass(paramTypeName, currentNamespaceName)) {
                         this.diagnostics.push({
@@ -636,34 +710,98 @@ export class Scope {
         }
     }
 
+    /**
+    * Find functions with either the wrong type of parameters, or the wrong number of parameters
+    */
+    private diagnosticDetectInvalidFunctionCalls(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
+        if (isBrsFile(file)) {
+            for (let expCall of file.functionCalls) {
+                const symbolTypeInfo = file.getSymbolTypeFromToken(expCall.name, expCall.functionExpression, this);
+                let funcType = symbolTypeInfo.type;
+                if (!isFunctionType(funcType) && !isDynamicType(funcType)) {
+                    // We don't know if this is a function. Try seeing if it is a global
+                    const callableContainer = util.getCallableContainerByFunctionCall(callableContainersByLowerName, expCall);
+                    if (callableContainer) {
+                        // We found a global callable with correct number of params - use that
+                        funcType = callableContainer.callable?.type;
+                    } else {
+                        const allowedParamCount = util.getMinMaxParamCountByFunctionCall(callableContainersByLowerName, expCall);
+                        if (allowedParamCount) {
+                            // We found a global callable, but it needs a different number of args
+                            this.addMismatchParamCountDiagnostic(allowedParamCount, expCall, file);
+                            continue;
+                        }
+                    }
+                }
+                if (isFunctionType(funcType)) {
+                    // Check for Argument count mismatch.
+                    //get min/max parameter count for callable
+                    let paramCount = util.getMinMaxParamCount(funcType.params);
+                    if (expCall.args.length > paramCount.max || expCall.args.length < paramCount.min) {
+                        this.addMismatchParamCountDiagnostic(paramCount, expCall, file);
+                    }
 
-    private diagnosticDetectInvalidFunctionCalls(file: BscFile) {
-        for (let expCall of file.functionCalls) {
-            const funcType = expCall.functionExpression.symbolTable.getSymbolType(expCall.name);
-
-            if (!isFunctionType(funcType)) {
-                // can not find function. Handled in a different validation function
-                continue;
-            }
-            if (funcType.params.length !== expCall.args.length) {
-                // Argument count mismatch. Handled in a different validation function
-                continue;
-            }
-
-            for (let index = 0; index < funcType.params.length; index++) {
-                const param = funcType.params[index];
-                const arg = expCall.args[index];
-                const argType = arg.type;
-
-                if (!argType.isAssignableTo(param.type)) {
+                    // Check for Argument type mismatch.
+                    const paramTypeContext = { file: file, scope: this, position: expCall.functionExpression.range?.start };
+                    const argTypeContext = { file: file, scope: this, position: expCall.range?.start };
+                    for (let index = 0; index < funcType.params.length; index++) {
+                        const param = funcType.params[index];
+                        const arg = expCall.args[index];
+                        if (!arg) {
+                            // not enough args
+                            break;
+                        }
+                        let argType = arg.type ?? new UninitializedType();
+                        let assignable = false;
+                        const paramType = getTypeFromContext(param.type, paramTypeContext);
+                        if (!paramType) {
+                            // other error - can not determine what type this parameter should be
+                            continue;
+                        }
+                        argType = getTypeFromContext(argType, argTypeContext);
+                        if (isCustomType(argType)) {
+                            const lowerNamespaceName = expCall.functionExpression.namespaceName?.getName().toLowerCase();
+                            assignable = argType.isAssignableTo(paramType, argTypeContext, this.getAncestorTypeList(argType.name, lowerNamespaceName));
+                        } else {
+                            assignable = argType?.isAssignableTo(paramType, argTypeContext);
+                        }
+                        if (!assignable) {
+                            // TODO TYPES: perhaps this should be a strict mode setting?
+                            assignable = argType?.isConvertibleTo(paramType, argTypeContext);
+                        }
+                        if (!assignable) {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.argumentTypeMismatch(argType?.toString(argTypeContext), paramType.toString(paramTypeContext)),
+                                range: arg?.range,
+                                file: file
+                            });
+                        }
+                    }
+                } else if (isInvalidType(symbolTypeInfo.type)) {
+                    // TODO TYPES: standard member functions like integer.ToStr() are not detectable yet.
+                } else if (isDynamicType(symbolTypeInfo.type)) {
+                    // maybe this is a function? who knows
+                } else {
+                    const functionNameText = symbolTypeInfo.expandedTokenText;
                     this.diagnostics.push({
-                        ...DiagnosticMessages.argumentTypeMismatch(arg.type.toTypeString(), param.type.toTypeString()),
-                        range: arg.range,
+                        ...DiagnosticMessages.callToUnknownFunction(functionNameText, this.name),
+                        range: expCall.nameRange,
+                        //TODO detect end of expression call
                         file: file
                     });
                 }
             }
         }
+    }
+
+    private addMismatchParamCountDiagnostic(paramCount: MinMax, expCall: FunctionCall, file: BscFile) {
+        const minMaxParamsText = paramCount.min === paramCount.max ? paramCount.max : `${paramCount.min}-${paramCount.max}`;
+        const expCallArgCount = expCall.args.length;
+        this.diagnostics.push({
+            ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
+            range: expCall.nameRange,
+            file: file
+        });
     }
 
     public getNewExpressions() {
@@ -678,46 +816,10 @@ export class Scope {
         return result;
     }
 
-    private validateClasses() {
+    private validateClasses(file: BrsFile) {
         let validator = new BsClassValidator();
-        validator.validate(this);
+        validator.validate(this, file);
         this.diagnostics.push(...validator.diagnostics);
-    }
-
-    /**
-     * Detect calls to functions with the incorrect number of parameters
-     * @param file
-     * @param callableContainersByLowerName
-     */
-    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
-        //validate all function calls
-        for (let expCall of file.functionCalls) {
-            let callableContainersWithThisName = callableContainersByLowerName.get(expCall.name.toLowerCase());
-
-            if (callableContainersWithThisName && callableContainersWithThisName.length > 0) {
-                // There are some global functions with the same name, but different return types and param counts - see "Val()"
-                let paramCount = { min: CallExpression.MaximumArguments, max: 0 };
-                for (const callableContainer of callableContainersWithThisName) {
-                    let specificParamCount = util.getMinMaxParamCount(callableContainer.callable.params);
-                    if (specificParamCount.max > paramCount.max) {
-                        paramCount.max = specificParamCount.max;
-                    }
-                    if (specificParamCount.min < paramCount.min) {
-                        paramCount.min = specificParamCount.min;
-                    }
-                }
-                let expCallArgCount = expCall.args.length;
-                if (expCall.args.length > paramCount.max || expCall.args.length < paramCount.min) {
-                    let minMaxParamsText = paramCount.min === paramCount.max ? paramCount.max : `${paramCount.min}-${paramCount.max}`;
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
-                        range: expCall.nameRange,
-                        //TODO detect end of expression call
-                        file: file
-                    });
-                }
-            }
-        }
     }
 
     /**
@@ -730,7 +832,7 @@ export class Scope {
 
         for (let func of file.parser.references.functionExpressions) {
             //every var declaration in this function expression
-            for (let symbol of func.symbolTable.ownSymbols) {
+            for (let symbol of func.symbolTable.getOwnSymbols()) {
                 const symbolNameLower = symbol.name.toLowerCase();
                 //if the var is a function
                 if (isFunctionType(symbol.type)) {
@@ -779,48 +881,6 @@ export class Scope {
                             file: file
                         });
                     }
-                }
-            }
-        }
-    }
-
-    /**
-     * Detect calls to functions that are not defined in this scope
-     * @param file
-     * @param callablesByLowerName
-     */
-    private diagnosticDetectCallsToUnknownFunctions(file: BscFile, callablesByLowerName: CallableContainerMap) {
-        //validate all expression calls
-        for (let expCall of file.functionCalls) {
-            if (isBrsFile(file)) {
-                const lowerName = expCall.name.toLowerCase();
-                //for now, skip validation on any method named "super" within `.bs` contexts.
-                //TODO revise this logic so we know if this function call resides within a class constructor function
-                if (file.extension === '.bs' && lowerName === 'super') {
-                    continue;
-                }
-
-                //find a local variable with this name
-                const localSymbol = file.getFunctionExpressionAtPosition(expCall.nameRange.start)?.symbolTable.getSymbol(lowerName);
-
-                //if we don't already have a variable with this name.
-                if (!localSymbol) {
-                    const callablesWithThisName = util.getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName, expCall);
-
-                    //use the first item from callablesByLowerName, because if there are more, that's a separate error
-                    let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
-
-                    //detect calls to unknown functions
-                    if (!knownCallable) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.callToUnknownFunction(expCall.name, this.name),
-                            range: expCall.nameRange,
-                            file: file
-                        });
-                    }
-                } else {
-                    //if we found a variable with the same name as the function, assume the call is "known".
-                    //If the variable is a different type, some other check should add a diagnostic for that.
                 }
             }
         }
@@ -1067,7 +1127,7 @@ export class Scope {
     }
 }
 
-interface NamespaceContainer {
+export interface NamespaceContainer {
     file: BscFile;
     fullName: string;
     nameRange: Range;

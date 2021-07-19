@@ -5,13 +5,16 @@ import type { BrsFile } from './BrsFile';
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { Diagnostic } from 'vscode-languageserver';
-import { Range, DiagnosticSeverity } from 'vscode-languageserver';
+import { Range, DiagnosticSeverity, Position } from 'vscode-languageserver';
 import { ParseMode } from '../parser/Parser';
 import { expectZeroDiagnostics, getTestTranspile } from '../testHelpers.spec';
 import { standardizePath as s } from '../util';
 import * as fsExtra from 'fs-extra';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { doesNotThrow } from 'assert';
+import type { Scope } from '../Scope';
+import { isCustomType, isFunctionType } from '../astUtils/reflection';
+import type { CustomType } from '../types/CustomType';
 
 let sinon = sinonImport.createSandbox();
 
@@ -176,7 +179,7 @@ describe('BrsFile BrighterScript classes', () => {
                 class Duck extends Bird
                     sub new()
                         m.name = m.name + "Duck"
-                        super()
+                        super(m.name)
                     end sub
                 end class
             `);
@@ -379,6 +382,9 @@ describe('BrsFile BrighterScript classes', () => {
                 class Animal
                     sub new(name as string)
                     end sub
+
+                    sub DoSomething()
+                    end sub
                 end class
 
                 class Duck extends Animal
@@ -391,6 +397,8 @@ describe('BrsFile BrighterScript classes', () => {
                 function __Animal_builder()
                     instance = {}
                     instance.new = sub(name as string)
+                    end sub
+                    instance.DoSomething = sub()
                     end sub
                     return instance
                 end function
@@ -1177,5 +1185,341 @@ describe('BrsFile BrighterScript classes', () => {
         doesNotThrow(() => {
             file.parser.references.classStatements[0].getParentClassIndex(new BrsTranspileState(file));
         });
+    });
+
+    describe('getHover', () => {
+
+        const animalClassCode = `
+        class Animal
+            kind as string
+            isHungry as boolean
+
+            sub new(kind as string)
+                m.kind = kind
+                m.isHungry = true ' born hungry
+            end sub
+
+            sub eat(foodAmount as integer)
+                if foodAmount > 100
+                  m.isHungry = false
+                end if
+            end sub
+
+            sub sleep()
+              m.isHungry = false
+            end sub
+
+        end class
+
+        class Dog extends Animal
+            breed as string
+            sub new(breed as string)
+                super("Dog")
+                m.breed = breed
+            end sub
+
+            sub snooze()
+                m.sleep()
+            end sub
+        end class
+
+        class DogHouse
+            puppy as Dog
+            sub new(pup as Dog)
+                m.puppy = pup
+            end sub
+        end class
+
+        sub main()
+            snoopy = new Dog("Beagle")
+            biplane = new DogHouse(snoopy)
+            print snoopy.kind ' Dog
+            print snoopy.breed ' Beagle
+            print snoopy.isHungry ' true
+            feedAnimal(biplane.puppy)
+            print snoopy.isHungry ' false
+        end sub
+
+        sub feedAnimal(beast as Animal)
+            beast.eat(100)
+        end sub
+        `;
+
+        it('correctly parses the file', () => {
+            program.setFile('source/animal.bs', animalClassCode);
+            program.validate();
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+
+        it('gets the correct text for m', () => {
+            let animalCode = program.setFile('source/animal.bs', animalClassCode);
+            program.validate();
+            let hover = animalCode.getHover(Position.create(6, 17));
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('m as Animal');
+
+            hover = animalCode.getHover(Position.create(26, 17));
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('m as Dog');
+        });
+
+        it('gets the correct text for m.field', () => {
+            let animalCode = program.setFile('source/animal.bs', animalClassCode);
+            program.validate();
+            let hover = animalCode.getHover(Position.create(6, 19));
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('Animal.kind as string');
+
+            hover = animalCode.getHover(Position.create(26, 19));
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('Dog.breed as string');
+        });
+
+        it('gets the correct text for m.method', () => {
+            let animalCode = program.setFile('source/animal.bs', animalClassCode);
+            program.validate();
+            let hover = animalCode.getHover(Position.create(30, 21));
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('sub Animal.sleep() as void');
+        });
+
+        it('gets the correct text for obj.field', () => {
+            let animalCode = program.setFile('source/animal.brs', animalClassCode);
+            program.validate();
+            let hover = animalCode.getHover(Position.create(46, 29));
+            expect(hover).to.exist;
+            //TODO TYPES: This should probably say 'Animal.isHungry ...' because that field is defined in Animal
+            expect(hover.contents).to.equal('Dog.isHungry as boolean');
+        });
+
+        it('gets the correct text for obj.method', () => {
+            let animalCode = program.setFile('source/animal.bs', animalClassCode);
+            program.validate();
+            let hover = animalCode.getHover(Position.create(52, 21));
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('sub Animal.eat(foodAmount as integer) as void');
+        });
+    });
+
+    describe('getHover class members', () => {
+        const testCode = `
+            class Foo
+                sub new(name as string)
+                end sub
+            end class
+
+            class Bar
+                sub doSomething()
+                    myFoo = new Foo()
+                end sub
+
+                function getInt() as integer
+                    return 1
+                end function
+            end class
+
+            class Buz
+                myInt as integer
+                sub new(i as integer)
+                    myInt = i
+                end sub
+            end class
+
+            class Bee extends Buz
+                sub new(i as integer)
+                    super(i)
+                end sub
+
+                sub varSameNameAsMember()
+                   myInt = 4567
+                   print myInt ' should not print m.myInt
+                end sub
+            end class`;
+
+        it('correctly parses the file', () => {
+            program.setFile('source/fooBar.bs', testCode);
+            program.validate();
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+
+        it('gets the correct text for new Class()', () => {
+            let file = program.setFile('source/fooBar.bs', testCode);
+            program.validate();
+            let hover = file.getHover(Position.create(8, 34)); // new Foo("hello")
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('new Foo(name as string)');
+        });
+
+        it('gets the correct text for created object', () => {
+            let file = program.setFile('source/fooBar.bs', testCode);
+            program.validate();
+            let hover = file.getHover(Position.create(8, 23)); // myFoo
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('myFoo as Foo');
+        });
+
+        it('gets the correct text for class declaration', () => {
+            let file = program.setFile('source/fooBar.bs', testCode);
+            program.validate();
+            let hover = file.getHover(Position.create(6, 21)); // class Bar
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('class Bar');
+        });
+
+        it('gets the correct text for class method declaration', () => {
+            let file = program.setFile('source/fooBar.bs', testCode);
+            program.validate();
+            let hover = file.getHover(Position.create(11, 29)); // getInt
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('function Bar.getInt() as integer');
+        });
+
+        it('gets the correct text for class field declaration', () => {
+            let file = program.setFile('source/fooBar.bs', testCode);
+            program.validate();
+            let hover = file.getHover(Position.create(17, 20)); // myInt
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('Buz.myInt as integer');
+        });
+
+        it('gets the correct text for super() call', () => {
+            let file = program.setFile('source/fooBar.bs', testCode);
+            program.validate();
+            let hover = file.getHover(Position.create(25, 23)); // super() in Bee.new
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('new Buz(i as integer)');
+        });
+
+        it('gets the correct text for variable with same name as a member', () => {
+            let file = program.setFile('source/fooBar.bs', testCode);
+            program.validate();
+            let hover = file.getHover(Position.create(29, 23)); // myInt in Bee.varSameNameAsMember
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('myInt as integer');
+        });
+    });
+
+    describe('getSymbolTypeFromToken', () => {
+        const testClassCode = `
+        class KlassA
+            function getInt() as integer
+                return 1
+            end function
+
+            sub printInt(i as integer)
+                print i
+            end sub
+        end class
+
+        class KlassB
+
+            function getA() as KlassA
+                return new KlassA()
+            end function
+        end class
+
+        class KlassC
+            public b as KlassB
+
+            sub new()
+                m.b = new KlassB()
+            end sub
+        end class
+
+        sub main()
+            c = new KlassC()
+            a = c.b.getA()
+            num = c.b.getA().getInt()
+            c.b.getA().printInt(num)
+        end sub
+        `;
+
+        it('correctly parses the file', () => {
+            program.setFile('source/klassTest.bs', testClassCode);
+            program.validate();
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+
+        describe('finding tokens', () => {
+            let klassCode: BrsFile;
+            let mainScope: Scope;
+            beforeEach(() => {
+                klassCode = program.setFile<BrsFile>('source/klassTest.bs', testClassCode);
+                const scopes = program.getScopesForFile(klassCode);
+                expect(scopes.length).to.eql(1);
+                mainScope = scopes[0];
+                mainScope.linkSymbolTable();
+            });
+            afterEach(() => {
+                mainScope.unlinkSymbolTable();
+            });
+
+            it('gets correct class for m', () => {
+                const position = Position.create(22, 17); // 'm' from m.b = new KlassB()
+                const token = klassCode.parser.getTokenAt(position);
+                expect(token.text).to.equal('m');
+                const func = klassCode.getFunctionExpressionAtPosition(position);
+                let klass = klassCode.getClassFromToken(token, func, mainScope)?.item;
+                expect(klass).to.exist;
+                expect(klass.getName(ParseMode.BrighterScript)).to.equal('KlassC');
+            });
+
+            it('gets correct class for fieldMember', () => {
+                const position = Position.create(22, 19); // 'b' from m.b = new KlassB()
+                const token = klassCode.parser.getTokenAt(position);
+                expect(token.text).to.equal('b');
+                const func = klassCode.getFunctionExpressionAtPosition(position);
+                let klass = klassCode.getClassFromToken(token, func, mainScope)?.item;
+                expect(klass).to.exist;
+                expect(klass.getName(ParseMode.BrighterScript)).to.equal('KlassB');
+            });
+
+            it('gets correct class for variable', () => {
+                const position = Position.create(28, 17); // 'c' from c.b.getA().getInt()
+                const token = klassCode.parser.getTokenAt(position);
+                expect(token.text).to.equal('c');
+                const func = klassCode.getFunctionExpressionAtPosition(position);
+                let klass = klassCode.getClassFromToken(token, func, mainScope)?.item;
+                expect(klass).to.exist;
+                expect(klass.getName(ParseMode.BrighterScript)).to.equal('KlassC');
+            });
+
+            it('gets correct class for variable field', () => {
+                const position = Position.create(28, 19); // 'b' from c.b.getA()
+                const token = klassCode.parser.getTokenAt(position);
+                expect(token.text).to.equal('b');
+                const func = klassCode.getFunctionExpressionAtPosition(position);
+                let klass = klassCode.getClassFromToken(token, func, mainScope)?.item;
+                expect(klass).to.exist;
+                expect(klass.getName(ParseMode.BrighterScript)).to.equal('KlassB');
+            });
+
+
+            it('gets type and return class for variable function field', () => {
+                const position = Position.create(28, 23); // 'getA' from c.b.getA()
+                const token = klassCode.parser.getTokenAt(position);
+                expect(token.text).to.equal('getA');
+                const func = klassCode.getFunctionExpressionAtPosition(position);
+                let { type, symbolContainer } = klassCode.getSymbolTypeFromToken(token, func, mainScope);
+                expect(type).to.exist;
+                expect(isFunctionType(type)).to.be.true;
+                expect(symbolContainer).to.exist;
+                expect(isCustomType(symbolContainer)).to.be.true;
+                expect((symbolContainer as CustomType).name).to.equal('KlassA');
+            });
+
+            it('gets type and class for field from return value of function', () => {
+                const position = Position.create(29, 30); // 'getInt' from c.b.getA().getInt()
+                const token = klassCode.parser.getTokenAt(position);
+                expect(token.text).to.equal('getInt');
+                const func = klassCode.getFunctionExpressionAtPosition(position);
+                let { type, symbolContainer } = klassCode.getSymbolTypeFromToken(token, func, mainScope);
+                expect(type).to.exist;
+                expect(isFunctionType(type)).to.be.true;
+                expect(symbolContainer).to.be.undefined; // getInt() returns integer - no class reference at this point
+            });
+
+        });
+
     });
 });

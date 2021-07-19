@@ -911,7 +911,7 @@ describe('Program', () => {
             expect(completions.map(x => x.label)).to.include('NameA_NameB_NameC_DoSomething');
         });
 
-        it('inlcudes global completions for file with no scope', () => {
+        it('includes global completions for file with no scope', () => {
             program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'main.brs' }, `
                 function Main()
                     age = 1
@@ -1182,7 +1182,7 @@ describe('Program', () => {
         ).to.eql(['MyClassA', 'MyClassB', 'MyClassC']);
     });
 
-    it('gets completions when using callfunc inovation', () => {
+    it('gets completions when using callfunc invocation', () => {
         program.setFile('source/main.bs', `
             function main()
                 myNode@.sayHello(arg1)
@@ -1490,7 +1490,7 @@ describe('Program', () => {
             //declare file with two different syntax errors
             program.setFile({ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub A()
-                    'call with wrong param count
+                    'call with wrong param count AND wrong parameter type
                     B(1,2,3)
 
                     'call unknown function
@@ -1502,14 +1502,15 @@ describe('Program', () => {
             `);
 
             program.validate();
-            expect(program.getDiagnostics()).to.be.lengthOf(2);
+            expect(program.getDiagnostics()).to.be.lengthOf(3);
 
             program.options.diagnosticFilters = [
                 DiagnosticMessages.mismatchArgumentCount(0, 0).code
             ];
 
-            expect(program.getDiagnostics()).to.be.lengthOf(1);
-            expect(program.getDiagnostics()[0].code).to.equal(DiagnosticMessages.callToUnknownFunction('', '').code);
+            expect(program.getDiagnostics()).to.be.lengthOf(2);
+            expect(program.getDiagnostics()[0].code).to.equal(DiagnosticMessages.argumentTypeMismatch('string', 'integer').code);
+            expect(program.getDiagnostics()[1].code).to.equal(DiagnosticMessages.callToUnknownFunction('', '').code);
         });
     });
 
@@ -1816,7 +1817,7 @@ describe('Program', () => {
             sinon.stub(file.parser, 'getPreviousToken').returns(undefined);
             //should not crash
             expect(
-                file['getClassFromMReference'](util.createPosition(2, 3), createToken(TokenKind.Dot, '.'), null)
+                file['getClassFromToken'](createToken(TokenKind.Dot, '.'), null, null)
             ).to.be.undefined;
         });
 
@@ -1998,6 +1999,7 @@ describe('Program', () => {
         it('does not get signature help for callfunc method, referenced by dot', () => {
             program.setFile('source/main.bs', `
                 function main()
+                    myNode = CreateObject("roSGScreen").CreateScene("Component1")
                     myNode.sayHello(arg1)
                 end function
             `);
@@ -2015,7 +2017,7 @@ describe('Program', () => {
                 </component>`);
             program.validate();
 
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(4, 36)));
             expect(program.getDiagnostics()).to.be.empty;
             //note - callfunc completions and signatures are not yet correctly identifying methods that are exposed in an interace - waiting on the new xml branch for that
             expect(signatureHelp).to.be.empty;

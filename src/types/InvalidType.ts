@@ -1,4 +1,4 @@
-import { isDynamicType, isInvalidType } from '../astUtils/reflection';
+import { isCustomType, isDynamicType, isInvalidType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 export class InvalidType implements BscType {
@@ -10,7 +10,7 @@ export class InvalidType implements BscType {
     }
 
     public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+        return this.isAssignableTo(targetType) || isCustomType(targetType) || isObjectType(targetType);
     }
 
     public toString() {

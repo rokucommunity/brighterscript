@@ -406,7 +406,7 @@ export class Program {
             pkgPath = util.sanitizePkgPath(fileParam.dest);
         }
         const lowerPkgPath = pkgPath.toLowerCase();
-        return this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(srcPath)], () => {
+        return this.logger.time(LogLevel.debug, ['program.setFile()', chalk.green(srcPath)], () => {
 
             assert.ok(srcPath, 'srcPath is required');
             assert.ok(pkgPath, 'pkgPath is required');
@@ -846,7 +846,12 @@ export class Program {
 
         //get the completions from all scopes for this file
         let allCompletions = util.flatMap(
-            scopes.map(ctx => file.getCompletions(position, ctx)),
+            scopes.map(ctx => {
+                ctx.linkSymbolTable();
+                const completions = file.getCompletions(position, ctx);
+                ctx.unlinkSymbolTable();
+                return completions;
+            }),
             c => c
         );
 
@@ -987,9 +992,11 @@ export class Program {
             //if m class reference.. then
             //only get statements from the class I am in..
             if (functionExpression) {
-                let myClass = file.getClassFromMReference(position, file.parser.getTokenAt(position), functionExpression);
-                if (myClass) {
-                    for (let scope of this.getScopesForFile(myClass.file)) {
+                const currentToken = file.parser.getTokenAt(position);
+                for (let scope of this.getScopesForFile(file)) {
+                    scope.linkSymbolTable();
+                    let myClass = file.getClassFromToken(currentToken, functionExpression, scope);
+                    if (myClass) {
                         let classes = scope.getClassHierarchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
                         //and anything from any class in scope to a non m class
                         for (let statement of [...classes].filter((i) => isClassMethodStatement(i.item))) {
@@ -1001,7 +1008,9 @@ export class Program {
                             }
                         }
                     }
+                    scope.unlinkSymbolTable();
                 }
+
             }
 
             if (identifierInfo.dotPart) {

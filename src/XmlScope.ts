@@ -5,9 +5,11 @@ import type { XmlFile } from './files/XmlFile';
 import type { BscFile, CallableContainerMap, FileReference } from './interfaces';
 import type { Program } from './Program';
 import util from './util';
-import { isSGInterfaceFunction, isXmlFile } from './astUtils/reflection';
+import { isSGInterfaceField, isSGInterfaceFunction, isXmlFile, isXmlScope } from './astUtils/reflection';
 import { SGFieldTypes } from './parser/SGTypes';
 import type { SGTag } from './parser/SGTypes';
+import { SymbolTable } from './SymbolTable';
+import { ObjectType } from './types/ObjectType';
 
 export class XmlScope extends Scope {
     constructor(
@@ -38,6 +40,44 @@ export class XmlScope extends Scope {
                 return this.program.globalScope;
             }
         });
+    }
+    private _topTable: SymbolTable;
+
+    protected clearSymbolTable() {
+        super.clearSymbolTable();
+        this._topTable = null;
+    }
+
+    public get topTable() {
+        if (!this._topTable) {
+            const parentScope = this.getParentScope();
+            this._topTable = new SymbolTable();
+            if (isXmlScope(parentScope)) {
+                this._topTable.setParent(parentScope.topTable);
+            }
+        }
+        return this._topTable;
+    }
+
+    public get memberTable() {
+        if (!this._memberTable) {
+            this._memberTable = new SymbolTable(this.getParentScope()?.memberTable);
+            const interfaceMembers = this.xmlFile.parser.ast?.component?.interfaceMembers ?? [];
+
+            for (const member of interfaceMembers) {
+                //validate functions
+                if (isSGInterfaceFunction(member)) {
+                    if (member.name) {
+                        // TODO TYPES: Should add something here for @callFunc types?
+                        // this.callFuncTable.addSymbol(member.name, member.range, member.functionType);
+                    }
+                } else if (isSGInterfaceField(member) && member?.id) {
+                    this.topTable.addSymbol(member.id, member.range, member.bscType);
+                }
+            }
+            this._memberTable.addSymbol('top', this.xmlFile.fileRange, new ObjectType(this.topTable));
+        }
+        return this._memberTable;
     }
 
     protected _validate(callableContainerMap: CallableContainerMap) {

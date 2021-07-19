@@ -11,7 +11,9 @@ import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser';
 import type { FunctionType } from './types/FunctionType';
-import { UninitializedType } from './types/UninitializedType';
+import { isFloatType } from './astUtils/reflection';
+import type { SymbolTable } from './SymbolTable';
+import type { Scope } from './Scope';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -199,7 +201,7 @@ describe('Scope', () => {
                     sayMyName = function(name as string)
                     end function
 
-                    sayMyName()
+                    sayMyName("hello")
                 end sub`
             );
             program.validate();
@@ -230,7 +232,7 @@ describe('Scope', () => {
                 });
             });
 
-            it('warns when local var has same name as built-in function', () => {
+            it('warns when local var has same name as built-in function (shadow)', () => {
                 program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         str = 12345
@@ -242,7 +244,7 @@ describe('Scope', () => {
                 expect(diagnostics[0]?.message).not.to.exist;
             });
 
-            it('warns when local var has same name as built-in function', () => {
+            it('warns when local var has same name as built-in function (does not override)', () => {
                 program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         str = 6789
@@ -362,6 +364,30 @@ describe('Scope', () => {
             });
         });
 
+        it('properly validates function chains on global callables', () => {
+            program.setFile('source/file.brs', `
+                sub testFunctionChainOnGlobalCallable()
+                    print str(123).replace("1", "").trim()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('properly validates function chains on functions returning primitives', () => {
+            program.setFile('source/file.brs', `
+                function getStr(num as integer) as string
+                    return num.toStr()
+                end function
+
+                sub testFunctionChainOnGlobalCallable()
+                    print getStr(123).replace("1", "").trim()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('does not error with calls to callables in same namespace', () => {
             program.setFile('source/file.bs', `
                 namespace Name.Space
@@ -412,13 +438,110 @@ describe('Scope', () => {
             expect(program.getDiagnostics().length).to.equal(0);
         });
 
-        //We don't currently support someObj.callSomething() format, so don't throw errors on those
         it('does not fail on object callables', () => {
             expect(program.getDiagnostics().length).to.equal(0);
             program.setFile('source/file.brs', `
                function DoB()
+                    m.doSomething = sub()
+                    end sub
                     m.doSomething()
                 end function
+            `);
+            //validate the scope
+            program.validate();
+            //shouldn't have any errors
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([]);
+        });
+
+        it('does not fail on primitive type callables', () => {
+            expect(program.getDiagnostics().length).to.equal(0);
+            program.setFile('source/file.brs', `
+                sub takesInt(i as integer)
+                end sub
+
+                sub takesString(s as string)
+                end sub
+
+                function test()
+                    myStr = "1234"
+                    print myStr.toInt()
+                    print myStr.toInt().toStr().trim()
+                    takesString(myStr.toInt().toStr().trim())
+                    myInt = 1234
+                    print myInt.toStr()
+                    print myInt.trim()
+                    takesInt(myInt.trim().toInt())
+                end function
+            `);
+            //validate the scope
+            program.validate();
+            //shouldn't have any errors
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([]);
+        });
+
+        it('does not fail on using fields of objects', () => {
+            expect(program.getDiagnostics().length).to.equal(0);
+            program.setFile('source/file.brs', `
+                sub takesInt(i as integer)
+                end sub
+
+                sub takesObj(obj as object)
+                  age = obj.age
+                  takesInt(obj.age)
+                  takesInt(age)
+                end sub
+            `);
+            //validate the scope
+            program.validate();
+            //shouldn't have any errors
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([]);
+        });
+
+
+        it('does not fail on using array values ', () => {
+            expect(program.getDiagnostics().length).to.equal(0);
+            program.setFile('source/file.brs', `
+                sub takesInt(i as integer)
+                end sub
+
+                sub takesArray(arr as object)
+                    myArray = [1,2,3]
+                    takesInt(arr[2])
+                    takesInt(myArray[2])
+                    arrVal = arr[2]
+                    myArrayVal = myArray[2]
+                    takesInt(arrVal)
+                    takesInt(myArrayVal)
+                end sub
+            `);
+            //validate the scope
+            program.validate();
+            //shouldn't have any errors
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([]);
+        });
+
+        it('does not fail on calling functions on objects', () => {
+            expect(program.getDiagnostics().length).to.equal(0);
+            program.setFile('source/file.brs', `
+                sub takesObj(obj as object)
+                  obj.someFunc()
+                  obj.field.SomeFunc()
+                end sub
+            `);
+            //validate the scope
+            program.validate();
+            //shouldn't have any errors
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([]);
+        });
+
+        it('does not fail on calling functions on array objects', () => {
+            expect(program.getDiagnostics().length).to.equal(0);
+            program.setFile('source/file.brs', `
+                sub takesArray(arr as object)
+                  arr.someFunc()
+                  arr[0].anotherFunc()
+                  arr[0].field.anotherFunc()
+                end sub
             `);
             //validate the scope
             program.validate();
@@ -618,6 +741,156 @@ describe('Scope', () => {
             );
         });
 
+        it('correctly validates correct parameters that are class members', () => {
+            program.setFile('source/main.bs', `
+            class PiHolder
+                pi = 3.14
+            end class
+
+            sub takesFloat(fl as float)
+            end sub
+
+            sub someFunc()
+                holder = new PiHolder()
+                takesFloat(holder.pi)
+            end sub`);
+            program.validate();
+            //should have no error
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+
+        it('correctly validates wrong parameters that are class members', () => {
+            program.setFile('source/main.bs', `
+            class PiHolder
+                pi = 3.14
+                name = "hello"
+            end class
+
+            sub takesFloat(fl as float)
+            end sub
+
+            sub someFunc()
+                holder = new PiHolder()
+                takesFloat(holder.name)
+            end sub`);
+            program.validate();
+            //should have error: holder.name is string
+            expect(program.getDiagnostics().length).to.equal(1);
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('string', 'float').message
+            );
+        });
+
+        it('allows conversions for arguments', () => {
+            program.setFile('source/main.bs', `
+            sub takesFloat(fl as float)
+            end sub
+
+            sub someFunc()
+                takesFloat(1)
+            end sub`);
+            program.validate();
+            //should have no error
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+
+        it('allows subclasses as arguments', () => {
+            program.setFile('source/main.bs', `
+
+            class Animal
+            end class
+
+            class Dog extends Animal
+            end class
+
+            class Retriever extends Dog
+            end class
+
+            class Lab extends Retriever
+            end class
+
+            sub takesAnimal(thing as Animal)
+            end sub
+
+            sub someFunc()
+                fido = new Lab()
+                takesAnimal(fido)
+            end sub`);
+            program.validate();
+            //should have no error
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+
+        it('allows subclasses from namespaces as arguments', () => {
+            program.setFile('source/main.bs', `
+
+            class Outside
+            end class
+
+            class ChildOutExtendsInside extends NS.Inside
+            end class
+
+            namespace NS
+                class Inside
+                end class
+
+                class ChildInExtendsOutside extends Outside
+                end class
+
+                class ChildInExtendsInside extends Inside
+                    sub methodTakesInside(i as Inside)
+                    end sub
+                end class
+
+                sub takesInside(klass as Inside)
+                end sub
+
+                sub testFuncInNamespace()
+                    takesOutside(new Outside())
+                    takesOutside(new NS.ChildInExtendsOutside())
+
+                    ' These call NS.takesInside
+                    takesInside(new NS.Inside())
+                    takesInside(new Inside())
+                    takesInside(new NS.ChildInExtendsInside())
+                    takesInside(new ChildInExtendsInside())
+                    takesInside(new ChildOutExtendsInside())
+
+                    child = new ChildInExtendsInside()
+                    child.methodTakesInside(new Inside())
+                    child.methodTakesInside(new ChildInExtendsInside())
+                    child.methodTakesInside(new ChildOutExtendsInside())
+                end sub
+
+            end namespace
+
+            sub takesOutside(klass as Outside)
+            end sub
+
+            sub takesInside(klass as NS.Inside)
+            end sub
+
+            sub testFunc()
+                takesOutside(new Outside())
+                takesOutside(new NS.ChildInExtendsOutside())
+
+                takesInside(new NS.Inside())
+                takesInside(new NS.ChildInExtendsInside())
+                takesInside(new ChildOutExtendsInside())
+
+                NS.takesInside(new NS.Inside())
+                NS.takesInside(new NS.ChildInExtendsInside())
+                NS.takesInside(new ChildOutExtendsInside())
+
+                child = new NS.ChildInExtendsInside()
+                child.methodTakesInside(new NS.Inside())
+                child.methodTakesInside(new NS.ChildInExtendsInside())
+                child.methodTakesInside(new ChildOutExtendsInside())
+            end sub`);
+            program.validate();
+            //should have no error
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
 
         it('handles JavaScript reserved names', () => {
             program.setFile('source/file.brs', `
@@ -1006,8 +1279,8 @@ describe('Scope', () => {
             `);
             sourceSymbols = program.getScopeByName('source').symbolTable;
 
-            expect(sourceSymbols.getSymbolType('funcInt')).to.be.instanceOf(UninitializedType);
-            expect(sourceSymbols.getSymbolType('funcStr')).to.be.instanceOf(UninitializedType);
+            expect(sourceSymbols.getSymbolType('funcInt')).to.be.undefined;
+            expect(sourceSymbols.getSymbolType('funcStr')).to.be.undefined;
             expect((sourceSymbols.getSymbolType('funcFloat') as FunctionType).returnType.toString()).to.equal('float');
         });
 
@@ -1068,6 +1341,369 @@ describe('Scope', () => {
             expect((mergedNsSymbolTable.getSymbolType('Name.Space.nsFunc2') as FunctionType).returnType.toString()).to.equal('integer');
             expect((mergedNsSymbolTable.getSymbolType('Name.outerNsFunc') as FunctionType).returnType.toString()).to.equal('string');
         });
+
+        describe('lazytypes and scope', () => {
+            const lazyTypeCode = `
+                class KlassA
+                    pi = 3.14
+
+                    function getPi() as float
+                        return m.pi
+                    end function
+                end class
+
+                class KlassB
+                    function getNewA() as KlassA
+                       return new KlassA()
+                    end function
+                end class
+
+                sub main()
+                    a = new KlassA()
+                    myPi = a.pi
+                    myPiFromFunc = a.getPi()
+                end sub
+            `;
+            let mainFile: BrsFile;
+            let sourceScope: Scope;
+            let mainSymbolTable: SymbolTable;
+
+            beforeEach(() => {
+                program.setFile('source/main.bs', lazyTypeCode);
+                sourceScope = program.getScopeByName('source');
+                mainFile = (sourceScope.getAllFiles()[0] as BrsFile);
+                expect(mainFile).not.to.be.undefined;
+                const mainFunc = mainFile.parser.references.functionStatementLookup.get('main').func;
+                sourceScope.linkSymbolTable();
+                mainSymbolTable = mainFunc.symbolTable;
+            });
+
+            it('uses file context for lazyType field lookups', () => {
+                const piSymbol = mainSymbolTable.getSymbolType('myPi', true, { file: mainFile, scope: sourceScope });
+                expect(isFloatType(piSymbol)).to.be.true;
+            });
+
+            it('uses class members for lazyType method lookups', () => {
+                const piSymbol = mainSymbolTable.getSymbolType('myPiFromFunc', true, { file: mainFile, scope: sourceScope });
+                expect(isFloatType(piSymbol)).to.be.true;
+            });
+
+            it('uses class members for lazyType lookups on lookups', () => {
+                const piSymbol = mainSymbolTable.getSymbolType('myPiFromFunc', true, { file: mainFile, scope: sourceScope });
+                expect(isFloatType(piSymbol)).to.be.true;
+            });
+        });
+
+        it('can get fields on m from various files in component', () => {
+            program = new Program({ rootDir: rootDir });
+
+            program.setFile('components/comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp" extends="Scene">
+                    <script uri="comp.brs"/>
+                    <script uri="comp.file1.brs"/>
+                    <script uri="comp.file2.brs"/>
+                    <script uri="comp.file3.brs"/>
+                    <script uri="comp.helpers.brs"/>
+                    <interface>
+                      <field id="intField" type="integer" />
+                      <function name="func1" />
+                    </interface>
+                    <children>
+                      <Label id="myLabel" />
+                    </children>
+                </component>
+            `);
+            program.setFile(s`components/comp.brs`, `
+                sub init()
+                  m.name = "hello"
+                  m.label = m.top.findNode("myLabel")
+                  m.assignedTwice = "test"
+                  m.someObj = {foo: "bar"}
+
+                end sub
+            `);
+            program.setFile(s`components/comp.file1.brs`, `
+                sub func1()
+                  m.age = 13
+                  m.pi = getPi()
+                end sub
+            `);
+            program.setFile(s`components/comp.file2.brs`, `
+                sub func2()
+                  m.someObj.foo = getString()
+                end sub
+
+            `);
+            program.setFile(s`components/comp.file3.brs`, `
+                sub func3()
+                  m.assignedTwice = 123
+                end sub
+            `);
+            program.setFile(s`components/comp.helpers.brs`, `
+                function getPi() as float
+                    return 3.14
+                end function
+
+                function getString() as string
+                    return "hello"
+                end function
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            let result = program.getCompletions(`${rootDir}/components/comp.file3.brs`, Position.create(2, 20)); // completions on 'm.'
+            let properties = result.map(x => x.label);
+            expect(properties).to.contain('top');
+            expect(properties).to.contain('name');
+            expect(properties).to.contain('someObj');
+            expect(properties).to.contain('assignedTwice');
+            expect(properties).to.contain('label');
+            expect(properties).to.contain('pi');
+
+            let topResult = program.getCompletions(`${rootDir}/components/comp.brs`, Position.create(3, 34)); // completions on 'm.top.'
+            let topProperties = topResult.map(x => x.label);
+            expect(topProperties).to.contain('intField');
+            expect(topProperties).not.to.contain('func1'); // TODO Types -  add functions from interface
+        });
+
+
+        it('can resolve self referential values', () => {
+            program = new Program({ rootDir: rootDir });
+            program.setFile(s`source/main.brs`, `
+                function trimName(name as string) as string
+                    name = name.trim()
+                    return name
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('can resolve self referential values in a loop', () => {
+            program = new Program({ rootDir: rootDir });
+            program.setFile(s`source/main.brs`, `
+                function trimName(names as object) as string
+                    allNames = ""
+                    for each name in names
+                        name = name.trim()
+                        allNames +=name
+                    end for
+                    return allNames
+                end function
+
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('handles when the same loop variable is used in multiple places from function calls', () => {
+            program.setFile(s`source/main.brs`, `
+            sub doLoop(someObj)
+                for each datum in someObj.getArray()
+                  print datum
+                end for
+
+                for each datum in someObj.getArray()
+                  print datum
+                end for
+            end sub`);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('can call functions on object properties of m that extend from a parent', () => {
+            program = new Program({ rootDir: rootDir });
+            program.setFile('components/child.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="child" extends="parent">
+                    <script uri="child.brs"/>
+                </component>
+            `);
+            program.setFile(s`components/child.brs`, `
+                sub init()
+                    m.name = getName()
+                    m.pi = m.objProp.getPi()
+                    print m.pi
+                end sub
+
+                function getName() as string
+                    return "Bob"
+                end function
+            `);
+            program.setFile('components/parent.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="parent" extends="Scene">
+                    <script uri="parent.brs"/>
+                </component>
+            `);
+            program.setFile(s`components/parent.brs`, `
+                sub init()
+                  m.objProp = getObj()
+                end sub
+
+                function getObj()
+                    return {
+                        getPi: function () as float
+                          return 3.14
+                        end function
+                    }
+                end function
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('can call functions on properties of m that extend from a parent', () => {
+            program = new Program({ rootDir: rootDir });
+            program.setFile('components/comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp" extends="Scene">
+                    <script uri="comp.1.brs"/>
+                    <script uri="comp.2.brs"/>
+                </component>
+            `);
+            program.setFile(s`components/comp.1.brs`, `
+                sub init()
+                    m.pi = getPi()
+                    piStr = m.pi.toStr()
+                    print piStr
+                end sub
+            `);
+            program.setFile(s`components/comp.2.brs`, `
+                function getName()
+                    return "Bob"
+                end function
+
+                function getPi()
+                    return 3.14
+                end function
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('can call functions on m.top', () => {
+            program = new Program({ rootDir: rootDir });
+            program.setFile('components/comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp" extends="Scene">
+                    <script uri="comp.brs"/>
+                    <children>
+                      <Label id="myLabel" />
+                    </children>
+                </component>
+            `);
+            program.setFile(s`components/comp.brs`, `
+                sub init()
+                    m.label = m.top.findNode("myLabel")
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('can validate shared functions between components', () => {
+            program = new Program({ rootDir: rootDir });
+            program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Group">
+                    <script uri="comp1.brs"/>
+                    <script type="text/brightscript" uri="pkg:/source/helpers.brs" />
+                    <children>
+                      <Label id="myLabel" />
+                    </children>
+                </component>
+            `);
+            program.setFile(s`components/comp1.brs`, `
+                sub init()
+                    m.foo = "foo"
+                    printFoo(3)
+                end sub
+            `);
+            program.setFile('components/comp2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp2" extends="Group">
+                    <script uri="comp2.brs"/>
+                    <script type="text/brightscript" uri="pkg:/source/helpers.brs" />
+                    <children>
+                        <Label id="myLabel" />
+                    </children>
+                </component>
+            `);
+            program.setFile(s`components/comp2.brs`, `
+                sub init()
+                    m.foo ="bar"
+                    printFoo(2)
+                    printFoo("test") ' this is invalid
+                end sub
+            `);
+            program.setFile(s`source/helpers.brs`, `
+                sub printFoo(num as integer)
+                    print lcase(m.foo)+num.toStr()
+                end sub
+            `);
+
+            program.validate();
+            const diagnostics = program.getDiagnostics();
+            expect(diagnostics.length).to.equal(1);
+            expect(diagnostics.map(x => x.message)).to.eql([
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message]);
+        });
+
+        it('can determine properties on m from grand-parent components', () => {
+            program = new Program({ rootDir: rootDir });
+            program.setFile('components/comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp" extends="Group">
+                    <script uri="comp.brs"/>
+                    <children>
+                      <Label id="myLabel" />
+                    </children>
+                </component>
+            `);
+            program.setFile(s`components/comp.brs`, `
+                sub init()
+                    m.label = m.top.findNode("myLabel")
+                end sub
+            `);
+            program.setFile('components/compChild.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="compChild" extends="comp">
+                    <script uri="compChild.brs"/>
+                </component>
+            `);
+            program.setFile(s`components/compChild.brs`, `
+                sub init()
+                    m.foo = "foo"
+                end sub
+            `);
+            program.setFile('components/compGrandChild.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="compGrandChild" extends="CompChild">
+                    <script uri="compGrandChild.brs"/>
+                </component>
+            `);
+            program.setFile(s`components/compGrandChild.brs`, `
+                sub init()
+                    m.obj = {name: "Bill", age: 44}
+                    m.label.callFunc("") ' below checks for completions on this line
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            let result = program.getCompletions(`${rootDir}/components/compGrandChild.brs`, Position.create(3, 22)); // completions on 'm.'
+            let properties = result.map(x => x.label);
+            expect(properties).to.contain('top');
+            expect(properties).to.contain('obj');
+            expect(properties).to.contain('label');
+            expect(properties).to.contain('foo');
+        });
+
     });
     describe('buildNamespaceLookup', () => {
         it('does not crash when class statement is missing `name` prop', () => {

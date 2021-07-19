@@ -194,7 +194,7 @@ let runtimeFunctions = [{
 }, {
     name: 'Type',
     shortDescription: 'Returns the type of a variable and/or object. See the BrightScript Component specification for a list of types.',
-    type: new FunctionType(new ObjectType()),
+    type: new FunctionType(new StringType()),
     file: globalFile,
     params: [{
         name: 'variable',
@@ -692,7 +692,8 @@ By using Chr, you can create strings containing characters which cannot be conta
             type: new StringType()
         }, {
             name: 'radix',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: true
         }]
     }, {
         name: 'Substitute',

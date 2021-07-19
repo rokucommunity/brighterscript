@@ -62,7 +62,7 @@ describe('SymbolTable', () => {
         });
 
         it('returns dynamic if multiple assignments of different type', () => {
-            // TODO - union types
+            // TODO TYPES - union types
             const st = new SymbolTable();
             st.addSymbol('foo', null, new StringType());
             st.addSymbol('foo', null, new IntegerType());
@@ -77,9 +77,9 @@ describe('SymbolTable', () => {
             expect(st.getSymbolType('foo').toString()).eq('string');
         });
 
-        it('returns uninitialized if not found', () => {
+        it('returns undefined if not found', () => {
             const st = new SymbolTable();
-            expect(st.getSymbolType('foo').toString()).eq('uninitialized');
+            expect(st.getSymbolType('foo')).to.be.undefined;
         });
     });
 

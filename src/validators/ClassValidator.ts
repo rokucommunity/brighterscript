@@ -11,14 +11,22 @@ import type { BscFile, BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer';
+import { getTypeFromContext } from '../types/BscType';
+import type { TypeContext } from '../types/BscType';
 
 export class BsClassValidator {
     private scope: Scope;
+    private file: BrsFile;
     public diagnostics: BsDiagnostic[];
     private classes: Record<string, AugmentedClassStatement>;
 
-    public validate(scope: Scope) {
+    get typeContext(): TypeContext {
+        return { scope: this.scope, file: this.file };
+    }
+
+    public validate(scope: Scope, file: BrsFile) {
         this.scope = scope;
+        this.file = file;
         this.diagnostics = [];
         this.classes = {};
 
@@ -199,15 +207,18 @@ export class BsClassValidator {
                         if (isClassFieldStatement(member)) {
                             const ancestorFieldType = (ancestorAndMember.member as ClassFieldStatement).getType();
                             const childFieldType = member.getType();
-                            if (!childFieldType.isAssignableTo(ancestorFieldType)) {
+                            if (!childFieldType.isAssignableTo(ancestorFieldType, this.typeContext)) {
                                 //flag incompatible child field type to ancestor field type
+
+                                const childFieldTypeName = childFieldType?.toString(this.typeContext) ?? member.type?.text;
+                                const ancestorFieldTypeName = ancestorFieldType?.toString(this.typeContext) ?? (ancestorAndMember.member as ClassFieldStatement).type.text;
                                 this.diagnostics.push({
                                     ...DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty(
                                         classStatement.getName(ParseMode.BrighterScript),
                                         ancestorAndMember.classStatement.getName(ParseMode.BrighterScript),
                                         member.name.text,
-                                        childFieldType.toString(),
-                                        ancestorFieldType.toString()
+                                        childFieldTypeName,
+                                        ancestorFieldTypeName
                                     ),
                                     file: classStatement.file,
                                     range: member.range
@@ -273,22 +284,28 @@ export class BsClassValidator {
             let classStatement = this.classes[key];
             for (let statement of classStatement.body) {
                 if (isClassFieldStatement(statement)) {
-                    let fieldType = statement.getType();
+                    let fieldType = getTypeFromContext(statement.getType(), this.typeContext);
+                    const fieldTypeName = fieldType?.toString(this.typeContext) ?? statement.type?.text;
+                    const lowerFieldTypeName = fieldTypeName?.toLowerCase();
 
+                    let addDiagnostic = false;
                     if (isCustomType(fieldType)) {
-                        const fieldTypeName = fieldType.name;
-                        const lowerFieldTypeName = fieldTypeName?.toLowerCase();
                         if (lowerFieldTypeName) {
                             const currentNamespaceName = classStatement.namespaceName?.getName(ParseMode.BrighterScript);
                             //check if this custom type is in our class map
                             if (!this.getClassByName(lowerFieldTypeName, currentNamespaceName)) {
-                                this.diagnostics.push({
-                                    ...DiagnosticMessages.cannotFindType(fieldTypeName),
-                                    range: statement.type.range,
-                                    file: classStatement.file
-                                });
+                                addDiagnostic = true;
                             }
                         }
+                    } else if (!fieldType) {
+                        addDiagnostic = true;
+                    }
+                    if (addDiagnostic) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.cannotFindType(fieldTypeName),
+                            range: statement.type.range,
+                            file: classStatement.file
+                        });
                     }
                 }
             }
