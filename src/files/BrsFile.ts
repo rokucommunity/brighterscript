@@ -630,7 +630,7 @@ export class BrsFile {
             result.push(...KeywordCompletions);
 
             //include local variables
-            for (let symbol of functionExpression.symbolTable.ownSymbols) {
+            for (let symbol of functionExpression.symbolTable.getOwnSymbols()) {
                 const symbolNameLower = symbol.name.toLowerCase();
                 //skip duplicate variable names
                 if (names[symbolNameLower]) {
@@ -670,7 +670,7 @@ export class BrsFile {
     }
 
     private getCompletionsFromSymbolTable(symbolTable: SymbolTable) {
-        return symbolTable.allSymbols.map(bscType => {
+        return symbolTable.getAllSymbols().map(bscType => {
             return {
                 label: bscType.name,
                 kind: isFunctionType(bscType.type) ? CompletionItemKind.Method : CompletionItemKind.Field
@@ -739,10 +739,11 @@ export class BrsFile {
     }
 
 
-    private findNamespaceFromTokenChain(tokenChain: Token[], scope: Scope): NamespacedTokenChain {
+    private findNamespaceFromTokenChain(originalTokenChain: Token[], scope: Scope): NamespacedTokenChain {
         let namespaceTokens: Token[] = [];
         let startsWithNamespace = '';
         let namespaceContainer: NamespaceContainer;
+        let tokenChain = [...originalTokenChain];
         while (tokenChain[0]) {
             const namespaceNameToCheck = `${startsWithNamespace}${startsWithNamespace.length > 0 ? '.' : ''}${tokenChain[0].text}`.toLowerCase();
             const foundNamespace = scope.namespaceLookup[namespaceNameToCheck];
@@ -763,7 +764,7 @@ export class BrsFile {
     }
 
     private checkForSpecialClassSymbol(currentToken: Token, scope: Scope, func?: FunctionExpression): TokenSymbolLookup {
-        const containingClass = this.parser.references.getContainingClass(currentToken);
+        const containingClass = this.parser.getContainingClass(currentToken);
         let symbolType: BscType;
         let currentClassRef: ClassStatement;
         const currentTokenLower = currentToken.text.toLowerCase();
@@ -837,7 +838,7 @@ export class BrsFile {
             return specialCase;
         }
         const tokenChain = nameSpacedTokenChain.tokenChain;
-        let symbolContainer: SymbolContainer = this.parser.references.getContainingAA(currentToken) || this.parser.references.getContainingClass(currentToken);
+        let symbolContainer: SymbolContainer = this.parser.getContainingAA(currentToken) || this.parser.getContainingClass(currentToken);
         let currentSymbolTable = nameSpacedTokenChain.namespaceContainer?.symbolTable ?? functionExpression?.symbolTable;
         let tokenFoundCount = 0;
         let symbolTypeBeforeReference: BscType;
@@ -1319,7 +1320,7 @@ export class BrsFile {
         const func = this.getFunctionExpressionAtPosition(position);
         //look through local variables first
         //find any variable with this name
-        for (const symbol of func.symbolTable.ownSymbols) {
+        for (const symbol of func.symbolTable.getOwnSymbols()) {
             //we found a variable declaration with this token text
             if (symbol.name.toLowerCase() === textToSearchFor) {
                 const uri = util.pathToUri(this.srcPath);

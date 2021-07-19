@@ -41,7 +41,7 @@ describe('parser', () => {
                 end sub
             `);
             expect(
-                parser.references.functionExpressions[0].symbolTable.ownSymbols.map(x => x.name).sort()
+                parser.references.functionExpressions[0].symbolTable.getOwnSymbols().map(x => x.name).sort()
             ).to.eql([
                 'herd',
                 'humansAreAlive',
@@ -52,7 +52,7 @@ describe('parser', () => {
             ]);
             parser.invalidateReferences();
             expect(
-                parser.references.functionExpressions[0].symbolTable.ownSymbols.map(x => x.name).sort()
+                parser.references.functionExpressions[0].symbolTable.getOwnSymbols().map(x => x.name).sort()
             ).to.eql([
                 'herd',
                 'humansAreAlive',
@@ -75,7 +75,7 @@ describe('parser', () => {
             `);
             parser.invalidateReferences();
             expect(
-                parser.references.functionExpressions[0].symbolTable.ownSymbols.map(x => x.name)
+                parser.references.functionExpressions[0].symbolTable.getOwnSymbols().map(x => x.name)
             ).to.eql([
                 'outerName',
                 'speak',
@@ -83,7 +83,7 @@ describe('parser', () => {
             ]);
 
             expect(
-                parser.references.functionExpressions[1].symbolTable.ownSymbols.map(x => x.name)
+                parser.references.functionExpressions[1].symbolTable.getOwnSymbols().map(x => x.name)
             ).to.eql([
                 'innerName'
             ]);

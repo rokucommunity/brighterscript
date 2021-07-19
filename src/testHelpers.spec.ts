@@ -176,7 +176,7 @@ function getTestFileAction(
 }
 
 export function expectSymbolTableEquals(symbolTable: SymbolTable, expected: [string, BscType, Range][]) {
-    const ownSymbols = symbolTable.ownSymbols.sort((a, b) => {
+    const ownSymbols = symbolTable.getOwnSymbols().sort((a, b) => {
         return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
     });
     expect(ownSymbols).to.be.length(expected.length);

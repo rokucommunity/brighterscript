@@ -3105,6 +3105,19 @@ export class Parser {
         }
     }
 
+    public getContainingClass(currentToken: Token): ClassStatement {
+        return this.references.classStatements.find((cs) => util.rangeContains(cs.range, currentToken.range.start));
+    }
+    public getContainingAA(currentToken: Token): AALiteralExpression {
+        return this.references.aaLiterals.find((aa) => util.rangeContains(aa.range, currentToken.range.start));
+    }
+    public getContainingNamespace(currentToken: Token): NamespaceStatement {
+        return this.references.namespaceStatements.find((cs) => util.rangeContains(cs.range, currentToken.range.start));
+    }
+    public getContainingFunctionExpression(currentToken: Token): FunctionExpression {
+        return this.references.functionExpressions.find((fe) => util.rangeContains(fe.range, currentToken.range.start));
+    }
+
     public dispose() {
     }
 }
@@ -3177,18 +3190,7 @@ export class References {
     public newExpressions = [] as NewExpression[];
     public propertyHints = {} as Record<string, string>;
 
-    public getContainingClass(currentToken: Token): ClassStatement {
-        return this.classStatements.find((cs) => util.rangeContains(cs.range, currentToken.range.start));
-    }
-    public getContainingAA(currentToken: Token): AALiteralExpression {
-        return this.aaLiterals.find((aa) => util.rangeContains(aa.range, currentToken.range.start));
-    }
-    public getContainingNamespace(currentToken: Token): NamespaceStatement {
-        return this.namespaceStatements.find((cs) => util.rangeContains(cs.range, currentToken.range.start));
-    }
-    public getContainingFunctionExpression(currentToken: Token): FunctionExpression {
-        return this.functionExpressions.find((fe) => util.rangeContains(fe.range, currentToken.range.start));
-    }
+
 }
 
 export interface LocalVarEntry {
