@@ -832,7 +832,7 @@ export class Scope {
 
         for (let func of file.parser.references.functionExpressions) {
             //every var declaration in this function expression
-            for (let symbol of func.symbolTable.ownSymbols) {
+            for (let symbol of func.symbolTable.getOwnSymbols()) {
                 const symbolNameLower = symbol.name.toLowerCase();
                 //if the var is a function
                 if (isFunctionType(symbol.type)) {
