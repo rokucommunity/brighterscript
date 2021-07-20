@@ -59,9 +59,9 @@ class ComponentListBuilder {
             //components
             ...Object.values(this.result.components).flatMap(x => x.interfaces),
             //interfaces
-            ...Object.values(this.result.interfaces).flatMap(x => x.implementors),
+            ...Object.values(this.result.interfaces).flatMap(x => x.implementers),
             //events
-            ...Object.values(this.result.events).flatMap(x => x.implementors)
+            ...Object.values(this.result.events).flatMap(x => x.implementers)
         ];
         for (const ref of refs) {
             if (!ref.url) {
@@ -166,7 +166,7 @@ class ComponentListBuilder {
                     url: getDocUrl(docPath),
                     methods: this.buildInterfaceMethods(manager),
                     properties: [],
-                    implementors: this.getImplementors(manager),
+                    implementers: this.getImplementers(manager),
                     description: manager.getMarkdown(manager.getHeading(1), x => x.type === 'heading'),
                     availableSince: manager.getAvailableSince(manager.getHeading(1), x => x.type === 'heading')
                 } as RokuInterface;
@@ -203,7 +203,7 @@ class ComponentListBuilder {
                     url: getDocUrl(docPath),
                     methods: this.buildInterfaceMethods(manager),
                     properties: [],
-                    implementors: this.getImplementors(manager),
+                    implementers: this.getImplementers(manager),
                     description: manager.getMarkdown(manager.getHeading(1), x => x.type === 'heading'),
                     availableSince: manager.getAvailableSince(manager.getHeading(1), x => x.type === 'heading')
                 } as RokuEvent;
@@ -221,8 +221,8 @@ class ComponentListBuilder {
         }
     }
 
-    private getImplementors(manager: TokenManager) {
-        const result = [] as Implementor[];
+    private getImplementers(manager: TokenManager) {
+        const result = [] as Implementer[];
 
         //try to find a table from multiple different locations, keep the first one found
         const table = [
@@ -282,7 +282,7 @@ class ComponentListBuilder {
         const iface = {
             name: 'AppManagerTheme',
             properties: [],
-            implementors: [],
+            implementers: [],
             methods: [],
             url: undefined
         } as RokuInterface;
@@ -678,9 +678,9 @@ interface Reference {
     url: string;
 }
 
-interface Implementor extends Reference {
+interface Implementer extends Reference {
     /**
-     * A description of that this interface implementor does (i.e. describes a component)
+     * A description of that this interface implementer does (i.e. describes a component)
      */
     description: string;
 }
@@ -695,7 +695,7 @@ interface RokuInterface {
      */
     properties: Prop[];
     methods: Func[];
-    implementors: Implementor[];
+    implementers: Implementer[];
 }
 
 interface RokuEvent {
@@ -709,7 +709,7 @@ interface RokuEvent {
      */
     properties: Prop[];
     methods: Func[];
-    implementors: Implementor[];
+    implementers: Implementer[];
 }
 
 interface Func extends Signature {

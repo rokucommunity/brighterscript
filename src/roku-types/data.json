@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2021-07-20T18:48:26.536Z",
+    "generatedDate": "2021-07-20T19:06:07.884Z",
     "nodes": {},
     "components": {
         "roAppInfo": {
@@ -2555,7 +2555,7 @@
                     "type": "string"
                 }
             ],
-            "implementors": [],
+            "implementers": [],
             "methods": []
         },
         "ifAppInfo": {
@@ -2621,7 +2621,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roAppInfo",
                     "description": "Returns information about the application",
@@ -2804,7 +2804,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roAppManager",
                     "description": "Returns information about the application",
@@ -2908,7 +2908,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roArray",
                     "description": "An array stores an indexed collection of BrightScript objects. Each entry of an array can be a different type, or they may all of the same type",
@@ -2952,7 +2952,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roArray",
                     "description": "An array stores an indexed collection of BrightScript objects. Each entry of an array can be a different type, or they may all of the same type",
@@ -2997,7 +2997,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roArray",
                     "description": "Returns information about the application",
@@ -3032,7 +3032,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roArray",
                     "description": "An array stores an indexed collection of BrightScript objects. Each entry of an array can be a different type, or they may all of the same type",
@@ -3101,7 +3101,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roArray",
                     "description": "Returns information about the application",
@@ -3242,7 +3242,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roAssociativeArray",
                     "description": "An associative array allows objects to be associated with string keys",
@@ -3310,7 +3310,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roAudioGuide",
                     "description": "Returns information about the application",
@@ -3360,7 +3360,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roAudioMetadata",
                     "description": "This component provides developers access to audio file metadata included in many audio files",
@@ -3489,7 +3489,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roAudioMetadata",
                     "description": "The Audio Player object provides the ability to setup the playing of a series of audio streams",
@@ -3565,7 +3565,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roAudioResource",
                     "description": "The roAudioResouce allows .wav files to be cached to memory and quickly played at any time",
@@ -3600,7 +3600,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roBoolean",
                     "description": "Object equivalent for intrinsic type Boolean",
@@ -3856,7 +3856,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roByteArray",
                     "description": "The byte array component is used to contain and manipulate an arbitrary array of bytes",
@@ -3951,7 +3951,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roCaptionRenderer",
                     "description": "Returns information about the application",
@@ -4122,7 +4122,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roChannelStore",
                     "description": "allows the application to perform a purchase of an In-Channel Product or upgrade a channel",
@@ -4260,7 +4260,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roCodeRegistrationScreen",
                     "description": "The Code Registration Screen is designed to present the user a registration code, and the information required to instruct the user on how to register with a service provider",
@@ -4415,7 +4415,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roCompositor",
                     "description": "The roCompositor allows the composition and animation of multiple roBitmaps and roRegions",
@@ -4581,7 +4581,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roDateTime",
                     "description": "The roDateTime provides an interface to obtain the current date/time for the player and manipulate date/times",
@@ -5108,7 +5108,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roDeviceInfo",
                     "description": "The roDeviceInfo component provides an interface to obtain attributes about the device",
@@ -5121,7 +5121,7 @@
             "url": "https://developer.roku.com/docs/docs/references/brightscript/interfaces/ifdevicecrypto.md",
             "methods": [],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roDeviceCrypto",
                     "description": "Encrypts and decrypts data on a device using a key that is unique per channel, device, or model.",
@@ -5156,7 +5156,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roDouble",
                     "description": "roDouble is a legacy object name, corresponding to the intrinsic Double object",
@@ -5618,7 +5618,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roBitmap",
                     "description": "The roBitmap component contains image data and provides an interface (ifDraw2D) for drawing",
@@ -5670,7 +5670,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roArray",
                     "description": "An array stores an indexed collection of BrightScript objects",
@@ -5796,7 +5796,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roEVPCipher",
                     "description": "The EVP Cipher component provides an interface to the OpenSSL EVP library of symmetric cipher commands",
@@ -5868,7 +5868,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roEVPDigest",
                     "description": "The EVP Digest component provides an interface to the OpenSSL EVP library of message digest algorithms",
@@ -6089,7 +6089,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roFile System",
                     "description": "The roFilesystem component implements common filesystem inspection and modification routines",
@@ -6124,7 +6124,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roFloat",
                     "description": "Object equivalent for intrinsic type 'Float'",
@@ -6189,7 +6189,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roFont",
                     "description": "roFont represents a particular font, from a font-family (eg. Arial), with a particular pixel size (e.g 20), and a particular boldness or italicness",
@@ -6218,7 +6218,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roFontMetrics",
                     "description": "The roFontMetrics object allows you to get display size information for a specific font returned by the roFontRegistry.Get() method",
@@ -6369,7 +6369,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roFontRegistry",
                     "description": "The roFontRegistry object allows you to create roFont objects, either using the default font or using fonts in TrueType or OpenType files packaged with your application",
@@ -6400,7 +6400,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roFunction",
                     "description": "Object equivalent for intrinsic type Function",
@@ -6422,7 +6422,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roHdmiStatus",
                     "description": "The HDMI status component provides an interface to the current HDMI operational status",
@@ -6820,7 +6820,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roGridScreen",
                     "description": "The Grid Screen provides a graphical display of poster art from multiple content categories from within a single screen",
@@ -6864,7 +6864,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roHdmiStatus",
                     "description": "The HDMI status component provides an interface to the current HDMI operational status",
@@ -6943,7 +6943,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roHMAC",
                     "description": "The HMAC component provides an interface to the OpenSSL HMAC functions",
@@ -7076,7 +7076,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roAppManager",
                     "description": "The Application Manager APIs set application level attributes, which mostly affect the look-and-feel of the application",
@@ -7330,7 +7330,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roImageCanvas",
                     "description": "The roImageCanvas component provides an interface to render graphic elements at specific spots on the screen",
@@ -7402,7 +7402,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roImageMetadata",
                     "description": "The roImageMetadata component provides developers access to image file metadata included in many .jpg EXIF headers",
@@ -7456,7 +7456,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roInput",
                     "description": "An roInput object can be used to receive events sent from a network client using the External Control Protocol (ECP), as described in External Control API",
@@ -7491,7 +7491,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roInt",
                     "description": "Object equivalent for intrinsic type Integer",
@@ -7513,7 +7513,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roInt",
                     "description": "Object equivalent for intrinsic type Integer",
@@ -7643,7 +7643,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roKeyboardScreen",
                     "description": "The Keyboard Screen is designed to allow the user to enter an alpha-numeric string for searching, username/password registration or other purposes",
@@ -7745,7 +7745,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roList",
                     "description": "The list object implements the interfaces: ifList, ifArray, ifEnum and therefore can behave like an array that can dynamically add members",
@@ -7919,7 +7919,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roListScreen",
                     "description": "The List Screen provides a graphical display of content in a vertical list within a single screen",
@@ -7941,7 +7941,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roList",
                     "description": "The list object implements the interfaces: ifList, ifArray, ifEnum and therefore can behave like an array that can dynamically add members",
@@ -8013,7 +8013,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roLocalization",
                     "description": "The roLocalization object provides functions to assist in localization",
@@ -8048,7 +8048,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roLongInteger",
                     "description": "Object equivalent for intrinsic type LongInteger",
@@ -8333,7 +8333,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roMessageDialog",
                     "description": "The Message Dialog component is used to display a formatted, multi-line text message to the user",
@@ -8377,7 +8377,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roMessagePort",
                     "description": "A Message Port is the place messages (events) are sent",
@@ -8441,7 +8441,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roMicrophone",
                     "description": "The roMicrophone API allows channel applications to receive audio data from the user’s microphone-supported remote control device or mobile phone",
@@ -8488,7 +8488,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roOneLineDialog",
                     "description": "The One Line Dialog is a special type of dialog optimized for single line text",
@@ -8652,7 +8652,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roParagraphScreen",
                     "description": "The Paragraph Screen provides a way to display text and selection choices to the user",
@@ -8696,7 +8696,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roPath",
                     "description": "The roPath component provides developers an easy way to create valid file system paths",
@@ -8792,7 +8792,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roPinEntryDialog",
                     "description": "The Pin Entry Dialog is designed to allow the user to enter a numeric PIN for purchasing content",
@@ -9058,7 +9058,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roPosterScreen",
                     "description": "The Poster Screen provides a graphical display of poster art for content selection or can be used as a submenu to provide hierarchical structure to the application",
@@ -9109,7 +9109,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roProgramGuide",
                     "description": "Represents Electronic Program Guide (EPG) information from the tuner.",
@@ -9227,7 +9227,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roRegex",
                     "description": "The roRegex component provides the powerful regular expression processing of the PCRE library to Brightscript strings",
@@ -9512,7 +9512,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roRegion",
                     "description": "The roRegion component is used to represent a subsection of a bitmap",
@@ -9562,7 +9562,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roRegistry",
                     "description": "The Registry is an area of non-volatile storage where a small number of persistent settings can be stored",
@@ -9686,7 +9686,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roRegistrySection",
                     "description": "A Registry Section enables the organization of settings within the registry",
@@ -9749,7 +9749,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roSGScreen",
                     "description": "The roSGScreen object is a SceneGraph canvas that displays the contents of a SceneGraph Scene node tree",
@@ -9841,7 +9841,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roRSA",
                     "description": "The RSA component provides an interface to the OpenSSL RSA library of signing algorithms",
@@ -9861,7 +9861,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roScreen",
                     "description": "The roScreen component provides a full screen drawing surface that can be stacked and that you can receive input events from",
@@ -9903,7 +9903,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roSearchHistory",
                     "description": "The Search History object implements the system-wide storage of search terms for use in implementing the roSearchScreen",
@@ -10084,7 +10084,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roSearchScreen",
                     "description": "The Search Screen provides a standard way to allow users to enter text for searching",
@@ -10112,7 +10112,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roHdmiStatus",
                     "description": "The HDMI status component provides an interface to the current HDMI operational status",
@@ -10207,7 +10207,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roSGNode",
                     "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
@@ -10399,7 +10399,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roSGNode",
                     "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
@@ -10493,7 +10493,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roSGNode",
                     "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
@@ -10828,7 +10828,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roSGNode",
                     "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
@@ -10872,7 +10872,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roSGNode",
                     "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
@@ -10905,7 +10905,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roSGNode",
                     "description": "The roSGNode object is the BrightScript equivalent of SceneGraph XML file node creation",
@@ -11176,7 +11176,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roSlideShow",
                     "description": "The Slide Show screen provides the ability to setup a photo slide show to playback a series of images",
@@ -11355,7 +11355,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roDataGramSocket",
                     "description": "The roDataGramSocket component enables Brightscript apps to send and receive UDP packets",
@@ -11446,7 +11446,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roSocketAddress",
                     "description": "The roSocketAddress is used by the roStreamSocket and roDataGramSocket components for TCP and UDP traffic respectively",
@@ -11529,7 +11529,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roDataGramSocket",
                     "description": "The roDataGramSocket component enables Brightscript apps to send and receive UDP packets",
@@ -11645,7 +11645,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roDataGramSocket",
                     "description": "The roDataGramSocket component enables Brightscript apps to send and receive UDP packets",
@@ -11701,7 +11701,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roStreamSocket",
                     "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
@@ -11803,7 +11803,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roStreamSocket",
                     "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
@@ -11852,7 +11852,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roStreamSocket",
                     "description": "The roStreamSocket component enables BrightScript apps to accept and connect to TCP streams as well as send and receive data with them",
@@ -12018,7 +12018,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roDataGramSocket",
                     "description": "The roDataGramSocket component enables Brightscript apps to send and receive UDP packets",
@@ -12105,7 +12105,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roDataGramSocket",
                     "description": "The roDataGramSocket component enables Brightscript apps to send and receive UDP packets",
@@ -12131,7 +12131,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roChannelStoreEvent",
                     "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get",
@@ -12578,7 +12578,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roSpringboardScreen",
                     "description": "The Springboard Screen shows detailed information about an individual piece of content and provides options for actions that may be taken on that content",
@@ -12830,7 +12830,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roSprite",
                     "description": "This component is associated with a managing roCompositor object",
@@ -12865,7 +12865,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roChannelStoreEvent",
                     "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get",
@@ -13187,7 +13187,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roString",
                     "description": "Object equivalent for intrinsic type 'String'",
@@ -13215,7 +13215,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roSystemLog",
                     "description": "The roSystemLog component enables the application to receive events from the Roku Streaming Player that are intended for reporting errors and trends, rather than trigger a response to a user action",
@@ -13341,7 +13341,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roTextScreen",
                     "description": "roTextScreen provides a way of displaying large amounts of scrollable text",
@@ -13518,7 +13518,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roTextToSpeech",
                     "description": "The roTextToSpeech component provides text to speech capabilities to applications",
@@ -13581,7 +13581,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roTextureManager",
                     "description": "The Texture Manager provides a set of API's for managing an roBitmap cache",
@@ -13657,7 +13657,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roTextureRequest",
                     "description": "An roTextureRequest is used to make requests to the roTextureManager",
@@ -13705,7 +13705,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roTimespan",
                     "description": "The Timespan object provides an interface to a simple timer for tracking the duration of activities",
@@ -13726,7 +13726,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roBoolean",
                     "description": "Object equivalent for intrinsic type Boolean",
@@ -14156,7 +14156,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roUrlTransfer",
                     "description": "A roUrlTransfer object transfers data to or from remote servers specified by URLs. It can perform mutual authentication with a web server",
@@ -14437,7 +14437,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roVideoPlayer",
                     "description": "The roVideoPlayer component implements a video player with more programmatic control, but less user control than the roVideoScreen component",
@@ -14698,7 +14698,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roVideoScreen",
                     "description": "The Video Screen object implements the video playback portion of the user interface",
@@ -14969,7 +14969,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roXMLElement",
                     "description": "roXMLElement is used to contain an XML tree",
@@ -15041,7 +15041,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
+            "implementers": [
                 {
                     "name": "roXMLList",
                     "description": "Contains a list of roXML objects",
@@ -15102,7 +15102,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "The roAudioPlayer sends the roAudioPlayerEvent with the following predicates that indicate its valid event types:"
         },
         "roCaptionRendererEvent": {
@@ -15121,7 +15121,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nroCaptionRenderer events are sent by the roCaptionRenderer to notify a BrightScript channel when caption data needs to be rendered. Specifically, one of two events, isCaptionText and isUpdateCaptionRequest, will be fired depending on the mode that the caption renderer is in. The mode is set by calling the [ifCaptionRenderer.SetMode()](/docs/references/brightscript/interfaces/ifcaptionrenderer.md#setmodemode-as-integer-as-void \"ifCaptionRenderer.SetMode()\") function.\n\n| Mode | Event |\n| --- | --- |\n| 1 | isCaptionUpdateRequest |\n| 2 | isCaptionText |"
         },
         "roCECStatusEvent": {
@@ -15135,7 +15135,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "_Available since Roku OS 8_\n\nThis event determines the active source status for set boxes. Channels subscribing to the `roCECStatusEvent` will be notified when the active-source status of the device changes per the CEC message traffic.\n\nTo use the roCECStatusEvent, follow the steps below:\n\n1.  Connect a Roku STB to a TV which transmits and receives CEC messages\n2.  Select the HDMI input to which the STB is connected\n3.  Switch away and then back to the STB's HDMI input",
             "availableSince": "8"
         },
@@ -15160,7 +15160,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get\\* methods in [ifChannelStore](/docs/references/brightscript/interfaces/ifchannelstore.md \"ifChannelStore\"). The following predicates indicate its valid event types:"
         },
         "roCodeRegistrationScreenEvent": {
@@ -15179,7 +15179,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roCodeRegistrationScreen sends the roCodeRegistrationScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roDeviceInfoEvent": {
@@ -15198,7 +15198,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "_Available since Roku OS 8_\n\nThe roDeviceInfo component sends the roDeviceInfoEvent with the following predicates that indicate its valid event types:",
             "availableSince": "8"
         },
@@ -15218,7 +15218,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "The roFileSystem component sends the roFileSystemEvent with the following predicates that indicate its valid event types:"
         },
         "roGridScreenEvent": {
@@ -15247,7 +15247,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.Beginning July 1st, 2017, any new channels using this component will be rejected during certification.Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roGridScreen sends the roGridScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roHdmiHotPlugEvent": {
@@ -15261,7 +15261,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "The roHdmiStatus sends the roHdmiHotPlugEvent with the following predicates that indicate its valid event types:"
         },
         "roHdmiStatusEvent": {
@@ -15275,7 +15275,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "The roHdmiStatus sends the roHdmiStatusEvent with the following predicates that indicate its valid event types:"
         },
         "roImageCanvasEvent": {
@@ -15299,7 +15299,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roImageCanvas sends the roImageCanvasEvent with the following predicates that indicate its valid event types:"
         },
         "roInputEvent": {
@@ -15318,7 +15318,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "The roInput component sends the roInputEvent with the following predicates that indicate its valid event types:"
         },
         "roKeyboardScreenEvent": {
@@ -15337,7 +15337,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roKeyboardScreen sends the roKeyboardScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roListScreenEvent": {
@@ -15366,7 +15366,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roListScreen sends the roListScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roMessageDialogEvent": {
@@ -15390,7 +15390,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roMessageDialog sends the roMessageDialogEvent with the following predicates that indicate its valid event types:"
         },
         "roMicrophoneEvent": {
@@ -15409,7 +15409,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "The [roMicrophone](/docs/references/brightscript/components/romicrophone.md \"roMicrophone\") component sends the `roMicrophoneEvent` with the following predicates that indicate its valid event types:"
         },
         "roOneLineDialogEvent": {
@@ -15423,7 +15423,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nSends the roOneLineDialogEvent with the following predicates that indicate its valid event types:"
         },
         "roParagraphScreenEvent": {
@@ -15442,7 +15442,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roParagraphScreen sends the roParagraphScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roPinEntryDialogEvent": {
@@ -15461,7 +15461,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roPinEntryDialog sends the roPinEntryDialogEvent with the following predicates that indicate its valid event types:"
         },
         "roPosterScreenEvent": {
@@ -15510,7 +15510,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.Beginning July 1st, 2017, any new channels using this component will be rejected during certification.Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roPosterScreen sends the roPosterScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roSearchScreenEvent": {
@@ -15544,7 +15544,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roSearchScreen sends the roSearchScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roSGNodeEvent": {
@@ -15578,7 +15578,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "An roSGNode object sends roSGNodeEvent messages to a specified port when changes occur in nodes. An roSGNodeEvent is also sent as the argument of field observer callback functions. Both of these cases allow a SceneGraph application to respond to events. roSGNodeEvent supports the following methods."
         },
         "roSGScreenEvent": {
@@ -15592,7 +15592,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "**roSGScreenEvents** are events sent to a scene graph **roSGScreen** by the framework. Other than when notifying the channel's main BrightScript thread that the screen is being closed, and thus that the channel should be terminated, channels do not generally handle these events."
         },
         "roSlideShowEvent": {
@@ -15646,7 +15646,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roSlideShow sends the roSlideShowEvent with the following predicates that indicate its valid event types:"
         },
         "roSocketEvent": {
@@ -15660,7 +15660,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "An roStreamSocket or roDataGramSocket object sends the roSocketEvent to indicate a change in the status of the socket. The socket must enable specific event notifications via the notify methods of ifSocketAsync."
         },
         "roSpringboardScreenEvent": {
@@ -15689,7 +15689,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roSpringboardScreen sends the roSpringboardScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roSystemLogEvent": {
@@ -15703,7 +15703,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "roSystemLogEvents are sent when enabled via [roSystemLog](/docs/references/brightscript/components/rosystemlog.md \"roSystemLog\"). roSystemLogEvent has the following method:"
         },
         "roTextScreenEvent": {
@@ -15722,7 +15722,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roTextScreen sends the roTextScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roTextToSpeechEvent": {
@@ -15746,7 +15746,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> Please note this component is only available on the following devices: Roku Streaming Stick (3600X), Roku Express (3700X) and Express+ (3710X), Roku Premiere (4620X) and Premiere+ (4630X), Roku Ultra (4640X), and any Roku TV running Roku OS version 7.2 and later.\nThe [roTextToSpeech](/docs/references/brightscript/components/rotexttospeech.md \"roTextToSpeech\") component sends the roTextToSpeechEvent with the following predicates that indicate its valid event types."
         },
         "roTextureRequestEvent": {
@@ -15775,7 +15775,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "The [roTextureManager](/docs/references/brightscript/components/rotexturemanager.md \"roTextureManager\") sends the roTextureRequestEvent after completing a request."
         },
         "roUniversalControlEvent": {
@@ -15814,7 +15814,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "The roScreen object sends the roUniversalControlEvent with the following related methods. If an app constrains the events processed to just the roUniversalControlEvent, the app will work with any controller. The GetID(), GetChar(), GetKey(), and IsPress() methods can be used instead of parsing the GetInt() return value to more effectively distinguish between remote control and keyboard key presses, and the key press and release events."
         },
         "roUrlEvent": {
@@ -15863,7 +15863,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "The roUrlTransfer component sends the roUrlEvent with the following methods:"
         },
         "roVideoPlayerEvent": {
@@ -15957,7 +15957,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "The roVideoPlayer sends the roVideoPlayerEvent with the following predicates that indicate its valid event types:"
         },
         "roVideoScreenEvent": {
@@ -15991,7 +15991,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [],
+            "implementers": [],
             "description": "> This component is deprecated.Beginning July 1st, 2017, any new channels using this component will be rejected during certification.Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roVideoScreen sends the roVideoScreenEvent with the same predicates as in [roVideoPlayerEvent](/docs/references/brightscript/events/rovideoplayerevent.md \"roVideoPlayerEvent\"). In addition to the events listed in roVideoPlayerEvent, the following events are also supported:"
         }
     }
