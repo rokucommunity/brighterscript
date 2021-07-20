@@ -77,25 +77,6 @@ class ComponentListBuilder {
         // const asdf = this.httpGet('https://devtools.web.roku.com/schema/RokuSceneGraph.xsd');
     }
 
-    private getImplementors(manager: TokenManager) {
-        const result = [] as Implementor[];
-        const table = manager.getTableByHeaders(['name', 'description']);
-        if (table?.type === 'table') {
-            for (const row of table?.tokens?.cells ?? []) {
-                const firstTokenInRow = row?.[0]?.[0];
-                //find the link, or default to the cell itself (assume it's a text node?)
-                const token = deepSearch(firstTokenInRow, 'type', (key, value) => value === 'link') ?? firstTokenInRow;
-                result.push({
-                    name: token.text,
-                    description: he.decode((row?.[1]?.[0] as Tokens.Text).text ?? '') || undefined,
-                    //if this is not a link, we'll just get back `undefined`, and we will repair this link at the end of the script
-                    url: getDocUrl(token?.href)
-                });
-            }
-        }
-        return result;
-    }
-
     private async buildComponents() {
         const componentDocs = this.references.BrightScript.Components;
         const count = Object.values(componentDocs).length;
@@ -241,6 +222,25 @@ class ComponentListBuilder {
                 console.error(`Error processing interface ${docUrl}`, e);
             }
         }
+    }
+
+    private getImplementors(manager: TokenManager) {
+        const result = [] as Implementor[];
+        const table = manager.getTableByHeaders(['name', 'description']);
+        if (table?.type === 'table') {
+            for (const row of table?.tokens?.cells ?? []) {
+                const firstTokenInRow = row?.[0]?.[0];
+                //find the link, or default to the cell itself (assume it's a text node?)
+                const token = deepSearch(firstTokenInRow, 'type', (key, value) => value === 'link') ?? firstTokenInRow;
+                result.push({
+                    name: token.text,
+                    description: he.decode((row?.[1]?.[0] as Tokens.Text).text ?? '') || undefined,
+                    //if this is not a link, we'll just get back `undefined`, and we will repair this link at the end of the script
+                    url: getDocUrl(token?.href)
+                });
+            }
+        }
+        return result;
     }
 
     private isTable(element) {
