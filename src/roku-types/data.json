@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2021-07-20T10:20:35.681Z",
+    "generatedDate": "2021-07-20T10:27:45.361Z",
     "nodes": {},
     "components": {
         "roAppInfo": {
@@ -15054,7 +15054,6 @@
         "roAudioPlayerEvent": {
             "name": "roAudioPlayerEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/roaudioplayerevent.md",
-            "description": "The roAudioPlayer sends the roAudioPlayerEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isListItemSelected",
@@ -15103,12 +15102,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "The roAudioPlayer sends the roAudioPlayerEvent with the following predicates that indicate its valid event types:"
         },
         "roCaptionRendererEvent": {
             "name": "roCaptionRendererEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rocaptionrendererevent.md",
-            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nroCaptionRenderer events are sent by the roCaptionRenderer to notify a BrightScript channel when caption data needs to be rendered. Specifically, one of two events, isCaptionText and isUpdateCaptionRequest, will be fired depending on the mode that the caption renderer is in. The mode is set by calling the [ifCaptionRenderer.SetMode()](/docs/references/brightscript/interfaces/ifcaptionrenderer.md#setmodemode-as-integer-as-void \"ifCaptionRenderer.SetMode()\") function.\n\n| Mode | Event |\n| --- | --- |\n| 1 | isCaptionUpdateRequest |\n| 2 | isCaptionText |",
             "methods": [
                 {
                     "name": "isCaptionUpdateRequest",
@@ -15122,12 +15121,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nroCaptionRenderer events are sent by the roCaptionRenderer to notify a BrightScript channel when caption data needs to be rendered. Specifically, one of two events, isCaptionText and isUpdateCaptionRequest, will be fired depending on the mode that the caption renderer is in. The mode is set by calling the [ifCaptionRenderer.SetMode()](/docs/references/brightscript/interfaces/ifcaptionrenderer.md#setmodemode-as-integer-as-void \"ifCaptionRenderer.SetMode()\") function.\n\n| Mode | Event |\n| --- | --- |\n| 1 | isCaptionUpdateRequest |\n| 2 | isCaptionText |"
         },
         "roCECStatusEvent": {
             "name": "roCECStatusEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rocecstatusevent.md",
-            "description": "_Available since Roku OS 8_\n\nThis event determines the active source status for set boxes. Channels subscribing to the `roCECStatusEvent` will be notified when the active-source status of the device changes per the CEC message traffic.\n\nTo use the roCECStatusEvent, follow the steps below:\n\n1.  Connect a Roku STB to a TV which transmits and receives CEC messages\n2.  Select the HDMI input to which the STB is connected\n3.  Switch away and then back to the STB's HDMI input",
             "methods": [
                 {
                     "name": "isActiveSource",
@@ -15137,12 +15136,12 @@
             ],
             "properties": [],
             "implementors": [],
+            "description": "_Available since Roku OS 8_\n\nThis event determines the active source status for set boxes. Channels subscribing to the `roCECStatusEvent` will be notified when the active-source status of the device changes per the CEC message traffic.\n\nTo use the roCECStatusEvent, follow the steps below:\n\n1.  Connect a Roku STB to a TV which transmits and receives CEC messages\n2.  Select the HDMI input to which the STB is connected\n3.  Switch away and then back to the STB's HDMI input",
             "availableSince": "8"
         },
         "roChannelStoreEvent": {
             "name": "roChannelStoreEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rochannelstoreevent.md",
-            "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get\\* methods in [ifChannelStore](/docs/references/brightscript/interfaces/ifchannelstore.md \"ifChannelStore\"). The following predicates indicate its valid event types:",
             "methods": [
                 {
                     "name": "isRequestSucceeded",
@@ -15182,12 +15181,12 @@
                     "name": "total",
                     "description": "Total purchase amount (including taxes) in the local currency"
                 }
-            ]
+            ],
+            "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get\\* methods in [ifChannelStore](/docs/references/brightscript/interfaces/ifchannelstore.md \"ifChannelStore\"). The following predicates indicate its valid event types:"
         },
         "roCodeRegistrationScreenEvent": {
             "name": "roCodeRegistrationScreenEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rocoderegistrationscreenevent.md",
-            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roCodeRegistrationScreen sends the roCodeRegistrationScreenEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isScreenClosed",
@@ -15201,12 +15200,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roCodeRegistrationScreen sends the roCodeRegistrationScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roDeviceInfoEvent": {
             "name": "roDeviceInfoEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rodeviceinfoevent.md",
-            "description": "_Available since Roku OS 8_\n\nThe roDeviceInfo component sends the roDeviceInfoEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isStatusMessage",
@@ -15221,12 +15220,12 @@
             ],
             "properties": [],
             "implementors": [],
+            "description": "_Available since Roku OS 8_\n\nThe roDeviceInfo component sends the roDeviceInfoEvent with the following predicates that indicate its valid event types:",
             "availableSince": "8"
         },
         "roFileSystemEvent": {
             "name": "roFileSystemEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rofilesystemevent.md",
-            "description": "The roFileSystem component sends the roFileSystemEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isStorageDeviceAdded",
@@ -15240,12 +15239,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "The roFileSystem component sends the roFileSystemEvent with the following predicates that indicate its valid event types:"
         },
         "roGridScreenEvent": {
             "name": "roGridScreenEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rogridscreenevent.md",
-            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.Beginning July 1st, 2017, any new channels using this component will be rejected during certification.Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roGridScreen sends the roGridScreenEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isListItemSelected",
@@ -15269,12 +15268,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.Beginning July 1st, 2017, any new channels using this component will be rejected during certification.Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roGridScreen sends the roGridScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roHdmiHotPlugEvent": {
             "name": "roHdmiHotPlugEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rohdmihotplugevent.md",
-            "description": "The roHdmiStatus sends the roHdmiHotPlugEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isHdmiHotPlug",
@@ -15283,12 +15282,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "The roHdmiStatus sends the roHdmiHotPlugEvent with the following predicates that indicate its valid event types:"
         },
         "roHdmiStatusEvent": {
             "name": "roHdmiStatusEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rohdmistatusevent.md",
-            "description": "The roHdmiStatus sends the roHdmiStatusEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isHdmiStatus",
@@ -15297,12 +15296,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "The roHdmiStatus sends the roHdmiStatusEvent with the following predicates that indicate its valid event types:"
         },
         "roImageCanvasEvent": {
             "name": "roImageCanvasEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/roimagecanvasevent.md",
-            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roImageCanvas sends the roImageCanvasEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isScreenClosed",
@@ -15321,12 +15320,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roImageCanvas sends the roImageCanvasEvent with the following predicates that indicate its valid event types:"
         },
         "roInputEvent": {
             "name": "roInputEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/roinputevent.md",
-            "description": "The roInput component sends the roInputEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isInput",
@@ -15340,12 +15339,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "The roInput component sends the roInputEvent with the following predicates that indicate its valid event types:"
         },
         "roKeyboardScreenEvent": {
             "name": "roKeyboardScreenEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rokeyboardscreenevent.md",
-            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roKeyboardScreen sends the roKeyboardScreenEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isScreenClosed",
@@ -15359,12 +15358,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roKeyboardScreen sends the roKeyboardScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roListScreenEvent": {
             "name": "roListScreenEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rolistscreenevent.md",
-            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roListScreen sends the roListScreenEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isListItemSelected",
@@ -15388,12 +15387,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roListScreen sends the roListScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roMessageDialogEvent": {
             "name": "roMessageDialogEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/romessagedialogevent.md",
-            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roMessageDialog sends the roMessageDialogEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isScreenClosed",
@@ -15412,12 +15411,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roMessageDialog sends the roMessageDialogEvent with the following predicates that indicate its valid event types:"
         },
         "roMicrophoneEvent": {
             "name": "roMicrophoneEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/romicrophoneevent.md",
-            "description": "The [roMicrophone](/docs/references/brightscript/components/romicrophone.md \"roMicrophone\") component sends the `roMicrophoneEvent` with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "IsRecordingDone",
@@ -15431,12 +15430,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "The [roMicrophone](/docs/references/brightscript/components/romicrophone.md \"roMicrophone\") component sends the `roMicrophoneEvent` with the following predicates that indicate its valid event types:"
         },
         "roOneLineDialogEvent": {
             "name": "roOneLineDialogEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/roonelinedialogevent.md",
-            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nSends the roOneLineDialogEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isScreenClosed",
@@ -15445,12 +15444,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nSends the roOneLineDialogEvent with the following predicates that indicate its valid event types:"
         },
         "roParagraphScreenEvent": {
             "name": "roParagraphScreenEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/roparagraphscreenevent.md",
-            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roParagraphScreen sends the roParagraphScreenEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isScreenClosed",
@@ -15464,12 +15463,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roParagraphScreen sends the roParagraphScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roPinEntryDialogEvent": {
             "name": "roPinEntryDialogEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/ropinentrydialogevent.md",
-            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roPinEntryDialog sends the roPinEntryDialogEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isScreenClosed",
@@ -15483,12 +15482,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roPinEntryDialog sends the roPinEntryDialogEvent with the following predicates that indicate its valid event types:"
         },
         "roPosterScreenEvent": {
             "name": "roPosterScreenEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/roposterscreenevent.md",
-            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.Beginning July 1st, 2017, any new channels using this component will be rejected during certification.Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roPosterScreen sends the roPosterScreenEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isListItemSelected",
@@ -15532,12 +15531,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.Beginning July 1st, 2017, any new channels using this component will be rejected during certification.Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roPosterScreen sends the roPosterScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roSearchScreenEvent": {
             "name": "roSearchScreenEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rosearchscreenevent.md",
-            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roSearchScreen sends the roSearchScreenEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "IsFullResult",
@@ -15566,12 +15565,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roSearchScreen sends the roSearchScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roSGNodeEvent": {
             "name": "roSGNodeEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rosgnodeevent.md",
-            "description": "An roSGNode object sends roSGNodeEvent messages to a specified port when changes occur in nodes. An roSGNodeEvent is also sent as the argument of field observer callback functions. Both of these cases allow a SceneGraph application to respond to events. roSGNodeEvent supports the following methods.",
             "methods": [
                 {
                     "name": "getData",
@@ -15600,12 +15599,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "An roSGNode object sends roSGNodeEvent messages to a specified port when changes occur in nodes. An roSGNodeEvent is also sent as the argument of field observer callback functions. Both of these cases allow a SceneGraph application to respond to events. roSGNodeEvent supports the following methods."
         },
         "roSGScreenEvent": {
             "name": "roSGScreenEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rosgscreenevent.md",
-            "description": "**roSGScreenEvents** are events sent to a scene graph **roSGScreen** by the framework. Other than when notifying the channel's main BrightScript thread that the screen is being closed, and thus that the channel should be terminated, channels do not generally handle these events.",
             "methods": [
                 {
                     "name": "isScreenClosed",
@@ -15614,12 +15613,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "**roSGScreenEvents** are events sent to a scene graph **roSGScreen** by the framework. Other than when notifying the channel's main BrightScript thread that the screen is being closed, and thus that the channel should be terminated, channels do not generally handle these events."
         },
         "roSlideShowEvent": {
             "name": "roSlideShowEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/roslideshowevent.md",
-            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roSlideShow sends the roSlideShowEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isPaused",
@@ -15668,12 +15667,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roSlideShow sends the roSlideShowEvent with the following predicates that indicate its valid event types:"
         },
         "roSocketEvent": {
             "name": "roSocketEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rosocketevent.md",
-            "description": "An roStreamSocket or roDataGramSocket object sends the roSocketEvent to indicate a change in the status of the socket. The socket must enable specific event notifications via the notify methods of ifSocketAsync.",
             "methods": [
                 {
                     "name": "GetSocketID",
@@ -15682,12 +15681,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "An roStreamSocket or roDataGramSocket object sends the roSocketEvent to indicate a change in the status of the socket. The socket must enable specific event notifications via the notify methods of ifSocketAsync."
         },
         "roSpringboardScreenEvent": {
             "name": "roSpringboardScreenEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rospringboardscreenevent.md",
-            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roSpringboardScreen sends the roSpringboardScreenEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isScreenClosed",
@@ -15711,12 +15710,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roSpringboardScreen sends the roSpringboardScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roSystemLogEvent": {
             "name": "roSystemLogEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rosystemlogevent.md",
-            "description": "roSystemLogEvents are sent when enabled via [roSystemLog](/docs/references/brightscript/components/rosystemlog.md \"roSystemLog\"). roSystemLogEvent has the following method:",
             "methods": [
                 {
                     "name": "GetInfo",
@@ -15725,12 +15724,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "roSystemLogEvents are sent when enabled via [roSystemLog](/docs/references/brightscript/components/rosystemlog.md \"roSystemLog\"). roSystemLogEvent has the following method:"
         },
         "roTextScreenEvent": {
             "name": "roTextScreenEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rotextscreenevent.md",
-            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roTextScreen sends the roTextScreenEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isScreenClosed",
@@ -15744,12 +15743,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated and will be removed from Roku OS on January 1st, 2019.\n> \n> Beginning July 1st, 2017, any new channels using this component will be rejected during certification.\n> \n> Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roTextScreen sends the roTextScreenEvent with the following predicates that indicate its valid event types:"
         },
         "roTextToSpeechEvent": {
             "name": "roTextToSpeechEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rotexttospeechevent.md",
-            "description": "> Please note this component is only available on the following devices: Roku Streaming Stick (3600X), Roku Express (3700X) and Express+ (3710X), Roku Premiere (4620X) and Premiere+ (4630X), Roku Ultra (4640X), and any Roku TV running Roku OS version 7.2 and later.\nThe [roTextToSpeech](/docs/references/brightscript/components/rotexttospeech.md \"roTextToSpeech\") component sends the roTextToSpeechEvent with the following predicates that indicate its valid event types.",
             "methods": [
                 {
                     "name": "GetData",
@@ -15768,12 +15767,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> Please note this component is only available on the following devices: Roku Streaming Stick (3600X), Roku Express (3700X) and Express+ (3710X), Roku Premiere (4620X) and Premiere+ (4630X), Roku Ultra (4640X), and any Roku TV running Roku OS version 7.2 and later.\nThe [roTextToSpeech](/docs/references/brightscript/components/rotexttospeech.md \"roTextToSpeech\") component sends the roTextToSpeechEvent with the following predicates that indicate its valid event types."
         },
         "roTextureRequestEvent": {
             "name": "roTextureRequestEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rotexturerequestevent.md",
-            "description": "The [roTextureManager](/docs/references/brightscript/components/rotexturemanager.md \"roTextureManager\") sends the roTextureRequestEvent after completing a request.",
             "methods": [
                 {
                     "name": "GetId",
@@ -15797,12 +15796,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "The [roTextureManager](/docs/references/brightscript/components/rotexturemanager.md \"roTextureManager\") sends the roTextureRequestEvent after completing a request."
         },
         "roUniversalControlEvent": {
             "name": "roUniversalControlEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rouniversalcontrolevent.md",
-            "description": "The roScreen object sends the roUniversalControlEvent with the following related methods. If an app constrains the events processed to just the roUniversalControlEvent, the app will work with any controller. The GetID(), GetChar(), GetKey(), and IsPress() methods can be used instead of parsing the GetInt() return value to more effectively distinguish between remote control and keyboard key presses, and the key press and release events.",
             "methods": [
                 {
                     "name": "GetInt",
@@ -15836,12 +15835,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "The roScreen object sends the roUniversalControlEvent with the following related methods. If an app constrains the events processed to just the roUniversalControlEvent, the app will work with any controller. The GetID(), GetChar(), GetKey(), and IsPress() methods can be used instead of parsing the GetInt() return value to more effectively distinguish between remote control and keyboard key presses, and the key press and release events."
         },
         "roUrlEvent": {
             "name": "roUrlEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rourlevent.md",
-            "description": "The roUrlTransfer component sends the roUrlEvent with the following methods:",
             "methods": [
                 {
                     "name": "GetInt",
@@ -15885,12 +15884,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "The roUrlTransfer component sends the roUrlEvent with the following methods:"
         },
         "roVideoPlayerEvent": {
             "name": "roVideoPlayerEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rovideoplayerevent.md",
-            "description": "The roVideoPlayer sends the roVideoPlayerEvent with the following predicates that indicate its valid event types:",
             "methods": [
                 {
                     "name": "isPaused",
@@ -15979,12 +15978,12 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "The roVideoPlayer sends the roVideoPlayerEvent with the following predicates that indicate its valid event types:"
         },
         "roVideoScreenEvent": {
             "name": "roVideoScreenEvent",
             "url": "https://developer.roku.com/docs/docs/references/brightscript/events/rovideoscreenevent.md",
-            "description": "> This component is deprecated.Beginning July 1st, 2017, any new channels using this component will be rejected during certification.Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roVideoScreen sends the roVideoScreenEvent with the same predicates as in [roVideoPlayerEvent](/docs/references/brightscript/events/rovideoplayerevent.md \"roVideoPlayerEvent\"). In addition to the events listed in roVideoPlayerEvent, the following events are also supported:",
             "methods": [
                 {
                     "name": "isScreenClosed",
@@ -16013,7 +16012,8 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "description": "> This component is deprecated.Beginning July 1st, 2017, any new channels using this component will be rejected during certification.Beginning January 1st, 2018, any updates to existing channels using this component will be rejected during certification.\nThe roVideoScreen sends the roVideoScreenEvent with the same predicates as in [roVideoPlayerEvent](/docs/references/brightscript/events/rovideoplayerevent.md \"roVideoPlayerEvent\"). In addition to the events listed in roVideoPlayerEvent, the following events are also supported:"
         }
     }
 }
