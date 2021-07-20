@@ -32,6 +32,24 @@
                 "test:nocover",
                 "--silent"
             ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "scrape-roku-docs",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run",
+                "scrape-roku-docs"
+            ],
             "group": {
                 "kind": "test",
                 "isDefault": true

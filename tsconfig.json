@@ -15,9 +15,11 @@
         "downlevelIteration": true,
         "noUnusedLocals": true,
         "allowSyntheticDefaultImports": true,
+        "resolveJsonModule": true,
         "lib": [
             "es2017",
-            "es2019.array"
+            "es2019.array",
+            "dom"
         ]
     },
     "include": [
