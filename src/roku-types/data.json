@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2021-07-20T10:27:45.361Z",
+    "generatedDate": "2021-07-20T10:39:36.513Z",
     "nodes": {},
     "components": {
         "roAppInfo": {
@@ -15160,28 +15160,7 @@
                 }
             ],
             "properties": [],
-            "implementors": [
-                {
-                    "name": "amount",
-                    "description": "Price of each purchased item"
-                },
-                {
-                    "name": "code",
-                    "description": "Product code. This corresponds to the product identifier that the developer assigns to the specific in-app purchase product"
-                },
-                {
-                    "name": "purchaseID",
-                    "description": "Contains the unique transaction ID of the transaction. Channels often use this value to entitle users to purchased subscriptions, etc. in their back end systems"
-                },
-                {
-                    "name": "qty",
-                    "description": "Quantity of the specific product purchased"
-                },
-                {
-                    "name": "total",
-                    "description": "Total purchase amount (including taxes) in the local currency"
-                }
-            ],
+            "implementors": [],
             "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get\\* methods in [ifChannelStore](/docs/references/brightscript/interfaces/ifchannelstore.md \"ifChannelStore\"). The following predicates indicate its valid event types:"
         },
         "roCodeRegistrationScreenEvent": {
