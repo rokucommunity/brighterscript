@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2021-07-20T19:14:09.260Z",
+    "generatedDate": "2021-07-20T19:40:40.138Z",
     "nodes": {},
     "components": {
         "roAppInfo": {
@@ -2052,13 +2052,13 @@
                 },
                 {
                     "name": "FilterBannerActiveHD",
-                    "description": "URL to set HD Filter Banner Active/Focus Highlighter. Screen types: Po. Example: pkg:/images/Filter_ActiveHint_HD.png",
+                    "description": "URL to set HD Filter Banner Active/Focus Highlighter. Screen types: Po. Example: pkg:/images/Filter\\_ActiveHint\\_HD.png",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
                     "name": "FilterBannerActiveSD",
-                    "description": "URL to set SD Filter Banner Active/Focus Highlighter. Screen types: Po. Example: pkg:/images/Filter_ActiveHint_SD43.png",
+                    "description": "URL to set SD Filter Banner Active/Focus Highlighter. Screen types: Po. Example: pkg:/images/Filter\\_ActiveHint\\_SD43.png",
                     "default": "invalid",
                     "type": "string"
                 },
@@ -2070,13 +2070,13 @@
                 },
                 {
                     "name": "FilterBannerInactiveHD",
-                    "description": "URL to set HD Filter Banner Inactive Highlighter. Screen types: Po. Example: pkg:/images/Filter_InactiveHint_HD.png",
+                    "description": "URL to set HD Filter Banner Inactive Highlighter. Screen types: Po. Example: pkg:/images/Filter\\_InactiveHint\\_HD.png",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
                     "name": "FilterBannerInactiveSD",
-                    "description": "URL to set SD Filter Banner Inactive Highlighter. Screen types: Po. Example: pkg:/images/Filter_ActiveHint_SD43.png",
+                    "description": "URL to set SD Filter Banner Inactive Highlighter. Screen types: Po. Example: pkg:/images/Filter\\_ActiveHint\\_SD43.png",
                     "default": "invalid",
                     "type": "string"
                 },
@@ -2088,13 +2088,13 @@
                 },
                 {
                     "name": "FilterBannerSliceHD",
-                    "description": "URL to set HD Filter Banner Background Image. Screen types: Po. Example: pkg:/images/Filter_ActiveHint_HD.png",
+                    "description": "URL to set HD Filter Banner Background Image. Screen types: Po. Example: pkg:/images/Filter\\_ActiveHint\\_HD.png",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
                     "name": "FilterBannerSliceSD",
-                    "description": "URL to set SD Filter Banner Background Image. Screen types: Po. Example: pkg:/images/Filter_ActiveHint_SD43.png",
+                    "description": "URL to set SD Filter Banner Background Image. Screen types: Po. Example: pkg:/images/Filter\\_ActiveHint\\_SD43.png",
                     "default": "invalid",
                     "type": "string"
                 },
@@ -2106,13 +2106,13 @@
                 },
                 {
                     "name": "GridScreenBorderOffsetHD",
-                    "description": "String representing point \"(x, y)\" that is the offset from the upper left corner of the focused HD image. Set to the negative width &amp; height of border. Screen types: Gr. Example: (-25,-25)",
+                    "description": "String representing point \"(x, y)\" that is the offset from the upper left corner of the focused HD image. Set to the negative width & height of border. Screen types: Gr. Example: (-25,-25)",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
                     "name": "GridScreenBorderOffsetSD",
-                    "description": "String representing point \"(x, y)\" that is the offset from the upper left corner of the focused SD image. Set to the negative width &amp; height of border. Screen types: Gr. Example: (-20,-20)",
+                    "description": "String representing point \"(x, y)\" that is the offset from the upper left corner of the focused SD image. Set to the negative width & height of border. Screen types: Gr. Example: (-20,-20)",
                     "default": "invalid",
                     "type": "string"
                 },
@@ -2124,13 +2124,13 @@
                 },
                 {
                     "name": "GridScreenDescriptionImageHD",
-                    "description": "URL to set HD Description callout background image on Grid. Screen types: Gr. Example: pkg:/images/Description_Background_HD.ng",
+                    "description": "URL to set HD Description callout background image on Grid. Screen types: Gr. Example: pkg:/images/Description\\_Background\\_HD.ng",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
                     "name": "GridScreenDescriptionImageSD",
-                    "description": "URL to set SD Description callout background image on Grid. Screen types: Gr. Example: pkg:/images/Description_Background_SD43.ng",
+                    "description": "URL to set SD Description callout background image on Grid. Screen types: Gr. Example: pkg:/images/Description\\_Background\\_SD43.ng",
                     "default": "invalid",
                     "type": "string"
                 },
@@ -2166,13 +2166,13 @@
                 },
                 {
                     "name": "GridScreenFocusBorderHD",
-                    "description": "URL to set HD Focus image on Active Grid Poster. Screen types: Gr. Example: pkg:/images/Border_16x9_HD.png",
+                    "description": "URL to set HD Focus image on Active Grid Poster. Screen types: Gr. Example: pkg:/images/Border\\_16x9\\_HD.png",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
                     "name": "GridScreenFocusBorderSD",
-                    "description": "URL to set SD Focus image on Active Grid Poster. Screen types: Gr. Example: pkg:/images/Border_16x9_SD43.png",
+                    "description": "URL to set SD Focus image on Active Grid Poster. Screen types: Gr. Example: pkg:/images/Border\\_16x9\\_SD43.png",
                     "default": "invalid",
                     "type": "string"
                 },
@@ -2189,25 +2189,25 @@
                     "type": "string"
                 },
                 {
-                    "name": "GridScreenLogoOffsetHD_X",
+                    "name": "GridScreenLogoOffsetHD\\_X",
                     "description": "Offset in pixels from the top-left origin of the display. Range 0 to 1280. Screen types: Gr. Example: 592",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
-                    "name": "GridScreenLogoOffsetHD_Y",
+                    "name": "GridScreenLogoOffsetHD\\_Y",
                     "description": "Offset in pixels from the top-left origin of the display. Range 0 to 720. Screen types: Gr. Example: 31",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
-                    "name": "GridScreenLogoOffsetSD_X",
+                    "name": "GridScreenLogoOffsetSD\\_X",
                     "description": "Offset in pixels from the top-left origin of the display. Range 0 to 720. Screen types: Gr. Example: 324",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
-                    "name": "GridScreenLogoOffsetSD_Y",
+                    "name": "GridScreenLogoOffsetSD\\_Y",
                     "description": "Offset in pixels from the top-left origin of the display. Range 0 to 480. Screen types: Gr. Example: 21",
                     "default": "invalid",
                     "type": "string"
@@ -2256,13 +2256,13 @@
                 },
                 {
                     "name": "ListItemHighlightHD",
-                    "description": "URL to set HD highlight image. Screen types: Gr Li Po. Example: pkg:/images/listitem_highlight_hd.png",
+                    "description": "URL to set HD highlight image. Screen types: Gr Li Po. Example: pkg:/images/listitem\\_highlight\\_hd.png",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
                     "name": "ListItemHighlightSD",
-                    "description": "URL to set SD highlight image. Screen types: Gr Li Po. Example: pkg:/images/listitem_highlight_sd.png",
+                    "description": "URL to set SD highlight image. Screen types: Gr Li Po. Example: pkg:/images/listitem\\_highlight\\_sd.png",
                     "default": "invalid",
                     "type": "string"
                 },
@@ -2292,85 +2292,85 @@
                 },
                 {
                     "name": "OverhangPrimaryLogoHD",
-                    "description": "Small application logo formatted for display in overhang top left. Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/co_logo_sd.png",
+                    "description": "Small application logo formatted for display in overhang top left. Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/co\\_logo\\_sd.png",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
-                    "name": "OverhangPrimaryLogoOffsetHD_X",
+                    "name": "OverhangPrimaryLogoOffsetHD\\_X",
                     "description": "Offset in pixels from the top-left origin of the display films.Range 0 to 1280. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 25",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
-                    "name": "OverhangPrimaryLogoOffsetHD_Y",
+                    "name": "OverhangPrimaryLogoOffsetHD\\_Y",
                     "description": "Offset in pixels from the top-left origin of the display films.Range 0 to 720. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 50",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
-                    "name": "OverhangPrimaryLogoOffsetSD_X",
+                    "name": "OverhangPrimaryLogoOffsetSD\\_X",
                     "description": "Offset in pixels from the top-left origin of the display films.Range 0 to 720. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 25",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
-                    "name": "OverhangPrimaryLogoOffsetSD_Y",
+                    "name": "OverhangPrimaryLogoOffsetSD\\_Y",
                     "description": "Offset in pixels from the top-left origin of the display films.Range 0 to 480. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 50",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
                     "name": "OverhangPrimaryLogoSD",
-                    "description": "Small application logo formatted for display in overhang top left. Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/co_logo_sd.png",
+                    "description": "Small application logo formatted for display in overhang top left. Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/co\\_logo\\_sd.png",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
                     "name": "OverhangSecondaryLogoHD",
-                    "description": "Small application logo formatted for display in overhang top left. Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/co_logo_hd.png",
+                    "description": "Small application logo formatted for display in overhang top left. Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/co\\_logo\\_hd.png",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
-                    "name": "OverhangSecondaryLogoOffsetHD_X",
+                    "name": "OverhangSecondaryLogoOffsetHD\\_X",
                     "description": "Offset in pixels from the top-left origin of the display films. Range 0 to 1280. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 25",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
-                    "name": "OverhangSecondaryLogoOffsetHD_Y",
+                    "name": "OverhangSecondaryLogoOffsetHD\\_Y",
                     "description": "Offset in pixels from the top-left origin of the display films. Range 0 to 720. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 50",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
-                    "name": "OverhangSecondaryLogoOffsetSD_X",
+                    "name": "OverhangSecondaryLogoOffsetSD\\_X",
                     "description": "Offset in pixels from the top-left origin of the display films. Range 0 to 720. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 25",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
-                    "name": "OverhangSecondaryLogoOffsetSD_Y",
+                    "name": "OverhangSecondaryLogoOffsetSD\\_Y",
                     "description": "Offset in pixels from the top-left origin of the display films. Range 0 to 480. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 50",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
                     "name": "OverhangSecondaryLogoSD",
-                    "description": "Small application logo formatted for display in overhang top left. Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/co_logo_sd.png",
+                    "description": "Small application logo formatted for display in overhang top left. Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/co\\_logo\\_sd.png",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
                     "name": "OverhangSliceHD",
-                    "description": "URI for the overhang slice (thin piece of border at the top of the screen in HD size). Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/overhang_hd.png",
+                    "description": "URI for the overhang slice (thin piece of border at the top of the screen in HD size). Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/overhang\\_hd.png",
                     "default": "invalid",
                     "type": "string"
                 },
                 {
                     "name": "OverhangSliceSD",
-                    "description": "URI for the overhang slice (thin piece of top of screen border). Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/overhang_sd.png",
+                    "description": "URI for the overhang slice (thin piece of top of screen border). Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/overhang\\_sd.png",
                     "default": "invalid",
                     "type": "string"
                 },
