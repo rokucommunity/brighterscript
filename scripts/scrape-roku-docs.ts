@@ -46,6 +46,7 @@ class ComponentListBuilder {
 
         //certain references are missing hyperlinks. this attempts to repair them
         this.linkMissingReferences();
+        this.linkMissingImplementers();
 
         //store the output
         fsExtra.outputFileSync(outPath, JSON.stringify(this.result, null, 4));
@@ -66,6 +67,28 @@ class ComponentListBuilder {
         for (const ref of refs) {
             if (!ref.url) {
                 ref.url = this.result.components[ref.name]?.url;
+            }
+        }
+    }
+
+    /**
+     * Link events back to the components that implement them
+     */
+    public linkMissingImplementers() {
+        const events = Object.values(this.result.events);
+        for (const name in this.result.components) {
+            const component = this.result.components[name];
+            for (const ref of component?.events ?? []) {
+                //find the event
+                const evt = events.find(x => x.name.toLowerCase() === ref?.name?.toLowerCase());
+                if (evt) {
+                    evt.implementers.push({
+                        name: component.name,
+                        url: component.url,
+                        //we don't have any description available
+                        description: undefined
+                    });
+                }
             }
         }
     }
