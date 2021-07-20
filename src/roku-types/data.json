@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2021-07-20T10:14:30.135Z",
+    "generatedDate": "2021-07-20T10:20:35.681Z",
     "nodes": {},
     "components": {
         "roAppInfo": {
@@ -15136,7 +15136,8 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "availableSince": "8"
         },
         "roChannelStoreEvent": {
             "name": "roChannelStoreEvent",
@@ -15219,7 +15220,8 @@
                 }
             ],
             "properties": [],
-            "implementors": []
+            "implementors": [],
+            "availableSince": "8"
         },
         "roFileSystemEvent": {
             "name": "roFileSystemEvent",
