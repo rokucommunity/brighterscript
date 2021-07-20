@@ -55,20 +55,17 @@ class ComponentListBuilder {
      * Repair references that are missing a hyperlink (usually because the roku docs were incomplete)
      */
     public linkMissingReferences() {
-        //components
-        for (const component of Object.values(this.result.components)) {
-            for (const ref of component.interfaces) {
-                if (!ref.url) {
-                    ref.url = this.result.interfaces[ref.name]?.url;
-                }
-            }
-        }
-        //interfaces
-        for (const iface of Object.values(this.result.interfaces)) {
-            for (const ref of iface.implementors ?? []) {
-                if (!ref.url) {
-                    ref.url = this.result.components[ref.name]?.url;
-                }
+        const refs = [
+            //components
+            ...Object.values(this.result.components).flatMap(x => x.interfaces),
+            //interfaces
+            ...Object.values(this.result.interfaces).flatMap(x => x.implementors),
+            //events
+            ...Object.values(this.result.events).flatMap(x => x.implementors)
+        ];
+        for (const ref of refs) {
+            if (!ref.url) {
+                ref.url = this.result.components[ref.name]?.url;
             }
         }
     }
@@ -226,7 +223,21 @@ class ComponentListBuilder {
 
     private getImplementors(manager: TokenManager) {
         const result = [] as Implementor[];
-        const table = manager.getTableByHeaders(['name', 'description']);
+
+        //try to find a table from multiple different locations, keep the first one found
+        const table = [
+            manager.getHeading(2, 'implemented by'),
+            //some roku docs incorrectly have the table nested inside the `Description` block instead
+            manager.getHeading(2, 'description'),
+            manager.getHeading(1)
+        ].map(token => manager.getTableByHeaders(
+            ['name', 'description'],
+            token,
+            x => x.type === 'heading' && x.depth === 2
+        )).find(x => !!x);
+
+        //some docs have the "implemented by" table in the "Description heading instead"
+        if (!table) { }
         if (table?.type === 'table') {
             for (const row of table?.tokens?.cells ?? []) {
                 const firstTokenInRow = row?.[0]?.[0];
@@ -355,7 +366,7 @@ class ComponentListBuilder {
 
                 //augment parameter info from optional parameters table
                 const parameterObjects = manager.tableToObjects(
-                    manager.getTableByHeaders(['name', 'type', 'description'], methodHeader, nextMethodHeader)
+                    manager.getTableByHeaders(['name', 'type', 'description'], methodHeader, x => x === nextMethodHeader)
                 );
                 for (const row of parameterObjects ?? []) {
                     const methodParam = method.params.find(p => p?.name && p.name?.toLowerCase() === row.name?.toLowerCase());
@@ -477,7 +488,7 @@ class TokenManager {
      */
     public getHeading(depth: number, text?: string) {
         for (const token of this.tokens) {
-            if (token?.type === 'heading' && token?.depth === 1) {
+            if (token?.type === 'heading' && token?.depth === depth) {
                 //if we have a text filter, and the text does not match, then skip
                 if (text && token?.text?.toLowerCase() !== text) {
                     continue;
@@ -490,14 +501,11 @@ class TokenManager {
     /**
      * Scan the tokens and find the first the top-level table based on the header names
      */
-    public getTableByHeaders(searchHeaders: string[], startAt?: Token, stopAt?: Token): TableEnhanced {
+    public getTableByHeaders(searchHeaders: string[], startAt: Token, endTokenMatcher?: EndTokenMatcher): TableEnhanced {
         let startIndex = this.tokens.indexOf(startAt);
         startIndex = startIndex > -1 ? startIndex : 0;
 
-        let stopIndex = this.tokens.indexOf(stopAt);
-        stopIndex = stopIndex > -1 ? stopIndex : this.tokens.length;
-
-        for (let i = startIndex; i < stopIndex; i++) {
+        for (let i = startIndex + 1; i < this.tokens.length; i++) {
             const token = this.tokens[i];
             if (token?.type === 'table') {
                 const headers = token?.header?.map(x => x.toLowerCase());
@@ -507,6 +515,9 @@ class TokenManager {
                 ) {
                     return token as TableEnhanced;
                 }
+            }
+            if (endTokenMatcher?.(token) === true) {
+                break;
             }
         }
     }
