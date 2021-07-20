@@ -225,7 +225,7 @@ class ComponentListBuilder {
                     url: getDocUrl(docPath),
                     methods: this.buildInterfaceMethods(manager),
                     properties: [],
-                    implementors: this.getInterfaceImplementors(document),
+                    implementors: this.getImplementors(manager),
                     description: manager.getMarkdown(manager.getHeading(1), x => x.type === 'heading'),
                     availableSince: manager.getAvailableSince(manager.getHeading(1), x => x.type === 'heading')
                 } as RokuEvent;
@@ -245,35 +245,6 @@ class ComponentListBuilder {
 
     private isTable(element) {
         return element?.nodeName?.toLowerCase() === 'table';
-    }
-
-    private getInterfaceImplementors(document: Document) {
-        //there are serveral different ways the interface "implemented by" table can be found in the html, so get them all and keep the first one
-        let table = [
-            document.getElementById('implemented-by')?.nextElementSibling,
-            document.getElementById('implemented-by')?.nextElementSibling?.firstElementChild,
-            document.getElementById('implemented-by')?.nextElementSibling?.nextElementSibling,
-            document.getElementById('implemented-by')?.nextElementSibling?.nextElementSibling?.firstElementChild,
-            document.querySelectorAll('h1')[0]?.nextElementSibling,
-            document.querySelectorAll('h1')[0]?.nextElementSibling?.firstElementChild,
-            document.querySelectorAll('h1')[0]?.nextElementSibling?.nextElementSibling,
-            document.querySelectorAll('h1')[0]?.nextElementSibling?.nextElementSibling?.firstElementChild,
-            document.querySelectorAll('h1')[1]?.nextElementSibling,
-            document.querySelectorAll('h1')[1]?.nextElementSibling?.firstElementChild,
-            document.querySelectorAll('h1')[1]?.nextElementSibling?.nextElementSibling,
-            document.querySelectorAll('h1')[1]?.nextElementSibling?.nextElementSibling?.firstElementChild,
-            this.getTableByHeaders(document, ['name', 'description'], true)
-        ].find(x => this.isTable(x));
-
-        const result = this.getTableData<Implementor>(table).map((x) => {
-            //some name columns are a hyperlink
-            if (x.name?.trim().startsWith('<a')) {
-                x.name = />(.*)?<\/a>/.exec(x.name)?.[1];
-                x.url = /href\s*=\s*"(.*)?"/.exec(x.name)?.[1];
-            }
-            return x;
-        });
-        return result;
     }
 
     private reduceSignatures(signatures: Array<Signature>) {
@@ -363,27 +334,6 @@ class ComponentListBuilder {
             result.push(rowData);
         }
         return result;
-    }
-    private findNextElement<T = HTMLElement>(start: HTMLElement, matchFilter: ElementFilter, stopFilter?: ElementFilter): T {
-
-        function doFilter(item: HTMLElement, filter) {
-            return item?.id === filter?.id ||
-                item?.textContent?.toLowerCase() === filter?.text ||
-                item?.nodeName?.toString()?.toLowerCase() === filter?.type?.toLowerCase() ||
-                item?.classList.contains(filter?.class);
-        }
-
-        let current = start;
-        do {
-            current = current?.nextElementSibling as HTMLElement;
-            //return the first element that matches the filter
-            if (doFilter(current, matchFilter)) {
-                return current as unknown as T;
-                //if we found a not-match filter, stop searching
-            } else if (doFilter(current, stopFilter)) {
-                return;
-            }
-        } while (current);
     }
 
     private buildInterfaceMethods(manager: TokenManager) {
