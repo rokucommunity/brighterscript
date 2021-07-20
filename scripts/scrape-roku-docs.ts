@@ -754,7 +754,9 @@ class TokenManager {
      * Get the description of the overall item (all the text between the first two headings)
      */
     public getDescription() {
-        return this.getTokensBetween(this.getHeading(1), (x) => x.type === 'heading').map(x => x.raw).join()?.trim() || undefined;
+        return this.getTokensBetween(this.getHeading(1), (x) => x.type === 'heading').map(x => x.raw).join('')?.trim() || undefined;
+    }
+
     }
 }
 
