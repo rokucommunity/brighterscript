@@ -108,18 +108,16 @@ class ComponentListBuilder {
             const dom = await this.getDom(docUrl);
             const document = dom.window.document;
 
-            const descriptionEl = this.findNextElement(document.getElementsByTagName('h1')[0], { type: 'p' });
-
             const component = {
                 name: manager.getHeading(1)?.text,
                 url: getDocUrl(docPath),
                 interfaces: manager.getListReferences('supported interfaces'),
                 events: manager.getListReferences('supported events'),
                 constructors: [],
-                description: descriptionEl?.innerHTML
+                description: manager.getDescription()
             } as BrightScriptComponent;
 
-            if (document.body.innerHTML.match(/this object is created with no parameters/)) {
+            if (/this object is created with no parameters/.exec(manager.html)) {
                 component.constructors.push({
                     params: [],
                     returnType: name,
@@ -183,7 +181,6 @@ class ComponentListBuilder {
 
                 const dom = await this.getDom(docUrl);
                 const document = dom.window.document;
-                const descriptionEl = this.findNextElement(document.getElementsByTagName('h1')[0], { type: 'p' });
 
                 const iface = {
                     name: name,
@@ -191,8 +188,9 @@ class ComponentListBuilder {
                     methods: this.buildInterfaceMethods(manager),
                     properties: [],
                     implementors: this.getImplementors(manager),
-                    desription: descriptionEl?.innerHTML
-                };
+                    description: manager.getDescription(),
+                    availableSince: undefined
+                } as RokuInterface;
 
                 //if there is a custom handler for this doc, call it
                 if (this[name]) {
@@ -220,12 +218,11 @@ class ComponentListBuilder {
 
                 const dom = await this.getDom(docUrl);
                 const document = dom.window.document;
-                const descriptionEl = this.findNextElement(document.getElementsByTagName('h1')[0], { type: 'p' });
 
                 const evt = {
                     name: name,
                     url: getDocUrl(docPath),
-                    description: descriptionEl?.innerHTML,
+                    description: manager.getDescription(),
                     methods: this.buildInterfaceMethods(manager),
                     properties: [],
                     implementors: this.getInterfaceImplementors(document)
@@ -536,6 +533,7 @@ interface RokuEvent {
     availableSince: string;
     name: string;
     url: string;
+    description: string;
     /**
      * Standard roku interfaces don't have properties, but we occasionally need to store properties
      * for complicated parameter values for certain methods
@@ -729,6 +727,34 @@ class TokenManager {
         if (idx > -1) {
             return this.tokens[idx + 1] as T;
         }
+    }
+
+    /**
+     * Get all text found between the start token and the matched end token
+     */
+    public getTokensBetween(startToken: Token, endTokenMatcher: (t: Token) => boolean | undefined) {
+        let startIndex = this.tokens.indexOf(startToken);
+        startIndex = startIndex > -1 ? startIndex : 0;
+
+        const result = [] as Token[];
+
+        for (let i = startIndex + 1; i < this.tokens.length; i++) {
+            const token = this.tokens[i];
+            //stop collecting tokens once the matcher returns true
+            if (endTokenMatcher(token) === true) {
+                break;
+            } else {
+                result.push(token);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Get the description of the overall item (all the text between the first two headings)
+     */
+    public getDescription() {
+        return this.getTokensBetween(this.getHeading(1), (x) => x.type === 'heading').map(x => x.raw).join()?.trim() || undefined;
     }
 }
 
