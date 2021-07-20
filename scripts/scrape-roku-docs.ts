@@ -2,7 +2,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 /* eslint-disable no-cond-assign */
-import { JSDOM } from 'jsdom';
 import * as phin from 'phin';
 import * as fsExtra from 'fs-extra';
 import { standardizePath as s } from '../src/util';
@@ -104,10 +103,8 @@ class ComponentListBuilder {
         for (const name in componentDocs) {
             console.log(`Processing component ${i++} of ${count}`);
             const docPath = componentDocs[name];
-            const docUrl = this.getDocApiUrl(docPath);
-            const manager = await new TokenManager().process(docUrl);
-            const dom = await this.getDom(docUrl);
-            const document = dom.window.document;
+            const docApiUrl = this.getDocApiUrl(docPath);
+            const manager = await new TokenManager().process(docApiUrl);
 
             const component = {
                 name: manager.getHeading(1)?.text,
@@ -162,7 +159,7 @@ class ComponentListBuilder {
             //if there is a custom handler for this doc, call it
             if (this[name]) {
                 console.log(`calling custom handler for ${name}`);
-                this[name](component, document);
+                this[name](component, manager);
             }
 
             this.result.components[name] = component;
@@ -176,13 +173,10 @@ class ComponentListBuilder {
         for (const name in interfaceDocs) {
             console.log(`Processing interface ${i++} of ${count}`);
             const docPath = interfaceDocs[name];
-            const docUrl = this.getDocApiUrl(docPath);
-            const manager = await new TokenManager().process(docUrl);
+            const docApiUrl = this.getDocApiUrl(docPath);
+            const manager = await new TokenManager().process(docApiUrl);
 
             try {
-
-                const dom = await this.getDom(docUrl);
-                const document = dom.window.document;
 
                 const iface = {
                     name: name,
@@ -202,7 +196,7 @@ class ComponentListBuilder {
 
                 this.result.interfaces[name] = iface as any;
             } catch (e) {
-                console.error(`Error processing interface ${docUrl}`, e);
+                console.error(`Error processing interface ${docApiUrl}`, e);
             }
         }
     }
@@ -214,13 +208,10 @@ class ComponentListBuilder {
         for (const name in eventDocs) {
             console.log(`Processing event ${i++} of ${count}`);
             const docPath = eventDocs[name];
-            const docUrl = this.getDocApiUrl(docPath);
-            const manager = await new TokenManager().process(docUrl);
+            const docApiUrl = this.getDocApiUrl(docPath);
+            const manager = await new TokenManager().process(docApiUrl);
+
             try {
-
-                const dom = await this.getDom(docUrl);
-                const document = dom.window.document;
-
                 const evt = {
                     name: name,
                     url: getDocUrl(docPath),
@@ -239,7 +230,7 @@ class ComponentListBuilder {
 
                 this.result.events[name] = evt as any;
             } catch (e) {
-                console.error(`Error processing interface ${docUrl}`, e);
+                console.error(`Error processing interface ${docApiUrl}`, e);
             }
         }
     }
@@ -301,7 +292,7 @@ class ComponentListBuilder {
      * Custom handler for roAppManager
      * create a new interface called `AppManagerTheme`
      */
-    private roAppManager(component: BrightScriptComponent, document: Document) {
+    private roAppManager(component: BrightScriptComponent, manager: TokenManager) {
         const iface = {
             name: 'AppManagerTheme',
             properties: [],
@@ -309,8 +300,10 @@ class ComponentListBuilder {
             methods: [],
             url: undefined
         } as RokuInterface;
-
-        for (const row of this.getTableDataByHeaders(document, ['attribute', 'screen types', 'values', 'example', 'version'])) {
+        const table = manager.getTableByHeaders(
+            ['attribute', 'screen types', 'values', 'example', 'version']
+        );
+        for (const row of manager.tableToObjects(table)) {
             iface.properties.push({
                 name: row.attribute,
                 description: `${row.values}. Screen types: ${row['screen types']}. Example: ${row.example}`,
@@ -342,32 +335,6 @@ class ComponentListBuilder {
             }
             return true;
         });
-    }
-
-    private getTableDataByHeaders<T extends string, U = { [K in T]?: string }>(document: Document, searchHeaders: T[]) {
-        return this.getTableData<U>(
-            this.getTableByHeaders(document, searchHeaders)
-        );
-    }
-
-    private getTableData<T>(table: any) {
-        if (!this.isTable(table)) {
-            console.error('Element is not a table', table);
-            return [];
-        }
-        //get the header names
-        const headerNames = [...table.getElementsByTagName('tr')?.[0].getElementsByTagName('th')].map(x => x.innerHTML.toLowerCase());
-        const result = [] as Array<T>;
-        for (const row of [...table.getElementsByTagName('tbody')[0].getElementsByTagName('tr')]) {
-            const columns = [...row.getElementsByTagName('td')];
-            const rowData = {} as T;
-            for (let i = 0; i < columns.length; i++) {
-                const column = columns[i];
-                rowData[headerNames[i]] = column.innerHTML;
-            }
-            result.push(rowData);
-        }
-        return result;
     }
 
     private buildInterfaceMethods(manager: TokenManager) {
@@ -421,12 +388,6 @@ class ComponentListBuilder {
                 returnType: func.func.returnTypeToken?.text
             } as Func;
         }
-    }
-
-    private async getDom(apiUrl: string) {
-        const html = (await getJson(apiUrl)).content;
-        const dom = new JSDOM(html);
-        return dom;
     }
 
     private getDocApiUrl(docRelativePath: string) {
@@ -524,7 +485,7 @@ class TokenManager {
     /**
      * Scan the tokens and find the first the top-level table based on the header names
      */
-    public getTableByHeaders(searchHeaders: string[], startAt: Token, endTokenMatcher?: EndTokenMatcher): TableEnhanced {
+    public getTableByHeaders(searchHeaders: string[], startAt?: Token, endTokenMatcher?: EndTokenMatcher): TableEnhanced {
         let startIndex = this.tokens.indexOf(startAt);
         startIndex = startIndex > -1 ? startIndex : 0;
 
