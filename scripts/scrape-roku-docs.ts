@@ -114,7 +114,8 @@ class ComponentListBuilder {
                 interfaces: manager.getListReferences('supported interfaces'),
                 events: manager.getListReferences('supported events'),
                 constructors: [],
-                description: manager.getDescription()
+                description: manager.getDescription(),
+                availableSince: manager.getAvailableSince()
             } as BrightScriptComponent;
 
             if (/this object is created with no parameters/.exec(manager.html)) {
@@ -189,7 +190,7 @@ class ComponentListBuilder {
                     properties: [],
                     implementors: this.getImplementors(manager),
                     description: manager.getDescription(),
-                    availableSince: undefined
+                    availableSince: manager.getAvailableSince()
                 } as RokuInterface;
 
                 //if there is a custom handler for this doc, call it
@@ -225,8 +226,9 @@ class ComponentListBuilder {
                     description: manager.getDescription(),
                     methods: this.buildInterfaceMethods(manager),
                     properties: [],
-                    implementors: this.getInterfaceImplementors(document)
-                };
+                    implementors: this.getInterfaceImplementors(document),
+                    availableSince: manager.getAvailableSince()
+                } as RokuEvent;
 
                 //if there is a custom handler for this doc, call it
                 if (this[name]) {
@@ -757,6 +759,11 @@ class TokenManager {
         return this.getTokensBetween(this.getHeading(1), (x) => x.type === 'heading').map(x => x.raw).join('')?.trim() || undefined;
     }
 
+    public getAvailableSince() {
+        const match = /available\s+since\s?(?:roku\s*os\s*)?([\d\.]+)/i.exec(this.getDescription());
+        if (match) {
+            return match[1];
+        }
     }
 }
 
