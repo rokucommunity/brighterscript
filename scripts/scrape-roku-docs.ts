@@ -486,94 +486,6 @@ function getDocUrl(docRelativePath: string) {
     }
 }
 
-interface BrightScriptComponent {
-    name: string;
-    url: string;
-    availableSince: string;
-    description: string;
-    constructors: Array<Signature>;
-    interfaces: Reference[];
-    events: Reference[];
-}
-
-interface SceneGraphNode {
-    name: string;
-    url: string;
-    availableSince: string;
-    description: string;
-    constructors: Array<Signature>;
-    interfaces: Reference[];
-    events: Reference[];
-}
-
-interface Reference {
-    name: string;
-    url: string;
-}
-
-interface Implementor extends Reference {
-    /**
-     * A description of that this interface implementor does (i.e. describes a component)
-     */
-    description: string;
-}
-
-interface RokuInterface {
-    availableSince: string;
-    name: string;
-    url: string;
-    /**
-     * Standard roku interfaces don't have properties, but we occasionally need to store properties
-     * for complicated parameter values for certain methods
-     */
-    properties: Prop[];
-    methods: Func[];
-    implementors: Implementor[];
-}
-
-interface RokuEvent {
-    availableSince: string;
-    name: string;
-    url: string;
-    description: string;
-    /**
-     * Standard roku interfaces don't have properties, but we occasionally need to store properties
-     * for complicated parameter values for certain methods
-     */
-    properties: Prop[];
-    methods: Func[];
-    implementors: Implementor[];
-}
-
-interface Func extends Signature {
-    name: string;
-    description: string;
-}
-interface Param {
-    name: string;
-    isRequired: boolean;
-    description: string;
-    default: string;
-    type: string;
-}
-interface Prop {
-    name: string;
-    description: string;
-    type: string;
-    default: string;
-}
-interface Signature {
-    params: Param[];
-    returnType: string;
-    returnDescription: string;
-}
-interface ElementFilter {
-    id?: string;
-    text?: string;
-    type?: string;
-    class?: string;
-}
-
 //run the builder
 new ComponentListBuilder().run().catch((e) => console.error(e));
 
@@ -772,4 +684,92 @@ interface TableEnhanced extends Tokens.Table {
         header: Array<Array<TokensList>>;
         cells: Array<Array<TokensList>>;
     };
+}
+
+interface BrightScriptComponent {
+    name: string;
+    url: string;
+    availableSince: string;
+    description: string;
+    constructors: Array<Signature>;
+    interfaces: Reference[];
+    events: Reference[];
+}
+
+interface SceneGraphNode {
+    name: string;
+    url: string;
+    availableSince: string;
+    description: string;
+    constructors: Array<Signature>;
+    interfaces: Reference[];
+    events: Reference[];
+}
+
+interface Reference {
+    name: string;
+    url: string;
+}
+
+interface Implementor extends Reference {
+    /**
+     * A description of that this interface implementor does (i.e. describes a component)
+     */
+    description: string;
+}
+
+interface RokuInterface {
+    availableSince: string;
+    name: string;
+    url: string;
+    /**
+     * Standard roku interfaces don't have properties, but we occasionally need to store properties
+     * for complicated parameter values for certain methods
+     */
+    properties: Prop[];
+    methods: Func[];
+    implementors: Implementor[];
+}
+
+interface RokuEvent {
+    availableSince: string;
+    name: string;
+    url: string;
+    description: string;
+    /**
+     * Standard roku interfaces don't have properties, but we occasionally need to store properties
+     * for complicated parameter values for certain methods
+     */
+    properties: Prop[];
+    methods: Func[];
+    implementors: Implementor[];
+}
+
+interface Func extends Signature {
+    name: string;
+    description: string;
+}
+interface Param {
+    name: string;
+    isRequired: boolean;
+    description: string;
+    default: string;
+    type: string;
+}
+interface Prop {
+    name: string;
+    description: string;
+    type: string;
+    default: string;
+}
+interface Signature {
+    params: Param[];
+    returnType: string;
+    returnDescription: string;
+}
+interface ElementFilter {
+    id?: string;
+    text?: string;
+    type?: string;
+    class?: string;
 }
