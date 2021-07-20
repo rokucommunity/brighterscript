@@ -114,8 +114,8 @@ class ComponentListBuilder {
                 interfaces: manager.getListReferences('supported interfaces'),
                 events: manager.getListReferences('supported events'),
                 constructors: [],
-                description: manager.getDescription(),
-                availableSince: manager.getAvailableSince()
+                description: manager.getMarkdown(manager.getHeading(1), x => x.type === 'heading'),
+                availableSince: manager.getAvailableSince(manager.getHeading(1), x => x.type === 'heading')
             } as BrightScriptComponent;
 
             if (/this object is created with no parameters/.exec(manager.html)) {
@@ -189,8 +189,8 @@ class ComponentListBuilder {
                     methods: this.buildInterfaceMethods(manager),
                     properties: [],
                     implementors: this.getImplementors(manager),
-                    description: manager.getDescription(),
-                    availableSince: manager.getAvailableSince()
+                    description: manager.getMarkdown(manager.getHeading(1), x => x.type === 'heading'),
+                    availableSince: manager.getAvailableSince(manager.getHeading(1), x => x.type === 'heading')
                 } as RokuInterface;
 
                 //if there is a custom handler for this doc, call it
@@ -223,11 +223,11 @@ class ComponentListBuilder {
                 const evt = {
                     name: name,
                     url: getDocUrl(docPath),
-                    description: manager.getDescription(),
                     methods: this.buildInterfaceMethods(manager),
                     properties: [],
                     implementors: this.getInterfaceImplementors(document),
-                    availableSince: manager.getAvailableSince()
+                    description: manager.getMarkdown(manager.getHeading(1), x => x.type === 'heading'),
+                    availableSince: manager.getAvailableSince(manager.getHeading(1), x => x.type === 'heading')
                 } as RokuEvent;
 
                 //if there is a custom handler for this doc, call it
@@ -646,7 +646,7 @@ class TokenManager {
     /**
      * Get all text found between the start token and the matched end token
      */
-    public getTokensBetween(startToken: Token, endTokenMatcher: (t: Token) => boolean | undefined) {
+    public getTokensBetween(startToken: Token, endTokenMatcher: EndTokenMatcher) {
         let startIndex = this.tokens.indexOf(startToken);
         startIndex = startIndex > -1 ? startIndex : 0;
 
@@ -665,19 +665,25 @@ class TokenManager {
     }
 
     /**
-     * Get the description of the overall item (all the text between the first two headings)
+     * Get join all markdown between the specified items
      */
-    public getDescription() {
-        return this.getTokensBetween(this.getHeading(1), (x) => x.type === 'heading').map(x => x.raw).join('')?.trim() || undefined;
+    public getMarkdown(startToken: Token, endTokenMatcher: EndTokenMatcher) {
+        return this.getTokensBetween(startToken, endTokenMatcher).map(x => x.raw).join('')?.trim() || undefined;
     }
 
-    public getAvailableSince() {
-        const match = /available\s+since\s?(?:roku\s*os\s*)?([\d\.]+)/i.exec(this.getDescription());
+    /**
+     * Find any `available since` text between the specified items
+     */
+    public getAvailableSince(startToken: Token, endTokenMatcher: EndTokenMatcher) {
+        const markdown = this.getMarkdown(startToken, endTokenMatcher);
+        const match = /available\s+since\s?(?:roku\s*os\s*)?([\d\.]+)/i.exec(markdown);
         if (match) {
             return match[1];
         }
     }
 }
+
+type EndTokenMatcher = (t: Token) => boolean | undefined;
 
 interface TableEnhanced extends Tokens.Table {
     tokens: {
