@@ -295,7 +295,7 @@ class ComponentListBuilder {
         for (let i = 0; i < docs.length; i++) {
             const doc = docs[i];
             //skip non-component pages
-            if (/(component\s*functions)|(xml\s*elements)/i.exec(doc?.categoryName)) {
+            if (/(component\s*functions)|(xml\s*elements)/i.exec(doc?.categoryName) || doc?.name?.toLowerCase() === 'overview') {
                 continue;
             }
             console.log(`Processing node ${i} of ${docs.length}`);
@@ -315,6 +315,13 @@ class ComponentListBuilder {
                     events: [],
                     interfaces: []
                 } as SceneGraphNode;
+
+                //hydrate the `Node` node with roSGNode component info
+                if (node.name === 'Node') {
+                    const roSGNode = this.result.components.roSGNode;
+                    node.events = roSGNode.events ?? [];
+                    node.interfaces = roSGNode.interfaces ?? [];
+                }
 
                 //if there is a custom handler for this doc, call it
                 if (this[node.name]) {

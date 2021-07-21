@@ -1,13 +1,47 @@
 {
-    "generatedDate": "2021-07-21T13:43:31.515Z",
+    "generatedDate": "2021-07-21T10:32:24.734Z",
     "nodes": {
         "Node": {
             "name": "Node",
             "url": "https://developer.roku.com/docs/references/scenegraph/node.md",
             "description": "The abstract base class of all SceneGraph nodes and the equivalent of the BrightScript roSGNode component. See [roSGNode](https://developer.roku.com/docs/references/brightscript/components/rosgnode.md\"roSGNode\") for supported interfaces.\n\n**Node** class objects do not draw anything and are skipped in the render traversal of the SceneGraph node tree. The Node class provides the core parenting and key focus management functionality used by all nodes.",
             "fields": [],
-            "events": [],
-            "interfaces": []
+            "events": [
+                {
+                    "name": "roSGNodeEvent",
+                    "url": "https://developer.roku.com/docs/references/brightscript/events/rosgnodeevent.md"
+                }
+            ],
+            "interfaces": [
+                {
+                    "name": "ifAssociativeArray",
+                    "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifassociativearray.md"
+                },
+                {
+                    "name": "ifSGNodeChildren",
+                    "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodechildren.md"
+                },
+                {
+                    "name": "ifSGNodeField",
+                    "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodefield.md"
+                },
+                {
+                    "name": "ifSGNodeDict",
+                    "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodedict.md"
+                },
+                {
+                    "name": "ifSGNodeFocus",
+                    "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodefocus.md"
+                },
+                {
+                    "name": "ifSGNodeBoundingRect",
+                    "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodeboundingrect.md"
+                },
+                {
+                    "name": "ifSGNodeHttpAgentAccess",
+                    "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodehttpagentaccess.md"
+                }
+            ]
         },
         "Scene": {
             "name": "Scene",
@@ -93,14 +127,6 @@
             "events": [],
             "interfaces": []
         },
-        "Overview": {
-            "name": "Overview",
-            "url": "https://developer.roku.com/docs/references/scenegraph/animation-nodes/overview.md",
-            "description": "The SceneGraph API includes several nodes to animate screen elements. You can move screen elements around, make them disappear and reappear, and change color. Animating screen elements requires the use of one of the node classes derived from [**AnimationBase**](AnimationBase_1607218.html), which must include a child interpolator node to actually achieve a specific animation effect. The animation and interpolator node classes are:\n\n*   **[Animation](https://developer.roku.com/docs/references/scenegraph/animation-nodes/animation.md**\n*   **[SequentialAnimation](https://developer.roku.com/docs/references/scenegraph/animation-nodes/sequentialanimation.md**\n*   **[ParallelAnimation](https://developer.roku.com/docs/references/scenegraph/animation-nodes/parallelanimation.md**\n*   **[FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md**\n*   **[Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md**\n*   **[ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md**\n\nAll animations require that you target a specific field of a specific renderable node or group of renderable nodes. You must also start (and stop, if wanted) the animation in BrightScript code by setting the value of the animation `control` field.\n\nThe child interpolator nodes each operate on different types of target node field values. The [**FloatFieldInterpolator**](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md node class operates on target node field values of type `float`, which includes the `opacity` and `rotation` fields. Use a [**FloatFieldInterpolator**](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md node to fade the target node in or out of visibility, or to rotate the target node. The **[Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md** operates on target node field values of type `vector2d`, which includes the `translation` and `scale` fields. Use a **[Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md** node to move the target node around the screen display, or to enlarge or shrink it. The **[ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md** node class operates on target node fields of type `color`, so can be used to change the color of a target node that includes a color field.\n\nThe child interpolator nodes each include two field arrays: `key` and `keyValue`. These two arrays _must_ contain the same number of elements in order for the animation to work. The key field array contains the fractional values of the animation duration at which the target node field value in the corresponding `keyValue` array position will be set.\n\nThe following summarizes how to achieve certain animation effects.\n\n| Effect | Interpolator | Target Field | Notes |\n| --- | --- | --- | --- |\n| Move | [Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md | `translation` | You can move the element off the screen entirely, or over/under other elements at different z-order positions in the SceneGraph |\n| Enlarge/Shrink | [Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md | `scale` | Set the target `scaleRotateCenter` field to specify the point around which the element enlarges/shrinks |\n| Fade-In/Out | [FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md | `opacity` | The `opacity` field ranges in value from 1.0 (fully opaque and visible) to 0.0 (fully transparent and invisible) by setting the alpha channel of screen elements. |\n| Rotate | [FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md | `rotation` | Set the target `scaleRotateCenter` field to specify the point around which the element rotates |\n| Change Color | [ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md | color | The interpolator for the `color` field ranges through the HSV color space bounded by the low and high color values set in the `keyValue` field array. For example, if the low color value in the `keyValue` field array is set to the bottom of the HSV color space, and the high color value is set to the top of the HSV color space, the interpolator will range the animation throughout the entire HSV color space, with perhaps surprising (but not unpredictable) results. You should carefully choose the low and high key values to achieve a desired color animation result. |\n\nYou can try out these concepts by downloading and installing this sample: [SimpleAnimation.zip](https://github.com/rokudev/samples/tree/master/ux%20components/animation). It shows a number of animation types, including opacity, translation, and color animations.",
-            "fields": [],
-            "events": [],
-            "interfaces": []
-        },
         "Animation": {
             "name": "Animation",
             "url": "https://developer.roku.com/docs/references/scenegraph/animation-nodes/animation.md",
@@ -169,14 +195,6 @@
                 "url": "https://developer.roku.com/docs/references/scenegraph/node.md"
             },
             "description": "Extends [**Node**](https://developer.roku.com/docs/references/scenegraph/node.md\n\nVector2DFieldInterpolator specifies a keyframe animation sequence to be applied to a pair Vector2D field of a node. Most typically, this is used to animate the (x,y) coordinates of a node's translation field.\n\nAll field interpolators include a set of key/keyValue pairs that define a keyframe of the animation. Field interpolators are generally used as children of an Animation node. As the animation progresses, it sets the fraction field of its field interpolators to a value between 0 and 1, indicating the percentage of the Animation's progress. The keyframes of the interpolator include a \"key\", the percentage where the keyframe should occur, and a \"keyValue\", the value that the field should have at that percentage.\n\nFor example, if a Vector2DFieldInterpolator had three keyframes, (0.0, \\[0.0, 0.0\\]), (0.4, \\[500.0, 0.0\\]) and (1.0, \\[500, 200.0\\]), then when the interpolator's fraction field was 0.0 (i.e. 0%), the field would be set to \\[0.0, 0.0\\]. When fraction was 0.4 (i.e. 40%), the field would be set to \\[500.0, 0.0\\]. When fraction was 1.0 (i.e. 100%), the field would be set to \\[500.0, 200.0\\].\n\nFor values of fraction between 0.0 and 0.4 (e.g. 0.2 or 20%), the field value is determined by linearly interpolating the keyValues for the first two keyframes. In this case, since the key of 0.2 is halfway between the key at 0.0 and the key at 0.4, the field would be set to \\[250.0, 0.0\\] (halfway between the point \\[0.0, 0.0\\] and \\[200.0, 0.0\\]. Similarly, when fraction is between the second and third keys (i.e. between 0.4 and 1.0), the field value is determined by linearly interpolating the keyValues of the second and third keyframes.\n\nFor this example, if the field being interpolated were the translation field of a Poster node parented to the Scene node, the Poster would originally be positioned with its top/left corner at the upper, left corner of the screen. As the animation proceeded from 0% to 40% complete, the Poster would slide horizontally to the right until it's top/left corner was at x=500.0, y=0.0. As the animation continued from 40% to 100% complete, the Poster would slide vertically down until its top/left corner was at x=500.0, y=200.0.\n\nIf the first keyframe has a key percentage greater than zero, then the field value will be equal to the keyValue of the first keyframe until fraction reaches the first keyframe's key percentage. Similarly, if the last keyframe has a key percentage less than one, the field value will be set to the keyValue of the last keyframe from when fraction equals the the last keyframe's key percentage and will not change as fraction increases from that value to 1.0.\n\n> While linearly interpolation is used to compute the keyValue's for fraction values between successive keys, non-linear easing functions may be applied to the fraction values computed by the Animation node, so the overall animation may vary in speed.",
-            "fields": [],
-            "events": [],
-            "interfaces": []
-        },
-        "Typography": {
-            "name": "Typography",
-            "url": "https://developer.roku.com/docs/references/scenegraph/typographic-nodes/overview.md",
-            "description": "The SceneGraph API includes the **Font** node class for specifying the font characteristics to be used by your application. Each node class that renders text on the screen display includes a `font` field to set the font characteristics for the node.\n\nThere is a default font supplied with the Roku OS. To use a different font, you must include it in the application package, such as in `pkg:/fonts/`. Then you can specify that this font be used as the font for a node class that renders text on the screen display in a couple of ways:\n\n*   by setting the `role` field for a child **Font** node to be used in the node\n*   by setting the `font` field of the node to a **Font** node that specifies the font\n\nThe `font` field can also be used to specify custom settings in the default or specified font. For the default font, there is a set of standard names that allow you to select the size and weight of the font for a node. The default font standard names range from smallest to large sizes, and are:\n\n*   `LargeSystemFont`\n*   `MediumSystemFont`\n*   `SmallSystemFont`\n*   `SmallestSystemFont`\n*   `LargeBoldSystemFont`\n*   `MediumBoldSystemFont`\n*   `SmallBoldSystemFont`\n*   `SmallestBoldSystemFont`\n\nFor example, to specify the bolded small default font for a **Label** node in XML markup:\n\n```\n<Label id=\"mySmallLabel\"\n    width=\"200\" height=\"200\"\n    text=\"Can you read this?\"\n    font=\"font:SmallBoldSystemFont\" />\n```\n\nAnd you can also set sizes explicitly using BrightScript:\n\n`m.mylargerlabel.font.size = m.mylargerlabel.font.size+5`",
             "fields": [],
             "events": [],
             "interfaces": []
@@ -432,14 +450,6 @@
             "name": "Key Defintion File",
             "url": "https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/key-defintion-file.md",
             "description": "The Key Definition File is a JSON-formatted file that specifies the layout of a keyboard. The Key Definition Files for the classes derived from **DynamicKeyboardBase** (**DynamicKeyboard**, **DynamicPinPad**, and **DynamicMiniKeyboard**) are built-in and cannot be modified because the keyboard layout for these nodes is fixed. Conversely, the **DynamicCustomKeyboard** node requires developers to create the Key Definition File in order to implement a custom keyboard layout.\n\nThe Key Definition File is a single JSON object with the following six hierarchal objects (listed in order from the top to the bottom of the hierarchy):\n\n1.  [KeyLayout](#keylayout)\n2.  [Section](#section)\n3.  [Grid](#grid)\n4.  [Row](#row)\n5.  [Key](#key)\n6.  [KeySuggestions](#keysuggestions)\n\nProperties can be set at any level of the hierarchy and are used to determine the default values for the subparts at lower levels in the hierarchy. For example, setting the **keyboardHeight** property at the **KeyLayout** level will specify the default height of each **Row** in each **Grid** in each **Section** of the grid used. If a **Grid** specifies a **gridHeight** property, it is set as the default for each **Row** in that **Grid**. In both cases, if any **Row** in the **Grid** specifies a **rowHeight** property, that height will be used as the default for each **Key** in that **Row**.",
-            "fields": [],
-            "events": [],
-            "interfaces": []
-        },
-        "Standard dialog framework": {
-            "name": "Standard dialog framework",
-            "url": "https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/standard-dialog-framework-overview.md",
-            "description": "As part of the Roku OS 10.0 release, Roku's standard dialog framework enables developers to use new pre-built modal pop-up dialogs and build custom ones. Dialogs are used to display information to users that require their immediate attention (for example, selecting a subscription product, entering credentials or account information, informing the user that a screen is loading, and so on). These new pre-built and custom standard keyboards are summarized as follows:\n\n*   **New pre-built message, keyboard, pin pad, and progress dialogs**. These new dialogs feature updated graphics and color palette support that enable developers to provide a consistent user experience across the dialogs in their channel (and across the Roku platform as developers can easily adopt the new design of Roku OS system dialogs). In addition, the keyboard and pin pad dialogs include voice entry support for faster customer sign-ups and sign-ins. These new dialog nodes deprecate the [legacy versions](https://developer.roku.com/docs/references/scenegraph/dialog-nodes/dialog.md).\n\n*   **Developer-defined custom dialogs**. Developers can design custom dialogs that may include a combination of text, buttons, bulleted lists, keyboards, loading indicators, and other building blocks. Custom dialogs also include all the features provided by the pre-built dialogs (voice, custom layout, and graphics). This provides developers with the flexibility to build and configure dialogs to meet their channel's requirements.",
             "fields": [],
             "events": [],
             "interfaces": []
@@ -793,14 +803,6 @@
             "events": [],
             "interfaces": []
         },
-        "Lists and grids": {
-            "name": "Lists and grids",
-            "url": "https://developer.roku.com/docs/references/scenegraph/list-and-grid-nodes/overview.md",
-            "description": "Lists and grids are important screen elements for the application user interface. Lists and grids allow the user to choose from a selection of items that, for example, can include the title of movie to rent or purchase, and a graphic image of the theater poster for the movie. The SceneGraph API allows you to include several data items for each item in the list or grid, such as the price to rent or buy the movie, and to display this information to the user when the user selects the item.",
-            "fields": [],
-            "events": [],
-            "interfaces": []
-        },
         "LabelList": {
             "name": "LabelList",
             "url": "https://developer.roku.com/docs/references/scenegraph/list-and-grid-nodes/labellist.md",
@@ -925,14 +927,6 @@
             "name": "TimeGrid",
             "url": "https://developer.roku.com/docs/references/scenegraph/list-and-grid-nodes/timegrid.md",
             "description": "OTT providers can use the TimeGrid node to implement an Electronic Program Guide (EPG) in their channels. In an EPG, channels are represented as horizontal rows, one for each channel. Each row has a channel name on the left, and a set of programs airing on that channel to the right. The size of each program depends on its duration. One of these programs has a remote control focus highlight indicator on it, and this highlight can be moved around using the remote control (as long as the TimeGrid node has remote control focus).\n\nThe TimeGrid node also features an alternative Now/Next view that lists only the programs currently airing and airing next, with their respective start times. See [Now/Next mode](https://developer.roku.com/docs/references/scenegraph/list-and-grid-nodes/timegrid.mdnownext-mode) for more information.\n\n![time grid](https://image.roku.com/ZHZscHItMTc2/epg-standard.jpg \"time grid\")",
-            "fields": [],
-            "events": [],
-            "interfaces": []
-        },
-        "Sliding panels": {
-            "name": "Sliding panels",
-            "url": "https://developer.roku.com/docs/references/scenegraph/sliding-panels-nodes/overview.md",
-            "description": "Sliding panels allow the creation of sets of other elements, such as lists or grids, that are grouped into _panels_ that can be moved left and right on and off the display screen. The panels can also be created (and removed) dynamically in response to user input and program behavior.",
             "fields": [],
             "events": [],
             "interfaces": []
