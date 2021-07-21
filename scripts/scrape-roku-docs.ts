@@ -9,7 +9,7 @@ import { Parser } from '../src/parser/Parser';
 import type { CallExpression, LiteralExpression } from '../src/parser/Expression';
 import type { ExpressionStatement, FunctionStatement } from '../src/parser/Statement';
 import TurndownService = require('turndown');
-import { gfm } from 'turndown-plugin-gfm';
+import { gfm } from '@guyplusplus/turndown-plugin-gfm';
 import type { TokensList, Tokens, Token } from 'marked';
 import { lexer as markedLexer } from 'marked';
 import * as he from 'he';
@@ -311,7 +311,7 @@ class ComponentListBuilder {
                     extends: manager.getExtendsRef(),
                     description: manager.getMarkdown(manager.getHeading(1), x => x.type === 'heading'),
                     availableSince: manager.getAvailableSince(manager.getHeading(1), x => x.type === 'heading'),
-                    fields: [],
+                    fields: this.getNodeFields(manager),
                     events: [],
                     interfaces: []
                 } as SceneGraphNode;
@@ -334,6 +334,28 @@ class ComponentListBuilder {
                 console.error(`Error processing interface ${docApiUrl}`, e);
             }
         }
+    }
+
+    private getNodeFields(manager: TokenManager) {
+        const result = [] as SceneGraphNodeField[];
+        const table = manager.getTableByHeaders(['field', 'type', 'default', 'access permission', 'description']);
+        const rows = manager.tableToObjects(table);
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            let description = table.tokens.cells[i][4].map(x => x.raw).join('');
+            //the turndown plugin doesn't convert inner html tables, so turn that into markdown too
+            description = turndownService.turndown(description);
+            result.push({
+                name: row.field,
+                type: row.type,
+                default: row.default,
+                accessPermission: row['access permission'],
+                //grab all the markdown from the 4th column (description)
+                description: description
+            });
+        }
+
+        return result;
     }
 
     private getImplementers(manager: TokenManager) {
