@@ -70,6 +70,7 @@
         "branches": 100
     },
     "devDependencies": {
+        "@guyplusplus/turndown-plugin-gfm": "^1.0.7",
         "@types/benchmark": "^1.0.31",
         "@types/chai": "^4.1.2",
         "@types/command-line-args": "^5.0.0",
