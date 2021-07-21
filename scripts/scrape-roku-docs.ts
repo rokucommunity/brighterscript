@@ -42,9 +42,10 @@ class ComponentListBuilder {
         await this.buildComponents();
         await this.buildInterfaces();
         await this.buildEvents();
+        await this.buildNodes();
 
         //certain references are missing hyperlinks. this attempts to repair them
-        this.linkMissingReferences();
+        this.repairReferences();
         this.linkMissingImplementers();
 
         //store the output
@@ -52,20 +53,55 @@ class ComponentListBuilder {
     }
 
     /**
-     * Repair references that are missing a hyperlink (usually because the roku docs were incomplete)
+     * Repair references that are missing a hyperlink (usually because the roku docs were incomplete),
+     * or references that still have the relative doc path rather than the full url
      */
-    public linkMissingReferences() {
+    public repairReferences() {
+        console.log('Repairing relative references');
+        //convert relative references to full URLs
         const refs = [
             //components
             ...Object.values(this.result.components).flatMap(x => x.interfaces),
+            ...Object.values(this.result.components).flatMap(x => x.events),
             //interfaces
             ...Object.values(this.result.interfaces).flatMap(x => x.implementers),
             //events
-            ...Object.values(this.result.events).flatMap(x => x.implementers)
+            ...Object.values(this.result.events).flatMap(x => x.implementers),
+            //nodes
+            ...Object.values(this.result.nodes).map(x => x.extends),
+            ...Object.values(this.result.nodes).flatMap(x => x.interfaces)
         ];
         for (const ref of refs) {
+            if (!ref) {
+                continue;
+            }
+            //set any missing urls
             if (!ref.url) {
                 ref.url = this.result.components[ref.name]?.url;
+            }
+            //convert doc path to url
+            if (ref?.url?.startsWith('/docs')) {
+                ref.url = getDocUrl(ref.url);
+            }
+        }
+
+        console.log('Repairing doc paths in descriptions');
+        //repair relative links in all description properties
+        const items = [
+            ...Object.values(this.result.components),
+            ...Object.values(this.result.interfaces),
+            ...Object.values(this.result.events),
+            ...Object.values(this.result.nodes)
+        ] as any[];
+        while (items.length > 0) {
+            const item = items.pop();
+            if (item && typeof item === 'object') {
+                items.push(
+                    ...Object.values(item)
+                );
+            }
+            if (item?.description) {
+                item.description = repairMarkdownLinks(item.description);
             }
         }
     }
@@ -229,6 +265,64 @@ class ComponentListBuilder {
                 }
 
                 this.result.events[name] = evt as any;
+            } catch (e) {
+                console.error(`Error processing interface ${docApiUrl}`, e);
+            }
+        }
+    }
+
+    private flatten(object, parentKey?: string) {
+        const result = [] as Array<{ name: string; path: string; categoryName: string }>;
+        for (const key in object) {
+            const value = object[key];
+            if (typeof value === 'string') {
+                result.push({
+                    name: key,
+                    path: value,
+                    categoryName: parentKey
+                });
+            } else if (typeof value === 'object') {
+                result.push(
+                    ...this.flatten(value, key)
+                );
+            }
+        }
+        return result;
+    }
+
+    private async buildNodes() {
+        const docs = this.flatten(this.references.SceneGraph);
+        for (let i = 0; i < docs.length; i++) {
+            const doc = docs[i];
+            //skip non-component pages
+            if (/(component\s*functions)|(xml\s*elements)/i.exec(doc?.categoryName)) {
+                continue;
+            }
+            console.log(`Processing node ${i} of ${docs.length}`);
+
+            const docApiUrl = this.getDocApiUrl(doc.path);
+            const manager = await new TokenManager().process(docApiUrl);
+
+            try {
+
+                const node = {
+                    name: manager.getHeading(1).text,
+                    url: getDocUrl(doc.path),
+                    extends: manager.getExtendsRef(),
+                    description: manager.getMarkdown(manager.getHeading(1), x => x.type === 'heading'),
+                    availableSince: manager.getAvailableSince(manager.getHeading(1), x => x.type === 'heading'),
+                    fields: [],
+                    events: [],
+                    interfaces: []
+                } as SceneGraphNode;
+
+                //if there is a custom handler for this doc, call it
+                if (this[node.name]) {
+                    console.log(`calling custom handler for ${name}`);
+                    this[node.name](node, document);
+                }
+
+                this.result.nodes[node.name] = node as any;
             } catch (e) {
                 console.error(`Error processing interface ${docApiUrl}`, e);
             }
@@ -427,7 +521,7 @@ async function getJson(url: string) {
 
 function getDocUrl(docRelativePath: string) {
     if (docRelativePath) {
-        return `https://developer.roku.com/docs${docRelativePath}`;
+        return `https://developer.roku.com${docRelativePath}`;
     }
 }
 
@@ -449,6 +543,25 @@ function deepSearch(object, key, predicate) {
         }
     }
     return null;
+}
+
+function repairMarkdownLinks(text: string) {
+    if (typeof text !== 'string') {
+        return text;
+    }
+    const regexp = /\((\/docs\/references\/.*?.md)/g;
+    let match: RegExpExecArray;
+    const matches = [] as RegExpExecArray[];
+    while (match = regexp.exec(text)) {
+        matches.push(match);
+    }
+
+    //process the matches in reverse to preserve string indexes
+    for (const match of matches.reverse()) {
+        //+1 to step past the opening paren
+        text = text.substring(0, match.index + 1) + getDocUrl(match[1]) + text.substring(match.index + 1 + match[0].length);
+    }
+    return text;
 }
 
 
@@ -626,6 +739,26 @@ class TokenManager {
             return match[1];
         }
     }
+
+    /**
+     * Search for `Extends [SomeComponentName](some_url)` in the top-level description
+     */
+    public getExtendsRef() {
+        const extendsToken = this.getTokensBetween(
+            this.getHeading(1),
+            x => x.type === 'heading'
+        )?.find(
+            x => x.raw?.toLowerCase().startsWith('extends')
+        ) as any;
+        //assume the second token is the link
+        const link = extendsToken?.tokens[1];
+        if (link) {
+            return {
+                name: link?.text?.replace(/^\*\*/, '').replace(/\*\*$/, ''),
+                url: getDocUrl(link?.href)
+            } as Reference;
+        }
+    }
 }
 
 type EndTokenMatcher = (t: Token) => boolean | undefined;
@@ -638,16 +771,6 @@ interface TableEnhanced extends Tokens.Table {
 }
 
 interface BrightScriptComponent {
-    name: string;
-    url: string;
-    availableSince: string;
-    description: string;
-    constructors: Array<Signature>;
-    interfaces: Reference[];
-    events: Reference[];
-}
-
-interface SceneGraphNode {
     name: string;
     url: string;
     availableSince: string;
@@ -694,6 +817,31 @@ interface RokuEvent {
     properties: Prop[];
     methods: Func[];
     implementers: Implementer[];
+}
+
+interface SceneGraphNode {
+    name: string;
+    url: string;
+    /**
+     * The parent node this node extends
+     */
+    extends?: Reference;
+    availableSince: string;
+    description: string;
+    interfaces: Reference[];
+    events: Reference[];
+    fields: SceneGraphNodeField[];
+}
+
+interface SceneGraphNodeField {
+    name: string;
+    type: string;
+    default: string;
+    accessPermission: string;
+    /**
+     * The markdown description of this field
+     */
+    description: string;
 }
 
 interface Func extends Signature {
