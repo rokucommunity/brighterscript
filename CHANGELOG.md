@@ -6,8 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.40.0] - 2021-08-02
+[0.39.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.39.4...v0.40.0
+### Added
+ - language support for Interface statements ([#426](https://github.com/rokucommunity/brighterscript/pull/426))
+### Changed
+ - cli prints the path of any loaded bsconfig.json on startup ([#434](https://github.com/rokucommunity/brighterscript/pull/434))
+
+
+
 ## [0.39.4] - 2021-06-27
-[0.39.4]: https://github.com/RokuCommunity/roku-debug/compare/v0.8.3...v0.8.4
+[0.39.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.39.3...v0.39.4
 ### Fixed
  - incorrect block range for inline if/then branch ([#424](https://github.com/rokucommunity/brighterscript/pull/424))
  - extract associative array comma when parsing ([#427](https://github.com/rokucommunity/brighterscript/pull/424))
@@ -16,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.39.3] - 2021-06-01
-[0.39.3]: https://github.com/RokuCommunity/roku-debug/compare/v0.8.2...v0.8.3
+[0.39.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.39.2...v0.39.3
 ### Changed
  - upgraded to [roku-deploy@3.4.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#341---2021-06-01) which fixes bugs introduced in roku-deploy@3.4.0
 
