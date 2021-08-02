@@ -52,6 +52,10 @@
                 "showReuseMessage": true,
                 "clear": true
             },
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
             "problemMatcher": []
         },
         {
@@ -62,10 +66,6 @@
                 "run",
                 "scrape-roku-docs"
             ],
-            "group": {
-                "kind": "test",
-                "isDefault": true
-            },
             "presentation": {
                 "echo": true,
                 "reveal": "always",

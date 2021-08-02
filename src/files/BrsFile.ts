@@ -475,7 +475,6 @@ export class BrsFile {
                                 argText = arg.value.value.toString();
                             }
                         }
-
                         //wrap the value in quotes because that's how it appears in the code
                         if (argText && isStringType(inferredType)) {
                             argText = '"' + argText + '"';

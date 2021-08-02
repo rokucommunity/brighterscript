@@ -165,6 +165,41 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
+        describe('createObject', () => {
+            it('recognizes various scenegraph nodes', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        scene = CreateObject("roSGNode", "roSGScreen")
+                        button = CreateObject("roSGNode", "Button")
+                        list = CreateObject("roSGNode", "MarkupList")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('recognizes valid custom components', () => {
+                program.setFile('components/comp1.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp1" extends="Scene">
+                    </component>
+                `);
+                program.setFile('components/comp1.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp2" extends="Scene">
+                    </component>
+                `);
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        comp1 = CreateObject("roSGNode", "Comp1")
+                        comp2 = CreateObject("roSGNode", "Comp2")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
+
         it('marks the scope as validated after validation has occurred', () => {
             program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                sub main()
