@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/dot-notation */
 /* eslint-disable @typescript-eslint/no-var-requires */
 /* eslint-disable @typescript-eslint/no-require-imports */
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
@@ -77,7 +78,7 @@ class ComponentListBuilder {
             }
             //set any missing urls
             if (!ref.url) {
-                ref.url = this.result.components[ref.name]?.url;
+                ref.url = this.result.components[ref.name?.toLowerCase()]?.url;
             }
             //convert doc path to url
             if (ref?.url?.startsWith('/docs')) {
@@ -198,7 +199,7 @@ class ComponentListBuilder {
                 this[name](component, manager);
             }
 
-            this.result.components[name] = component;
+            this.result.components[name?.toLowerCase()] = component;
         }
     }
 
@@ -230,7 +231,7 @@ class ComponentListBuilder {
                     this[name](iface, document);
                 }
 
-                this.result.interfaces[name] = iface as any;
+                this.result.interfaces[name?.toLowerCase()] = iface as any;
             } catch (e) {
                 console.error(`Error processing interface ${docApiUrl}`, e);
             }
@@ -264,7 +265,7 @@ class ComponentListBuilder {
                     this[name](evt, document);
                 }
 
-                this.result.events[name] = evt as any;
+                this.result.events[name?.toLowerCase()] = evt as any;
             } catch (e) {
                 console.error(`Error processing interface ${docApiUrl}`, e);
             }
@@ -318,7 +319,7 @@ class ComponentListBuilder {
 
                 //hydrate the `Node` node with roSGNode component info
                 if (node.name === 'Node') {
-                    const roSGNode = this.result.components.roSGNode;
+                    const roSGNode = this.result.components['rosgnode'];
                     node.events = roSGNode.events ?? [];
                     node.interfaces = roSGNode.interfaces ?? [];
                 }
@@ -329,7 +330,7 @@ class ComponentListBuilder {
                     this[node.name](node, document);
                 }
 
-                this.result.nodes[node.name] = node as any;
+                this.result.nodes[node.name?.toLowerCase()] = node as any;
             } catch (e) {
                 console.error(`Error processing interface ${docApiUrl}`, e);
             }

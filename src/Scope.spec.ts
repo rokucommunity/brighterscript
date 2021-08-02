@@ -6,7 +6,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
-import { trim } from './testHelpers.spec';
+import { expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser';
@@ -154,6 +154,41 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
+        describe.only('createObject', () => {
+            it('recognizes various scenegraph nodes', () => {
+                program.addOrReplaceFile(`source/file.brs`, `
+                    sub main()
+                        scene = CreateObject("roSGNode", "roSGScreen")
+                        button = CreateObject("roSGNode", "Button")
+                        list = CreateObject("roSGNode", "MarkupList")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('recognizes valid custom components', () => {
+                program.addOrReplaceFile('components/comp1.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp1" extends="Scene">
+                    </component>
+                `);
+                program.addOrReplaceFile('components/comp1.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp2" extends="Scene">
+                    </component>
+                `);
+                program.addOrReplaceFile(`source/file.brs`, `
+                    sub main()
+                        comp1 = CreateObject("roSGNode", "Comp1")
+                        comp2 = CreateObject("roSGNode", "Comp2")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
+
         it('marks the scope as validated after validation has occurred', () => {
             program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                sub main()

@@ -17,6 +17,12 @@ import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
+import { nodes } from './roku-types';
+
+/**
+ * The lower-case names of all platform-included scenegraph nodes
+ */
+const platformNodeNames = Object.values(nodes).map(x => x.name.toLowerCase());
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -464,7 +470,26 @@ export class Scope {
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.diagnosticDetectInvalidFunctionExpressionTypes(file);
+            this.validateCreateObjectCalls(file);
         });
+    }
+
+    /**
+     * Validate every function call to `CreateObject`.
+     * Ideally we would create better type checking/handling for this, but in the mean time, we know exactly
+     * what these calls are supposed to look like, and this is a very common thing for brs devs to do, so just
+     * do this manually for now.
+     */
+    protected validateCreateObjectCalls(file: BrsFile) {
+        for (const call of file.functionCalls) {
+            if (call.name?.toLowerCase() === 'createobject') {
+                const firstParamStringValue = (call?.args[0]?.expression as any)?.token?.text?.toLowerCase();
+                //if this is a roSGNode createObject call, only support known sg node types
+                if (firstParamStringValue === 'rosgnode') {
+
+                }
+            }
+        }
     }
 
     /**

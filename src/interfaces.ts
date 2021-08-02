@@ -77,7 +77,9 @@ export interface FunctionCall {
 export interface CallableArg {
     text: string;
     type: BscType;
+    typeToken: Token;
     range: Range;
+    expression: Expression;
 }
 
 export interface CallableParam {
