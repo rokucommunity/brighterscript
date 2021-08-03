@@ -190,6 +190,14 @@ let runtimeFunctions = [{
         name: 'param4',
         type: new DynamicType(),
         isOptional: true
+    }, {
+        name: 'param5',
+        type: new DynamicType(),
+        isOptional: true
+    }, {
+        name: 'param6',
+        type: new DynamicType(),
+        isOptional: true
     }]
 }, {
     name: 'Type',
@@ -745,6 +753,154 @@ let programStatementFunctions = [
         type: new FunctionType(new ObjectType()),
         file: globalFile,
         params: []
+    }, { //TODO Same as the Roku_Ads.brs (RAF) library above, the following functions are from the 'v30/bslCore.brs' library
+        name: 'bslBrightScriptErrorCodes',
+        shortDescription: 'Returns an roAssociativeArray with name value pairs of the error name and corresponding integer value, for example ERR_OKAY = &hFF.',
+        type: new FunctionType(new ObjectType()),
+        file: globalFile,
+        params: []
+    }, {
+        name: 'bslGeneralConstants',
+        shortDescription: 'Returns an roAssociativeArray with name value pairs of system constants, for example MAX_INT = 2147483647.',
+        type: new FunctionType(new ObjectType()),
+        file: globalFile,
+        params: []
+    }, {
+        name: 'bslUniversalControlEventCodes',
+        shortDescription: 'Returns an roAssociativeArray with name value pairs of the remote key code (buttons) constants, for example BUTTON_SELECT_PRESSED = 6.',
+        type: new FunctionType(new ObjectType()),
+        file: globalFile,
+        params: []
+    },
+    {
+        name: 'AsciiToHex',
+        shortDescription: 'Returns the hex encoded string, for example AsciiToHex("Hi!") = "486921".',
+        type: new FunctionType(new StringType()),
+        file: globalFile,
+        params: [{
+            name: 'ascii',
+            type: new StringType()
+        }]
+    }, {
+        name: 'HexToAscii',
+        shortDescription: 'Returns a string that is the hex decoded string, for example HexToAscii("486921") = "Hi!".',
+        type: new FunctionType(new StringType()),
+        file: globalFile,
+        params: [{
+            name: 'hex',
+            type: new StringType()
+        }]
+    },
+    {
+        name: 'HexToInteger',
+        shortDescription: 'Returns the integer value of the passed in hex string.',
+        type: new FunctionType(new IntegerType()),
+        file: globalFile,
+        params: [{
+            name: 'hex',
+            type: new StringType()
+        }]
+    }, {
+        name: 'HexToInteger',
+        shortDescription: 'Returns a string that is the hex decoded string, for example HexToAscii("486921") = "Hi!".',
+        type: new FunctionType(new IntegerType()),
+        file: globalFile,
+        params: [{
+            name: 'hex',
+            type: new StringType()
+        }]
+    }, {
+        name: 'dfNewBitmapSet',
+        shortDescription: `The goal is to enable simple xml descriptions of graphics resources like bitmaps, regions, sprites, animations, and layouts to be used in your games. The library handles parsing, loading, rendering, and animation of sprites sheets (multiple images in a single png file).
+Filename is the path to an XML file that contains info about bitmap regions, animation frames, and ExtraInfo metadata (any fields you would like) about resources used in 2d games.
+Returns an roAssociativeArray with the following name value pairs:
+ExtraInfo: roAssociativeArray
+Regions: roAssociativeArray of name, roRegions pairs
+Animations: roAssociativeArray of name, roArray of roRegion pairs.
+Backgrounds: roAssociativeArray of name, path pairs.`,
+        type: new FunctionType(new ObjectType()),
+        file: globalFile,
+        params: [{
+            name: 'filename',
+            type: new StringType()
+        }]
+    }, {
+        name: 'dfDrawMessage',
+        shortDescription: 'dest is an roScreen/roBitmap/roRegion and region is an roRegion.\nGreys the entire dest region and draws it the region centered on the drawable dest.',
+        type: new FunctionType(new VoidType()),
+        file: globalFile,
+        params: [{
+            name: 'dest',
+            type: new ObjectType()
+        }, {
+            name: 'region',
+            type: new ObjectType()
+        }]
+    }, {
+        name: 'dfDrawImage',
+        shortDescription: 'Returns True if successful.\nCreates a bitmap out of the image stored in the filename "path" and draws it at position (x,y) of the drawable dest.',
+        type: new FunctionType(new BooleanType()),
+        file: globalFile,
+        params: [{
+            name: 'dest',
+            type: new ObjectType()
+        }, {
+            name: 'path',
+            type: new StringType()
+        }, {
+            name: 'x',
+            type: new IntegerType()
+        }, {
+            name: 'y',
+            type: new IntegerType()
+        }]
+    }, {
+        name: 'dfSetupDisplayRegions',
+        shortDescription: `Helper function to setup screen scaling with supplied pillar box or letterbox images to fill the entire screen.
+screen is an roScreen
+topx and topy are the coordinates of the upper left hand corner of the main drawing region
+Width and height is the size of the main drawing region
+
+Returns an associative array containing the following roRegions
+Main: main drawable region
+Left: left region if there is pillar box area on the left
+Right: right region if there is a pillar box area on the right
+Upper: upper region if there is a letterbox area at thetop
+Lower: lower region if there is a letterbox area at the bottom
+When using these regions as drawables, your graphics will be translated and clipped to these regions.`,
+        type: new FunctionType(new ObjectType()),
+        file: globalFile,
+        params: [{
+            name: 'screen',
+            type: new ObjectType()
+        }, {
+            name: 'topx',
+            type: new IntegerType()
+        }, {
+            name: 'topy',
+            type: new IntegerType()
+        }, {
+            name: 'width',
+            type: new IntegerType()
+        }, {
+            name: 'height',
+            type: new IntegerType()
+        }]
+    }, {
+        name: 'dfSetBackground',
+        shortDescription: `dfSetBackground helps manage the limited video memory. The video memory does not currently run a defragmenter, and is very limited. These constraints make it important that large bitmaps (like backgrounds that fill the entire screen) are only allocated when needed. It is also helpful if you set your first initial background very early in your program, and then immediately replace the background after it is no longer in use. This helper function supports this background management for your application.
+backgroundName is a key for the Backgrounds roAssociative array of backgrounds.
+Backgrounds is an roAssociative array of background name keys and file path string values
+This function creates an roBitmap out of the background image file and returns a region the size of the entire roBitmap.`,
+        type: new FunctionType(new ObjectType()),
+        file: globalFile,
+        params: [{
+            name: 'backgroundName',
+            type: new StringType()
+        }, {
+            name: 'backgrounds',
+            type: new ObjectType()
+        }]
     }
 ] as Callable[];
 

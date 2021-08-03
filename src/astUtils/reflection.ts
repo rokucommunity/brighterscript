@@ -1,4 +1,4 @@
-import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement } from '../parser/Statement';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement } from '../parser/Statement';
 import type { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
@@ -131,6 +131,15 @@ export function isClassMethodStatement(element: Statement | Expression | undefin
 }
 export function isClassFieldStatement(element: Statement | Expression | undefined): element is ClassFieldStatement {
     return element?.constructor.name === 'ClassFieldStatement';
+}
+export function isInterfaceStatement(element: Statement | Expression | undefined): element is InterfaceStatement {
+    return element?.constructor.name === 'InterfaceStatement';
+}
+export function isInterfaceMethodStatement(element: Statement | Expression | undefined): element is InterfaceMethodStatement {
+    return element?.constructor.name === 'InterfaceMethodStatement';
+}
+export function isInterfaceFieldStatement(element: Statement | Expression | undefined): element is InterfaceFieldStatement {
+    return element?.constructor.name === 'InterfaceFieldStatement';
 }
 
 // Expressions reflection

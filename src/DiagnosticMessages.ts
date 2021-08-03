@@ -175,8 +175,8 @@ export let DiagnosticMessages = {
         code: 1031,
         severity: DiagnosticSeverity.Error
     }),
-    expectedClassKeyword: () => ({
-        message: `Expected 'class' keyword`,
+    expectedKeyword: (kind: TokenKind) => ({
+        message: `Expected '${kind}' keyword`,
         code: 1032,
         severity: DiagnosticSeverity.Error
     }),
@@ -423,8 +423,8 @@ export let DiagnosticMessages = {
         code: 1080,
         severity: DiagnosticSeverity.Error
     }),
-    foundUnexpectedToken: (text: string) => ({
-        message: `Found unexpected token '${text}'`,
+    unexpectedToken: (text: string) => ({
+        message: `Unexpected token '${text}'`,
         code: 1081,
         severity: DiagnosticSeverity.Error
     }),
@@ -566,8 +566,8 @@ export let DiagnosticMessages = {
         code: 1108,
         severity: DiagnosticSeverity.Error
     }),
-    expectedTokenAButFoundTokenB: (tokenA: string, tokenB: string) => ({
-        message: `Expected '${tokenA}' but instead found ${tokenB}`,
+    expectedToken: (tokenKind: string) => ({
+        message: `Expected '${tokenKind}'`,
         code: 1109,
         severity: DiagnosticSeverity.Error
     }),

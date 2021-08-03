@@ -790,7 +790,7 @@ describe('parser', () => {
                 sub main()
                 end sub
             `, ParseMode.BrighterScript);
-            expect(diagnostics[0]?.message).to.equal(DiagnosticMessages.foundUnexpectedToken('@').message);
+            expect(diagnostics[0]?.message).to.equal(DiagnosticMessages.unexpectedToken('@').message);
         });
 
         it('properly handles empty annotation above class method', () => {

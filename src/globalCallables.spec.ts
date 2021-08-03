@@ -31,6 +31,22 @@ describe('globalCallables', () => {
         });
     });
 
+    describe('bslCore', () => {
+        it('exists', () => {
+            program.setFile('source/main.brs', `
+                Library "v30/bslCore.brs"
+
+                sub main()
+                    print bslBrightScriptErrorCodes()
+                    print bslUniversalControlEventCodes()
+                    print HexToAscii(AsciiToHex("Hi"))
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
     describe('val', () => {
         it('allows single parameter', () => {
             program.setFile('source/main.brs', `

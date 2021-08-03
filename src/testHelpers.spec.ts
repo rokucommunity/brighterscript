@@ -1,4 +1,4 @@
-import type { BsDiagnostic } from './interfaces';
+import type { BscFile, BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
@@ -11,6 +11,7 @@ import type { Program } from './Program';
 import { standardizePath as s } from './util';
 import type { SymbolTable } from './SymbolTable';
 import type { BscType } from './types/BscType';
+import type { CodeWithSourceMap } from 'source-map';
 
 /**
  * Trim leading whitespace for every line (to make test writing cleaner
@@ -110,7 +111,23 @@ export function expectCodeActions(test: () => any, expected: CodeActionShorthand
 }
 
 export function getTestTranspile(scopeGetter: () => [Program, string]) {
-    return (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) => {
+    return getTestFileAction((file) => file.transpile(), scopeGetter);
+}
+
+export function getTestGetTypedef(scopeGetter: () => [Program, string]) {
+    return getTestFileAction((file) => {
+        return {
+            code: (file as BrsFile).getTypedef(),
+            map: undefined
+        };
+    }, scopeGetter);
+}
+
+function getTestFileAction(
+    action: (file: BscFile) => CodeWithSourceMap,
+    scopeGetter: () => [Program, string]
+) {
+    return function testFileAction(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
         let file = program.setFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
@@ -118,9 +135,9 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
         if (failOnDiagnostic !== false) {
             expectZeroDiagnostics(program);
         }
-        let transpiled = file.transpile();
+        let codeWithMap = action(file);
 
-        let sources = [transpiled.code, expected];
+        let sources = [codeWithMap.code, expected];
         for (let i = 0; i < sources.length; i++) {
             if (formatType === 'trim') {
                 let lines = sources[i].split('\n');
@@ -148,7 +165,13 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
             }
         }
         expect(trimMap(sources[0])).to.equal(sources[1]);
-        return transpiled;
+        return {
+            file: file,
+            source: source,
+            expected: expected,
+            actual: codeWithMap.code,
+            map: codeWithMap.map
+        };
     };
 }
 

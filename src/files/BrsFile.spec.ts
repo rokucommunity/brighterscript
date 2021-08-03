@@ -50,6 +50,16 @@ describe('BrsFile', () => {
         expect(program.getDiagnostics()[0]?.message).to.not.exist;
     });
 
+    it('supports the 6 params in CreateObject for roRegion', () => {
+        program.setFile('source/main.brs', `
+            sub createRegion(bitmap as object)
+                region = CreateObject("roRegion", bitmap, 20, 40, 100, 200)
+            end sub
+        `);
+        program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.not.exist;
+    });
+
     it('sets needsTranspiled to true for .bs files', () => {
         //BrightScript
         expect(new BrsFile(`${rootDir}/source/main.brs`, 'source/main.brs', program).needsTranspiled).to.be.false;

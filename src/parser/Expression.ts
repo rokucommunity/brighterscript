@@ -649,6 +649,7 @@ export class AAMemberExpression extends Expression {
     }
 
     public range: Range;
+    public commaToken?: Token;
 
     transpile(state: BrsTranspileState) {
         //TODO move the logic from AALiteralExpression loop into this function

@@ -94,6 +94,11 @@ export class ProgramBuilder {
         this.isRunning = true;
         try {
             this.options = util.normalizeAndResolveConfig(options);
+            if (this.options.project) {
+                this.logger.log(`Using config file: "${this.options.project}"`);
+            } else {
+                this.logger.log(`No bsconfig.json file found, using default options`);
+            }
             this.loadPlugins();
         } catch (e) {
             if (e?.file && e.message && e.code) {

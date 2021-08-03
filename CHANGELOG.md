@@ -6,10 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [1.0.0-alpha.7] - 2021-05-17
-[1.0.0-alpha.7]: https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.6...v1.0.0-alpha.7
+## [0.40.0] - 2021-08-02
+[0.39.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.39.4...v0.40.0
 ### Added
- - all changes from [v0.39.2](#0390---2021-05-28)
+ - language support for Interface statements ([#426](https://github.com/rokucommunity/brighterscript/pull/426))
+### Changed
+ - cli prints the path of any loaded bsconfig.json on startup ([#434](https://github.com/rokucommunity/brighterscript/pull/434))
+
+
+
+## [0.39.4] - 2021-06-27
+[0.39.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.39.3...v0.39.4
+### Fixed
+ - incorrect block range for inline if/then branch ([#424](https://github.com/rokucommunity/brighterscript/pull/424))
+ - extract associative array comma when parsing ([#427](https://github.com/rokucommunity/brighterscript/pull/424))
+ - allow up to 6 arguments in `CreateObject` function signature ([#430](https://github.com/rokucommunity/brighterscript/pull/430))
+ - add v30/bslCore library functions to global callables ([#433](https://github.com/rokucommunity/brighterscript/pull/433))
+
+
+
+## [0.39.3] - 2021-06-01
+[0.39.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.39.2...v0.39.3
+### Changed
+ - upgraded to [roku-deploy@3.4.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#341---2021-06-01) which fixes bugs introduced in roku-deploy@3.4.0
 
 
 
@@ -17,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.39.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.39.1...v0.39.2
 ### Changed
  - upgraded to [roku-deploy@3.4.0](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#340---2021-05-28) which brings significant zip speed improvements
+
+
+
+## [1.0.0-alpha.7] - 2021-05-17
+[1.0.0-alpha.7]: https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.6...v1.0.0-alpha.7
+### Added
+ - all changes from [v0.39.2](#0390---2021-05-28)
 
 
 
@@ -1217,5 +1243,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.37.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.2...v0.37.3
 [0.37.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.3...v0.37.4
 [0.38.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.4...v0.38.0
-[0.39.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.38.0...v0.39.0
-[0.39.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.39.0...v0.39.1
