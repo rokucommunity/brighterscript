@@ -2920,9 +2920,11 @@ export class Parser {
         let lastTokenHadLeadingWhitespace = currentToken?.leadingWhitespace.length > 0;
         let lastTokenWasLeftBracket = false;
         let bracketNestCount = 0;
+        let hasBrackets = false;
         // check for nested function call
         if (isRightBracket(currentToken)) {
             bracketNestCount++;
+            hasBrackets = true;
         }
         while (currentToken && bracketNestCount > 0) {
             previousTokenResult = this.getPreviousTokenFromIndex(currentTokenIndex);
@@ -2945,7 +2947,8 @@ export class Parser {
         // We will not be able to decipher the token type if it was in brackets
         // e.g (someVar+otherVar).toStr() -- we don't bother trying to decipher what "(someVar+otherVar)" is
         let isUnknown = (lastTokenWasLeftBracket && (lastTokenHadLeadingWhitespace || !this.isAcceptableChainToken(currentToken)));
-        return { token: currentToken, index: currentTokenIndex, tokenTypeIsNotKnowable: isUnknown };
+        const tokenWithIndex = { token: currentToken, index: currentTokenIndex, tokenTypeIsNotKnowable: isUnknown, hasBrackets: hasBrackets };
+        return tokenWithIndex;
 
     }
 
@@ -2956,9 +2959,10 @@ export class Parser {
      * @param allowCurrent can the current token be the token that's the identifier?
      * @returns the previous identifer
      */
-    public getPreviousTokenInChain(currentTokenIndex: number, allowCurrent = false): TokenWithIndex {
+    public getPreviousTokenInChain(currentTokenIndex: number, allowCurrent = false): TokenChainMember {
         let currentToken = this.tokens[currentTokenIndex];
         let previousTokenResult: TokenWithIndex;
+        let usage = TokenUsage.Direct;
         if (!allowCurrent) {
             previousTokenResult = this.getPreviousTokenFromIndex(currentTokenIndex);
             currentToken = previousTokenResult?.token;
@@ -2973,19 +2977,26 @@ export class Parser {
         previousTokenResult = this.getPreviousTokenIgnoreNests(currentTokenIndex, TokenKind.LeftParen, TokenKind.RightParen);
         currentToken = previousTokenResult?.token;
         currentTokenIndex = previousTokenResult?.index;
+        if (previousTokenResult.hasBrackets) {
+            usage = TokenUsage.Call;
+        }
         let tokenTypeIsNotKnowable = previousTokenResult?.tokenTypeIsNotKnowable;
         if (currentTokenIndex) {
             previousTokenResult = this.getPreviousTokenIgnoreNests(currentTokenIndex, TokenKind.LeftSquareBracket, TokenKind.RightSquareBracket);
             currentToken = previousTokenResult?.token;
             currentTokenIndex = previousTokenResult?.index;
+            if (previousTokenResult.hasBrackets) {
+                usage = TokenUsage.ArrayReference;
+            }
         }
         tokenTypeIsNotKnowable = tokenTypeIsNotKnowable || previousTokenResult?.tokenTypeIsNotKnowable;
         if (tokenTypeIsNotKnowable || this.isAcceptableChainToken(currentToken)) {
             // either we have a valid chain token, or we can't know what the token type is
-            return { token: currentToken, index: currentTokenIndex, tokenTypeIsNotKnowable: tokenTypeIsNotKnowable };
+            return { token: currentToken, index: currentTokenIndex, tokenTypeIsNotKnowable: tokenTypeIsNotKnowable, usage: usage };
         }
         return undefined;
     }
+
     private isAcceptableChainToken(currentToken: Token, lastTokenHasWhitespace = false): boolean {
         if (!currentToken || lastTokenHasWhitespace) {
             return false;
@@ -3007,16 +3018,16 @@ export class Parser {
      * @returns array of tokens
      */
     public getTokenChain(currentToken: Token): TokenChain {
-        const tokenChain: Token[] = [];
+        const tokenChain: TokenChainMember[] = [];
         let currentTokenIndex = this.tokens.indexOf(currentToken);
-        let previousTokenResult: TokenWithIndex;
+        let previousTokenResult: TokenChainMember;
         let lastTokenHasWhitespace = false;
         let includesUnknown = false;
         previousTokenResult = this.getPreviousTokenInChain(currentTokenIndex, true);
         currentToken = previousTokenResult?.token;
         currentTokenIndex = previousTokenResult?.index;
         if (this.isAcceptableChainToken(currentToken)) {
-            tokenChain.push(currentToken);
+            tokenChain.push(previousTokenResult);
             lastTokenHasWhitespace = currentToken?.leadingWhitespace.length > 0;
         }
         if (!lastTokenHasWhitespace) {
@@ -3025,7 +3036,7 @@ export class Parser {
             currentTokenIndex = previousTokenResult?.index;
             includesUnknown = !!previousTokenResult?.tokenTypeIsNotKnowable;
             while (!includesUnknown && this.isAcceptableChainToken(currentToken, lastTokenHasWhitespace)) {
-                tokenChain.push(currentToken);
+                tokenChain.push(previousTokenResult);
                 lastTokenHasWhitespace = currentToken?.leadingWhitespace.length > 0;
                 if (!lastTokenHasWhitespace) {
                     previousTokenResult = this.getPreviousTokenInChain(currentTokenIndex);
@@ -3199,6 +3210,35 @@ export interface LocalVarEntry {
     type: BscType;
 }
 
+export enum TokenUsage {
+    Direct = 1,
+    Call = 2,
+    ArrayReference = 3
+}
+
+/**
+ * A member of a token chain - a wrapper around a token, which also gives some context for how iot is used, and if teh type is knowable
+ */
+export interface TokenChainMember {
+    /**
+        * The token
+        */
+    token: Token;
+
+    /**
+     * Is it impossible to know the the type of this token (for now)
+     */
+    tokenTypeIsNotKnowable?: boolean;
+    /**
+     * How was this token used?
+     */
+    usage: TokenUsage;
+    /**
+     * Index of the token in the parser's token list
+     */
+    index: number;
+}
+
 /**
  * A token paired with the index it is at in the file
  * Used for when we need to get a token, but may also need the previous or next token
@@ -3207,20 +3247,25 @@ export interface LocalVarEntry {
 export interface TokenWithIndex {
     /**
      * The token
-     * */
+     */
     token: Token;
     /**
      * Index of the token in the parser's token list
-     *  */
+     */
     index: number;
     /**
      * Is it impossible to know the the type of this token (for now)
      */
     tokenTypeIsNotKnowable?: boolean;
+    /**
+     * does this token have brackets (either parens or square brackets) after it
+     */
+    hasBrackets?: boolean;
 }
 
+
 export interface TokenChain {
-    chain: Token[];
+    chain: TokenChainMember[];
     includesUnknowableTokenType?: boolean;
 }
 

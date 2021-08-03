@@ -9,7 +9,8 @@ import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../Diagn
 import type { Callable, CallableArg, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords, isToken } from '../lexer';
-import { Parser, ParseMode, getBscTypeFromExpression } from '../parser';
+import { Parser, ParseMode, getBscTypeFromExpression, TokenUsage } from '../parser';
+import type { TokenChainMember } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
 import type { FileLink, Program, SignatureInfoObj } from '../Program';
@@ -739,18 +740,18 @@ export class BrsFile {
     }
 
 
-    private findNamespaceFromTokenChain(originalTokenChain: Token[], scope: Scope): NamespacedTokenChain {
+    private findNamespaceFromTokenChain(originalTokenChain: TokenChainMember[], scope: Scope): NamespacedTokenChain {
         let namespaceTokens: Token[] = [];
         let startsWithNamespace = '';
         let namespaceContainer: NamespaceContainer;
         let tokenChain = [...originalTokenChain];
-        while (tokenChain[0]) {
-            const namespaceNameToCheck = `${startsWithNamespace}${startsWithNamespace.length > 0 ? '.' : ''}${tokenChain[0].text}`.toLowerCase();
+        while (tokenChain[0] && tokenChain[0].usage === TokenUsage.Direct) {
+            const namespaceNameToCheck = `${startsWithNamespace}${startsWithNamespace.length > 0 ? '.' : ''}${tokenChain[0].token.text}`.toLowerCase();
             const foundNamespace = scope.namespaceLookup[namespaceNameToCheck];
 
             if (foundNamespace) {
                 namespaceContainer = foundNamespace;
-                namespaceTokens.push(tokenChain[0]);
+                namespaceTokens.push(tokenChain[0].token);
                 startsWithNamespace = namespaceTokens.map(token => token.text).join('.');
                 tokenChain.shift();
             } else {
@@ -814,7 +815,7 @@ export class BrsFile {
                 useExpandedTextOnly: true
             };
         }
-        const specialCase = tokenChain.length === 1 ? this.checkForSpecialClassSymbol(tokenChain[0], scope, functionExpression) : null;
+        const specialCase = tokenChain.length === 1 ? this.checkForSpecialClassSymbol(tokenChain[0].token, scope, functionExpression) : null;
         if (specialCase) {
             return specialCase;
         }
@@ -845,8 +846,9 @@ export class BrsFile {
         let symbolType: BscType;
         let tokenText = [];
         let justReturnDynamic = false;
-        const typeContext = { file: this, scope: scope, position: tokenChain[0]?.range.start };
-        for (const token of tokenChain) {
+        const typeContext = { file: this, scope: scope, position: tokenChain[0]?.token.range.start };
+        for (const tokenChainMember of tokenChain) {
+            const token = tokenChainMember?.token;
             const tokenLowerText = token.text.toLowerCase();
 
             if (tokenLowerText === 'super' && isClassStatement(symbolContainer as any) && tokenFoundCount === 0) {
@@ -1690,7 +1692,7 @@ export const KeywordCompletions = Object.keys(Keywords)
 
 interface NamespacedTokenChain {
     namespaceContainer?: NamespaceContainer;
-    tokenChain: Token[];
+    tokenChain: TokenChainMember[];
 }
 
 interface TokenSymbolLookup {

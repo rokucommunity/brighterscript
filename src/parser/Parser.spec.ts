@@ -1,7 +1,7 @@
 import { expect, assert } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
 import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
-import { Parser, ParseMode, getBscTypeFromExpression } from './Parser';
+import { Parser, ParseMode, getBscTypeFromExpression, TokenUsage } from './Parser';
 import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Position, Range } from 'vscode-languageserver';
@@ -1291,8 +1291,10 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             const childFieldToken = parser.getTokenAt(Position.create(2, 38));
             const tokenChain = parser.getTokenChain(childFieldToken).chain;
+            const tokenChainTokens = tokenChain.map(tcm => tcm.token);
             expect(tokenChain.length).to.equal(3);
-            expect(tokenChain.map(token => token.text)).to.eql(['m', 'field', 'childField']);
+            expect(tokenChainTokens.map(token => token.text)).to.eql(['m', 'field', 'childField']);
+            expect(tokenChain.map(tcm => tcm.usage)).to.eql([TokenUsage.Direct, TokenUsage.Direct, TokenUsage.Direct]);
         });
 
         it('can find a chain of tokens with function call with no args in the middle', () => {
@@ -1303,8 +1305,10 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             const childFieldToken = parser.getTokenAt(Position.create(2, 49));
             const tokenChain = parser.getTokenChain(childFieldToken).chain;
+            const tokenChainTokens = tokenChain.map(tcm => tcm.token);
             expect(tokenChain.length).to.equal(4);
-            expect(tokenChain.map(token => token.text)).to.eql(['var', 'field', 'funcCall', 'childField']);
+            expect(tokenChainTokens.map(token => token.text)).to.eql(['var', 'field', 'funcCall', 'childField']);
+            expect(tokenChain[2].usage).to.eql(TokenUsage.Call);
         });
 
         it('can find a chain of tokens with function call with multiple args in the middle', () => {
@@ -1315,8 +1319,10 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             const childFieldToken = parser.getTokenAt(Position.create(2, 75));
             const tokenChain = parser.getTokenChain(childFieldToken).chain;
+            const tokenChainTokens = tokenChain.map(tcm => tcm.token);
             expect(tokenChain.length).to.equal(4);
-            expect(tokenChain.map(token => token.text)).to.eql(['var', 'field', 'funcCall', 'childField']);
+            expect(tokenChainTokens.map(token => token.text)).to.eql(['var', 'field', 'funcCall', 'childField']);
+            expect(tokenChain[2].usage).to.eql(TokenUsage.Call);
         });
 
         it('can find a chain of tokens with function call with function call inside', () => {
@@ -1327,8 +1333,10 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             const childFieldToken = parser.getTokenAt(Position.create(2, 90));
             const tokenChain = parser.getTokenChain(childFieldToken).chain;
+            const tokenChainTokens = tokenChain.map(tcm => tcm.token);
             expect(tokenChain.length).to.equal(4);
-            expect(tokenChain.map(token => token.text)).to.eql(['var', 'field', 'funcCall', 'childField']);
+            expect(tokenChainTokens.map(token => token.text)).to.eql(['var', 'field', 'funcCall', 'childField']);
+            expect(tokenChain[2].usage).to.eql(TokenUsage.Call);
         });
 
         it('can find a chain of tokens with array references inside', () => {
@@ -1339,8 +1347,10 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             const childFieldToken = parser.getTokenAt(Position.create(2, 50));
             const tokenChain = parser.getTokenChain(childFieldToken).chain;
+            const tokenChainTokens = tokenChain.map(tcm => tcm.token);
             expect(tokenChain.length).to.equal(4);
-            expect(tokenChain.map(token => token.text)).to.eql(['var', 'field', 'myArray', 'childField']);
+            expect(tokenChainTokens.map(token => token.text)).to.eql(['var', 'field', 'myArray', 'childField']);
+            expect(tokenChain[2].usage).to.eql(TokenUsage.ArrayReference);
         });
 
         it('includes unknown when an expression in brackets is part of the chain', () => {
@@ -1393,11 +1403,11 @@ describe('parser', () => {
 
         let tokenChainResponse = parser.getTokenChain(propAsChainToken);
         expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-        expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['complexObj', 'subObj', 'prop']);
+        expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['complexObj', 'subObj', 'prop']);
 
         tokenChainResponse = parser.getTokenChain(propAsAsBracketToken);
         expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-
+        expect(tokenChainResponse.chain[0].usage).to.eql(TokenUsage.ArrayReference);
         tokenChainResponse = parser.getTokenChain(propAsAsDoubleBracketToken);
         expect(tokenChainResponse.includesUnknowableTokenType).to.be.true;
     });
@@ -1416,15 +1426,15 @@ describe('parser', () => {
 
         let tokenChainResponse = parser.getTokenChain(overrideFuncToken);
         expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-        expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['override', 'someProp', 'someFunc']);
+        expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['override', 'someProp', 'someFunc']);
 
         tokenChainResponse = parser.getTokenChain(stringFuncToken);
         expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-        expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['string', 'someProp', 'someFunc']);
+        expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['string', 'someProp', 'someFunc']);
 
         tokenChainResponse = parser.getTokenChain(floatFuncToken);
         expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-        expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['float', 'someProp', 'someFunc']);
+        expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['float', 'someProp', 'someFunc']);
     });
 
     it('allows token kinds from AllowedProperties in middle of a chain', () => {
@@ -1441,15 +1451,15 @@ describe('parser', () => {
 
         let tokenChainResponse = parser.getTokenChain(overrideFuncToken);
         expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-        expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['someObj', 'override', 'someFunc']);
+        expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['someObj', 'override', 'someFunc']);
 
         tokenChainResponse = parser.getTokenChain(stringFuncToken);
         expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-        expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['someObj', 'string', 'someFunc']);
+        expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['someObj', 'string', 'someFunc']);
 
         tokenChainResponse = parser.getTokenChain(floatFuncToken);
         expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-        expect(tokenChainResponse.chain.map(token => token.text)).to.eql(['someObj', 'float', 'someFunc']);
+        expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['someObj', 'float', 'someFunc']);
 
     });
 });
