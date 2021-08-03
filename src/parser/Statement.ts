@@ -14,12 +14,11 @@ import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isComm
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
-import type { BscType } from '../types/BscType';
+import type { BscType, SymbolContainer } from '../types/BscType';
 import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
 import { CustomType } from '../types/CustomType';
-import type { SymbolContainer } from '../types/BscType';
 
 /**
  * A BrightScript statement
