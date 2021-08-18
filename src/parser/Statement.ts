@@ -2108,9 +2108,9 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
      * Derive a ValueKind from the type token, or the initial value.
      * Defaults to `DynamicType`
      */
-    getType() {
+    getType(parseMode: ParseMode = ParseMode.BrighterScript) {
         if (this.type) {
-            return util.tokenToBscType(this.type, true, this.namespaceName);
+            return util.tokenToBscType(this.type, parseMode === ParseMode.BrighterScript, this.namespaceName);
         } else if (isLiteralExpression(this.initialValue)) {
             return this.initialValue.type;
         } else {
@@ -2135,8 +2135,8 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
                 );
             }
 
-            let type = this.getType();
-            if (isInvalidType(type) || isVoidType(type)) {
+            let type = this.getType(ParseMode.BrightScript);
+            if (!type || isInvalidType(type) || isVoidType(type)) {
                 type = new DynamicType();
             }
 
