@@ -14,10 +14,11 @@ import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isComm
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
-import type { BscType } from '../types/BscType';
+import type { BscType, SymbolContainer } from '../types/BscType';
 import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
+import { CustomType } from '../types/CustomType';
 
 /**
  * A BrightScript statement
@@ -1500,7 +1501,9 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 }
 
-export class ClassStatement extends Statement implements TypedefProvider {
+export class ClassStatement extends Statement implements TypedefProvider, SymbolContainer {
+    readonly symbolTable: SymbolTable = new SymbolTable();
+    readonly memberTable: SymbolTable = new SymbolTable();
 
     constructor(
         readonly classKeyword: Token,
@@ -1512,10 +1515,15 @@ export class ClassStatement extends Statement implements TypedefProvider {
         readonly end: Token,
         readonly extendsKeyword?: Token,
         readonly parentClassName?: NamespacedVariableNameExpression,
-        readonly namespaceName?: NamespacedVariableNameExpression
+        readonly namespaceName?: NamespacedVariableNameExpression,
+        readonly currentSymbolTable?: SymbolTable
     ) {
         super();
         this.body = this.body ?? [];
+        this.symbolTable.setParent(currentSymbolTable);
+
+        this.range = util.createRangeFromPositions(this.classKeyword.range.start, this.end.range.end);
+
         for (let statement of this.body) {
             if (isClassMethodStatement(statement)) {
                 this.methods.push(statement);
@@ -1526,7 +1534,6 @@ export class ClassStatement extends Statement implements TypedefProvider {
             }
         }
 
-        this.range = util.createRangeFromPositions(this.classKeyword.range.start, this.end.range.end);
     }
 
     public getName(parseMode: ParseMode) {
@@ -1551,6 +1558,38 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
 
     public readonly range: Range;
+
+    public getCustomType(): CustomType {
+        return new CustomType(this.getName(ParseMode.BrighterScript), this.memberTable);
+    }
+
+    public getConstructorFunctionType() {
+        const constructFunc = this.getConstructorFunction() ?? this.getEmptyNewFunction();
+        const constructorFuncType = constructFunc.func.getFunctionType();
+        constructorFuncType.setName(this.getName(ParseMode.BrighterScript));
+        constructorFuncType.isNew = true;
+        return constructorFuncType;
+    }
+
+    public buildSymbolTable(parentClass?: ClassStatement) {
+        this.symbolTable.clear();
+        this.symbolTable.addSymbol('m', this.name?.range, this.getCustomType());
+        this.memberTable.clear();
+        if (parentClass) {
+            this.symbolTable.addSymbol('super', this.parentClassName?.range, parentClass.getConstructorFunctionType());
+            this.memberTable.setParent(parentClass?.memberTable);
+        }
+
+        for (const statement of this.methods) {
+            statement?.func.symbolTable.setParent(this.symbolTable);
+            const funcType = statement?.func.getFunctionType();
+            funcType.setName(this.getName(ParseMode.BrighterScript) + '.' + statement?.name?.text);
+            this.memberTable.addSymbol(statement?.name?.text, statement?.range, funcType);
+        }
+        for (const statement of this.fields) {
+            this.memberTable.addSymbol(statement?.name?.text, statement?.range, statement.getType());
+        }
+    }
 
     transpile(state: BrsTranspileState) {
         let result = [];
@@ -1631,6 +1670,28 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     public hasParentClass() {
         return !!this.parentClassName;
+    }
+
+    /**
+     * Gets an array of possible parent class names, taking into account the namespace this class was created under
+     * @returns array of possible parent class names
+     */
+    public getPossibleFullParentNames(): string[] {
+        if (!this.hasParentClass()) {
+            return [];
+        }
+        if (this.parentClassName?.getNameParts().length > 1) {
+            // The specified parent class already has a dot, so it must already reference a namespace
+            return [this.parentClassName.getName()];
+        }
+        const names = [];
+
+        if (this.namespaceName) {
+            // We're under a namespace, so the full parent name MIGHT be with this namespace too
+            names.push(this.namespaceName.getName() + '.' + this.parentClassName.getName());
+        }
+        names.push(this.parentClassName.getName());
+        return names;
     }
 
     /**
@@ -2033,7 +2094,8 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
         readonly as?: Token,
         readonly type?: Token,
         readonly equal?: Token,
-        readonly initialValue?: Expression
+        readonly initialValue?: Expression,
+        readonly namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
         this.range = util.createRangeFromPositions(
@@ -2046,9 +2108,9 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
      * Derive a ValueKind from the type token, or the initial value.
      * Defaults to `DynamicType`
      */
-    getType() {
+    getType(parseMode: ParseMode = ParseMode.BrighterScript) {
         if (this.type) {
-            return util.tokenToBscType(this.type);
+            return util.tokenToBscType(this.type, parseMode === ParseMode.BrighterScript, this.namespaceName);
         } else if (isLiteralExpression(this.initialValue)) {
             return this.initialValue.type;
         } else {
@@ -2073,8 +2135,8 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
                 );
             }
 
-            let type = this.getType();
-            if (isInvalidType(type) || isVoidType(type)) {
+            let type = this.getType(ParseMode.BrightScript);
+            if (!type || isInvalidType(type) || isVoidType(type)) {
                 type = new DynamicType();
             }
 

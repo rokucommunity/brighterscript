@@ -4,12 +4,13 @@ import type { CompletionItem, Hover, Position } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
-import type { Scope } from '../Scope';
+import type { NamespaceContainer, Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import type { Callable, CallableArg, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords, isToken } from '../lexer';
-import { Parser, ParseMode, getBscTypeFromExpression } from '../parser';
+import { Parser, ParseMode, getBscTypeFromExpression, TokenUsage } from '../parser';
+import type { TokenChainMember } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
 import type { FileLink, Program, SignatureInfoObj } from '../Program';
@@ -18,10 +19,18 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement } from '../astUtils/reflection';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isCustomType, isDynamicType, isObjectType, isArrayType, isPrimitiveType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
+import type { BscType, SymbolContainer } from '../types/BscType';
+import { getTypeFromContext } from '../types/BscType';
+import { UninitializedType } from '../types/UninitializedType';
+import { InvalidType } from '../types/InvalidType';
+import { globalCallableMap } from '../globalCallables';
+import { DynamicType } from '../types/DynamicType';
+import type { SymbolTable } from '../SymbolTable';
+
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -412,8 +421,6 @@ export class BrsFile {
             //for all function calls in this function
             for (let expression of func.callExpressions) {
                 if (
-                    //filter out dotted function invocations (i.e. object.doSomething()) (not currently supported. TODO support it)
-                    (expression.callee as any).obj ||
                     //filter out method calls on method calls for now (i.e. getSomething().getSomethingElse())
                     (expression.callee as any).callee ||
                     //filter out callees without a name (immediately-invoked function expressions)
@@ -421,7 +428,9 @@ export class BrsFile {
                 ) {
                     continue;
                 }
-                let functionName = (expression.callee as any).name.text;
+                //Flag dotted function invocations (i.e. object.doSomething())
+                const dottedInvocation = (expression.callee as any).obj;
+                let functionName = (expression.callee as any).name as Token;
 
                 //callee is the name of the function being called
                 let callee = expression.callee as VariableExpression;
@@ -433,7 +442,7 @@ export class BrsFile {
                 //TODO convert if stmts to use instanceof instead
                 for (let arg of expression.args as any) {
 
-                    let impliedType = getBscTypeFromExpression(arg, func);
+                    let inferredType = getBscTypeFromExpression(arg, func);
                     let argText = '';
 
                     // Get the text to display for the arg
@@ -448,17 +457,19 @@ export class BrsFile {
                     } else if (arg.value) {
                         /* istanbul ignore next: TODO figure out why value is undefined sometimes */
                         if (arg.value.value) {
-                            argText = arg.value.value.toString();
+                            if (arg.value.value.toString) {
+                                argText = arg.value.value.toString();
+                            }
                         }
 
                         //wrap the value in quotes because that's how it appears in the code
-                        if (isStringType(impliedType)) {
+                        if (argText && isStringType(inferredType)) {
                             argText = '"' + argText + '"';
                         }
                     }
                     args.push({
                         range: arg.range,
-                        type: impliedType,
+                        type: inferredType,
                         text: argText
                     });
                 }
@@ -468,8 +479,8 @@ export class BrsFile {
                     file: this,
                     name: functionName,
                     nameRange: util.createRange(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
-                    //TODO keep track of parameters
-                    args: args
+                    args: args,
+                    isDottedInvocation: dottedInvocation
                 };
 
                 this.functionCalls.push(functionCall);
@@ -587,8 +598,12 @@ export class BrsFile {
             if (selfClassMemberCompletions.size > 0) {
                 return [...selfClassMemberCompletions.values()].filter((i) => i.label !== 'new');
             }
-
-            if (!this.getClassFromMReference(position, currentToken, functionExpression)) {
+            const tokenLookup = this.getSymbolTypeFromToken(currentToken, functionExpression, scope);
+            if (tokenLookup.symbolContainer?.memberTable) {
+                return this.getCompletionsFromSymbolTable(tokenLookup.symbolContainer.memberTable);
+            }
+            const foundClassLink = this.getClassFromTokenLookup(tokenLookup, scope);
+            if (!foundClassLink) {
                 //and anything from any class in scope to a non m class
                 let classMemberCompletions = scope.getAllClassMemberCompletions();
                 result.push(...classMemberCompletions.values());
@@ -616,19 +631,22 @@ export class BrsFile {
             result.push(...KeywordCompletions);
 
             //include local variables
-            for (let symbol of functionExpression.symbolTable.ownSymbols) {
+            for (let symbol of functionExpression.symbolTable.getOwnSymbols()) {
                 const symbolNameLower = symbol.name.toLowerCase();
                 //skip duplicate variable names
                 if (names[symbolNameLower]) {
                     continue;
                 }
                 names[symbolNameLower] = true;
+                // TODO TYPES (This may be a performance hit?)
+                // const foundType = getTypeFromContext(symbol.type, { scope: scope, file: this });
+
                 result.push({
                     //TODO does this work?
                     label: symbol.name,
-                    //TODO find type for local vars
+                    //TODO TYPES find type for local vars - SEE above
                     kind: CompletionItemKind.Variable
-                    // kind: isFunctionType(variable.type) ? CompletionItemKind.Function : CompletionItemKind.Variable
+                    // kind: isFunctionType(foundType) ? CompletionItemKind.Function : CompletionItemKind.Variable
                 });
             }
 
@@ -652,6 +670,15 @@ export class BrsFile {
         return result;
     }
 
+    private getCompletionsFromSymbolTable(symbolTable: SymbolTable) {
+        return symbolTable.getAllSymbols().map(bscType => {
+            return {
+                label: bscType.name,
+                kind: isFunctionType(bscType.type) ? CompletionItemKind.Method : CompletionItemKind.Field
+            };
+        });
+    }
+
     private getLabelCompletion(func: FunctionExpression) {
         return func.labelStatements.map(label => ({
             label: label.tokens.identifier.text,
@@ -661,7 +688,7 @@ export class BrsFile {
 
     private getClassMemberCompletions(position: Position, currentToken: Token, functionExpression: FunctionExpression, scope: Scope) {
 
-        let classStatement = this.getClassFromMReference(position, currentToken, functionExpression);
+        let classStatement = this.getClassFromToken(currentToken, functionExpression, scope);
         let results = new Map<string, CompletionItem>();
         if (classStatement) {
             let classes = scope.getClassHierarchy(classStatement.item.getName(ParseMode.BrighterScript).toLowerCase());
@@ -679,15 +706,247 @@ export class BrsFile {
         return results;
     }
 
-    public getClassFromMReference(position: Position, currentToken: Token, functionExpression: FunctionExpression): FileLink<ClassStatement> | undefined {
-        let previousToken = this.parser.getPreviousToken(currentToken);
-        if (previousToken?.kind === TokenKind.Dot) {
-            previousToken = this.parser.getPreviousToken(previousToken);
-        }
-        if (previousToken?.kind === TokenKind.Identifier && previousToken?.text.toLowerCase() === 'm' && isClassMethodStatement(functionExpression.functionStatement)) {
-            return { item: this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, position)), file: this };
+    /**
+     * Gets the class (if any) of a given token based on the scope
+     * @param currentToken token in question
+     * @param functionExpression current functionExpression
+     * @param scope the current scope
+     * @returns A fileLink of the ClassStatement, if it is a class, otherwise undefined
+     */
+    public getClassFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): FileLink<ClassStatement> | undefined {
+        const tokenLookup = this.getSymbolTypeFromToken(currentToken, functionExpression, scope);
+        return this.getClassFromTokenLookup(tokenLookup, scope);
+    }
+
+    /**
+     * Gets the class (if any) of a given token based on the scope
+     * @param currentToken token in question
+     * @param functionExpression current functionExpression
+     * @param scope the current scope
+     * @returns A fileLink of the ClassStatement, if it is a class, otherwise undefined
+     */
+    public getClassFromTokenLookup(tokenLookup: TokenSymbolLookup, scope: Scope): FileLink<ClassStatement> | undefined {
+        const currentClass = tokenLookup?.symbolContainer;
+
+        if (isClassStatement(currentClass as any)) {
+            return { item: currentClass as ClassStatement, file: this };
+        } else if (isCustomType(currentClass)) {
+            const foundClass = scope.getClass(currentClass.name);
+            if (foundClass) {
+                return { item: foundClass, file: this };
+            }
         }
         return undefined;
+    }
+
+
+    private findNamespaceFromTokenChain(originalTokenChain: TokenChainMember[], scope: Scope): NamespacedTokenChain {
+        let namespaceTokens: Token[] = [];
+        let startsWithNamespace = '';
+        let namespaceContainer: NamespaceContainer;
+        let tokenChain = [...originalTokenChain];
+        while (tokenChain[0] && tokenChain[0].usage === TokenUsage.Direct) {
+            const namespaceNameToCheck = `${startsWithNamespace}${startsWithNamespace.length > 0 ? '.' : ''}${tokenChain[0].token.text}`.toLowerCase();
+            const foundNamespace = scope.namespaceLookup[namespaceNameToCheck];
+
+            if (foundNamespace) {
+                namespaceContainer = foundNamespace;
+                namespaceTokens.push(tokenChain[0].token);
+                startsWithNamespace = namespaceTokens.map(token => token.text).join('.');
+                tokenChain.shift();
+            } else {
+                break;
+            }
+        }
+        if (namespaceTokens.length > 0) {
+            namespaceContainer = scope.namespaceLookup[startsWithNamespace.toLowerCase()];
+        }
+        return { namespaceContainer: namespaceContainer, tokenChain: tokenChain };
+    }
+
+    private checkForSpecialClassSymbol(currentToken: Token, scope: Scope, func?: FunctionExpression): TokenSymbolLookup {
+        const containingClass = this.parser.getContainingClass(currentToken);
+        let symbolType: BscType;
+        let currentClassRef: ClassStatement;
+        const currentTokenLower = currentToken.text.toLowerCase();
+        const typeContext = { file: this, scope: scope, position: currentToken.range.start };
+        if (containingClass) {
+            // Special cases for a single token inside a class
+            let expandedText = '';
+            let useExpandedTextOnly = false;
+            if (containingClass.name === currentToken) {
+                symbolType = containingClass.getCustomType();
+                expandedText = `class ${containingClass.getName(ParseMode.BrighterScript)}`;
+                useExpandedTextOnly = true;
+                currentClassRef = containingClass;
+            } else if (currentTokenLower === 'm') {
+                symbolType = containingClass.getCustomType();
+                expandedText = currentToken.text;
+                currentClassRef = containingClass;
+            } else if (currentTokenLower === 'super') {
+                symbolType = getTypeFromContext(containingClass.symbolTable.getSymbolType(currentTokenLower, true, typeContext), typeContext);
+                if (isFunctionType(symbolType)) {
+                    currentClassRef = scope.getParentClass(containingClass);
+                }
+            } else if (func?.functionStatement?.name === currentToken) {
+                // check if this is a method declaration
+                currentClassRef = containingClass;
+                symbolType = containingClass?.memberTable.getSymbolType(currentTokenLower, true, { file: this, scope: scope });
+                expandedText = [containingClass.getName(ParseMode.BrighterScript), currentToken.text].join('.');
+            } else if (!func) {
+                // check if this is a field  declaration
+                currentClassRef = containingClass;
+                symbolType = containingClass?.memberTable.getSymbolType(currentTokenLower, true, { file: this, scope: scope });
+                expandedText = [containingClass.getName(ParseMode.BrighterScript), currentToken.text].join('.');
+            }
+            if (symbolType) {
+                return { type: symbolType, expandedTokenText: expandedText, symbolContainer: currentClassRef, useExpandedTextOnly: useExpandedTextOnly };
+            }
+        }
+    }
+
+    private checkForSpecialCaseToken(nameSpacedTokenChain: NamespacedTokenChain, functionExpression: FunctionExpression, scope: Scope): TokenSymbolLookup {
+        const tokenChain = nameSpacedTokenChain.tokenChain ?? [];
+        if (nameSpacedTokenChain.namespaceContainer && tokenChain.length === 0) {
+            //currentToken was part of a namespace
+            return {
+                type: null,
+                expandedTokenText: `namespace ${nameSpacedTokenChain.namespaceContainer.fullName}`,
+                useExpandedTextOnly: true
+            };
+        }
+        const specialCase = tokenChain.length === 1 ? this.checkForSpecialClassSymbol(tokenChain[0].token, scope, functionExpression) : null;
+        if (specialCase) {
+            return specialCase;
+        }
+    }
+
+    /**
+     * Checks previous tokens for the start of a symbol chain (eg. m.property.subProperty.method())
+     * @param currentToken  The token to check
+     * @param functionExpression The current function context
+     * @param scope use this scope for finding class maps
+     * @returns the BscType, expanded text (e.g <Class.field>) and classStatement (if available) for the token
+     */
+    public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): TokenSymbolLookup {
+        const tokenChainResponse = this.parser.getTokenChain(currentToken);
+        if (tokenChainResponse.includesUnknowableTokenType) {
+            return { type: new DynamicType(), expandedTokenText: currentToken.text };
+        }
+        const nameSpacedTokenChain = this.findNamespaceFromTokenChain(tokenChainResponse.chain, scope);
+        const specialCase = this.checkForSpecialCaseToken(nameSpacedTokenChain, functionExpression, scope);
+        if (specialCase) {
+            return specialCase;
+        }
+        const tokenChain = nameSpacedTokenChain.tokenChain;
+        let symbolContainer: SymbolContainer = this.parser.getContainingAA(currentToken) || this.parser.getContainingClass(currentToken);
+        let currentSymbolTable = nameSpacedTokenChain.namespaceContainer?.symbolTable ?? functionExpression?.symbolTable;
+        let tokenFoundCount = 0;
+        let symbolTypeBeforeReference: BscType;
+        let symbolType: BscType;
+        let tokenText = [];
+        let justReturnDynamic = false;
+        const typeContext = { file: this, scope: scope, position: tokenChain[0]?.token.range.start };
+        for (const tokenChainMember of tokenChain) {
+            const token = tokenChainMember?.token;
+            const tokenLowerText = token.text.toLowerCase();
+
+            if (tokenLowerText === 'super' && isClassStatement(symbolContainer as any) && tokenFoundCount === 0) {
+                /// Special cases for first item in chain inside a class
+                symbolContainer = scope?.getParentClass(symbolContainer as ClassStatement);
+                currentSymbolTable = (symbolContainer as ClassStatement)?.memberTable;
+                if (symbolContainer && currentSymbolTable) {
+                    tokenText.push((symbolContainer as ClassStatement).getName(ParseMode.BrighterScript));
+                    tokenFoundCount++;
+                    continue;
+                }
+
+            }
+            if (!currentSymbolTable) {
+                // uh oh... no symbol table to continue to check
+                break;
+            }
+            symbolType = currentSymbolTable.getSymbolType(tokenLowerText, true, typeContext);
+            if (tokenFoundCount === 0 && !symbolType) {
+                //check for global callable
+                symbolType = globalCallableMap.get(tokenLowerText)?.type;
+            }
+            if (symbolType) {
+                // found this symbol, and it's valid. increase found counter
+                tokenFoundCount++;
+            }
+            symbolTypeBeforeReference = symbolType;
+            if (isFunctionType(symbolType)) {
+                // this is a function, and it is in the start or middle of the chain
+                // the next symbol to check will be the return value of this function
+                symbolType = getTypeFromContext(symbolType.returnType, typeContext);
+                if (tokenFoundCount < tokenChain.length) {
+                    // We're still
+                    symbolTypeBeforeReference = symbolType;
+                }
+            }
+
+            if (symbolType?.memberTable) {
+                if (isCustomType(symbolType)) {
+                    // we're currently looking at a customType, that has it's own symbol table
+                    // use the name of the custom type
+                    // TODO TYPES: get proper parent name for methods/fields defined in super classes
+                    tokenText.push(tokenChain.length === 1 ? token.text : symbolType.name);
+                } else {
+                    justReturnDynamic = true;
+                    tokenText.push(token.text);
+                }
+
+                symbolContainer = symbolType as SymbolContainer;
+                currentSymbolTable = symbolContainer?.memberTable;
+            } else if (isObjectType(symbolType) || isArrayType(symbolType) || isDynamicType(symbolType)) {
+                // this is an object that has no member table
+                // this could happen if a parameter is marked as object
+                // assume all fields are dynamic
+                symbolContainer = undefined;
+                tokenText.push(token.text);
+                justReturnDynamic = true;
+                break;
+            } else {
+                // No further symbol tables were found
+                symbolContainer = undefined;
+                tokenText.push(token.text);
+                break;
+            }
+            if (tokenText.length > 2) {
+                tokenText.shift(); // only care about last two symbols
+            }
+        }
+        let expandedTokenText = tokenText.join('.');
+        let backUpReturnType: BscType;
+        if (tokenFoundCount === tokenChain.length) {
+            // did we complete the chain? if so, we have a valid token at the end
+            return { type: symbolTypeBeforeReference, expandedTokenText: tokenText.join('.'), symbolContainer: symbolContainer };
+        }
+        if (isDynamicType(symbolTypeBeforeReference) || isArrayType(symbolTypeBeforeReference) || justReturnDynamic) {
+            // last type in chain is dynamic... so currentToken could be anything.
+            backUpReturnType = new DynamicType();
+            expandedTokenText = currentToken.text;
+        } else if (isPrimitiveType(symbolTypeBeforeReference)) {
+            // last type in chain is dynamic... so currentToken could be anything.
+            backUpReturnType = new DynamicType();
+            expandedTokenText = currentToken.text;
+        } else if (tokenChain.length === 1) {
+            // variable that has not been assigned
+            expandedTokenText = currentToken.text;
+            backUpReturnType = new UninitializedType();
+        } else if (tokenFoundCount === tokenChain.length - 1) {
+            // member field that is not known
+            if (symbolContainer) {
+                backUpReturnType = new InvalidType();
+            } else {
+                // TODO TYPES: once we have stricter object/node member type checking, we could say this is invalid, but until then, call it dynamic
+                backUpReturnType = new DynamicType();
+                expandedTokenText = currentToken.text;
+
+            }
+        }
+        return { type: backUpReturnType, expandedTokenText: expandedTokenText };
     }
 
     private getGlobalClassStatementCompletions(currentToken: Token, parseMode: ParseMode): CompletionItem[] {
@@ -1063,7 +1322,7 @@ export class BrsFile {
         const func = this.getFunctionExpressionAtPosition(position);
         //look through local variables first
         //find any variable with this name
-        for (const symbol of func.symbolTable.ownSymbols) {
+        for (const symbol of func.symbolTable.getOwnSymbols()) {
             //we found a variable declaration with this token text
             if (symbol.name.toLowerCase() === textToSearchFor) {
                 const uri = util.pathToUri(this.srcPath);
@@ -1157,29 +1416,34 @@ export class BrsFile {
         //look through local variables first
         {
             const func = this.getFunctionExpressionAtPosition(position);
-            for (const labelStatement of func.labelStatements) {
-                if (labelStatement.tokens.identifier.text.toLocaleLowerCase() === lowerTokenText) {
-                    return {
-                        range: token.range,
-                        contents: `${labelStatement.tokens.identifier.text}: label`
-                    };
+            if (func) {
+                // this identifier could possibly be a class field, so no function expression is available
+                for (const labelStatement of func?.labelStatements) {
+                    if (labelStatement.tokens.identifier.text.toLocaleLowerCase() === lowerTokenText) {
+                        return {
+                            range: token.range,
+                            contents: `${labelStatement.tokens.identifier.text}: label`
+                        };
+                    }
                 }
             }
             const typeTexts: string[] = [];
 
             for (const scope of this.program.getScopesForFile(this)) {
                 scope.linkSymbolTable();
-                if (func.symbolTable.hasSymbol(lowerTokenText)) {
-                    const type = func.symbolTable?.getSymbolType(lowerTokenText);
+                const typeTextPair = this.getSymbolTypeFromToken(token, func, scope);
+                if (typeTextPair) {
                     let scopeTypeText = '';
 
-                    if (isFunctionType(type)) {
-                        scopeTypeText = type.toString();
+                    if (isFunctionType(typeTextPair.type)) {
+                        scopeTypeText = typeTextPair.type?.toString();
+                    } else if (typeTextPair.useExpandedTextOnly) {
+                        scopeTypeText = typeTextPair.expandedTokenText;
                     } else {
-                        scopeTypeText = `${token.text} as ${type.toString()}`;
+                        scopeTypeText = `${typeTextPair.expandedTokenText} as ${typeTextPair.type?.toString()}`;
                     }
 
-                    if (!typeTexts.includes(scopeTypeText)) {
+                    if (scopeTypeText && !typeTexts.includes(scopeTypeText)) {
                         typeTexts.push(scopeTypeText);
                     }
                 }
@@ -1298,7 +1562,8 @@ export class BrsFile {
     }
 
     private getClassMethod(classStatement: ClassStatement, name: string, walkParents = true): ClassMethodStatement | undefined {
-        //TODO - would like to write this with getClassHieararchy; but got stuck on working out the scopes to use... :(
+        //TODO - would like to write this with getClassHierarchy; but got stuck on working out the scopes to use... :(
+        //TODO types - this could be solved with symbolTable?
         let statement;
         const statementHandler = (e) => {
             if (!statement && e.name.text.toLowerCase() === name.toLowerCase()) {
@@ -1423,3 +1688,16 @@ export const KeywordCompletions = Object.keys(Keywords)
             kind: CompletionItemKind.Keyword
         } as CompletionItem;
     });
+
+
+interface NamespacedTokenChain {
+    namespaceContainer?: NamespaceContainer;
+    tokenChain: TokenChainMember[];
+}
+
+interface TokenSymbolLookup {
+    type: BscType;
+    expandedTokenText: string;
+    symbolContainer?: SymbolContainer;
+    useExpandedTextOnly?: boolean;
+}

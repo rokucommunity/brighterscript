@@ -90,16 +90,15 @@ import {
 } from './Expression';
 import type { Diagnostic, Position, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isLiteralExpression, isVariableExpression, isAALiteralExpression, isArrayLiteralExpression, isNewExpression, isUninitializedType, isFunctionType } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isLiteralExpression, isVariableExpression, isAALiteralExpression, isArrayLiteralExpression, isNewExpression, isInvalidType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { BscType } from '../types/BscType';
 import { DynamicType } from '../types/DynamicType';
-import { LazyType } from '../types/LazyType';
 import { SymbolTable } from '../SymbolTable';
 import { ObjectType } from '../types/ObjectType';
-import { CustomType } from '../types/CustomType';
 import { ArrayType } from '../types/ArrayType';
+import { getTypeFromCallExpression, getTypeFromDottedGetExpression, getTypeFromNewExpression, getTypeFromVariableExpression } from '../types/helpers';
 
 export class Parser {
     /**
@@ -563,7 +562,7 @@ export class Parser {
 
                 //methods (function/sub keyword OR identifier followed by opening paren)
                 if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
-                    const funcDeclaration = this.functionDeclaration(false, false);
+                    const funcDeclaration = this.functionDeclaration(false, false, true);
 
                     //remove this function from the lists because it's not a callable
                     const functionStatement = this._references.functionStatements.pop();
@@ -632,8 +631,12 @@ export class Parser {
             endingKeyword,
             extendsKeyword,
             parentClassName,
-            this.currentNamespaceName
+            this.currentNamespaceName,
+            this.currentSymbolTable
         );
+        if (className) {
+            this.currentSymbolTable.addSymbol(className.text, className.range, result.getConstructorFunctionType());
+        }
 
         this._references.classStatements.push(result);
         this.exitAnnotationBlock(parentAnnotations);
@@ -654,7 +657,7 @@ export class Parser {
             fieldType = this.typeToken();
 
             //no field type specified
-            if (!util.tokenToBscType(fieldType)) {
+            if (!util.tokenToBscType(fieldType, true, this.currentNamespaceName)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedValidTypeToFollowAsKeyword(),
                     range: this.peek().range
@@ -676,7 +679,8 @@ export class Parser {
             asToken,
             fieldType,
             equal,
-            initialValue
+            initialValue,
+            this.currentNamespaceName
         );
     }
 
@@ -685,9 +689,9 @@ export class Parser {
      */
     private callExpressions = [];
 
-    private functionDeclaration(isAnonymous: true, checkIdentifier?: boolean): FunctionExpression;
-    private functionDeclaration(isAnonymous: false, checkIdentifier?: boolean): FunctionStatement;
-    private functionDeclaration(isAnonymous: boolean, checkIdentifier = true) {
+    private functionDeclaration(isAnonymous: true, checkIdentifier?: boolean, forClassMethod?: boolean): FunctionExpression;
+    private functionDeclaration(isAnonymous: false, checkIdentifier?: boolean, forClassMethod?: boolean): FunctionStatement;
+    private functionDeclaration(isAnonymous: boolean, checkIdentifier = true, forClassMethod = false) {
         let previousCallExpressions = this.callExpressions;
         this.callExpressions = [];
 
@@ -776,7 +780,7 @@ export class Parser {
 
                 typeToken = this.typeToken();
 
-                if (!util.tokenToBscType(typeToken, this.options.mode === ParseMode.BrighterScript)) {
+                if (!util.tokenToBscType(typeToken, this.options.mode === ParseMode.BrighterScript, this.currentNamespaceName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.invalidFunctionReturnType(typeToken.text ?? ''),
                         range: typeToken.range
@@ -817,7 +821,7 @@ export class Parser {
             }
 
             // add the function to the relevant symbol tables
-            if (!isAnonymous) {
+            if (!isAnonymous && !forClassMethod) {
                 const funcType = func.getFunctionType();
                 funcType.setName(name.text);
 
@@ -908,7 +912,7 @@ export class Parser {
 
             typeToken = this.typeToken();
 
-            if (!util.tokenToBscType(typeToken, this.options.mode === ParseMode.BrighterScript)) {
+            if (!util.tokenToBscType(typeToken, this.options.mode === ParseMode.BrighterScript, this.currentNamespaceName)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, typeToken.text),
                     range: typeToken.range
@@ -920,9 +924,12 @@ export class Parser {
         let type: BscType;
 
         if (typeToken) {
-            type = util.tokenToBscType(typeToken);
+            type = util.tokenToBscType(typeToken, true, this.currentNamespaceName);
         } else if (defaultValue) {
             type = getBscTypeFromExpression(defaultValue, this.currentFunctionExpression);
+            if (isInvalidType(type)) {
+                type = new DynamicType();
+            }
         } else {
             type = new DynamicType();
         }
@@ -1209,7 +1216,7 @@ export class Parser {
         }
 
         let endFor = this.advance();
-        //TODO infer type from `target`
+        //TODO TYPES infer type from `target`
         const itemType = new DynamicType();
 
         this.currentSymbolTable.addSymbol(name.text, name.range, itemType);
@@ -1936,13 +1943,15 @@ export class Parser {
                     left.closingSquare
                 );
             } else if (isDottedGetExpression(left)) {
-                return new DottedSetStatement(
+                const dottedSetStmt = new DottedSetStatement(
                     left.obj,
                     left.name,
                     operator.kind === TokenKind.Equal
                         ? right
                         : new BinaryExpression(left, operator, right)
                 );
+                this._references.dottedSetStatements.push(dottedSetStmt);
+                return dottedSetStmt;
             }
         }
         return this.expressionStatement(expr);
@@ -2541,7 +2550,8 @@ export class Parser {
                         lastAAMember = new AAMemberExpression(
                             k.keyToken,
                             k.colonToken,
-                            expr
+                            expr,
+                            getBscTypeFromExpression(expr, this.currentFunctionExpression)
                         );
                         members.push(lastAAMember);
                     }
@@ -2575,7 +2585,8 @@ export class Parser {
                             lastAAMember = new AAMemberExpression(
                                 k.keyToken,
                                 k.colonToken,
-                                expr
+                                expr,
+                                getBscTypeFromExpression(expr, this.currentFunctionExpression)
                             );
                             members.push(lastAAMember);
                         }
@@ -2589,7 +2600,8 @@ export class Parser {
 
                 let closingBrace = this.previous();
 
-                const aaExpr = new AALiteralExpression(members, openingBrace, closingBrace);
+                const aaExpr = new AALiteralExpression(members, openingBrace, closingBrace, this.currentFunctionExpression);
+                this._references.aaLiterals.push(aaExpr);
                 this.addPropertyHints(aaExpr);
                 return aaExpr;
             case this.matchAny(TokenKind.Pos, TokenKind.Tab):
@@ -2892,6 +2904,152 @@ export class Parser {
         return this.tokens[idx - 1];
     }
 
+    public getPreviousTokenFromIndex(idx: number): TokenWithIndex {
+        return { token: this.tokens[idx - 1], index: idx - 1 };
+    }
+
+    public getPreviousTokenIgnoreNests(currentTokenIndex: number, leftBracketType: TokenKind, rightBracketType: TokenKind): TokenWithIndex {
+        let currentToken = this.tokens[currentTokenIndex];
+        let previousTokenResult: TokenWithIndex;
+        function isRightBracket(token: Token): boolean {
+            return token?.kind === rightBracketType;
+        }
+        function isLeftBracket(token: Token): boolean {
+            return token?.kind === leftBracketType;
+        }
+        let lastTokenHadLeadingWhitespace = currentToken?.leadingWhitespace.length > 0;
+        let lastTokenWasLeftBracket = false;
+        let bracketNestCount = 0;
+        let hasBrackets = false;
+        // check for nested function call
+        if (isRightBracket(currentToken)) {
+            bracketNestCount++;
+            hasBrackets = true;
+        }
+        while (currentToken && bracketNestCount > 0) {
+            previousTokenResult = this.getPreviousTokenFromIndex(currentTokenIndex);
+            currentToken = previousTokenResult?.token;
+            currentTokenIndex = previousTokenResult?.index;
+            lastTokenWasLeftBracket = false;
+
+            if (isRightBracket(currentToken)) {
+                bracketNestCount++;
+            }
+            while (isLeftBracket(currentToken)) {
+                bracketNestCount--;
+                lastTokenWasLeftBracket = true;
+                lastTokenHadLeadingWhitespace = currentToken?.leadingWhitespace.length > 0;
+                previousTokenResult = this.getPreviousTokenFromIndex(currentTokenIndex);
+                currentToken = previousTokenResult?.token;
+                currentTokenIndex = previousTokenResult?.index;
+            }
+        }
+        // We will not be able to decipher the token type if it was in brackets
+        // e.g (someVar+otherVar).toStr() -- we don't bother trying to decipher what "(someVar+otherVar)" is
+        let isUnknown = (lastTokenWasLeftBracket && (lastTokenHadLeadingWhitespace || !this.isAcceptableChainToken(currentToken)));
+        const tokenWithIndex = { token: currentToken, index: currentTokenIndex, tokenTypeIsNotKnowable: isUnknown, hasBrackets: hasBrackets };
+        return tokenWithIndex;
+
+    }
+
+    /**
+     * Finds the previous token in a chain (e.g. 'm.obj.func(someFunc()).value'), skipping over any arguments of function calls
+     * If this function was called with the token at 'value' above, the previous identifier in the chain is 'func'
+     * @param currentTokenIndex token index to start from
+     * @param allowCurrent can the current token be the token that's the identifier?
+     * @returns the previous identifer
+     */
+    public getPreviousTokenInChain(currentTokenIndex: number, allowCurrent = false): TokenChainMember {
+        let currentToken = this.tokens[currentTokenIndex];
+        let previousTokenResult: TokenWithIndex;
+        let usage = TokenUsage.Direct;
+        if (!allowCurrent) {
+            previousTokenResult = this.getPreviousTokenFromIndex(currentTokenIndex);
+            currentToken = previousTokenResult?.token;
+            currentTokenIndex = previousTokenResult?.index;
+
+        }
+        if (currentToken?.kind === TokenKind.Dot) {
+            previousTokenResult = this.getPreviousTokenFromIndex(currentTokenIndex);
+            currentToken = previousTokenResult.token;
+            currentTokenIndex = previousTokenResult.index;
+        }
+        previousTokenResult = this.getPreviousTokenIgnoreNests(currentTokenIndex, TokenKind.LeftParen, TokenKind.RightParen);
+        currentToken = previousTokenResult?.token;
+        currentTokenIndex = previousTokenResult?.index;
+        if (previousTokenResult.hasBrackets) {
+            usage = TokenUsage.Call;
+        }
+        let tokenTypeIsNotKnowable = previousTokenResult?.tokenTypeIsNotKnowable;
+        if (currentTokenIndex) {
+            previousTokenResult = this.getPreviousTokenIgnoreNests(currentTokenIndex, TokenKind.LeftSquareBracket, TokenKind.RightSquareBracket);
+            currentToken = previousTokenResult?.token;
+            currentTokenIndex = previousTokenResult?.index;
+            if (previousTokenResult.hasBrackets) {
+                usage = TokenUsage.ArrayReference;
+            }
+        }
+        tokenTypeIsNotKnowable = tokenTypeIsNotKnowable || previousTokenResult?.tokenTypeIsNotKnowable;
+        if (tokenTypeIsNotKnowable || this.isAcceptableChainToken(currentToken)) {
+            // either we have a valid chain token, or we can't know what the token type is
+            return { token: currentToken, index: currentTokenIndex, tokenTypeIsNotKnowable: tokenTypeIsNotKnowable, usage: usage };
+        }
+        return undefined;
+    }
+
+    private isAcceptableChainToken(currentToken: Token, lastTokenHasWhitespace = false): boolean {
+        if (!currentToken || lastTokenHasWhitespace) {
+            return false;
+        }
+        if (currentToken.kind === TokenKind.Identifier) {
+            return true;
+        }
+        if (currentToken.leadingWhitespace.length === 0) {
+            // start of the chain
+            return AllowedLocalIdentifiers.includes(currentToken.kind);
+        }
+        // not the start of the chain
+        return AllowedProperties.includes(currentToken.kind);
+    }
+    /**
+     * Builds up a chain of tokens, starting with the first in the chain, and ending with currentToken
+     * e.g. m.prop.method().field (with 'field' as currentToken) -> ["m", "prop", "method", "field"], with each element as a token
+     * @param currentToken the token that is the end of the chain
+     * @returns array of tokens
+     */
+    public getTokenChain(currentToken: Token): TokenChain {
+        const tokenChain: TokenChainMember[] = [];
+        let currentTokenIndex = this.tokens.indexOf(currentToken);
+        let previousTokenResult: TokenChainMember;
+        let lastTokenHasWhitespace = false;
+        let includesUnknown = false;
+        previousTokenResult = this.getPreviousTokenInChain(currentTokenIndex, true);
+        currentToken = previousTokenResult?.token;
+        currentTokenIndex = previousTokenResult?.index;
+        if (this.isAcceptableChainToken(currentToken)) {
+            tokenChain.push(previousTokenResult);
+            lastTokenHasWhitespace = currentToken?.leadingWhitespace.length > 0;
+        }
+        if (!lastTokenHasWhitespace) {
+            previousTokenResult = this.getPreviousTokenInChain(currentTokenIndex);
+            currentToken = previousTokenResult?.token;
+            currentTokenIndex = previousTokenResult?.index;
+            includesUnknown = !!previousTokenResult?.tokenTypeIsNotKnowable;
+            while (!includesUnknown && this.isAcceptableChainToken(currentToken, lastTokenHasWhitespace)) {
+                tokenChain.push(previousTokenResult);
+                lastTokenHasWhitespace = currentToken?.leadingWhitespace.length > 0;
+                if (!lastTokenHasWhitespace) {
+                    previousTokenResult = this.getPreviousTokenInChain(currentTokenIndex);
+                    currentToken = previousTokenResult?.token;
+                    currentTokenIndex = previousTokenResult?.index;
+                    includesUnknown = includesUnknown || previousTokenResult?.tokenTypeIsNotKnowable;
+                }
+            }
+        }
+        tokenChain.reverse();
+        return { chain: tokenChain, includesUnknowableTokenType: !!includesUnknown };
+    }
+
     /**
      * References are found during the initial parse.
      * However, sometimes plugins can modify the AST, requiring a full walk to re-compute all references.
@@ -2958,6 +3116,19 @@ export class Parser {
         }
     }
 
+    public getContainingClass(currentToken: Token): ClassStatement {
+        return this.references.classStatements.find((cs) => util.rangeContains(cs.range, currentToken.range.start));
+    }
+    public getContainingAA(currentToken: Token): AALiteralExpression {
+        return this.references.aaLiterals.find((aa) => util.rangeContains(aa.range, currentToken.range.start));
+    }
+    public getContainingNamespace(currentToken: Token): NamespaceStatement {
+        return this.references.namespaceStatements.find((cs) => util.rangeContains(cs.range, currentToken.range.start));
+    }
+    public getContainingFunctionExpression(currentToken: Token): FunctionExpression {
+        return this.references.functionExpressions.find((fe) => util.rangeContains(fe.range, currentToken.range.start));
+    }
+
     public dispose() {
     }
 }
@@ -2981,6 +3152,8 @@ export interface ParseOptions {
 export class References {
     public assignmentStatements = [] as AssignmentStatement[];
     public classStatements = [] as ClassStatement[];
+    public dottedSetStatements = [] as DottedSetStatement[];
+    public aaLiterals = [] as AALiteralExpression[];
 
     public get classStatementLookup() {
         if (!this._classStatementLookup) {
@@ -3027,12 +3200,73 @@ export class References {
     public namespaceStatements = [] as NamespaceStatement[];
     public newExpressions = [] as NewExpression[];
     public propertyHints = {} as Record<string, string>;
+
+
 }
 
 export interface LocalVarEntry {
     lowerName: string;
     nameToken: Identifier;
     type: BscType;
+}
+
+export enum TokenUsage {
+    Direct = 1,
+    Call = 2,
+    ArrayReference = 3
+}
+
+/**
+ * A member of a token chain - a wrapper around a token, which also gives some context for how iot is used, and if teh type is knowable
+ */
+export interface TokenChainMember {
+    /**
+        * The token
+        */
+    token: Token;
+
+    /**
+     * Is it impossible to know the the type of this token (for now)
+     */
+    tokenTypeIsNotKnowable?: boolean;
+    /**
+     * How was this token used?
+     */
+    usage: TokenUsage;
+    /**
+     * Index of the token in the parser's token list
+     */
+    index: number;
+}
+
+/**
+ * A token paired with the index it is at in the file
+ * Used for when we need to get a token, but may also need the previous or next token
+ * This way, we can access the adjacent tokens via their index instead of search
+ */
+export interface TokenWithIndex {
+    /**
+     * The token
+     */
+    token: Token;
+    /**
+     * Index of the token in the parser's token list
+     */
+    index: number;
+    /**
+     * Is it impossible to know the the type of this token (for now)
+     */
+    tokenTypeIsNotKnowable?: boolean;
+    /**
+     * does this token have brackets (either parens or square brackets) after it
+     */
+    hasBrackets?: boolean;
+}
+
+
+export interface TokenChain {
+    chain: TokenChainMember[];
+    includesUnknowableTokenType?: boolean;
 }
 
 class CancelStatementError extends Error {
@@ -3050,7 +3284,6 @@ class CancelStatementError extends Error {
  */
 export function getBscTypeFromExpression(expression: Expression, functionExpression: FunctionExpression): BscType {
     try {
-        //function
         if (isFunctionExpression(expression)) {
             return expression.getFunctionType();
             //literal
@@ -3058,75 +3291,24 @@ export function getBscTypeFromExpression(expression: Expression, functionExpress
             return expression.type;
             //Associative array literal
         } else if (isAALiteralExpression(expression)) {
-            return new ObjectType();
+            return new ObjectType(expression.memberTable);
             //Array literal
         } else if (isArrayLiteralExpression(expression)) {
             return new ArrayType();
             //function call
         } else if (isNewExpression(expression)) {
-            return new CustomType(expression.className.getName(ParseMode.BrighterScript));
+            return getTypeFromNewExpression(expression, functionExpression); // new CustomType(expression.className.getName(ParseMode.BrighterScript));
             //Function call
         } else if (isCallExpression(expression)) {
             return getTypeFromCallExpression(expression, functionExpression);
         } else if (isVariableExpression(expression)) {
             return getTypeFromVariableExpression(expression, functionExpression);
+        } else if (isDottedGetExpression(expression)) {
+            return getTypeFromDottedGetExpression(expression, functionExpression);
         }
     } catch (e) {
         //do nothing. Just return dynamic
     }
     //fallback to dynamic
     return new DynamicType();
-}
-
-
-/**
- * Gets the return type of a function, taking into account that the function may not have been declared yet
- * If the callee already exists in symbol table, use that return type
- * otherwise, make a lazy type which will not compute its type until the file is done parsing
- *
- * @param call the Expression to process
- * @param functionExpression the wrapping function expression
- * @return the best guess type of that expression
- */
-export function getTypeFromCallExpression(call: CallExpression, functionExpression: FunctionExpression): BscType {
-    let calleeName = ((call.callee as any).name.text as string)?.toLowerCase();
-    if (calleeName) {
-        // i
-        const currentKnownType = functionExpression.symbolTable.getSymbolType(calleeName);
-        if (isFunctionType(currentKnownType)) {
-            return currentKnownType.returnType;
-        }
-        if (!isUninitializedType(currentKnownType)) {
-            // this will probably only happen if a functionName has been assigned to something else previously?
-            return currentKnownType;
-        }
-        return new LazyType(() => {
-            const futureType = functionExpression.symbolTable.getSymbolType(calleeName);
-            if (isFunctionType(futureType)) {
-                return futureType.returnType;
-            }
-
-            return futureType;
-        });
-    }
-}
-
-/**
- * Gets the type of a variable
- * if it already exists in symbol table, use that type
- * otherwise defer the type until first read, which will allow us to derive types from variables defined after this one (like from a loop perhaps)
- *
- * @param variable the Expression to process
- * @param functionExpression the wrapping function expression
- * @return the best guess type of that expression
- */
-export function getTypeFromVariableExpression(variable: VariableExpression, functionExpression: FunctionExpression): BscType {
-    let variableName = variable.name.text.toLowerCase();
-    const currentKnownType = functionExpression.symbolTable.getSymbolType(variableName);
-    if (!isUninitializedType(currentKnownType)) {
-        return currentKnownType;
-    }
-    return new LazyType(() => {
-        return functionExpression.symbolTable.getSymbolType(variableName);
-    });
 }

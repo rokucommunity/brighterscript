@@ -1,5 +1,5 @@
 import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement } from '../parser/Statement';
-import type { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression } from '../parser/Expression';
+import type { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { BscFile } from '../interfaces';
@@ -22,6 +22,7 @@ import type { ArrayType } from '../types/ArrayType';
 import type { ObjectType } from '../types/ObjectType';
 import type { DynamicType } from '../types/DynamicType';
 import type { SGInterfaceField, SGInterfaceFunction, SGNode } from '../parser/SGTypes';
+import type { LazyType } from '../types/LazyType';
 
 // File reflection
 
@@ -191,6 +192,9 @@ export function isArrayLiteralExpression(element: Statement | Expression | undef
 export function isAALiteralExpression(element: Statement | Expression | undefined): element is AALiteralExpression {
     return element?.constructor.name === 'AALiteralExpression';
 }
+export function isAAMemberExpression(element: Statement | Expression | undefined): element is AAMemberExpression {
+    return element?.constructor.name === 'AAMemberExpression';
+}
 export function isUnaryExpression(element: Statement | Expression | undefined): element is UnaryExpression {
     return element?.constructor.name === 'UnaryExpression';
 }
@@ -245,6 +249,9 @@ export function isFloatType(e: any): e is FloatType {
 export function isDoubleType(e: any): e is DoubleType {
     return e?.constructor.name === 'DoubleType';
 }
+export function isPrimitiveType(e: any) {
+    return isBooleanType(e) || isIntegerType(e) || isFloatType(e) || isDoubleType(e) || isStringType(e) || isLongIntegerType(e);
+}
 export function isInvalidType(e: any): e is InvalidType {
     return e?.constructor.name === 'InvalidType';
 }
@@ -268,6 +275,9 @@ export function isObjectType(e: any): e is ObjectType {
 }
 export function isDynamicType(e: any): e is DynamicType {
     return e?.constructor.name === 'DynamicType';
+}
+export function isLazyType(e: any): e is LazyType {
+    return e?.constructor.name === 'LazyType';
 }
 
 const numberConstructorNames = [

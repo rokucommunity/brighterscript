@@ -1,12 +1,13 @@
-import { isCustomType, isDynamicType } from '../astUtils/reflection';
-import type { BscType } from './BscType';
+import { isDynamicType, isObjectType } from '../astUtils/reflection';
+import type { SymbolTable } from '../SymbolTable';
+import type { BscType, SymbolContainer, TypeContext } from './BscType';
 
-export class CustomType implements BscType {
+export class CustomType implements BscType, SymbolContainer {
 
-    constructor(public name: string) {
+    constructor(public name: string, public memberTable: SymbolTable = null) {
     }
 
-    public toString() {
+    public toString(): string {
         return this.name;
     }
 
@@ -14,22 +15,22 @@ export class CustomType implements BscType {
         return 'object';
     }
 
-    public isAssignableTo(targetType: BscType) {
-        //TODO for now, if the custom types have the same name, assume they're the same thing
-        if (isCustomType(targetType) && targetType.name === this.name) {
+    public isAssignableTo(targetType: BscType, context?: TypeContext, ancestorTypes?: CustomType[]) {
+        if (ancestorTypes?.find(ancestorType => targetType.equals(ancestorType, context))) {
             return true;
-        } else if (isDynamicType(targetType)) {
-            return true;
-        } else {
-            return false;
         }
+        return (
+            this.equals(targetType, context) ||
+            isObjectType(targetType) ||
+            isDynamicType(targetType)
+        );
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+    public isConvertibleTo(targetType: BscType, context?: TypeContext) {
+        return this.isAssignableTo(targetType, context);
     }
 
-    public equals(targetType: BscType): boolean {
-        return this.toString() === targetType.toString();
+    public equals(targetType: BscType, context?: TypeContext): boolean {
+        return this.toString() === targetType?.toString(context);
     }
 }

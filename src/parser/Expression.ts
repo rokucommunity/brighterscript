@@ -3,19 +3,20 @@ import type { Token, Identifier } from '../lexer';
 import { TokenKind } from '../lexer';
 import type { Block, CommentStatement, FunctionStatement, LabelStatement } from './Statement';
 import type { Range } from 'vscode-languageserver';
-import util from '../util';
+import util, { MAX_PARAM_COUNT } from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
-import { ParseMode } from './Parser';
+import { getBscTypeFromExpression, ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { walk, InternalWalkMode } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
-import type { BscType } from '../types/BscType';
+import type { BscType, SymbolContainer } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
 import { FunctionType } from '../types/FunctionType';
+import { ObjectType } from '../types/ObjectType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -66,7 +67,7 @@ export class BinaryExpression extends Expression {
 }
 
 export class CallExpression extends Expression {
-    static MaximumArguments = 32;
+    static MaximumArguments = MAX_PARAM_COUNT;
 
     constructor(
         readonly callee: Expression,
@@ -140,7 +141,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     ) {
         super();
         if (this.returnTypeToken) {
-            this.returnType = util.tokenToBscType(this.returnTypeToken);
+            this.returnType = util.tokenToBscType(this.returnTypeToken, true, namespaceName);
         } else if (this.functionType.text.toLowerCase() === 'sub') {
             this.returnType = new VoidType();
         } else {
@@ -227,7 +228,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 state.transpileToken(this.asToken),
                 ' ',
                 //return type
-                state.sourceNode(this.returnTypeToken, this.returnType.toTypeString())
+                state.sourceNode(this.returnTypeToken, this.returnType.toTypeString(state.typeContext))
             );
         }
         if (includeBody) {
@@ -308,7 +309,7 @@ export class FunctionParameterExpression extends Expression {
             result.push(' ');
             result.push(state.transpileToken(this.asToken));
             result.push(' ');
-            result.push(state.sourceNode(this.typeToken, this.type.toTypeString()));
+            result.push(state.sourceNode(this.typeToken, this.type.toTypeString(state.typeContext)));
         }
 
         return result;
@@ -359,7 +360,7 @@ export class NamespacedVariableNameExpression extends Expression {
         return parts;
     }
 
-    getName(parseMode: ParseMode) {
+    getName(parseMode: ParseMode = ParseMode.BrighterScript) {
         if (parseMode === ParseMode.BrighterScript) {
             return this.getNameParts().join('.');
         } else {
@@ -642,7 +643,8 @@ export class AAMemberExpression extends Expression {
         public keyToken: Token,
         public colonToken: Token,
         /** The expression evaluated to determine the member's initial value. */
-        public value: Expression
+        public value: Expression,
+        public type: BscType
     ) {
         super();
         this.range = util.createRangeFromPositions(keyToken.range.start, this.value.range.end);
@@ -662,17 +664,32 @@ export class AAMemberExpression extends Expression {
 
 }
 
-export class AALiteralExpression extends Expression {
+export class AALiteralExpression extends Expression implements SymbolContainer {
     constructor(
         readonly elements: Array<AAMemberExpression | CommentStatement>,
         readonly open: Token,
-        readonly close: Token
+        readonly close: Token,
+        readonly functionExpression: FunctionExpression
     ) {
         super();
         this.range = util.createRangeFromPositions(this.open.range.start, this.close.range.end);
+        this.buildSymbolTable();
     }
 
+    readonly symbolTable: SymbolTable = new SymbolTable();
+    readonly memberTable: SymbolTable = new SymbolTable();
+
     public readonly range: Range;
+
+    public buildSymbolTable() {
+        this.symbolTable.clear();
+        this.symbolTable.addSymbol('m', { start: this.open.range.start, end: this.close.range.end }, new ObjectType(this.memberTable));
+        for (const element of this.elements) {
+            if (isAAMemberExpression(element)) {
+                this.memberTable.addSymbol(element.keyToken.text, element.keyToken.range, getBscTypeFromExpression(element.value, this.functionExpression));
+            }
+        }
+    }
 
     transpile(state: BrsTranspileState) {
         let result = [];

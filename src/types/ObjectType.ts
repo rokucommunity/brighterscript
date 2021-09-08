@@ -1,7 +1,13 @@
 import { isDynamicType, isObjectType } from '../astUtils/reflection';
-import type { BscType } from './BscType';
+import type { SymbolTable } from '../SymbolTable';
+import type { BscType, SymbolContainer } from './BscType';
 
-export class ObjectType implements BscType {
+export class ObjectType implements BscType, SymbolContainer {
+
+
+    constructor(public memberTable: SymbolTable = null) {
+    }
+
     public isAssignableTo(targetType: BscType) {
         return (
             isObjectType(targetType) ||
