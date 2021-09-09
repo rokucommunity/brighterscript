@@ -635,6 +635,11 @@ export let DiagnosticMessages = {
         message: `Cannot find type with name '${typeName}'`,
         code: 1123,
         severity: DiagnosticSeverity.Error
+    }),
+    unknownRoSGNode: (nodeName: string) => ({
+        message: `Unknown roSGNode '${nodeName}'`,
+        code: 1124,
+        severity: DiagnosticSeverity.Error
     })
 };
 

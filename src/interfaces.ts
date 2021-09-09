@@ -11,6 +11,7 @@ import type { Expression, FunctionStatement } from './parser';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
+import type { Token } from './lexer/Token';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;

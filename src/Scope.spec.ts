@@ -6,7 +6,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
-import { expectZeroDiagnostics, trim } from './testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser';
@@ -173,7 +173,7 @@ describe('Scope', () => {
                     <component name="Comp1" extends="Scene">
                     </component>
                 `);
-                program.addOrReplaceFile('components/comp1.xml', trim`
+                program.addOrReplaceFile('components/comp2.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="Comp2" extends="Scene">
                     </component>
@@ -186,6 +186,22 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
+            });
+
+            it.only('catches unknown roSGNodes', () => {
+                program.addOrReplaceFile(`source/file.brs`, `
+                    sub main()
+                        scene = CreateObject("roSGNode", "notReal")
+                        button = CreateObject("roSGNode", "alsoNotReal")
+                        list = CreateObject("roSGNode", "definitelyNotReal")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.unknownRoSGNode('notReal'),
+                    DiagnosticMessages.unknownRoSGNode('alsoNotReal'),
+                    DiagnosticMessages.unknownRoSGNode('definitelyNotReal')
+                ]);
             });
         });
 

@@ -10,6 +10,7 @@ import { BrsFile } from './files/BrsFile';
 import type { Program } from './Program';
 import { standardizePath as s } from './util';
 import type { CodeWithSourceMap } from 'source-map';
+import type { DiagnosticInfo } from './DiagnosticMessages';
 
 /**
  * Trim leading whitespace for every line (to make test writing cleaner
@@ -59,20 +60,27 @@ export function trim(strings: TemplateStringsArray, ...args) {
     return trimLeading(text);
 }
 
+type Diagnostics = { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[];
+
+function getDiagnostics(diagnostics: Diagnostics) {
+    let result: BsDiagnostic[];
+    if (Array.isArray(diagnostics)) {
+        result = diagnostics as BsDiagnostic[];
+    } else if ((diagnostics as any).getDiagnostics) {
+        result = (diagnostics as any).getDiagnostics();
+    } else if ((diagnostics as any).diagnostics) {
+        result = (diagnostics as any).diagnostics;
+    } else {
+        throw new Error('Cannot derive a list of diagnostics from ' + JSON.stringify(diagnostics));
+    }
+    return result;
+}
+
 /**
  * Test that the given object has zero diagnostics. If diagnostics are found, they are printed to the console in a pretty fashion.
  */
-export function expectZeroDiagnostics(arg: { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[]) {
-    let diagnostics: BsDiagnostic[];
-    if (Array.isArray(arg)) {
-        diagnostics = arg as BsDiagnostic[];
-    } else if ((arg as any).getDiagnostics) {
-        diagnostics = (arg as any).getDiagnostics();
-    } else if ((arg as any).diagnostics) {
-        diagnostics = (arg as any).diagnostics;
-    } else {
-        throw new Error('Cannot derive a list of diagnostics from ' + JSON.stringify(arg));
-    }
+export function expectZeroDiagnostics(arg: Diagnostics) {
+    const diagnostics = getDiagnostics(arg);
     if (diagnostics.length > 0) {
         let message = `Expected 0 diagnostics, but instead found ${diagnostics.length}:`;
         for (const diagnostic of diagnostics) {
@@ -82,6 +90,23 @@ export function expectZeroDiagnostics(arg: { getDiagnostics(): Array<Diagnostic>
         }
         assert.fail(message);
     }
+}
+
+/**
+ * Assert that the given diagnostics collection exactly equals the list of given diagnostics
+ */
+export function expectDiagnostics(actual: Diagnostics, expected: DiagnosticInfo[]) {
+    const actualDiagnostics = getDiagnostics(actual).map(x => ({
+        code: x.code,
+        message: x.message
+    })).sort((a, b) => a?.message?.localeCompare(b?.message));
+
+    const expectedDiagnostics = expected.map(x => ({
+        code: x.code,
+        message: x.message
+    })).sort((a, b) => a?.message?.localeCompare(b?.message));
+
+    expect(actualDiagnostics).to.eql(expectedDiagnostics);
 }
 
 /**
