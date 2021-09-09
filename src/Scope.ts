@@ -26,11 +26,12 @@ import { ObjectType } from './types/ObjectType';
 import { UninitializedType } from './types/UninitializedType';
 import type { Token } from './lexer/Token';
 import { nodes } from './roku-types';
+import type { Token } from './lexer/Token';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
  */
-const platformNodeNames = Object.values(nodes).map(x => x.name.toLowerCase());
+const platformNodeNames = new Set(Object.values(nodes).map(x => x.name.toLowerCase()));
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -693,9 +694,17 @@ export class Scope {
         for (const call of file.functionCalls) {
             if (call.name?.text?.toLowerCase() === 'createobject') {
                 const firstParamStringValue = (call?.args[0]?.expression as any)?.token?.text?.toLowerCase();
-                //if this is a roSGNode createObject call, only support known sg node types
+                //if this is a `createObject('roSGNode'` call, only support known sg node types
                 if (firstParamStringValue === 'rosgnode') {
-
+                    const componentName: Token = null;
+                    //add diagnostic for unknown components
+                    if (!platformNodeNames.has(componentName.text.toLowerCase()) && !this.program.getComponent(componentName.text)) {
+                        this.diagnostics.push({
+                            file: file as BscFile,
+                            ...DiagnosticMessages.unknownRoSGNode(componentName.text),
+                            range: componentName.range
+                        });
+                    }
                 }
             }
         }

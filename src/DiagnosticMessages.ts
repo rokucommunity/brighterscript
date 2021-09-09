@@ -675,6 +675,11 @@ export let DiagnosticMessages = {
         message: `Class cannot have the same name as interface '${className}'`,
         code: 1131,
         severity: DiagnosticSeverity.Error
+    }),
+    unknownRoSGNode: (nodeName: string) => ({
+        message: `Unknown roSGNode '${nodeName}'`,
+        code: 1132,
+        severity: DiagnosticSeverity.Error
     })
 };
 
