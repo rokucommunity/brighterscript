@@ -16,13 +16,13 @@ import type { DoubleType } from '../types/DoubleType';
 import type { CustomType } from '../types/CustomType';
 import type { Scope } from '../Scope';
 import type { XmlScope } from '../XmlScope';
-import type { UninitializedType } from '../types/UninitializedType';
-import type { InterfaceType } from '../types/InterfaceType';
-import type { ArrayType } from '../types/ArrayType';
-import type { ObjectType } from '../types/ObjectType';
 import type { DynamicType } from '../types/DynamicType';
-import type { SGInterfaceField, SGInterfaceFunction, SGNode } from '../parser/SGTypes';
+import type { InterfaceType } from '../types/InterfaceType';
+import type { ObjectType } from '../types/ObjectType';
+import type { UninitializedType } from '../types/UninitializedType';
+import type { ArrayType } from '../types/ArrayType';
 import type { LazyType } from '../types/LazyType';
+import type { SGInterfaceField, SGInterfaceFunction, SGNode } from '../parser/SGTypes';
 
 // File reflection
 
@@ -34,7 +34,7 @@ export function isXmlFile(file: (BscFile)): file is XmlFile {
     return file?.constructor.name === 'XmlFile';
 }
 
-export function isXmlScope(scope: (Scope)): scope is XmlScope {
+export function isXmlScope(scope: (Scope | XmlScope)): scope is XmlScope {
     return scope?.constructor.name === 'XmlScope';
 }
 

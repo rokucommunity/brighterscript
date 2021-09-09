@@ -355,7 +355,7 @@ export class Parser {
             return this.statement();
         } catch (error) {
             //if the error is not a diagnostic, then log the error for debugging purposes
-            if (!error.isDiagnostic) {
+            if (!(error as unknown as any).isDiagnostic) {
                 this.logger.error(error);
             }
             this.synchronize();
