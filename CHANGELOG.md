@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.9](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.8...v1.0.0-alpha.9) - 2021-09-08
+### Added
+ - type checking in classes, including validation of method calls and deep finding of types
+ - handle super.doSomething() calls in classes
+### Fixed
+ - issue with `m` and `m.top` code completion and validation
+ - issue finding properties of `m` in grandparents
+
+
+
 ## [1.0.0-alpha.8] - 2021-08-02
 [1.0.0-alpha.8]: https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.7...v1.0.0-alpha.8
 ### Added
