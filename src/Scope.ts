@@ -15,7 +15,7 @@ import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isInvalidType, isDynamicType, isVariableExpression } from './astUtils/reflection';
-import type { BrsFile } from './files/BrsFile';
+import type { BrsFile, TokenSymbolLookup } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { SymbolTable } from './SymbolTable';
 import type { CustomType } from './types/CustomType';
@@ -23,6 +23,7 @@ import { UninitializedType } from './types/UninitializedType';
 import { ObjectType } from './types/ObjectType';
 import { getTypeFromContext } from './types/BscType';
 import { DynamicType } from './types/DynamicType';
+import type { Token } from './lexer/Token';
 
 
 /**
@@ -47,6 +48,7 @@ export class Scope {
     public isValidated: boolean;
 
     protected cache = new Cache();
+    protected symbolCache = new Map<Token, TokenSymbolLookup>();
 
     public get dependencyGraphKey() {
         return this._dependencyGraphKey;
@@ -148,6 +150,20 @@ export class Scope {
         }
         // TODO TYPES: this should probably be cached
         return ancestors;
+    }
+
+
+    public hasCachedSymbolForToken(token: Token) {
+        return this.symbolCache.has(token);
+    }
+
+    public getCachedSymbolForToken(token: Token): TokenSymbolLookup {
+        return this.symbolCache.get(token);
+    }
+
+    public setCachedSymbolForToken(token: Token, lookupValue: TokenSymbolLookup): TokenSymbolLookup {
+        this.symbolCache.set(token, lookupValue);
+        return lookupValue;
     }
 
     /**
@@ -513,6 +529,7 @@ export class Scope {
         //clear out various lookups (they'll get regenerated on demand the next time they're requested)
         this.cache.clear();
         this.clearSymbolTable();
+        this.symbolCache.clear();
     }
 
 
