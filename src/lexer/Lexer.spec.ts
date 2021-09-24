@@ -1242,7 +1242,9 @@ describe('lexer', () => {
                 /with spaces/s,
                 /with(parens)and[squarebraces]/,
                 //lots of special characters
-                /.*()^$@/
+                /.*()^$@/,
+                //captures quote char
+                /"/
             );
         });
 
