@@ -48,7 +48,6 @@ export class Scope {
     public isValidated: boolean;
 
     protected cache = new Cache();
-    protected symbolCache = new Map<Token, TokenSymbolLookup>();
 
     public get dependencyGraphKey() {
         return this._dependencyGraphKey;
@@ -70,6 +69,15 @@ export class Scope {
      */
     public getClass(className: string, containingNamespace?: string): ClassStatement {
         return this.getClassFileLink(className, containingNamespace)?.item;
+    }
+
+    /**
+     * A cache of a map of tokens -> TokenSymbolLookups, which are the result of getSymbolTypeFromToken()
+     * Sometimes the lookup of symbols may take a while if there are lazyTypes or multiple tokens in a chain
+     * By caching the result of this lookup, subsequent lookups of the same tokens are quicker
+     */
+    protected get symbolCache() {
+        return this.cache.getOrAdd('symbolCache', () => new Map<Token, TokenSymbolLookup>());
     }
 
     /**
@@ -152,7 +160,6 @@ export class Scope {
         return ancestors;
     }
 
-
     public hasCachedSymbolForToken(token: Token) {
         return this.symbolCache.has(token);
     }
@@ -161,6 +168,10 @@ export class Scope {
         return this.symbolCache.get(token);
     }
 
+    /**
+     * Stores a TokenSymbolLookup object associated with a token
+     * @returns the "lookupValue" that was passed in
+     */
     public setCachedSymbolForToken(token: Token, lookupValue: TokenSymbolLookup): TokenSymbolLookup {
         this.symbolCache.set(token, lookupValue);
         return lookupValue;

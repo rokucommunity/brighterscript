@@ -832,8 +832,9 @@ export class BrsFile {
         if (!scope) {
             return undefined;
         }
-        if (scope.hasCachedSymbolForToken(currentToken)) {
-            return scope.getCachedSymbolForToken(currentToken);
+        const cachedSymbolData = scope.getCachedSymbolForToken(currentToken);
+        if (cachedSymbolData) {
+            return cachedSymbolData;
         }
         const tokenChainResponse = this.parser.getTokenChain(currentToken);
         if (tokenChainResponse.includesUnknowableTokenType) {
