@@ -10,6 +10,7 @@ See the following pages for more information
  - [Namespaces](namespaces.md)
  - [Null-coalescing operator](null-coalescing-operator.md)
  - [Plugins](plugins.md)
+ - [Regular Expression Literals](regex-literals.md)
  - [Source Literals](source-literals.md)
  - [Template Strings (Template Literals)](template-strings.md)
  - [Ternary (Conditional) Operator](ternary-operator.md)
