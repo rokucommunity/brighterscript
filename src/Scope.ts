@@ -15,7 +15,7 @@ import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isInvalidType, isDynamicType, isVariableExpression } from './astUtils/reflection';
-import type { BrsFile } from './files/BrsFile';
+import type { BrsFile, TokenSymbolLookup } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { SymbolTable } from './SymbolTable';
 import type { CustomType } from './types/CustomType';
@@ -23,6 +23,7 @@ import { UninitializedType } from './types/UninitializedType';
 import { ObjectType } from './types/ObjectType';
 import { getTypeFromContext } from './types/BscType';
 import { DynamicType } from './types/DynamicType';
+import type { Token } from './lexer/Token';
 
 
 /**
@@ -68,6 +69,15 @@ export class Scope {
      */
     public getClass(className: string, containingNamespace?: string): ClassStatement {
         return this.getClassFileLink(className, containingNamespace)?.item;
+    }
+
+    /**
+     * A cache of a map of tokens -> TokenSymbolLookups, which are the result of getSymbolTypeFromToken()
+     * Sometimes the lookup of symbols may take a while if there are lazyTypes or multiple tokens in a chain
+     * By caching the result of this lookup, subsequent lookups of the same tokens are quicker
+     */
+    public get symbolCache() {
+        return this.cache.getOrAdd('symbolCache', () => new Map<Token, TokenSymbolLookup>());
     }
 
     /**
@@ -513,6 +523,7 @@ export class Scope {
         //clear out various lookups (they'll get regenerated on demand the next time they're requested)
         this.cache.clear();
         this.clearSymbolTable();
+        this.symbolCache.clear();
     }
 
 

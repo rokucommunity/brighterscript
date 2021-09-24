@@ -829,13 +829,23 @@ export class BrsFile {
      * @returns the BscType, expanded text (e.g <Class.field>) and classStatement (if available) for the token
      */
     public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): TokenSymbolLookup {
+        if (!scope) {
+            return undefined;
+        }
+        const cachedSymbolData = scope.symbolCache.get(currentToken);
+        if (cachedSymbolData) {
+            return cachedSymbolData;
+        }
         const tokenChainResponse = this.parser.getTokenChain(currentToken);
         if (tokenChainResponse.includesUnknowableTokenType) {
-            return { type: new DynamicType(), expandedTokenText: currentToken.text };
+            const symbolData = { type: new DynamicType(), expandedTokenText: currentToken.text };
+            scope.symbolCache.set(currentToken, symbolData);
+            return symbolData;
         }
         const nameSpacedTokenChain = this.findNamespaceFromTokenChain(tokenChainResponse.chain, scope);
         const specialCase = this.checkForSpecialCaseToken(nameSpacedTokenChain, functionExpression, scope);
         if (specialCase) {
+            scope.symbolCache.set(currentToken, specialCase);
             return specialCase;
         }
         const tokenChain = nameSpacedTokenChain.tokenChain;
@@ -921,7 +931,9 @@ export class BrsFile {
         let backUpReturnType: BscType;
         if (tokenFoundCount === tokenChain.length) {
             // did we complete the chain? if so, we have a valid token at the end
-            return { type: symbolTypeBeforeReference, expandedTokenText: tokenText.join('.'), symbolContainer: symbolContainer };
+            const symbolData = { type: symbolTypeBeforeReference, expandedTokenText: tokenText.join('.'), symbolContainer: symbolContainer };
+            scope.symbolCache.set(currentToken, symbolData);
+            return symbolData;
         }
         if (isDynamicType(symbolTypeBeforeReference) || isArrayType(symbolTypeBeforeReference) || justReturnDynamic) {
             // last type in chain is dynamic... so currentToken could be anything.
@@ -946,7 +958,9 @@ export class BrsFile {
 
             }
         }
-        return { type: backUpReturnType, expandedTokenText: expandedTokenText };
+        const symbolData = { type: backUpReturnType, expandedTokenText: expandedTokenText };
+        scope.symbolCache.set(currentToken, symbolData);
+        return symbolData;
     }
 
     private getGlobalClassStatementCompletions(currentToken: Token, parseMode: ParseMode): CompletionItem[] {
@@ -1695,7 +1709,7 @@ interface NamespacedTokenChain {
     tokenChain: TokenChainMember[];
 }
 
-interface TokenSymbolLookup {
+export interface TokenSymbolLookup {
     type: BscType;
     expandedTokenText: string;
     symbolContainer?: SymbolContainer;
