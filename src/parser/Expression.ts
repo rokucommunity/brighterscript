@@ -1428,8 +1428,11 @@ export class RegexLiteralExpression extends Expression {
             text = text.substring(0, flagMatch.index + 1);
             flags = flagMatch[1];
         }
-        //remove leading and trailing slashes
-        const pattern = text.substring(1, text.length - 1);
+        let pattern = text
+            //remove leading and trailing slashes
+            .substring(1, text.length - 1)
+            //escape quotemarks
+            .split('"').join('" + chr(34) + "');
 
         return [
             state.sourceNode(this.tokens.regexLiteral, [

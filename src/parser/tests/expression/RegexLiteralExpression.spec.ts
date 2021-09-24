@@ -50,5 +50,18 @@ describe('RegexLiteralExpression', () => {
                 end sub
             `);
         });
+
+        it('escapes quotemark', () => {
+            testTranspile(`
+                sub main()
+                    print /"/
+                end sub
+            `, `
+                sub main()
+                    print CreateObject("roRegex", "" + chr(34) + "", "")
+                end sub
+            `);
+        });
+
     });
 });
