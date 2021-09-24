@@ -76,7 +76,7 @@ export class Scope {
      * Sometimes the lookup of symbols may take a while if there are lazyTypes or multiple tokens in a chain
      * By caching the result of this lookup, subsequent lookups of the same tokens are quicker
      */
-    protected get symbolCache() {
+    public get symbolCache() {
         return this.cache.getOrAdd('symbolCache', () => new Map<Token, TokenSymbolLookup>());
     }
 
@@ -158,23 +158,6 @@ export class Scope {
         }
         // TODO TYPES: this should probably be cached
         return ancestors;
-    }
-
-    public hasCachedSymbolForToken(token: Token) {
-        return this.symbolCache.has(token);
-    }
-
-    public getCachedSymbolForToken(token: Token): TokenSymbolLookup {
-        return this.symbolCache.get(token);
-    }
-
-    /**
-     * Stores a TokenSymbolLookup object associated with a token
-     * @returns the "lookupValue" that was passed in
-     */
-    public setCachedSymbolForToken(token: Token, lookupValue: TokenSymbolLookup): TokenSymbolLookup {
-        this.symbolCache.set(token, lookupValue);
-        return lookupValue;
     }
 
     /**
