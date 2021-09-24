@@ -1224,10 +1224,11 @@ describe('lexer', () => {
     });
 
     describe('regular expression literals', () => {
-        function testRegex(...regexps) {
+        function testRegex(...regexps: Array<string | RegExp>) {
+            regexps = regexps.map(x => x.toString());
             const results = [] as string[];
             for (const regexp of regexps) {
-                const { tokens } = Lexer.scan(regexp);
+                const { tokens } = Lexer.scan(regexp as string);
                 results.push(tokens[0].text);
             }
             expect(results).to.eql(regexps);
@@ -1235,12 +1236,25 @@ describe('lexer', () => {
 
         it('recognizes regex literals', () => {
             testRegex(
-                '/simple/',
-                '/SimpleWithValidFlags/imsx',
-                '/UnknownFlags/VUI',
-                '/with spaces/andflags',
-                '/with(parens)and[squarebraces]/',
-                '/*()^$@/'
+                /simple/,
+                /SimpleWithValidFlags/g,
+                /UnknownFlags/gi,
+                /with spaces/s,
+                /with(parens)and[squarebraces]/,
+                //lots of special characters
+                /.*()^$@/
+            );
+        });
+
+        it('handles escape characters properly', () => {
+            testRegex(
+                //an escaped forward slash right next to the end-regexp forwardslash
+                /\//,
+                /\r/,
+                /\n/,
+                /\r\n/,
+                //a literal backslash in front of an escape backslash
+                /\\\n/
             );
         });
     });
