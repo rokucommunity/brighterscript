@@ -1222,4 +1222,26 @@ describe('lexer', () => {
             TokenKind.Eof
         ]);
     });
+
+    describe('regular expression literals', () => {
+        function testRegex(...regexps) {
+            const results = [] as string[];
+            for (const regexp of regexps) {
+                const { tokens } = Lexer.scan(regexp);
+                results.push(tokens[0].text);
+            }
+            expect(results).to.eql(regexps);
+        }
+
+        it('recognizes regex literals', () => {
+            testRegex(
+                '/simple/',
+                '/SimpleWithValidFlags/imsx',
+                '/UnknownFlags/VUI',
+                '/with spaces/andflags',
+                '/with(parens)and[squarebraces]/',
+                '/*()^$@/'
+            );
+        });
+    });
 });
