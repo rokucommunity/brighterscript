@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.10](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.9...v1.0.0-alpha.10) - 2021-09-27
+### Added
+ - all changes from [v0.41.0](#0410---2021-09-27)
+### Changed
+ - type system performance boost by caching symbol lookups for tokens ([#453](https://github.com/rokucommunity/brighterscript/pull/453))
+
+
+
 ## [1.0.0-alpha.9](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.8...v1.0.0-alpha.9) - 2021-09-08
 ### Added
  - type checking in classes, including validation of method calls and deep finding of types
