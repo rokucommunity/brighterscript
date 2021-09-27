@@ -9,5 +9,5 @@ print /hello world/ig
 transpiles to:
 
 ```BrightScript
-print CreateObject("roRegex","hello world","ig")
+print CreateObject("roRegex", "hello world", "ig")
 ```
