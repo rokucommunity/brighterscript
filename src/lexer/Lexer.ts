@@ -199,14 +199,17 @@ export class Lexer {
             }
         },
         '/': function (this: Lexer) {
-            switch (this.peek()) {
-                case '=':
-                    this.advance();
-                    this.addToken(TokenKind.ForwardslashEqual);
-                    break;
-                default:
-                    this.addToken(TokenKind.Forwardslash);
-                    break;
+            //try capturing a regex literal. If that doesn't work, fall back to normal handling
+            if (!this.regexLiteral()) {
+                switch (this.peek()) {
+                    case '=':
+                        this.advance();
+                        this.addToken(TokenKind.ForwardslashEqual);
+                        break;
+                    default:
+                        this.addToken(TokenKind.Forwardslash);
+                        break;
+                }
             }
         },
         '\\': function (this: Lexer) {
@@ -382,6 +385,19 @@ export class Lexer {
     private advance(): void {
         this.current++;
         this.columnEnd++;
+    }
+
+    private lookaheadStack = [] as Array<{ current: number; columnEnd: number }>;
+    private pushLookahead() {
+        this.lookaheadStack.push({
+            current: this.current,
+            columnEnd: this.columnEnd
+        });
+    }
+    private popLookahead() {
+        const { current, columnEnd } = this.lookaheadStack.pop();
+        this.current = current;
+        this.columnEnd = columnEnd;
     }
 
     /**
@@ -925,6 +941,45 @@ export class Lexer {
                     range: this.rangeOf()
                 });
         }
+    }
+
+    /**
+     * Capture a regex literal token. Returns false if not found.
+     * This is lookahead lexing which might techincally belong in the parser,
+     * but it's easy enough to do here in the lexer
+     */
+    private regexLiteral() {
+        this.pushLookahead();
+
+        let nextCharNeedsEscaped = false;
+
+        //finite loop to prevent infinite loop if something went wrong
+        for (let i = this.current; i < this.source.length; i++) {
+
+            //if we reached the end of the regex, consume any flags
+            if (this.check('/') && !nextCharNeedsEscaped) {
+                this.advance();
+                //consume all flag-like chars (let the parser validate the actual values)
+                while (/[a-z]/i.exec(this.peek())) {
+                    this.advance();
+                }
+                //finalize the regex literal and EXIT
+                this.addToken(TokenKind.RegexLiteral);
+                return true;
+
+                //if we found a non-escaped newline, there's a syntax error with this regex (or it's not a regex), so quit
+            } else if (this.check('\n') || this.isAtEnd()) {
+                break;
+            } else if (this.check('\\')) {
+                this.advance();
+                nextCharNeedsEscaped = true;
+            } else {
+                this.advance();
+                nextCharNeedsEscaped = false;
+            }
+        }
+        this.popLookahead();
+        return false;
     }
 
     /**

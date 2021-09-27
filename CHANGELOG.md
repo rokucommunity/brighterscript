@@ -23,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.41.0](https://github.com/rokucommunity/brighterscript/compare/v0.40.1...v0.41.0) - 2021-09-27
+### Added
+ - Regex literal support in brighterscript ([#452](https://github.com/rokucommunity/brighterscript/pull/452)).
+
+
+
+## [0.40.1](https://github.com/rokucommunity/brighterscript/compare/v0.40.0...v0.40.1) - 2021-09-17
+### Changed
+ - install roku-deploy@3.4.2 which prevents deploy crashes when target Roku doesn't have an installed channel ([roku-deploy#65](https://github.com/rokucommunity/brighterscript/compare/v0.39.4...v0.40.0))
+
+
 
 ## [0.40.0] - 2021-08-02
 [0.40.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.39.4...v0.40.0

@@ -99,6 +99,7 @@ import { SymbolTable } from '../SymbolTable';
 import { ObjectType } from '../types/ObjectType';
 import { ArrayType } from '../types/ArrayType';
 import { getTypeFromCallExpression, getTypeFromDottedGetExpression, getTypeFromNewExpression, getTypeFromVariableExpression } from '../types/helpers';
+import { RegexLiteralExpression } from '.';
 
 export class Parser {
     /**
@@ -1456,6 +1457,12 @@ export class Parser {
         return new NullCoalescingExpression(test, questionQuestionToken, alternate);
     }
 
+    private regexLiteralExpression() {
+        return new RegexLiteralExpression({
+            regexLiteral: this.advance()
+        });
+    }
+
     private templateString(isTagged: boolean): TemplateStringExpression | TaggedTemplateStringExpression {
         this.warnIfNotBrighterScriptMode('template string');
 
@@ -2611,6 +2618,8 @@ export class Parser {
                 return new VariableExpression(token, this.currentNamespaceName);
             case this.checkAny(TokenKind.Function, TokenKind.Sub):
                 return this.anonymousFunction();
+            case this.check(TokenKind.RegexLiteral):
+                return this.regexLiteralExpression();
             case this.check(TokenKind.Comment):
                 return new CommentStatement([this.advance()]);
             default:

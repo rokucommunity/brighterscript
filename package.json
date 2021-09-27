@@ -128,7 +128,7 @@
         "moment": "^2.23.0",
         "p-settle": "^2.1.0",
         "parse-ms": "^2.1.0",
-        "roku-deploy": "^3.4.1",
+        "roku-deploy": "^3.4.2",
         "serialize-error": "^7.0.1",
         "source-map": "^0.7.3",
         "vscode-languageserver": "7.0.0",
