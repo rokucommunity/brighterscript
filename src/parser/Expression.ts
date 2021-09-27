@@ -1406,6 +1406,49 @@ export class NullCoalescingExpression extends Expression {
     }
 }
 
+export class RegexLiteralExpression extends Expression {
+    public constructor(
+        public tokens: {
+            regexLiteral: Token;
+        }
+    ) {
+        super();
+    }
+
+    public get range() {
+        return this.tokens.regexLiteral.range;
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        let text = this.tokens.regexLiteral?.text ?? '';
+        let flags = '';
+        //get any flags from the end
+        const flagMatch = /\/([a-z]+)$/i.exec(text);
+        if (flagMatch) {
+            text = text.substring(0, flagMatch.index + 1);
+            flags = flagMatch[1];
+        }
+        let pattern = text
+            //remove leading and trailing slashes
+            .substring(1, text.length - 1)
+            //escape quotemarks
+            .split('"').join('" + chr(34) + "');
+
+        return [
+            state.sourceNode(this.tokens.regexLiteral, [
+                'CreateObject("roRegex", ',
+                `"${pattern}", `,
+                `"${flags}"`,
+                ')'
+            ])
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+}
+
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 type ExpressionValue = string | number | boolean | Expression | ExpressionValue[] | { [key: string]: ExpressionValue };
 

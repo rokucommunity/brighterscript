@@ -93,6 +93,7 @@ import { Logger } from '../Logger';
 import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
+import { RegexLiteralExpression } from '.';
 
 export class Parser {
     /**
@@ -1396,6 +1397,12 @@ export class Parser {
         return new NullCoalescingExpression(test, questionQuestionToken, alternate);
     }
 
+    private regexLiteralExpression() {
+        return new RegexLiteralExpression({
+            regexLiteral: this.advance()
+        });
+    }
+
     private templateString(isTagged: boolean): TemplateStringExpression | TaggedTemplateStringExpression {
         this.warnIfNotBrighterScriptMode('template string');
 
@@ -2544,6 +2551,8 @@ export class Parser {
                 return new VariableExpression(token, this.currentNamespaceName);
             case this.checkAny(TokenKind.Function, TokenKind.Sub):
                 return this.anonymousFunction();
+            case this.check(TokenKind.RegexLiteral):
+                return this.regexLiteralExpression();
             case this.check(TokenKind.Comment):
                 return new CommentStatement([this.advance()]);
             default:
