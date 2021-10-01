@@ -1260,4 +1260,13 @@ describe('lexer', () => {
             );
         });
     });
+
+    it('detects "continue" as a keyword', () => {
+        expect(
+            Lexer.scan('continue').tokens.map(x => x.kind)
+        ).to.eql([
+            TokenKind.Continue,
+            TokenKind.Eof
+        ]);
+    });
 });
