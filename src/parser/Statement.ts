@@ -10,7 +10,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode, Parser } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isVoidType } from '../astUtils/reflection';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isTypedefProvider, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
@@ -115,10 +115,10 @@ export class Body extends Statement implements TypedefProvider {
         let result = [];
         for (const statement of this.statements) {
             //if the current statement supports generating typedef, call it
-            if ('getTypedef' in statement) {
+            if (isTypedefProvider(statement)) {
                 result.push(
                     state.indent(),
-                    ...(statement as TypedefProvider).getTypedef(state),
+                    ...statement.getTypedef(state),
                     state.newline
                 );
             }
@@ -1585,10 +1585,10 @@ export class ClassStatement extends Statement implements TypedefProvider {
         result.push(state.newline);
         state.blockDepth++;
         for (const member of this.body) {
-            if ('getTypedef' in member) {
+            if (isTypedefProvider(member)) {
                 result.push(
                     state.indent(),
-                    ...(member as TypedefProvider).getTypedef(state),
+                    ...member.getTypedef(state),
                     state.newline
                 );
             }

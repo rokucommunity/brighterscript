@@ -243,7 +243,7 @@ export class BrsFile {
                 this.program.logger.time(LogLevel.debug, ['preprocessor.process', chalk.green(this.pathAbsolute)], () => {
                     preprocessor.process(lexer.tokens, this.program.getManifest());
                 });
-            } catch (error) {
+            } catch (error: any) {
                 //if the thrown error is DIFFERENT than any errors from the preprocessor, add that error to the list as well
                 if (this.diagnostics.find((x) => x === error) === undefined) {
                     this.diagnostics.push(error);
