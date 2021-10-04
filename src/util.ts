@@ -1004,7 +1004,7 @@ export class Util {
                         plugin.name = pathOrModule;
                     }
                     acc.push(plugin);
-                } catch (err) {
+                } catch (err: any) {
                     if (onError) {
                         onError(pathOrModule, err);
                     } else {
