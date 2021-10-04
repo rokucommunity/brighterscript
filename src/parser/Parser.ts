@@ -354,7 +354,7 @@ export class Parser {
             }
 
             return this.statement();
-        } catch (error) {
+        } catch (error: any) {
             //if the error is not a diagnostic, then log the error for debugging purposes
             if (!(error as unknown as any).isDiagnostic) {
                 this.logger.error(error);

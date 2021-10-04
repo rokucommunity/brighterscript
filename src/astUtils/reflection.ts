@@ -2,7 +2,7 @@ import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStat
 import type { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
-import type { BscFile } from '../interfaces';
+import type { BscFile, TypedefProvider } from '../interfaces';
 import type { InvalidType } from '../types/InvalidType';
 import type { VoidType } from '../types/VoidType';
 import { InternalWalkMode } from './visitors';
@@ -224,6 +224,9 @@ export function isFunctionParameterExpression(element: Statement | Expression | 
 }
 export function isAnnotationExpression(element: Statement | Expression | undefined): element is AnnotationExpression {
     return element?.constructor.name === 'AnnotationExpression';
+}
+export function isTypedefProvider(element: any): element is TypedefProvider {
+    return 'getTypedef' in element;
 }
 
 // BscType reflection
