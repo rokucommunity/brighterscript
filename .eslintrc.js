@@ -40,6 +40,13 @@ module.exports = {
         '@typescript-eslint/no-invalid-this': 'off',
         '@typescript-eslint/no-magic-numbers': 'off',
         '@typescript-eslint/no-parameter-properties': 'off',
+        //had to add this rule to prevent eslint from crashing
+        '@typescript-eslint/no-restricted-imports': ['off', {}],
+        'object-curly-spacing': 'off',
+        '@typescript-eslint/object-curly-spacing': [
+            'error',
+            'always'
+        ],
         '@typescript-eslint/no-shadow': 'off',
         '@typescript-eslint/no-this-alias': 'off',
         //possibly disable this once we have converted all throw statements to actual errors
@@ -140,10 +147,6 @@ module.exports = {
         'no-unneeded-ternary': 'off',
         'no-useless-escape': 'off',
         'no-warning-comments': 'off',
-        'object-curly-spacing': [
-            'error',
-            'always'
-        ],
         'object-property-newline': 'off',
         'object-shorthand': [
             'error',
