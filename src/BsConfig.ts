@@ -91,7 +91,7 @@ export interface BsConfig {
     /**
      * A list of error codes the compiler should NOT emit, even if encountered.
      */
-    ignoreErrorCodes?: (number|string)[];
+    ignoreErrorCodes?: (number | string)[];
 
     /**
      * Emit full paths to files when printing diagnostics to the console. Defaults to false
@@ -107,7 +107,7 @@ export interface BsConfig {
     /**
      * A list of filters used to exclude diagnostics from the output
      */
-    diagnosticFilters?: Array<number | string | { src: string; codes: (number|string)[] } | { src: string } | { codes: (number|string)[] }>;
+    diagnosticFilters?: Array<number | string | { src: string; codes: (number | string)[] } | { src: string } | { codes: (number | string)[] }>;
 
     /**
      * Specify what diagnostic types should be printed to the console. Defaults to 'warn'

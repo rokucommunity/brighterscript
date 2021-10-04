@@ -857,7 +857,7 @@ export class BrsFile {
         if (classStatement) {
             let classes = scope.getClassHierarchy(classStatement.item.getName(ParseMode.BrighterScript).toLowerCase());
             for (let cs of classes) {
-                for (let member of [...cs?.item?.fields, ...cs?.item?.methods]) {
+                for (let member of [...cs?.item?.fields ?? [], ...cs?.item?.methods ?? []]) {
                     if (!results.has(member.name.text.toLowerCase())) {
                         results.set(member.name.text.toLowerCase(), {
                             label: member.name.text,

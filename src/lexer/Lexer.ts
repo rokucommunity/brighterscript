@@ -83,7 +83,7 @@ export class Lexer {
      * @param options options used to customize the scan process
      * @returns an object containing an array of `errors` and an array of `tokens` to be passed to a parser.
      */
-    public scan(toScan: string, options?: ScanOptions): Lexer {
+    public scan(toScan: string, options?: ScanOptions): this {
         this.source = toScan;
         this.options = this.sanitizeOptions(options);
         this.start = 0;
