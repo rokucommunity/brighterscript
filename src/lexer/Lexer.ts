@@ -5,6 +5,7 @@ import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Character
 import type { Range, Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
+import { PreceedingRegexTypes } from '.';
 
 export class Lexer {
     /**
@@ -944,6 +945,18 @@ export class Lexer {
     }
 
     /**
+     * Find the closest previous non-whtespace token
+     */
+    private getPreviousNonWhitespaceToken() {
+        for (let i = this.tokens.length - 1; i >= 0; i--) {
+            let token = this.tokens[i];
+            if (token && token.kind !== TokenKind.Whitespace) {
+                return this.tokens[i];
+            }
+        }
+    }
+
+    /**
      * Capture a regex literal token. Returns false if not found.
      * This is lookahead lexing which might techincally belong in the parser,
      * but it's easy enough to do here in the lexer
@@ -952,6 +965,11 @@ export class Lexer {
         this.pushLookahead();
 
         let nextCharNeedsEscaped = false;
+
+        //regexps can only occur when preceeded by exactly one of these tokens:
+        if (!PreceedingRegexTypes.includes(this.getPreviousNonWhitespaceToken()?.kind)) {
+            return false;
+        }
 
         //finite loop to prevent infinite loop if something went wrong
         for (let i = this.current; i < this.source.length; i++) {

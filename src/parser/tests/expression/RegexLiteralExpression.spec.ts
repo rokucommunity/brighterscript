@@ -63,5 +63,95 @@ describe('RegexLiteralExpression', () => {
             `);
         });
 
+        it.only('handles edge cases', () => {
+            testTranspile(`
+                sub main()
+                    v = /1/.Match("1")[0].ToInt()
+                    v = [
+                        0
+                    ]
+                    v[/0/.Match("0")[0].ToInt()] = true
+                    type(/1/.Match("1")[0].ToInt())
+                    v = 1 ^ /1/.Match("1")[0].ToInt()
+                    v = 1 - /1/.Match("1")[0].ToInt()
+                    v = 1 + /1/.Match("1")[0].ToInt()
+                    v = 1 * /1/.Match("1")[0].ToInt()
+                    v = 1 / /1/.Match("1")[0].ToInt()
+                    v = 1 mod /1/.Match("1")[0].ToInt()
+                    v = 1 \\ /1/.Match("1")[0].ToInt()
+                    v = 1 >> /1/.Match("1")[0].ToInt()
+                    v = 1 << /1/.Match("1")[0].ToInt()
+                    v -= /1/.Match("1")[0].ToInt()
+                    v += /1/.Match("1")[0].ToInt()
+                    v *= /1/.Match("1")[0].ToInt()
+                    v \\= /1/.Match("1")[0].ToInt()
+                    v /= /1/.Match("1")[0].ToInt()
+                    v <<= /1/.Match("1")[0].ToInt()
+                    v >>= /1/.Match("1")[0].ToInt()
+                    v = 1 < /1/.Match("1")[0].ToInt()
+                    v = 1 <= /1/.Match("1")[0].ToInt()
+                    v = 1 > /1/.Match("1")[0].ToInt()
+                    v = 1 >= /1/.Match("1")[0].ToInt()
+                    v = 1 = /1/.Match("1")[0].ToInt()
+                    v = 1 <> /1/.Match("1")[0].ToInt()
+                    v = 1 and /1/.Match("1")[0].ToInt()
+                    v = 1 or /1/.Match("1")[0].ToInt()
+                    if /1/.Match("1")[0].ToInt() > 0 then
+                    end if
+                    v = not /1/.Match("1")[0].ToInt() > 0
+                    for i = 0 to /1/.Match("1")[0].ToInt()
+                    end for
+                    v = /1/
+                    v = { name: /1/.Match("1")[0].ToInt() }
+                    print 1; /1/.Match("1")[0].ToInt()
+                    throw /1/.Match("1")[0]
+                end sub
+            `, `
+                sub main()
+                    v = CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = [
+                        0
+                    ]
+                    v[CreateObject("roRegex", "0", "").Match("0")[0].ToInt()] = true
+                    type(CreateObject("roRegex", "1", "").Match("1")[0].ToInt())
+                    v = 1 ^ CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 - CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 + CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 * CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 / CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 mod CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 \\ CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 >> CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 << CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v -= CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v += CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v *= CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v \\= CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v /= CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v <<= CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v >>= CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 < CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 <= CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 > CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 >= CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 = CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 <> CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 and CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    v = 1 or CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    if CreateObject("roRegex", "1", "").Match("1")[0].ToInt() > 0 then
+                    end if
+                    v = not CreateObject("roRegex", "1", "").Match("1")[0].ToInt() > 0
+                    for i = 0 to CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    end for
+                    v = CreateObject("roRegex", "1", "")
+                    v = {
+                        name: CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    }
+                    print 1; CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                    throw CreateObject("roRegex", "1", "").Match("1")[0]
+                end sub
+            `);
+        });
+
     });
 });
