@@ -1432,7 +1432,7 @@ export class BrsFile {
             const func = this.getFunctionExpressionAtPosition(position);
             if (func) {
                 // this identifier could possibly be a class field, so no function expression is available
-                for (const labelStatement of func?.labelStatements) {
+                for (const labelStatement of func?.labelStatements ?? []) {
                     if (labelStatement.tokens.identifier.text.toLocaleLowerCase() === lowerTokenText) {
                         return {
                             range: token.range,
