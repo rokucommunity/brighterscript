@@ -88,17 +88,25 @@ export function printDiagnostic(
     //Get the line referenced by the diagnostic. if we couldn't find a line,
     // default to an empty string so it doesn't crash the error printing below
     let diagnosticLine = lines[diagnostic.range?.start?.line ?? -1] ?? '';
+    console.log(
+        getDiagnosticLine(diagnostic, diagnosticLine, typeColor[severity])
+    );
+    console.log('');
+}
 
-    let squigglyText = getDiagnosticSquigglyText(diagnostic, diagnosticLine);
+export function getDiagnosticLine(diagnostic: BsDiagnostic, diagnosticLine: string, colorFunction: Chalk) {
+    let result = '';
 
     //only print the line information if we have some
     if (diagnostic.range && diagnosticLine) {
         let lineNumberText = chalk.bgWhite(' ' + chalk.black((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
-        let blankLineNumberText = chalk.bgWhite(' ' + chalk.bgWhite((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
-        console.log(lineNumberText + diagnosticLine);
-        console.log(blankLineNumberText + typeColor[severity](squigglyText));
+        let blankLineNumberText = chalk.bgWhite(' ' + chalk.white('_') + ' ') + ' ';
+        let squigglyText = getDiagnosticSquigglyText(diagnostic, diagnosticLine);
+        result +=
+            lineNumberText + diagnosticLine + '\n' +
+            blankLineNumberText + colorFunction(squigglyText);
     }
-    console.log('');
+    return result;
 }
 
 /**

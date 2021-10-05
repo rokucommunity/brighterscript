@@ -602,7 +602,10 @@ export const DeclarableTypes = [
 /**
  * The tokens that might preceed a regex literal
  */
-export const PreceedingRegexTypes = [
+export const PreceedingRegexTypes = new Set([
+    TokenKind.Print,
+    TokenKind.Question,
+    TokenKind.QuestionQuestion,
     TokenKind.LeftSquareBracket,
     TokenKind.LeftParen,
     TokenKind.LeftCurlyBrace,
@@ -638,4 +641,4 @@ export const PreceedingRegexTypes = [
     TokenKind.Throw,
     TokenKind.Colon,
     TokenKind.Semicolon
-];
+]);

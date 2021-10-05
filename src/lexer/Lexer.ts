@@ -967,33 +967,35 @@ export class Lexer {
         let nextCharNeedsEscaped = false;
 
         //regexps can only occur when preceeded by exactly one of these tokens:
-        if (!PreceedingRegexTypes.includes(this.getPreviousNonWhitespaceToken()?.kind)) {
-            return false;
-        }
+        const previousKind = this.getPreviousNonWhitespaceToken()?.kind;
 
-        //finite loop to prevent infinite loop if something went wrong
-        for (let i = this.current; i < this.source.length; i++) {
+        //preceeded by an allowed token, or if there are no previous tokens (i.e. this is the first token in the file).
+        if (PreceedingRegexTypes.has(previousKind) || !previousKind) {
 
-            //if we reached the end of the regex, consume any flags
-            if (this.check('/') && !nextCharNeedsEscaped) {
-                this.advance();
-                //consume all flag-like chars (let the parser validate the actual values)
-                while (/[a-z]/i.exec(this.peek())) {
+            //finite loop to prevent infinite loop if something went wrong
+            for (let i = this.current; i < this.source.length; i++) {
+
+                //if we reached the end of the regex, consume any flags
+                if (this.check('/') && !nextCharNeedsEscaped) {
                     this.advance();
-                }
-                //finalize the regex literal and EXIT
-                this.addToken(TokenKind.RegexLiteral);
-                return true;
+                    //consume all flag-like chars (let the parser validate the actual values)
+                    while (/[a-z]/i.exec(this.peek())) {
+                        this.advance();
+                    }
+                    //finalize the regex literal and EXIT
+                    this.addToken(TokenKind.RegexLiteral);
+                    return true;
 
-                //if we found a non-escaped newline, there's a syntax error with this regex (or it's not a regex), so quit
-            } else if (this.check('\n') || this.isAtEnd()) {
-                break;
-            } else if (this.check('\\')) {
-                this.advance();
-                nextCharNeedsEscaped = true;
-            } else {
-                this.advance();
-                nextCharNeedsEscaped = false;
+                    //if we found a non-escaped newline, there's a syntax error with this regex (or it's not a regex), so quit
+                } else if (this.check('\n') || this.isAtEnd()) {
+                    break;
+                } else if (this.check('\\')) {
+                    this.advance();
+                    nextCharNeedsEscaped = true;
+                } else {
+                    this.advance();
+                    nextCharNeedsEscaped = false;
+                }
             }
         }
         this.popLookahead();

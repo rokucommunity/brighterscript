@@ -1,5 +1,6 @@
 import type { BscFile, BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
+import chalk from 'chalk';
 import type { Diagnostic } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from 'chai';
@@ -10,7 +11,7 @@ import { BrsFile } from './files/BrsFile';
 import type { Program } from './Program';
 import { standardizePath as s } from './util';
 import type { CodeWithSourceMap } from 'source-map';
-import { getDiagnosticSquigglyText } from './diagnosticUtils';
+import { getDiagnosticLine } from './diagnosticUtils';
 
 /**
  * Trim leading whitespace for every line (to make test writing cleaner
@@ -83,11 +84,7 @@ export function expectZeroDiagnostics(arg: { getDiagnostics(): Array<Diagnostic>
             //print the line containing the error (if we can find it)
             const line = diagnostic.file?.fileContents?.split(/\r?\n/g)?.[diagnostic.range.start.line];
             if (line) {
-                const indent = '            ';
-                const squiggley = getDiagnosticSquigglyText(diagnostic, line);
-                message +=
-                    '\n' + indent + line +
-                    '\n' + indent + squiggley;
+                message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
             }
         }
         assert.fail(message);

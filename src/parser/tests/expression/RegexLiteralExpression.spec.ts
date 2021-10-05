@@ -63,9 +63,12 @@ describe('RegexLiteralExpression', () => {
             `);
         });
 
-        it.only('handles edge cases', () => {
+        it('handles edge cases', () => {
             testTranspile(`
                 sub main()
+                    print /1/
+                    ? /1/
+                    thing = false ?? /1/
                     v = /1/.Match("1")[0].ToInt()
                     v = [
                         0
@@ -100,6 +103,7 @@ describe('RegexLiteralExpression', () => {
                     end if
                     v = not /1/.Match("1")[0].ToInt() > 0
                     for i = 0 to /1/.Match("1")[0].ToInt()
+                        print "for!"
                     end for
                     v = /1/
                     v = { name: /1/.Match("1")[0].ToInt() }
@@ -108,6 +112,9 @@ describe('RegexLiteralExpression', () => {
                 end sub
             `, `
                 sub main()
+                    print CreateObject("roRegex", "1", "")
+                    ? CreateObject("roRegex", "1", "")
+                    thing = bslib_coalesce(false, CreateObject("roRegex", "1", ""))
                     v = CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
                     v = [
                         0
@@ -142,6 +149,7 @@ describe('RegexLiteralExpression', () => {
                     end if
                     v = not CreateObject("roRegex", "1", "").Match("1")[0].ToInt() > 0
                     for i = 0 to CreateObject("roRegex", "1", "").Match("1")[0].ToInt()
+                        print "for!"
                     end for
                     v = CreateObject("roRegex", "1", "")
                     v = {
