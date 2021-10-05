@@ -1,6 +1,8 @@
 import { Program } from '../../../Program';
 import { standardizePath as s } from '../../../util';
 import { getTestTranspile } from '../../../testHelpers.spec';
+import { expect } from 'chai';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
 
 describe('RegexLiteralExpression', () => {
     let rootDir = s`${process.cwd()}/rootDir`;
@@ -61,6 +63,15 @@ describe('RegexLiteralExpression', () => {
                     print CreateObject("roRegex", "" + chr(34) + "", "")
                 end sub
             `);
+        });
+
+        it('warns when in non-brighterscript mode', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print /"/
+                end sub
+            `);
+            expect(program.getDiagnostics()[0].code).to.eql(DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('').code);
         });
 
         it('handles edge cases', () => {
