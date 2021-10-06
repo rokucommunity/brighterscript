@@ -598,3 +598,47 @@ export const DeclarableTypes = [
     TokenKind.Void,
     TokenKind.Function
 ];
+
+/**
+ * The tokens that might preceed a regex literal
+ */
+export const PreceedingRegexTypes = new Set([
+    TokenKind.Print,
+    TokenKind.Question,
+    TokenKind.QuestionQuestion,
+    TokenKind.LeftSquareBracket,
+    TokenKind.LeftParen,
+    TokenKind.LeftCurlyBrace,
+    TokenKind.Caret,
+    TokenKind.Minus,
+    TokenKind.Plus,
+    TokenKind.Star,
+    TokenKind.Forwardslash,
+    TokenKind.Mod,
+    TokenKind.Backslash,
+    TokenKind.LeftShift,
+    TokenKind.RightShift,
+    TokenKind.MinusEqual,
+    TokenKind.PlusEqual,
+    TokenKind.StarEqual,
+    TokenKind.ForwardslashEqual,
+    TokenKind.BackslashEqual,
+    TokenKind.LeftShiftEqual,
+    TokenKind.RightShiftEqual,
+    TokenKind.Less,
+    TokenKind.LessEqual,
+    TokenKind.Greater,
+    TokenKind.GreaterEqual,
+    TokenKind.Equal,
+    TokenKind.LessGreater,
+    TokenKind.And,
+    TokenKind.Or,
+    TokenKind.If,
+    TokenKind.Not,
+    TokenKind.To,
+    TokenKind.Newline,
+    TokenKind.Throw,
+    TokenKind.Throw,
+    TokenKind.Colon,
+    TokenKind.Semicolon
+]);
