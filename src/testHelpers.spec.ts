@@ -1,6 +1,7 @@
 import type { BscFile, BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
-import type { Diagnostic, Range } from 'vscode-languageserver';
+import chalk from 'chalk';
+import type { Diagnostic } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from 'chai';
 import type { CodeActionShorthand } from './CodeActionUtil';
@@ -12,6 +13,7 @@ import { standardizePath as s } from './util';
 import type { SymbolTable } from './SymbolTable';
 import type { BscType } from './types/BscType';
 import type { CodeWithSourceMap } from 'source-map';
+import { getDiagnosticLine } from './diagnosticUtils';
 
 /**
  * Trim leading whitespace for every line (to make test writing cleaner
@@ -81,6 +83,11 @@ export function expectZeroDiagnostics(arg: { getDiagnostics(): Array<Diagnostic>
             //escape any newlines
             diagnostic.message = diagnostic.message.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
             message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file?.srcPath ?? ''}#(${diagnostic.range.start.line}:${diagnostic.range.start.character})-(${diagnostic.range.end.line}:${diagnostic.range.end.character})`;
+            //print the line containing the error (if we can find it)
+            const line = diagnostic.file?.fileContents?.split(/\r?\n/g)?.[diagnostic.range.start.line];
+            if (line) {
+                message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
+            }
         }
         assert.fail(message);
     }

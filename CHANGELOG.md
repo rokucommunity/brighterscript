@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.41.1](https://github.com/rokucommunity/brighterscript/compare/v0.41.0...v0.41.1) - 2021-10-07
+### Fixed
+ - parse issue with regex literals ([#458](https://github.com/rokucommunity/brighterscript/pull/458)).
+
+
+
 ## [1.0.0-alpha.10](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.9...v1.0.0-alpha.10) - 2021-09-27
 ### Added
  - all changes from [v0.41.0](#0410---2021-09-27)
