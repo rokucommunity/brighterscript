@@ -66,7 +66,7 @@ describe('RegexLiteralExpression', () => {
         });
 
         it('warns when in non-brighterscript mode', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print /"/
                 end sub
