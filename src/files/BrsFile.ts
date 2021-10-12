@@ -10,7 +10,7 @@ import type { Callable, CallableArg, CommentFlag, FunctionCall, BsDiagnostic, Fi
 import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords, isToken } from '../lexer';
 import { Parser, ParseMode, getBscTypeFromExpression, TokenUsage } from '../parser';
-import type { TokenChainMember, CallExpression, DottedGetExpression } from '../parser';
+import type { TokenChainMember, DottedGetExpression } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
 import type { FileLink, Program, SignatureInfoObj } from '../Program';
