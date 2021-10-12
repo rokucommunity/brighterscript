@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [1.0.0-alpha.11](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.10...v1.0.0-alpha.11) - 2021-10-07
+## [1.0.0-alpha.11](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.10...v1.0.0-alpha.11) - 2021-10-12
 ### Added
  - all changes from [v0.41.1](#0411---2021-10-07)
 
