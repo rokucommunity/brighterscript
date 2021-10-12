@@ -10,7 +10,7 @@ import type { Callable, CallableArg, CommentFlag, FunctionCall, BsDiagnostic, Fi
 import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords, isToken } from '../lexer';
 import { Parser, ParseMode, getBscTypeFromExpression, TokenUsage } from '../parser';
-import type { TokenChainMember } from '../parser';
+import type { TokenChainMember, CallExpression, DottedGetExpression } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
 import type { FileLink, Program, SignatureInfoObj } from '../Program';
@@ -19,7 +19,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isCustomType, isDynamicType, isObjectType, isArrayType, isPrimitiveType } from '../astUtils/reflection';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isCustomType, isDynamicType, isObjectType, isArrayType, isPrimitiveType, isRegexLiteralExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -423,6 +423,8 @@ export class BrsFile {
                 if (
                     //filter out method calls on method calls for now (i.e. getSomething().getSomethingElse())
                     (expression.callee as any).callee ||
+                    //filter out method calls on regexp literals for now
+                    isRegexLiteralExpression((expression.callee as DottedGetExpression)?.obj) ||
                     //filter out callees without a name (immediately-invoked function expressions)
                     !(expression.callee as any).name
                 ) {
