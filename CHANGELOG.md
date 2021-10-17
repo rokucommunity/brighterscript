@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [v1.0.0-alpha.12](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.11...v1.0.0-alpha.12) - 2021-10-17
+### Added
+ - all changes from [v0.41.2](#0411---2021-10-17)
+
+
+
 ## [0.41.2](https://github.com/rokucommunity/brighterscript/compare/v0.41.1...v0.41.2) - 2021-10-17
 ### Fixed
  - crash when subclass field has same name as ancestor method ([#460](https://github.com/rokucommunity/brighterscript/pull/460)).
