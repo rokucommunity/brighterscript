@@ -2,7 +2,7 @@ import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import type { ClassFieldStatement, ClassMethodStatement, ClassStatement } from '../parser/Statement';
+import type { ClassMethodStatement, ClassStatement } from '../parser/Statement';
 import { CancellationTokenSource, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
@@ -11,6 +11,7 @@ import type { BscFile, BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils';
 import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer';
+import { DynamicType } from '../types/DynamicType';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -197,9 +198,14 @@ export class BsClassValidator {
 
                         //child field has same name as parent
                         if (isClassFieldStatement(member)) {
-                            const ancestorFieldType = (ancestorAndMember.member as ClassFieldStatement).getType();
+                            let ancestorMemberType = new DynamicType();
+                            if (isClassFieldStatement(ancestorAndMember.member)) {
+                                ancestorMemberType = ancestorAndMember.member.getType();
+                            } else if (isClassMethodStatement(ancestorAndMember.member)) {
+                                ancestorMemberType = ancestorAndMember.member.func.getFunctionType();
+                            }
                             const childFieldType = member.getType();
-                            if (!childFieldType.isAssignableTo(ancestorFieldType)) {
+                            if (!childFieldType.isAssignableTo(ancestorMemberType)) {
                                 //flag incompatible child field type to ancestor field type
                                 this.diagnostics.push({
                                     ...DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty(
@@ -207,7 +213,7 @@ export class BsClassValidator {
                                         ancestorAndMember.classStatement.getName(ParseMode.BrighterScript),
                                         member.name.text,
                                         childFieldType.toString(),
-                                        ancestorFieldType.toString()
+                                        ancestorMemberType.toString()
                                     ),
                                     file: classStatement.file,
                                     range: member.range
