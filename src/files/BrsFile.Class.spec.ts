@@ -1520,6 +1520,31 @@ describe('BrsFile BrighterScript classes', () => {
             });
 
         });
+    });
 
+    it('does not crash when child has field with same name as sub in parent', () => {
+        program.setFile('source/main.bs', `
+            class Parent
+                public function helloWorld()
+                end function
+            end class
+            class Child extends Parent
+                public helloWorld as string
+            end class
+        `);
+        program.validate();
+    });
+
+    it('does not crash when child has method with same name as field in parent', () => {
+        program.setFile('source/main.bs', `
+            class Parent
+                public helloWorld as string
+            end class
+            class Child extends Parent
+                public function helloWorld()
+                end function
+            end class
+        `);
+        program.validate();
     });
 });

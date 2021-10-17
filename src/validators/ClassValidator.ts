@@ -11,8 +11,9 @@ import type { BscFile, BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer';
+import { DynamicType } from '../types/DynamicType';
+import type { BscType, TypeContext } from '../types/BscType';
 import { getTypeFromContext } from '../types/BscType';
-import type { TypeContext } from '../types/BscType';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -205,13 +206,18 @@ export class BsClassValidator {
 
                         //child field has same name as parent
                         if (isClassFieldStatement(member)) {
-                            const ancestorFieldType = (ancestorAndMember.member as ClassFieldStatement).getType();
+                            let ancestorMemberType: BscType = new DynamicType();
+                            if (isClassFieldStatement(ancestorAndMember.member)) {
+                                ancestorMemberType = ancestorAndMember.member.getType();
+                            } else if (isClassMethodStatement(ancestorAndMember.member)) {
+                                ancestorMemberType = ancestorAndMember.member.func.getFunctionType();
+                            }
                             const childFieldType = member.getType();
-                            if (!childFieldType.isAssignableTo(ancestorFieldType, this.typeContext)) {
+                            if (!childFieldType.isAssignableTo(ancestorMemberType, this.typeContext)) {
                                 //flag incompatible child field type to ancestor field type
 
                                 const childFieldTypeName = childFieldType?.toString(this.typeContext) ?? member.type?.text;
-                                const ancestorFieldTypeName = ancestorFieldType?.toString(this.typeContext) ?? (ancestorAndMember.member as ClassFieldStatement).type.text;
+                                const ancestorFieldTypeName = ancestorMemberType?.toString(this.typeContext) ?? (ancestorAndMember.member as ClassFieldStatement).type.text;
                                 this.diagnostics.push({
                                     ...DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty(
                                         classStatement.getName(ParseMode.BrighterScript),
