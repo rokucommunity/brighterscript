@@ -69,15 +69,18 @@ export class CommentFlagProcessor {
 
             //disable specific diagnostic codes
         } else {
-            let codes = [] as number[];
+            let codes = [] as DiagnosticCode[];
             for (let codeToken of tokenized.codes) {
                 let codeInt = parseInt(codeToken.code);
+                //is a plugin-contributed or non-numeric code
                 if (isNaN(codeInt)) {
-                    //don't validate non-numeric codes
-                    continue;
-                    //add a warning for unknown codes
+                    codes.push(codeToken.code?.toString()?.toLowerCase());
+
+                    //validate numeric codes against the list of known bsc codes
                 } else if (this.diagnosticCodes.includes(codeInt)) {
                     codes.push(codeInt);
+
+                    //add a warning for unknown codes
                 } else {
                     this.diagnostics.push({
                         ...DiagnosticMessages.unknownDiagnosticCode(codeInt),
