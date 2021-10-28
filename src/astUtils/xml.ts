@@ -21,3 +21,6 @@ export function isSGFunction(tag: SGTag): tag is SGFunction {
 export function isSGNode(tag: SGTag): tag is SGNode {
     return tag?.constructor.name === 'SGNode';
 }
+export function isSGCustomization(tag: SGTag): tag is SGNode {
+    return isSGNode(tag) && tag.tag?.text?.toLowerCase() === 'customization';
+}

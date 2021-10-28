@@ -254,15 +254,14 @@ function mapElements(content: ContentCstNode, allow: string[], diagnostics: Diag
         for (const entry of element) {
             const name = entry.children.Name?.[0];
             if (name?.image) {
-                if (allow.includes(name.image)) {
-                    tags.push(mapElement(entry, diagnostics));
-                } else {
+                if (!allow.includes(name.image)) {
                     //unexpected tag
                     diagnostics.push({
                         ...DiagnosticMessages.xmlUnexpectedTag(name.image),
                         range: rangeFromTokens(name)
                     });
                 }
+                tags.push(mapElement(entry, diagnostics));
             } else {
                 //bad xml syntax...
             }

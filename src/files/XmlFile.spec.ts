@@ -11,6 +11,8 @@ import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
 import { standardizePath as s } from '../util';
 import { expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
+import { ProgramBuilder } from '../ProgramBuilder';
+import { LogLevel } from '../Logger';
 
 describe('XmlFile', () => {
     const tempDir = s`${process.cwd()}/.tmp`;
@@ -624,6 +626,41 @@ describe('XmlFile', () => {
     });
 
     describe('transpile', () => {
+        it('supports instantresume <customization> elements', async () => {
+            fsExtra.outputFileSync(`${rootDir}/manifest`, '');
+            fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `sub main()\nend sub`);
+            fsExtra.outputFileSync(`${rootDir}/components/MainScene.xml`, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainScene" extends="Scene">
+                    <customization resumehandler="customResume" /> <!--bs:disable-line-->
+                    <customization suspendhandler="customSuspend" /> <!--bs:disable-line-->
+                    <children>
+                        <Rectangle width="1920" height="1080" />
+                    </children>
+                </component>
+            `);
+            const builder = new ProgramBuilder();
+            await builder.run({
+                cwd: rootDir,
+                retainStagingFolder: true,
+                stagingFolderPath: stagingDir,
+                logLevel: LogLevel.off
+            });
+            expect(
+                fsExtra.readFileSync(`${stagingDir}/components/MainScene.xml`).toString()
+            ).to.eql(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainScene" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    <children>
+                        <Rectangle width="1920" height="1080" />
+                    </children>
+                    <customization resumehandler="customResume" />
+                    <customization suspendhandler="customSuspend" />
+                </component>
+            `);
+        });
+
         it(`honors the 'needsTranspiled' flag when set in 'afterFileParse'`, () => {
             program.plugins.add({
                 name: 'test',
