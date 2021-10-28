@@ -632,8 +632,8 @@ describe('XmlFile', () => {
             fsExtra.outputFileSync(`${rootDir}/components/MainScene.xml`, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="MainScene" extends="Scene">
-                    <customization resumehandler="customResume" /> <!--bs:disable-line-->
-                    <customization suspendhandler="customSuspend" /> <!--bs:disable-line-->
+                    <customization resumehandler="customResume" />
+                    <customization suspendhandler="customSuspend" />
                     <children>
                         <Rectangle width="1920" height="1080" />
                     </children>
