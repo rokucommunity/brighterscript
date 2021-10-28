@@ -1,7 +1,7 @@
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import { createSGAttribute } from '../astUtils/creators';
-import { isSGChildren, isSGField, isSGFunction, isSGInterface, isSGScript } from '../astUtils/xml';
+import { isSGChildren, isSGCustomization, isSGField, isSGFunction, isSGInterface, isSGScript } from '../astUtils/xml';
 import type { FileReference, TranspileResult } from '../interfaces';
 import util from '../util';
 import type { TranspileState } from './TranspileState';
@@ -296,8 +296,6 @@ export class SGInterface extends SGTag {
                     this.fields.push(tag);
                 } else if (isSGFunction(tag)) {
                     this.functions.push(tag);
-                } else {
-                    throw new Error(`Unexpected tag ${tag.tag.text}`);
                 }
             }
         }
@@ -366,8 +364,8 @@ export class SGComponent extends SGTag {
                     this.scripts.push(tag);
                 } else if (isSGChildren(tag)) {
                     this.children = tag;
-                } else {
-                    throw new Error(`Unexpected tag ${tag.tag.text}`);
+                } else if (isSGCustomization(tag)) {
+                    this.customizations.push(tag);
                 }
             }
         }
@@ -378,6 +376,8 @@ export class SGComponent extends SGTag {
     public scripts: SGScript[] = [];
 
     public children: SGChildren;
+
+    public customizations: SGNode[] = [];
 
     get name() {
         return this.getAttributeValue('name');
@@ -404,6 +404,9 @@ export class SGComponent extends SGTag {
         }
         if (this.children) {
             body.push(this.children.transpile(state));
+        }
+        if (this.customizations.length > 0) {
+            body.push(...this.customizations.map(node => node.transpile(state)));
         }
         state.blockDepth--;
         body.push(state.indentText, '</', this.tag.text, '>\n');
