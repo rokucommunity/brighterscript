@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.41.4](https://github.com/rokucommunity/brighterscript/compare/v0.41.3...v0.41.4) - 2021-10-28
+### Fixed
+ - bug transpiling instant resume xml elements ([#465](https://github.com/rokucommunity/brighterscript/pull/465))
+
+
+
 ## [0.41.3](https://github.com/rokucommunity/brighterscript/compare/v0.41.2...v0.41.3) - 2021-10-27
 ### Changed
  - upgrade to  [roku-deploy@3.5.0](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#350---2021-10-27)  which adds the ability to use negated non-rootDir top-level patterns in the files array ([#78](https://github.com/rokucommunity/roku-deploy/pull/78))
