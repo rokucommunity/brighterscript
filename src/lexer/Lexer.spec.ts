@@ -1222,4 +1222,76 @@ describe('lexer', () => {
             TokenKind.Eof
         ]);
     });
+
+    describe('regular expression literals', () => {
+        function testRegex(...regexps: Array<string | RegExp>) {
+            regexps = regexps.map(x => x.toString());
+            const results = [] as string[];
+            for (const regexp of regexps) {
+                const { tokens } = Lexer.scan(regexp as string);
+                results.push(tokens[0].text);
+            }
+            expect(results).to.eql(regexps);
+        }
+
+        it('recognizes regex literals', () => {
+            testRegex(
+                /simple/,
+                /SimpleWithValidFlags/g,
+                /UnknownFlags/gi,
+                /with spaces/s,
+                /with(parens)and[squarebraces]/,
+                //lots of special characters
+                /.*()^$@/,
+                //captures quote char
+                /"/
+            );
+        });
+
+        it('does not capture multiple divisions on one line as regex', () => {
+            const { tokens } = Lexer.scan(`one = 1/2 + 1/4 + 1/4`, {
+                includeWhitespace: false
+            });
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.IntegerLiteral,
+                TokenKind.Forwardslash,
+                TokenKind.IntegerLiteral,
+                TokenKind.Plus,
+                TokenKind.IntegerLiteral,
+                TokenKind.Forwardslash,
+                TokenKind.IntegerLiteral,
+                TokenKind.Plus,
+                TokenKind.IntegerLiteral,
+                TokenKind.Forwardslash,
+                TokenKind.IntegerLiteral,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('only captures alphanumeric flags', () => {
+            expect(
+                Lexer.scan('speak(/a/)').tokens.map(x => x.kind)
+            ).to.eql([
+                TokenKind.Identifier,
+                TokenKind.LeftParen,
+                TokenKind.RegexLiteral,
+                TokenKind.RightParen,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('handles escape characters properly', () => {
+            testRegex(
+                //an escaped forward slash right next to the end-regexp forwardslash
+                /\//,
+                /\r/,
+                /\n/,
+                /\r\n/,
+                //a literal backslash in front of an escape backslash
+                /\\\n/
+            );
+        });
+    });
 });

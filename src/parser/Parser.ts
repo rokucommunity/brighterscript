@@ -93,6 +93,7 @@ import { Logger } from '../Logger';
 import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
+import { RegexLiteralExpression } from '.';
 
 export class Parser {
     /**
@@ -336,7 +337,7 @@ export class Parser {
             }
 
             return this.statement();
-        } catch (error) {
+        } catch (error: any) {
             //if the error is not a diagnostic, then log the error for debugging purposes
             if (!error.isDiagnostic) {
                 this.logger.error(error);
@@ -1394,6 +1395,13 @@ export class Parser {
         const questionQuestionToken = this.advance();
         const alternate = this.expression();
         return new NullCoalescingExpression(test, questionQuestionToken, alternate);
+    }
+
+    private regexLiteralExpression() {
+        this.warnIfNotBrighterScriptMode('regular expression literal');
+        return new RegexLiteralExpression({
+            regexLiteral: this.advance()
+        });
     }
 
     private templateString(isTagged: boolean): TemplateStringExpression | TaggedTemplateStringExpression {
@@ -2544,6 +2552,8 @@ export class Parser {
                 return new VariableExpression(token, this.currentNamespaceName);
             case this.checkAny(TokenKind.Function, TokenKind.Sub):
                 return this.anonymousFunction();
+            case this.check(TokenKind.RegexLiteral):
+                return this.regexLiteralExpression();
             case this.check(TokenKind.Comment):
                 return new CommentStatement([this.advance()]);
             default:

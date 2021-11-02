@@ -243,7 +243,7 @@ export class BrsFile {
                 this.program.logger.time(LogLevel.debug, ['preprocessor.process', chalk.green(this.pathAbsolute)], () => {
                     preprocessor.process(lexer.tokens, this.program.getManifest());
                 });
-            } catch (error) {
+            } catch (error: any) {
                 //if the thrown error is DIFFERENT than any errors from the preprocessor, add that error to the list as well
                 if (this.diagnostics.find((x) => x === error) === undefined) {
                     this.diagnostics.push(error);
@@ -617,7 +617,8 @@ export class BrsFile {
                             range: arg.range,
                             type: arg.type,
                             text: arg.token.text,
-                            expression: arg
+                            expression: arg,
+                            typeToken: undefined
                         });
 
                         //is variable being passed into argument
@@ -627,7 +628,8 @@ export class BrsFile {
                             //TODO - look up the data type of the actual variable
                             type: new DynamicType(),
                             text: arg.name.text,
-                            expression: arg
+                            expression: arg,
+                            typeToken: undefined
                         });
 
                     } else if (arg.value) {
@@ -641,7 +643,8 @@ export class BrsFile {
                             //TODO not sure what to do here
                             type: new DynamicType(), // util.valueKindToBrsType(arg.value.kind),
                             text: text,
-                            expression: arg
+                            expression: arg,
+                            typeToken: undefined
                         };
                         //wrap the value in quotes because that's how it appears in the code
                         if (isStringType(callableArg.type)) {
@@ -655,7 +658,8 @@ export class BrsFile {
                             type: new DynamicType(),
                             //TODO get text from other types of args
                             text: '',
-                            expression: arg
+                            expression: arg,
+                            typeToken: undefined
                         });
                     }
                 }
@@ -861,7 +865,7 @@ export class BrsFile {
         if (classStatement) {
             let classes = scope.getClassHierarchy(classStatement.item.getName(ParseMode.BrighterScript).toLowerCase());
             for (let cs of classes) {
-                for (let member of [...cs?.item?.fields, ...cs?.item?.methods]) {
+                for (let member of [...cs?.item?.fields ?? [], ...cs?.item?.methods ?? []]) {
                     if (!results.has(member.name.text.toLowerCase())) {
                         results.set(member.name.text.toLowerCase(), {
                             label: member.name.text,

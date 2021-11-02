@@ -101,7 +101,7 @@ export class ProgramBuilder {
                 this.logger.log(`No bsconfig.json file found, using default options`);
             }
             this.loadPlugins();
-        } catch (e) {
+        } catch (e: any) {
             if (e?.file && e.message && e.code) {
                 let err = e as BsDiagnostic;
                 this.staticDiagnostics.push(err);

@@ -642,11 +642,12 @@ export class Util {
      * @param diagnostic
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
+        const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
         for (let flag of diagnostic.file?.commentFlags ?? []) {
             //this diagnostic is affected by this flag
             if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
                 //if the flag acts upon this diagnostic's code
-                if (flag.codes === null || flag.codes.includes(diagnostic.code as number)) {
+                if (flag.codes === null || flag.codes.includes(diagnosticCode)) {
                     return true;
                 }
             }
@@ -1004,7 +1005,7 @@ export class Util {
                         plugin.name = pathOrModule;
                     }
                     acc.push(plugin);
-                } catch (err) {
+                } catch (err: any) {
                     if (onError) {
                         onError(pathOrModule, err);
                     } else {

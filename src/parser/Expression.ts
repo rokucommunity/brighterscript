@@ -14,6 +14,7 @@ import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
+import { FunctionType } from '../types/FunctionType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -249,6 +250,15 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 walk(this, 'body', visitor, options);
             }
         }
+    }
+
+    getFunctionType(): FunctionType {
+        let functionType = new FunctionType(this.returnType);
+        functionType.isSub = this.functionType.text === 'sub';
+        for (let param of this.parameters) {
+            functionType.addParameter(param.name.text, param.type, !!param.typeToken);
+        }
+        return functionType;
     }
 }
 
@@ -1403,6 +1413,49 @@ export class NullCoalescingExpression extends Expression {
             walk(this, 'consequent', visitor, options);
             walk(this, 'alternate', visitor, options);
         }
+    }
+}
+
+export class RegexLiteralExpression extends Expression {
+    public constructor(
+        public tokens: {
+            regexLiteral: Token;
+        }
+    ) {
+        super();
+    }
+
+    public get range() {
+        return this.tokens.regexLiteral.range;
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        let text = this.tokens.regexLiteral?.text ?? '';
+        let flags = '';
+        //get any flags from the end
+        const flagMatch = /\/([a-z]+)$/i.exec(text);
+        if (flagMatch) {
+            text = text.substring(0, flagMatch.index + 1);
+            flags = flagMatch[1];
+        }
+        let pattern = text
+            //remove leading and trailing slashes
+            .substring(1, text.length - 1)
+            //escape quotemarks
+            .split('"').join('" + chr(34) + "');
+
+        return [
+            state.sourceNode(this.tokens.regexLiteral, [
+                'CreateObject("roRegex", ',
+                `"${pattern}", `,
+                `"${flags}"`,
+                ')'
+            ])
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
     }
 }
 

@@ -154,7 +154,7 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
-        describe.only('createObject', () => {
+        describe('createObject', () => {
             it('recognizes various scenegraph nodes', () => {
                 program.addOrReplaceFile(`source/file.brs`, `
                     sub main()
@@ -188,7 +188,7 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
-            it.only('catches unknown roSGNodes', () => {
+            it('catches unknown roSGNodes', () => {
                 program.addOrReplaceFile(`source/file.brs`, `
                     sub main()
                         scene = CreateObject("roSGNode", "notReal")
