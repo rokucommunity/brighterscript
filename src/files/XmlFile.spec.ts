@@ -1152,6 +1152,18 @@ describe('XmlFile', () => {
         });
     });
 
+    it('includes single quotes in transpiled output', () => {
+        testTranspile(trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Cmp1" extends="Scene">
+                <interface>
+                    <field id="test" type="assocarray" value='{"testA":"testA"}' />
+                </interface>
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+            </component>
+        `, undefined, 'none', 'components/file.xml');
+    });
+
     describe('duplicate components', () => {
         it('more gracefully handles multiple components with the same name', () => {
             program.setFile('components/comp1.brs', ``);
