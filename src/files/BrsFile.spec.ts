@@ -388,15 +388,33 @@ describe('BrsFile', () => {
                 expect(program.getDiagnostics()[0]?.message).to.not.exist;
             });
 
-            it('ignores non-numeric codes', () => {
-                let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('recognizes non-numeric codes', () => {
+                let file = program.setFile<BrsFile>('source/main.brs', `
                     sub Main()
                         'bs:disable-next-line: LINT9999
                         name = "bob
                     end sub
                 `);
-                expect(file.commentFlags[0]).to.not.exist;
+                expect(file.commentFlags[0]).to.exist;
                 expect(program.getDiagnostics()[0]?.message).to.exist;
+            });
+
+            it('supports disabling non-numeric error codes', () => {
+                const program = new Program({});
+                const file = program.setFile('source/main.brs', `
+                    sub main()
+                        something = true 'bs:disable-line: LINT1005
+                    end sub
+                `);
+                file.addDiagnostics([{
+                    code: 'LINT1005',
+                    file: file,
+                    message: 'Something is not right',
+                    range: util.createRange(2, 16, 2, 26)
+                }]);
+                expect(
+                    program.getScopesForFile(file)[0].getDiagnostics()
+                ).to.be.empty;
             });
 
             it('adds diagnostics for unknown numeric diagnostic codes', () => {

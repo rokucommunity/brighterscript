@@ -1,7 +1,6 @@
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
-import { createSGInterface } from '../astUtils';
-import { createSGAttribute, createSGInterfaceField, createSGInterfaceFunction } from '../astUtils/creators';
+import { createSGAttribute, createSGInterface, createSGInterfaceField, createSGInterfaceFunction } from '../astUtils/creators';
 import type { FileReference } from '../interfaces';
 import { BooleanType } from '../types/BooleanType';
 import { DynamicType } from '../types/DynamicType';
@@ -340,6 +339,8 @@ export class SGNode extends SGTag { }
 
 export class SGChildren extends SGTag { }
 
+export class SGCustomization extends SGTag { }
+
 export class SGScript extends SGTag {
 
     public cdata?: SGToken;
@@ -651,6 +652,10 @@ export class SGComponent extends SGTag {
     public get children() {
         const children = this.getChildNodesByTagName<SGChildren>('children');
         return children[children.length - 1];
+    }
+
+    public get customizations() {
+        return this.getChildNodesByTagName<SGCustomization>('customization');
     }
 
     get name() {

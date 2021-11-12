@@ -178,7 +178,7 @@ export default class SGParser {
 
         switch (startTagName.text) {
             case 'component':
-                childrenContent = this.mapElements(content, ['interface', 'script', 'children']);
+                childrenContent = this.mapElements(content, ['interface', 'script', 'children', 'customization']);
                 return new SGComponent(startTagOpen, startTagName, attributes, startTagClose, childrenContent, endTagOpen, endTagName, endTagClose);
             case 'interface':
                 childrenContent = this.mapElements(content, ['field', 'function']);
