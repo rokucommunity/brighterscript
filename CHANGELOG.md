@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.41.5](https://github.com/rokucommunity/brighterscript/compare/v0.41.4...v0.41.5) - 2021-11-23
+ - critical crash whenever a local variable had the same name as a javascript object function on the prototype (stuch as `constructor`). ([#469](https://github.com/rokucommunity/brighterscript/pull/469))
+
+
+
 ## [0.41.4](https://github.com/rokucommunity/brighterscript/compare/v0.41.3...v0.41.4) - 2021-10-28
 ### Fixed
  - bug transpiling instant resume xml elements ([#465](https://github.com/rokucommunity/brighterscript/pull/465))
