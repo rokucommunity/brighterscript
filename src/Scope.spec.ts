@@ -41,6 +41,15 @@ describe('Scope', () => {
         expect(program.getDiagnostics()[0]?.message).not.to.exist;
     });
 
+    it('handles variables with javascript prototype names', () => {
+        program.addOrReplaceFile('source/main.brs', `
+            sub main()
+                constructor = true
+            end sub
+        `);
+        program.validate();
+    });
+
     it('flags parameter with same name as namespace', () => {
         program.addOrReplaceFile('source/main.bs', `
             namespace NameA.NameB

@@ -1020,7 +1020,7 @@ describe('XmlFile', () => {
             program.validate();
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
             const scope = program.getComponentScope('ChildComponent');
-            expect(Object.keys(scope.namespaceLookup).sort()).to.eql([
+            expect([...scope.namespaceLookup.keys()].sort()).to.eql([
                 'lib',
                 'parent'
             ]);
