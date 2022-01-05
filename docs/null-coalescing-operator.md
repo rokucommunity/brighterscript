@@ -55,14 +55,14 @@ user = getUser(userId ?? globalSettings.defaultUserId) ?? getDefaultUser()
 transpiles to:
 ```brightscript
 user = (function(getDefaultUser, getUser, globalSettings, userId)
-        __bsConsequent = getUser((function(globalSettings)
+        __bsConsequent = getUser((function(globalSettings, userId)
                 __bsConsequent = userId
                 if __bsConsequent <> invalid then
                     return __bsConsequent
                 else
                     return globalSettings.defaultUserId
                 end if
-            end function)(globalSettings))
+            end function)(globalSettings, userId))
         if __bsConsequent <> invalid then
             return __bsConsequent
         else
