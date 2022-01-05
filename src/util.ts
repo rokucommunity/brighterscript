@@ -1043,9 +1043,7 @@ export class Util {
         const variableExpressions = [] as VariableExpression[];
         const uniqueVarNames = new Set<string>();
 
-        // Collect all expressions. Most of these expressions are fairly small so this should be quick!
-        // This should only be called during transpile time and only when we actually need it.
-        expression?.walk((expression) => {
+        function expressionWalker(expression) {
             if (isExpression(expression)) {
                 expressions.push(expression);
             }
@@ -1053,9 +1051,17 @@ export class Util {
                 variableExpressions.push(expression);
                 uniqueVarNames.add(expression.name.text);
             }
-        }, {
+        }
+
+        // Collect all expressions. Most of these expressions are fairly small so this should be quick!
+        // This should only be called during transpile time and only when we actually need it.
+        expression?.walk(expressionWalker, {
             walkMode: WalkMode.visitExpressions
         });
+
+        //handle the expression itself (for situations when expression is a VariableExpression)
+        expressionWalker(expression);
+
         return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: [...uniqueVarNames] };
     }
 
