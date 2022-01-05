@@ -6,7 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.41.6](https://github.com/rokucommunity/brighterscript/compare/v0.41.5...v0.41.6) - 2022-01-05
+### Fixed
+ - issue in the transpiled output of the null coalescing operator where plain variable references are not properly passed into the function. ([#474](https://github.com/rokucommunity/brighterscript/pull/474))
+
+
+
 ## [0.41.5](https://github.com/rokucommunity/brighterscript/compare/v0.41.4...v0.41.5) - 2021-11-23
+### Fixed
  - critical crash whenever a local variable had the same name as a javascript object function on the prototype (stuch as `constructor`). ([#469](https://github.com/rokucommunity/brighterscript/pull/469))
 
 
