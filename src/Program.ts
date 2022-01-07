@@ -1225,6 +1225,8 @@ export class Program {
             }
 
             this.plugins.emit('afterFileTranspile', entry);
+
+            //undo all astEditor edits that may have been applied to this file.
             entry.astEditor.undoAll();
         });
 
