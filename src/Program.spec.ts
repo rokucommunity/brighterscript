@@ -11,7 +11,7 @@ import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import type { FunctionStatement } from './parser/Statement';
+import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
 import { expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
@@ -1641,6 +1641,30 @@ describe('Program', () => {
     });
 
     describe('transpile', () => {
+
+        it('sets needsTranspiled=true when there is at least one edit', async () => {
+            program.addOrReplaceFile('source/main.brs', trim`
+                sub main()
+                    print "hello world"
+                end sub
+            `);
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeFileTranspile: (event) => {
+                    const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
+                    event.astEditor.setProperty((stmt.expressions[0] as LiteralExpression).token, 'text', '"hello there"');
+                }
+            });
+            await program.transpile([], stagingFolderPath);
+            //our changes should be there
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/main.brs`).toString()
+            ).to.eql(trim`
+                sub main()
+                    print "hello there"
+                end sub`
+            );
+        });
 
         it('handles AstEditor flow properly', async () => {
             program.addOrReplaceFile('source/main.bs', `

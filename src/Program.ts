@@ -1204,6 +1204,11 @@ export class Program {
 
             this.plugins.emit('beforeFileTranspile', entry);
             const { file, outputPath } = entry;
+            //if we have any edits, assume the file needs to be transpiled
+            if (entry.astEditor.hasChanges) {
+                //use the astEditor because it'll track the previous value for us and revert later on
+                entry.astEditor.setProperty(file, 'needsTranspiled', true);
+            }
             const result = file.transpile();
 
             //make sure the full dir path exists
