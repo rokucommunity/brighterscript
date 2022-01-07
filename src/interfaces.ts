@@ -11,6 +11,7 @@ import type { Expression, FunctionStatement } from './parser';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
+import type { AstEditor } from './astUtils/AstEditor';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -204,8 +205,8 @@ export interface CompilerPlugin {
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: BscFile) => void;
     afterFileValidate?: (file: BscFile) => void;
-    beforeFileTranspile?: (entry: TranspileObj) => void;
-    afterFileTranspile?: (entry: TranspileObj) => void;
+    beforeFileTranspile?: (entry: BeforeFileTranspileEvent) => void;
+    afterFileTranspile?: (entry: AfterFileTranspileEvent) => void;
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
 }
@@ -225,6 +226,18 @@ export interface OnGetSemanticTokensEvent {
     file: BscFile;
     scopes: Scope[];
     semanticTokens: SemanticToken[];
+}
+
+export interface BeforeFileTranspileEvent {
+    file: BscFile;
+    outputPath: string;
+    astEditor: AstEditor;
+}
+
+export interface AfterFileTranspileEvent {
+    file: BscFile;
+    outputPath: string;
+    astEditor: AstEditor;
 }
 
 export interface SemanticToken {

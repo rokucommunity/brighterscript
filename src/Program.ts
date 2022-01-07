@@ -25,6 +25,7 @@ import type { FunctionStatement, Statement } from './parser/Statement';
 import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
 import { BscPlugin } from './bscPlugin/BscPlugin';
+import { AstEditor } from './astUtils/AstEditor';
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -1188,7 +1189,8 @@ export class Program {
             outputPath = s`${stagingFolderPath}/${outputPath}`;
             return {
                 file: file,
-                outputPath: outputPath
+                outputPath: outputPath,
+                astEditor: new AstEditor()
             };
         });
 
@@ -1199,6 +1201,7 @@ export class Program {
             if (isBrsFile(entry.file) && entry.file.isTypedef) {
                 return;
             }
+
             this.plugins.emit('beforeFileTranspile', entry);
             const { file, outputPath } = entry;
             const result = file.transpile();
@@ -1222,6 +1225,7 @@ export class Program {
             }
 
             this.plugins.emit('afterFileTranspile', entry);
+            entry.astEditor.undoAll();
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
