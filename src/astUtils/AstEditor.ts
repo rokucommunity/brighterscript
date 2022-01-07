@@ -2,6 +2,13 @@ export class AstEditor {
     private changes: Change[] = [];
 
     /**
+     * Indicates whether the editor have changes that were applied
+     */
+    public get hasChanges() {
+        return this.changes.length > 0;
+    }
+
+    /**
      * Change the value of an object's property
      */
     public setProperty<T, K extends keyof T>(obj: T, key: K, newValue: T[K]) {
