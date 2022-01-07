@@ -1190,7 +1190,7 @@ export class Program {
             return {
                 file: file,
                 outputPath: outputPath,
-                astEditor: new AstEditor()
+                editor: new AstEditor()
             };
         });
 
@@ -1205,9 +1205,9 @@ export class Program {
             this.plugins.emit('beforeFileTranspile', entry);
             const { file, outputPath } = entry;
             //if we have any edits, assume the file needs to be transpiled
-            if (entry.astEditor.hasChanges) {
+            if (entry.editor.hasChanges) {
                 //use the astEditor because it'll track the previous value for us and revert later on
-                entry.astEditor.setProperty(file, 'needsTranspiled', true);
+                entry.editor.setProperty(file, 'needsTranspiled', true);
             }
             const result = file.transpile();
 
@@ -1232,7 +1232,7 @@ export class Program {
             this.plugins.emit('afterFileTranspile', entry);
 
             //undo all astEditor edits that may have been applied to this file.
-            entry.astEditor.undoAll();
+            entry.editor.undoAll();
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory

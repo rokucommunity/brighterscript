@@ -231,13 +231,23 @@ export interface OnGetSemanticTokensEvent {
 export interface BeforeFileTranspileEvent {
     file: BscFile;
     outputPath: string;
-    astEditor: AstEditor;
+    /**
+     * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
+     * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
+     * the changes to persist in the in-memory file.
+     */
+    editor: AstEditor;
 }
 
 export interface AfterFileTranspileEvent {
     file: BscFile;
     outputPath: string;
-    astEditor: AstEditor;
+    /**
+     * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
+     * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
+     * the changes to persist in the in-memory file.
+     */
+    editor: AstEditor;
 }
 
 export interface SemanticToken {

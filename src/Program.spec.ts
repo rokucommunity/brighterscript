@@ -1652,7 +1652,7 @@ describe('Program', () => {
                 name: 'TestPlugin',
                 beforeFileTranspile: (event) => {
                     const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
-                    event.astEditor.setProperty((stmt.expressions[0] as LiteralExpression).token, 'text', '"hello there"');
+                    event.editor.setProperty((stmt.expressions[0] as LiteralExpression).token, 'text', '"hello there"');
                 }
             });
             await program.transpile([], stagingFolderPath);
@@ -1681,7 +1681,7 @@ describe('Program', () => {
                         event.file.ast.walk(createVisitor({
                             LiteralExpression: (literal) => {
                                 literalExpression = literal;
-                                event.astEditor.setProperty(literal.token, 'text', '"goodbye world"');
+                                event.editor.setProperty(literal.token, 'text', '"goodbye world"');
                             }
                         }), {
                             walkMode: WalkMode.visitExpressionsRecursive
