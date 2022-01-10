@@ -11,6 +11,7 @@ import type { Expression, FunctionStatement } from './parser';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
+import type { AstEditor } from './astUtils/AstEditor';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -204,8 +205,8 @@ export interface CompilerPlugin {
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: BscFile) => void;
     afterFileValidate?: (file: BscFile) => void;
-    beforeFileTranspile?: (entry: TranspileObj) => void;
-    afterFileTranspile?: (entry: TranspileObj) => void;
+    beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
+    afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
 }
@@ -225,6 +226,30 @@ export interface OnGetSemanticTokensEvent {
     file: BscFile;
     scopes: Scope[];
     semanticTokens: SemanticToken[];
+}
+
+export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty'>;
+
+export interface BeforeFileTranspileEvent {
+    file: BscFile;
+    outputPath: string;
+    /**
+     * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
+     * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
+     * the changes to persist in the in-memory file.
+     */
+    editor: Editor;
+}
+
+export interface AfterFileTranspileEvent {
+    file: BscFile;
+    outputPath: string;
+    /**
+     * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
+     * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
+     * the changes to persist in the in-memory file.
+     */
+    editor: Editor;
 }
 
 export interface SemanticToken {
