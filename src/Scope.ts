@@ -627,7 +627,7 @@ export class Scope {
                     maxParams++;
                     //optional parameters must come last, so we can assume that minParams won't increase once we hit
                     //the first isOptional
-                    if (param.isOptional === false) {
+                    if (param.isOptional !== true) {
                         minParams++;
                     }
                 }
