@@ -256,7 +256,7 @@ export default function () {
                     LiteralExpression: (literal) => {
                         //replace every occurance of <FIRST_NAME> in strings with "world"
                         if (literal.token.kind === TokenKind.StringLiteral && literal.token.text.includes('<FIRST_NAME>')) {
-                            event.astEditor.setProperty(literal.token, 'text', literal.token.text.replace('<FIRST_NAME>', 'world'));
+                            event.editor.setProperty(literal.token, 'text', literal.token.text.replace('<FIRST_NAME>', 'world'));
                         }
                     }
                 }), {
@@ -268,4 +268,4 @@ export default function () {
 };
 ```
 
-This plugin will search through every LiteralExpression in the entire project, and every time we find a string literal, we will replace `<FIRST_NAME>` with `world`. This is done with the `event.astEditor` object. `astEditor` allows you to apply edits to the AST, and then the brighterscript compiler will `undo` those edits once the file has been transpiled.
+This plugin will search through every LiteralExpression in the entire project, and every time we find a string literal, we will replace `<FIRST_NAME>` with `world`. This is done with the `event.editor` object. `editor` allows you to apply edits to the AST, and then the brighterscript compiler will `undo` those edits once the file has been transpiled.

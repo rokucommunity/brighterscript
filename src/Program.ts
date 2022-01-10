@@ -1206,7 +1206,7 @@ export class Program {
             const { file, outputPath } = entry;
             //if we have any edits, assume the file needs to be transpiled
             if (entry.editor.hasChanges) {
-                //use the astEditor because it'll track the previous value for us and revert later on
+                //use the `editor` because it'll track the previous value for us and revert later on
                 entry.editor.setProperty(file, 'needsTranspiled', true);
             }
             const result = file.transpile();
@@ -1231,7 +1231,7 @@ export class Program {
 
             this.plugins.emit('afterFileTranspile', entry);
 
-            //undo all astEditor edits that may have been applied to this file.
+            //undo all `editor` edits that may have been applied to this file.
             entry.editor.undoAll();
         });
 
