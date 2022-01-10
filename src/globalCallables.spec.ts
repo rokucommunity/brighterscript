@@ -2,6 +2,7 @@ import { standardizePath as s } from './util';
 import { Program } from './Program';
 import { expect } from 'chai';
 import { expectZeroDiagnostics } from './testHelpers.spec';
+import { DiagnosticMessages } from './DiagnosticMessages';
 
 let tmpPath = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tmpPath}/rootDir`;
@@ -29,6 +30,18 @@ describe('globalCallables', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+    });
+
+    it('isOptional defaults to false', () => {
+        program.addOrReplaceFile('source/main.brs', `
+            sub main()
+                thing = createObject()
+            end sub
+        `);
+        program.validate();
+        expect(program.getDiagnostics().map(x => x.message)).to.eql([
+            DiagnosticMessages.mismatchArgumentCount('1-6', 0).message
+        ]);
     });
 
     describe('bslCore', () => {
@@ -112,6 +125,4 @@ describe('globalCallables', () => {
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
     });
-
-
 });

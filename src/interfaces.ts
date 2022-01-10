@@ -84,7 +84,10 @@ export interface CallableArg {
 export interface CallableParam {
     name: string;
     type: BscType;
-    isOptional?: boolean;
+    /**
+     * Is this parameter required or optional?
+     */
+    isOptional: boolean;
     /**
      * Indicates that an unlimited number of arguments can be passed in
      */
