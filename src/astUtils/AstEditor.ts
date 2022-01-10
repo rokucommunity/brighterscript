@@ -27,6 +27,13 @@ export class AstEditor {
     }
 
     /**
+     * Change the value of an item in an array at the specified index
+     */
+    public setArrayValue<T extends any[], K extends keyof T>(array: T, index: number, newValue: T[K]) {
+        this.setProperty(array, index, newValue);
+    }
+
+    /**
      * Remove an element from an array at the specified index
      */
     public removeFromArray<T extends any[]>(array: T, index: number) {

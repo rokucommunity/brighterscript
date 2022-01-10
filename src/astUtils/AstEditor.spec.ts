@@ -64,6 +64,16 @@ describe('AstEditor', () => {
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
     });
 
+    it('changes the value at an array index', () => {
+        expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
+
+        changer.setArrayValue(obj.hobbies, 1, 'sleeping');
+        expect(obj.hobbies).to.eql(['gaming', 'sleeping', 'cycling']);
+
+        changer.undoAll();
+        expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
+    });
+
     it('inserts at end of array', () => {
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
 

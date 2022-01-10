@@ -228,6 +228,8 @@ export interface OnGetSemanticTokensEvent {
     semanticTokens: SemanticToken[];
 }
 
+export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty'>;
+
 export interface BeforeFileTranspileEvent {
     file: BscFile;
     outputPath: string;
@@ -236,7 +238,7 @@ export interface BeforeFileTranspileEvent {
      * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
      * the changes to persist in the in-memory file.
      */
-    editor: AstEditor;
+    editor: Editor;
 }
 
 export interface AfterFileTranspileEvent {
@@ -247,7 +249,7 @@ export interface AfterFileTranspileEvent {
      * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
      * the changes to persist in the in-memory file.
      */
-    editor: AstEditor;
+    editor: Editor;
 }
 
 export interface SemanticToken {
