@@ -25,6 +25,7 @@ import type { FunctionStatement, Statement } from './parser/Statement';
 import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
 import { BscPlugin } from './bscPlugin/BscPlugin';
+import { AstEditor } from './astUtils/AstEditor';
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -1188,7 +1189,8 @@ export class Program {
             outputPath = s`${stagingFolderPath}/${outputPath}`;
             return {
                 file: file,
-                outputPath: outputPath
+                outputPath: outputPath,
+                editor: new AstEditor()
             };
         });
 
@@ -1199,8 +1201,14 @@ export class Program {
             if (isBrsFile(entry.file) && entry.file.isTypedef) {
                 return;
             }
+
             this.plugins.emit('beforeFileTranspile', entry);
             const { file, outputPath } = entry;
+            //if we have any edits, assume the file needs to be transpiled
+            if (entry.editor.hasChanges) {
+                //use the `editor` because it'll track the previous value for us and revert later on
+                entry.editor.setProperty(file, 'needsTranspiled', true);
+            }
             const result = file.transpile();
 
             //make sure the full dir path exists
@@ -1222,6 +1230,9 @@ export class Program {
             }
 
             this.plugins.emit('afterFileTranspile', entry);
+
+            //undo all `editor` edits that may have been applied to this file.
+            entry.editor.undoAll();
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory

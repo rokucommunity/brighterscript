@@ -11,13 +11,14 @@ import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import type { FunctionStatement } from './parser/Statement';
+import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
 import { expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { Logger } from './Logger';
-import { createToken } from './astUtils';
+import { createToken, createVisitor, isBrsFile, WalkMode } from './astUtils';
 import { TokenKind } from './lexer';
+import type { LiteralExpression } from './parser/Expression';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -1640,6 +1641,69 @@ describe('Program', () => {
     });
 
     describe('transpile', () => {
+
+        it('sets needsTranspiled=true when there is at least one edit', async () => {
+            program.addOrReplaceFile('source/main.brs', trim`
+                sub main()
+                    print "hello world"
+                end sub
+            `);
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeFileTranspile: (event) => {
+                    const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
+                    event.editor.setProperty((stmt.expressions[0] as LiteralExpression).token, 'text', '"hello there"');
+                }
+            });
+            await program.transpile([], stagingFolderPath);
+            //our changes should be there
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/main.brs`).toString()
+            ).to.eql(trim`
+                sub main()
+                    print "hello there"
+                end sub`
+            );
+        });
+
+        it('handles AstEditor flow properly', async () => {
+            program.addOrReplaceFile('source/main.bs', `
+                sub main()
+                    print "hello world"
+                end sub
+            `);
+            let literalExpression: LiteralExpression;
+            //replace all strings with "goodbye world"
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeFileTranspile: (event) => {
+                    if (isBrsFile(event.file)) {
+                        event.file.ast.walk(createVisitor({
+                            LiteralExpression: (literal) => {
+                                literalExpression = literal;
+                                event.editor.setProperty(literal.token, 'text', '"goodbye world"');
+                            }
+                        }), {
+                            walkMode: WalkMode.visitExpressionsRecursive
+                        });
+                    }
+                }
+            });
+            //transpile the file
+            await program.transpile([], stagingFolderPath);
+            //our changes should be there
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/main.brs`).toString()
+            ).to.eql(trim`
+                sub main()
+                    print "goodbye world"
+                end sub`
+            );
+
+            //our literalExpression should have been restored to its original value
+            expect(literalExpression.token.text).to.eql('"hello world"');
+        });
+
         it('copies bslib.brs when no ropm version was found', async () => {
             await program.transpile([], stagingFolderPath);
             expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/bslib.brs`)).to.be.true;
