@@ -11,6 +11,7 @@ import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { Token } from './lexer/Token';
+import type { AstEditor } from './astUtils/AstEditor';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -339,6 +340,30 @@ export interface OnGetSemanticTokensEvent {
     file: BscFile;
     scopes: Scope[];
     semanticTokens: SemanticToken[];
+}
+
+export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty'>;
+
+export interface BeforeFileTranspileEvent {
+    file: BscFile;
+    outputPath: string;
+    /**
+     * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
+     * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
+     * the changes to persist in the in-memory file.
+     */
+    editor: Editor;
+}
+
+export interface AfterFileTranspileEvent {
+    file: BscFile;
+    outputPath: string;
+    /**
+     * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
+     * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
+     * the changes to persist in the in-memory file.
+     */
+    editor: Editor;
 }
 
 export interface SemanticToken {

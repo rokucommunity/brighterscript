@@ -45,6 +45,15 @@ describe('Scope', () => {
         expect(program.getDiagnostics()[0]?.message).not.to.exist;
     });
 
+    it('handles variables with javascript prototype names', () => {
+        program.setFile('source/main.brs', `
+            sub main()
+                constructor = true
+            end sub
+        `);
+        program.validate();
+    });
+
     it('flags parameter with same name as namespace', () => {
         program.setFile('source/main.bs', `
             namespace NameA.NameB
@@ -1334,7 +1343,7 @@ describe('Scope', () => {
                 end namespace
             `);
             const sourceScope = program.getScopeByName('source');
-            const mergedNsSymbolTable = sourceScope.namespaceLookup['name.space']?.symbolTable;
+            const mergedNsSymbolTable = sourceScope.namespaceLookup.get('name.space')?.symbolTable;
             expect(mergedNsSymbolTable).not.to.be.undefined;
             expect((mergedNsSymbolTable.getSymbolType('nsFunc1') as FunctionType).returnType.toString()).to.equal('integer');
             expect((mergedNsSymbolTable.getSymbolType('nsFunc2') as FunctionType).returnType.toString()).to.equal('integer');

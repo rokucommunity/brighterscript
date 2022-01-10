@@ -749,7 +749,7 @@ export class BrsFile {
         let tokenChain = [...originalTokenChain];
         while (tokenChain[0] && tokenChain[0].usage === TokenUsage.Direct) {
             const namespaceNameToCheck = `${startsWithNamespace}${startsWithNamespace.length > 0 ? '.' : ''}${tokenChain[0].token.text}`.toLowerCase();
-            const foundNamespace = scope.namespaceLookup[namespaceNameToCheck];
+            const foundNamespace = scope.namespaceLookup.get(namespaceNameToCheck);
 
             if (foundNamespace) {
                 namespaceContainer = foundNamespace;
@@ -761,7 +761,7 @@ export class BrsFile {
             }
         }
         if (namespaceTokens.length > 0) {
-            namespaceContainer = scope.namespaceLookup[startsWithNamespace.toLowerCase()];
+            namespaceContainer = scope.namespaceLookup.get(startsWithNamespace.toLowerCase());
         }
         return { namespaceContainer: namespaceContainer, tokenChain: tokenChain };
     }
@@ -1006,10 +1006,8 @@ export class BrsFile {
         let closestParentNamespaceName = completionName.replace(/\.([a-z0-9_]*)?$/gi, '');
         let newToken = this.parser.getTokenBefore(currentToken, TokenKind.New);
 
-        let namespaceLookup = scope.namespaceLookup;
         let result = new Map<string, CompletionItem>();
-        for (let key in namespaceLookup) {
-            let namespace = namespaceLookup[key.toLowerCase()];
+        for (let [, namespace] of scope.namespaceLookup) {
             //completionName = "NameA."
             //completionName = "NameA.Na
             //NameA
@@ -1017,8 +1015,7 @@ export class BrsFile {
             //NameA.NameB.NameC
             if (namespace.fullName.toLowerCase() === closestParentNamespaceName.toLowerCase()) {
                 //add all of this namespace's immediate child namespaces, bearing in mind if we are after a new keyword
-                for (let childKey in namespace.namespaces) {
-                    const ns = namespace.namespaces[childKey];
+                for (let [, ns] of namespace.namespaces) {
                     if (!newToken || ns.statements.find((s) => isClassStatement(s))) {
                         if (!result.has(ns.lastPartName)) {
                             result.set(ns.lastPartName, {
@@ -1133,7 +1130,7 @@ export class BrsFile {
             //find the first scope that contains this namespace
             let scopes = this.program.getScopesForFile(this);
             for (let scope of scopes) {
-                if (scope.namespaceLookup[lowerName]) {
+                if (scope.namespaceLookup.has(lowerName)) {
                     return true;
                 }
             }
@@ -1151,7 +1148,7 @@ export class BrsFile {
             if (lowerCalleeName) {
                 let scopes = this.program.getScopesForFile(this);
                 for (let scope of scopes) {
-                    let namespace = scope.namespaceLookup[namespaceName.toLowerCase()];
+                    let namespace = scope.namespaceLookup.get(namespaceName.toLowerCase());
                     if (namespace.functionStatements[lowerCalleeName]) {
                         return true;
                     }
@@ -1494,10 +1491,8 @@ export class BrsFile {
         if (!dottedGetText) {
             return [];
         }
-        let namespaceLookup = scope.namespaceLookup;
         let resultsMap = new Map<string, SignatureInfoObj>();
-        for (let key in namespaceLookup) {
-            let namespace = namespaceLookup[key.toLowerCase()];
+        for (let [, namespace] of scope.namespaceLookup) {
             //completionName = "NameA."
             //completionName = "NameA.Na
             //NameA

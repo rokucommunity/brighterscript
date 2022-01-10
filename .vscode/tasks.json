@@ -17,6 +17,15 @@
             ]
         },
         {
+            "label": "watch",
+            "type": "npm",
+            "script": "watch",
+            "presentation": {
+                "group": "watch"
+            },
+            "problemMatcher": []
+        },
+        {
             "type": "npm",
             "script": "lint",
             "problemMatcher": [

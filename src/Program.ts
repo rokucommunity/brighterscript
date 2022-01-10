@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileReference, FileObj, BscFile, SemanticToken, BeforeFileParseEvent } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, BscFile, SemanticToken, BeforeFileParseEvent, BeforeFileTranspileEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -26,6 +26,7 @@ import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { util as rokuDeployUtil } from 'roku-deploy';
+import { AstEditor } from './astUtils/AstEditor';
 
 const bslibNonAliasedRokuModulesPkgPath = `pkg:/source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = `pkg:/source/roku_modules/bslib/bslib.brs`;
@@ -1286,7 +1287,7 @@ export class Program {
             return collection;
         }, {});
 
-        const entries = [] as TranspileObj[];
+        const entries = [] as BeforeFileTranspileEvent[];
         for (const key in this.files) {
             const file = this.files[key];
             let filePathObj = mappedFileEntries[s`${file.srcPath}`];
@@ -1310,7 +1311,9 @@ export class Program {
             outputPath = s`${stagingFolderPath}/${outputPath}`;
             entries.push({
                 file: file,
-                outputPath: outputPath
+                program: this,
+                outputPath: outputPath,
+                editor: new AstEditor()
             });
         }
 
@@ -1324,12 +1327,14 @@ export class Program {
             if (isBrsFile(entry.file) && entry.file.isTypedef) {
                 return;
             }
-            this.plugins.emit('beforeFileTranspile', {
-                program: this,
-                file: entry.file,
-                outputPath: entry.outputPath
-            });
+
+            this.plugins.emit('beforeFileTranspile', entry);
             const { file, outputPath } = entry;
+            //if we have any edits, assume the file needs to be transpiled
+            if (entry.editor.hasChanges) {
+                //use the `editor` because it'll track the previous value for us and revert later on
+                entry.editor.setProperty(file, 'needsTranspiled', true);
+            }
             const result = file.transpile();
 
             //make sure the full dir path exists
@@ -1350,11 +1355,10 @@ export class Program {
                 await fsExtra.writeFile(typedefPath, typedef);
             }
 
-            this.plugins.emit('afterFileTranspile', {
-                program: this,
-                file: entry.file,
-                outputPath: entry.outputPath
-            });
+            this.plugins.emit('afterFileTranspile', entry);
+
+            //undo all `editor` edits that may have been applied to this file.
+            (entry.editor as AstEditor).undoAll();
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory

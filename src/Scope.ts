@@ -389,7 +389,7 @@ export class Scope {
      * Builds a tree of namespace objects
      */
     public buildNamespaceLookup() {
-        let namespaceLookup = {} as Record<string, NamespaceContainer>;
+        let namespaceLookup = new Map<string, NamespaceContainer>();
         this.enumerateBrsFiles((file) => {
             for (let namespace of file.parser.references.namespaceStatements) {
                 //TODO should we handle non-brighterscript?
@@ -402,19 +402,21 @@ export class Scope {
                 for (let part of nameParts) {
                     loopName = loopName === null ? part : `${loopName}.${part}`;
                     let lowerLoopName = loopName.toLowerCase();
-                    namespaceLookup[lowerLoopName] = namespaceLookup[lowerLoopName] ?? {
-                        file: file,
-                        fullName: loopName,
-                        nameRange: namespace.nameExpression.range,
-                        lastPartName: part,
-                        namespaces: {},
-                        classStatements: {},
-                        functionStatements: {},
-                        statements: [],
-                        symbolTable: new SymbolTable(this.symbolTable)
-                    };
+                    if (!namespaceLookup.has(lowerLoopName)) {
+                        namespaceLookup.set(lowerLoopName, {
+                            file: file,
+                            fullName: loopName,
+                            nameRange: namespace.nameExpression.range,
+                            lastPartName: part,
+                            namespaces: new Map<string, NamespaceContainer>(),
+                            classStatements: {},
+                            functionStatements: {},
+                            statements: [],
+                            symbolTable: new SymbolTable(this.symbolTable)
+                        });
+                    }
                 }
-                let ns = namespaceLookup[name.toLowerCase()];
+                let ns = namespaceLookup.get(name.toLowerCase());
                 ns.statements.push(...namespace.body.statements);
                 for (let statement of namespace.body.statements) {
                     if (isClassStatement(statement) && statement.name) {
@@ -429,15 +431,15 @@ export class Scope {
             }
 
             //associate child namespaces with their parents
-            for (let key in namespaceLookup) {
-                let ns = namespaceLookup[key];
+            for (let [, ns] of namespaceLookup) {
                 let parts = ns.fullName.split('.');
 
                 if (parts.length > 1) {
                     //remove the last part
                     parts.pop();
                     let parentName = parts.join('.');
-                    namespaceLookup[parentName.toLowerCase()].namespaces[ns.lastPartName.toLowerCase()] = ns;
+                    const parent = namespaceLookup.get(parentName.toLowerCase());
+                    parent.namespaces.set(ns.lastPartName.toLowerCase(), ns);
                 }
             }
         });
@@ -569,7 +571,7 @@ export class Scope {
 
                 for (const namespace of file.parser.references.namespaceStatements) {
                     const namespaceNameLower = namespace.nameExpression.getName(ParseMode.BrighterScript).toLowerCase();
-                    const namespaceSymbolTable = this.namespaceLookup[namespaceNameLower].symbolTable;
+                    const namespaceSymbolTable = this.namespaceLookup.get(namespaceNameLower).symbolTable;
                     namespace.symbolTable.setParent(namespaceSymbolTable);
                 }
                 //TODO TYPES: build symbol tables for dotted set assignments using actual values
@@ -614,7 +616,7 @@ export class Scope {
         for (let func of file.parser.references.functionExpressions) {
             for (let param of func.parameters) {
                 let lowerParamName = param.name.text.toLowerCase();
-                let namespace = this.namespaceLookup[lowerParamName];
+                let namespace = this.namespaceLookup.get(lowerParamName);
                 //see if the param matches any starting namespace part
                 if (namespace) {
                     this.diagnostics.push({
@@ -635,7 +637,7 @@ export class Scope {
 
         for (let assignment of file.parser.references.assignmentStatements) {
             let lowerAssignmentName = assignment.name.text.toLowerCase();
-            let namespace = this.namespaceLookup[lowerAssignmentName];
+            let namespace = this.namespaceLookup.get(lowerAssignmentName);
             //see if the param matches any starting namespace part
             if (namespace) {
                 this.diagnostics.push({
@@ -1146,7 +1148,7 @@ export interface NamespaceContainer {
     statements: Statement[];
     classStatements: Record<string, ClassStatement>;
     functionStatements: Record<string, FunctionStatement>;
-    namespaces: Record<string, NamespaceContainer>;
+    namespaces: Map<string, NamespaceContainer>;
     symbolTable: SymbolTable;
 }
 
