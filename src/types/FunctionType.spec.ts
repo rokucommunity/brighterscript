@@ -38,7 +38,7 @@ describe('FunctionType', () => {
     });
 
     it('adds a callableParam object as a parameter', () => {
-        const myFunc = new FunctionType(new IntegerType(), false, [{ name: 'a', type: new StringType() }, { name: 'b', type: new DynamicType(), isOptional: true }]);
+        const myFunc = new FunctionType(new IntegerType(), false, [{ name: 'a', type: new StringType(), isOptional: false }, { name: 'b', type: new DynamicType(), isOptional: true }]);
         myFunc.addParameter({ name: 'c', type: new FloatType(), isOptional: true });
         expect(myFunc.params.length).to.equal(3);
     });

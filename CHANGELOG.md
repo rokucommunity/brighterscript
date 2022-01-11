@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.42.0](https://github.com/rokucommunity/brighterscript/compare/v0.41.6...v0.42.0) - 2022-01-10
+### Added
+ - AST editing utility for transformations during between the begin and end transpile lifecycle events. See [the documentation](https://github.com/rokucommunity/brighterscript/blob/master/docs/plugins.md#modifying-code) for more info. ([#478](https://github.com/rokucommunity/brighterscript/pull/478))
+### Fixed
+ - bug in global function parameter checking that was not properly enforcing optional/required status for parameters. ([#479](https://github.com/rokucommunity/brighterscript/pull/479))
+
+
+
 ## [0.41.6](https://github.com/rokucommunity/brighterscript/compare/v0.41.5...v0.41.6) - 2022-01-05
 ### Fixed
  - issue in the transpiled output of the null coalescing operator where plain variable references are not properly passed into the function. ([#474](https://github.com/rokucommunity/brighterscript/pull/474))

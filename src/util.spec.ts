@@ -644,14 +644,14 @@ describe('util', () => {
         });
 
         it('finds correct number of params', () => {
-            const params: CallableParam[] = [{ name: 'a', type: new IntegerType() }, { name: 'b', type: new IntegerType() }];
+            const params: CallableParam[] = [{ name: 'a', type: new IntegerType(), isOptional: false }, { name: 'b', type: new IntegerType(), isOptional: false }];
             const count = util.getMinMaxParamCount(params);
             expect(count.min).to.equal(2);
             expect(count.max).to.equal(2);
         });
 
         it('finds correct number of params with optional params', () => {
-            const params: CallableParam[] = [{ name: 'a', type: new IntegerType() }, { name: 'b', type: new IntegerType() }, { name: 'c', type: new IntegerType(), isOptional: true }, { name: 'd', type: new IntegerType(), isOptional: true }];
+            const params: CallableParam[] = [{ name: 'a', type: new IntegerType(), isOptional: false }, { name: 'b', type: new IntegerType(), isOptional: false }, { name: 'c', type: new IntegerType(), isOptional: true }, { name: 'd', type: new IntegerType(), isOptional: true }];
             const count = util.getMinMaxParamCount(params);
             expect(count.min).to.equal(2);
             expect(count.max).to.equal(4);
