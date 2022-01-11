@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [v1.0.0-alpha.13](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.12...v1.0.0-alpha.13) - 2022-01-10
+### Added
+ - all changes from [v0.42.0](#0420---2022-01-10)
+
+
+
 ## [0.42.0](https://github.com/rokucommunity/brighterscript/compare/v0.41.6...v0.42.0) - 2022-01-10
 ### Added
  - AST editing utility for transformations during between the begin and end transpile lifecycle events. See [the documentation](https://github.com/rokucommunity/brighterscript/blob/master/docs/plugins.md#modifying-code) for more info. ([#478](https://github.com/rokucommunity/brighterscript/pull/478))
