@@ -19,7 +19,7 @@ export class BsClassValidator {
     private scope: Scope;
     private file: BrsFile;
     public diagnostics: BsDiagnostic[];
-    private classes: Record<string, AugmentedClassStatement>;
+    private classes: Map<string, AugmentedClassStatement>;
 
     get typeContext(): TypeContext {
         return { scope: this.scope, file: this.file };
@@ -29,7 +29,6 @@ export class BsClassValidator {
         this.scope = scope;
         this.file = file;
         this.diagnostics = [];
-        this.classes = {};
 
         this.findClasses();
         this.findNamespaceNonNamespaceCollisions();
@@ -47,10 +46,10 @@ export class BsClassValidator {
      */
     private getClassByName(className: string, namespaceName?: string) {
         let fullName = util.getFullyQualifiedClassName(className, namespaceName);
-        let cls = this.classes[fullName.toLowerCase()];
+        let cls = this.classes.get(fullName.toLowerCase());
         //if we couldn't find the class by its full namespaced name, look for a global class with that name
         if (!cls) {
-            cls = this.classes[className.toLowerCase()];
+            cls = this.classes.get(className.toLowerCase());
         }
         return cls;
     }
@@ -96,10 +95,9 @@ export class BsClassValidator {
     }
 
     private findNamespaceNonNamespaceCollisions() {
-        for (let name in this.classes) {
-            let classStatement = this.classes[name];
+        for (const [className, classStatement] of this.classes) {
             //catch namespace class collision with global class
-            let nonNamespaceClass = this.classes[util.getTextAfterFinalDot(name).toLowerCase()];
+            let nonNamespaceClass = this.classes.get(util.getTextAfterFinalDot(className).toLowerCase());
             if (classStatement.namespaceName && nonNamespaceClass) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.namespacedClassCannotShareNamewithNonNamespacedClass(
@@ -120,8 +118,7 @@ export class BsClassValidator {
     }
 
     private verifyChildConstructor() {
-        for (let key in this.classes) {
-            let classStatement = this.classes[key];
+        for (const [, classStatement] of this.classes) {
             const newMethod = classStatement.memberMap.new as ClassMethodStatement;
 
             if (
@@ -167,8 +164,7 @@ export class BsClassValidator {
     }
 
     private validateMemberCollisions() {
-        for (let key in this.classes) {
-            let classStatement = this.classes[key];
+        for (const [, classStatement] of this.classes) {
             let methods = {};
             let fields = {};
 
@@ -286,8 +282,7 @@ export class BsClassValidator {
      * Check the types for fields, and validate they are valid types
      */
     private validateFieldTypes() {
-        for (let key in this.classes) {
-            let classStatement = this.classes[key];
+        for (const [, classStatement] of this.classes) {
             for (let statement of classStatement.body) {
                 if (isClassFieldStatement(statement)) {
                     let fieldType = getTypeFromContext(statement.getType(), this.typeContext);
@@ -338,15 +333,14 @@ export class BsClassValidator {
 
     private cleanUp() {
         //unlink all classes from their parents so it doesn't mess up the next scope
-        for (let key in this.classes) {
-            let classStatement = this.classes[key];
+        for (const [, classStatement] of this.classes) {
             delete classStatement.parentClass;
             delete classStatement.file;
         }
     }
 
     private findClasses() {
-        this.classes = {};
+        this.classes = new Map();
         this.scope.enumerateBrsFiles((file) => {
             for (let x of file.parser.references.classStatements ?? []) {
                 let classStatement = x as AugmentedClassStatement;
@@ -357,11 +351,11 @@ export class BsClassValidator {
                 }
                 let lowerName = name.toLowerCase();
                 //see if this class was already defined
-                let alreadyDefinedClass = this.classes[lowerName];
+                let alreadyDefinedClass = this.classes.get(lowerName);
 
                 //if we don't already have this class, register it
                 if (!alreadyDefinedClass) {
-                    this.classes[lowerName] = classStatement;
+                    this.classes.set(lowerName, classStatement);
                     classStatement.file = file;
 
                     //add a diagnostic about this class already existing
@@ -373,7 +367,7 @@ export class BsClassValidator {
                         relatedInformation: [{
                             location: Location.create(
                                 URI.file(alreadyDefinedClass.file.srcPath).toString(),
-                                this.classes[lowerName].range
+                                this.classes.get(lowerName).range
                             ),
                             message: ''
                         }]
@@ -385,8 +379,7 @@ export class BsClassValidator {
 
     private linkClassesWithParents() {
         //link all classes with their parents
-        for (let key in this.classes) {
-            let classStatement = this.classes[key];
+        for (const [, classStatement] of this.classes) {
             let parentClassName = classStatement.parentClassName?.getName(ParseMode.BrighterScript);
             if (parentClassName) {
                 let relativeName: string;
@@ -411,8 +404,8 @@ export class BsClassValidator {
                     relativeName = parentClassName;
                 }
 
-                let relativeParent = this.classes[relativeName.toLowerCase()];
-                let absoluteParent = this.classes[absoluteName.toLowerCase()];
+                let relativeParent = this.classes.get(relativeName.toLowerCase());
+                let absoluteParent = this.classes.get(absoluteName.toLowerCase());
 
                 let parentClass: AugmentedClassStatement;
                 //if we found a relative parent class
