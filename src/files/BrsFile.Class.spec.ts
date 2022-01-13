@@ -900,6 +900,7 @@ describe('BrsFile BrighterScript classes', () => {
             ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakWithFamily', 'public', 'private', 'Animal')
         });
     });
+
     it('allows overridden methods with matching visibility', () => {
         program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
@@ -923,17 +924,101 @@ describe('BrsFile BrighterScript classes', () => {
         expect(program.getDiagnostics()).to.be.empty;
     });
 
-    it('detects extending unknown parent class', () => {
-        program.setFile('source/main.brs', `
-            class Duck extends Animal
-                sub speak()
-                end sub
-            end class
-        `);
-        program.validate();
-        expect(program.getDiagnostics()[0]).to.exist.and.to.deep.include({
-            ...DiagnosticMessages.classCouldNotBeFound('Animal', 'source'),
-            range: Range.create(1, 31, 1, 37)
+    describe('detects unknown parent class', () => {
+        it('non-namespaced parent from outside namespace', () => {
+            program.setFile('source/main.bs', `
+                class Duck extends Animal
+                    sub speak()
+                    end sub
+                end class
+
+                namespace Vertibrates
+                    class Animal
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expect(program.getDiagnostics()[0]).to.exist.and.to.deep.include({
+                ...DiagnosticMessages.classCouldNotBeFound('Animal', 'source'),
+                range: Range.create(1, 35, 1, 41)
+            });
+        });
+
+        it('non-namespaced parent from within namespace', () => {
+            program.setFile('source/main.bs', `
+                namespace Vertibrates
+                    class Duck extends Animal
+                        sub speak()
+                        end sub
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expect(program.getDiagnostics()[0]).to.exist.and.to.deep.include({
+                ...DiagnosticMessages.classCouldNotBeFound('Animal', 'source')
+            });
+        });
+
+        it('non-namespaced name from outside namespace alongside existing namespace', () => {
+            program.setFile('source/main.bs', `
+                namespace Vertibrates
+                    class Animal
+                    end class
+                end namespace
+
+                class Duck extends Animal
+                    sub speak()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                DiagnosticMessages.classCouldNotBeFound('Animal', 'source').message
+            ]);
+        });
+
+        it('namespaced parent class from outside namespace', () => {
+            program.setFile('source/vertibrates.bs', `
+                namespace Vertibrates
+                    class Bird
+                    end class
+                end namespace
+            `);
+            program.setFile('source/Duck.bs', `
+                class Duck extends Vertibrates.GroundedBird
+                    sub speak()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expect(
+                program.getDiagnostics().map(x => x.message)
+            ).includes(
+                DiagnosticMessages.classCouldNotBeFound('Vertibrates.GroundedBird', 'source').message
+            );
+        });
+
+        it('namespaced parent class from inside namespace', () => {
+            program.setFile('source/vertibrates.bs', `
+                namespace Vertibrates
+                    class Bird
+                    end class
+                end namespace
+            `);
+            program.setFile('source/Duck.bs', `
+                namespace Birdies
+                    class Duck extends Vertibrates.GroundedBird
+                        sub speak()
+                        end sub
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expect(
+                program.getDiagnostics().map(x => x.message)
+            ).includes(
+                DiagnosticMessages.classCouldNotBeFound('Vertibrates.GroundedBird', 'source').message
+            );
         });
     });
 
