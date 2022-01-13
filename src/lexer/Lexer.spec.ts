@@ -1140,6 +1140,17 @@ describe('lexer', () => {
         });
     });
 
+    it('recognizes enum-related keywords', () => {
+        expect(
+            Lexer.scan('enum end enum endenum').tokens.map(x => x.kind)
+        ).to.eql([
+            TokenKind.Enum,
+            TokenKind.EndEnum,
+            TokenKind.EndEnum,
+            TokenKind.Eof
+        ]);
+    });
+
     it('recognizes class-related keywords', () => {
         expect(
             Lexer.scan('class public protected private end class endclass new override').tokens.map(x => x.kind)
