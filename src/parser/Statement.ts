@@ -2284,7 +2284,7 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
     public constructor(
         public tokens: {
             name: Identifier;
-            equals?: Token;
+            equal?: Token;
         },
         public value?: Expression
     ) {
@@ -2293,8 +2293,8 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
 
     public get range() {
         return util.createRangeFromPositions(
-            (this.tokens.name ?? this.tokens.equals ?? this.value).range.start ?? Position.create(0, 0),
-            (this.value ?? this.tokens.equals ?? this.tokens.name).range.end
+            (this.tokens.name ?? this.tokens.equal ?? this.value).range.start ?? Position.create(0, 0),
+            (this.value ?? this.tokens.equal ?? this.tokens.name).range.end
         );
     }
 
@@ -2306,8 +2306,8 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         const result = [
             this.tokens.name.text
         ] as TranspileResult;
-        if (this.tokens.equals) {
-            result.push(' ', this.tokens.equals.text, ' ');
+        if (this.tokens.equal) {
+            result.push(' ', this.tokens.equal.text, ' ');
             if (this.value) {
                 result.push(
                     ...this.value.transpile(state)

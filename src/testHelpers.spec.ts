@@ -183,6 +183,16 @@ export function expectCodeActions(test: () => any, expected: CodeActionShorthand
     expect(args).to.eql(expected);
 }
 
+export function expectInstanceOf<T>(items: any[], constructors: Array<new (...args: any[]) => T>) {
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const constructor = constructors[i];
+        if (!(item instanceof constructor)) {
+            throw new Error(`Expected index ${i} to be instanceof ${constructor.name} but instead found ${item.constructor?.name}`);
+        }
+    }
+}
+
 export function getTestTranspile(scopeGetter: () => [Program, string]) {
     return getTestFileAction((file) => file.transpile(), scopeGetter);
 }

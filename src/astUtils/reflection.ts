@@ -142,7 +142,7 @@ export function isEnumStatement(element: Statement | Expression | undefined): el
     return element?.constructor.name === 'ClassFieldStatement';
 }
 export function isEnumMemberStatement(element: Statement | Expression | undefined): element is EnumMemberStatement {
-    return element?.constructor.name === 'ClassFieldStatement';
+    return element?.constructor.name === 'EnumMemberStatement';
 }
 
 // Expressions reflection

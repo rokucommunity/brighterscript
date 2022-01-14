@@ -93,7 +93,7 @@ import { Logger } from '../Logger';
 import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
-import { EnumStatement, RegexLiteralExpression } from '.';
+import { EnumMemberStatement, EnumStatement, RegexLiteralExpression } from '.';
 import { Cache } from '../Cache';
 
 export class Parser {
@@ -347,6 +347,22 @@ export class Parser {
         }
     }
 
+    /**
+     * Try to get an identifier. If not found, add diagnostic and return undefined
+     */
+    private tryIdentifier(...additionalTokenKinds: TokenKind[]): Identifier | undefined {
+        const identifier = this.tryConsume(
+            DiagnosticMessages.expectedIdentifier(),
+            TokenKind.Identifier,
+            ...additionalTokenKinds
+        ) as Identifier;
+        if (identifier) {
+            // force the name into an identifier so the AST makes some sense
+            identifier.kind = TokenKind.Identifier;
+            return identifier;
+        }
+    }
+
     private identifier(...additionalTokenKinds: TokenKind[]) {
         const identifier = this.consume(
             DiagnosticMessages.expectedIdentifier(),
@@ -356,6 +372,21 @@ export class Parser {
         // force the name into an identifier so the AST makes some sense
         identifier.kind = TokenKind.Identifier;
         return identifier;
+    }
+
+    private enumMemberStatement() {
+        const statement = new EnumMemberStatement({} as any);
+        statement.tokens.name = this.consume(
+            DiagnosticMessages.expectedClassFieldIdentifier(),
+            TokenKind.Identifier,
+            ...AllowedProperties
+        ) as Identifier;
+        //look for `= SOME_EXPRESSION`
+        if (this.check(TokenKind.Equal)) {
+            statement.tokens.equal = this.advance();
+            statement.value = this.expression();
+        }
+        return statement;
     }
 
     /**
@@ -498,19 +529,20 @@ export class Parser {
     }
 
     private enumDeclaration(): EnumStatement {
+        const result = new EnumStatement({} as any, []);
         this.warnIfNotBrighterScriptMode('enum declarations');
 
         const parentAnnotations = this.enterAnnotationBlock();
 
-        const enumToken = this.consume(
+        result.tokens.enum = this.consume(
             DiagnosticMessages.expectedKeyword(TokenKind.Enum),
             TokenKind.Enum
         );
-        const nameToken = this.identifier();
+
+        result.tokens.name = this.tryIdentifier();
 
         this.consumeStatementSeparators();
         //gather up all members
-        let body = [] as Statement[];
         while (this.checkAny(TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
             try {
                 let decl: Statement;
@@ -520,13 +552,9 @@ export class Parser {
                     this.annotationExpression();
                 }
 
-                //fields
-                if (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.As)) {
-                    decl = this.interfaceFieldStatement();
-
-                    //methods (function/sub keyword followed by opening paren)
-                } else if (this.checkAny(TokenKind.Function, TokenKind.Sub) && this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
-                    decl = this.interfaceMethodStatement();
+                //members
+                if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
+                    decl = this.enumMemberStatement();
 
                     //comments
                 } else if (this.check(TokenKind.Comment)) {
@@ -535,7 +563,7 @@ export class Parser {
 
                 if (decl) {
                     this.consumePendingAnnotations(decl);
-                    body.push(decl);
+                    result.body.push(decl);
                 } else {
                     //we didn't find a declaration...flag tokens until next line
                     this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
@@ -547,29 +575,19 @@ export class Parser {
 
             //ensure statement separator
             this.consumeStatementSeparators();
-            //break out of this loop if we encountered the `EndInterface` token not followed by `as`
-            if (this.check(TokenKind.EndInterface) && !this.checkNext(TokenKind.As)) {
+            //break out of this loop if we encountered the `EndEnum` token
+            if (this.check(TokenKind.EndEnum)) {
                 break;
             }
         }
 
         //consume the final `end interface` token
-        const endEnumToken = this.consumeToken(TokenKind.EndEnum);
+        result.tokens.endEnum = this.consumeToken(TokenKind.EndEnum);
 
         this.consumeStatementSeparators();
-
-        const statement = new EnumStatement(
-            {
-                enum: enumToken,
-                name: nameToken,
-                endEnum: endEnumToken
-            },
-            body,
-            this.currentNamespaceName
-        );
-        this._references.enumStatements.push(statement);
+        this._references.enumStatements.push(result);
         this.exitAnnotationBlock(parentAnnotations);
-        return statement;
+        return result;
     }
 
     /**
