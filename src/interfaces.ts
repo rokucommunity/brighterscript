@@ -207,6 +207,14 @@ export interface CompilerPlugin {
     //file events
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: BscFile) => void;
+    /**
+     * Called before every file is validated
+     */
+    beforeFileValidate?: PluginHandler<BeforeFileValidateEvent>;
+    /**
+     * Called during the file validation process. If your plugin contributes file validations, this is a good place to contribute them.
+     */
+    onFileValidate?: PluginHandler<OnFileValidateEvent>;
     afterFileValidate?: (file: BscFile) => void;
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
@@ -229,6 +237,16 @@ export interface OnGetSemanticTokensEvent {
     file: BscFile;
     scopes: Scope[];
     semanticTokens: SemanticToken[];
+}
+
+export interface BeforeFileValidateEvent<T extends BscFile = BscFile> {
+    program: Program;
+    file: T;
+}
+
+export interface OnFileValidateEvent<T extends BscFile = BscFile> {
+    program: Program;
+    file: T;
 }
 
 export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty'>;

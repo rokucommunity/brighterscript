@@ -635,6 +635,11 @@ export let DiagnosticMessages = {
         message: `Cannot find type with name '${typeName}'`,
         code: 1123,
         severity: DiagnosticSeverity.Error
+    }),
+    enumMembersMustHaveSameType: (expectedType: string) => ({
+        message: `Incompatible enum All enum members must be type ${expectedType}`,
+        code: 1124,
+        severity: DiagnosticSeverity.Error
     })
 };
 

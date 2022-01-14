@@ -1,11 +1,11 @@
 import { expect } from 'chai';
-import { EnumMemberStatement, LiteralExpression } from '../..';
+import { LiteralExpression } from '../..';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { expectDiagnostics, expectInstanceOf, expectZeroDiagnostics } from '../../../testHelpers.spec';
 import { ParseMode, Parser } from '../../Parser';
 import { EnumStatement } from '../../Statement';
 
-describe.only('EnumStatement', () => {
+describe('EnumStatement', () => {
     it('parses empty enum statement', () => {
         const parser = Parser.parse(`
             enum SomeEnum
@@ -51,7 +51,7 @@ describe.only('EnumStatement', () => {
 
         expectZeroDiagnostics(parser);
         expect(
-            (parser.ast.statements[0] as EnumStatement).members.map(x => x.tokens.name.text)
+            (parser.ast.statements[0] as EnumStatement).getMembers().map(x => x.tokens.name.text)
         ).to.eql([
             'up',
             'down',
@@ -71,7 +71,7 @@ describe.only('EnumStatement', () => {
         `, { mode: ParseMode.BrighterScript });
 
         expectZeroDiagnostics(parser);
-        const values = (parser.ast.statements[0] as EnumStatement).members.map(x => x.value) as LiteralExpression[];
+        const values = (parser.ast.statements[0] as EnumStatement).getMembers().map(x => x.value) as LiteralExpression[];
         expectInstanceOf(values, [
             LiteralExpression,
             LiteralExpression,
@@ -97,7 +97,7 @@ describe.only('EnumStatement', () => {
         `, { mode: ParseMode.BrighterScript });
 
         expectZeroDiagnostics(parser);
-        const values = (parser.ast.statements[0] as EnumStatement).members.map(x => x.value) as LiteralExpression[];
+        const values = (parser.ast.statements[0] as EnumStatement).getMembers().map(x => x.value) as LiteralExpression[];
         expectInstanceOf(values, [
             LiteralExpression,
             LiteralExpression,
@@ -109,6 +109,20 @@ describe.only('EnumStatement', () => {
             '"d"',
             '"l"',
             '"r"'
+        ]);
+    });
+
+    it('flags when used in brs mode', () => {
+        const parser = Parser.parse(`
+            enum Direction
+                up = "u"
+                down = "d"
+                left = "l"
+                right = "r"
+            end enum
+        `, { mode: ParseMode.BrightScript });
+        expectDiagnostics(parser, [
+            DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('enum declarations')
         ]);
     });
 });

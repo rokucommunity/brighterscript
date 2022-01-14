@@ -15,7 +15,7 @@ import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
-import { SourceNode } from 'source-map';
+import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 
 /**
@@ -2183,7 +2183,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
             name: Identifier;
             endEnum: Token;
         },
-        public body: Statement[],
+        public body: Array<EnumMemberStatement | CommentStatement>,
         public namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
@@ -2197,7 +2197,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
         );
     }
 
-    public get members() {
+    public getMembers() {
         const result = [] as EnumMemberStatement[];
         for (const statement of this.body) {
             if (isEnumMemberStatement(statement)) {
@@ -2289,6 +2289,10 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         public value?: Expression
     ) {
         super();
+    }
+
+    public get name() {
+        return this.tokens.name.text;
     }
 
     public get range() {

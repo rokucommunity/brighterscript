@@ -276,6 +276,16 @@ export class BrsFile {
             //find all places where a sub/function is being called
             this.findFunctionCalls();
 
+            this.program.plugins.emit('beforeFileValidate', {
+                file: this,
+                program: this.program
+            });
+
+            this.program.plugins.emit('onFileValidate', {
+                file: this,
+                program: this.program
+            });
+
             this.findAndValidateImportAndImportStatements();
 
             //attach this file to every diagnostic

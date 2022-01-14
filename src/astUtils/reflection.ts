@@ -19,6 +19,7 @@ import type { XmlScope } from '../XmlScope';
 import { DynamicType } from '../types/DynamicType';
 import type { InterfaceType } from '../types/InterfaceType';
 import type { ObjectType } from '../types/ObjectType';
+import { TokenKind } from '..';
 
 // File reflection
 
@@ -293,3 +294,4 @@ export function isLiteralString(e: any): e is LiteralExpression & { type: String
 export function isLiteralNumber(e: any): e is LiteralExpression & { type: IntegerType | LongIntegerType | FloatType | DoubleType } {
     return isLiteralExpression(e) && isNumberType(e.type);
 }
+

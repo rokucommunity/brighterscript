@@ -545,7 +545,7 @@ export class Parser {
         //gather up all members
         while (this.checkAny(TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
             try {
-                let decl: Statement;
+                let decl: EnumMemberStatement | CommentStatement;
 
                 //collect leading annotations
                 if (this.check(TokenKind.At)) {
