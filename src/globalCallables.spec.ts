@@ -1,7 +1,6 @@
 import { standardizePath as s } from './util';
 import { Program } from './Program';
-import { expect } from 'chai';
-import { expectZeroDiagnostics } from './testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics } from './testHelpers.spec';
 import { DiagnosticMessages } from './DiagnosticMessages';
 
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -39,8 +38,8 @@ describe('globalCallables', () => {
             end sub
         `);
         program.validate();
-        expect(program.getDiagnostics().map(x => x.message)).to.eql([
-            DiagnosticMessages.mismatchArgumentCount('1-6', 0).message
+        expectDiagnostics(program, [
+            DiagnosticMessages.mismatchArgumentCount('1-6', 0)
         ]);
     });
 
@@ -68,7 +67,7 @@ describe('globalCallables', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(program);
         });
 
         it('allows both parameters', () => {
@@ -78,7 +77,7 @@ describe('globalCallables', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(program);
         });
 
         it('does not allows 3 parameters', () => {
@@ -88,7 +87,7 @@ describe('globalCallables', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).to.exist;
+            expectHasDiagnostics(program);
         });
     });
 
@@ -100,7 +99,7 @@ describe('globalCallables', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(program);
         });
 
         it('allows both parameters', () => {
@@ -110,7 +109,7 @@ describe('globalCallables', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(program);
         });
 
         it('does not allows 3 parameters', () => {
@@ -120,7 +119,7 @@ describe('globalCallables', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).to.exist;
+            expectHasDiagnostics(program);
         });
     });
 
@@ -132,7 +131,7 @@ describe('globalCallables', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(program);
         });
 
         it('allows 2 parameters', () => {
@@ -142,7 +141,7 @@ describe('globalCallables', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(program);
         });
     });
 });

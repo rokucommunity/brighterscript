@@ -3,7 +3,7 @@ import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
-import { trim } from './testHelpers.spec';
+import { expectDiagnostics, trim } from './testHelpers.spec';
 import { standardizePath as s, util } from './util';
 let rootDir = s`${process.cwd()}/rootDir`;
 
@@ -109,27 +109,21 @@ describe('XmlScope', () => {
             `);
             program.validate();
             let childScope = program.getComponentScope('child');
-            let diagnostics = childScope.getDiagnostics();
-            expect(diagnostics.length).to.equal(5);
-            expect(diagnostics[0]).to.deep.include({
+            expectDiagnostics(childScope, [{
                 ...DiagnosticMessages.xmlFunctionNotFound('func2'),
                 range: Range.create(4, 24, 4, 29)
-            });
-            expect(diagnostics[1]).to.deep.include({
+            }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('function', 'name'),
                 range: Range.create(5, 9, 5, 17)
-            });
-            expect(diagnostics[2]).to.deep.include({
+            }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('function', 'name'),
                 range: Range.create(6, 9, 6, 17)
-            });
-            expect(diagnostics[3]).to.deep.include({
+            }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('function', 'name'),
                 range: Range.create(7, 9, 7, 17)
-            });
-            expect(diagnostics[4]).to.deep.include({ // syntax error expecting '=' but found '/>'
+            }, { // syntax error expecting '=' but found '/>'
                 code: DiagnosticMessages.xmlGenericParseError('').code
-            });
+            }]);
         });
 
         it('adds an error when an interface field is invalid', () => {
@@ -155,36 +149,27 @@ describe('XmlScope', () => {
                 end sub
             `);
             program.validate();
-            let childScope = program.getComponentScope('child');
-            let diagnostics = childScope.getDiagnostics();
-            expect(diagnostics.length).to.equal(7);
-            expect(diagnostics[0]).to.deep.include({
+            expectDiagnostics(program.getComponentScope('child'), [{
                 ...DiagnosticMessages.xmlInvalidFieldType('no'),
                 range: Range.create(4, 33, 4, 35)
-            });
-            expect(diagnostics[1]).to.deep.include({
+            }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'type'),
                 range: Range.create(5, 9, 5, 14)
-            });
-            expect(diagnostics[2]).to.deep.include({
+            }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'id'),
                 range: Range.create(6, 9, 6, 14)
-            });
-            expect(diagnostics[3]).to.deep.include({
+            }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'id'),
                 range: Range.create(8, 9, 8, 14)
-            });
-            expect(diagnostics[4]).to.deep.include({
+            }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'id'),
                 range: Range.create(9, 9, 9, 14)
-            });
-            expect(diagnostics[5]).to.deep.include({
+            }, {
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'type'),
                 range: Range.create(9, 9, 9, 14)
-            });
-            expect(diagnostics[6]).to.deep.include({ // syntax error expecting '=' but found '/>'
+            }, { // syntax error expecting '=' but found '/>'
                 code: DiagnosticMessages.xmlGenericParseError('').code
-            });
+            }]);
         });
     });
 });

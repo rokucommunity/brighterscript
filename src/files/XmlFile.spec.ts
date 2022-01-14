@@ -1,14 +1,14 @@
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
 import type { CompletionItem } from 'vscode-languageserver';
-import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { AfterFileParseEvent, BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
 import { XmlFile } from './XmlFile';
 import { standardizePath as s } from '../util';
-import { expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ProgramBuilder } from '../ProgramBuilder';
 import { LogLevel } from '../Logger';
 
@@ -332,12 +332,9 @@ describe('XmlFile', () => {
             `);
 
             program.validate();
-
-            expect(
-                program.getDiagnostics().map(x => x.message)
-            ).to.include(
-                DiagnosticMessages.fileNotReferencedByAnyOtherFile().message
-            );
+            expectDiagnostics(program, [
+                DiagnosticMessages.fileNotReferencedByAnyOtherFile()
+            ]);
         });
 
         it('is not enabled by default', () => {
@@ -366,9 +363,7 @@ describe('XmlFile', () => {
             program.validate();
 
             //there should be no errors
-            expect(
-                program.getDiagnostics().map(x => x.message)[0]
-            ).not.to.exist;
+            expectZeroDiagnostics(program);
         });
     });
 
@@ -527,8 +522,7 @@ describe('XmlFile', () => {
             range: undefined
         }];
         file.addDiagnostics(expected);
-        const actual = file.getDiagnostics();
-        expect(actual).deep.equal(expected);
+        expectDiagnostics(file, expected);
     });
 
     describe('component extends', () => {
@@ -592,10 +586,9 @@ describe('XmlFile', () => {
             );
             program.validate();
 
-            expect(file.getDiagnostics()[0]).to.include({
-                severity: DiagnosticSeverity.Warning,
-                message: DiagnosticMessages.xmlComponentMissingExtendsAttribute().message
-            });
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+            ]);
         });
     });
 
@@ -619,11 +612,9 @@ describe('XmlFile', () => {
         `);
 
         program.validate();
-        expect(
-            program.getDiagnostics()[0]?.message
-        ).to.equal(
-            DiagnosticMessages.unnecessaryCodebehindScriptImport().message
-        );
+        expectDiagnostics(program, [
+            DiagnosticMessages.unnecessaryCodebehindScriptImport()
+        ]);
     });
 
     describe('transpile', () => {
@@ -957,7 +948,7 @@ describe('XmlFile', () => {
             </component>
         `);
         program.validate();
-        expect(program.getDiagnostics().map(x => ({ message: x.message, code: x.code }))).to.eql([{
+        expectDiagnostics(program, [{
             message: 'Test diagnostic',
             code: 9999
         }]);
@@ -1008,7 +999,7 @@ describe('XmlFile', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(program);
             const scope = program.getComponentScope('ChildComponent');
             expect([...scope.namespaceLookup.keys()].sort()).to.eql([
                 'lib',
@@ -1159,8 +1150,8 @@ describe('XmlFile', () => {
                 </component>
             `);
             program.validate();
-            expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                DiagnosticMessages.xmlComponentMissingExtendsAttribute().message
+            expectDiagnostics(program, [
+                DiagnosticMessages.xmlComponentMissingExtendsAttribute()
             ]);
         });
 
@@ -1183,8 +1174,8 @@ describe('XmlFile', () => {
                 </component>
             `);
             program.validate();
-            expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                DiagnosticMessages.xmlComponentMissingExtendsAttribute().message
+            expectDiagnostics(program, [
+                DiagnosticMessages.xmlComponentMissingExtendsAttribute()
             ]);
         });
     });
@@ -1219,9 +1210,9 @@ describe('XmlFile', () => {
                 </component>
             `);
             program.validate();
-            expect(program.getDiagnostics().map(x => x.message).sort()).to.eql([
-                DiagnosticMessages.duplicateComponentName('comp1').message,
-                DiagnosticMessages.duplicateComponentName('comp1').message
+            expectDiagnostics(program, [
+                DiagnosticMessages.duplicateComponentName('comp1'),
+                DiagnosticMessages.duplicateComponentName('comp1')
             ]);
         });
 
