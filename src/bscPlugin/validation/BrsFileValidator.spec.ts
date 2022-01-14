@@ -29,7 +29,7 @@ describe('BrsFileValidator', () => {
             }]);
         });
 
-        it.skip('flags mismatched enum value types', () => {
+        it('flags mismatched enum value types', () => {
             program.addOrReplaceFile('source/main.bs', `
                 enum Direction
                     a = 1
@@ -37,8 +37,47 @@ describe('BrsFileValidator', () => {
                 end enum
             `);
             expectDiagnostics(program, [{
-                ...DiagnosticMessages.enumMembersMustHaveSameType('integer'),
-                range: util.createRange(3, 20, 3, 24)
+                ...DiagnosticMessages.enumValueMustBeType('integer'),
+                range: util.createRange(3, 24, 3, 27)
+            }]);
+        });
+
+        it('flags mismatched enum value types', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                enum Direction
+                    a = "a"
+                    b = 1
+                end enum
+            `);
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.enumValueMustBeType('string'),
+                range: util.createRange(3, 24, 3, 25)
+            }]);
+        });
+
+        it('flags missing value for string enum', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                enum Direction
+                    a = "a"
+                    b
+                end enum
+            `);
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.enumValueIsRequired('string'),
+                range: util.createRange(3, 20, 3, 21)
+            }]);
+        });
+
+        it('flags missing value for string enum', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                enum Direction
+                    a
+                    b = "b" 'since this is the only value present, this is a string enum
+                end enum
+            `);
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.enumValueIsRequired('string'),
+                range: util.createRange(2, 20, 2, 21)
             }]);
         });
     });

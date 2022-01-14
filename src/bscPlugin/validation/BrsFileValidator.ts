@@ -1,4 +1,4 @@
-import { isIntegerType, isLiteralExpression, isLiteralNumber, isStringType } from '../..';
+import { EnumMemberStatement, isIntegerType, isLiteralExpression, isLiteralNumber, isStringType } from '../..';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, OnFileValidateEvent } from '../../interfaces';
@@ -20,7 +20,7 @@ export class BrsFileValidator {
         for (const stmt of this.event.file.parser.references.enumStatements) {
             const members = stmt.getMembers();
             //the enum data type is based on the first member value
-            const enumValueKind = (members.find(x => x.value)?.value as LiteralExpression)?.token?.kind ?? TokenKind.Integer;
+            const enumValueKind = (members.find(x => x.value)?.value as LiteralExpression)?.token?.kind ?? TokenKind.IntegerLiteral;
             const memberNames = new Set<string>();
             for (const member of members) {
                 const memberNameLower = member.name?.toLowerCase();
@@ -37,13 +37,57 @@ export class BrsFileValidator {
                 } else {
                     memberNames.add(memberNameLower);
                 }
+
+                /**
+                 * Enforce all member values are the same type
+                 */
+                this.validateEnumValueTypes(diagnostics, member, enumValueKind);
+
             }
 
-            /**
-             * Enforce all member types are the same
-             */
+        }
+        this.event.file.addDiagnostics(diagnostics);
+    }
 
-            this.event.file.addDiagnostics(diagnostics);
+    private validateEnumValueTypes(diagnostics: BsDiagnostic[], member: EnumMemberStatement, enumValueKind: TokenKind) {
+        const memberValueKind = (member.value as LiteralExpression)?.token.kind;
+
+        //is integer enum, has value, that value type is not integer
+        if (enumValueKind === TokenKind.IntegerLiteral && memberValueKind && memberValueKind !== enumValueKind) {
+            diagnostics.push({
+                file: this.event.file,
+                ...DiagnosticMessages.enumValueMustBeType(
+                    enumValueKind.replace(/literal$/i, '').toLowerCase()
+                ),
+                range: (member.value ?? member)?.range
+            });
+        }
+
+        //is non integer value
+        if (enumValueKind !== TokenKind.IntegerLiteral) {
+            //default value present
+            if (memberValueKind) {
+                //member value is same as enum
+                if (memberValueKind !== enumValueKind) {
+                    diagnostics.push({
+                        file: this.event.file,
+                        ...DiagnosticMessages.enumValueMustBeType(
+                            enumValueKind.replace(/literal$/i, '').toLowerCase()
+                        ),
+                        range: (member.value ?? member)?.range
+                    });
+                }
+
+                //default value missing
+            } else {
+                diagnostics.push({
+                    file: this.event.file,
+                    ...DiagnosticMessages.enumValueIsRequired(
+                        enumValueKind.replace(/literal$/i, '').toLowerCase()
+                    ),
+                    range: (member.value ?? member)?.range
+                });
+            }
         }
     }
 }

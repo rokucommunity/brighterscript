@@ -636,9 +636,14 @@ export let DiagnosticMessages = {
         code: 1123,
         severity: DiagnosticSeverity.Error
     }),
-    enumMembersMustHaveSameType: (expectedType: string) => ({
-        message: `Incompatible enum All enum members must be type ${expectedType}`,
+    enumValueMustBeType: (expectedType: string) => ({
+        message: `Enum value must be type ${expectedType}`,
         code: 1124,
+        severity: DiagnosticSeverity.Error
+    }),
+    enumValueIsRequired: (expectedType: string) => ({
+        message: `Value is required for ${expectedType} enum`,
+        code: 1125,
         severity: DiagnosticSeverity.Error
     })
 };
