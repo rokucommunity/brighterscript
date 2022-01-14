@@ -146,7 +146,7 @@ describe('ProgramBuilder', () => {
                     dest: 'source/lib.brs'
                 }]
             });
-            expectZeroDiagnostics(builder)
+            expectZeroDiagnostics(builder);
             expect(builder.program.getFileByPathAbsolute(s``));
         });
     });
