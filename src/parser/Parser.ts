@@ -529,7 +529,7 @@ export class Parser {
     }
 
     private enumDeclaration(): EnumStatement {
-        const result = new EnumStatement({} as any, []);
+        const result = new EnumStatement({} as any, [], this.currentNamespaceName);
         this.warnIfNotBrighterScriptMode('enum declarations');
 
         const parentAnnotations = this.enterAnnotationBlock();
