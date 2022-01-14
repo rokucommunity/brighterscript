@@ -6,7 +6,7 @@ import { Program } from '../../Program';
 import { standardizePath as s } from '../../util';
 import type { XmlFile } from '../XmlFile';
 import type { BrsFile } from '../BrsFile';
-import { expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../../testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -98,7 +98,7 @@ describe('import statements', () => {
             end function
         `);
         program.validate();
-        expect(program.getDiagnostics().map(x => x.message)[0]).to.not.exist;
+        expectZeroDiagnostics(program);
         expect(
             (component as XmlFile).getAvailableScriptImports().sort()
         ).to.eql([
@@ -128,7 +128,7 @@ describe('import statements', () => {
             end function
         `);
         program.validate();
-        expect(program.getDiagnostics().map(x => x.message)[0]).to.not.exist;
+        expectZeroDiagnostics(program);
         expect(
             (component as XmlFile).getAvailableScriptImports()
         ).to.eql([
@@ -157,7 +157,7 @@ describe('import statements', () => {
         //there should be an error because that function doesn't exist
         program.validate();
 
-        expect(program.getDiagnostics().map(x => x.message)).to.eql([
+        expectDiagnostics(program, [
             DiagnosticMessages.callToUnknownFunction('Waddle', s`components/ChildScene.xml`).message
         ]);
 
@@ -219,7 +219,9 @@ describe('import statements', () => {
             end sub
         `);
         program.validate();
-        expect(program.getDiagnostics().map(x => x.message)[0]).to.eql(DiagnosticMessages.referencedFileDoesNotExist().message);
+        expectDiagnostics(program, [
+            DiagnosticMessages.referencedFileDoesNotExist()
+        ]);
     });
 
     it('complicated import graph adds correct script tags', () => {
