@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { LiteralExpression } from '../..';
+import { LiteralExpression } from '../../Expression';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { expectDiagnostics, expectInstanceOf, expectZeroDiagnostics } from '../../../testHelpers.spec';
 import { ParseMode, Parser } from '../../Parser';

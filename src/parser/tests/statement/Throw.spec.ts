@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import type { TryCatchStatement, ThrowStatement } from '../..';
+import type { TryCatchStatement, ThrowStatement } from '../../Statement';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { LiteralExpression } from '../../Expression';
 import { Parser } from '../../Parser';

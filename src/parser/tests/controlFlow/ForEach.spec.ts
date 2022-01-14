@@ -3,7 +3,8 @@ import { expect } from 'chai';
 import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
-import { ForEachStatement, VariableExpression } from '../..';
+import { ForEachStatement } from '../../Statement';
+import { VariableExpression } from '../../Expression';
 import { Range } from 'vscode-languageserver';
 
 describe('parser foreach loops', () => {

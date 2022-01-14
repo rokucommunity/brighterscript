@@ -19,7 +19,6 @@ import type { XmlScope } from '../XmlScope';
 import { DynamicType } from '../types/DynamicType';
 import type { InterfaceType } from '../types/InterfaceType';
 import type { ObjectType } from '../types/ObjectType';
-import { TokenKind } from '..';
 
 // File reflection
 

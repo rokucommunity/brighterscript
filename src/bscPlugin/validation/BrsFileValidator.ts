@@ -1,9 +1,9 @@
-import { EnumMemberStatement, isIntegerType, isLiteralExpression, isLiteralNumber, isStringType } from '../..';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { LiteralExpression } from '../../parser/Expression';
+import type { EnumMemberStatement } from '../../parser/Statement';
 
 export class BrsFileValidator {
     constructor(
