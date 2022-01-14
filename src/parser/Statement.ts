@@ -10,12 +10,12 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode, Parser } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isTypedefProvider, isVoidType } from '../astUtils/reflection';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isTypedefProvider, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
-import type { SourceNode } from 'source-map';
+import { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 
 /**
@@ -2170,6 +2170,156 @@ export class ThrowStatement extends Statement {
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (this.expression && options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'expression', visitor, options);
+        }
+    }
+}
+
+
+export class EnumStatement extends Statement implements TypedefProvider {
+
+    constructor(
+        public tokens: {
+            enum: Token;
+            name: Identifier;
+            endEnum: Token;
+        },
+        public body: Statement[],
+        public namespaceName?: NamespacedVariableNameExpression
+    ) {
+        super();
+        this.body = this.body ?? [];
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            this.tokens.enum.range.start ?? Position.create(0, 0),
+            (this.tokens.endEnum ?? this.tokens.name ?? this.tokens.enum).range.end
+        );
+    }
+
+    public get members() {
+        const result = [] as EnumMemberStatement[];
+        for (const statement of this.body) {
+            if (isEnumMemberStatement(statement)) {
+                result.push(statement);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * The name of the interface (without the namespace prefix)
+     */
+    public get name() {
+        return this.tokens.name?.text;
+    }
+
+    /**
+     * The name of the interface WITH its leading namespace (if applicable)
+     */
+    public get fullName() {
+        const name = this.tokens.name?.text;
+        if (name) {
+            if (this.namespaceName) {
+                let namespaceName = this.namespaceName.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this doesn't have a name
+            return undefined;
+        }
+    }
+
+    transpile(state: BrsTranspileState) {
+        //enum declarations do not exist at runtime, so don't transpile anything...
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
+            this.tokens.enum.text ?? 'enum',
+            ' ',
+            this.tokens.name.text
+        );
+        result.push(state.newline);
+        state.blockDepth++;
+        for (const member of this.body) {
+            if (isTypedefProvider(member)) {
+                result.push(
+                    state.indent(),
+                    ...member.getTypedef(state),
+                    state.newline
+                );
+            }
+        }
+        state.blockDepth--;
+        result.push(
+            state.indent(),
+            this.tokens.endEnum.text ?? 'end enum'
+        );
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            for (let i = 0; i < this.body.length; i++) {
+                walk(this.body, i, visitor, options, this);
+            }
+        }
+    }
+}
+
+export class EnumMemberStatement extends Statement implements TypedefProvider {
+
+    public constructor(
+        public tokens: {
+            name: Identifier;
+            equals?: Token;
+        },
+        public value?: Expression
+    ) {
+        super();
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            (this.tokens.name ?? this.tokens.equals ?? this.value).range.start ?? Position.create(0, 0),
+            (this.value ?? this.tokens.equals ?? this.tokens.name).range.end
+        );
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
+        const result = [
+            this.tokens.name.text
+        ] as TranspileResult;
+        if (this.tokens.equals) {
+            result.push(' ', this.tokens.equals.text, ' ');
+            if (this.value) {
+                result.push(
+                    ...this.value.transpile(state)
+                );
+            }
+        }
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.value && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
         }
     }
 }

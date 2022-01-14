@@ -93,7 +93,8 @@ import { Logger } from '../Logger';
 import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
-import { RegexLiteralExpression } from '.';
+import { EnumStatement, RegexLiteralExpression } from '.';
+import { Cache } from '../Cache';
 
 export class Parser {
     /**
@@ -492,6 +493,81 @@ export class Parser {
             this.currentNamespaceName
         );
         this._references.interfaceStatements.push(statement);
+        this.exitAnnotationBlock(parentAnnotations);
+        return statement;
+    }
+
+    private enumDeclaration(): EnumStatement {
+        this.warnIfNotBrighterScriptMode('enum declarations');
+
+        const parentAnnotations = this.enterAnnotationBlock();
+
+        const enumToken = this.consume(
+            DiagnosticMessages.expectedKeyword(TokenKind.Enum),
+            TokenKind.Enum
+        );
+        const nameToken = this.identifier();
+
+        this.consumeStatementSeparators();
+        //gather up all members
+        let body = [] as Statement[];
+        while (this.checkAny(TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
+            try {
+                let decl: Statement;
+
+                //collect leading annotations
+                if (this.check(TokenKind.At)) {
+                    this.annotationExpression();
+                }
+
+                //fields
+                if (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.As)) {
+                    decl = this.interfaceFieldStatement();
+
+                    //methods (function/sub keyword followed by opening paren)
+                } else if (this.checkAny(TokenKind.Function, TokenKind.Sub) && this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
+                    decl = this.interfaceMethodStatement();
+
+                    //comments
+                } else if (this.check(TokenKind.Comment)) {
+                    decl = this.commentStatement();
+                }
+
+                if (decl) {
+                    this.consumePendingAnnotations(decl);
+                    body.push(decl);
+                } else {
+                    //we didn't find a declaration...flag tokens until next line
+                    this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
+                }
+            } catch (e) {
+                //throw out any failed members and move on to the next line
+                this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
+            }
+
+            //ensure statement separator
+            this.consumeStatementSeparators();
+            //break out of this loop if we encountered the `EndInterface` token not followed by `as`
+            if (this.check(TokenKind.EndInterface) && !this.checkNext(TokenKind.As)) {
+                break;
+            }
+        }
+
+        //consume the final `end interface` token
+        const endEnumToken = this.consumeToken(TokenKind.EndEnum);
+
+        this.consumeStatementSeparators();
+
+        const statement = new EnumStatement(
+            {
+                enum: enumToken,
+                name: nameToken,
+                endEnum: endEnumToken
+            },
+            body,
+            this.currentNamespaceName
+        );
+        this._references.enumStatements.push(statement);
         this.exitAnnotationBlock(parentAnnotations);
         return statement;
     }
@@ -1037,6 +1113,10 @@ export class Parser {
 
         if (this.check(TokenKind.Namespace)) {
             return this.namespaceStatement();
+        }
+
+        if (this.check(TokenKind.Enum)) {
+            return this.enumDeclaration();
         }
 
         // TODO: support multi-statements
@@ -2825,6 +2905,7 @@ export interface ParseOptions {
 }
 
 export class References {
+    private cache = new Cache();
     public assignmentStatements = [] as AssignmentStatement[];
     public classStatements = [] as ClassStatement[];
 
@@ -2867,6 +2948,19 @@ export class References {
         return this._interfaceStatementLookup;
     }
     private _interfaceStatementLookup: Map<string, InterfaceStatement>;
+
+
+    public enumStatements = [] as EnumStatement[];
+
+    public get enumStatementLookup() {
+        return this.cache.getOrAdd('enums', () => {
+            const result = new Map<string, EnumStatement>();
+            for (const stmt of this.enumStatements) {
+                result.set(stmt.fullName.toLowerCase(), stmt);
+            }
+            return result;
+        });
+    }
 
     public importStatements = [] as ImportStatement[];
     public libraryStatements = [] as LibraryStatement[];
