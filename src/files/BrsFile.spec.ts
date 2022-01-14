@@ -2,7 +2,7 @@ import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
 import * as path from 'path';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
-import type { Callable, CommentFlag, BsDiagnostic, VariableDeclaration } from '../interfaces';
+import type { Callable, CommentFlag, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
 import { BooleanType } from '../types/BooleanType';
 import { DynamicType } from '../types/DynamicType';
@@ -16,7 +16,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
 
@@ -46,7 +46,7 @@ describe('BrsFile', () => {
             end sub
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).to.not.exist;
+        expectZeroDiagnostics(program);
     });
 
     it('supports the 6 params in CreateObject for roRegion', () => {
@@ -56,7 +56,7 @@ describe('BrsFile', () => {
             end sub
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).to.not.exist;
+        expectZeroDiagnostics(program);
     });
 
     it('sets needsTranspiled to true for .bs files', () => {
@@ -73,8 +73,7 @@ describe('BrsFile', () => {
             range: undefined
         }];
         file.addDiagnostics(expected);
-        const actual = file.getDiagnostics();
-        expect(actual).deep.equal(expected);
+        expectDiagnostics(file, expected);
     });
 
     describe('getPartialVariableName', () => {
@@ -297,7 +296,7 @@ describe('BrsFile', () => {
                 `);
                 //should have an error
                 program.validate();
-                expect(program.getDiagnostics()[0]?.message).to.exist;
+                expectHasDiagnostics(program);
 
                 program.addOrReplaceFile('source/main.brs', `
                     sub main()
@@ -305,9 +304,9 @@ describe('BrsFile', () => {
                         Dim requestData
                     end sub
                 `);
-                //should have an error
+                //should not have an error
                 program.validate();
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('works with leading whitespace', () => {
@@ -319,7 +318,7 @@ describe('BrsFile', () => {
                 `);
                 //should have an error
                 program.validate();
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('works for all', () => {
@@ -337,7 +336,7 @@ describe('BrsFile', () => {
                 } as CommentFlag);
                 program.validate();
                 //the "unterminated string" error should be filtered out
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('works for specific codes', () => {
@@ -354,7 +353,7 @@ describe('BrsFile', () => {
                     affectedRange: util.createRange(3, 0, 3, Number.MAX_SAFE_INTEGER)
                 } as CommentFlag);
                 //the "unterminated string" error should be filtered out
-                expect(program.getDiagnostics()[0]?.message).to.not.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('recognizes non-numeric codes', () => {
@@ -365,7 +364,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 expect(file.commentFlags[0]).to.exist;
-                expect(program.getDiagnostics()[0]?.message).to.exist;
+                expectHasDiagnostics(program);
             });
 
             it('supports disabling non-numeric error codes', () => {
@@ -381,9 +380,8 @@ describe('BrsFile', () => {
                     message: 'Something is not right',
                     range: util.createRange(2, 16, 2, 26)
                 }]);
-                expect(
-                    program.getScopesForFile(file)[0].getDiagnostics()
-                ).to.be.empty;
+                const scope = program.getScopesForFile(file)[0];
+                expectZeroDiagnostics(scope);
             });
 
             it('adds diagnostics for unknown numeric diagnostic codes', () => {
@@ -394,14 +392,13 @@ describe('BrsFile', () => {
                 `);
 
                 program.validate();
-
-                expect(program.getDiagnostics()).to.be.lengthOf(2);
-                expect(program.getDiagnostics()[0]).to.deep.include({
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unknownDiagnosticCode(123456),
                     range: Range.create(2, 53, 2, 59)
-                } as BsDiagnostic);
-                expect(program.getDiagnostics()[1]).to.deep.include({
+                }, {
+                    ...DiagnosticMessages.unknownDiagnosticCode(999999),
                     range: Range.create(2, 60, 2, 66)
-                } as BsDiagnostic);
+                }]);
             });
 
         });
@@ -421,7 +418,7 @@ describe('BrsFile', () => {
                 } as CommentFlag);
                 program.validate();
                 //the "unterminated string" error should be filtered out
-                expect(program.getDiagnostics()).to.be.lengthOf(0);
+                expectZeroDiagnostics(program);
             });
 
             it('works for specific codes', () => {
@@ -438,10 +435,9 @@ describe('BrsFile', () => {
 
                 program.validate();
 
-                expect(program.getDiagnostics()).to.be.lengthOf(1);
-                expect(program.getDiagnostics()[0]).to.deep.include({
+                expectDiagnostics(program, [{
                     range: Range.create(5, 24, 5, 35)
-                } as BsDiagnostic);
+                }]);
             });
 
             it('handles the erraneous `stop` keyword', () => {
@@ -455,7 +451,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expect(program.getDiagnostics()).to.be.lengthOf(0);
+                expectZeroDiagnostics(program);
             });
         });
     });
@@ -496,7 +492,7 @@ describe('BrsFile', () => {
                     myLabel:
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports empty print statements', () => {
@@ -505,7 +501,7 @@ describe('BrsFile', () => {
                    print
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         describe('conditional compile', () => {
@@ -523,7 +519,7 @@ describe('BrsFile', () => {
                         #ENDIF
                     end sub
                 `);
-                expect(file.getDiagnostics()).to.be.lengthOf(0);
+                expectZeroDiagnostics(file);
             });
 
             it('supports single-word #elseif and #endif', () => {
@@ -537,7 +533,7 @@ describe('BrsFile', () => {
                         #endif
                     end sub
                 `);
-                expect(file.getDiagnostics()).to.be.lengthOf(0);
+                expectZeroDiagnostics(file);
             });
 
             it('supports multi-word #else if and #end if', () => {
@@ -551,7 +547,7 @@ describe('BrsFile', () => {
                         #end if
                     end sub
                 `);
-                expect(file.getDiagnostics()).to.be.lengthOf(0);
+                expectZeroDiagnostics(file);
             });
 
             it('does not choke on invalid code inside a false conditional compile', () => {
@@ -562,7 +558,7 @@ describe('BrsFile', () => {
                         #end if
                     end sub
                 `);
-                expect(file.getDiagnostics()).to.be.lengthOf(0);
+                expectZeroDiagnostics(file);
             });
 
             it('detects syntax error in #if', () => {
@@ -573,9 +569,9 @@ describe('BrsFile', () => {
                         #end if
                     end sub
                 `);
-                expect(file.getDiagnostics()[0]).to.exist.and.deep.include({
-                    ...DiagnosticMessages.invalidHashConstValue
-                });
+                expectDiagnostics(file, [
+                    DiagnosticMessages.referencedConstDoesNotExist()
+                ]);
             });
 
             it('detects syntax error in #const', () => {
@@ -586,9 +582,10 @@ describe('BrsFile', () => {
                         #end if
                     end sub
                 `);
-                expect(file.getDiagnostics()[0]).to.exist.and.deep.include({
-                    ...DiagnosticMessages.unexpectedCharacter('%')
-                });
+                expectDiagnostics(file, [
+                    DiagnosticMessages.unexpectedCharacter('%'),
+                    DiagnosticMessages.invalidHashIfValue()
+                ]);
             });
 
             it('detects #const name using reserved word', () => {
@@ -597,9 +594,10 @@ describe('BrsFile', () => {
                         #const function = true
                     end sub
                 `);
-                expect(file.getDiagnostics()[0]).to.exist.and.deep.include({
-                    ...DiagnosticMessages.constNameCannotBeReservedWord()
-                });
+                expectDiagnostics(file, [
+                    DiagnosticMessages.constNameCannotBeReservedWord(),
+                    DiagnosticMessages.unexpectedToken('#const')
+                ]);
             });
 
             it('detects syntax error in #const', () => {
@@ -608,9 +606,9 @@ describe('BrsFile', () => {
                         #const someConst = 123
                     end sub
                 `);
-                expect(file.getDiagnostics()[0]).to.exist.and.deep.include({
-                    ...DiagnosticMessages.invalidHashConstValue()
-                });
+                expectDiagnostics(file, [
+                    DiagnosticMessages.invalidHashConstValue()
+                ]);
             });
         });
 
@@ -620,7 +618,7 @@ describe('BrsFile', () => {
                    stop
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports single-line if statements', () => {
@@ -634,7 +632,7 @@ describe('BrsFile', () => {
                     if true then : test = sub() : print "yes" : end sub : end if
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports line_num as global variable', () => {
@@ -643,7 +641,7 @@ describe('BrsFile', () => {
                     print LINE_NUM
                 end sub
             `);
-            expect(file.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(file);
         });
 
         it('supports many keywords as object property names', () => {
@@ -710,7 +708,7 @@ describe('BrsFile', () => {
                     person.new = true
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
         it('does not error on numeric literal type designators', () => {
             file.parse(`
@@ -724,7 +722,7 @@ describe('BrsFile', () => {
                     print 9876543210&
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('does not error when encountering sub with return type', () => {
@@ -733,7 +731,7 @@ describe('BrsFile', () => {
                     return
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('does not lose function scopes when mismatched end sub', () => {
@@ -771,7 +769,7 @@ describe('BrsFile', () => {
                     foo.bar = true and false or 3 > 4
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('does not error with boolean in RHS of set statement', () => {
@@ -785,7 +783,7 @@ describe('BrsFile', () => {
                     m.isTrue = m.isTrue = m.isTrue
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports variable names ending with type designators', () => {
@@ -798,7 +796,7 @@ describe('BrsFile', () => {
                   someHex& = 13
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports multiple spaces between two-word keywords', () => {
@@ -811,7 +809,7 @@ describe('BrsFile', () => {
                     end if
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('does not error with `stop` as object key', () => {
@@ -825,7 +823,7 @@ describe('BrsFile', () => {
                     return obj
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('does not error with `run` as object key', () => {
@@ -839,7 +837,7 @@ describe('BrsFile', () => {
                     return obj
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports assignment operators', () => {
@@ -857,7 +855,7 @@ describe('BrsFile', () => {
                     print x
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports `then` as object property', () => {
@@ -870,7 +868,7 @@ describe('BrsFile', () => {
                     promise.then()
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports function as parameter type', () => {
@@ -880,7 +878,7 @@ describe('BrsFile', () => {
                     end function
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports increment operator', () => {
@@ -890,8 +888,7 @@ describe('BrsFile', () => {
                     x++
                 end function
             `);
-            file.getDiagnostics();
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports decrement operator', () => {
@@ -901,8 +898,7 @@ describe('BrsFile', () => {
                     x--
                 end function
             `);
-            file.getDiagnostics();
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports writing numbers with decimal but no trailing digit', () => {
@@ -912,7 +908,7 @@ describe('BrsFile', () => {
                     print x
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports assignment operators against object properties', () => {
@@ -935,7 +931,7 @@ describe('BrsFile', () => {
                     print m.age
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         //skipped until `brs` supports this
@@ -948,7 +944,7 @@ describe('BrsFile', () => {
                     print x
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         //skipped until `brs` supports this
@@ -961,7 +957,7 @@ describe('BrsFile', () => {
                         print m.x
                     end function
                 `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports leading and trailing periods for numeric literals', () => {
@@ -973,7 +969,7 @@ describe('BrsFile', () => {
                     print pointOne
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports bitshift assignment operators on object properties accessed by array syntax', () => {
@@ -985,7 +981,7 @@ describe('BrsFile', () => {
                         print m.x
                     end function
                 `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports weird period AA accessor', () => {
@@ -995,7 +991,7 @@ describe('BrsFile', () => {
                     print m.["_uuid"]
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('adds error for library statements NOT at top of file', () => {
@@ -1004,10 +1000,8 @@ describe('BrsFile', () => {
                 end sub
                 import "file.brs"
             `);
-            expect(
-                file.getDiagnostics().map(x => x.message)
-            ).to.eql([
-                DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile().message
+            expectDiagnostics(file, [
+                DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile()
             ]);
         });
 
@@ -1015,7 +1009,7 @@ describe('BrsFile', () => {
             file.parse(`
                 Library "v30/bslCore.brs"
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('adds error for library statements NOT at top of file', () => {
@@ -1024,10 +1018,8 @@ describe('BrsFile', () => {
                 end sub
                 Library "v30/bslCore.brs"
             `);
-            expect(
-                file.getDiagnostics().map(x => x.message)
-            ).to.eql([
-                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile().message
+            expectDiagnostics(file, [
+                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile()
             ]);
         });
 
@@ -1037,10 +1029,8 @@ describe('BrsFile', () => {
                     Library "v30/bslCore.brs"
                 end sub
             `);
-            expect(
-                file.getDiagnostics().map(x => x.message)
-            ).to.eql([
-                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile().message
+            expectDiagnostics(file, [
+                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile()
             ]);
         });
 
@@ -1050,7 +1040,7 @@ describe('BrsFile', () => {
                     obj = {x:0 : y: 1}
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('succeeds when finding variables with "sub" in them', () => {
@@ -1146,10 +1136,8 @@ describe('BrsFile', () => {
                 function DoSomething
                 end function
             `);
-            expect(file.getDiagnostics().length).to.be.greaterThan(0);
-            expect(file.getDiagnostics()[0]).to.deep.include({
-                file: file
-            });
+            expectHasDiagnostics(file);
+            expect(file.getDiagnostics()[0].file).to.equal(file);
             expect(file.getDiagnostics()[0].range.start.line).to.equal(1);
         });
 
@@ -1162,7 +1150,7 @@ describe('BrsFile', () => {
                     next
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(file);
         });
 
         //test is not working yet, but will be enabled when brs supports this syntax
@@ -1176,7 +1164,7 @@ describe('BrsFile', () => {
                     end sub
                 end function
             `);
-            expect(file.getDiagnostics().length).to.equal(0);
+            expectZeroDiagnostics(file);
         });
     });
 
@@ -1317,11 +1305,9 @@ describe('BrsFile', () => {
                 end sub
             `);
             program.validate();
-            expect(
-                program.getDiagnostics()[0]?.message
-            ).to.equal(
-                DiagnosticMessages.callToUnknownFunction('DoesNotExist', 'source').message
-            );
+            expectDiagnostics(program, [
+                DiagnosticMessages.callToUnknownFunction('DoesNotExist', 'source')
+            ]);
         });
 
         it('finds arguments with variable values', () => {
@@ -1629,7 +1615,7 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(mainFile);
             mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     if true Then
@@ -1637,7 +1623,7 @@ describe('BrsFile', () => {
                     end if
                 end sub
             `);
-            expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(mainFile);
 
             mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
@@ -1646,7 +1632,7 @@ describe('BrsFile', () => {
                     end if
                 end sub
             `);
-            expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(mainFile);
         });
     });
 
@@ -2263,7 +2249,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('sets invalid on empty callfunc', () => {

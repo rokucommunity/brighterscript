@@ -13,6 +13,7 @@ import { standardizePath as s, util } from './util';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Program } from './Program';
 import * as assert from 'assert';
+import { expectZeroDiagnostics } from './testHelpers.spec';
 
 let sinon: sinonImport.SinonSandbox;
 beforeEach(() => {
@@ -147,9 +148,7 @@ describe('LanguageServer', () => {
             let filePath = `${rootDir}/.tmp/main.brs`;
             writeToFs(filePath, `sub main(): return: end sub`);
             let firstWorkspace: Workspace = await svr.createStandaloneFileWorkspace(filePath);
-            expect(
-                firstWorkspace.builder.program.getDiagnostics().map(x => x.message).sort()
-            ).to.eql([]);
+            expectZeroDiagnostics(firstWorkspace.builder.program);
         });
     });
 

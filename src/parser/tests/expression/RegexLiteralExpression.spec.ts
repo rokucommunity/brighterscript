@@ -1,7 +1,6 @@
 import { Program } from '../../../Program';
 import { standardizePath as s } from '../../../util';
-import { getTestTranspile } from '../../../testHelpers.spec';
-import { expect } from 'chai';
+import { expectDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 
 describe('RegexLiteralExpression', () => {
@@ -71,7 +70,9 @@ describe('RegexLiteralExpression', () => {
                     print /"/
                 end sub
             `);
-            expect(program.getDiagnostics()[0].code).to.eql(DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('').code);
+            expectDiagnostics(program, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('regular expression literal')
+            ]);
         });
 
         it('handles edge cases', () => {
