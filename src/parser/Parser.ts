@@ -1375,11 +1375,6 @@ export class Parser {
                 // force it into an identifier so the AST makes some sense
                 identifier.kind = TokenKind.Identifier;
                 expr = new DottedGetExpression(expr, identifier, dot);
-
-                //if this is the leftmost DottedGetExpression, store it on references
-                if ((expr as any) === varExpr) {
-                    this._references.primaryDottedGetExpressions.push(expr);
-                }
             }
         }
         return new NamespacedVariableNameExpression(expr);
@@ -2391,8 +2386,8 @@ export class Parser {
 
                     // force it into an identifier so the AST makes some sense
                     name.kind = TokenKind.Identifier;
-
                     expr = new DottedGetExpression(expr, name as Identifier, dot);
+
                     this.addPropertyHints(name);
                 }
             } else if (this.check(TokenKind.At)) {
@@ -2899,9 +2894,6 @@ export class Parser {
             },
             DottedGetExpression: e => {
                 this.addPropertyHints(e.name);
-                if (isVariableExpression(e.obj)) {
-                    this._references.primaryDottedGetExpressions.push(e);
-                }
             },
             DottedSetStatement: e => {
                 this.addPropertyHints(e.name);
@@ -2991,11 +2983,6 @@ export class References {
             return result;
         });
     }
-
-    /**
-     * All the dotted get expressions that start with a VariableExpression.
-     */
-    public primaryDottedGetExpressions = [] as DottedGetExpression[];
 
     public importStatements = [] as ImportStatement[];
     public libraryStatements = [] as LibraryStatement[];
