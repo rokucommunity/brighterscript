@@ -18,5 +18,6 @@
     "editor.tabSize": 4,
     "editor.insertSpaces": true,
     "typescript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
+    "typescript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets": false,
     "files.trimTrailingWhitespace": true
 }
