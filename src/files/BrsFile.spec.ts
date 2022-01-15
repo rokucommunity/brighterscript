@@ -227,6 +227,10 @@ describe('BrsFile', () => {
                     end function
                     class fooClass
                     end class
+                    enum foo3
+                        bar3_1
+                        bar3_2
+                    end enum
                 `);
 
                 let result;
@@ -234,17 +238,21 @@ describe('BrsFile', () => {
                 result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 26));
                 names = result.map(x => x.label);
                 expect(names).to.includes('foo');
+                expect(names).to.includes('foo3');
                 expect(names).to.includes('fooFace');
                 expect(names).to.includes('fooClass');
                 expect(result[2].kind).to.equal(CompletionItemKind.Enum);
+                expect(result[3].kind).to.equal(CompletionItemKind.Enum);
 
 
                 result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 27));
                 names = result.map(x => x.label);
                 expect(names).to.includes('foo');
+                expect(names).to.includes('foo3');
                 expect(names).to.includes('fooFace');
                 expect(names).to.includes('fooClass');
                 expect(result[2].kind).to.equal(CompletionItemKind.Enum);
+                expect(result[3].kind).to.equal(CompletionItemKind.Enum);
 
                 result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 30));
                 names = result.map(x => x.label);
