@@ -7,7 +7,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
 import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
+import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement, EnumStatement } from './parser';
 import { ParseMode } from './parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
@@ -104,6 +104,28 @@ export class Scope {
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (lowerClassName) {
                             map.set(lowerClassName, { item: cls, file: file });
+                        }
+                    }
+                }
+            });
+            return map;
+        });
+    }
+
+    /**
+     * A dictionary of all enums in this scope. This includes namespaced classes always with their full name.
+     * The key is stored in lower case
+     */
+    public getEnumMap(): Map<string, FileLink<EnumStatement>> {
+        return this.cache.getOrAdd('enumMap', () => {
+            const map = new Map<string, FileLink<EnumStatement>>();
+            this.enumerateBrsFiles((file) => {
+                if (isBrsFile(file)) {
+                    for (let e of file.parser.references.enumStatements) {
+                        const lowerClassName = e.fullName.toLowerCase();
+                        //only track classes with a defined name (i.e. exclude nameless malformed classes)
+                        if (lowerClassName) {
+                            map.set(lowerClassName, { item: e, file: file });
                         }
                     }
                 }
@@ -359,7 +381,8 @@ export class Scope {
                             namespaces: new Map<string, NamespaceContainer>(),
                             classStatements: {},
                             functionStatements: {},
-                            statements: []
+                            statements: [],
+                            enumStatements: {}
                         });
                     }
                 }
@@ -368,6 +391,8 @@ export class Scope {
                 for (let statement of namespace.body.statements) {
                     if (isClassStatement(statement) && statement.name) {
                         ns.classStatements[statement.name.text.toLowerCase()] = statement;
+                    } else if (isFunctionStatement(statement) && statement.name) {
+                        ns.functionStatements[statement.name.text.toLowerCase()] = statement;
                     } else if (isFunctionStatement(statement) && statement.name) {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
                     }
@@ -1010,6 +1035,7 @@ interface NamespaceContainer {
     statements: Statement[];
     classStatements: Record<string, ClassStatement>;
     functionStatements: Record<string, FunctionStatement>;
+    enumStatements: Record<string, EnumStatement>;
     namespaces: Map<string, NamespaceContainer>;
 }
 

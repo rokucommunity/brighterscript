@@ -169,6 +169,106 @@ describe('BrsFile', () => {
             expect(names).to.includes('SayHello');
         });
 
+        describe('namespaces', () => {
+
+            it('gets namespace completions', () => {
+                //eslint-disable-next-line @typescript-eslint/no-floating-promises
+                program.addOrReplaceFile('source/main.bs', `
+                    namespace foo.bar
+                        function sayHello()
+                        end function
+                    end namespace
+
+                    sub Main()
+                        print "hello"
+                        foo.ba
+                        foo.bar.
+                    end sub
+                `);
+
+                let result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 30));
+                let names = result.map(x => x.label);
+                expect(names).to.includes('bar');
+
+                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(9, 32));
+                names = result.map(x => x.label);
+                expect(names).to.includes('sayHello');
+            });
+
+        });
+        describe('enums', () => {
+
+            it.only('gets enum completions', () => {
+                //eslint-disable-next-line @typescript-eslint/no-floating-promises
+                program.addOrReplaceFile('source/main.bs', `
+                    enum foo
+                        bar1
+                        bar2
+                    end enum
+
+                    sub Main()
+                        print "hello"
+                        foo.ba
+                        test.foo2.ba
+                    end sub
+
+                    namespace test
+                        function fooFace2()
+                        end function
+                        class fooClass2
+                        end class
+
+                        enum foo2
+                            bar2_1
+                            bar2_2
+                        end enum
+                    end namespace
+                    function fooFace()
+                    end function
+                    class fooClass
+                    end class
+                `);
+
+                let result;
+                let names;
+                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 26));
+                names = result.map(x => x.label);
+                expect(names).to.includes('foo');
+                expect(names).to.includes('fooFace');
+                expect(names).to.includes('fooClass');
+                expect(result[2].kind).to.equal(CompletionItemKind.Enum);
+
+
+                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 27));
+                names = result.map(x => x.label);
+                expect(names).to.includes('foo');
+                expect(names).to.includes('fooFace');
+                expect(names).to.includes('fooClass');
+                expect(result[2].kind).to.equal(CompletionItemKind.Enum);
+
+                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 30));
+                names = result.map(x => x.label);
+                expect(names).to.includes('bar1');
+                expect(names).to.includes('bar2');
+                expect(result[0].kind).to.equal(CompletionItemKind.EnumMember);
+                expect(result[1].kind).to.equal(CompletionItemKind.EnumMember);
+
+                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(9, 33));
+                names = result.map(x => x.label);
+                expect(names).to.includes('foo2');
+                expect(names).to.includes('fooFace2');
+                expect(names).to.includes('fooClass2');
+                expect(result[2].kind).to.equal(CompletionItemKind.Enum);
+
+                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(9, 36));
+                names = result.map(x => x.label);
+                expect(names).to.includes('bar2_1');
+                expect(names).to.includes('bar2_2');
+                expect(result[0].kind).to.equal(CompletionItemKind.EnumMember);
+                expect(result[1].kind).to.equal(CompletionItemKind.EnumMember);
+            });
+
+        });
         it('always includes `m`', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
