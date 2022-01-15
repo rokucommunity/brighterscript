@@ -22,7 +22,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement } from '../astUtils/reflection';
+import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement } from '../astUtils/reflection';
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
@@ -79,7 +79,7 @@ export class BrsFile {
     private diagnostics = [] as BsDiagnostic[];
 
     public getDiagnostics() {
-        return [...this.diagnostics];
+        return [ ...this.diagnostics ];
     }
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
@@ -226,7 +226,7 @@ export class BrsFile {
             }
 
             //tokenize the input file
-            let lexer = this.program.logger.time(LogLevel.debug, ['lexer.lex', chalk.green(this.pathAbsolute)], () => {
+            let lexer = this.program.logger.time(LogLevel.debug, [ 'lexer.lex', chalk.green(this.pathAbsolute) ], () => {
                 return Lexer.scan(fileContents, {
                     includeWhitespace: false
                 });
@@ -240,7 +240,7 @@ export class BrsFile {
             //TODO preprocessor should go away in favor of the AST handling this internally (because it affects transpile)
             //currently the preprocessor throws exceptions on syntax errors...so we need to catch it
             try {
-                this.program.logger.time(LogLevel.debug, ['preprocessor.process', chalk.green(this.pathAbsolute)], () => {
+                this.program.logger.time(LogLevel.debug, [ 'preprocessor.process', chalk.green(this.pathAbsolute) ], () => {
                     preprocessor.process(lexer.tokens, this.program.getManifest());
                 });
             } catch (error: any) {
@@ -253,7 +253,7 @@ export class BrsFile {
             //if the preprocessor generated tokens, use them.
             let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
 
-            this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.pathAbsolute)], () => {
+            this.program.logger.time(LogLevel.debug, [ 'parser.parse', chalk.green(this.pathAbsolute) ], () => {
                 this._parser = Parser.parse(tokens, {
                     mode: this.parseMode,
                     logger: this.program.logger
@@ -381,7 +381,7 @@ export class BrsFile {
         const results = [] as CompletionItem[];
         for (const key of Object.keys(propertyHints)) {
             results.push({
-                label: propertyHints[key],
+                label: propertyHints[ key ],
                 kind: CompletionItemKind.Text
             });
         }
@@ -402,7 +402,7 @@ export class BrsFile {
      * @param lines - the lines of the program
      */
     public getCommentFlags(tokens: Token[]) {
-        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
+        const processor = new CommentFlagProcessor(this, [ 'rem', `'` ], diagnosticCodes, [ DiagnosticCodeMap.unknownDiagnosticCode ]);
 
         this.commentFlags = [];
         for (let token of tokens) {
@@ -724,7 +724,7 @@ export class BrsFile {
         } else if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
             const match = /^("?)(pkg|libpkg):/.exec(currentToken.text);
             if (match) {
-                const [, openingQuote, fileProtocol] = match;
+                const [ , openingQuote, fileProtocol ] = match;
                 //include every absolute file path from this scope
                 for (const file of scope.getAllFiles()) {
                     const pkgPath = `${fileProtocol}:/${file.pkgPath.replace(/\\/g, '/')}`;
@@ -751,9 +751,17 @@ export class BrsFile {
             }
         }
 
+        //temporary workaround - the enums are not appearing on namspace, so we have to look them up first
+        let enumCompletions = this.getEnumStatementCompletions(currentToken, this.parseMode);
         let namespaceCompletions = this.getNamespaceCompletions(currentToken, this.parseMode, scope);
         if (namespaceCompletions.length > 0) {
-            return namespaceCompletions;
+            return [ ...namespaceCompletions, ...enumCompletions ];
+        }
+
+        let enumMemberCompletions = this.getEnumMemberStatementCompletions(currentToken, this.parseMode);
+        if (enumMemberCompletions.length > 0) {
+            // no other completion is valid, in this case
+            return enumMemberCompletions;
         }
         //determine if cursor is inside a function
         let functionScope = this.getFunctionScopeAtPosition(position);
@@ -761,9 +769,9 @@ export class BrsFile {
             //we aren't in any function scope, so return the keyword completions and namespaces
             if (this.getTokenBefore(currentToken, TokenKind.New)) {
                 // there's a new keyword, so only class types are viable here
-                return [...this.getGlobalClassStatementCompletions(currentToken, this.parseMode)];
+                return [ ...this.getGlobalClassStatementCompletions(currentToken, this.parseMode) ];
             } else {
-                return [...KeywordCompletions, ...this.getGlobalClassStatementCompletions(currentToken, this.parseMode), ...namespaceCompletions];
+                return [ ...KeywordCompletions, ...this.getGlobalClassStatementCompletions(currentToken, this.parseMode), ...namespaceCompletions, ...this.getEnumStatementCompletions(currentToken, this.parseMode) ];
             }
         }
 
@@ -781,15 +789,11 @@ export class BrsFile {
         }
 
         if (this.isPositionNextToTokenKind(position, TokenKind.Dot)) {
-            if (namespaceCompletions.length > 0) {
-                //if we matched a namespace, after a dot, it can't be anything else but something from our namespace completions
-                return namespaceCompletions;
-            }
 
             const selfClassMemberCompletions = this.getClassMemberCompletions(position, currentToken, functionScope, scope);
 
             if (selfClassMemberCompletions.size > 0) {
-                return [...selfClassMemberCompletions.values()].filter((i) => i.label !== 'new');
+                return [ ...selfClassMemberCompletions.values() ].filter((i) => i.label !== 'new');
             }
 
             if (!this.getClassFromMReference(position, currentToken, functionScope)) {
@@ -807,6 +811,9 @@ export class BrsFile {
             //include class names
             result.push(...classNameCompletions);
 
+            //include enums
+            result.push(...enumCompletions);
+
             //include the global callables
             result.push(...scope.getCallablesAsCompletions(this.parseMode));
 
@@ -823,10 +830,10 @@ export class BrsFile {
             let variables = functionScope.variableDeclarations;
             for (let variable of variables) {
                 //skip duplicate variable names
-                if (names[variable.name.toLowerCase()]) {
+                if (names[ variable.name.toLowerCase() ]) {
                     continue;
                 }
-                names[variable.name.toLowerCase()] = true;
+                names[ variable.name.toLowerCase() ] = true;
                 result.push({
                     label: variable.name,
                     kind: isFunctionType(variable.type) ? CompletionItemKind.Function : CompletionItemKind.Variable
@@ -839,10 +846,10 @@ export class BrsFile {
                 for (let stmt of namespaces) {
                     let firstPart = stmt.nameExpression.getNameParts().shift();
                     //skip duplicate namespace names
-                    if (names[firstPart.toLowerCase()]) {
+                    if (names[ firstPart.toLowerCase() ]) {
                         continue;
                     }
-                    names[firstPart.toLowerCase()] = true;
+                    names[ firstPart.toLowerCase() ] = true;
                     result.push({
                         label: firstPart,
                         kind: CompletionItemKind.Module
@@ -867,7 +874,7 @@ export class BrsFile {
         if (classStatement) {
             let classes = scope.getClassHierarchy(classStatement.item.getName(ParseMode.BrighterScript).toLowerCase());
             for (let cs of classes) {
-                for (let member of [...cs?.item?.fields ?? [], ...cs?.item?.methods ?? []]) {
+                for (let member of [ ...cs?.item?.fields ?? [], ...cs?.item?.methods ?? [] ]) {
                     if (!results.has(member.name.text.toLowerCase())) {
                         results.set(member.name.text.toLowerCase(), {
                             label: member.name.text,
@@ -896,7 +903,7 @@ export class BrsFile {
             return [];
         }
         let results = new Map<string, CompletionItem>();
-        let completionName = this.getPartialVariableName(currentToken, [TokenKind.New])?.toLowerCase();
+        let completionName = this.getPartialVariableName(currentToken, [ TokenKind.New ])?.toLowerCase();
         if (completionName?.includes('.')) {
             return [];
         }
@@ -904,7 +911,7 @@ export class BrsFile {
         for (let scope of scopes) {
             let classMap = scope.getClassMap();
             // let viableKeys = [...classMap.keys()].filter((k) => k.startsWith(completionName));
-            for (const key of [...classMap.keys()]) {
+            for (const key of [ ...classMap.keys() ]) {
                 let cs = classMap.get(key).item;
                 if (!results.has(cs.name.text)) {
                     results.set(cs.name.text, {
@@ -914,7 +921,62 @@ export class BrsFile {
                 }
             }
         }
-        return [...results.values()];
+        return [ ...results.values() ];
+    }
+
+    private getEnumStatementCompletions(currentToken: Token, parseMode: ParseMode): CompletionItem[] {
+        if (parseMode === ParseMode.BrightScript) {
+            return [];
+        }
+        let results = new Map<string, CompletionItem>();
+        let completionName = this.getPartialVariableName(currentToken)?.toLowerCase();
+        let scopes = this.program.getScopesForFile(this);
+        for (let scope of scopes) {
+            let enumMap = scope.getEnumMap();
+            for (const key of [ ...enumMap.keys() ]) {
+                let es = enumMap.get(key).item;
+                if (es.fullName.startsWith(completionName)) {
+
+                    if (!results.has(es.fullName)) {
+                        results.set(es.fullName, {
+                            label: es.name,
+                            kind: CompletionItemKind.Enum
+                        });
+                    }
+                }
+            }
+        }
+        return [ ...results.values() ];
+    }
+    private getEnumMemberStatementCompletions(currentToken: Token, parseMode: ParseMode): CompletionItem[] {
+        if (parseMode === ParseMode.BrightScript) {
+            return [];
+        }
+        let results = new Map<string, CompletionItem>();
+        let completionName = this.getPartialVariableName(currentToken)?.toLowerCase();
+        let scopes = this.program.getScopesForFile(this);
+        for (let scope of scopes) {
+            let enumMap = scope.getEnumMap();
+            for (const key of [ ...enumMap.keys() ]) {
+                let es = enumMap.get(key).item;
+                if (completionName.startsWith(es.fullName) && completionName.length > es.fullName.length) {
+
+                    for (const esm of es.getMembers()) {
+                        const name = es.fullName + "." + esm.name;
+                        if (name.startsWith(completionName)) {
+                            if (!results.has(name)) {
+                                results.set(name, {
+                                    label: esm.name,
+                                    kind: CompletionItemKind.EnumMember
+                                });
+
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return [ ...results.values() ];
     }
 
     private getNamespaceCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
@@ -923,7 +985,7 @@ export class BrsFile {
             return [];
         }
 
-        let completionName = this.getPartialVariableName(currentToken, [TokenKind.New]);
+        let completionName = this.getPartialVariableName(currentToken, [ TokenKind.New ]);
         if (!completionName) {
             return [];
         }
@@ -933,7 +995,7 @@ export class BrsFile {
         let newToken = this.getTokenBefore(currentToken, TokenKind.New);
 
         let result = new Map<string, CompletionItem>();
-        for (let [, namespace] of scope.namespaceLookup) {
+        for (let [ , namespace ] of scope.namespaceLookup) {
             //completionName = "NameA."
             //completionName = "NameA.Na
             //NameA
@@ -941,7 +1003,7 @@ export class BrsFile {
             //NameA.NameB.NameC
             if (namespace.fullName.toLowerCase() === closestParentNamespaceName.toLowerCase()) {
                 //add all of this namespace's immediate child namespaces, bearing in mind if we are after a new keyword
-                for (let [, ns] of namespace.namespaces) {
+                for (let [ , ns ] of namespace.namespaces) {
                     if (!newToken || ns.statements.find((s) => isClassStatement(s))) {
                         if (!result.has(ns.lastPartName)) {
                             result.set(ns.lastPartName, {
@@ -968,13 +1030,28 @@ export class BrsFile {
                                 kind: CompletionItemKind.Function
                             });
                         }
+                    } else if (isEnumStatement(stmt) && !newToken) {
+                        if (!result.has(stmt.name)) {
+                            result.set(stmt.name, {
+                                label: stmt.name,
+                                kind: CompletionItemKind.Enum
+                            });
+                        }
                     }
+                    //  else if (isEnumMemberStatement(stmt) && !newToken) {
+                    //     if (!result.has(stmt.name)) {
+                    //         result.set(stmt.name, {
+                    //             label: stmt.name,
+                    //             kind: CompletionItemKind.EnumMember
+                    //         });
+                    //     }
+                    // }
 
                 }
 
             }
         }
-        return [...result.values()];
+        return [ ...result.values() ];
     }
 
     private getNamespaceDefinitions(token: Token, file: BrsFile): Location {
@@ -984,8 +1061,8 @@ export class BrsFile {
         }
         let location;
 
-        const nameParts = this.getPartialVariableName(token, [TokenKind.New]).split('.');
-        const endName = nameParts[nameParts.length - 1].toLowerCase();
+        const nameParts = this.getPartialVariableName(token, [ TokenKind.New ]).split('.');
+        const endName = nameParts[ nameParts.length - 1 ].toLowerCase();
         const namespaceName = nameParts.slice(0, -1).join('.').toLowerCase();
 
         const statementHandler = (statement: NamespaceStatement) => {
@@ -1019,13 +1096,13 @@ export class BrsFile {
      * Given a current token, walk
      */
     public getPartialVariableName(currentToken: Token, excludeTokens: TokenKind[] = null) {
-        let identifierAndDotKinds = [TokenKind.Identifier, ...AllowedLocalIdentifiers, TokenKind.Dot];
+        let identifierAndDotKinds = [ TokenKind.Identifier, ...AllowedLocalIdentifiers, TokenKind.Dot ];
 
         //consume tokens backwards until we find something other than a dot or an identifier
         let tokens = [];
         const parser = this.parser;
         for (let i = parser.tokens.indexOf(currentToken); i >= 0; i--) {
-            currentToken = parser.tokens[i];
+            currentToken = parser.tokens[ i ];
             if (identifierAndDotKinds.includes(currentToken.kind) && (!excludeTokens || !excludeTokens.includes(currentToken.kind))) {
                 tokens.unshift(currentToken.text);
             } else {
@@ -1063,7 +1140,7 @@ export class BrsFile {
     private getTokenBefore(currentToken: Token, tokenKind: TokenKind): Token {
         const index = this.parser.tokens.indexOf(currentToken);
         for (let i = index - 1; i >= 0; i--) {
-            currentToken = this.parser.tokens[i];
+            currentToken = this.parser.tokens[ i ];
             if (currentToken.kind === TokenKind.Newline) {
                 break;
             } else if (currentToken.kind === tokenKind) {
@@ -1076,7 +1153,7 @@ export class BrsFile {
     private tokenFollows(currentToken: Token, tokenKind: TokenKind): boolean {
         const index = this.parser.tokens.indexOf(currentToken);
         if (index > 0) {
-            return this.parser.tokens[index - 1].kind === tokenKind;
+            return this.parser.tokens[ index - 1 ].kind === tokenKind;
         }
         return false;
     }
@@ -1084,7 +1161,7 @@ export class BrsFile {
     public getTokensUntil(currentToken: Token, tokenKind: TokenKind, direction: -1 | 1 = -1) {
         let tokens = [];
         for (let i = this.parser.tokens.indexOf(currentToken); direction === -1 ? i >= 0 : i === this.parser.tokens.length; i += direction) {
-            currentToken = this.parser.tokens[i];
+            currentToken = this.parser.tokens[ i ];
             if (currentToken.kind === TokenKind.Newline || currentToken.kind === tokenKind) {
                 break;
             }
@@ -1096,7 +1173,7 @@ export class BrsFile {
     public getPreviousToken(token: Token) {
         const parser = this.parser;
         let idx = parser.tokens.indexOf(token);
-        return parser.tokens[idx - 1];
+        return parser.tokens[ idx - 1 ];
     }
 
     /**
@@ -1133,7 +1210,7 @@ export class BrsFile {
                 let scopes = this.program.getScopesForFile(this);
                 for (let scope of scopes) {
                     let namespace = scope.namespaceLookup.get(namespaceName.toLowerCase());
-                    if (namespace.functionStatements[lowerCalleeName]) {
+                    if (namespace.functionStatements[ lowerCalleeName ]) {
                         return true;
                     }
                 }
@@ -1150,19 +1227,19 @@ export class BrsFile {
     public getClosestToken(position: Position) {
         let tokens = this.parser.tokens;
         for (let i = 0; i < tokens.length; i++) {
-            let token = tokens[i];
+            let token = tokens[ i ];
             if (util.rangeContains(token.range, position)) {
                 return token;
             }
             //if the position less than this token range, then this position touches no token,
             if (util.positionIsGreaterThanRange(position, token.range) === false) {
-                let t = tokens[i - 1];
+                let t = tokens[ i - 1 ];
                 //return the token or the first token
-                return t ? t : tokens[0];
+                return t ? t : tokens[ 0 ];
             }
         }
         //return the last token
-        return tokens[tokens.length - 1];
+        return tokens[ tokens.length - 1 ];
     }
 
     /**
@@ -1320,7 +1397,7 @@ export class BrsFile {
             let cs = this.parser.references.classStatements.find((cs) => cs.classKeyword.range === classToken.range);
             if (cs?.parentClassName) {
                 const nameParts = cs.parentClassName.getNameParts();
-                let extendedClass = this.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
+                let extendedClass = this.getClassFileLink(nameParts[ nameParts.length - 1 ], nameParts.slice(0, -1).join('.'));
                 if (extendedClass) {
                     results.push(Location.create(util.pathToUri(extendedClass.file.pathAbsolute), extendedClass.item.range));
                 }
@@ -1488,7 +1565,7 @@ export class BrsFile {
             return [];
         }
         let resultsMap = new Map<string, SignatureInfoObj>();
-        for (let [, namespace] of scope.namespaceLookup) {
+        for (let [ , namespace ] of scope.namespaceLookup) {
             //completionName = "NameA."
             //completionName = "NameA.Na
             //NameA
@@ -1508,7 +1585,7 @@ export class BrsFile {
             }
         }
 
-        return [...resultsMap.values()];
+        return [ ...resultsMap.values() ];
     }
 
     public getSignatureHelpForStatement(statement: Statement): SignatureInfoObj {
@@ -1543,7 +1620,7 @@ export class BrsFile {
                     continue;
                 }
                 // if we already had a new line as the last token then exit out
-                if (functionComments[0] === currentToken.text) {
+                if (functionComments[ 0 ] === currentToken.text) {
                     break;
                 }
                 functionComments.unshift(currentToken.text);
@@ -1587,7 +1664,7 @@ export class BrsFile {
             }
             if (walkParents && classStatement.parentClassName) {
                 const nameParts = classStatement.parentClassName.getNameParts();
-                classStatement = this.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'))?.item;
+                classStatement = this.getClassFileLink(nameParts[ nameParts.length - 1 ], nameParts.slice(0, -1).join('.'))?.item;
             } else {
                 break;
             }
