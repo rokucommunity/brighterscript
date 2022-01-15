@@ -2896,6 +2896,9 @@ export class Parser {
             },
             DottedSetStatement: e => {
                 this.addPropertyHints(e.name);
+            },
+            EnumStatement: e => {
+                this._references.enumStatements.push(e);
             }
         }), {
             walkMode: WalkMode.visitAllRecursive
