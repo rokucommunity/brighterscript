@@ -1350,7 +1350,8 @@ export class Parser {
         if (firstIdentifier) {
             // force it into an identifier so the AST makes some sense
             firstIdentifier.kind = TokenKind.Identifier;
-            expr = new VariableExpression(firstIdentifier, null);
+            const varExpr = new VariableExpression(firstIdentifier, null);
+            expr = varExpr;
 
             //consume multiple dot identifiers (i.e. `Name.Space.Can.Have.Many.Parts`)
             while (this.check(TokenKind.Dot)) {
@@ -1374,6 +1375,11 @@ export class Parser {
                 // force it into an identifier so the AST makes some sense
                 identifier.kind = TokenKind.Identifier;
                 expr = new DottedGetExpression(expr, identifier, dot);
+
+                //if this is the leftmost DottedGetExpression, store it on references
+                if ((expr as any) === varExpr) {
+                    this._references.primaryDottedGetExpressions.push(expr);
+                }
             }
         }
         return new NamespacedVariableNameExpression(expr);
@@ -2893,9 +2899,15 @@ export class Parser {
             },
             DottedGetExpression: e => {
                 this.addPropertyHints(e.name);
+                if (isVariableExpression(e.obj)) {
+                    this._references.primaryDottedGetExpressions.push(e);
+                }
             },
             DottedSetStatement: e => {
                 this.addPropertyHints(e.name);
+            },
+            EnumStatement: e => {
+                this._references.enumStatements.push(e);
             }
         }), {
             walkMode: WalkMode.visitAllRecursive
@@ -2979,6 +2991,11 @@ export class References {
             return result;
         });
     }
+
+    /**
+     * All the dotted get expressions that start with a VariableExpression.
+     */
+    public primaryDottedGetExpressions = [] as DottedGetExpression[];
 
     public importStatements = [] as ImportStatement[];
     public libraryStatements = [] as LibraryStatement[];
