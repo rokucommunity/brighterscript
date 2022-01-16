@@ -7,14 +7,13 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
 import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement, EnumStatement } from './parser';
+import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement, EnumStatement, DottedGetExpression } from './parser';
 import { ParseMode } from './parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isDottedGetExpression, isVariableExpression, isEnumStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 
@@ -51,6 +50,12 @@ export class Scope {
      */
     public get namespaceLookup() {
         return this.cache.getOrAdd('namespaceLookup', () => this.buildNamespaceLookup());
+    }
+    /**
+     * A dictionary of enums, indexed by the lower case full name of each enum.
+     */
+    public get enumLookup() {
+        return this.cache.getOrAdd('enumLookup', () => this.buildEnumLookup());
     }
 
     /**
@@ -415,6 +420,35 @@ export class Scope {
         return namespaceLookup;
     }
 
+    public buildEnumLookup() {
+        let lookup = new Map<string, EnumContainer>();
+        this.enumerateBrsFiles((file) => {
+            for (let [key, es] of file.parser.references.enumStatementLookup) {
+                if (!lookup.has(key)) {
+                    lookup.set(key, {
+                        file: file,
+                        fullName: key,
+                        nameRange: es.range,
+                        lastPartName: es.name,
+                        statement: es,
+                    });
+                    for (const ems of es.getMembers()) {
+                        const fullMemberName = `${key}.${ems.name.toLowerCase()}`;
+                        lookup.set(fullMemberName, {
+                            file: file,
+                            fullName: fullMemberName,
+                            nameRange: ems.range,
+                            lastPartName: ems.name,
+                            statement: es,
+                        });
+                    }
+                }
+            }
+        });
+        return lookup;
+    }
+
+
     public getAllNamespaceStatements() {
         let result = [] as NamespaceStatement[];
         this.enumerateBrsFiles((file) => {
@@ -491,6 +525,7 @@ export class Scope {
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.diagnosticDetectInvalidFunctionExpressionTypes(file);
+            this.detectUnknownEnumMembers(file);
         });
     }
 
@@ -1025,6 +1060,44 @@ export class Scope {
         }
         return items;
     }
+
+    private detectUnknownEnumMembers(file: BrsFile) {
+        if (!isBrsFile(file)) {
+            return;
+        }
+        (file.parser as any)._references = undefined;
+        for (const dg of file.parser.references.primaryDottedGetExpressions) {
+            let nameParts = this.getAllDottedGetParts(dg);
+            let name = nameParts.pop();
+            let parentPath = nameParts.join('.');
+            let ec = this.enumLookup.get(parentPath);
+            if (ec && !this.enumLookup.has(`${parentPath}.${name}`)) {
+                this.diagnostics.push({
+                    file: file,
+                    ...DiagnosticMessages.unknownEnumValue(name, ec.fullName),
+                    range: dg.range,
+                    relatedInformation: [{
+                        message: 'Enum declared here',
+                        location: Location.create(
+                            URI.file(ec.file.pathAbsolute).toString(),
+                            ec.statement.range
+                        )
+                    }]
+                });
+
+            }
+        }
+    }
+
+    getAllDottedGetParts(dg: DottedGetExpression) {
+        let parts = [dg?.name?.text];
+        let nextPart = dg.obj;
+        while (isDottedGetExpression(nextPart) || isVariableExpression(nextPart)) {
+            parts.push(nextPart?.name?.text);
+            nextPart = isDottedGetExpression(nextPart) ? nextPart.obj : undefined;
+        }
+        return parts.reverse();
+    }
 }
 
 interface NamespaceContainer {
@@ -1037,6 +1110,14 @@ interface NamespaceContainer {
     functionStatements: Record<string, FunctionStatement>;
     enumStatements: Map<string, EnumStatement>;
     namespaces: Map<string, NamespaceContainer>;
+}
+
+interface EnumContainer {
+    file: BscFile;
+    fullName: string;
+    nameRange: Range;
+    lastPartName: string;
+    statement: EnumStatement;
 }
 
 interface AugmentedNewExpression extends NewExpression {
