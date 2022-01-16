@@ -16,6 +16,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
+import { isBrsFile, isXmlFile, isClassStatement, isFunctionStatement, isEnumStatement, isCustomType, isFunctionType, isClassMethodStatement, isDottedGetExpression, isVariableExpression } from '.';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
