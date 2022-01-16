@@ -113,7 +113,7 @@ export class Scope {
     }
 
     /**
-     * A dictionary of all enums in this scope. This includes namespaced classes always with their full name.
+     * A dictionary of all enums in this scope. This includes namespaced enums always with their full name.
      * The key is stored in lower case
      */
     public getEnumMap(): Map<string, FileLink<EnumStatement>> {
@@ -121,11 +121,11 @@ export class Scope {
             const map = new Map<string, FileLink<EnumStatement>>();
             this.enumerateBrsFiles((file) => {
                 if (isBrsFile(file)) {
-                    for (let e of file.parser.references.enumStatements) {
-                        const lowerClassName = e.fullName.toLowerCase();
-                        //only track classes with a defined name (i.e. exclude nameless malformed classes)
-                        if (lowerClassName) {
-                            map.set(lowerClassName, { item: e, file: file });
+                    for (let enumStmt of file.parser.references.enumStatements) {
+                        const lowerEnumName = enumStmt.fullName.toLowerCase();
+                        //only track enums with a defined name (i.e. exclude nameless malformed enums)
+                        if (lowerEnumName) {
+                            map.set(lowerEnumName, { item: enumStmt, file: file });
                         }
                     }
                 }

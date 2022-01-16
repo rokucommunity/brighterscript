@@ -958,15 +958,15 @@ export class BrsFile {
         for (let scope of scopes) {
             let enumMap = scope.getEnumMap();
             for (const key of [...enumMap.keys()]) {
-                let es = enumMap.get(key).item;
-                if (completionName.startsWith(es.fullName) && completionName.length > es.fullName.length) {
+                let enumStmt = enumMap.get(key).item;
+                if (completionName.startsWith(enumStmt.fullName) && completionName.length > enumStmt.fullName.length) {
 
-                    for (const esm of es.getMembers()) {
-                        const name = es.fullName + '.' + esm.name;
+                    for (const member of enumStmt.getMembers()) {
+                        const name = enumStmt.fullName + '.' + member.name;
                         if (name.startsWith(completionName)) {
                             if (!results.has(name)) {
                                 results.set(name, {
-                                    label: esm.name,
+                                    label: member.name,
                                     kind: CompletionItemKind.EnumMember
                                 });
 
