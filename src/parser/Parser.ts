@@ -95,6 +95,7 @@ import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { EnumMemberStatement, EnumStatement, RegexLiteralExpression } from '.';
 import { Cache } from '../Cache';
+import { debug } from 'console';
 
 export class Parser {
     /**
@@ -2861,38 +2862,47 @@ export class Parser {
      */
     private findReferences() {
         this._references = new References();
-
+        debug;
         this.ast.walk(createVisitor({
             AssignmentStatement: s => {
+                debug;
                 this._references.assignmentStatements.push(s);
             },
             ClassStatement: s => {
+                debug;
                 this._references.classStatements.push(s);
             },
             NamespaceStatement: s => {
+                debug;
                 this._references.namespaceStatements.push(s);
             },
             FunctionStatement: s => {
+                debug;
                 this._references.functionStatements.push(s);
             },
             ImportStatement: s => {
+                debug;
                 this._references.importStatements.push(s);
             },
             LibraryStatement: s => {
                 this._references.libraryStatements.push(s);
             },
             FunctionExpression: (expression, parent) => {
+                debug;
                 if (!isClassMethodStatement(parent)) {
                     this._references.functionExpressions.push(expression);
                 }
             },
             NewExpression: e => {
+                debug;
                 this._references.newExpressions.push(e);
             },
             AALiteralExpression: e => {
+                debug;
                 this.addPropertyHints(e);
             },
             DottedGetExpression: e => {
+                debug;
                 this.addPropertyHints(e.name);
             },
             DottedSetStatement: e => {

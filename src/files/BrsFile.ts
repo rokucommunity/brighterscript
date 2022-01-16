@@ -22,7 +22,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement } from '../astUtils/reflection';
+import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement } from '../astUtils/reflection';
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
@@ -751,9 +751,17 @@ export class BrsFile {
             }
         }
 
+        //temporary workaround - the enums are not appearing on namspace, so we have to look them up first
+        let enumCompletions = this.getEnumStatementCompletions(currentToken, this.parseMode);
         let namespaceCompletions = this.getNamespaceCompletions(currentToken, this.parseMode, scope);
         if (namespaceCompletions.length > 0) {
-            return namespaceCompletions;
+            return [...namespaceCompletions, ...enumCompletions];
+        }
+
+        let enumMemberCompletions = this.getEnumMemberStatementCompletions(currentToken, this.parseMode);
+        if (enumMemberCompletions.length > 0) {
+            // no other completion is valid, in this case
+            return enumMemberCompletions;
         }
         //determine if cursor is inside a function
         let functionScope = this.getFunctionScopeAtPosition(position);
@@ -763,7 +771,7 @@ export class BrsFile {
                 // there's a new keyword, so only class types are viable here
                 return [...this.getGlobalClassStatementCompletions(currentToken, this.parseMode)];
             } else {
-                return [...KeywordCompletions, ...this.getGlobalClassStatementCompletions(currentToken, this.parseMode), ...namespaceCompletions];
+                return [...KeywordCompletions, ...this.getGlobalClassStatementCompletions(currentToken, this.parseMode), ...namespaceCompletions, ...this.getEnumStatementCompletions(currentToken, this.parseMode)];
             }
         }
 
@@ -781,10 +789,6 @@ export class BrsFile {
         }
 
         if (this.isPositionNextToTokenKind(position, TokenKind.Dot)) {
-            if (namespaceCompletions.length > 0) {
-                //if we matched a namespace, after a dot, it can't be anything else but something from our namespace completions
-                return namespaceCompletions;
-            }
 
             const selfClassMemberCompletions = this.getClassMemberCompletions(position, currentToken, functionScope, scope);
 
@@ -806,6 +810,9 @@ export class BrsFile {
 
             //include class names
             result.push(...classNameCompletions);
+
+            //include enums
+            result.push(...enumCompletions);
 
             //include the global callables
             result.push(...scope.getCallablesAsCompletions(this.parseMode));
@@ -917,6 +924,61 @@ export class BrsFile {
         return [...results.values()];
     }
 
+    private getEnumStatementCompletions(currentToken: Token, parseMode: ParseMode): CompletionItem[] {
+        if (parseMode === ParseMode.BrightScript) {
+            return [];
+        }
+        let results = new Map<string, CompletionItem>();
+        let completionName = this.getPartialVariableName(currentToken)?.toLowerCase();
+        let scopes = this.program.getScopesForFile(this);
+        for (let scope of scopes) {
+            let enumMap = scope.getEnumMap();
+            for (const key of [...enumMap.keys()]) {
+                let es = enumMap.get(key).item;
+                if (es.fullName.startsWith(completionName)) {
+
+                    if (!results.has(es.fullName)) {
+                        results.set(es.fullName, {
+                            label: es.name,
+                            kind: CompletionItemKind.Enum
+                        });
+                    }
+                }
+            }
+        }
+        return [...results.values()];
+    }
+    private getEnumMemberStatementCompletions(currentToken: Token, parseMode: ParseMode): CompletionItem[] {
+        if (parseMode === ParseMode.BrightScript) {
+            return [];
+        }
+        let results = new Map<string, CompletionItem>();
+        let completionName = this.getPartialVariableName(currentToken)?.toLowerCase();
+        let scopes = this.program.getScopesForFile(this);
+        for (let scope of scopes) {
+            let enumMap = scope.getEnumMap();
+            for (const key of [...enumMap.keys()]) {
+                let enumStmt = enumMap.get(key).item;
+                if (completionName.startsWith(enumStmt.fullName) && completionName.length > enumStmt.fullName.length) {
+
+                    for (const member of enumStmt.getMembers()) {
+                        const name = enumStmt.fullName + '.' + member.name;
+                        if (name.startsWith(completionName)) {
+                            if (!results.has(name)) {
+                                results.set(name, {
+                                    label: member.name,
+                                    kind: CompletionItemKind.EnumMember
+                                });
+
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return [...results.values()];
+    }
+
     private getNamespaceCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
         //BrightScript does not support namespaces, so return an empty list in that case
         if (parseMode === ParseMode.BrightScript) {
@@ -968,7 +1030,22 @@ export class BrsFile {
                                 kind: CompletionItemKind.Function
                             });
                         }
+                    } else if (isEnumStatement(stmt) && !newToken) {
+                        if (!result.has(stmt.name)) {
+                            result.set(stmt.name, {
+                                label: stmt.name,
+                                kind: CompletionItemKind.Enum
+                            });
+                        }
                     }
+                    //  else if (isEnumMemberStatement(stmt) && !newToken) {
+                    //     if (!result.has(stmt.name)) {
+                    //         result.set(stmt.name, {
+                    //             label: stmt.name,
+                    //             kind: CompletionItemKind.EnumMember
+                    //         });
+                    //     }
+                    // }
 
                 }
 
