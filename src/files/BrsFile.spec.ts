@@ -194,11 +194,10 @@ describe('BrsFile', () => {
                 names = result.map(x => x.label);
                 expect(names).to.includes('sayHello');
             });
-
         });
-        describe('enums', () => {
 
-            it.only('gets enum completions', () => {
+        describe('enums', () => {
+            it('gets enum completions', () => {
                 //eslint-disable-next-line @typescript-eslint/no-floating-promises
                 program.addOrReplaceFile('source/main.bs', `
                     enum foo
