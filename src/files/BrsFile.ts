@@ -1038,17 +1038,7 @@ export class BrsFile {
                             });
                         }
                     }
-                    //  else if (isEnumMemberStatement(stmt) && !newToken) {
-                    //     if (!result.has(stmt.name)) {
-                    //         result.set(stmt.name, {
-                    //             label: stmt.name,
-                    //             kind: CompletionItemKind.EnumMember
-                    //         });
-                    //     }
-                    // }
-
                 }
-
             }
         }
         return [...result.values()];
