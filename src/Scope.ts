@@ -16,7 +16,8 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isXmlFile, isClassStatement, isFunctionStatement, isEnumStatement, isCustomType, isFunctionType, isClassMethodStatement, isDottedGetExpression, isVariableExpression, createVisitor, WalkMode } from '.';
+import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDottedGetExpression, isEnumStatement, isFunctionStatement, isFunctionType, isVariableExpression, isXmlFile } from './astUtils/reflection';
+import { createVisitor, WalkMode } from './astUtils/visitors';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -388,7 +389,7 @@ export class Scope {
                             classStatements: {},
                             functionStatements: {},
                             statements: [],
-                            enumStatements: new Map<string, EnumStatement>(),
+                            enumStatements: new Map<string, EnumStatement>()
                         });
                     }
                 }
@@ -431,7 +432,7 @@ export class Scope {
                         fullName: key,
                         nameRange: es.range,
                         lastPartName: es.name,
-                        statement: es,
+                        statement: es
                     });
                     for (const ems of es.getMembers()) {
                         const fullMemberName = `${key}.${ems.name.toLowerCase()}`;
@@ -440,7 +441,7 @@ export class Scope {
                             fullName: fullMemberName,
                             nameRange: ems.range,
                             lastPartName: ems.name,
-                            statement: es,
+                            statement: es
                         });
                     }
                 }
