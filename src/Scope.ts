@@ -14,7 +14,7 @@ import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isDottedGetExpression, isVariableExpression } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isDottedGetExpression, isVariableExpression, isEnumStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 
@@ -388,7 +388,7 @@ export class Scope {
                             classStatements: {},
                             functionStatements: {},
                             statements: [],
-                            enumStatements: {}
+                            enumStatements: new Map<string, EnumStatement>(),
                         });
                     }
                 }
@@ -399,8 +399,8 @@ export class Scope {
                         ns.classStatements[statement.name.text.toLowerCase()] = statement;
                     } else if (isFunctionStatement(statement) && statement.name) {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
-                    } else if (isFunctionStatement(statement) && statement.name) {
-                        ns.functionStatements[statement.name.text.toLowerCase()] = statement;
+                    } else if (isEnumStatement(statement) && statement.fullName) {
+                        ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
                     }
                 }
             }
@@ -1109,7 +1109,7 @@ interface NamespaceContainer {
     statements: Statement[];
     classStatements: Record<string, ClassStatement>;
     functionStatements: Record<string, FunctionStatement>;
-    enumStatements: Record<string, EnumStatement>;
+    enumStatements: Map<string, EnumStatement>;
     namespaces: Map<string, NamespaceContainer>;
 }
 
