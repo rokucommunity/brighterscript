@@ -231,44 +231,48 @@ describe('BrsFile', () => {
                 `);
 
                 let result;
-                let names;
                 result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 26));
-                names = result.map(x => x.label);
-                expect(names).to.includes('foo');
-                expect(names).to.includes('foo3');
-                expect(names).to.includes('fooFace');
-                expect(names).to.includes('fooClass');
+                expect(result.map(x => x.label)).include.members([
+                    'foo',
+                    'foo3',
+                    'fooFace',
+                    'fooClass'
+                ]);
                 expect(result[2].kind).to.equal(CompletionItemKind.Enum);
                 expect(result[3].kind).to.equal(CompletionItemKind.Enum);
 
 
                 result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 27));
-                names = result.map(x => x.label);
-                expect(names).to.includes('foo');
-                expect(names).to.includes('foo3');
-                expect(names).to.includes('fooFace');
-                expect(names).to.includes('fooClass');
+                expect(result.map(x => x.label)).include.members([
+                    'foo',
+                    'foo3',
+                    'fooFace',
+                    'fooClass'
+                ]);
                 expect(result[2].kind).to.equal(CompletionItemKind.Enum);
                 expect(result[3].kind).to.equal(CompletionItemKind.Enum);
 
                 result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 30));
-                names = result.map(x => x.label);
-                expect(names).to.includes('bar1');
-                expect(names).to.includes('bar2');
+                expect(result.map(x => x.label)).include.members([
+                    'bar1',
+                    'bar2'
+                ]);
                 expect(result[0].kind).to.equal(CompletionItemKind.EnumMember);
                 expect(result[1].kind).to.equal(CompletionItemKind.EnumMember);
 
                 result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(9, 33));
-                names = result.map(x => x.label);
-                expect(names).to.includes('foo2');
-                expect(names).to.includes('fooFace2');
-                expect(names).to.includes('fooClass2');
+                expect(result.map(x => x.label)).include.members([
+                    'foo2',
+                    'fooFace2',
+                    'fooClass2'
+                ]);
                 expect(result[2].kind).to.equal(CompletionItemKind.Enum);
 
                 result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(9, 36));
-                names = result.map(x => x.label);
-                expect(names).to.includes('bar2_1');
-                expect(names).to.includes('bar2_2');
+                expect(result.map(x => x.label)).include.members([
+                    'bar2_1',
+                    'bar2_2'
+                ]);
                 expect(result[0].kind).to.equal(CompletionItemKind.EnumMember);
                 expect(result[1].kind).to.equal(CompletionItemKind.EnumMember);
             });
