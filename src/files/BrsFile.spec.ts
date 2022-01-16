@@ -172,7 +172,6 @@ describe('BrsFile', () => {
         describe('namespaces', () => {
 
             it('gets namespace completions', () => {
-                //eslint-disable-next-line @typescript-eslint/no-floating-promises
                 program.addOrReplaceFile('source/main.bs', `
                     namespace foo.bar
                         function sayHello()
@@ -198,7 +197,6 @@ describe('BrsFile', () => {
 
         describe('enums', () => {
             it('gets enum completions', () => {
-                //eslint-disable-next-line @typescript-eslint/no-floating-promises
                 program.addOrReplaceFile('source/main.bs', `
                     enum foo
                         bar1
