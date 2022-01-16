@@ -198,7 +198,7 @@ describe('BrsFile', () => {
         });
         describe('enums', () => {
 
-            it.only('gets enum completions', () => {
+            it('gets enum completions', () => {
                 //eslint-disable-next-line @typescript-eslint/no-floating-promises
                 program.addOrReplaceFile('source/main.bs', `
                     enum foo
