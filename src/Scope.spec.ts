@@ -848,7 +848,7 @@ describe('Scope', () => {
 
     describe('buildEnumLookup', () => {
 
-        it('builds enum lookup', () => {
+        it.only('builds enum lookup', () => {
             const sourceScope = program.getScopeByName('source');
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile('source/main.bs', `

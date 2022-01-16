@@ -16,7 +16,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isXmlFile, isClassStatement, isFunctionStatement, isEnumStatement, isCustomType, isFunctionType, isClassMethodStatement, isDottedGetExpression, isVariableExpression } from '.';
+import { isBrsFile, isXmlFile, isClassStatement, isFunctionStatement, isEnumStatement, isCustomType, isFunctionType, isClassMethodStatement, isDottedGetExpression, isVariableExpression, createVisitor, WalkMode } from '.';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -1066,31 +1066,32 @@ export class Scope {
         if (!isBrsFile(file)) {
             return;
         }
-        (file.parser as any)._references = undefined;
-        for (const dg of file.parser.references.primaryDottedGetExpressions) {
-            let nameParts = this.getAllDottedGetParts(dg);
-            let name = nameParts.pop();
-            let parentPath = nameParts.join('.');
-            let ec = this.enumLookup.get(parentPath);
-            if (ec && !this.enumLookup.has(`${parentPath}.${name}`)) {
-                this.diagnostics.push({
-                    file: file,
-                    ...DiagnosticMessages.unknownEnumValue(name, ec.fullName),
-                    range: dg.range,
-                    relatedInformation: [{
-                        message: 'Enum declared here',
-                        location: Location.create(
-                            URI.file(ec.file.pathAbsolute).toString(),
-                            ec.statement.range
-                        )
-                    }]
-                });
+        file.parser.ast.walk(createVisitor({
+            DottedGetExpression: (dge) => {
+                let nameParts = this.getAllDottedGetParts(dge);
+                let name = nameParts.pop();
+                let parentPath = nameParts.join('.');
+                let ec = this.enumLookup.get(parentPath);
+                if (ec && !this.enumLookup.has(`${parentPath}.${name}`)) {
+                    this.diagnostics.push({
+                        file: file,
+                        ...DiagnosticMessages.unknownEnumValue(name, ec.fullName),
+                        range: dge.range,
+                        relatedInformation: [{
+                            message: 'Enum declared here',
+                            location: Location.create(
+                                URI.file(ec.file.pathAbsolute).toString(),
+                                ec.statement.range
+                            )
+                        }]
+                    });
 
+                }
             }
-        }
+        }), { walkMode: WalkMode.visitAllRecursive });
     }
 
-    getAllDottedGetParts(dg: DottedGetExpression) {
+    private getAllDottedGetParts(dg: DottedGetExpression) {
         let parts = [dg?.name?.text];
         let nextPart = dg.obj;
         while (isDottedGetExpression(nextPart) || isVariableExpression(nextPart)) {
@@ -1099,6 +1100,7 @@ export class Scope {
         }
         return parts.reverse();
     }
+
 }
 
 interface NamespaceContainer {
