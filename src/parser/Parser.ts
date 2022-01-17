@@ -2100,7 +2100,9 @@ export class Parser {
     }
 
     private expression(): Expression {
-        return this.anonymousFunction();
+        const expression = this.anonymousFunction();
+        this._references.expressions.add(expression);
+        return expression;
     }
 
     private anonymousFunction(): Expression {
@@ -2266,10 +2268,13 @@ export class Parser {
             return this.newExpression();
         }
         let expr = this.primary();
-
+        //an expression to keep for _references
+        let referenceCallExpression: Expression;
         while (true) {
             if (this.match(TokenKind.LeftParen)) {
                 expr = this.finishCall(this.previous(), expr);
+                //store this call expression in references
+                referenceCallExpression = expr;
             } else if (this.match(TokenKind.LeftSquareBracket)) {
                 expr = this.indexedGet(expr);
             } else if (this.match(TokenKind.Callfunc)) {
@@ -2308,6 +2313,10 @@ export class Parser {
             } else {
                 break;
             }
+        }
+        //if we found a callExpression, add it to `expressions` in references
+        if (referenceCallExpression) {
+            this._references.expressions.add(referenceCallExpression);
         }
         return expr;
     }
@@ -2867,6 +2876,18 @@ export class References {
         return this._interfaceStatementLookup;
     }
     private _interfaceStatementLookup: Map<string, InterfaceStatement>;
+
+    /**
+     * A collection of full expressions. This excludes intermediary expressions.
+     *
+     * Example 1:
+     * `a.b.c` is composed of `a` (variableExpression)  `.b` (DottedGetExpression) `.c` (DottedGetExpression)
+     * This will only contain the final `.c` DottedGetExpression because `.b` and `a` can both be derived by walking back from the `.c` DottedGetExpression.
+     *
+     * Example 2:
+     * `name.space.doSomething(a.b.c)` will result in 2 entries in this list. the `CallExpression` for `doSomething`, and the `.c` DottedGetExpression.
+     */
+    public expressions = new Set<Expression>();
 
     public importStatements = [] as ImportStatement[];
     public libraryStatements = [] as LibraryStatement[];

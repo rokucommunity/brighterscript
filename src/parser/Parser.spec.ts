@@ -1,5 +1,6 @@
 import { expect, assert } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
+import type { Expression } from './Expression';
 import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
 import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
@@ -8,6 +9,9 @@ import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
+import { BrsTranspileState } from './BrsTranspileState';
+import { SourceNode } from 'source-map';
+import { BrsFile, Program } from '..';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -38,6 +42,44 @@ describe('parser', () => {
             //calling `references` automatically regenerates the references
             expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
                 'main'
+            ]);
+        });
+
+        function expressionsToStrings(expressions: Set<Expression>) {
+            return [...expressions.values()].map(x => {
+                const file = new BrsFile('', '', new Program({} as any));
+                const state = new BrsTranspileState(file);
+                return new SourceNode(null, null, null, x.transpile(state)).toString();
+            });
+        }
+
+        it('works for references.expressions', () => {
+            const parser = Parser.parse(`
+                thing = alpha.bravo
+                alpha.charlie()
+                delta(alpha.delta)
+                a += 1 + 2
+                bravo(1 + 2).jump(callMe())
+                class Person
+                    name as string = "bob"
+                end class
+                function thing(p1 = name.space.getSomething())
+
+                end function
+            `);
+            expect(
+                expressionsToStrings(parser.references.expressions)
+            ).to.eql([
+                'alpha.bravo',
+                'alpha.charlie()',
+                'alpha.delta',
+                'delta(alpha.delta)',
+                '1 + 2',
+                '1 + 2',
+                'callMe()',
+                'bravo(1 + 2).jump(callMe())',
+                '"bob"',
+                'name.space.getSomething()'
             ]);
         });
     });
