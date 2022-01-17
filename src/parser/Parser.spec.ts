@@ -53,8 +53,14 @@ describe('parser', () => {
             });
         }
 
-        it('works for references.expressions', () => {
+        it.only('works for references.expressions', () => {
             const parser = Parser.parse(`
+                obj = {
+                    val1: someValue
+                }
+                arr = [
+                    one
+                ]
                 thing = alpha.bravo
                 alpha.charlie()
                 delta(alpha.delta)
@@ -67,9 +73,11 @@ describe('parser', () => {
 
                 end function
             `);
-            expect(
-                expressionsToStrings(parser.references.expressions)
-            ).to.eql([
+            const expected = [
+                'someValue',
+                '{\n    val1: someValue\n}',
+                'one',
+                '[\n    one\n]',
                 'alpha.bravo',
                 'alpha.charlie()',
                 'alpha.delta',
@@ -80,7 +88,17 @@ describe('parser', () => {
                 'bravo(1 + 2).jump(callMe())',
                 '"bob"',
                 'name.space.getSomething()'
-            ]);
+            ].sort();
+            expect(
+                expressionsToStrings(parser.references.expressions).sort()
+            ).to.eql(expected);
+
+            //tell the parser we modified the AST and need to regenerate references
+            parser.invalidateReferences();
+
+            expect(
+                expressionsToStrings(parser.references.expressions).sort()
+            ).to.eql(expected);
         });
     });
 

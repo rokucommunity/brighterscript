@@ -90,7 +90,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAAMemberExpression, isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { RegexLiteralExpression } from '.';
@@ -2775,9 +2775,15 @@ export class Parser {
         this.ast.walk(createVisitor({
             AssignmentStatement: s => {
                 this._references.assignmentStatements.push(s);
+                this.references.expressions.add(s.value);
             },
             ClassStatement: s => {
                 this._references.classStatements.push(s);
+            },
+            ClassFieldStatement: s => {
+                if (s.initialValue) {
+                    this._references.expressions.add(s.initialValue);
+                }
             },
             NamespaceStatement: s => {
                 this._references.namespaceStatements.push(s);
@@ -2798,9 +2804,26 @@ export class Parser {
             },
             NewExpression: e => {
                 this._references.newExpressions.push(e);
+                for (const p of e.call.args) {
+                    this._references.expressions.add(p);
+                }
+            },
+            ExpressionStatement: s => {
+                this._references.expressions.add(s.expression);
+            },
+            CallExpression: e => {
+                for (const p of e.args) {
+                    this._references.expressions.add(p);
+                }
             },
             AALiteralExpression: e => {
                 this.addPropertyHints(e);
+                this._references.expressions.add(e);
+                for (const member of e.elements) {
+                    if (isAAMemberExpression(member)) {
+                        this._references.expressions.add(member.value);
+                    }
+                }
             },
             DottedGetExpression: e => {
                 this.addPropertyHints(e.name);
