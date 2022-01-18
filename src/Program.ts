@@ -1264,7 +1264,7 @@ export class Program {
     }
 
     /**
-     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     * Find a list of files in the program that have a class with the given name (case INsensitive)
      */
     public findFilesForClass(className: string) {
         const files = [] as BscFile[];
