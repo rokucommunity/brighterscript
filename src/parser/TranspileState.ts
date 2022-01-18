@@ -1,7 +1,6 @@
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
-import type { BrsFile } from '../files/BrsFile';
-import type { ClassStatement } from './Statement';
+import type { BsConfig } from '../BsConfig';
 
 /**
  * Holds the state of a transpile operation as it works its way through the transpile process
@@ -9,46 +8,25 @@ import type { ClassStatement } from './Statement';
 export class TranspileState {
     constructor(
         /**
-         * The BrsFile that is currently being transpiled
+         * The absolute path to the source location of this file. If sourceRoot is specified,
+         * this path will be full path to the file in sourceRoot instead of rootDir.
+         * If the file resides outside of rootDir, then no changes will be made to this path.
          */
-        public file: BrsFile
+        public srcPath: string,
+        public options: BsConfig
     ) {
-        this.file = file;
+        this.srcPath = srcPath;
 
         //if a sourceRoot is specified, use that instead of the rootDir
-        if (this.file.program.options.sourceRoot) {
-            this.pathAbsolute = this.file.pathAbsolute.replace(
-                this.file.program.options.rootDir,
-                this.file.program.options.sourceRoot
+        if (this.options.sourceRoot) {
+            this.srcPath = this.srcPath.replace(
+                this.options.rootDir,
+                this.options.sourceRoot
             );
-        } else {
-            this.pathAbsolute = this.file.pathAbsolute;
         }
     }
 
-    /**
-     * The absolute path to the source location of this file. If sourceRoot is specified,
-     * this path will be full path to the file in sourceRoot instead of rootDir.
-     * If the file resides outside of rootDir, then no changes will be made to this path.
-     */
-    public pathAbsolute: string;
-
-    /**
-     * The number of active parent blocks for the current location of the state.
-     */
-    blockDepth = 0;
-    /**
-     * the tree of parents, with the first index being direct parent, and the last index being the furthest removed ancestor.
-     * Used to assist blocks in knowing when to add a comment statement to the same line as the first line of the parent
-     */
-    lineage = [] as Array<{
-        range: Range;
-    }>;
-
-    /**
-     * Used by ClassMethodStatements to determine information about their enclosing class
-     */
-    public classStatement?: ClassStatement;
+    public indentText = '';
 
     /**
      * Append whitespace until we reach the current blockDepth amount
@@ -56,25 +34,82 @@ export class TranspileState {
      */
     public indent(blockDepthChange = 0) {
         this.blockDepth += blockDepthChange;
-        let totalSpaceCount = this.blockDepth * 4;
-        totalSpaceCount = totalSpaceCount > -1 ? totalSpaceCount : 0;
-        return ' '.repeat(totalSpaceCount);
+        return this.indentText;
     }
 
-    public newline() {
-        return '\n';
+    /**
+     * The number of active parent blocks for the current location of the state.
+     */
+    get blockDepth() {
+        return this._blockDepth;
     }
+    set blockDepth(value: number) {
+        this._blockDepth = value;
+        this.indentText = value === 0 ? '' : '    '.repeat(value);
+    }
+    private _blockDepth = 0;
+
+    public newline = '\n';
 
     /**
      * Shorthand for creating a new source node
      */
-    public sourceNode(locatable: { range: Range }, code: string) {
-        let result = new SourceNode(
-            locatable.range.start.line,
+    public sourceNode(locatable: { range?: Range }, code: string | SourceNode | Array<string | SourceNode>): SourceNode | undefined {
+        return new SourceNode(
+            //convert 0-based range line to 1-based SourceNode line
+            locatable.range.start.line + 1,
+            //range and SourceNode character are both 0-based, so no conversion necessary
             locatable.range.start.character,
-            this.pathAbsolute,
+            this.srcPath,
             code
         );
-        return code || result;
+    }
+
+    /**
+     * Create a SourceNode from a token. This is more efficient than the above `sourceNode` function
+     * because the entire token is passed by reference, instead of the raw string being copied to the parameter,
+     * only to then be copied again for the SourceNode constructor
+     */
+    public tokenToSourceNode(token: { range?: Range; text: string }) {
+        return new SourceNode(
+            //convert 0-based range line to 1-based SourceNode line
+            token.range.start.line + 1,
+            //range and SourceNode character are both 0-based, so no conversion necessary
+            token.range.start.character,
+            this.srcPath,
+            token.text
+        );
+    }
+
+    /**
+     * Create a SourceNode from a token, accounting for missing range and multi-line text
+     */
+    public transpileToken(token: { range?: Range; text: string }) {
+        if (!token.range) {
+            return token.text;
+        }
+        //split multi-line text
+        if (token.range.end.line > token.range.start.line) {
+            const lines = token.text.split(/\r?\n/g);
+            const code = [
+                this.sourceNode(token, lines[0])
+            ] as Array<string | SourceNode>;
+            for (let i = 1; i < lines.length; i++) {
+                code.push(
+                    this.newline,
+                    new SourceNode(
+                        //convert 0-based range line to 1-based SourceNode line
+                        token.range.start.line + i + 1,
+                        //SourceNode column is 0-based, and this starts at the beginning of the line
+                        0,
+                        this.srcPath,
+                        lines[i]
+                    )
+                );
+            }
+            return new SourceNode(null, null, null, code);
+        } else {
+            return this.tokenToSourceNode(token);
+        }
     }
 }

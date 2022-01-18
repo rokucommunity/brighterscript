@@ -51,7 +51,7 @@ BrighterScript adds several new features to the BrightScript language such as Na
       - `user = m.user ?? getDefaultUser()`
     - Additional Language features coming soon
       - null-conditional operator: `userSettings = m.user?.account?.profile?.settings`
-    - and [more](https://github.com/rokucommunity/BrighterScript/blob/master/docs/index.md)...
+    - and [more](https://github.com/rokucommunity/BrighterScript/blob/master/docs/readme.md)...
 
 
   - Full BrighterScript support for syntax checking, validation, and intellisense is available within the [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=celsoaf.brightscript) VSCode extension.
@@ -60,9 +60,9 @@ BrighterScript adds several new features to the BrightScript language such as Na
 
 ## Who uses Brighterscript?
 
-Brighterscript is used by [applicaster](https://www.applicaster.com/), [The miracle channel](https://miraclechannel.ca/corco/), and in open source projects such as [rooibos](https://github.com/georgejecook/rooibos/blob/master/docs/index.md), and the [maestro framework](https://github.com/georgejecook/maestro/blob/master/docs/index.md). The language has been in use for almost a year, and there are at least 2,000+ BrighterScript transpiled files on published channels.
+Brighterscript is used by [applicaster](https://www.applicaster.com/), [The miracle channel](https://miraclechannel.ca/corco/), and in open source projects such as [rooibos](https://github.com/georgejecook/rooibos/blob/master/docs/index.md), the [maestro framework](https://github.com/georgejecook/maestro/blob/master/docs/index.md), and more.
 
-The BrighterScript project is used to power the popular [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=celsoaf.brightscript) VSCode extension, and other tools.
+The BrighterScript project is used to power the popular [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=rokucommunity.brightscript) VSCode extension, and other tools.
 
 More projects are adopting BrighterScript all the time, from using the new BrighterScript language features to simply using the compiler as part of their build pipeline. Be sure to watch this space!
 
@@ -254,6 +254,28 @@ end sub
 ```
 
 The primary motivation for this feature was to provide a stopgap measure to hide incorrectly-thrown errors on legitimate BrightScript code due to parser bugs. This is still a new project and it is likely to be missing support for certain BrightScript syntaxes. It is recommended that you only use these comments when absolutely necessary.
+
+
+## ropm support
+In order for BrighterScript-transpiled projects to work as ropm modules, they need a reference to [bslib](https://github.com/rokucommunity/bslib/blob/master/source/bslib.brs) (the BrightScript runtime library for BrighterScript features) in their package. As `ropm` and `brighterscript` become more popular, this could result in many duplicate copies of `bslib.brs`.
+
+To encourage reducing code duplication, BrighterScript has built-in support for loading `bslib` from [ropm](https://github.com/rokucommunity/ropm). Here's how it works:
+1. if your program does not use ropm, or _does_ use ropm but does not directly reference bslib, then the BrighterScript compiler will copy bslib to `"pkg:/source/bslib.brs"` at transpile-time.
+2. if your program uses ropm and has installed `bslib` as a dependency, then the BrighterScript compiler will _not_ emit a copy of bslib at `pkg:/source/bslib.brs`, and will instead use the path to the version from ropm `pkg:/source/roku_modules/bslib/bslib.brs`.
+
+
+### Installing bslib in your ropm-enabled project
+bslib is published to npm under the name [@rokucommunity/bslib](https://npmjs.com/package/@rokucommunity/bslib). If you use NodeJS version 12 or above, we recommend installing `@rokucommunity/bslib` with the `bslib` alias, as it produces smaller transpiled code (i.e. emits `bslib_` prefix instead of `rokucommunity_bslib_`). Here's the command to install bslib under the `bslib` alias using the ropm CLI.
+
+```bash
+ropm install bslib@npm:@rokucommunity/bslib
+```
+
+#### bslib support on NodeJS versions less than 12
+npm aliases only work in NodeJS version 12 and above. If you're using a NodeJS version less than 12, you will need to install @rokucommunity/bslib directly without the alias. BrighterScript recognizes this pattern as well, it's just not preferred (for the reasons mentioned previously). Here's the command for that:
+```bash
+ropm install @rokucommunity/bslib
+```
 
 ## Language Server Protocol
 

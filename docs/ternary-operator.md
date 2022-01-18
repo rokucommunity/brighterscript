@@ -10,7 +10,7 @@ authStatus = user <> invalid ? "logged in" : "not logged in"
 transpiles to:
 
 ```BrightScript
-a = bslib_ternary(user = invalid, "no user", "logged in")
+authStatus = bslib_ternary(user <> invalid, "logged in", "not logged in")
 ```
 
 The `bslib_ternary` function checks the condition, and returns either the consequent or alternate.

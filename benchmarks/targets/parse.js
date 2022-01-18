@@ -1,5 +1,5 @@
-module.exports = async (suite, name, brighterscript, projectPath) => {
-    const { ProgramBuilder, Lexer } = brighterscript;
+module.exports = async (suite, name, brighterscript, projectPath, options) => {
+    const { ProgramBuilder, Parser } = brighterscript;
 
     const builder = new ProgramBuilder();
     //run the first run
@@ -16,9 +16,10 @@ module.exports = async (suite, name, brighterscript, projectPath) => {
     if (brsFiles.length === 0) {
         throw new Error('No files found in program');
     }
+
     suite.add(name, () => {
         for (let brsFile of brsFiles) {
-            Lexer.scan(brsFile.fileContents);
+            Parser.parse(brsFile.parser.tokens);
         }
-    });
+    }, options);
 };

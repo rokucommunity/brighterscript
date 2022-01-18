@@ -4,7 +4,7 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import type { Position, Range } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
@@ -24,9 +24,9 @@ import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
-import type { Token } from './lexer';
+import type { Locatable, Token } from './lexer';
 import { TokenKind } from './lexer';
-import { isBrsFile, isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
+import { isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
@@ -467,6 +467,24 @@ export class Util {
     }
 
     /**
+     * Does a touch b in any way?
+     */
+    public rangesIntersect(a: Range, b: Range) {
+        // Check if `a` is before `b`
+        if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character <= b.start.character)) {
+            return false;
+        }
+
+        // Check if `b` is before `a`
+        if (b.end.line < a.start.line || (b.end.line === a.start.line && b.end.character <= a.start.character)) {
+            return false;
+        }
+
+        // These ranges must intersect
+        return true;
+    }
+
+    /**
      * Test if `position` is in `range`. If the position is at the edges, will return true.
      * Adapted from core vscode
      * @param range
@@ -624,115 +642,16 @@ export class Util {
      * @param diagnostic
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
-        //for now, we only support suppressing brs file diagnostics
-        if (isBrsFile(diagnostic.file)) {
-            for (let flag of diagnostic.file.commentFlags) {
-                //this diagnostic is affected by this flag
-                if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
-                    //if the flag acts upon this diagnostic's code
-                    if (flag.codes === null || flag.codes.includes(diagnostic.code as number)) {
-                        return true;
-                    }
+        const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
+        for (let flag of diagnostic.file?.commentFlags ?? []) {
+            //this diagnostic is affected by this flag
+            if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
+                //if the flag acts upon this diagnostic's code
+                if (flag.codes === null || flag.codes.includes(diagnosticCode)) {
+                    return true;
                 }
             }
         }
-    }
-
-    /**
-     * Small tokenizer for bs:disable comments
-     */
-    public tokenizeBsDisableComment(token: Token) {
-        if (token.kind !== TokenKind.Comment) {
-            return null;
-        }
-        let lowerText = token.text.toLowerCase();
-        let offset = 0;
-        let commentTokenText: string;
-
-        if (token.text.startsWith(`'`)) {
-            commentTokenText = `'`;
-            offset = 1;
-            lowerText = lowerText.substring(1);
-        } else if (lowerText.startsWith('rem')) {
-            commentTokenText = lowerText.substring(0, 3);
-            offset = 3;
-            lowerText = lowerText.substring(3);
-        }
-
-        let disableType: 'line' | 'next-line';
-        //trim leading/trailing whitespace
-        let len = lowerText.length;
-        lowerText = lowerText.trimLeft();
-        offset += len - lowerText.length;
-        if (lowerText.startsWith('bs:disable-line')) {
-            lowerText = lowerText.substring('bs:disable-line'.length);
-            offset += 'bs:disable-line'.length;
-            disableType = 'line';
-        } else if (lowerText.startsWith('bs:disable-next-line')) {
-            lowerText = lowerText.substring('bs:disable-next-line'.length);
-            offset += 'bs:disable-next-line'.length;
-            disableType = 'next-line';
-        } else {
-            return null;
-        }
-        //do something with the colon
-        if (lowerText.startsWith(':')) {
-            lowerText = lowerText.substring(1);
-            offset += 1;
-        }
-
-        let items = this.tokenizeByWhitespace(lowerText);
-        let codes = [] as Array<{ code: string; range: Range }>;
-        for (let item of items) {
-            codes.push({
-                code: item.text,
-                range: util.createRange(
-                    token.range.start.line,
-                    token.range.start.character + offset + item.startIndex,
-                    token.range.start.line,
-                    token.range.start.character + offset + item.startIndex + item.text.length
-                )
-            });
-        }
-
-        return {
-            commentTokenText: commentTokenText,
-            disableType: disableType,
-            codes: codes
-        };
-    }
-
-    /**
-     * Given a string, extract each item split by whitespace
-     * @param text
-     */
-    public tokenizeByWhitespace(text: string) {
-        let tokens = [] as Array<{ startIndex: number; text: string }>;
-        let currentToken = null;
-        for (let i = 0; i < text.length; i++) {
-            let char = text[i];
-            //if we hit whitespace
-            if (char === ' ' || char === '\t') {
-                if (currentToken) {
-                    tokens.push(currentToken);
-                    currentToken = null;
-                }
-
-                //we hit non-whitespace
-            } else {
-                if (!currentToken) {
-                    currentToken = {
-                        startIndex: i,
-                        text: ''
-                    };
-                }
-                currentToken.text += char;
-            }
-        }
-        if (currentToken) {
-            tokens.push(currentToken);
-        }
-        return tokens;
     }
 
     /**
@@ -1096,7 +1015,7 @@ export class Util {
                         plugin.name = pathOrModule;
                     }
                     acc.push(plugin);
-                } catch (err) {
+                } catch (err: any) {
                     if (onError) {
                         onError(pathOrModule, err);
                     } else {
@@ -1134,9 +1053,7 @@ export class Util {
         const variableExpressions = [] as VariableExpression[];
         const uniqueVarNames = new Set<string>();
 
-        // Collect all expressions. Most of these expressions are fairly small so this should be quick!
-        // This should only be called during transpile time and only when we actually need it.
-        expression?.walk((expression) => {
+        function expressionWalker(expression) {
             if (isExpression(expression)) {
                 expressions.push(expression);
             }
@@ -1144,9 +1061,17 @@ export class Util {
                 variableExpressions.push(expression);
                 uniqueVarNames.add(expression.name.text);
             }
-        }, {
+        }
+
+        // Collect all expressions. Most of these expressions are fairly small so this should be quick!
+        // This should only be called during transpile time and only when we actually need it.
+        expression?.walk(expressionWalker, {
             walkMode: WalkMode.visitExpressions
         });
+
+        //handle the expression itself (for situations when expression is a VariableExpression)
+        expressionWalker(expression);
+
         return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: [...uniqueVarNames] };
     }
 
@@ -1184,6 +1109,113 @@ export class Util {
             },
             range: attr.range
         } as SGAttribute;
+    }
+
+    /**
+     * Copy the version of bslib from local node_modules to the staging folder
+     */
+    public async copyBslibToStaging(stagingDir: string) {
+        //copy bslib to the output directory
+        await fsExtra.ensureDir(standardizePath(`${stagingDir}/source`));
+        // eslint-disable-next-line
+        const bslib = require('@rokucommunity/bslib');
+        let source = bslib.source as string;
+
+        //apply the `bslib_` prefix to the functions
+        let match: RegExpExecArray;
+        const positions = [] as number[];
+        const regexp = /^(\s*(?:function|sub)\s+)([a-z0-9_]+)/mg;
+        // eslint-disable-next-line no-cond-assign
+        while (match = regexp.exec(source)) {
+            positions.push(match.index + match[1].length);
+        }
+
+        for (let i = positions.length - 1; i >= 0; i--) {
+            const position = positions[i];
+            source = source.slice(0, position) + 'bslib_' + source.slice(position);
+        }
+        await fsExtra.writeFile(`${stagingDir}/source/bslib.brs`, source);
+    }
+
+    /**
+     * Given a Diagnostic or BsDiagnostic, return a copy of the diagnostic
+     */
+    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic) {
+        return {
+            severity: diagnostic.severity,
+            range: diagnostic.range,
+            message: diagnostic.message,
+            relatedInformation: diagnostic.relatedInformation?.map(x => {
+                //clone related information just in case a plugin added circular ref info here
+                return { ...x };
+            }),
+            code: diagnostic.code,
+            source: 'brs'
+        };
+    }
+
+    /**
+     * Sort an array of objects that have a Range
+     */
+    public sortByRange(locatables: Locatable[]) {
+        //sort the tokens by range
+        return locatables.sort((a, b) => {
+            //start line
+            if (a.range.start.line < b.range.start.line) {
+                return -1;
+            }
+            if (a.range.start.line > b.range.start.line) {
+                return 1;
+            }
+            //start char
+            if (a.range.start.character < b.range.start.character) {
+                return -1;
+            }
+            if (a.range.start.character > b.range.start.character) {
+                return 1;
+            }
+            //end line
+            if (a.range.end.line < b.range.end.line) {
+                return -1;
+            }
+            if (a.range.end.line > b.range.end.line) {
+                return 1;
+            }
+            //end char
+            if (a.range.end.character < b.range.end.character) {
+                return -1;
+            } else if (a.range.end.character > b.range.end.character) {
+                return 1;
+            }
+            return 0;
+        });
+    }
+
+    /**
+     * Split the given text and return ranges for each chunk.
+     * Only works for single-line strings
+     */
+    public splitGetRange(separator: string, text: string, range: Range) {
+        const chunks = text.split(separator);
+        const result = [] as Array<{ text: string; range: Range }>;
+        let offset = 0;
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
+            //only keep nonzero chunks
+            if (chunk.length > 0) {
+                result.push({
+                    text: chunk,
+                    range: this.createRange(
+                        range.start.line,
+                        range.start.character + offset,
+                        range.end.line,
+                        range.start.character + offset + chunk.length
+                    )
+                });
+            }
+            offset += chunk.length + separator.length;
+        }
+        return result;
     }
 }
 

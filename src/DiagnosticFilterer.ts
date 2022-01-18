@@ -6,8 +6,7 @@ import { standardizePath as s } from './util';
 
 export class DiagnosticFilterer {
     private byFile: Record<string, BsDiagnostic[]>;
-    private filePaths: string[];
-    private filters: Array<{ src?: string; codes?: (number|string)[] }>;
+    private filters: Array<{ src?: string; codes?: (number | string)[] }>;
     private rootDir: string;
 
     /**
@@ -26,7 +25,6 @@ export class DiagnosticFilterer {
 
         //clean up
         delete this.byFile;
-        delete this.filePaths;
         delete this.rootDir;
         delete this.filters;
 
@@ -58,23 +56,22 @@ export class DiagnosticFilterer {
      */
     private groupByFile(diagnostics: BsDiagnostic[]) {
         this.byFile = {};
-        this.filePaths = [] as string[];
 
         for (let diagnostic of diagnostics) {
             //skip diagnostics that have issues
             if (!diagnostic?.file?.pathAbsolute) {
                 continue;
             }
+            const lowerSrcPath = diagnostic.file.pathAbsolute.toLowerCase();
             //make a new array for this file if one does not yet exist
-            if (!this.byFile[diagnostic.file.pathAbsolute]) {
-                this.byFile[diagnostic.file.pathAbsolute] = [];
+            if (!this.byFile[lowerSrcPath]) {
+                this.byFile[lowerSrcPath] = [];
             }
-            this.byFile[diagnostic.file.pathAbsolute].push(diagnostic);
-            this.filePaths.push(diagnostic.file.pathAbsolute);
+            this.byFile[lowerSrcPath].push(diagnostic);
         }
     }
 
-    private filterAllFiles(filter: { src?: string; codes?: (number|string)[] }) {
+    private filterAllFiles(filter: { src?: string; codes?: (number | string)[] }) {
         let matchedFilePaths: string[];
 
         //if there's a src, match against all files
@@ -84,11 +81,13 @@ export class DiagnosticFilterer {
                 path.isAbsolute(filter.src) ? filter.src : `${this.rootDir}/${filter.src}`
             );
 
-            matchedFilePaths = minimatch.match(this.filePaths, src);
+            matchedFilePaths = minimatch.match(Object.keys(this.byFile), src, {
+                nocase: true
+            });
 
             //there is no src; this applies to all files
         } else {
-            matchedFilePaths = this.filePaths.slice();
+            matchedFilePaths = Object.keys(this.byFile);
         }
 
         //filter each matched file
@@ -97,12 +96,11 @@ export class DiagnosticFilterer {
         }
     }
 
-    private filterFile(filter: { src?: string; codes?: (number|string)[] }, filePath: string) {
+    private filterFile(filter: { src?: string; codes?: (number | string)[] }, filePath: string) {
         //if there are no codes, throw out all diagnostics for this file
         if (!filter.codes) {
-            delete this.byFile[filePath];
             //remove this file from the list because all of its diagnostics were removed
-            this.filePaths.splice(this.filePaths.indexOf(filePath), 1);
+            delete this.byFile[filePath];
 
             //filter any diagnostics with matching codes
         } else {
@@ -121,7 +119,7 @@ export class DiagnosticFilterer {
 
     public getDiagnosticFilters(config1: BsConfig) {
 
-        let globalIgnoreCodes: (number|string)[] = [...config1.ignoreErrorCodes ?? []];
+        let globalIgnoreCodes: (number | string)[] = [...config1.ignoreErrorCodes ?? []];
         let diagnosticFilters = [...config1.diagnosticFilters ?? []];
 
         let result = [];
@@ -153,6 +151,6 @@ export class DiagnosticFilterer {
                 codes: globalIgnoreCodes
             });
         }
-        return result as Array<{ src?: string; codes: (number|string)[] }>;
+        return result as Array<{ src?: string; codes: (number | string)[] }>;
     }
 }

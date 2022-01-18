@@ -1,4 +1,4 @@
-module.exports = async (suite, name, brighterscript, projectPath) => {
+module.exports = async (suite, name, brighterscript, projectPath, options) => {
     const { ProgramBuilder } = brighterscript;
 
     const builder = new ProgramBuilder();
@@ -28,6 +28,7 @@ module.exports = async (suite, name, brighterscript, projectPath) => {
             deferred.resolve();
         }
     }, {
+        ...options,
         'defer': true
     });
 };

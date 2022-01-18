@@ -1,6 +1,7 @@
 import { standardizePath as s } from './util';
 import { Program } from './Program';
-import { expect } from 'chai';
+import { expectDiagnostics, expectZeroDiagnostics } from './testHelpers.spec';
+import { DiagnosticMessages } from './DiagnosticMessages';
 
 let tmpPath = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tmpPath}/rootDir`;
@@ -18,6 +19,46 @@ describe('globalCallables', () => {
         program.dispose();
     });
 
+    describe('Roku_ads', () => {
+        it('exists', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    adIface = Roku_Ads()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
+    it('isOptional defaults to false', () => {
+        program.addOrReplaceFile('source/main.brs', `
+            sub main()
+                thing = createObject()
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            DiagnosticMessages.mismatchArgumentCount('1-6', 0)
+        ]);
+    });
+
+    describe('bslCore', () => {
+        it('exists', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                Library "v30/bslCore.brs"
+
+                sub main()
+                    print bslBrightScriptErrorCodes()
+                    print bslUniversalControlEventCodes()
+                    print HexToAscii(AsciiToHex("Hi"))
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
     describe('val', () => {
         it('allows single parameter', () => {
             program.addOrReplaceFile('source/main.brs', `
@@ -26,7 +67,7 @@ describe('globalCallables', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(program);
         });
 
         it('allows both parameters', () => {
@@ -36,7 +77,7 @@ describe('globalCallables', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(program);
         });
     });
 
@@ -48,7 +89,7 @@ describe('globalCallables', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(program);
         });
 
         it('allows both parameters', () => {
@@ -58,9 +99,29 @@ describe('globalCallables', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(program);
         });
     });
 
+    describe('parseJson', () => {
+        it('allows single parameter', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print ParseJson("{}")
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
 
+        it('allows 2 parameters', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                print ParseJson("{}", "i")
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
 });

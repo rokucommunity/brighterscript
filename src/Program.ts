@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -25,7 +25,10 @@ import type { FunctionStatement, Statement } from './parser/Statement';
 import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
 import { BscPlugin } from './bscPlugin/BscPlugin';
+import { AstEditor } from './astUtils/AstEditor';
 const startOfSourcePkgPath = `source${path.sep}`;
+const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
+const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
 
 export interface SourceObj {
     pathAbsolute: string;
@@ -83,7 +86,8 @@ export class Program {
 
     private createGlobalScope() {
         //create the 'global' scope
-        this.globalScope = new Scope('global', 'scope:global', this);
+        this.globalScope = new Scope('global', this, 'scope:global');
+        this.globalScope.attachDependencyGraph(this.dependencyGraph);
         this.scopes.global = this.globalScope;
         //hardcode the files list for global scope to only contain the global file
         this.globalScope.getAllFiles = () => [globalFile];
@@ -100,7 +104,7 @@ export class Program {
      *      File.xml -> [lib1.brs, lib2.brs]
      *      lib2.brs -> [lib3.brs] //via an import statement
      */
-    public dependencyGraph = new DependencyGraph();
+    private dependencyGraph = new DependencyGraph();
 
     private diagnosticFilterer = new DiagnosticFilterer();
 
@@ -122,6 +126,33 @@ export class Program {
     private diagnostics = [] as BsDiagnostic[];
 
     /**
+     * The path to bslib.brs (the BrightScript runtime for certain BrighterScript features)
+     */
+    public get bslibPkgPath() {
+        //if there's an aliased (preferred) version of bslib from roku_modules loaded into the program, use that
+        if (this.getFileByPkgPath(bslibAliasedRokuModulesPkgPath)) {
+            return bslibAliasedRokuModulesPkgPath;
+
+            //if there's a non-aliased version of bslib from roku_modules, use that
+        } else if (this.getFileByPkgPath(bslibNonAliasedRokuModulesPkgPath)) {
+            return bslibNonAliasedRokuModulesPkgPath;
+
+            //default to the embedded version
+        } else {
+            return `source${path.sep}bslib.brs`;
+        }
+    }
+
+    public get bslibPrefix() {
+        if (this.bslibPkgPath === bslibNonAliasedRokuModulesPkgPath) {
+            return 'rokucommunity_bslib';
+        } else {
+            return 'bslib';
+        }
+    }
+
+
+    /**
      * A map of every file loaded into this program, indexed by its original file location
      */
     public files = {} as Record<string, BscFile>;
@@ -135,16 +166,21 @@ export class Program {
     }
 
     /**
-     * A map of every component currently loaded into the program, indexed by the component name
+     * A map of every component currently loaded into the program, indexed by the component name.
+     * It is a compile-time error to have multiple components with the same name. However, we store an array of components
+     * by name so we can provide a better developer expreience. You shouldn't be directly accessing this array,
+     * but if you do, only ever use the component at index 0.
      */
-    private components = {} as Record<string, { file: XmlFile; scope: XmlScope }>;
+    private components = {} as Record<string, { file: XmlFile; scope: XmlScope }[]>;
 
     /**
      * Get the component with the specified name
      */
     public getComponent(componentName: string) {
         if (componentName) {
-            return this.components[componentName.toLowerCase()];
+            //return the first compoment in the list with this name
+            //(components are ordered in this list by pkgPath to ensure consistency)
+            return this.components[componentName.toLowerCase()]?.[0];
         } else {
             return undefined;
         }
@@ -154,18 +190,52 @@ export class Program {
      * Register (or replace) the reference to a component in the component map
      */
     private registerComponent(xmlFile: XmlFile, scope: XmlScope) {
-        //store a reference to this component by its component name
-        this.components[(xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase()] = {
+        const key = (xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
+        if (!this.components[key]) {
+            this.components[key] = [];
+        }
+        this.components[key].push({
             file: xmlFile,
             scope: scope
-        };
+        });
+        this.components[key].sort(
+            (x, y) => x.file.pkgPath.toLowerCase().localeCompare(y.file.pkgPath.toLowerCase())
+        );
+        this.syncComponentDependencyGraph(this.components[key]);
     }
 
     /**
      * Remove the specified component from the components map
      */
     private unregisterComponent(xmlFile: XmlFile) {
-        delete this.components[(xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase()];
+        const key = (xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
+        const arr = this.components[key] || [];
+        for (let i = 0; i < arr.length; i++) {
+            if (arr[i].file === xmlFile) {
+                arr.splice(i, 1);
+                break;
+            }
+        }
+        this.syncComponentDependencyGraph(arr);
+    }
+
+    /**
+     * re-attach the dependency graph with a new key for any component who changed
+     * their position in their own named array (only matters when there are multiple
+     * components with the same name)
+     */
+    private syncComponentDependencyGraph(components: Array<{ file: XmlFile; scope: XmlScope }>) {
+        //reattach every dependency graph
+        for (let i = 0; i < components.length; i++) {
+            const { file, scope } = components[i];
+
+            //attach (or re-attach) the dependencyGraph for every component whose position changed
+            if (file.dependencyGraphIndex !== i) {
+                file.dependencyGraphIndex = i;
+                file.attachDependencyGraph(this.dependencyGraph);
+                scope.attachDependencyGraph(this.dependencyGraph);
+            }
+        }
     }
 
     /**
@@ -189,30 +259,36 @@ export class Program {
      * by walking through every file, so call this sparingly.
      */
     public getDiagnostics() {
-        let diagnostics = [...this.diagnostics];
+        return this.logger.time(LogLevel.info, ['Program.getDiagnostics()'], () => {
 
-        //get the diagnostics from all scopes
-        for (let scopeName in this.scopes) {
-            let scope = this.scopes[scopeName];
-            diagnostics.push(
-                ...scope.getDiagnostics()
-            );
-        }
+            let diagnostics = [...this.diagnostics];
 
-        //get the diagnostics from all unreferenced files
-        let unreferencedFiles = this.getUnreferencedFiles();
-        for (let file of unreferencedFiles) {
-            diagnostics.push(
-                ...file.getDiagnostics()
-            );
-        }
+            //get the diagnostics from all scopes
+            for (let scopeName in this.scopes) {
+                let scope = this.scopes[scopeName];
+                diagnostics.push(
+                    ...scope.getDiagnostics()
+                );
+            }
 
-        //filter out diagnostics based on our diagnostic filters
-        let finalDiagnostics = this.diagnosticFilterer.filter({
-            ...this.options,
-            rootDir: this.options.rootDir
-        }, diagnostics);
-        return finalDiagnostics;
+            //get the diagnostics from all unreferenced files
+            let unreferencedFiles = this.getUnreferencedFiles();
+            for (let file of unreferencedFiles) {
+                diagnostics.push(
+                    ...file.getDiagnostics()
+                );
+            }
+            const filteredDiagnostics = this.logger.time(LogLevel.debug, ['filter diagnostics'], () => {
+                //filter out diagnostics based on our diagnostic filters
+                let finalDiagnostics = this.diagnosticFilterer.filter({
+                    ...this.options,
+                    rootDir: this.options.rootDir
+                }, diagnostics);
+                return finalDiagnostics;
+            });
+            this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
+            return filteredDiagnostics;
+        });
     }
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
@@ -316,7 +392,7 @@ export class Program {
                 };
                 this.plugins.emit('beforeFileParse', sourceObj);
 
-                this.logger.time(LogLevel.info, ['parse', chalk.green(srcPath)], () => {
+                this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
                     brsFile.parse(sourceObj.source);
                 });
                 file = brsFile;
@@ -339,7 +415,9 @@ export class Program {
                     source: fileContents
                 };
                 this.plugins.emit('beforeFileParse', sourceObj);
-                xmlFile.parse(sourceObj.source);
+                this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
+                    xmlFile.parse(sourceObj.source);
+                });
 
                 file = xmlFile;
 
@@ -349,11 +427,6 @@ export class Program {
 
                 //register this compoent now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
-
-                //attach the dependency graph, so the component can
-                //   a) be regularly notified of changes
-                //   b) immediately emit its own changes
-                xmlFile.attachDependencyGraph(this.dependencyGraph);
 
                 this.plugins.emit('afterFileValidate', xmlFile);
             } else {
@@ -376,7 +449,8 @@ export class Program {
      */
     public createSourceScope() {
         if (!this.scopes.source) {
-            const sourceScope = new Scope('source', 'scope:source', this);
+            const sourceScope = new Scope('source', this, 'scope:source');
+            sourceScope.attachDependencyGraph(this.dependencyGraph);
             this.addScope(sourceScope);
         }
     }
@@ -472,14 +546,16 @@ export class Program {
      * @param force - if true, then all scopes are force to validate, even if they aren't marked as dirty
      */
     public validate() {
-        this.logger.time(LogLevel.debug, ['Program.validate()'], () => {
+        this.logger.time(LogLevel.log, ['Validating project'], () => {
             this.diagnostics = [];
             this.plugins.emit('beforeProgramValidate', this);
 
-            for (let scopeName in this.scopes) {
-                let scope = this.scopes[scopeName];
-                scope.validate();
-            }
+            this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
+                for (let scopeName in this.scopes) {
+                    let scope = this.scopes[scopeName];
+                    scope.validate();
+                }
+            });
 
             //find any files NOT loaded into a scope
             for (let filePath in this.files) {
@@ -584,7 +660,6 @@ export class Program {
     public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {
         let results = new Map<Statement, FileLink<Statement>>();
         const filesSearched = new Set<BrsFile>();
-        let parseMode = originFile.getParseMode();
         let lowerNamespaceName = namespaceName?.toLowerCase();
         let lowerName = name?.toLowerCase();
         //look through all files in scope for matches
@@ -596,7 +671,7 @@ export class Program {
                 filesSearched.add(file);
 
                 for (const statement of [...file.parser.references.functionStatements, ...file.parser.references.classStatements.flatMap((cs) => cs.methods)]) {
-                    let parentNamespaceName = statement.namespaceName?.getName(parseMode)?.toLowerCase();
+                    let parentNamespaceName = statement.namespaceName?.getName(originFile.parseMode)?.toLowerCase();
                     if (statement.name.text.toLowerCase() === lowerName && (!parentNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                         if (!results.has(statement)) {
                             results.set(statement, { item: statement, file: file });
@@ -616,7 +691,7 @@ export class Program {
         let funcNames = new Set<string>();
         let currentScope = scope;
         while (isXmlScope(currentScope)) {
-            for (let name of currentScope.xmlFile.ast.component.api.functions.map((f) => f.name)) {
+            for (let name of currentScope.xmlFile.ast.component.api?.functions.map((f) => f.name) ?? []) {
                 if (!filterName || name === filterName) {
                     funcNames.add(name);
                 }
@@ -744,24 +819,44 @@ export class Program {
     public getCodeActions(pathAbsolute: string, range: Range) {
         const codeActions = [] as CodeAction[];
         const file = this.getFile(pathAbsolute);
+        if (file) {
+            const diagnostics = this
+                //get all current diagnostics (filtered by diagnostic filters)
+                .getDiagnostics()
+                //only keep diagnostics related to this file
+                .filter(x => x.file === file)
+                //only keep diagnostics that touch this range
+                .filter(x => util.rangesIntersect(x.range, range));
 
-        this.plugins.emit('beforeProgramGetCodeActions', this, file, range, codeActions);
+            const scopes = this.getScopesForFile(file);
 
-        //get code actions from the file
-        file.getCodeActions(range, codeActions);
-
-        //get code actions from every scope this file is a member of
-        for (let key in this.scopes) {
-            let scope = this.scopes[key];
-
-            if (scope.hasFile(file)) {
-                //get code actions from each scope this file is a member of
-                scope.getCodeActions(file, range, codeActions);
-            }
+            this.plugins.emit('onGetCodeActions', {
+                program: this,
+                file: file,
+                range: range,
+                diagnostics: diagnostics,
+                scopes: scopes,
+                codeActions: codeActions
+            });
         }
-
-        this.plugins.emit('afterProgramGetCodeActions', this, file, range, codeActions);
         return codeActions;
+    }
+
+    /**
+     * Get semantic tokens for the specified file
+     */
+    public getSemanticTokens(srcPath: string) {
+        const file = this.getFile(srcPath);
+        if (file) {
+            const result = [] as SemanticToken[];
+            this.plugins.emit('onGetSemanticTokens', {
+                program: this,
+                file: file,
+                scopes: this.getScopesForFile(file),
+                semanticTokens: result
+            });
+            return result;
+        }
     }
 
     public getSignatureHelp(filepath: string, position: Position): SignatureInfoObj[] {
@@ -1094,7 +1189,8 @@ export class Program {
             outputPath = s`${stagingFolderPath}/${outputPath}`;
             return {
                 file: file,
-                outputPath: outputPath
+                outputPath: outputPath,
+                editor: new AstEditor()
             };
         });
 
@@ -1105,8 +1201,14 @@ export class Program {
             if (isBrsFile(entry.file) && entry.file.isTypedef) {
                 return;
             }
+
             this.plugins.emit('beforeFileTranspile', entry);
             const { file, outputPath } = entry;
+            //if we have any edits, assume the file needs to be transpiled
+            if (entry.editor.hasChanges) {
+                //use the `editor` because it'll track the previous value for us and revert later on
+                entry.editor.setProperty(file, 'needsTranspiled', true);
+            }
             const result = file.transpile();
 
             //make sure the full dir path exists
@@ -1128,20 +1230,56 @@ export class Program {
             }
 
             this.plugins.emit('afterFileTranspile', entry);
+
+            //undo all `editor` edits that may have been applied to this file.
+            entry.editor.undoAll();
         });
 
-        //copy the brighterscript stdlib to the output directory
-        promises.push(
-            fsExtra.ensureDir(s`${stagingFolderPath}/source`).then(() => {
-                return fsExtra.copyFile(
-                    s`${__dirname}/../bslib.brs`,
-                    s`${stagingFolderPath}/source/bslib.brs`
-                );
-            })
-        );
+        //if there's no bslib file already loaded into the program, copy it to the staging directory
+        if (!this.getFileByPkgPath(bslibAliasedRokuModulesPkgPath) && !this.getFileByPkgPath(s`source/bslib.brs`)) {
+            promises.push(util.copyBslibToStaging(stagingFolderPath));
+        }
         await Promise.all(promises);
 
         this.plugins.emit('afterProgramTranspile', this, entries);
+    }
+
+    /**
+     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     */
+    public findFilesForFunction(functionName: string) {
+        const files = [] as BscFile[];
+        const lowerFunctionName = functionName.toLowerCase();
+        //find every file with this function defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                //TODO handle namespace-relative function calls
+                //if the file has a function with this name
+                if (file.parser.references.functionStatementLookup.get(lowerFunctionName) !== undefined) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
+    }
+
+    /**
+     * Find a list of files in the program that have a class with the given name (case INsensitive)
+     */
+    public findFilesForClass(className: string) {
+        const files = [] as BscFile[];
+        const lowerClassName = className.toLowerCase();
+        //find every file with this class defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                //TODO handle namespace-relative classes
+                //if the file has a function with this name
+                if (file.parser.references.classStatementLookup.get(lowerClassName) !== undefined) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
     }
 
     /**

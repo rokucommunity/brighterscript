@@ -1,20 +1,22 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer';
 import { CompoundAssignmentOperators, TokenKind } from '../lexer';
-import { SourceNode } from 'source-map';
-import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, AnnotationExpression } from './Expression';
+import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, AnnotationExpression, FunctionParameterExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
 import { Position } from 'vscode-languageserver';
-import type { TranspileState } from './TranspileState';
+import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode, Parser } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInvalidType, isLiteralExpression, isVoidType } from '../astUtils/reflection';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isTypedefProvider, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
+import type { BscType } from '../types/BscType';
+import type { SourceNode } from 'source-map';
+import type { TranspileState } from './TranspileState';
 
 /**
  * A BrightScript statement
@@ -31,7 +33,7 @@ export abstract class Statement {
      */
     public annotations: AnnotationExpression[];
 
-    public abstract transpile(state: TranspileState): TranspileResult;
+    public abstract transpile(state: BrsTranspileState): TranspileResult;
 
     /**
      * When being considered by the walk visitor, this describes what type of element the current class is.
@@ -51,7 +53,7 @@ export class EmptyStatement extends Statement {
         super();
     }
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         return [];
     }
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -76,7 +78,7 @@ export class Body extends Statement implements TypedefProvider {
         );
     }
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
         for (let i = 0; i < this.statements.length; i++) {
             let statement = this.statements[i];
@@ -109,14 +111,15 @@ export class Body extends Statement implements TypedefProvider {
         return result;
     }
 
-    getTypedef(state: TranspileState) {
+    getTypedef(state: BrsTranspileState) {
         let result = [];
         for (const statement of this.statements) {
             //if the current statement supports generating typedef, call it
-            if ('getTypedef' in statement) {
+            if (isTypedefProvider(statement)) {
                 result.push(
-                    ...(statement as TypedefProvider).getTypedef(state),
-                    state.newline()
+                    state.indent(),
+                    ...statement.getTypedef(state),
+                    state.newline
                 );
             }
         }
@@ -145,15 +148,15 @@ export class AssignmentStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         //if the value is a compound assignment, just transpile the expression itself
         if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.operator?.kind)) {
             return this.value.transpile(state);
         } else {
             return [
-                new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text),
+                state.transpileToken(this.name),
                 ' ',
-                new SourceNode(this.equals.range.start.line + 1, this.equals.range.start.character, state.pathAbsolute, '='),
+                state.transpileToken(this.equals),
                 ' ',
                 ...this.value.transpile(state)
             ];
@@ -183,7 +186,7 @@ export class Block extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         state.blockDepth++;
         let results = [] as TranspileResult;
         for (let i = 0; i < this.statements.length; i++) {
@@ -200,7 +203,7 @@ export class Block extends Statement {
             } else {
                 //add a newline and indent
                 results.push(
-                    state.newline(),
+                    state.newline,
                     state.indent()
                 );
             }
@@ -235,7 +238,7 @@ export class ExpressionStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         return this.expression.transpile(state);
     }
 
@@ -267,7 +270,7 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
         return this.comments.map(x => x.text).join('\n');
     }
 
-    transpile(state: TranspileState): Array<SourceNode | string> {
+    transpile(state: BrsTranspileState) {
         let result = [];
         for (let i = 0; i < this.comments.length; i++) {
             let comment = this.comments[i];
@@ -275,7 +278,7 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
                 result.push(state.indent());
             }
             result.push(
-                new SourceNode(comment.range.start.line + 1, comment.range.start.character, state.pathAbsolute, comment.text)
+                state.transpileToken(comment)
             );
             //add newline for all except final comment
             if (i < this.comments.length - 1) {
@@ -286,7 +289,7 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
     }
 
     public getTypedef(state: TranspileState) {
-        return this.transpile(state);
+        return this.transpile(state as BrsTranspileState);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -306,9 +309,9 @@ export class ExitForStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState): Array<SourceNode | string> {
+    transpile(state: BrsTranspileState) {
         return [
-            new SourceNode(this.tokens.exitFor.range.start.line + 1, this.tokens.exitFor.range.start.character, state.pathAbsolute, 'exit for')
+            state.transpileToken(this.tokens.exitFor)
         ];
     }
 
@@ -330,9 +333,9 @@ export class ExitWhileStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState): Array<SourceNode | string> {
+    transpile(state: BrsTranspileState) {
         return [
-            new SourceNode(this.tokens.exitWhile.range.start.line + 1, this.tokens.exitWhile.range.start.character, state.pathAbsolute, 'exit while')
+            state.transpileToken(this.tokens.exitWhile)
         ];
     }
 
@@ -367,7 +370,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
     }
 
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         //create a fake token using the full transpiled name
         let nameToken = {
             ...this.name,
@@ -377,8 +380,20 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         return this.func.transpile(state, nameToken);
     }
 
-    getTypedef(state: TranspileState) {
-        return this.func.getTypedef(state, this.name);
+    getTypedef(state: BrsTranspileState) {
+        let result = [];
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+
+        result.push(
+            ...this.func.getTypedef(state, this.name)
+        );
+        return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -409,10 +424,10 @@ export class IfStatement extends Statement {
     }
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         let results = [];
         //if   (already indented by block)
-        results.push(new SourceNode(this.tokens.if.range.start.line + 1, this.tokens.if.range.start.character, state.pathAbsolute, 'if'));
+        results.push(state.transpileToken(this.tokens.if));
         results.push(' ');
         //conditions
         results.push(...this.condition.transpile(state));
@@ -420,7 +435,7 @@ export class IfStatement extends Statement {
         //then
         if (this.tokens.then) {
             results.push(
-                new SourceNode(this.tokens.then.range.start.line + 1, this.tokens.then.range.start.character, state.pathAbsolute, 'then')
+                state.transpileToken(this.tokens.then)
             );
         } else {
             results.push('then');
@@ -440,7 +455,7 @@ export class IfStatement extends Statement {
             //else
             results.push(
                 state.indent(),
-                new SourceNode(this.tokens.else.range.start.line + 1, this.tokens.else.range.start.character, state.pathAbsolute, 'else')
+                state.transpileToken(this.tokens.else)
             );
         }
 
@@ -478,7 +493,7 @@ export class IfStatement extends Statement {
         results.push(state.indent());
         if (this.tokens.endIf) {
             results.push(
-                new SourceNode(this.tokens.endIf.range.start.line + 1, this.tokens.endIf.range.start.character, state.pathAbsolute, 'end if')
+                state.transpileToken(this.tokens.endIf)
             );
         } else {
             results.push('end if');
@@ -510,10 +525,10 @@ export class IncrementStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState): Array<SourceNode | string> {
+    transpile(state: BrsTranspileState) {
         return [
             ...this.value.transpile(state),
-            new SourceNode(this.operator.range.start.line + 1, this.operator.range.start.character, state.pathAbsolute, this.operator.text)
+            state.transpileToken(this.operator)
         ];
     }
 
@@ -560,25 +575,28 @@ export class PrintStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         let result = [
-            new SourceNode(this.tokens.print.range.start.line + 1, this.tokens.print.range.start.character, state.pathAbsolute, 'print'),
+            state.transpileToken(this.tokens.print),
             ' '
         ];
         for (let i = 0; i < this.expressions.length; i++) {
-            let expression: any = this.expressions[i];
-            if (expression.transpile) {
-                //separate print statements with a semi-colon
-                if (i > 0) {
-                    result.push(' ; ');
-                }
-                result.push(...(expression as ExpressionStatement).transpile(state));
+            const expressionOrSeparator: any = this.expressions[i];
+            if (expressionOrSeparator.transpile) {
+                result.push(...(expressionOrSeparator as ExpressionStatement).transpile(state));
             } else {
-                //skip these because I think they are bogus items only added for use in the runtime
+                result.push(
+                    state.tokenToSourceNode(expressionOrSeparator)
+                );
+            }
+            //if there's an expression after us, add a space
+            if ((this.expressions[i + 1] as any)?.transpile) {
+                result.push(' ');
             }
         }
         return result;
     }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             for (let i = 0; i < this.expressions.length; i++) {
@@ -607,12 +625,12 @@ export class DimStatement extends Statement {
     }
     public range: Range;
 
-    public transpile(state: TranspileState) {
+    public transpile(state: BrsTranspileState) {
         let result = [
-            state.sourceNode(this.dimToken, 'dim'),
+            state.transpileToken(this.dimToken),
             ' ',
-            state.sourceNode(this.identifier, this.identifier.text),
-            state.sourceNode(this.openingSquare, '[')
+            state.transpileToken(this.identifier),
+            state.transpileToken(this.openingSquare)
         ];
         for (let i = 0; i < this.dimensions.length; i++) {
             if (i > 0) {
@@ -622,7 +640,7 @@ export class DimStatement extends Statement {
                 ...this.dimensions[i].transpile(state)
             );
         }
-        result.push(state.sourceNode(this.closingSquare, ']'));
+        result.push(state.transpileToken(this.closingSquare));
         return result;
     }
 
@@ -648,11 +666,11 @@ export class GotoStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState): Array<SourceNode | string> {
+    transpile(state: BrsTranspileState) {
         return [
-            new SourceNode(this.tokens.goto.range.start.line + 1, this.tokens.goto.range.start.character, state.pathAbsolute, 'goto'),
+            state.transpileToken(this.tokens.goto),
             ' ',
-            new SourceNode(this.tokens.label.range.start.line + 1, this.tokens.label.range.start.character, state.pathAbsolute, this.tokens.label.text)
+            state.transpileToken(this.tokens.label)
         ];
     }
 
@@ -674,10 +692,10 @@ export class LabelStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState): Array<SourceNode | string> {
+    transpile(state: BrsTranspileState) {
         return [
-            new SourceNode(this.tokens.identifier.range.start.line + 1, this.tokens.identifier.range.start.character, state.pathAbsolute, this.tokens.identifier.text),
-            new SourceNode(this.tokens.colon.range.start.line + 1, this.tokens.colon.range.start.character, state.pathAbsolute, ':')
+            state.transpileToken(this.tokens.identifier),
+            state.transpileToken(this.tokens.colon)
 
         ];
     }
@@ -703,10 +721,10 @@ export class ReturnStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
-            new SourceNode(this.tokens.return.range.start.line + 1, this.tokens.return.range.start.character, state.pathAbsolute, 'return')
+            state.transpileToken(this.tokens.return)
         );
         if (this.value) {
             result.push(' ');
@@ -734,9 +752,9 @@ export class EndStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         return [
-            new SourceNode(this.tokens.end.range.start.line + 1, this.tokens.end.range.start.character, state.pathAbsolute, 'end')
+            state.transpileToken(this.tokens.end)
         ];
     }
 
@@ -757,9 +775,9 @@ export class StopStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         return [
-            new SourceNode(this.tokens.stop.range.start.line + 1, this.tokens.stop.range.start.character, state.pathAbsolute, 'stop')
+            state.transpileToken(this.tokens.stop)
         ];
     }
 
@@ -786,11 +804,11 @@ export class ForStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         let result = [];
         //for
         result.push(
-            new SourceNode(this.forToken.range.start.line + 1, this.forToken.range.start.character, state.pathAbsolute, 'for'),
+            state.transpileToken(this.forToken),
             ' '
         );
         //i=1
@@ -800,7 +818,7 @@ export class ForStatement extends Statement {
         );
         //to
         result.push(
-            new SourceNode(this.toToken.range.start.line + 1, this.toToken.range.start.character, state.pathAbsolute, 'to'),
+            state.transpileToken(this.toToken),
             ' '
         );
         //final value
@@ -809,7 +827,7 @@ export class ForStatement extends Statement {
         if (this.stepToken) {
             result.push(
                 ' ',
-                new SourceNode(this.stepToken.range.start.line + 1, this.stepToken.range.start.character, state.pathAbsolute, 'step'),
+                state.transpileToken(this.stepToken),
                 ' ',
                 this.increment.transpile(state)
             );
@@ -824,7 +842,7 @@ export class ForStatement extends Statement {
         //end for
         result.push(
             state.indent(),
-            new SourceNode(this.endForToken.range.start.line + 1, this.endForToken.range.start.character, state.pathAbsolute, 'end for')
+            state.transpileToken(this.endForToken)
         );
 
         return result;
@@ -862,21 +880,21 @@ export class ForEachStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         let result = [];
         //for each
         result.push(
-            new SourceNode(this.tokens.forEach.range.start.line + 1, this.tokens.forEach.range.start.character, state.pathAbsolute, 'for each'),
+            state.transpileToken(this.tokens.forEach),
             ' '
         );
         //item
         result.push(
-            new SourceNode(this.tokens.forEach.range.start.line + 1, this.tokens.forEach.range.start.character, state.pathAbsolute, this.item.text),
+            state.transpileToken(this.item),
             ' '
         );
         //in
         result.push(
-            new SourceNode(this.tokens.in.range.start.line + 1, this.tokens.in.range.start.character, state.pathAbsolute, 'in'),
+            state.transpileToken(this.tokens.in),
             ' '
         );
         //target
@@ -891,7 +909,7 @@ export class ForEachStatement extends Statement {
         //end for
         result.push(
             state.indent(),
-            new SourceNode(this.tokens.endFor.range.start.line + 1, this.tokens.endFor.range.start.character, state.pathAbsolute, 'end for')
+            state.transpileToken(this.tokens.endFor)
         );
         return result;
     }
@@ -922,11 +940,11 @@ export class WhileStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         let result = [];
         //while
         result.push(
-            new SourceNode(this.tokens.while.range.start.line + 1, this.tokens.while.range.start.character, state.pathAbsolute, 'while'),
+            state.transpileToken(this.tokens.while),
             ' '
         );
         //condition
@@ -944,7 +962,7 @@ export class WhileStatement extends Statement {
         //end while
         result.push(
             state.indent(),
-            new SourceNode(this.tokens.endWhile.range.start.line + 1, this.tokens.endWhile.range.start.character, state.pathAbsolute, 'end while')
+            state.transpileToken(this.tokens.endWhile)
         );
 
         return result;
@@ -972,7 +990,7 @@ export class DottedSetStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         //if the value is a compound assignment, don't add the obj, dot, name, or operator...the expression will handle that
         if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.operator?.kind)) {
             return this.value.transpile(state);
@@ -982,7 +1000,7 @@ export class DottedSetStatement extends Statement {
                 ...this.obj.transpile(state),
                 '.',
                 //name
-                new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text),
+                state.transpileToken(this.name),
                 ' = ',
                 //right-hand-side of assignment
                 ...this.value.transpile(state)
@@ -1012,7 +1030,7 @@ export class IndexedSetStatement extends Statement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         //if the value is a component assignment, don't add the obj, index or operator...the expression will handle that
         if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.operator?.kind)) {
             return this.value.transpile(state);
@@ -1021,11 +1039,11 @@ export class IndexedSetStatement extends Statement {
                 //obj
                 ...this.obj.transpile(state),
                 //   [
-                new SourceNode(this.openingSquare.range.start.line + 1, this.openingSquare.range.start.character, state.pathAbsolute, '['),
+                state.transpileToken(this.openingSquare),
                 //    index
                 ...this.index.transpile(state),
                 //         ]
-                new SourceNode(this.closingSquare.range.start.line + 1, this.closingSquare.range.start.character, state.pathAbsolute, ']'),
+                state.transpileToken(this.closingSquare),
                 //           =
                 ' = ',
                 //             value
@@ -1059,22 +1077,22 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
-            new SourceNode(this.tokens.library.range.start.line + 1, this.tokens.library.range.start.character, state.pathAbsolute, 'library')
+            state.transpileToken(this.tokens.library)
         );
         //there will be a parse error if file path is missing, but let's prevent a runtime error just in case
         if (this.tokens.filePath) {
             result.push(
                 ' ',
-                new SourceNode(this.tokens.filePath.range.start.line + 1, this.tokens.filePath.range.start.character, state.pathAbsolute, this.tokens.filePath.text)
+                state.transpileToken(this.tokens.filePath)
             );
         }
         return result;
     }
 
-    getTypedef(state: TranspileState) {
+    getTypedef(state: BrsTranspileState) {
         return this.transpile(state);
     }
 
@@ -1111,25 +1129,25 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         return this.nameExpression.getName(parseMode);
     }
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         //namespaces don't actually have any real content, so just transpile their bodies
         return this.body.transpile(state);
     }
 
-    getTypedef(state: TranspileState) {
+    getTypedef(state: BrsTranspileState) {
         let result = [
             'namespace ',
             ...this.nameExpression.getName(ParseMode.BrighterScript),
-            state.newline()
+            state.newline
         ];
         state.blockDepth++;
         result.push(
-            state.indent(),
             ...this.body.getTypedef(state)
         );
         state.blockDepth--;
 
         result.push(
+            state.indent(),
             'end namespace'
         );
         return result;
@@ -1170,23 +1188,21 @@ export class ImportStatement extends Statement implements TypedefProvider {
     public filePath: string;
     public range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         //The xml files are responsible for adding the additional script imports, but
         //add the import statement as a comment just for debugging purposes
         return [
-            new SourceNode(
-                this.range.start.line + 1,
-                this.range.start.character,
-                state.file.pathAbsolute,
-                `'${this.importToken.text} ${this.filePathToken.text}`
-            )
+            `'`,
+            state.transpileToken(this.importToken),
+            ' ',
+            state.transpileToken(this.filePathToken)
         ];
     }
 
     /**
      * Get the typedef for this statement
      */
-    public getTypedef(state: TranspileState) {
+    public getTypedef(state: BrsTranspileState) {
         return [
             this.importToken.text,
             ' ',
@@ -1197,6 +1213,285 @@ export class ImportStatement extends Statement implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+}
+
+export class InterfaceStatement extends Statement implements TypedefProvider {
+    constructor(
+        interfaceToken: Token,
+        name: Identifier,
+        extendsToken: Token,
+        public parentInterfaceName: NamespacedVariableNameExpression,
+        public body: Statement[],
+        endInterfaceToken: Token,
+        public namespaceName: NamespacedVariableNameExpression
+    ) {
+        super();
+        this.tokens.interface = interfaceToken;
+        this.tokens.name = name;
+        this.tokens.extends = extendsToken;
+        this.tokens.endInterface = endInterfaceToken;
+    }
+
+    public tokens = {} as {
+        interface: Token;
+        name: Identifier;
+        extends: Token;
+        endInterface: Token;
+    };
+
+    public range: Range;
+
+    public get fields() {
+        return this.body.filter(x => isInterfaceFieldStatement(x));
+    }
+
+    public get methods() {
+        return this.body.filter(x => isInterfaceMethodStatement(x));
+    }
+
+    /**
+     * The name of the interface WITH its leading namespace (if applicable)
+     */
+    public get fullName() {
+        const name = this.tokens.name?.text;
+        if (name) {
+            if (this.namespaceName) {
+                let namespaceName = this.namespaceName.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this interface doesn't have a name
+            return undefined;
+        }
+    }
+
+    /**
+     * The name of the interface (without the namespace prefix)
+     */
+    public get name() {
+        return this.tokens.name?.text;
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        //interfaces should completely disappear at runtime
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
+            this.tokens.interface.text,
+            ' ',
+            this.tokens.name.text
+        );
+        const parentInterfaceName = this.parentInterfaceName?.getName(ParseMode.BrighterScript);
+        if (parentInterfaceName) {
+            result.push(
+                ' extends ',
+                parentInterfaceName
+            );
+        }
+        const body = this.body ?? [];
+        if (body.length > 0) {
+            state.blockDepth++;
+        }
+        for (const statement of body) {
+            if (isInterfaceMethodStatement(statement) || isInterfaceFieldStatement(statement)) {
+                result.push(
+                    state.newline,
+                    state.indent(),
+                    ...statement.getTypedef(state)
+                );
+            } else {
+                result.push(
+                    state.newline,
+                    state.indent(),
+                    ...statement.transpile(state)
+                );
+            }
+        }
+        if (body.length > 0) {
+            state.blockDepth--;
+        }
+        result.push(
+            state.newline,
+            state.indent(),
+            'end interface',
+            state.newline
+        );
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            for (let i = 0; i < this.body.length; i++) {
+                walk(this.body, i, visitor, options, this);
+            }
+        }
+    }
+}
+
+export class InterfaceFieldStatement extends Statement implements TypedefProvider {
+    public transpile(state: BrsTranspileState): TranspileResult {
+        throw new Error('Method not implemented.');
+    }
+    constructor(
+        nameToken: Identifier,
+        asToken: Token,
+        typeToken: Token,
+        public type: BscType
+    ) {
+        super();
+        this.tokens.name = nameToken;
+        this.tokens.as = asToken;
+        this.tokens.type = typeToken;
+    }
+    public get range() {
+        return util.createRangeFromPositions(
+            this.tokens.name.range.start,
+            (this.tokens.type ?? this.tokens.as ?? this.tokens.name).range.end
+        );
+    }
+
+    public tokens = {} as {
+        name: Identifier;
+        as: Token;
+        type: Token;
+    };
+
+    public get name() {
+        return this.tokens.name.text;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
+        const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+
+        result.push(
+            this.tokens.name.text
+        );
+        if (this.tokens.type?.text?.length > 0) {
+            result.push(
+                ' as ',
+                this.tokens.type.text
+            );
+        }
+        return result;
+    }
+
+}
+
+export class InterfaceMethodStatement extends Statement implements TypedefProvider {
+    public transpile(state: BrsTranspileState): TranspileResult {
+        throw new Error('Method not implemented.');
+    }
+    constructor(
+        functionTypeToken: Token,
+        nameToken: Identifier,
+        leftParen: Token,
+        public params: FunctionParameterExpression[],
+        rightParen: Token,
+        asToken?: Token,
+        returnTypeToken?: Token,
+        public returnType?: BscType
+    ) {
+        super();
+        this.tokens.functionType = functionTypeToken;
+        this.tokens.name = nameToken;
+        this.tokens.leftParen = leftParen;
+        this.tokens.rightParen = rightParen;
+        this.tokens.as = asToken;
+        this.tokens.returnType = returnTypeToken;
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            this.tokens.name.range.start,
+            (
+                this.tokens.returnType ??
+                this.tokens.as ??
+                this.tokens.rightParen ??
+                this.params?.[this.params?.length - 1] ??
+                this.tokens.leftParen ??
+                this.tokens.name ??
+                this.tokens.functionType
+            ).range.end
+        );
+    }
+
+    public tokens = {} as {
+        functionType: Token;
+        name: Identifier;
+        leftParen: Token;
+        rightParen: Token;
+        as: Token;
+        returnType: Token;
+    };
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+
+        result.push(
+            this.tokens.functionType.text,
+            ' ',
+            this.tokens.name.text,
+            '('
+        );
+        const params = this.params ?? [];
+        for (let i = 0; i < params.length; i++) {
+            if (i > 0) {
+                result.push(', ');
+            }
+            const param = params[i];
+            result.push(param.name.text);
+            if (param.typeToken?.text?.length > 0) {
+                result.push(
+                    ' as ',
+                    param.typeToken.text
+                );
+            }
+        }
+        result.push(
+            ')'
+        );
+        if (this.tokens.returnType?.text.length > 0) {
+            result.push(
+                ' as ',
+                this.tokens.returnType.text
+            );
+        }
+        return result;
     }
 }
 
@@ -1252,7 +1547,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState): Array<SourceNode | string> {
+    transpile(state: BrsTranspileState) {
         let result = [];
         //make the builder
         result.push(...this.getTranspiledBuilder(state));
@@ -1265,25 +1560,36 @@ export class ClassStatement extends Statement implements TypedefProvider {
         return result;
     }
 
-    getTypedef(state: TranspileState) {
-        const result = [] as Array<string | SourceNode>;
+    getTypedef(state: BrsTranspileState) {
+        const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
         result.push(
             'class ',
             this.name.text
         );
         if (this.extendsKeyword && this.parentClassName) {
+            const fqName = util.getFullyQualifiedClassName(
+                this.parentClassName.getName(ParseMode.BrighterScript),
+                this.namespaceName?.getName(ParseMode.BrighterScript)
+            );
             result.push(
-                ` extends ${this.parentClassName.getName(ParseMode.BrighterScript)}`
+                ` extends ${fqName}`
             );
         }
-        result.push(state.newline());
+        result.push(state.newline);
         state.blockDepth++;
         for (const member of this.body) {
-            if ('getTypedef' in member) {
+            if (isTypedefProvider(member)) {
                 result.push(
                     state.indent(),
-                    ...(member as TypedefProvider).getTypedef(state),
-                    state.newline()
+                    ...member.getTypedef(state),
+                    state.newline
                 );
             }
         }
@@ -1300,7 +1606,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * For class inheritance, every class is given an index.
      * The base class is index 0, its child is index 1, and so on.
      */
-    public getParentClassIndex(state: TranspileState) {
+    public getParentClassIndex(state: BrsTranspileState) {
         let myIndex = 0;
         let stmt = this as ClassStatement;
         while (stmt) {
@@ -1326,7 +1632,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * Get all ancestor classes, in closest-to-furthest order (i.e. 0 is parent, 1 is grandparent, etc...).
      * This will return an empty array if no ancestors were found
      */
-    public getAncestors(state: TranspileState) {
+    public getAncestors(state: BrsTranspileState) {
         let ancestors = [] as ClassStatement[];
         let stmt = this as ClassStatement;
         while (stmt) {
@@ -1390,7 +1696,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * This needs to be a separate function so that child classes can call the builder from their parent
      * without instantiating the parent constructor at that point in time.
      */
-    private getTranspiledBuilder(state: TranspileState) {
+    private getTranspiledBuilder(state: BrsTranspileState) {
         let result = [];
         result.push(`function ${this.getBuilderName(this.getName(ParseMode.BrightScript))}()\n`);
         state.blockDepth++;
@@ -1416,7 +1722,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             result.push('instance = {}');
         }
         result.push(
-            state.newline(),
+            state.newline,
             state.indent()
         );
         let parentClassIndex = this.getParentClassIndex(state);
@@ -1445,7 +1751,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 ) {
                     result.push(
                         `instance.super${parentClassIndex}_${statement.name.text} = instance.${statement.name.text}`,
-                        state.newline(),
+                        state.newline,
                         state.indent()
                     );
                 }
@@ -1453,10 +1759,10 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 state.classStatement = this;
                 result.push(
                     'instance.',
-                    state.sourceNode(statement.name, statement.name.text),
+                    state.transpileToken(statement.name),
                     ' = ',
                     ...statement.transpile(state),
-                    state.newline(),
+                    state.newline,
                     state.indent()
                 );
                 delete state.classStatement;
@@ -1464,7 +1770,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 //other random statements (probably just comments)
                 result.push(
                     ...statement.transpile(state),
-                    state.newline(),
+                    state.newline,
                     state.indent()
                 );
             }
@@ -1482,30 +1788,15 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * consumers should call to create a new instance of that class.
      * This invokes the builder, gets an instance of the class, then invokes the "new" function on that class.
      */
-    private getTranspiledClassFunction(state: TranspileState) {
+    private getTranspiledClassFunction(state: BrsTranspileState) {
         let result = [];
         const constructorFunction = this.getConstructorFunction();
         const constructorParams = constructorFunction ? constructorFunction.func.parameters : [];
 
         result.push(
-            new SourceNode(
-                this.classKeyword.range.start.line + 1,
-                this.classKeyword.range.start.character,
-                state.pathAbsolute,
-                'function'
-            ),
-            new SourceNode(
-                this.classKeyword.range.end.line + 1,
-                this.classKeyword.range.end.character,
-                state.pathAbsolute,
-                ' '
-            ),
-            new SourceNode(
-                this.name.range.start.line + 1,
-                this.name.range.start.character,
-                state.pathAbsolute,
-                this.getName(ParseMode.BrightScript)
-            ),
+            state.sourceNode(this.classKeyword, 'function'),
+            state.sourceNode(this.classKeyword, ' '),
+            state.sourceNode(this.name, this.getName(ParseMode.BrightScript)),
             `(`
         );
         let i = 0;
@@ -1537,7 +1828,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 result.push(', ');
             }
             result.push(
-                state.sourceNode(param, param.name.text)
+                state.transpileToken(param.name)
             );
             i++;
         }
@@ -1580,7 +1871,7 @@ export class ClassMethodStatement extends FunctionStatement {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState): Array<SourceNode | string> {
+    transpile(state: BrsTranspileState) {
         if (this.name.text.toLowerCase() === 'new') {
             this.ensureSuperConstructorCall(state);
             //TODO we need to undo this at the bottom of this method
@@ -1612,8 +1903,15 @@ export class ClassMethodStatement extends FunctionStatement {
         return this.func.transpile(state);
     }
 
-    getTypedef(state: TranspileState) {
+    getTypedef(state: BrsTranspileState) {
         const result = [] as string[];
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
         if (this.accessModifier) {
             result.push(
                 this.accessModifier.text,
@@ -1624,7 +1922,7 @@ export class ClassMethodStatement extends FunctionStatement {
             result.push('override ');
         }
         result.push(
-            ...super.getTypedef(state)
+            ...this.func.getTypedef(state, this.name)
         );
         return result;
     }
@@ -1633,7 +1931,7 @@ export class ClassMethodStatement extends FunctionStatement {
      * All child classes must call the parent constructor. The type checker will warn users when they don't call it in their own class,
      * but we still need to call it even if they have omitted it. This injects the super call if it's missing
      */
-    private ensureSuperConstructorCall(state: TranspileState) {
+    private ensureSuperConstructorCall(state: BrsTranspileState) {
         //if this class doesn't extend another class, quit here
         if (state.classStatement.getAncestors(state).length === 0) {
             return;
@@ -1688,7 +1986,7 @@ export class ClassMethodStatement extends FunctionStatement {
     /**
      * Inject field initializers at the top of the `new` function (after any present `super()` call)
      */
-    private injectFieldInitializersForConstructor(state: TranspileState) {
+    private injectFieldInitializersForConstructor(state: BrsTranspileState) {
         let startingIndex = state.classStatement.hasParentClass() ? 1 : 0;
 
         let newStatements = [] as Statement[];
@@ -1741,7 +2039,7 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
 
     /**
      * Derive a ValueKind from the type token, or the initial value.
-     * Defaults to `ValueKind.Dynamic`
+     * Defaults to `DynamicType`
      */
     getType() {
         if (this.type) {
@@ -1755,13 +2053,21 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState): Array<SourceNode | string> {
+    transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
     }
 
-    getTypedef(state: TranspileState) {
+    getTypedef(state: BrsTranspileState) {
         const result = [];
         if (this.name) {
+            for (let annotation of this.annotations ?? []) {
+                result.push(
+                    ...annotation.getTypedef(state),
+                    state.newline,
+                    state.indent()
+                );
+            }
+
             let type = this.getType();
             if (isInvalidType(type) || isVoidType(type)) {
                 type = new DynamicType();
@@ -1805,19 +2111,19 @@ export class TryCatchStatement extends Statement {
         );
     }
 
-    public transpile(state: TranspileState): TranspileResult {
+    public transpile(state: BrsTranspileState): TranspileResult {
         return [
-            state.sourceNode(this.tryToken, 'try'),
+            state.transpileToken(this.tryToken),
             ...this.tryBranch.transpile(state),
-            state.newline(),
+            state.newline,
             state.indent(),
-            state.sourceNode(this.catchToken, 'catch'),
+            state.transpileToken(this.catchToken),
             ' ',
-            state.sourceNode(this.exceptionVariable, this.exceptionVariable.text),
+            state.transpileToken(this.exceptionVariable),
             ...this.catchBranch.transpile(state),
-            state.newline(),
+            state.newline,
             state.indent(),
-            state.sourceNode(this.endTryToken, 'end try')
+            state.transpileToken(this.endTryToken)
         ];
     }
 
@@ -1842,9 +2148,9 @@ export class ThrowStatement extends Statement {
     }
     public range: Range;
 
-    public transpile(state: TranspileState) {
+    public transpile(state: BrsTranspileState) {
         const result = [
-            state.sourceNode(this.throwToken, 'throw'),
+            state.transpileToken(this.throwToken),
             ' '
         ];
 

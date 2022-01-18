@@ -1,4 +1,4 @@
-module.exports = (suite, name, brighterscript, projectPath) => {
+module.exports = (suite, name, brighterscript, projectPath, options) => {
     const { ProgramBuilder } = brighterscript;
 
     suite.add(name, (deferred) => {
@@ -22,6 +22,7 @@ module.exports = (suite, name, brighterscript, projectPath) => {
             console.error(error);
         });
     }, {
+        ...options,
         'defer': true
     });
 };

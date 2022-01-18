@@ -6,7 +6,10 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
-import { trim } from './testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, trim } from './testHelpers.spec';
+import { Logger } from './Logger';
+import type { BrsFile } from './files/BrsFile';
+import type { FunctionStatement, NamespaceStatement } from './parser';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -35,7 +38,17 @@ describe('Scope', () => {
         `);
 
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        expectZeroDiagnostics(program);
+    });
+
+    it('handles variables with javascript prototype names', () => {
+        program.addOrReplaceFile('source/main.brs', `
+            sub main()
+                constructor = true
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
     });
 
     it('flags parameter with same name as namespace', () => {
@@ -46,11 +59,9 @@ describe('Scope', () => {
             end sub
         `);
         program.validate();
-        expect(
-            program.getDiagnostics()[0]?.message
-        ).to.eql(
-            DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace('nameA').message
-        );
+        expectDiagnostics(program, [
+            DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace('nameA')
+        ]);
     });
 
     it('flags assignments with same name as namespace', () => {
@@ -63,11 +74,9 @@ describe('Scope', () => {
             end sub
         `);
         program.validate();
-        expect(
-            program.getDiagnostics().map(x => x.message)
-        ).to.eql([
-            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea').message,
-            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA').message
+        expectDiagnostics(program, [
+            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea'),
+            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA')
         ]);
     });
 
@@ -79,8 +88,7 @@ describe('Scope', () => {
             range: undefined
         }];
         source.addDiagnostics(expected);
-        const actual = source.getDiagnostics();
-        expect(actual).to.deep.equal(expected);
+        expectDiagnostics(source, expected);
     });
 
     it('allows getting all scopes', () => {
@@ -111,7 +119,7 @@ describe('Scope', () => {
                 s`${rootDir}/source/lib.brs`,
                 s`${rootDir}/source/main.brs`
             ]);
-            expect(program.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(program);
             expect(sourceScope.getOwnCallables()).is.lengthOf(3);
             expect(sourceScope.getAllCallables()).is.length.greaterThan(3);
         });
@@ -122,14 +130,14 @@ describe('Scope', () => {
             let originalLength = program.getScopeByName('source').getAllCallables().length;
 
             program.addOrReplaceFile('source/file.brs', `
-            function DoA()
-                print "A"
-            end function
+                function DoA()
+                    print "A"
+                end function
 
-             function DoA()
-                 print "A"
-             end function
-        `);
+                function DoA()
+                    print "A"
+                end function
+            `);
             expect(program.getScopeByName('source').getAllCallables().length).to.equal(originalLength + 2);
         });
     });
@@ -185,8 +193,7 @@ describe('Scope', () => {
                 end namespace
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
-            expect(program.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(program);
         });
         it('resolves local-variable function calls', () => {
             program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
@@ -198,8 +205,7 @@ describe('Scope', () => {
                 end sub`
             );
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
-            expect(program.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(program);
         });
 
         describe('function shadowing', () => {
@@ -213,16 +219,10 @@ describe('Scope', () => {
                     end sub
                 `);
                 program.validate();
-                let diagnostics = program.getDiagnostics().map(x => {
-                    return {
-                        message: x.message,
-                        range: x.range
-                    };
-                });
-                expect(diagnostics[0]).to.exist.and.to.eql({
-                    message: DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib').message,
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
                     range: Range.create(2, 24, 2, 27)
-                });
+                }]);
             });
 
             it('warns when local var has same name as built-in function', () => {
@@ -233,8 +233,7 @@ describe('Scope', () => {
                     end sub
                 `);
                 program.validate();
-                let diagnostics = program.getDiagnostics();
-                expect(diagnostics[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('warns when local var has same name as built-in function', () => {
@@ -245,8 +244,7 @@ describe('Scope', () => {
                     end sub
                 `);
                 program.validate();
-                let diagnostics = program.getDiagnostics();
-                expect(diagnostics[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('detects local function with same name as scope function', () => {
@@ -263,16 +261,10 @@ describe('Scope', () => {
                     end function
                 `);
                 program.validate();
-                let diagnostics = program.getDiagnostics().map(x => {
-                    return {
-                        message: x.message,
-                        range: x.range
-                    };
-                });
-                expect(diagnostics[0]).to.exist.and.to.eql({
+                expectDiagnostics(program, [{
                     message: DiagnosticMessages.localVarFunctionShadowsParentFunction('scope').message,
                     range: Range.create(2, 24, 2, 32)
-                });
+                }]);
             });
 
             it('detects local function with same name as scope function', () => {
@@ -286,16 +278,10 @@ describe('Scope', () => {
                     end function
                 `);
                 program.validate();
-                let diagnostics = program.getDiagnostics().map(x => {
-                    return {
-                        message: x.message,
-                        range: x.range
-                    };
-                });
-                expect(diagnostics[0]).to.exist.and.to.eql({
+                expectDiagnostics(program, [{
                     message: DiagnosticMessages.localVarShadowedByScopedFunction().message,
                     range: Range.create(2, 24, 2, 32)
-                });
+                }]);
             });
 
             it('flags scope function with same name (but different case) as built-in function', () => {
@@ -308,16 +294,10 @@ describe('Scope', () => {
                     end function
                 `);
                 program.validate();
-                let diagnostics = program.getDiagnostics().map(x => {
-                    return {
-                        message: x.message,
-                        range: x.range
-                    };
-                });
-                expect(diagnostics[0]).to.exist.and.to.eql({
+                expectDiagnostics(program, [{
                     message: DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction().message,
                     range: Range.create(4, 29, 4, 32)
-                });
+                }]);
             });
         });
 
@@ -331,15 +311,13 @@ describe('Scope', () => {
                      print "A"
                  end function
             `);
-            expect(
-                program.getDiagnostics().length
-            ).to.equal(0);
+            expectZeroDiagnostics(program);
             //validate the scope
             program.validate();
             //we should have the "DoA declared more than once" error twice (one for each function named "DoA")
-            expect(program.getDiagnostics().map(x => x.message).sort()).to.eql([
-                DiagnosticMessages.duplicateFunctionImplementation('DoA', 'source').message,
-                DiagnosticMessages.duplicateFunctionImplementation('DoA', 'source').message
+            expectDiagnostics(program, [
+                DiagnosticMessages.duplicateFunctionImplementation('DoA', 'source'),
+                DiagnosticMessages.duplicateFunctionImplementation('DoA', 'source')
             ]);
         });
 
@@ -349,12 +327,12 @@ describe('Scope', () => {
                     DoB()
                 end function
             `);
-            expect(program.getDiagnostics().length).to.equal(0);
+            expectZeroDiagnostics(program);
             //validate the scope
             program.validate();
-            expect(program.getDiagnostics()[0]).to.deep.include({
-                code: DiagnosticMessages.callToUnknownFunction('DoB', '').code
-            });
+            expectDiagnostics(program, [
+                DiagnosticMessages.callToUnknownFunction('DoB', 'source')
+            ]);
         });
 
         it('recognizes known callables', () => {
@@ -368,14 +346,31 @@ describe('Scope', () => {
             `);
             //validate the scope
             program.validate();
-            expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                DiagnosticMessages.callToUnknownFunction('DoC', 'source').message
+            expectDiagnostics(program, [
+                DiagnosticMessages.callToUnknownFunction('DoC', 'source')
             ]);
+        });
+
+        it('does not error with calls to callables in same namespace', () => {
+            program.addOrReplaceFile('source/file.bs', `
+                namespace Name.Space
+                    sub a(param as string)
+                        print param
+                    end sub
+
+                    sub b()
+                        a("hello")
+                    end sub
+                end namespace
+            `);
+            //validate the scope
+            program.validate();
+            expectZeroDiagnostics(program);
         });
 
         //We don't currently support someObj.callSomething() format, so don't throw errors on those
         it('does not fail on object callables', () => {
-            expect(program.getDiagnostics().length).to.equal(0);
+            expectZeroDiagnostics(program);
             program.addOrReplaceFile('source/file.brs', `
                function DoB()
                     m.doSomething()
@@ -384,7 +379,7 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             //shouldn't have any errors
-            expect(program.getDiagnostics().map(x => x.message)).to.eql([]);
+            expectZeroDiagnostics(program);
         });
 
         it('detects calling functions with too many parameters', () => {
@@ -396,9 +391,31 @@ describe('Scope', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().map(x => x.message)).includes(
+            expectDiagnostics(program, [
                 DiagnosticMessages.mismatchArgumentCount(0, 1).message
-            );
+            ]);
+        });
+
+        it('detects calling class constructors with too many parameters', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                function noop0()
+                end function
+
+                function noop1(p1)
+                end function
+
+                sub main()
+                   noop0(1)
+                   noop1(1,2)
+                   noop1()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(0, 1),
+                DiagnosticMessages.mismatchArgumentCount(1, 2),
+                DiagnosticMessages.mismatchArgumentCount(1, 0)
+            ]);
         });
 
         it('detects calling functions with too many parameters', () => {
@@ -410,9 +427,9 @@ describe('Scope', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().map(x => x.message)).to.includes(
-                DiagnosticMessages.mismatchArgumentCount(1, 0).message
-            );
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(1, 0)
+            ]);
         });
 
         it('allows skipping optional parameter', () => {
@@ -425,7 +442,7 @@ describe('Scope', () => {
             `);
             program.validate();
             //should have an error
-            expect(program.getDiagnostics().length).to.equal(0);
+            expectZeroDiagnostics(program);
         });
 
         it('shows expected parameter range in error message', () => {
@@ -438,9 +455,9 @@ describe('Scope', () => {
             `);
             program.validate();
             //should have an error
-            expect(program.getDiagnostics().map(x => x.message)).includes(
-                DiagnosticMessages.mismatchArgumentCount('1-2', 0).message
-            );
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount('1-2', 0)
+            ]);
         });
 
         it('handles expressions as arguments to a function', () => {
@@ -452,7 +469,7 @@ describe('Scope', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(0);
+            expectZeroDiagnostics(program);
         });
 
         it('Catches extra arguments for expressions as arguments to a function', () => {
@@ -465,9 +482,9 @@ describe('Scope', () => {
             `);
             program.validate();
             //should have an error
-            expect(program.getDiagnostics().map(x => x.message)).to.include(
-                DiagnosticMessages.mismatchArgumentCount(1, 2).message
-            );
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(1, 2)
+            ]);
         });
 
         it('handles JavaScript reserved names', () => {
@@ -482,7 +499,7 @@ describe('Scope', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(program);
         });
 
         it('Emits validation events', () => {
@@ -502,7 +519,7 @@ describe('Scope', () => {
                 name: 'Emits validation events',
                 beforeScopeValidate: validateStartScope,
                 afterScopeValidate: validateEndScope
-            }], undefined);
+            }], new Logger());
             program.validate();
             expect(validateStartScope.callCount).to.equal(2);
             expect(validateStartScope.calledWith(sourceScope)).to.be.true;
@@ -538,7 +555,7 @@ describe('Scope', () => {
                     end function
                 `);
                 program.validate();
-                expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                expectDiagnostics(program, [
                     DiagnosticMessages.invalidFunctionReturnType('unknownType').message,
                     DiagnosticMessages.invalidFunctionReturnType('unknownType').message
                 ]);
@@ -561,7 +578,7 @@ describe('Scope', () => {
                     end sub
                 `);
                 program.validate();
-                expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                expectDiagnostics(program, [
                     DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message,
                     DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message
                 ]);
@@ -580,9 +597,9 @@ describe('Scope', () => {
                     end class
                 `);
                 program.validate();
-                expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                    DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message,
-                    DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindType('unknownType').message,
+                    DiagnosticMessages.cannotFindType('unknownType').message
                 ]);
             });
 
@@ -603,7 +620,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('finds custom types from other namespaces', () => {
@@ -618,7 +635,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('detects missing custom types from current namespaces', () => {
@@ -633,7 +650,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                expectDiagnostics(program, [
                     DiagnosticMessages.invalidFunctionReturnType('UnknownType').message
                 ]);
             });
@@ -649,7 +666,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('finds custom types from other other files', () => {
@@ -665,7 +682,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('detects missing custom types from another namespaces', () => {
@@ -680,8 +697,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                    DiagnosticMessages.invalidFunctionReturnType('MyNamespace.UnknownType').message
+                expectDiagnostics(program, [
+                    DiagnosticMessages.invalidFunctionReturnType('MyNamespace.UnknownType')
                 ]);
             });
 
@@ -700,7 +717,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
 
                 program.addOrReplaceFile('components/bar.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
@@ -714,7 +731,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                expectDiagnostics(program, [
                     DiagnosticMessages.invalidFunctionReturnType('MyClass').message
                 ]);
             });
@@ -745,7 +762,7 @@ describe('Scope', () => {
 
                 program.validate();
 
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
 
             });
         });
@@ -803,6 +820,29 @@ describe('Scope', () => {
             expect(completions).to.be.length.greaterThan(0);
             //it should find documentation for completions
             expect(completions.filter(x => !!x.documentation)).to.have.length.greaterThan(0);
+        });
+    });
+
+    describe('buildNamespaceLookup', () => {
+        it('does not crash when class statement is missing `name` prop', () => {
+            program.addOrReplaceFile<BrsFile>('source/main.bs', `
+                namespace NameA
+                    class
+                    end class
+                end namespace
+            `);
+            program['scopes']['source'].buildNamespaceLookup();
+        });
+
+        it('does not crash when function statement is missing `name` prop', () => {
+            const file = program.addOrReplaceFile<BrsFile>('source/main.bs', `
+                namespace NameA
+                    function doSomething()
+                    end function
+                end namespace
+            `);
+            delete ((file.ast.statements[0] as NamespaceStatement).body.statements[0] as FunctionStatement).name;
+            program['scopes']['source'].buildNamespaceLookup();
         });
     });
 });

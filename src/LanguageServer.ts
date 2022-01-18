@@ -18,9 +18,13 @@ import type {
     ReferenceParams,
     SignatureHelp,
     SignatureHelpParams,
-    CodeActionParams
-} from 'vscode-languageserver';
+    CodeActionParams,
+    SemanticTokensOptions,
+    SemanticTokens,
+    SemanticTokensParams
+} from 'vscode-languageserver/node';
 import {
+    SemanticTokensRequest,
     createConnection,
     DidChangeConfigurationNotification,
     FileChangeType,
@@ -28,10 +32,9 @@ import {
     TextDocuments,
     TextDocumentSyncKind,
     CodeActionKind
-} from 'vscode-languageserver';
+} from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-
 import type { BsConfig } from './BsConfig';
 import { Deferred } from './deferred';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -42,10 +45,10 @@ import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { isBrsFile } from './astUtils/reflection';
+import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 
 export class LanguageServer {
-    //cast undefined as any to get around strictNullChecks...it's ok in this case
-    private connection: Connection = <any>undefined;
+    private connection = undefined as Connection;
 
     public workspaces = [] as Workspace[];
 
@@ -147,6 +150,9 @@ export class LanguageServer {
 
         this.connection.onCodeAction(this.onCodeAction.bind(this));
 
+        //TODO switch to a more specific connection function call once they actually add it
+        this.connection.onRequest(SemanticTokensRequest.method, this.onFullSemanticTokens.bind(this));
+
         /*
         this.connection.onDidOpenTextDocument((params) => {
              // A text document got opened in VSCode.
@@ -178,6 +184,7 @@ export class LanguageServer {
      * Called when the client starts initialization
      * @param params
      */
+    @AddStackToErrorMessage
     public onInitialize(params: InitializeParams) {
         let clientCapabilities = params.capabilities;
 
@@ -199,6 +206,10 @@ export class LanguageServer {
                 },
                 documentSymbolProvider: true,
                 workspaceSymbolProvider: true,
+                semanticTokensProvider: {
+                    legend: semanticTokensLegend,
+                    full: true
+                } as SemanticTokensOptions,
                 referencesProvider: true,
                 codeActionProvider: {
                     codeActionKinds: [CodeActionKind.Refactor]
@@ -223,6 +234,7 @@ export class LanguageServer {
      * Called when the client has finished initializing
      * @param params
      */
+    @AddStackToErrorMessage
     private async onInitialized() {
         let workspaceCreatedDeferred = new Deferred();
         this.initialWorkspacesCreated = workspaceCreatedDeferred.promise;
@@ -260,7 +272,7 @@ export class LanguageServer {
             await this.waitAllProgramFirstRuns(false);
             workspaceCreatedDeferred.resolve();
             await this.sendDiagnostics();
-        } catch (e) {
+        } catch (e: any) {
             this.sendCriticalFailure(
                 `Critical failure during BrighterScript language server startup.
                 Please file a github issue and include the contents of the 'BrighterScript Language Server' output channel.
@@ -291,7 +303,7 @@ export class LanguageServer {
         for (let workspace of workspaces) {
             try {
                 await workspace.firstRunPromise;
-            } catch (e) {
+            } catch (e: any) {
                 status = 'critical-error';
                 //the first run failed...that won't change unless we reload the workspace, so replace with resolved promise
                 //so we don't show this error again
@@ -317,8 +329,8 @@ export class LanguageServer {
      * Event handler for when the program wants to load file contents.
      * anytime the program wants to load a file, check with our in-memory document cache first
      */
-    private documentFileResolver(pathAbsolute) {
-        let pathUri = URI.file(pathAbsolute).toString();
+    private documentFileResolver(srcPath: string) {
+        let pathUri = URI.file(srcPath).toString();
         let document = this.documents.get(pathUri);
         if (document) {
             return document.getText();
@@ -515,6 +527,7 @@ export class LanguageServer {
      * Provide a list of completion items based on the current cursor position
      * @param textDocumentPosition
      */
+    @AddStackToErrorMessage
     private async onCompletion(uri: string, position: Position) {
         //ensure programs are initialized
         await this.waitAllProgramFirstRuns();
@@ -539,6 +552,7 @@ export class LanguageServer {
      * Provide a full completion item from the selection
      * @param item
      */
+    @AddStackToErrorMessage
     private onCompletionResolve(item: CompletionItem): CompletionItem {
         if (item.data === 1) {
             item.detail = 'TypeScript details';
@@ -550,19 +564,28 @@ export class LanguageServer {
         return item;
     }
 
+    @AddStackToErrorMessage
     private async onCodeAction(params: CodeActionParams) {
         //ensure programs are initialized
         await this.waitAllProgramFirstRuns();
 
-        let filePath = util.uriToPath(params.textDocument.uri);
+        let srcPath = util.uriToPath(params.textDocument.uri);
 
         //wait until the file has settled
-        await this.keyedThrottler.onIdleOnce(filePath, true);
+        await this.keyedThrottler.onIdleOnce(srcPath, true);
 
-        let codeActions = this
+        const codeActions = this
             .getWorkspaces()
-            .flatMap(workspace => workspace.builder.program.getCodeActions(filePath, params.range));
+            //skip programs that don't have this file
+            .filter(x => x.builder?.program?.hasFile(srcPath))
+            .flatMap(workspace => workspace.builder.program.getCodeActions(srcPath, params.range));
 
+        //clone the diagnostics for each code action, since certain diagnostics can have circular reference properties that kill the language server if serialized
+        for (const codeAction of codeActions) {
+            if (codeAction.diagnostics) {
+                codeAction.diagnostics = codeAction.diagnostics.map(x => util.toDiagnostic(x));
+            }
+        }
         return codeActions;
     }
 
@@ -599,11 +622,13 @@ export class LanguageServer {
                 }
             })
         );
-        //wait for all of the programs to finish starting up
-        await this.waitAllProgramFirstRuns();
+        if (workspaces.length > 0) {
+            //wait for all of the programs to finish starting up
+            await this.waitAllProgramFirstRuns();
 
-        // valdiate all workspaces
-        this.validateAllThrottled(); //eslint-disable-line
+            // valdiate all workspaces
+            this.validateAllThrottled(); //eslint-disable-line
+        }
     }
 
     private getRootDir(workspace: Workspace) {
@@ -661,6 +686,8 @@ export class LanguageServer {
             await workspace.firstRunPromise;
         }
     }
+
+    @AddStackToErrorMessage
     private async onDidChangeConfiguration() {
         if (this.hasConfigurationCapability) {
             await this.reloadWorkspaces();
@@ -679,6 +706,7 @@ export class LanguageServer {
      * file types are watched (.brs,.bs,.xml,manifest, and any json/text/image files)
      * @param params
      */
+    @AddStackToErrorMessage
     private async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
         //ensure programs are initialized
         await this.waitAllProgramFirstRuns();
@@ -714,8 +742,11 @@ export class LanguageServer {
                         workspacesToReload.push(workspace);
                     }
                 }
-                //reload any workspaces that need to be reloaded
-                await this.reloadWorkspaces(workspacesToReload);
+                if (workspacesToReload.length > 0) {
+                    //vsc can generate a ton of these changes, for vsc system files, so we need to bail if there's no work to do on any of our actual workspace files
+                    //reload any workspaces that need to be reloaded
+                    await this.reloadWorkspaces(workspacesToReload);
+                }
 
                 //set the list of workspaces to non-reloaded workspaces
                 workspaces = workspaces.filter(x => !workspacesToReload.includes(x));
@@ -746,22 +777,19 @@ export class LanguageServer {
                     });
                     return files.map(x => {
                         return {
-                            type: FileChangeType.Created as FileChangeType,
+                            type: FileChangeType.Created,
                             pathAbsolute: s`${x}`
                         };
                     });
                 });
 
             //add the new file changes to the changes array.
-            changes.push(...newFileChanges);
+            changes.push(...newFileChanges as any);
 
             //give every workspace the chance to handle file changes
             await Promise.all(
                 workspaces.map((workspace) => this.handleFileChanges(workspace, changes))
             );
-
-            //validate all workspaces
-            await this.validateAllThrottled();
         }
         this.connection.sendNotification('build-status', 'success');
     }
@@ -774,11 +802,16 @@ export class LanguageServer {
     public async handleFileChanges(workspace: Workspace, changes: { type: FileChangeType; pathAbsolute: string }[]) {
         //this loop assumes paths are both file paths and folder paths, which eliminates the need to detect.
         //All functions below can handle being given a file path AND a folder path, and will only operate on the one they are looking for
+        let consumeCount = 0;
         await Promise.all(changes.map(async (change) => {
             await this.keyedThrottler.run(change.pathAbsolute, async () => {
-                await this.handleFileChange(workspace, change);
+                consumeCount += await this.handleFileChange(workspace, change) ? 1 : 0;
             });
         }));
+
+        if (consumeCount > 0) {
+            await this.validateAllThrottled();
+        }
     }
 
     /**
@@ -790,6 +823,7 @@ export class LanguageServer {
         const program = workspace.builder.program;
         const options = workspace.builder.options;
         const rootDir = workspace.builder.rootDir;
+
         //deleted
         if (change.type === FileChangeType.Deleted) {
             //try to act on this path as a directory
@@ -798,6 +832,9 @@ export class LanguageServer {
             //if this is a file loaded in the program, remove it
             if (program.hasFile(change.pathAbsolute)) {
                 program.removeFile(change.pathAbsolute);
+                return true;
+            } else {
+                return false;
             }
 
             //created
@@ -816,8 +853,10 @@ export class LanguageServer {
                     },
                     await workspace.builder.getFileContents(change.pathAbsolute)
                 );
+                return true;
             } else {
                 //no dest path means the program doesn't want this file
+                return false;
             }
 
             //changed
@@ -835,9 +874,11 @@ export class LanguageServer {
             } else {
                 program.removeFile(change.pathAbsolute);
             }
+            return true;
         }
     }
 
+    @AddStackToErrorMessage
     private async onHover(params: TextDocumentPositionParams) {
         //ensure programs are initialized
         await this.waitAllProgramFirstRuns();
@@ -865,6 +906,7 @@ export class LanguageServer {
         return hover;
     }
 
+    @AddStackToErrorMessage
     private async onDocumentClose(textDocument: TextDocument): Promise<void> {
         let filePath = URI.parse(textDocument.uri).fsPath;
         let standaloneFileWorkspace = this.standaloneFileWorkspaces[filePath];
@@ -877,6 +919,7 @@ export class LanguageServer {
         }
     }
 
+    @AddStackToErrorMessage
     private async validateTextDocument(textDocument: TextDocument): Promise<void> {
         //ensure programs are initialized
         await this.waitAllProgramFirstRuns();
@@ -906,8 +949,7 @@ export class LanguageServer {
             });
             // validate all workspaces
             await this.validateAllThrottled();
-        } catch (e) {
-            this.connection.tracer.log(e);
+        } catch (e: any) {
             this.sendCriticalFailure(`Critical error parsing/ validating ${filePath}: ${e.message}`);
         }
     }
@@ -925,7 +967,7 @@ export class LanguageServer {
             );
 
             await this.sendDiagnostics();
-        } catch (e) {
+        } catch (e: any) {
             this.connection.console.error(e);
             this.sendCriticalFailure(`Critical error validating workspace: ${e.message}${e.stack ?? ''}`);
         }
@@ -933,6 +975,7 @@ export class LanguageServer {
         this.connection.sendNotification('build-status', 'success');
     }
 
+    @AddStackToErrorMessage
     public async onWorkspaceSymbol(params: WorkspaceSymbolParams) {
         await this.waitAllProgramFirstRuns();
 
@@ -952,6 +995,7 @@ export class LanguageServer {
         return allSymbols as SymbolInformation[];
     }
 
+    @AddStackToErrorMessage
     public async onDocumentSymbol(params: DocumentSymbolParams) {
         await this.waitAllProgramFirstRuns();
 
@@ -966,6 +1010,7 @@ export class LanguageServer {
         }
     }
 
+    @AddStackToErrorMessage
     private async onDefinition(params: TextDocumentPositionParams) {
         await this.waitAllProgramFirstRuns();
 
@@ -980,6 +1025,7 @@ export class LanguageServer {
         return results;
     }
 
+    @AddStackToErrorMessage
     private async onSignatureHelp(params: SignatureHelpParams) {
         await this.waitAllProgramFirstRuns();
 
@@ -1003,8 +1049,8 @@ export class LanguageServer {
                 activeParameter: activeParameter
             };
             return results;
-        } catch (e) {
-            this.connection.console.error(`error in onSignatureHelp: ${e.message}${e.stack ?? ''}`);
+        } catch (e: any) {
+            this.connection.console.error(`error in onSignatureHelp: ${e.stack ?? e.message ?? e}`);
             return {
                 signatures: [],
                 activeSignature: 0,
@@ -1013,6 +1059,7 @@ export class LanguageServer {
         }
     }
 
+    @AddStackToErrorMessage
     private async onReferences(params: ReferenceParams) {
         await this.waitAllProgramFirstRuns();
 
@@ -1028,6 +1075,23 @@ export class LanguageServer {
         return results.filter((r) => r);
     }
 
+    @AddStackToErrorMessage
+    private async onFullSemanticTokens(params: SemanticTokensParams) {
+        await this.waitAllProgramFirstRuns();
+        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        for (const workspace of this.workspaces) {
+            //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
+            if (workspace.builder.program.hasFile(srcPath)) {
+                let semanticTokens = workspace.builder.program.getSemanticTokens(srcPath);
+                return {
+                    data: encodeSemanticTokens(semanticTokens)
+                } as SemanticTokens;
+            }
+        }
+    }
+
     private diagnosticCollection = new DiagnosticCollection();
 
     private async sendDiagnostics() {
@@ -1035,16 +1099,7 @@ export class LanguageServer {
         const patch = await this.diagnosticCollection.getPatch(this.workspaces);
 
         for (let filePath in patch) {
-            const diagnostics = patch[filePath].map(d => {
-                return {
-                    severity: d.severity,
-                    range: d.range,
-                    message: d.message,
-                    relatedInformation: d.relatedInformation,
-                    code: d.code,
-                    source: 'brs'
-                };
-            });
+            const diagnostics = patch[filePath].map(d => util.toDiagnostic(d));
 
             this.connection.sendDiagnostics({
                 uri: URI.file(filePath).toString(),
@@ -1053,6 +1108,7 @@ export class LanguageServer {
         }
     }
 
+    @AddStackToErrorMessage
     public async onExecuteCommand(params: ExecuteCommandParams) {
         await this.waitAllProgramFirstRuns();
         if (params.command === CustomCommands.TranspileFile) {
@@ -1090,4 +1146,35 @@ export interface Workspace {
 
 export enum CustomCommands {
     TranspileFile = 'TranspileFile'
+}
+
+/**
+ * Wraps a method. If there's an error (either sync or via a promise),
+ * this appends the error's stack trace at the end of the error message so that the connection will
+ */
+function AddStackToErrorMessage(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+    let originalMethod = descriptor.value;
+
+    //wrapping the original method
+    descriptor.value = function value(...args: any[]) {
+        try {
+            let result = originalMethod.apply(this, args);
+            //if the result looks like a promise, log if there's a rejection
+            if (result?.then) {
+                return Promise.resolve(result).catch((e: Error) => {
+                    if (e?.stack) {
+                        e.message = e.stack;
+                    }
+                    return Promise.reject(e);
+                });
+            } else {
+                return result;
+            }
+        } catch (e: any) {
+            if (e?.stack) {
+                e.message = e.stack;
+            }
+            throw e;
+        }
+    };
 }

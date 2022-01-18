@@ -1,4 +1,5 @@
-import type { CodeAction, CompletionItem, Position, Range } from 'vscode-languageserver';
+import type { CompletionItem, Position, Range } from 'vscode-languageserver';
+import * as path from 'path';
 import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
@@ -15,6 +16,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
+import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -22,17 +24,12 @@ import type { BrsFile } from './files/BrsFile';
 export class Scope {
     constructor(
         public name: string,
-        public dependencyGraphKey: string,
-        public program: Program
+        public program: Program,
+        private _dependencyGraphKey?: string
     ) {
         this.isValidated = false;
         //used for improved logging performance
         this._debugLogComponentName = `Scope '${chalk.redBright(this.name)}'`;
-
-        //anytime a dependency for this scope changes, we need to be revalidated
-        this.programHandles.push(
-            this.program.dependencyGraph.onchange(this.dependencyGraphKey, this.onDependenciesChanged.bind(this), true)
-        );
     }
 
     /**
@@ -41,9 +38,11 @@ export class Scope {
      */
     public readonly isValidated: boolean;
 
-    protected programHandles = [] as Array<() => void>;
-
     protected cache = new Cache();
+
+    public get dependencyGraphKey() {
+        return this._dependencyGraphKey;
+    }
 
     /**
      * A dictionary of namespaces, indexed by the lower case full name of each namespace.
@@ -85,7 +84,7 @@ export class Scope {
     /**
     * Tests if a class exists with the specified name
     * @param className - the all-lower-case namespace-included class name
-    * @param namespaceName - teh current namespace name
+    * @param containingNamespace - The namespace used to resolve relative class names. (i.e. the namespace around the current statement trying to find a class)
     */
     public hasClass(className: string, namespaceName?: string): boolean {
         return !!this.getClass(className, namespaceName);
@@ -118,8 +117,8 @@ export class Scope {
      */
     protected diagnostics = [] as BsDiagnostic[];
 
-    protected onDependenciesChanged(key: string) {
-        this.logDebug('invalidated because dependency graph said [', key, '] changed');
+    protected onDependenciesChanged(event: DependencyChangedEvent) {
+        this.logDebug('invalidated because dependency graph said [', event.sourceKey, '] changed');
         this.invalidate();
     }
 
@@ -127,9 +126,7 @@ export class Scope {
      * Clean up all event handles
      */
     public dispose() {
-        for (let disconnect of this.programHandles) {
-            disconnect();
-        }
+        this.unsubscribeFromDependencyGraph?.();
     }
 
     /**
@@ -168,6 +165,25 @@ export class Scope {
         }
     }
 
+    private dependencyGraph: DependencyGraph;
+    /**
+     * An unsubscribe function for the dependencyGraph subscription
+     */
+    private unsubscribeFromDependencyGraph: () => void;
+
+    public attachDependencyGraph(dependencyGraph: DependencyGraph) {
+        this.dependencyGraph = dependencyGraph;
+        if (this.unsubscribeFromDependencyGraph) {
+            this.unsubscribeFromDependencyGraph();
+        }
+
+        //anytime a dependency for this scope changes, we need to be revalidated
+        this.unsubscribeFromDependencyGraph = this.dependencyGraph.onchange(this.dependencyGraphKey, this.onDependenciesChanged.bind(this));
+
+        //invalidate immediately since this is a new scope
+        this.invalidate();
+    }
+
     /**
      * Get the file with the specified pkgPath
      */
@@ -197,7 +213,7 @@ export class Scope {
     public getAllFiles() {
         return this.cache.getOrAdd('getAllFiles', () => {
             let result = [] as BscFile[];
-            let dependencies = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
+            let dependencies = this.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
             for (let dependency of dependencies) {
                 //load components by their name
                 if (dependency.startsWith('component:')) {
@@ -241,11 +257,6 @@ export class Scope {
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
         this.diagnostics.push(...diagnostics);
-    }
-
-    public getCodeActions(file: BscFile, range: Range, codeActions: CodeAction[]) {
-        const diagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
-        this.program.plugins.emit('onScopeGetCodeActions', this, file, range, diagnostics, codeActions);
     }
 
     /**
@@ -326,7 +337,7 @@ export class Scope {
      * Builds a tree of namespace objects
      */
     public buildNamespaceLookup() {
-        let namespaceLookup = {} as Record<string, NamespaceContainer>;
+        let namespaceLookup = new Map<string, NamespaceContainer>();
         this.enumerateBrsFiles((file) => {
             for (let namespace of file.parser.references.namespaceStatements) {
                 //TODO should we handle non-brighterscript?
@@ -339,38 +350,40 @@ export class Scope {
                 for (let part of nameParts) {
                     loopName = loopName === null ? part : `${loopName}.${part}`;
                     let lowerLoopName = loopName.toLowerCase();
-                    namespaceLookup[lowerLoopName] = namespaceLookup[lowerLoopName] ?? {
-                        file: file,
-                        fullName: loopName,
-                        nameRange: namespace.nameExpression.range,
-                        lastPartName: part,
-                        namespaces: {},
-                        classStatements: {},
-                        functionStatements: {},
-                        statements: []
-                    };
+                    if (!namespaceLookup.has(lowerLoopName)) {
+                        namespaceLookup.set(lowerLoopName, {
+                            file: file,
+                            fullName: loopName,
+                            nameRange: namespace.nameExpression.range,
+                            lastPartName: part,
+                            namespaces: new Map<string, NamespaceContainer>(),
+                            classStatements: {},
+                            functionStatements: {},
+                            statements: []
+                        });
+                    }
                 }
-                let ns = namespaceLookup[name.toLowerCase()];
+                let ns = namespaceLookup.get(name.toLowerCase());
                 ns.statements.push(...namespace.body.statements);
                 for (let statement of namespace.body.statements) {
-                    if (isClassStatement(statement)) {
+                    if (isClassStatement(statement) && statement.name) {
                         ns.classStatements[statement.name.text.toLowerCase()] = statement;
-                    } else if (isFunctionStatement(statement)) {
+                    } else if (isFunctionStatement(statement) && statement.name) {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
                     }
                 }
             }
 
             //associate child namespaces with their parents
-            for (let key in namespaceLookup) {
-                let ns = namespaceLookup[key];
+            for (let [, ns] of namespaceLookup) {
                 let parts = ns.fullName.split('.');
 
                 if (parts.length > 1) {
                     //remove the last part
                     parts.pop();
                     let parentName = parts.join('.');
-                    namespaceLookup[parentName.toLowerCase()].namespaces[ns.lastPartName.toLowerCase()] = ns;
+                    const parent = namespaceLookup.get(parentName.toLowerCase());
+                    parent.namespaces.set(ns.lastPartName.toLowerCase(), ns);
                 }
             }
         });
@@ -397,7 +410,7 @@ export class Scope {
             return;
         }
 
-        this.program.logger.time(LogLevel.info, [this._debugLogComponentName, 'validate()'], () => {
+        this.program.logger.time(LogLevel.debug, [this._debugLogComponentName, 'validate()'], () => {
 
             let parentScope = this.getParentScope();
 
@@ -470,7 +483,7 @@ export class Scope {
         for (let func of file.parser.references.functionExpressions) {
             for (let param of func.parameters) {
                 let lowerParamName = param.name.text.toLowerCase();
-                let namespace = this.namespaceLookup[lowerParamName];
+                let namespace = this.namespaceLookup.get(lowerParamName);
                 //see if the param matches any starting namespace part
                 if (namespace) {
                     this.diagnostics.push({
@@ -491,7 +504,7 @@ export class Scope {
 
         for (let assignment of file.parser.references.assignmentStatements) {
             let lowerAssignmentName = assignment.name.text.toLowerCase();
-            let namespace = this.namespaceLookup[lowerAssignmentName];
+            let namespace = this.namespaceLookup.get(lowerAssignmentName);
             //see if the param matches any starting namespace part
             if (namespace) {
                 this.diagnostics.push({
@@ -614,7 +627,7 @@ export class Scope {
                     maxParams++;
                     //optional parameters must come last, so we can assume that minParams won't increase once we hit
                     //the first isOptional
-                    if (param.isOptional === false) {
+                    if (param.isOptional !== true) {
                         minParams++;
                     }
                 }
@@ -718,7 +731,17 @@ export class Scope {
 
             //if we don't already have a variable with this name.
             if (!scope?.getVariableByName(lowerName)) {
-                let callablesWithThisName = callablesByLowerName.get(lowerName);
+                let callablesWithThisName: CallableContainer[];
+
+                if (expCall.functionScope.func.namespaceName) {
+                    // prefer namespaced function
+                    const potentialNamespacedCallable = expCall.functionScope.func.namespaceName.getName(ParseMode.BrightScript).toLowerCase() + '_' + lowerName;
+                    callablesWithThisName = callablesByLowerName.get(potentialNamespacedCallable.toLowerCase());
+                }
+                if (!callablesWithThisName) {
+                    // just try it as is
+                    callablesWithThisName = callablesByLowerName.get(lowerName);
+                }
 
                 //use the first item from callablesByLowerName, because if there are more, that's a separate error
                 let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
@@ -835,6 +858,10 @@ export class Scope {
             let referencedFile = this.getFileByRelativePath(scriptImport.pkgPath);
             //if we can't find the file
             if (!referencedFile) {
+                //skip the default bslib file, it will exist at transpile time but should not show up in the program during validation cycle
+                if (scriptImport.pkgPath === `source${path.sep}bslib.brs`) {
+                    continue;
+                }
                 let dInfo: DiagnosticInfo;
                 if (scriptImport.text.trim().length === 0) {
                     dInfo = DiagnosticMessages.scriptSrcCannotBeEmpty();
@@ -863,6 +890,9 @@ export class Scope {
      * @param relativePath
      */
     protected getFileByRelativePath(relativePath: string) {
+        if (!relativePath) {
+            return;
+        }
         let files = this.getAllFiles();
         for (let file of files) {
             if (file.pkgPath.toLowerCase() === relativePath.toLowerCase()) {
@@ -980,7 +1010,7 @@ interface NamespaceContainer {
     statements: Statement[];
     classStatements: Record<string, ClassStatement>;
     functionStatements: Record<string, FunctionStatement>;
-    namespaces: Record<string, NamespaceContainer>;
+    namespaces: Map<string, NamespaceContainer>;
 }
 
 interface AugmentedNewExpression extends NewExpression {

@@ -1,7 +1,6 @@
-import type { CodeActionKind, Diagnostic, Position, Range, WorkspaceEdit } from 'vscode-languageserver';
-import { CodeAction, TextEdit } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range, WorkspaceEdit } from 'vscode-languageserver';
+import { CodeActionKind, CodeAction, TextEdit } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
-import type { SGComponent } from './parser/SGTypes';
 
 export class CodeActionUtil {
 
@@ -21,24 +20,30 @@ export class CodeActionUtil {
                     TextEdit.insert(change.position, change.newText)
                 );
             } else if (change.type === 'replace') {
-                TextEdit.replace(change.range, change.newText);
+                edit.changes[uri].push(
+                    TextEdit.replace(change.range, change.newText)
+                );
             }
         }
-        return CodeAction.create(obj.title, edit);
+        const action = CodeAction.create(obj.title, edit, obj.kind);
+        action.isPreferred = obj.isPreferred;
+        action.diagnostics = this.serializableDiagnostics(obj.diagnostics);
+        return action;
     }
-    /**
-     * Create an edit that properly handles inserting a script to the end of the component,
-     * honoring the indentation
-     */
-    addXmlScript(component: SGComponent, uri: string) {
-        //find the last script tag (if one exists)
-        const lastScript = component.scripts[component.scripts.length - 1];
-        //TODO
-        if (lastScript) {
-        }
-        //find the closing interface tag
+
+    public serializableDiagnostics(diagnostics: Diagnostic[]) {
+        return diagnostics?.map(({ range, severity, code, source, message, relatedInformation }) => ({
+            range: range,
+            severity: severity,
+            source: source,
+            code: code,
+            message: message,
+            relatedInformation: relatedInformation
+        }));
     }
 }
+
+export { CodeActionKind };
 
 export interface CodeActionShorthand {
     title: string;
@@ -63,5 +68,3 @@ export interface ReplaceChange {
 }
 
 export const codeActionUtil = new CodeActionUtil();
-export default codeActionUtil;
-

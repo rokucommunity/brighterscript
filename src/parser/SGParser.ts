@@ -14,6 +14,8 @@ export default class SGParser {
      */
     public ast: SGAst = new SGAst();
 
+    public tokens: IToken[];
+
     /**
      * The list of diagnostics found during the parse process
      */
@@ -81,6 +83,7 @@ export default class SGParser {
         this.diagnostics = [];
 
         const { cst, tokenVector, lexErrors, parseErrors } = parser.parse(fileContents);
+        this.tokens = tokenVector;
 
         if (lexErrors.length) {
             for (const err of lexErrors) {
@@ -186,7 +189,7 @@ function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SG
     const content = children.content?.[0];
     switch (name.text) {
         case 'component':
-            const componentContent = mapElements(content, ['interface', 'script', 'children'], diagnostics);
+            const componentContent = mapElements(content, ['interface', 'script', 'children', 'customization'], diagnostics);
             return new SGComponent(children, name, attributes, componentContent, range);
         case 'interface':
             const interfaceContent = mapElements(content, ['field', 'function'], diagnostics);
@@ -324,7 +327,7 @@ function rangeFromTokens(start: IToken, end?: IToken) {
 }
 
 //make range not including quotes
-function rangeFromTokenValue(token: IToken) {
+export function rangeFromTokenValue(token: IToken) {
     if (!token) {
         return undefined;
     }

@@ -15,8 +15,7 @@ import {
     NullCoalescingExpression
 } from '../../Expression';
 import { Program } from '../../..';
-import { getTestTranspile } from '../../../files/BrsFile.spec';
-import { expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 
 describe('NullCoalescingExpression', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -190,6 +189,14 @@ describe('NullCoalescingExpression', () => {
             program.dispose();
         });
 
+        it('uses the proper prefix when aliased package is installed', () => {
+            program.addOrReplaceFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
+            testTranspile(
+                'a = user ?? false',
+                `a = rokucommunity_bslib_coalesce(user, false)`
+            );
+        });
+
         it('properly transpiles null coalesence assignments - simple', () => {
             testTranspile(`a = user ?? {"id": "default"}`, 'a = bslib_coalesce(user, {\n    "id": "default"\n})', 'none');
         });
@@ -209,16 +216,29 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
+        it('transpiles null coalesence assignment for variable alternate- complex consequent', () => {
+            testTranspile(`a = obj.link ?? fallback`, `
+                a = (function(fallback, obj)
+                        __bsConsequent = obj.link
+                        if __bsConsequent <> invalid then
+                            return __bsConsequent
+                        else
+                            return fallback
+                        end if
+                    end function)(fallback, obj)
+            `);
+        });
+
         it('properly transpiles null coalesence assignments - complex alternate', () => {
             testTranspile(`a = user ?? m.defaults.getAccount(settings.name)`, `
-                a = (function(m, settings)
+                a = (function(m, settings, user)
                         __bsConsequent = user
                         if __bsConsequent <> invalid then
                             return __bsConsequent
                         else
                             return m.defaults.getAccount(settings.name)
                         end if
-                    end function)(m, settings)
+                    end function)(m, settings, user)
             `);
         });
     });

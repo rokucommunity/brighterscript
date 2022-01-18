@@ -1,8 +1,8 @@
-import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement } from '../parser/Statement';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement } from '../parser/Statement';
 import type { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
-import type { BscFile, File } from '../interfaces';
+import type { BscFile, File, TypedefProvider } from '../interfaces';
 import { InvalidType } from '../types/InvalidType';
 import { VoidType } from '../types/VoidType';
 import { InternalWalkMode } from './visitors';
@@ -16,6 +16,9 @@ import { DoubleType } from '../types/DoubleType';
 import { CustomType } from '../types/CustomType';
 import type { Scope } from '../Scope';
 import type { XmlScope } from '../XmlScope';
+import { DynamicType } from '../types/DynamicType';
+import type { InterfaceType } from '../types/InterfaceType';
+import type { ObjectType } from '../types/ObjectType';
 
 // File reflection
 
@@ -126,6 +129,15 @@ export function isClassMethodStatement(element: Statement | Expression | undefin
 export function isClassFieldStatement(element: Statement | Expression | undefined): element is ClassFieldStatement {
     return element?.constructor.name === 'ClassFieldStatement';
 }
+export function isInterfaceStatement(element: Statement | Expression | undefined): element is InterfaceStatement {
+    return element?.constructor.name === 'InterfaceStatement';
+}
+export function isInterfaceMethodStatement(element: Statement | Expression | undefined): element is InterfaceMethodStatement {
+    return element?.constructor.name === 'InterfaceMethodStatement';
+}
+export function isInterfaceFieldStatement(element: Statement | Expression | undefined): element is InterfaceFieldStatement {
+    return element?.constructor.name === 'InterfaceFieldStatement';
+}
 
 // Expressions reflection
 /**
@@ -206,6 +218,9 @@ export function isFunctionParameterExpression(element: Statement | Expression | 
 export function isAnnotationExpression(element: Statement | Expression | undefined): element is AnnotationExpression {
     return element?.constructor.name === 'AnnotationExpression';
 }
+export function isTypedefProvider(element: any): element is TypedefProvider {
+    return 'getTypedef' in element;
+}
 
 // BscType reflection
 export function isStringType(value: any): value is StringType {
@@ -237,6 +252,15 @@ export function isVoidType(e: any): e is VoidType {
 }
 export function isCustomType(e: any): e is CustomType {
     return e?.constructor.name === CustomType.name;
+}
+export function isDynamicType(e: any): e is DynamicType {
+    return e?.constructor.name === DynamicType.name;
+}
+export function isInterfaceType(e: any): e is InterfaceType {
+    return e?.constructor.name === 'InterfaceType';
+}
+export function isObjectType(e: any): e is ObjectType {
+    return e?.constructor.name === 'ObjectType';
 }
 
 const numberConstructorNames = [

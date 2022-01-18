@@ -17,8 +17,7 @@ import {
     LiteralExpression
 } from '../../Expression';
 import { Program } from '../../../Program';
-import { getTestTranspile } from '../../../files/BrsFile.spec';
-import { expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 
 describe('ternary expressions', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -264,6 +263,14 @@ describe('ternary expressions', () => {
         });
         afterEach(() => {
             program.dispose();
+        });
+
+        it('uses the proper prefix when aliased package is installed', () => {
+            program.addOrReplaceFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
+            testTranspile(
+                `a = user = invalid ? "no user" : "logged in"`,
+                `a = rokucommunity_bslib_ternary(user = invalid, "no user", "logged in")`
+            );
         });
 
         it('simple consequents', () => {

@@ -2,16 +2,17 @@ import { assert, expect } from 'chai';
 import * as path from 'path';
 import * as sinonImport from 'sinon';
 import type { CodeAction, CompletionItem } from 'vscode-languageserver';
-import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
 import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
-import util, { standardizePath as s } from '../util';
-import { getTestTranspile } from './BrsFile.spec';
-import { expectCodeActions, trim, trimMap } from '../testHelpers.spec';
+import { standardizePath as s, util } from '../util';
+import { expectCodeActions, expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
+import { ProgramBuilder } from '../ProgramBuilder';
+import { LogLevel } from '../Logger';
 import { URI } from 'vscode-uri';
 
 describe('XmlFile', () => {
@@ -335,12 +336,9 @@ describe('XmlFile', () => {
             `);
 
             program.validate();
-
-            expect(
-                program.getDiagnostics().map(x => x.message)
-            ).to.include(
-                DiagnosticMessages.fileNotReferencedByAnyOtherFile().message
-            );
+            expectDiagnostics(program, [
+                DiagnosticMessages.fileNotReferencedByAnyOtherFile()
+            ]);
         });
 
         it('is not enabled by default', () => {
@@ -369,9 +367,7 @@ describe('XmlFile', () => {
             program.validate();
 
             //there should be no errors
-            expect(
-                program.getDiagnostics().map(x => x.message)[0]
-            ).not.to.exist;
+            expectZeroDiagnostics(program);
         });
     });
 
@@ -527,8 +523,7 @@ describe('XmlFile', () => {
             range: undefined
         }];
         file.addDiagnostics(expected);
-        const actual = file.getDiagnostics();
-        expect(actual).deep.equal(expected);
+        expectDiagnostics(file, expected);
     });
 
     describe('component extends', () => {
@@ -591,10 +586,9 @@ describe('XmlFile', () => {
                 `
             );
 
-            expect(file.getDiagnostics()[0]).to.include({
-                severity: DiagnosticSeverity.Warning,
-                message: DiagnosticMessages.xmlComponentMissingExtendsAttribute().message
-            });
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+            ]);
         });
     });
 
@@ -618,14 +612,122 @@ describe('XmlFile', () => {
         `);
 
         program.validate();
-        expect(
-            program.getDiagnostics()[0]?.message
-        ).to.equal(
-            DiagnosticMessages.unnecessaryCodebehindScriptImport().message
-        );
+        expectDiagnostics(program, [
+            DiagnosticMessages.unnecessaryCodebehindScriptImport()
+        ]);
     });
 
     describe('transpile', () => {
+        it('supports instantresume <customization> elements', async () => {
+            fsExtra.outputFileSync(`${rootDir}/manifest`, '');
+            fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `sub main()\nend sub`);
+            fsExtra.outputFileSync(`${rootDir}/components/MainScene.xml`, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainScene" extends="Scene">
+                    <customization resumehandler="customResume" />
+                    <customization suspendhandler="customSuspend" />
+                    <children>
+                        <Rectangle width="1920" height="1080" />
+                    </children>
+                </component>
+            `);
+            const builder = new ProgramBuilder();
+            await builder.run({
+                cwd: rootDir,
+                retainStagingFolder: true,
+                stagingFolderPath: stagingDir,
+                logLevel: LogLevel.off
+            });
+            expect(
+                fsExtra.readFileSync(`${stagingDir}/components/MainScene.xml`).toString()
+            ).to.eql(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainScene" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    <children>
+                        <Rectangle width="1920" height="1080" />
+                    </children>
+                    <customization resumehandler="customResume" />
+                    <customization suspendhandler="customSuspend" />
+                </component>
+            `);
+        });
+
+        it(`honors the 'needsTranspiled' flag when set in 'afterFileParse'`, () => {
+            program.plugins.add({
+                name: 'test',
+                afterFileParse: (file) => {
+                    //enable transpile for every file
+                    file.needsTranspiled = true;
+                }
+            });
+            const file = program.addOrReplaceFile('components/file.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                </component>
+            `);
+            expect(file.needsTranspiled).to.be.true;
+        });
+
+        it('includes bslib script', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/Comp.xml');
+        });
+
+        it('does not include additional bslib script if already there ', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/child.xml');
+        });
+
+        it('does not include bslib script if already there from ropm', () => {
+            program.addOrReplaceFile('source/roku_modules/bslib/bslib.brs', ``);
+            program.addOrReplaceFile('source/lib.bs', ``);
+            //include a bs file to force transpile for the xml file
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/lib.bs" />
+                    <script type="text/brightscript" uri="pkg:/source/roku_modules/bslib/bslib.brs" />
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/roku_modules/bslib/bslib.brs" />
+                </component>
+            `, 'none', 'components/child.xml');
+        });
+
+        it('does not transpile xml file when bslib script is already present', () => {
+            const file = program.addOrReplaceFile('components/comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(file.needsTranspiled).to.be.false;
+        });
+
+
         /**
          * There was a bug that would incorrectly replace one of the script paths on the second or third transpile, so this test verifies it doesn't do that anymore
          */
@@ -658,7 +760,7 @@ describe('XmlFile', () => {
 
         it('keeps all content of the XML', () => {
             program.addOrReplaceFile(`components/SimpleScene.bs`, `
-                sub init()
+                sub b()
                 end sub
             `);
 
@@ -670,10 +772,10 @@ describe('XmlFile', () => {
                     xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd"
                 >
                     <interface>
-                        <field id="a" />
+                        <field id="a" type="string" />
                         <function name="b" />
                     </interface>
-                    <script type="text/brightscript" uri="SimpleScene.brs"/>
+                    <script type="text/brightscript" uri="SimpleScene.bs"/>
                     <children>
                         <aa id="aa">
                             <bb id="bb" />
@@ -684,7 +786,7 @@ describe('XmlFile', () => {
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd">
                     <interface>
-                        <field id="a" />
+                        <field id="a" type="string" />
                         <function name="b" />
                     </interface>
                     <script type="text/brightscript" uri="SimpleScene.brs" />
@@ -719,7 +821,8 @@ describe('XmlFile', () => {
             `, 'none', 'components/SimpleScene.xml');
         });
 
-        it('does not fail on msissing script type', () => {
+        it('does not fail on missing script type', () => {
+            program.addOrReplaceFile('components/SimpleScene.brs', '');
             testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene">
@@ -856,7 +959,7 @@ describe('XmlFile', () => {
             </component>
         `);
         program.validate();
-        expect(program.getDiagnostics().map(x => ({ message: x.message, code: x.code }))).to.eql([{
+        expectDiagnostics(program, [{
             message: 'Test diagnostic',
             code: 9999
         }]);
@@ -907,9 +1010,9 @@ describe('XmlFile', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(program);
             const scope = program.getComponentScope('ChildComponent');
-            expect(Object.keys(scope.namespaceLookup).sort()).to.eql([
+            expect([...scope.namespaceLookup.keys()].sort()).to.eql([
                 'lib',
                 'parent'
             ]);
@@ -941,7 +1044,7 @@ describe('XmlFile', () => {
             `);
             program.addOrReplaceFile('components/Component1.bs', `
                 import "pkg:/source/logger.brs"
-                sub logInfo()
+                sub init()
                 end sub
             `);
             testTranspile(trim`
@@ -1098,6 +1201,114 @@ describe('XmlFile', () => {
             ).to.eql(
                 util.createRange(1, 51, 1, 51)
             );
+        });
+    });
+
+    describe('commentFlags', () => {
+        it('ignores warning from previous line comment', () => {
+            //component without a name attribute
+            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <!--bs:disable-next-line-->
+                <component>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('ignores warning from previous line just for the specified code', () => {
+            //component without a name attribute
+            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <!--bs:disable-next-line 1006-->
+                <component>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+            ]);
+        });
+
+        it('ignores warning from previous line comment', () => {
+            //component without a name attribute
+            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component> <!--bs:disable-line-->
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('ignores warning from previous line just for the specified code', () => {
+            //component without a name attribute
+            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component> <!--bs:disable-line 1006-->
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+            ]);
+        });
+    });
+
+    describe('duplicate components', () => {
+        it('more gracefully handles multiple components with the same name', () => {
+            program.addOrReplaceFile('components/comp1.brs', ``);
+            program.addOrReplaceFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Group">
+                    <script uri="comp1.brs" />
+                </component>
+            `);
+            //add another component with the same name
+            program.addOrReplaceFile('components/comp2.brs', ``);
+            program.addOrReplaceFile('components/comp2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Group">
+                    <script uri="comp2.brs" />
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.duplicateComponentName('comp1'),
+                DiagnosticMessages.duplicateComponentName('comp1')
+            ]);
+        });
+
+        it('maintains consistent component selection', () => {
+            //add comp2 first
+            const comp2 = program.addOrReplaceFile('components/comp2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1">
+                </component>
+            `);
+            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
+
+            //add comp1. it should become the main component with this name
+            const comp1 = program.addOrReplaceFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Group">
+                </component>
+            `);
+            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp1.pkgPath);
+
+            //remove comp1, comp2 should be the primary again
+            program.removeFile(s`${rootDir}/components/comp1.xml`);
+            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
+
+            //add comp3
+            program.addOrReplaceFile('components/comp3.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1">
+                </component>
+            `);
+            //...the 2nd file should still be main
+            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
         });
     });
 });

@@ -9,7 +9,10 @@ export class DependencyGraph {
      */
     public nodes = {} as Record<string, Node>;
 
-    private onchangeEmitter = new EventEmitter();
+    /**
+     * An internal event emitter for when keys have changed.
+     */
+    private onchangeEmitter = new EventEmitter<string, DependencyChangedEvent>();
 
     /**
      * Add a node to the graph.
@@ -26,7 +29,7 @@ export class DependencyGraph {
         //create a new dependency node
         let node = new Node(key, dependencies, this);
         this.nodes[key] = node;
-        this.onchangeEmitter.emit(key, key);
+        this.emit(key, { sourceKey: key, notifiedKeys: new Set() });
     }
 
     /**
@@ -70,25 +73,26 @@ export class DependencyGraph {
      */
     public remove(key: string) {
         delete this.nodes[key];
-        this.onchangeEmitter.emit(key, key);
+        this.emit(key, { sourceKey: key, notifiedKeys: new Set() });
     }
 
     /**
      * Emit event that this item has changed
      */
-    public emit(key: string) {
-        this.onchangeEmitter.emit(key, key);
+    public emit(key: string, event: DependencyChangedEvent) {
+        //prevent infinite event loops by skipping already-notified keys
+        if (!event.notifiedKeys.has(key)) {
+            event.notifiedKeys.add(key);
+            this.onchangeEmitter.emit(key, event);
+        }
     }
 
     /**
      * Listen for any changes to dependencies with the given key.
      * @param emitImmediately if true, the handler will be called once immediately.
      */
-    public onchange(key: string, handler: (key) => void, emitImmediately = false) {
+    public onchange(key: string, handler: (event: DependencyChangedEvent) => void) {
         this.onchangeEmitter.on(key, handler);
-        if (emitImmediately) {
-            this.onchangeEmitter.emit(key, key);
-        }
         return () => {
             this.onchangeEmitter.off(key, handler);
         };
@@ -103,6 +107,17 @@ export class DependencyGraph {
     }
 }
 
+export interface DependencyChangedEvent {
+    /**
+     * The key that was the initiator of this event. Child keys will emit this same event object, but this key will remain the same
+     */
+    sourceKey: string;
+    /**
+     * A set of keys that have already been notified of this change. Used to prevent circular reference notification cycles
+     */
+    notifiedKeys: Set<string>;
+}
+
 export class Node {
     public constructor(
         public key: string,
@@ -113,9 +128,9 @@ export class Node {
             this.subscriptions = [];
         }
         for (let dependency of this.dependencies) {
-            let sub = this.graph.onchange(dependency, () => {
+            let sub = this.graph.onchange(dependency, (event) => {
                 //notify the graph that we changed since one of our dependencies changed
-                this.graph.emit(this.key);
+                this.graph.emit(this.key, event);
             });
 
             this.subscriptions.push(sub);
