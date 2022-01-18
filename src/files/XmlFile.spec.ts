@@ -9,11 +9,10 @@ import type { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
 import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
-import { standardizePath as s, util } from '../util';
-import { expectCodeActions, expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
+import { standardizePath as s } from '../util';
+import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ProgramBuilder } from '../ProgramBuilder';
 import { LogLevel } from '../Logger';
-import { URI } from 'vscode-uri';
 
 describe('XmlFile', () => {
     const tempDir = s`${process.cwd()}/.tmp`;
@@ -1137,72 +1136,6 @@ describe('XmlFile', () => {
             </component>
         `);
         expect(file.scriptTagImports[0]?.text).to.eql('SingleQuotedFile.brs');
-    });
-
-    describe('getCodeActions', () => {
-        it('suggests `extends=Group`', () => {
-            const file = program.addOrReplaceFile('components/comp1.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="comp1">
-                </component>
-            `);
-            expectCodeActions(() => {
-                program.getCodeActions(
-                    file.pathAbsolute,
-                    //<comp|onent name="comp1">
-                    util.createRange(1, 5, 1, 5)
-                );
-            }, [{
-                title: `Extend "Group"`,
-                isPreferred: true,
-                kind: 'quickfix',
-                changes: [{
-                    filePath: s`${rootDir}/components/comp1.xml`,
-                    newText: ' extends="Group"',
-                    type: 'insert',
-                    //<component name="comp1"|>
-                    position: util.createPosition(1, 23)
-                }]
-            }, {
-                title: `Extend "Task"`,
-                kind: 'quickfix',
-                changes: [{
-                    filePath: s`${rootDir}/components/comp1.xml`,
-                    newText: ' extends="Task"',
-                    type: 'insert',
-                    //<component name="comp1"|>
-                    position: util.createPosition(1, 23)
-                }]
-            }, {
-                title: `Extend "ContentNode"`,
-                kind: 'quickfix',
-                changes: [{
-                    filePath: s`${rootDir}/components/comp1.xml`,
-                    newText: ' extends="ContentNode"',
-                    type: 'insert',
-                    //<component name="comp1"|>
-                    position: util.createPosition(1, 23)
-                }]
-            }]);
-        });
-
-        it('adds attribute at end of component with multiple attributes`', () => {
-            const file = program.addOrReplaceFile('components/comp1.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="comp1" attr2="attr3" attr3="attr3">
-                </component>
-            `);
-            const codeActions = program.getCodeActions(
-                file.pathAbsolute,
-                //<comp|onent name="comp1">
-                util.createRange(1, 5, 1, 5)
-            );
-            expect(
-                codeActions[0].edit.changes[URI.file(s`${rootDir}/components/comp1.xml`).toString()][0].range
-            ).to.eql(
-                util.createRange(1, 51, 1, 51)
-            );
-        });
     });
 
     describe('commentFlags', () => {
