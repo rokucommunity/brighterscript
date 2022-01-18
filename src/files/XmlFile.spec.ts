@@ -1,7 +1,7 @@
 import { assert, expect } from 'chai';
 import * as path from 'path';
 import * as sinonImport from 'sinon';
-import type { CodeAction, CompletionItem } from 'vscode-languageserver';
+import type { CompletionItem } from 'vscode-languageserver';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -1147,9 +1147,10 @@ describe('XmlFile', () => {
                 </component>
             `);
             expectCodeActions(() => {
-                file.getCodeActions(
+                program.getCodeActions(
+                    file.pathAbsolute,
                     //<comp|onent name="comp1">
-                    util.createRange(1, 5, 1, 5), []
+                    util.createRange(1, 5, 1, 5)
                 );
             }, [{
                 title: `Extend "Group"`,
@@ -1191,10 +1192,10 @@ describe('XmlFile', () => {
                 <component name="comp1" attr2="attr3" attr3="attr3">
                 </component>
             `);
-            const codeActions = [] as CodeAction[];
-            file.getCodeActions(
+            const codeActions = program.getCodeActions(
+                file.pathAbsolute,
                 //<comp|onent name="comp1">
-                util.createRange(1, 5, 1, 5), codeActions
+                util.createRange(1, 5, 1, 5)
             );
             expect(
                 codeActions[0].edit.changes[URI.file(s`${rootDir}/components/comp1.xml`).toString()][0].range

@@ -151,13 +151,16 @@ describe('CodeActionsProcessor', () => {
 
             program.validate();
 
-            //there should be no code actions since this is a brs file
-            const codeActions = program.getCodeActions(
-                file.pathAbsolute,
-                // DoSometh|ing()
-                util.createRange(2, 28, 2, 28)
-            );
-            expect(codeActions).to.be.empty;
+            //the ImportStatement code action should be missing since this is a brs file
+            expect(
+                program.getCodeActions(
+                    file.pathAbsolute,
+                    // DoSometh|ing()
+                    util.createRange(2, 28, 2, 28)
+                ).map(x => x.title).sort()
+            ).to.eql([
+                `Add xml script import "pkg:/source/lib.brs" into component "ChildScene"`
+            ]);
         });
 
         it('suggests class imports', () => {

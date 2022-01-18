@@ -197,14 +197,13 @@ describe('XmlScope', () => {
             program.validate();
 
             expectCodeActions(() => {
-                program.getComponentScope('child').getCodeActions(
-                    codebehind,
+                program.getCodeActions(
+                    codebehind.pathAbsolute,
                     // doSo|mething()
-                    util.createRange(2, 24, 2, 24),
-                    []
+                    util.createRange(2, 24, 2, 24)
                 );
             }, [{
-                title: `Import "pkg:/source/common.brs" into component "child"`,
+                title: `Add xml script import "pkg:/source/common.brs" into component "child"`,
                 changes: [{
                     filePath: s`${rootDir}/components/comp1.xml`,
                     newText: '  <script type="text/brightscript" uri="pkg:/source/common.brs" />\n',
