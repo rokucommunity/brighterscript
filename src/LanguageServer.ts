@@ -272,7 +272,7 @@ export class LanguageServer {
             await this.waitAllProgramFirstRuns(false);
             workspaceCreatedDeferred.resolve();
             await this.sendDiagnostics();
-        } catch (e) {
+        } catch (e: any) {
             this.sendCriticalFailure(
                 `Critical failure during BrighterScript language server startup.
                 Please file a github issue and include the contents of the 'BrighterScript Language Server' output channel.
@@ -303,7 +303,7 @@ export class LanguageServer {
         for (let workspace of workspaces) {
             try {
                 await workspace.firstRunPromise;
-            } catch (e) {
+            } catch (e: any) {
                 status = 'critical-error';
                 //the first run failed...that won't change unless we reload the workspace, so replace with resolved promise
                 //so we don't show this error again
@@ -949,7 +949,7 @@ export class LanguageServer {
             });
             // validate all workspaces
             await this.validateAllThrottled();
-        } catch (e) {
+        } catch (e: any) {
             this.sendCriticalFailure(`Critical error parsing/ validating ${filePath}: ${e.message}`);
         }
     }
@@ -967,7 +967,7 @@ export class LanguageServer {
             );
 
             await this.sendDiagnostics();
-        } catch (e) {
+        } catch (e: any) {
             this.connection.console.error(e);
             this.sendCriticalFailure(`Critical error validating workspace: ${e.message}${e.stack ?? ''}`);
         }
@@ -1049,7 +1049,7 @@ export class LanguageServer {
                 activeParameter: activeParameter
             };
             return results;
-        } catch (e) {
+        } catch (e: any) {
             this.connection.console.error(`error in onSignatureHelp: ${e.stack ?? e.message ?? e}`);
             return {
                 signatures: [],
@@ -1170,7 +1170,7 @@ function AddStackToErrorMessage(target: any, propertyKey: string, descriptor: Pr
             } else {
                 return result;
             }
-        } catch (e) {
+        } catch (e: any) {
             if (e?.stack) {
                 e.message = e.stack;
             }

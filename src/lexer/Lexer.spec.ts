@@ -1248,6 +1248,40 @@ describe('lexer', () => {
             );
         });
 
+        it('does not capture multiple divisions on one line as regex', () => {
+            const { tokens } = Lexer.scan(`one = 1/2 + 1/4 + 1/4`, {
+                includeWhitespace: false
+            });
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.IntegerLiteral,
+                TokenKind.Forwardslash,
+                TokenKind.IntegerLiteral,
+                TokenKind.Plus,
+                TokenKind.IntegerLiteral,
+                TokenKind.Forwardslash,
+                TokenKind.IntegerLiteral,
+                TokenKind.Plus,
+                TokenKind.IntegerLiteral,
+                TokenKind.Forwardslash,
+                TokenKind.IntegerLiteral,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('only captures alphanumeric flags', () => {
+            expect(
+                Lexer.scan('speak(/a/)').tokens.map(x => x.kind)
+            ).to.eql([
+                TokenKind.Identifier,
+                TokenKind.LeftParen,
+                TokenKind.RegexLiteral,
+                TokenKind.RightParen,
+                TokenKind.Eof
+            ]);
+        });
+
         it('handles escape characters properly', () => {
             testRegex(
                 //an escaped forward slash right next to the end-regexp forwardslash

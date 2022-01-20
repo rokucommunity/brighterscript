@@ -243,7 +243,7 @@ export class BrsFile {
                 this.program.logger.time(LogLevel.debug, ['preprocessor.process', chalk.green(this.pathAbsolute)], () => {
                     preprocessor.process(lexer.tokens, this.program.getManifest());
                 });
-            } catch (error) {
+            } catch (error: any) {
                 //if the thrown error is DIFFERENT than any errors from the preprocessor, add that error to the list as well
                 if (this.diagnostics.find((x) => x === error) === undefined) {
                     this.diagnostics.push(error);
@@ -857,7 +857,7 @@ export class BrsFile {
         if (classStatement) {
             let classes = scope.getClassHierarchy(classStatement.item.getName(ParseMode.BrighterScript).toLowerCase());
             for (let cs of classes) {
-                for (let member of [...cs?.item?.fields, ...cs?.item?.methods]) {
+                for (let member of [...cs?.item?.fields ?? [], ...cs?.item?.methods ?? []]) {
                     if (!results.has(member.name.text.toLowerCase())) {
                         results.set(member.name.text.toLowerCase(), {
                             label: member.name.text,
@@ -922,10 +922,8 @@ export class BrsFile {
         let closestParentNamespaceName = completionName.replace(/\.([a-z0-9_]*)?$/gi, '');
         let newToken = this.getTokenBefore(currentToken, TokenKind.New);
 
-        let namespaceLookup = scope.namespaceLookup;
         let result = new Map<string, CompletionItem>();
-        for (let key in namespaceLookup) {
-            let namespace = namespaceLookup[key.toLowerCase()];
+        for (let [, namespace] of scope.namespaceLookup) {
             //completionName = "NameA."
             //completionName = "NameA.Na
             //NameA
@@ -933,8 +931,7 @@ export class BrsFile {
             //NameA.NameB.NameC
             if (namespace.fullName.toLowerCase() === closestParentNamespaceName.toLowerCase()) {
                 //add all of this namespace's immediate child namespaces, bearing in mind if we are after a new keyword
-                for (let childKey in namespace.namespaces) {
-                    const ns = namespace.namespaces[childKey];
+                for (let [, ns] of namespace.namespaces) {
                     if (!newToken || ns.statements.find((s) => isClassStatement(s))) {
                         if (!result.has(ns.lastPartName)) {
                             result.set(ns.lastPartName, {
@@ -1107,7 +1104,7 @@ export class BrsFile {
             //find the first scope that contains this namespace
             let scopes = this.program.getScopesForFile(this);
             for (let scope of scopes) {
-                if (scope.namespaceLookup[lowerName]) {
+                if (scope.namespaceLookup.has(lowerName)) {
                     return true;
                 }
             }
@@ -1125,7 +1122,7 @@ export class BrsFile {
             if (lowerCalleeName) {
                 let scopes = this.program.getScopesForFile(this);
                 for (let scope of scopes) {
-                    let namespace = scope.namespaceLookup[namespaceName.toLowerCase()];
+                    let namespace = scope.namespaceLookup.get(namespaceName.toLowerCase());
                     if (namespace.functionStatements[lowerCalleeName]) {
                         return true;
                     }
@@ -1480,10 +1477,8 @@ export class BrsFile {
         if (!dottedGetText) {
             return [];
         }
-        let namespaceLookup = scope.namespaceLookup;
         let resultsMap = new Map<string, SignatureInfoObj>();
-        for (let key in namespaceLookup) {
-            let namespace = namespaceLookup[key.toLowerCase()];
+        for (let [, namespace] of scope.namespaceLookup) {
             //completionName = "NameA."
             //completionName = "NameA.Na
             //NameA

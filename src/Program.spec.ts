@@ -1,23 +1,23 @@
 import { assert, expect } from 'chai';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
-import { CompletionItemKind, Position, Range, DiagnosticSeverity, Location } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range, Location } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import type { FunctionStatement } from './parser/Statement';
+import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { Logger } from './Logger';
-import { createToken } from './astUtils';
+import { createToken, createVisitor, isBrsFile, WalkMode } from './astUtils';
 import { TokenKind } from './lexer';
+import type { LiteralExpression } from './parser/Expression';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -213,11 +213,7 @@ describe('Program', () => {
                 </component>
             `);
             program.validate();
-            expect(program.getDiagnostics()).to.be.lengthOf(2);
-            expect(program.getDiagnostics().map(x => {
-                delete x.file;
-                return x;
-            })).to.eql([{
+            expectDiagnostics(program, [{
                 ...DiagnosticMessages.duplicateComponentName('Component1'),
                 range: Range.create(1, 17, 1, 27),
                 relatedInformation: [{
@@ -275,23 +271,21 @@ describe('Program', () => {
             `);
 
             program.validate();
-
-            let diagnostics = program.getDiagnostics();
-            expect(diagnostics).to.be.lengthOf(1);
+            expectHasDiagnostics(program, 1);
         });
 
         it('detects scripts not loaded by any file', () => {
             //add a main file for sanity check
             program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
             program.validate();
-            expect(program.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(program);
 
             //add the orphaned file
             program.addOrReplaceFile({ src: `${rootDir}/components/lib.brs`, dest: 'components/lib.brs' }, '');
             program.validate();
-            let diagnostics = program.getDiagnostics();
-            expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(DiagnosticMessages.fileNotReferencedByAnyOtherFile().code);
+            expectDiagnostics(program, [
+                DiagnosticMessages.fileNotReferencedByAnyOtherFile()
+            ]);
         });
         it('does not throw errors on shadowed init functions in components', () => {
             program.addOrReplaceFile({ src: `${rootDir}/lib.brs`, dest: 'lib.brs' }, `
@@ -314,11 +308,11 @@ describe('Program', () => {
             `);
 
             program.validate();
-            expect(program.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(program);
         });
 
         it('recognizes global function calls', () => {
-            expect(program.getDiagnostics().length).to.equal(0);
+            expectZeroDiagnostics(program);
             program.addOrReplaceFile({ src: `${rootDir}/source/file.brs`, dest: 'source/file.brs' }, `
                 function DoB()
                     sleep(100)
@@ -326,9 +320,7 @@ describe('Program', () => {
             `);
             //validate the scope
             program.validate();
-            let diagnostics = program.getDiagnostics();
-            //shouldn't have any errors
-            expect(diagnostics).to.be.lengthOf(0);
+            expectZeroDiagnostics(program);
         });
 
         it('shows warning when a child component imports the same script as its parent', () => {
@@ -348,10 +340,9 @@ describe('Program', () => {
 
             program.addOrReplaceFile({ src: `${rootDir}/lib.brs`, dest: 'lib.brs' }, `'comment`);
             program.validate();
-            let diagnostics = program.getDiagnostics();
-            expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(DiagnosticMessages.unnecessaryScriptImportInChildFromParent('').code);
-            expect(diagnostics[0].severity).to.equal(DiagnosticSeverity.Warning);
+            expectDiagnostics(program, [
+                DiagnosticMessages.unnecessaryScriptImportInChildFromParent('ParentScene')
+            ]);
         });
 
         it('adds info diag when child component method shadows parent component method', () => {
@@ -372,9 +363,9 @@ describe('Program', () => {
             program.addOrReplaceFile({ src: `${rootDir}/parent.brs`, dest: 'parent.brs' }, `sub DoSomething()\nend sub`);
             program.addOrReplaceFile({ src: `${rootDir}/child.brs`, dest: 'child.brs' }, `sub DoSomething()\nend sub`);
             program.validate();
-            let diagnostics = program.getDiagnostics();
-            expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(DiagnosticMessages.overridesAncestorFunction('', '', '', '').code);
+            expectDiagnostics(program, [
+                DiagnosticMessages.overridesAncestorFunction('', '', '', '').code
+            ]);
         });
 
         it('does not add info diagnostic on shadowed "init" functions', () => {
@@ -395,8 +386,7 @@ describe('Program', () => {
             `);
             //run this validate separately so we can have an easier time debugging just the child component
             program.validate();
-            let diagnostics = program.getDiagnostics();
-            expect(diagnostics.map(x => x.message)).to.eql([]);
+            expectZeroDiagnostics(program);
         });
 
         it('catches duplicate methods in single file', () => {
@@ -407,8 +397,10 @@ describe('Program', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(2);
-            expect(program.getDiagnostics()[0].message.indexOf('Duplicate sub declaration'));
+            expectDiagnostics(program, [
+                DiagnosticMessages.duplicateFunctionImplementation('DoSomething', 'source'),
+                DiagnosticMessages.duplicateFunctionImplementation('DoSomething', 'source')
+            ]);
         });
 
         it('catches duplicate methods across multiple files', () => {
@@ -421,8 +413,10 @@ describe('Program', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(2);
-            expect(program.getDiagnostics()[0].message.indexOf('Duplicate sub declaration'));
+            expectDiagnostics(program, [
+                DiagnosticMessages.duplicateFunctionImplementation('DoSomething', 'source'),
+                DiagnosticMessages.duplicateFunctionImplementation('DoSomething', 'source')
+            ]);
         });
 
         it('maintains correct callables list', () => {
@@ -454,7 +448,7 @@ describe('Program', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(2);
+            expectHasDiagnostics(program, 2);
             //set the file contents again (resetting the wasProcessed flag)
             program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
@@ -463,7 +457,7 @@ describe('Program', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(2);
+            expectHasDiagnostics(program, 2);
 
             //load in a valid file, the errors should go to zero
             program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
@@ -471,7 +465,7 @@ describe('Program', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(0);
+            expectZeroDiagnostics(program);
         });
 
         it('identifies invocation of unknown function', () => {
@@ -484,8 +478,9 @@ describe('Program', () => {
             `);
 
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(1);
-            expect(program.getDiagnostics()[0].code).to.equal(DiagnosticMessages.callToUnknownFunction('', '').code);
+            expectDiagnostics(program, [
+                DiagnosticMessages.callToUnknownFunction('DoSomething', 'source')
+            ]);
         });
 
         it('detects methods from another file in a subdirectory', () => {
@@ -500,7 +495,7 @@ describe('Program', () => {
                 end function
             `);
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(0);
+            expectZeroDiagnostics(program);
         });
     });
 
@@ -582,13 +577,10 @@ describe('Program', () => {
                 </component>
             `);
             program.validate();
-            let diagnostics = program.getDiagnostics();
-            expect(diagnostics.length).to.equal(1);
-            expect(diagnostics[0]).to.deep.include(<BsDiagnostic>{
+            expectDiagnostics(program, [{
                 ...DiagnosticMessages.referencedFileDoesNotExist(),
-                file: program.getFileByPathAbsolute(xmlPath),
                 range: Range.create(2, 42, 2, 72)
-            });
+            }]);
         });
 
         it('adds warning instead of error on mismatched upper/lower case script import', () => {
@@ -602,9 +594,8 @@ describe('Program', () => {
 
             //validate
             program.validate();
-            let diagnostics = program.getDiagnostics();
-            expect(diagnostics.map(x => x.message)).to.eql([
-                DiagnosticMessages.scriptImportCaseMismatch(s`components\\COMPONENT1.brs`).message
+            expectDiagnostics(program, [
+                DiagnosticMessages.scriptImportCaseMismatch(s`components\\COMPONENT1.brs`)
             ]);
         });
     });
@@ -620,15 +611,15 @@ describe('Program', () => {
                 </component>
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]).to.deep.include(<BsDiagnostic>{
-                message: DiagnosticMessages.referencedFileDoesNotExist().message
-            });
+            expectDiagnostics(program, [
+                DiagnosticMessages.referencedFileDoesNotExist()
+            ]);
 
             //add the file, the error should go away
             let brsPath = s`${rootDir}/components/component1.brs`;
             program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
             program.validate();
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
 
             //add the xml file back in, but change the component brs file name. Should have an error again
             program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
@@ -638,9 +629,9 @@ describe('Program', () => {
                 </component>
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]).to.deep.include(<BsDiagnostic>{
-                message: DiagnosticMessages.referencedFileDoesNotExist().message
-            });
+            expectDiagnostics(program, [
+                DiagnosticMessages.referencedFileDoesNotExist()
+            ]);
         });
 
         it('handles when the brs file is added before the component', () => {
@@ -655,7 +646,7 @@ describe('Program', () => {
                 </component>
             `);
             program.validate();
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(program.getScopeByName(xmlFile.pkgPath).getFile(brsPath)).to.exist;
         });
 
@@ -672,7 +663,7 @@ describe('Program', () => {
                 </component>
             `);
             program.validate();
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(program.getScopeByName(xmlFile.pkgPath).getFile(brsPath)).not.to.exist;
 
             //reload the xml file contents, adding a new script reference.
@@ -1342,10 +1333,9 @@ describe('Program', () => {
             program.validate();
 
             //there should be an error when calling DoParentThing, since it doesn't exist on child or parent
-            expect(program.getDiagnostics()).to.be.lengthOf(1);
-            expect(program.getDiagnostics()[0]).to.deep.include(<BsDiagnostic>{
-                code: DiagnosticMessages.callToUnknownFunction('DoParentThing', '').code
-            });
+            expectDiagnostics(program, [
+                DiagnosticMessages.callToUnknownFunction('DoParentThing', '').code
+            ]);
 
             //add the script into the parent
             program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
@@ -1363,7 +1353,7 @@ describe('Program', () => {
 
             program.validate();
             //the error should be gone because the child now has access to the parent script
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
         });
     });
 
@@ -1392,15 +1382,16 @@ describe('Program', () => {
                 `);
             }
             program.validate();
-            let diagnostics = program.getDiagnostics();
 
             //the children shouldn't have diagnostics about shadowing their parent lib.brs file.
-            let shadowedDiagnositcs = diagnostics.filter((x) => x.code === DiagnosticMessages.overridesAncestorFunction('', '', '', '').code);
-            expect(shadowedDiagnositcs).to.be.lengthOf(0);
+            expectZeroDiagnostics(
+                program.getDiagnostics().filter((x) => x.code === DiagnosticMessages.overridesAncestorFunction('', '', '', '').code)
+            );
 
             //the children all include a redundant import of lib.brs file which is imported by the parent.
-            let importDiagnositcs = diagnostics.filter((x) => x.code === DiagnosticMessages.unnecessaryScriptImportInChildFromParent('').code);
-            expect(importDiagnositcs).to.be.lengthOf(childCount);
+            expect(
+                program.getDiagnostics().filter((x) => x.code === DiagnosticMessages.unnecessaryScriptImportInChildFromParent('').code)
+            ).to.be.lengthOf(childCount);
         });
 
         it('detects script import changes', () => {
@@ -1474,7 +1465,7 @@ describe('Program', () => {
             //the file should be included in the program
             expect(program.getFileByPathAbsolute(pathAbsolute)).to.exist;
             let diagnostics = program.getDiagnostics();
-            expect(diagnostics.length).to.be.greaterThan(0);
+            expectHasDiagnostics(diagnostics);
             let parseError = diagnostics.filter(x => x.message === 'Unterminated string at end of line')[0];
             expect(parseError).to.exist;
         });
@@ -1495,14 +1486,15 @@ describe('Program', () => {
             `);
 
             program.validate();
-            expect(program.getDiagnostics()).to.be.lengthOf(2);
+            expectHasDiagnostics(program, 2);
 
             program.options.diagnosticFilters = [
                 DiagnosticMessages.mismatchArgumentCount(0, 0).code
             ];
 
-            expect(program.getDiagnostics()).to.be.lengthOf(1);
-            expect(program.getDiagnostics()[0].code).to.equal(DiagnosticMessages.callToUnknownFunction('', '').code);
+            expectDiagnostics(program, [
+                DiagnosticMessages.callToUnknownFunction('C', 'source')
+            ]);
         });
     });
 
@@ -1640,6 +1632,69 @@ describe('Program', () => {
     });
 
     describe('transpile', () => {
+
+        it('sets needsTranspiled=true when there is at least one edit', async () => {
+            program.addOrReplaceFile('source/main.brs', trim`
+                sub main()
+                    print "hello world"
+                end sub
+            `);
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeFileTranspile: (event) => {
+                    const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
+                    event.editor.setProperty((stmt.expressions[0] as LiteralExpression).token, 'text', '"hello there"');
+                }
+            });
+            await program.transpile([], stagingFolderPath);
+            //our changes should be there
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/main.brs`).toString()
+            ).to.eql(trim`
+                sub main()
+                    print "hello there"
+                end sub`
+            );
+        });
+
+        it('handles AstEditor flow properly', async () => {
+            program.addOrReplaceFile('source/main.bs', `
+                sub main()
+                    print "hello world"
+                end sub
+            `);
+            let literalExpression: LiteralExpression;
+            //replace all strings with "goodbye world"
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeFileTranspile: (event) => {
+                    if (isBrsFile(event.file)) {
+                        event.file.ast.walk(createVisitor({
+                            LiteralExpression: (literal) => {
+                                literalExpression = literal;
+                                event.editor.setProperty(literal.token, 'text', '"goodbye world"');
+                            }
+                        }), {
+                            walkMode: WalkMode.visitExpressionsRecursive
+                        });
+                    }
+                }
+            });
+            //transpile the file
+            await program.transpile([], stagingFolderPath);
+            //our changes should be there
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/main.brs`).toString()
+            ).to.eql(trim`
+                sub main()
+                    print "goodbye world"
+                end sub`
+            );
+
+            //our literalExpression should have been restored to its original value
+            expect(literalExpression.token.text).to.eql('"hello world"');
+        });
+
         it('copies bslib.brs when no ropm version was found', async () => {
             await program.transpile([], stagingFolderPath);
             expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/bslib.brs`)).to.be.true;
@@ -1799,7 +1854,7 @@ describe('Program', () => {
                 end class
             `);
             program.validate();
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
         });
     });
 
@@ -1832,7 +1887,7 @@ describe('Program', () => {
             `);
             for (let col = 0; col < 40; col++) {
                 let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
-                expect(program.getDiagnostics()).to.be.empty;
+                expectZeroDiagnostics(program);
                 expect(signatureHelp[0]?.signature).to.not.exist;
             }
         });
@@ -1867,7 +1922,7 @@ describe('Program', () => {
                 end class
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 31)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('Person()');
         });
 
@@ -1886,19 +1941,19 @@ describe('Program', () => {
                 end class
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 32)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
 
             signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
 
             signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 27)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
 
             signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 23)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
         });
 
@@ -1918,11 +1973,11 @@ describe('Program', () => {
                 end namespace
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 40)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
 
             signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 30)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
         });
 
@@ -1938,7 +1993,7 @@ describe('Program', () => {
                 end namespace
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
         });
 
@@ -1959,7 +2014,7 @@ describe('Program', () => {
                 end namespace
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 41)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
         });
 
@@ -1984,7 +2039,7 @@ describe('Program', () => {
             program.validate();
 
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
         });
 
@@ -2009,7 +2064,7 @@ describe('Program', () => {
             program.validate();
 
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             //note - callfunc completions and signatures are not yet correctly identifying methods that are exposed in an interace - waiting on the new xml branch for that
             expect(signatureHelp).to.be.empty;
         });
@@ -2026,7 +2081,7 @@ describe('Program', () => {
                 end class
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('Person(arg1, arg2)');
         });
 
@@ -2044,7 +2099,7 @@ describe('Program', () => {
                 end class
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('Roger(arg1, arg2)');
         });
 
@@ -2060,11 +2115,11 @@ describe('Program', () => {
                 end class
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].index).to.equal(0);
 
             signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 40)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].index).to.equal(1);
         });
 
@@ -2081,7 +2136,7 @@ describe('Program', () => {
                 end namespace
                     `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 47)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('people.coders.Person(arg1, arg2)');
             expect(signatureHelp[0].index).to.equal(0);
         });
@@ -2095,11 +2150,11 @@ describe('Program', () => {
                 end function
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 27)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function test(arg1, arg2)');
             expect(signatureHelp[0].index).to.equal(0);
             signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 32)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function test(arg1, arg2)');
             expect(signatureHelp[0].index).to.equal(1);
         });
@@ -2117,7 +2172,7 @@ describe('Program', () => {
                 end class
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 25)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
         });
 
@@ -2132,7 +2187,7 @@ describe('Program', () => {
                 end namespace
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 31)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
         });
 
@@ -2147,7 +2202,7 @@ describe('Program', () => {
                 end namespace
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 38)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
         });
 

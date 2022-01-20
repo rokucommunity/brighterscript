@@ -1402,6 +1402,7 @@ export class Parser {
     }
 
     private regexLiteralExpression() {
+        this.warnIfNotBrighterScriptMode('regular expression literal');
         return new RegexLiteralExpression({
             regexLiteral: this.advance()
         });

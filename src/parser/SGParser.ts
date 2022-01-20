@@ -189,7 +189,7 @@ function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SG
     const content = children.content?.[0];
     switch (name.text) {
         case 'component':
-            const componentContent = mapElements(content, ['interface', 'script', 'children'], diagnostics);
+            const componentContent = mapElements(content, ['interface', 'script', 'children', 'customization'], diagnostics);
             return new SGComponent(name, attributes, componentContent, range);
         case 'interface':
             const interfaceContent = mapElements(content, ['field', 'function'], diagnostics);

@@ -5,6 +5,7 @@ import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Character
 import type { Range, Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
+import { PreceedingRegexTypes } from '.';
 
 export class Lexer {
     /**
@@ -83,7 +84,7 @@ export class Lexer {
      * @param options options used to customize the scan process
      * @returns an object containing an array of `errors` and an array of `tokens` to be passed to a parser.
      */
-    public scan(toScan: string, options?: ScanOptions): Lexer {
+    public scan(toScan: string, options?: ScanOptions): this {
         this.source = toScan;
         this.options = this.sanitizeOptions(options);
         this.start = 0;
@@ -944,6 +945,18 @@ export class Lexer {
     }
 
     /**
+     * Find the closest previous non-whtespace token
+     */
+    private getPreviousNonWhitespaceToken() {
+        for (let i = this.tokens.length - 1; i >= 0; i--) {
+            let token = this.tokens[i];
+            if (token && token.kind !== TokenKind.Whitespace) {
+                return this.tokens[i];
+            }
+        }
+    }
+
+    /**
      * Capture a regex literal token. Returns false if not found.
      * This is lookahead lexing which might techincally belong in the parser,
      * but it's easy enough to do here in the lexer
@@ -953,29 +966,36 @@ export class Lexer {
 
         let nextCharNeedsEscaped = false;
 
-        //finite loop to prevent infinite loop if something went wrong
-        for (let i = this.current; i < this.source.length; i++) {
+        //regexps can only occur when preceeded by exactly one of these tokens:
+        const previousKind = this.getPreviousNonWhitespaceToken()?.kind;
 
-            //if we reached the end of the regex, consume any flags
-            if (this.check('/') && !nextCharNeedsEscaped) {
-                this.advance();
-                //consume all flag-like chars (let the parser validate the actual values)
-                while (/[a-z]/i.exec(this.peek())) {
+        //preceeded by an allowed token, or if there are no previous tokens (i.e. this is the first token in the file).
+        if (PreceedingRegexTypes.has(previousKind) || !previousKind) {
+
+            //finite loop to prevent infinite loop if something went wrong
+            for (let i = this.current; i < this.source.length; i++) {
+
+                //if we reached the end of the regex, consume any flags
+                if (this.check('/') && !nextCharNeedsEscaped) {
                     this.advance();
-                }
-                //finalize the regex literal and EXIT
-                this.addToken(TokenKind.RegexLiteral);
-                return true;
+                    //consume all flag-like chars (let the parser validate the actual values)
+                    while (/[a-z]/i.exec(this.peek())) {
+                        this.advance();
+                    }
+                    //finalize the regex literal and EXIT
+                    this.addToken(TokenKind.RegexLiteral);
+                    return true;
 
-                //if we found a non-escaped newline, there's a syntax error with this regex (or it's not a regex), so quit
-            } else if (this.check('\n') || this.isAtEnd()) {
-                break;
-            } else if (this.check('\\')) {
-                this.advance();
-                nextCharNeedsEscaped = true;
-            } else {
-                this.advance();
-                nextCharNeedsEscaped = false;
+                    //if we found a non-escaped newline, there's a syntax error with this regex (or it's not a regex), so quit
+                } else if (this.check('\n') || this.isAtEnd()) {
+                    break;
+                } else if (this.check('\\')) {
+                    this.advance();
+                    nextCharNeedsEscaped = true;
+                } else {
+                    this.advance();
+                    nextCharNeedsEscaped = false;
+                }
             }
         }
         this.popLookahead();

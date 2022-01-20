@@ -1,5 +1,6 @@
 import type { BscFile, BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
+import chalk from 'chalk';
 import type { Diagnostic } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from 'chai';
@@ -10,6 +11,8 @@ import { BrsFile } from './files/BrsFile';
 import type { Program } from './Program';
 import { standardizePath as s } from './util';
 import type { CodeWithSourceMap } from 'source-map';
+import { getDiagnosticLine } from './diagnosticUtils';
+import { firstBy } from 'thenby';
 
 /**
  * Trim leading whitespace for every line (to make test writing cleaner
@@ -58,29 +61,101 @@ export function trim(strings: TemplateStringsArray, ...args) {
     }
     return trimLeading(text);
 }
+type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[];
+
+function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
+    if (Array.isArray(arg)) {
+        return arg as BsDiagnostic[];
+    } else if ((arg as any).getDiagnostics) {
+        return (arg as any).getDiagnostics();
+    } else if ((arg as any).diagnostics) {
+        return (arg as any).diagnostics;
+    } else {
+        throw new Error('Cannot derive a list of diagnostics from ' + JSON.stringify(arg));
+    }
+}
+
+function sortDiagnostics(diagnostics: BsDiagnostic[]) {
+    return diagnostics.sort(
+        firstBy<BsDiagnostic>('code')
+            .thenBy<BsDiagnostic>('message')
+            .thenBy<BsDiagnostic>((a, b) => (a.range?.start?.line ?? 0) - (b.range?.start?.line ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.range?.start?.character ?? 0) - (b.range?.start?.character ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.range?.end?.line ?? 0) - (b.range?.end?.line ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.range?.end?.character ?? 0) - (b.range?.end?.character ?? 0))
+    );
+}
+
+/**
+ * Ensure the DiagnosticCollection exactly contains the data from expected list.
+ * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
+ * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
+ */
+export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Partial<Diagnostic> | string | number>) {
+    const diagnostics = sortDiagnostics(
+        getDiagnostics(arg)
+    );
+    const expectedDiagnostics = sortDiagnostics(
+        expected.map(x => {
+            let result = x;
+            if (typeof x === 'string') {
+                result = { message: x };
+            } else if (typeof x === 'number') {
+                result = { code: x };
+            }
+            return result as BsDiagnostic;
+        })
+    );
+
+    const actual = [] as BsDiagnostic[];
+    for (let i = 0; i < diagnostics.length; i++) {
+        const actualDiagnostic = diagnostics[i];
+        const clone = {} as BsDiagnostic;
+        let keys = Object.keys(expectedDiagnostics[i] ?? {}) as Array<keyof BsDiagnostic>;
+        //if there were no keys provided, use some sane defaults
+        keys = keys.length > 0 ? keys : ['message', 'code', 'range', 'severity'];
+
+        //copy only compare the specified keys from actualDiagnostic
+        for (const key of keys) {
+            clone[key] = actualDiagnostic[key];
+        }
+        actual.push(clone);
+    }
+
+    expect(actual).to.eql(expectedDiagnostics);
+}
 
 /**
  * Test that the given object has zero diagnostics. If diagnostics are found, they are printed to the console in a pretty fashion.
  */
-export function expectZeroDiagnostics(arg: { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[]) {
-    let diagnostics: BsDiagnostic[];
-    if (Array.isArray(arg)) {
-        diagnostics = arg as BsDiagnostic[];
-    } else if ((arg as any).getDiagnostics) {
-        diagnostics = (arg as any).getDiagnostics();
-    } else if ((arg as any).diagnostics) {
-        diagnostics = (arg as any).diagnostics;
-    } else {
-        throw new Error('Cannot derive a list of diagnostics from ' + JSON.stringify(arg));
-    }
+export function expectZeroDiagnostics(arg: DiagnosticCollection) {
+    const diagnostics = getDiagnostics(arg);
     if (diagnostics.length > 0) {
         let message = `Expected 0 diagnostics, but instead found ${diagnostics.length}:`;
         for (const diagnostic of diagnostics) {
             //escape any newlines
             diagnostic.message = diagnostic.message.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
             message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file?.pathAbsolute ?? ''}#(${diagnostic.range.start.line}:${diagnostic.range.start.character})-(${diagnostic.range.end.line}:${diagnostic.range.end.character})`;
+            //print the line containing the error (if we can find it)
+            const line = diagnostic.file?.fileContents?.split(/\r?\n/g)?.[diagnostic.range.start.line];
+            if (line) {
+                message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
+            }
         }
         assert.fail(message);
+    }
+}
+
+/**
+ * Test if the arg has any diagnostics. This just checks the count, nothing more.
+ * @param length if specified, checks the diagnostic count is exactly that amount. If omitted, the collection is just verified as non-empty
+ */
+export function expectHasDiagnostics(arg: DiagnosticCollection, length: number = null) {
+    const diagnostics = getDiagnostics(arg);
+    if (length) {
+        expect(diagnostics).lengthOf(length);
+    } else {
+        expect(diagnostics).not.empty;
     }
 }
 

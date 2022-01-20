@@ -14,6 +14,7 @@ import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
+import { FunctionType } from '../types/FunctionType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -249,6 +250,15 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 walk(this, 'body', visitor, options);
             }
         }
+    }
+
+    getFunctionType(): FunctionType {
+        let functionType = new FunctionType(this.returnType);
+        functionType.isSub = this.functionType.text === 'sub';
+        for (let param of this.parameters) {
+            functionType.addParameter(param.name.text, param.type, !!param.typeToken);
+        }
+        return functionType;
     }
 }
 

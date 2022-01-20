@@ -11,6 +11,7 @@ import type { BscFile, BsDiagnostic } from '.';
 import { Range } from '.';
 import { DiagnosticSeverity } from './astUtils';
 import { BrsFile } from './files/BrsFile';
+import { expectZeroDiagnostics } from './testHelpers.spec';
 
 describe('ProgramBuilder', () => {
 
@@ -145,8 +146,7 @@ describe('ProgramBuilder', () => {
                     dest: 'source/lib.brs'
                 }]
             });
-            const diagnostics = builder.getDiagnostics();
-            expect(diagnostics.map(x => x.message)).to.eql([]);
+            expectZeroDiagnostics(builder);
             expect(builder.program.getFileByPathAbsolute(s``));
         });
     });
