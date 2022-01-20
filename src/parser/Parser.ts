@@ -93,7 +93,7 @@ import { Logger } from '../Logger';
 import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
-import { RegexLiteralExpression } from '.';
+import { ContinueStatement, RegexLiteralExpression } from '.';
 
 export class Parser {
     /**
@@ -1002,6 +1002,10 @@ export class Parser {
 
         if (this.check(TokenKind.Goto)) {
             return this.gotoStatement();
+        }
+
+        if (this.check(TokenKind.Continue)) {
+            return this.continueStatement();
         }
 
         //does this line look like a label? (i.e.  `someIdentifier:` )
@@ -1970,6 +1974,15 @@ export class Parser {
         }
 
         return new LabelStatement(tokens);
+    }
+
+    /**
+     * Parses a `continue` statement
+     */
+    private continueStatement() {
+        return new ContinueStatement({
+            continue: this.advance()
+        });
     }
 
     /**

@@ -635,6 +635,11 @@ export let DiagnosticMessages = {
         message: `Cannot find type with name '${typeName}'`,
         code: 1123,
         severity: DiagnosticSeverity.Error
+    }),
+    illegalContinueStatement: () => ({
+        message: `Continue statement must be contained within a loop statement`,
+        code: 1124,
+        severity: DiagnosticSeverity.Error
     })
 };
 

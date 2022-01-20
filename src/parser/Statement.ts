@@ -805,6 +805,7 @@ export class ForStatement extends Statement {
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
+        state.pushLoopLabel();
         let result = [];
         //for
         result.push(
@@ -836,15 +837,22 @@ export class ForStatement extends Statement {
         state.lineage.unshift(this);
         result.push(...this.body.transpile(state));
         state.lineage.shift();
+
+        //if we need to include an end-of-loop label
+        const loopLabel = state.popLoopLabel();
+        if (loopLabel.wasAccessed) {
+            result.push('\n', state.indent(), loopLabel.label, ':');
+        }
+
         if (this.body.statements.length > 0) {
             result.push('\n');
         }
+
         //end for
         result.push(
             state.indent(),
             state.transpileToken(this.endForToken)
         );
-
         return result;
     }
 
@@ -2171,5 +2179,28 @@ export class ThrowStatement extends Statement {
         if (this.expression && options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'expression', visitor, options);
         }
+    }
+}
+
+export class ContinueStatement extends Statement {
+    constructor(
+        public tokens: {
+            continue: Token;
+        }
+    ) {
+        super();
+    }
+
+    public get range() {
+        return this.tokens.continue.range;
+    }
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.sourceNode(this.tokens.continue, `goto ${state.getLoopLabel()}`)
+        ];
+    }
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
     }
 }

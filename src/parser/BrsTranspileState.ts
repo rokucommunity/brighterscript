@@ -28,4 +28,31 @@ export class BrsTranspileState extends TranspileState {
      * Used by ClassMethodStatements to determine information about their enclosing class
      */
     public classStatement?: ClassStatement;
+
+    private loopLabels = [] as { label: string; wasAccessed: boolean }[];
+
+    /**
+     * Start a new loop label tracker. If any continue statements need this, they will
+     */
+    public pushLoopLabel() {
+        this.loopLabels.push({
+            label: `BRIGHTERSCRIPT_LABEL_${this.loopLabelSequence++}`,
+            wasAccessed: false
+        });
+    }
+
+    public popLoopLabel() {
+        return this.loopLabels.pop();
+    }
+
+    /**
+     * Get the name of the label at the end of the loop. By calling this, we tell
+     * the loop transpiler that it needs to insert the end-of-loop label
+     */
+    public getLoopLabel() {
+        const loopLabel = this.loopLabels[this.loopLabels.length - 1];
+        loopLabel.wasAccessed = true;
+        return loopLabel.label;
+    }
+    private loopLabelSequence = 0;
 }
