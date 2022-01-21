@@ -3248,7 +3248,7 @@ describe('BrsFile', () => {
             expect(symbol.expandedTokenText).to.equal('klass');
             const classStmt = file.parser.references.classStatements[0];
             expect(classStmt.name.text).to.equal('MyKlass');
-            expect(symbol.type.isAssignableTo(classStmt.getCustomType())).be.true;
+            expect(symbol.type.isAssignableTo(classStmt.getThisBscType())).be.true;
             expectZeroDiagnostics(program);
         });
 

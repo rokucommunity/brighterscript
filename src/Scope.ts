@@ -3,10 +3,10 @@ import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink, FunctionCall } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink, FunctionCall, InheritableStatement, InheritableType } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement } from './parser/Statement';
+import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, InterfaceStatement, EnumStatement } from './parser/Statement';
 import type { FunctionExpression, NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { standardizePath as s, util } from './util';
@@ -17,11 +17,10 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile, TokenSymbolLookup } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDynamicType, isEnumStatement, isFunctionStatement, isTypedFunctionType, isInvalidType, isFunctionType, isVariableExpression, isXmlFile, isArrayType } from './astUtils/reflection';
+import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDynamicType, isEnumStatement, isFunctionStatement, isTypedFunctionType, isInvalidType, isFunctionType, isVariableExpression, isXmlFile, isArrayType, isInterfaceType, isInterfaceStatement } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { BscType, TypeContext } from './types/BscType';
 import { getTypeFromContext } from './types/BscType';
-import type { CustomType } from './types/CustomType';
 import { DynamicType } from './types/DynamicType';
 import { ObjectType } from './types/ObjectType';
 import { UninitializedType } from './types/UninitializedType';
@@ -73,6 +72,24 @@ export class Scope {
     }
 
     /**
+     * Get the interface with the specified name.
+     * @param ifaceName - The interface name, including the namespace of the interface if possible
+     * @param containingNamespace - The namespace used to resolve relative interface names. (i.e. the namespace around the current statement trying to find a interface)
+     */
+    public getInterface(ifaceName: string, containingNamespace?: string): InterfaceStatement {
+        return this.getInterfaceFileLink(ifaceName, containingNamespace)?.item;
+    }
+
+    /**
+     * Get either the class or interface, etc. with a given name
+     * @param name - The name, including the namespace of the interface if possible
+     * @param containingNamespace - The namespace used to resolve relative names. (i.e. the namespace around the current statement trying to find the interface or class)
+     */
+    public getNamedTypeStatement(name: string, containingNamespace?: string): InheritableStatement {
+        return this.getFileLink(name, containingNamespace)?.item;
+    }
+
+    /**
      * A cache of a map of tokens -> TokenSymbolLookups, which are the result of getSymbolTypeFromToken()
      * Sometimes the lookup of symbols may take a while if there are lazyTypes or multiple tokens in a chain
      * By caching the result of this lookup, subsequent lookups of the same tokens are quicker
@@ -101,11 +118,39 @@ export class Scope {
     }
 
     /**
-   * Gets the parent class of the given class
-   * @param klass - The class to get the parent of, if possible
+   * Get an interface and its containing file by the interface name
+   * @param ifaceName - The interface name, including the namespace of the interface if possible
+   * @param containingNamespace - The namespace used to resolve relative interface names. (i.e. the namespace around the current statement trying to find a interface)
    */
+    public getInterfaceFileLink(ifaceName: string, containingNamespace?: string): FileLink<InterfaceStatement> {
+        const lowerName = ifaceName?.toLowerCase();
+        const ifaceMap = this.getInterfaceMap();
+
+        let iface = ifaceMap.get(
+            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
+        );
+        //if we couldn't find the iface by its full namespaced name, look for a global class with that name
+        if (!iface) {
+            iface = ifaceMap.get(lowerName);
+        }
+        return iface;
+    }
+
+    /**
+   * Get a InheritableStatement and its containing file by the name of the interface or class
+   * @param name - The name of the interface or class, including the namespace of the class if possible
+   * @param containingNamespace - The namespace used to resolve relative names. (i.e. the namespace around the current statement trying to find a class)
+   */
+    public getFileLink(name: string, containingNamespace?: string): FileLink<InheritableStatement> {
+        return this.getClassFileLink(name, containingNamespace) || this.getInterfaceFileLink(name, containingNamespace);
+    }
+
+    /**
+     * Gets the parent class of the given class
+     * @param klass - The class to get the parent of, if possible
+     */
     public getParentClass(klass: ClassStatement): ClassStatement {
-        if (klass?.hasParentClass()) {
+        if (klass?.hasParent()) {
             const lowerParentClassNames = klass.getPossibleFullParentNames().map(name => name.toLowerCase());
             for (const lowerParentClassName of lowerParentClassNames) {
                 const foundParent = this.getClassMap().get(lowerParentClassName);
@@ -117,12 +162,58 @@ export class Scope {
     }
 
     /**
+     * Gets the parent interface of the given interface
+     * @param iface - The interface to get the parent of, if possible
+     */
+    public getParentInterface(iface: InterfaceStatement): InterfaceStatement {
+        if (iface?.hasParent()) {
+            const lowerParentClassNames = iface.getPossibleFullParentNames().map(name => name.toLowerCase());
+            for (const lowerParentClassName of lowerParentClassNames) {
+                const foundParent = this.getInterfaceMap().get(lowerParentClassName);
+                if (foundParent) {
+                    return foundParent.item;
+                }
+            }
+        }
+    }
+
+    /**
+    * Gets the parent of an Interface or Class
+    * @param stmt - The class or interface to get the parent of, if possible
+    */
+    public getParentStatement(stmt: InheritableStatement): InheritableStatement {
+        if (isInterfaceStatement(stmt)) {
+            return this.getParentInterface(stmt);
+        } else if (isClassStatement(stmt)) {
+            return this.getParentClass(stmt);
+        }
+    }
+
+    /**
     * Tests if a class exists with the specified name
     * @param className - the all-lower-case namespace-included class name
     * @param namespaceName - the current namespace name
     */
     public hasClass(className: string, namespaceName?: string): boolean {
         return !!this.getClass(className, namespaceName);
+    }
+
+    /**
+    * Tests if an interface exists with the specified name
+    * @param ifaceName - the all-lower-case namespace-included class name
+    * @param namespaceName - the current namespace name
+    */
+    public hasInterface(ifaceName: string, namespaceName?: string): boolean {
+        return !!this.hasInterface(ifaceName, namespaceName);
+    }
+
+    /**
+    * Tests if a class OR an interface, etc. exists with the specified name
+    * @param name - the all-lower-case namespace-included class or interface name
+    * @param namespaceName - the current namespace name
+    */
+    public hasNamedType(name: string, namespaceName?: string): boolean {
+        return !!this.getNamedTypeStatement(name, namespaceName);
     }
 
     /**
@@ -147,24 +238,46 @@ export class Scope {
         });
     }
 
-    public getAncestorTypeListByContext(thisType: BscType, context?: TypeContext): CustomType[] {
+
+    public getAncestorTypeListByContext(thisType: BscType, context?: TypeContext): InheritableType[] {
         const funcExpr = context?.file?.getFunctionExpressionAtPosition(context?.position);
-        if (isCustomType(thisType)) {
+        if (isCustomType(thisType) || isInterfaceType(thisType)) {
             return this.getAncestorTypeList(thisType.name, funcExpr);
         }
         return [];
     }
+    /**
+   * A dictionary of all Interfaces in this scope. This includes namespaced Interfaces always with their full name.
+   * The key is stored in lower case
+   */
+    public getInterfaceMap(): Map<string, FileLink<InterfaceStatement>> {
+        return this.cache.getOrAdd('interfaceMap', () => {
+            const map = new Map<string, FileLink<InterfaceStatement>>();
+            this.enumerateBrsFiles((file) => {
+                if (isBrsFile(file)) {
+                    for (let cls of file.parser.references.interfaceStatements) {
+                        const lowerClassName = cls.getName(ParseMode.BrighterScript)?.toLowerCase();
+                        //only track classes with a defined name (i.e. exclude nameless malformed classes)
+                        if (lowerClassName) {
+                            map.set(lowerClassName, { item: cls, file: file });
+                        }
+                    }
+                }
+            });
+            return map;
+        });
+    }
 
-    public getAncestorTypeList(className: string, functionExpression?: FunctionExpression): CustomType[] {
+    public getAncestorTypeList(className: string, functionExpression?: FunctionExpression): InheritableType[] {
         const lowerNamespaceName = functionExpression.namespaceName?.getName().toLowerCase();
-        const ancestors: CustomType[] = [];
-        let currentClass = this.getClassFileLink(className, lowerNamespaceName)?.item;
-        if (currentClass) {
-            ancestors.push(currentClass?.getCustomType());
+        const ancestors: InheritableType[] = [];
+        let currentClassOrIFace = this.getFileLink(className, lowerNamespaceName)?.item;
+        if (currentClassOrIFace) {
+            ancestors.push(currentClassOrIFace?.getThisBscType());
         }
-        while (currentClass?.hasParentClass()) {
-            currentClass = this.getParentClass(currentClass);
-            ancestors.push(currentClass?.getCustomType());
+        while (currentClassOrIFace?.hasParent()) {
+            currentClassOrIFace = this.getParentStatement(currentClassOrIFace);
+            ancestors.push(currentClassOrIFace?.getThisBscType());
         }
         // TODO TYPES: this should probably be cached
         return ancestors;
@@ -641,6 +754,13 @@ export class Scope {
         for (const pair of classMap) {
             const classStmt = pair[1]?.item;
             classStmt?.buildSymbolTable(this.getParentClass(classStmt));
+        }
+
+        // also link interfaces
+        const ifaceMap = this.getInterfaceMap();
+        for (const pair of ifaceMap) {
+            const ifaceStmt = pair[1]?.item;
+            ifaceStmt?.buildSymbolTable(this.getParentInterface(ifaceStmt));
         }
     }
 
@@ -1175,7 +1295,7 @@ export class Scope {
     /**
      * @param className - The name of the class (including namespace if possible)
      * @param callsiteNamespace - the name of the namespace where the call site resides (this is NOT the known namespace of the class).
-     *                            This is used to help resolve non-namespaced class names that reside in the same namespac as the call site.
+     *                            This is used to help resolve non-namespaced class names that reside in the same namespace as the call site.
      */
     public getClassHierarchy(className: string, callsiteNamespace?: string) {
         let items = [] as FileLink<ClassStatement>[];

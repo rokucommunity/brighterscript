@@ -6,13 +6,15 @@ import type { TypedFunctionType } from './types/TypedFunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { FunctionStatement } from './parser/Statement';
+import type { FunctionStatement, ClassStatement, InterfaceStatement } from './parser/Statement';
 import type { Expression, FunctionExpression } from './parser/Expression';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceMapGenerator, SourceNode } from 'source-map';
-import type { BscType } from './types/BscType';
+import type { BscType, SymbolContainer } from './types/BscType';
 import type { Token } from './lexer/Token';
 import type { AstEditor } from './astUtils/AstEditor';
+import type { CustomType } from './types/CustomType';
+import type { InterfaceType } from './types/InterfaceType';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -424,4 +426,45 @@ export type DiagnosticCode = number | string;
 export interface FileLink<T> {
     item: T;
     file: BrsFile;
+}
+
+/**
+ * Common interface to support Statements which define entities that have a member table
+ * e.g. Class, Interface
+ */
+export interface MemberSymbolTableProvider extends SymbolContainer {
+    buildSymbolTable(parent?: InheritableStatement): void;
+    hasParent(): boolean;
+    getPossibleFullParentNames(): string[];
+    getName(parseMode: ParseMode): string;
+    getThisBscType(): BscType;
+}
+
+export type InheritableStatement = ClassStatement | InterfaceStatement;
+
+export type InheritableType = CustomType | InterfaceType;
+
+/**
+ * Options for the parser functionDeclaration() method
+ */
+export interface FunctionDeclarationParseOptions {
+    /**
+     * Function should have a name. Add a diagnostic if it is not there
+     * False for for anonymous functions
+     */
+    hasName?: boolean;
+    /**
+     * Function should have a body. Add a diagnostic if it is not there
+     * False for for functions defined in Interfaces
+     */
+    hasBody?: boolean;
+    /**
+    * Function should have an end token. Add a diagnostic if it is not there
+    * False for for functions defined in Interfaces
+    */
+    hasEnd?: boolean;
+    /**
+     *This function is only callable as a member for a class or interface, etc.
+     */
+    onlyCallableAsMember?: boolean;
 }

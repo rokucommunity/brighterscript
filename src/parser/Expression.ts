@@ -207,6 +207,21 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      */
     public childFunctionExpressions = [] as FunctionExpression[];
 
+    /**
+    * The range of the function declaration, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
+    * and ending with the last character in the returnTypeToken, or the 's' in 'as', or the rightParen
+    */
+    public get functionDeclarationRange() {
+        return util.createBoundingRange(
+            this.functionType,
+            this.leftParen,
+            ...(this.parameters ?? []),
+            this.rightParen,
+            this.asToken,
+            this.returnType
+        );
+    }
+
     transpile(state: BrsTranspileState, name?: Identifier, includeBody = true) {
         let results = [];
         //'function'|'sub'
@@ -255,12 +270,14 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             state.lineage.shift();
             results.push(...body);
         }
-        results.push('\n');
-        //'end sub'|'end function'
-        results.push(
-            state.indent(),
-            state.transpileToken(this.end)
-        );
+        if (this.end) {
+            results.push('\n');
+            //'end sub'|'end function'
+            results.push(
+                state.indent(),
+                state.transpileToken(this.end)
+            );
+        }
         return results;
     }
 

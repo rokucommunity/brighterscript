@@ -9,16 +9,15 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isTypedefProvider, isVoidType } from '../astUtils/reflection';
-import type { TranspileResult, TypedefProvider } from '../interfaces';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isClassStatement, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isTypedefProvider, isVoidType } from '../astUtils/reflection';
+import type { TranspileResult, TypedefProvider, MemberSymbolTableProvider, InheritableStatement } from '../interfaces';
 import { createClassMethodStatement, createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
-import type { SymbolContainer } from '../types/BscType';
 import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
 import { CustomType } from '../types/CustomType';
-
+import { InterfaceType } from '../types/InterfaceType';
 /**
  * A BrightScript statement
  */
@@ -1242,10 +1241,13 @@ export class ImportStatement extends Statement implements TypedefProvider {
     }
 }
 
-export class InterfaceStatement extends Statement implements TypedefProvider {
+
+export class InterfaceStatement extends Statement implements TypedefProvider, MemberSymbolTableProvider {
+    readonly memberTable: SymbolTable = new SymbolTable();
+
     constructor(
         interfaceToken: Token,
-        name: Identifier,
+        public name: Identifier,
         extendsToken: Token,
         public parentInterfaceName: NamespacedVariableNameExpression,
         public body: Statement[],
@@ -1266,6 +1268,17 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             ...this.body,
             this.tokens.endInterface
         ) ?? interpolatedRange;
+        for (let statement of this.body) {
+            if (isInterfaceMethodStatement(statement)) {
+                this.methods.push(statement);
+
+                this.memberMap[statement?.name?.text.toLowerCase()] = statement;
+            } else if (isInterfaceFieldStatement(statement)) {
+                this.fields.push(statement);
+
+                this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
+            }
+        }
     }
 
     public tokens = {} as {
@@ -1277,18 +1290,14 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
 
     public readonly range: Range;
 
-    public get fields() {
-        return this.body.filter(x => isInterfaceFieldStatement(x));
-    }
-
-    public get methods() {
-        return this.body.filter(x => isInterfaceMethodStatement(x));
-    }
+    public memberMap = {} as Record<string, InterfaceMemberStatement>;
+    public methods = [] as InterfaceMethodStatement[];
+    public fields = [] as InterfaceFieldStatement[];
 
     /**
      * The name of the interface WITH its leading namespace (if applicable)
      */
-    public get fullName() {
+    public getName(parseMode: ParseMode) {
         const name = this.tokens.name?.text;
         if (name) {
             if (this.namespaceName) {
@@ -1303,11 +1312,53 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         }
     }
 
+    public buildSymbolTable(parentIface?: InheritableStatement) {
+        this.memberTable.clear();
+        if (parentIface) {
+            this.memberTable.setParent(parentIface?.memberTable);
+        }
+
+        for (const statement of this.methods) {
+            const funcType = statement?.func.getFunctionType();
+            this.memberTable.addSymbol(statement?.name?.text, statement?.range, funcType);
+        }
+        for (const statement of this.fields) {
+            this.memberTable.addSymbol(statement?.tokens.name?.text, statement?.range, statement.getType());
+        }
+    }
+
+    public hasParent() {
+        return !!this.parentInterfaceName;
+    }
+
+    public getParentName() {
+        return !!this.parentInterfaceName;
+    }
+
     /**
-     * The name of the interface (without the namespace prefix)
+     * Gets an array of possible parent interface names, taking into account the namespace this interface was created under
+     * @returns array of possible parent interface names
      */
-    public get name() {
-        return this.tokens.name?.text;
+    public getPossibleFullParentNames(): string[] {
+        if (!this.hasParent()) {
+            return [];
+        }
+        if (this.parentInterfaceName?.getNameParts().length > 1) {
+            // The specified parent interface already has a dot, so it must already reference a namespace
+            return [this.parentInterfaceName.getName()];
+        }
+        const names = [];
+
+        if (this.namespaceName) {
+            // We're under a namespace, so the full parent name MIGHT be with this namespace too
+            names.push(this.namespaceName.getName() + '.' + this.parentInterfaceName.getName());
+        }
+        names.push(this.parentInterfaceName.getName());
+        return names;
+    }
+
+    public getThisBscType(): InterfaceType {
+        return new InterfaceType(this.getName(ParseMode.BrighterScript), this.memberTable);
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {
@@ -1383,7 +1434,8 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     constructor(
         nameToken: Identifier,
         asToken: Token,
-        public type?: TypeExpression
+        public type?: TypeExpression,
+        public namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
         this.tokens.name = nameToken;
@@ -1404,7 +1456,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     }
 
     public get name() {
-        return this.tokens.name.text;
+        return this.tokens.name;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1432,104 +1484,25 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         }
         return result;
     }
-
 }
 
-export class InterfaceMethodStatement extends Statement implements TypedefProvider {
-    constructor(
-        functionTypeToken: Token,
-        nameToken: Identifier,
-        leftParen: Token,
-        public params: FunctionParameterExpression[],
-        rightParen: Token,
-        asToken?: Token,
-        public returnType?: TypeExpression
-    ) {
-        super();
-        this.tokens.functionType = functionTypeToken;
-        this.tokens.name = nameToken;
-        this.tokens.leftParen = leftParen;
-        this.tokens.rightParen = rightParen;
-        this.tokens.as = asToken;
-
-        this.range = util.createBoundingRange(
-            this.tokens.name,
-            this.tokens.as,
-            this.tokens.leftParen,
-            ...this.params,
-            this.tokens.rightParen,
-            this.tokens.as,
-            this.returnType
-        ) ?? interpolatedRange;
-
+export class InterfaceMethodStatement extends FunctionStatement implements TypedefProvider {
+    public transpile(state: BrsTranspileState): TranspileResult {
+        throw new Error('Method not implemented.');
     }
-
-    public readonly range: Range;
-
-    public tokens = {} as {
-        functionType: Token;
-        name: Identifier;
-        leftParen: Token;
-        rightParen: Token;
-        as: Token;
-    };
-
-    public getReturnType() {
-        return this.returnType.type;
+    constructor(
+        name: Identifier,
+        func: FunctionExpression
+    ) {
+        super(name, func, undefined);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
-
-    getTypedef(state: BrsTranspileState) {
-        const result = [] as TranspileResult;
-        for (let annotation of this.annotations ?? []) {
-            result.push(
-                ...annotation.getTypedef(state),
-                state.newline,
-                state.indent()
-            );
-        }
-
-        result.push(
-            this.tokens.functionType.text,
-            ' ',
-            this.tokens.name.text,
-            '('
-        );
-        const params = this.params ?? [];
-        for (let i = 0; i < params.length; i++) {
-            if (i > 0) {
-                result.push(', ');
-            }
-            const param = params[i];
-            result.push(param.name.text);
-            if (param.asToken && param.type) {
-                result.push(
-                    ' as ',
-                    ...param.type.transpile(state)
-                );
-            }
-        }
-        result.push(
-            ')'
-        );
-        if (this.returnType) {
-            result.push(
-                ' as ',
-                ...this.returnType.transpile(state)
-            );
-        }
-        return result;
-    }
-
-    public transpile(state: BrsTranspileState): TranspileResult {
-        throw new Error('Method not implemented.');
-    }
 }
 
-export class ClassStatement extends Statement implements TypedefProvider, SymbolContainer {
+export class ClassStatement extends Statement implements TypedefProvider, MemberSymbolTableProvider {
     readonly symbolTable: SymbolTable = new SymbolTable();
     readonly memberTable: SymbolTable = new SymbolTable();
 
@@ -1593,7 +1566,7 @@ export class ClassStatement extends Statement implements TypedefProvider, Symbol
 
     public readonly range: Range;
 
-    public getCustomType(): CustomType {
+    public getThisBscType(): CustomType {
         return new CustomType(this.getName(ParseMode.BrighterScript), this.memberTable);
     }
 
@@ -1605,11 +1578,11 @@ export class ClassStatement extends Statement implements TypedefProvider, Symbol
         return constructorFuncType;
     }
 
-    public buildSymbolTable(parentClass?: ClassStatement) {
+    public buildSymbolTable(parentClass?: InheritableStatement) {
         this.symbolTable.clear();
-        this.symbolTable.addSymbol('m', this.name?.range, this.getCustomType());
+        this.symbolTable.addSymbol('m', this.name?.range, this.getThisBscType());
         this.memberTable.clear();
-        if (parentClass) {
+        if (isClassStatement(parentClass)) {
             this.symbolTable.addSymbol('super', this.parentClassName?.range, parentClass.getConstructorFunctionType());
             this.memberTable.setParent(parentClass?.memberTable);
         }
@@ -1704,7 +1677,7 @@ export class ClassStatement extends Statement implements TypedefProvider, Symbol
         return myIndex - 1;
     }
 
-    public hasParentClass() {
+    public hasParent() {
         return !!this.parentClassName;
     }
 
@@ -1713,7 +1686,7 @@ export class ClassStatement extends Statement implements TypedefProvider, Symbol
      * @returns array of possible parent class names
      */
     public getPossibleFullParentNames(): string[] {
-        if (!this.hasParentClass()) {
+        if (!this.hasParent()) {
             return [];
         }
         if (this.parentClassName?.getNameParts().length > 1) {
@@ -2094,7 +2067,7 @@ export class ClassMethodStatement extends FunctionStatement {
      * Inject field initializers at the top of the `new` function (after any present `super()` call)
      */
     private injectFieldInitializersForConstructor(state: BrsTranspileState) {
-        let startingIndex = state.classStatement.hasParentClass() ? 1 : 0;
+        let startingIndex = state.classStatement.hasParent() ? 1 : 0;
 
         let newStatements = [] as Statement[];
         //insert the field initializers in order
@@ -2204,6 +2177,9 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
     }
 }
 export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;
+export type InterfaceMemberStatement = InterfaceFieldStatement | InterfaceMethodStatement;
+export type MemberFieldStatement = ClassFieldStatement | InterfaceFieldStatement;
+export type MemberMethodStatement = ClassMethodStatement | InterfaceMethodStatement;
 
 export class TryCatchStatement extends Statement {
     constructor(

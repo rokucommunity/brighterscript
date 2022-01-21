@@ -660,6 +660,21 @@ export let DiagnosticMessages = {
         message: `Argument of type '${actualTypeString}' is not assignable to parameter of type '${expectedTypeString}'`,
         code: 1128,
         severity: DiagnosticSeverity.Error
+    }),
+    duplicateInterfaceDeclaration: (scopeName: string, ifaceName: string) => ({
+        message: `Scope '${scopeName}' already contains an interface with name '${ifaceName}'`,
+        code: 1129,
+        severity: DiagnosticSeverity.Error
+    }),
+    namespacedInterfaceCannotShareNameWithNonNamespacedInterface: (nonNamespacedInterfaceName: string) => ({
+        message: `Namespaced interface cannot have the same name as a non-namespaced interface '${nonNamespacedInterfaceName}'`,
+        code: 1130,
+        severity: DiagnosticSeverity.Error
+    }),
+    classCannotShareNamewithInterface: (className: string) => ({
+        message: `Class cannot have the same name as interface '${className}'`,
+        code: 1131,
+        severity: DiagnosticSeverity.Error
     })
 };
 

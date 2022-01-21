@@ -89,7 +89,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Position, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isInvalidType, isLiteralExpression, isNewExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isInvalidType, isLiteralExpression, isNewExpression, isVariableExpression, isInterfaceMethodStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
@@ -99,6 +99,8 @@ import { getTypeFromCallExpression, getTypeFromDottedGetExpression, getTypeFromN
 import { SymbolTable } from '../SymbolTable';
 import { ObjectType } from '../types/ObjectType';
 import type { BscType } from '../types/BscType';
+import type { FunctionDeclarationParseOptions } from '../interfaces';
+
 
 export class Parser {
     /**
@@ -332,7 +334,7 @@ export class Parser {
     private declaration(): Statement | AnnotationExpression | undefined {
         try {
             if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
-                return this.functionDeclaration(false);
+                return this.functionStatement({ hasName: true, hasBody: true, hasEnd: true });
             }
 
             if (this.checkLibrary()) {
@@ -406,57 +408,27 @@ export class Parser {
     }
 
     /**
-     * Create a new InterfaceMethodStatement. This should only be called from within `interfaceDeclaration`
+     * Create a new InterfaceFieldStatement. This should only be called from within `interfaceDeclaration`
      */
     private interfaceFieldStatement() {
         const name = this.identifier(...AllowedProperties);
-        let asToken = this.consumeToken(TokenKind.As);
-        let typeExpr = this.typeExpression();
-
-        if (!typeExpr.isValidType()) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, typeExpr.getText()),
-                range: typeExpr.range
-            });
-            throw this.lastDiagnosticAsError();
-        }
-
-        return new InterfaceFieldStatement(name, asToken, typeExpr);
-    }
-
-    /**
-     * Create a new InterfaceMethodStatement. This should only be called from within `interfaceDeclaration()`
-     */
-    private interfaceMethodStatement() {
-        const functionType = this.advance();
-        const name = this.identifier(...AllowedProperties);
-        const leftParen = this.consumeToken(TokenKind.LeftParen);
-
-        const params = [];
-        const rightParen = this.consumeToken(TokenKind.RightParen);
-        let asToken = null as Token;
-        let returnTypeExpr: TypeExpression;
+        let asToken: Token;
+        let typeExpr: TypeExpression;
+        //look for `as SOME_TYPE`
         if (this.check(TokenKind.As)) {
-            asToken = this.advance();
-            returnTypeExpr = this.typeExpression();
-            if (!returnTypeExpr.isValidType(this.options.mode)) {
+            asToken = this.consumeToken(TokenKind.As);
+            typeExpr = this.typeExpression();
+
+            //no field type specified
+            if (!typeExpr.isValidType()) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, returnTypeExpr.getText()),
-                    range: returnTypeExpr.range
+                    ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, typeExpr.getText()),
+                    range: typeExpr.range
                 });
-                throw this.lastDiagnosticAsError();
             }
         }
 
-        return new InterfaceMethodStatement(
-            functionType,
-            name,
-            leftParen,
-            params,
-            rightParen,
-            asToken,
-            returnTypeExpr
-        );
+        return new InterfaceFieldStatement(name, asToken, typeExpr, this.currentNamespaceName);
     }
 
     private interfaceDeclaration(): InterfaceStatement {
@@ -468,7 +440,8 @@ export class Parser {
             DiagnosticMessages.expectedKeyword(TokenKind.Interface),
             TokenKind.Interface
         );
-        const nameToken = this.identifier(...this.allowedLocalIdentifiers);
+        //get the interface name
+        let nameToken = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('interface'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
 
         let extendsToken: Token;
         let parentInterfaceName: NamespacedVariableNameExpression;
@@ -482,6 +455,11 @@ export class Parser {
         let body = [] as Statement[];
         while (this.checkAny(TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
             try {
+                //break out of this loop if we encountered the `EndInterface` token not followed by `as`
+                if (this.check(TokenKind.EndInterface) && !this.checkNext(TokenKind.As)) {
+                    break;
+                }
+
                 let decl: Statement;
 
                 //collect leading annotations
@@ -495,7 +473,19 @@ export class Parser {
 
                     //methods (function/sub keyword followed by opening paren)
                 } else if (this.checkAny(TokenKind.Function, TokenKind.Sub) && this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
-                    decl = this.interfaceMethodStatement();
+                    const functionStatement = this.functionStatement({
+                        hasName: true,
+                        hasBody: false,
+                        hasEnd: false,
+                        onlyCallableAsMember: true
+                    });
+                    decl = new InterfaceMethodStatement(
+                        functionStatement.name,
+                        functionStatement.func
+                    );
+
+                    //refer to this statement as parent of the expression
+                    functionStatement.func.functionStatement = decl as InterfaceMethodStatement;
 
                     //comments
                 } else if (this.check(TokenKind.Comment)) {
@@ -505,9 +495,6 @@ export class Parser {
                 if (decl) {
                     this.consumePendingAnnotations(decl);
                     body.push(decl);
-                } else {
-                    //we didn't find a declaration...flag tokens until next line
-                    this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
                 }
             } catch (e) {
                 //throw out any failed members and move on to the next line
@@ -516,14 +503,16 @@ export class Parser {
 
             //ensure statement separator
             this.consumeStatementSeparators();
-            //break out of this loop if we encountered the `EndInterface` token not followed by `as`
-            if (this.check(TokenKind.EndInterface) && !this.checkNext(TokenKind.As)) {
-                break;
-            }
         }
 
         //consume the final `end interface` token
-        const endInterfaceToken = this.consumeToken(TokenKind.EndInterface);
+        let endingKeyword = this.advance();
+        if (endingKeyword.kind !== TokenKind.EndInterface) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.couldNotFindMatchingEndKeyword('interface'),
+                range: endingKeyword.range
+            });
+        }
 
         const statement = new InterfaceStatement(
             interfaceToken,
@@ -531,7 +520,7 @@ export class Parser {
             extendsToken,
             parentInterfaceName,
             body,
-            endInterfaceToken,
+            endingKeyword,
             this.currentNamespaceName
         );
         this._references.interfaceStatements.push(statement);
@@ -654,13 +643,10 @@ export class Parser {
 
                 //methods (function/sub keyword OR identifier followed by opening paren)
                 if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
-                    const funcDeclaration = this.functionDeclaration(false, false, true);
-
-                    //remove this function from the lists because it's not a callable
-                    const functionStatement = this._references.functionStatements.pop();
+                    const functionStatement = this.functionStatement({ hasName: true, hasBody: true, hasEnd: true, onlyCallableAsMember: true });
 
                     //if we have an overrides keyword AND this method is called 'new', that's not allowed
-                    if (overrideKeyword && funcDeclaration.name.text.toLowerCase() === 'new') {
+                    if (overrideKeyword && functionStatement.name.text.toLowerCase() === 'new') {
                         this.diagnostics.push({
                             ...DiagnosticMessages.cannotUseOverrideKeywordOnConstructorFunction(),
                             range: overrideKeyword.range
@@ -669,8 +655,8 @@ export class Parser {
 
                     decl = new ClassMethodStatement(
                         accessModifier,
-                        funcDeclaration.name,
-                        funcDeclaration.func,
+                        functionStatement.name,
+                        functionStatement.func,
                         overrideKeyword
                     );
 
@@ -783,24 +769,36 @@ export class Parser {
      */
     private callExpressions = [];
 
-    private functionDeclaration(isAnonymous: true, checkIdentifier?: boolean, forClassMethod?: boolean): FunctionExpression;
-    private functionDeclaration(isAnonymous: false, checkIdentifier?: boolean, forClassMethod?: boolean): FunctionStatement;
-    private functionDeclaration(isAnonymous: boolean, checkIdentifier = true, forClassMethod = false) {
+
+    private functionStatement(options: FunctionDeclarationParseOptions): FunctionStatement {
+        options.hasName = true;
+        const funcResult = this.functionDeclaration(options);
+        if (funcResult) {
+            let result = new FunctionStatement(funcResult.name, funcResult.functionExpression, this.currentNamespaceName);
+            funcResult.functionExpression.functionStatement = result;
+            if (!options.onlyCallableAsMember) {
+                this._references.functionStatements.push(result);
+            }
+            return result;
+        }
+    }
+
+    private functionDeclaration(options: FunctionDeclarationParseOptions = {}): { name: Identifier; functionExpression: FunctionExpression } {
         let previousCallExpressions = this.callExpressions;
         this.callExpressions = [];
 
         try {
             //track depth to help certain statements need to know if they are contained within a function body
             this.namespaceAndFunctionDepth++;
-            let functionType: Token;
+            let functionKeyword: Token;
             if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
-                functionType = this.advance();
+                functionKeyword = this.advance();
             } else {
                 this.diagnostics.push({
                     ...DiagnosticMessages.missingCallableKeyword(),
                     range: this.peek().range
                 });
-                functionType = {
+                functionKeyword = {
                     isReserved: true,
                     kind: TokenKind.Function,
                     text: 'function',
@@ -812,24 +810,24 @@ export class Parser {
                     leadingWhitespace: ''
                 };
             }
-            let isSub = functionType?.kind === TokenKind.Sub;
-            let functionTypeText = isSub ? 'sub' : 'function';
+            let isSub = functionKeyword?.kind === TokenKind.Sub;
+            let functionKeywordText = isSub ? 'sub' : 'function';
             let name: Identifier;
             let leftParen: Token;
 
-            if (isAnonymous) {
+            if (!options.hasName) {
                 leftParen = this.consume(
-                    DiagnosticMessages.expectedLeftParenAfterCallable(functionTypeText),
+                    DiagnosticMessages.expectedLeftParenAfterCallable(functionKeywordText),
                     TokenKind.LeftParen
                 );
             } else {
                 name = this.consume(
-                    DiagnosticMessages.expectedNameAfterCallableKeyword(functionTypeText),
+                    DiagnosticMessages.expectedNameAfterCallableKeyword(functionKeywordText),
                     TokenKind.Identifier,
                     ...AllowedProperties
                 ) as Identifier;
                 leftParen = this.consume(
-                    DiagnosticMessages.expectedLeftParenAfterCallableName(functionTypeText),
+                    DiagnosticMessages.expectedLeftParenAfterCallableName(functionKeywordText),
                     TokenKind.LeftParen
                 );
 
@@ -838,13 +836,13 @@ export class Parser {
                 if (['$', '%', '!', '#', '&'].includes(lastChar)) {
                     //don't throw this error; let the parser continue
                     this.diagnostics.push({
-                        ...DiagnosticMessages.functionNameCannotEndWithTypeDesignator(functionTypeText, name.text, lastChar),
+                        ...DiagnosticMessages.functionNameCannotEndWithTypeDesignator(functionKeywordText, name.text, lastChar),
                         range: name.range
                     });
                 }
 
-                //flag functions with keywords for names (only for standard functions)
-                if (checkIdentifier && DisallowedFunctionIdentifiersText.has(name.text.toLowerCase())) {
+                //flag functions with keywords for names (only for standard functions - not for class methods)
+                if (!options.onlyCallableAsMember && DisallowedFunctionIdentifiersText.has(name.text.toLowerCase())) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.cannotUseReservedWordAsIdentifier(name.text),
                         range: name.range
@@ -893,11 +891,14 @@ export class Parser {
                 return haveFoundOptional || !!param.defaultValue;
             }, false);
 
-            this.consumeStatementSeparators(true);
+            if (options.hasEnd && options.hasBody) {
+                // do not go to next statement - we don't care about any other statement
+                this.consumeStatementSeparators(true);
+            }
             let func = new FunctionExpression(
                 params,
                 undefined, //body
-                functionType,
+                functionKeyword,
                 undefined, //ending keyword
                 leftParen,
                 rightParen,
@@ -915,7 +916,7 @@ export class Parser {
             }
 
             // add the function to the relevant symbol tables
-            if (!isAnonymous && !forClassMethod) {
+            if (!options.onlyCallableAsMember && name) {
                 const funcType = func.getFunctionType();
                 funcType.setName(name.text);
 
@@ -931,51 +932,43 @@ export class Parser {
 
             this._references.functionExpressions.push(func);
 
-            let previousFunctionExpression = this.currentFunctionExpression;
-            this.currentFunctionExpression = func;
+            if (options.hasBody) {
+                let previousFunctionExpression = this.currentFunctionExpression;
+                this.currentFunctionExpression = func;
 
-            //make sure to restore the currentFunctionExpression even if the body block fails to parse
-            try {
-                //support ending the function with `end sub` OR `end function`
-                func.body = this.block();
-            } finally {
-                this.currentFunctionExpression = previousFunctionExpression;
+                //make sure to restore the currentFunctionExpression even if the body block fails to parse
+                try {
+                    //support ending the function with `end sub` OR `end function`
+                    func.body = this.block();
+                } finally {
+                    this.currentFunctionExpression = previousFunctionExpression;
+                }
+
+                if (!func.body) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.callableBlockMissingEndKeyword(functionKeywordText),
+                        range: this.peek().range
+                    });
+                    throw this.lastDiagnosticAsError();
+                }
             }
+            if (options.hasEnd) {
+                // consume 'end sub' or 'end function'
+                func.end = this.advance();
+                let expectedEndKind = isSub ? TokenKind.EndSub : TokenKind.EndFunction;
 
-            if (!func.body) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.callableBlockMissingEndKeyword(functionTypeText),
-                    range: this.peek().range
-                });
-                throw this.lastDiagnosticAsError();
-            }
-
-            // consume 'end sub' or 'end function'
-            func.end = this.advance();
-            let expectedEndKind = isSub ? TokenKind.EndSub : TokenKind.EndFunction;
-
-            //if `function` is ended with `end sub`, or `sub` is ended with `end function`, then
-            //add an error but don't hard-fail so the AST can continue more gracefully
-            if (func.end.kind !== expectedEndKind) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.mismatchedEndCallableKeyword(functionTypeText, func.end.text),
-                    range: this.peek().range
-                });
+                //if `function` is ended with `end sub`, or `sub` is ended with `end function`, then
+                //add an error but don't hard-fail so the AST can continue more gracefully
+                if (func.end.kind !== expectedEndKind) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.mismatchedEndCallableKeyword(functionKeywordText, func.end.text),
+                        range: this.peek().range
+                    });
+                }
             }
             func.callExpressions = this.callExpressions;
-
-            if (isAnonymous) {
-                //cache the range property so that plugins can't affect it
-                func.cacheRange();
-                return func;
-            } else {
-                let result = new FunctionStatement(name, func, this.currentNamespaceName);
-                func.functionStatement = result;
-                this._references.functionStatements.push(result);
-                //cache the range property so that plugins can't affect it
-                result.cacheRange();
-                return result;
-            }
+            func.cacheRange();
+            return { name: name, functionExpression: func };
         } finally {
             this.namespaceAndFunctionDepth--;
             //restore the previous CallExpression list
@@ -2286,7 +2279,7 @@ export class Parser {
 
     private anonymousFunction(): Expression {
         if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
-            const func = this.functionDeclaration(true);
+            const func = this.functionDeclaration({ hasName: false, hasBody: true, hasEnd: true }).functionExpression;
             //if there's an open paren after this, this is an IIFE
             if (this.check(TokenKind.LeftParen)) {
                 return this.finishCall(this.advance(), func);
@@ -3259,6 +3252,9 @@ export class Parser {
                     this._references.expressions.add(s.initialValue);
                 }
             },
+            InterfaceStatement: s => {
+                this._references.interfaceStatements.push(s);
+            },
             NamespaceStatement: s => {
                 this._references.namespaceStatements.push(s);
             },
@@ -3272,7 +3268,7 @@ export class Parser {
                 this._references.libraryStatements.push(s);
             },
             FunctionExpression: (expression, parent) => {
-                if (!isClassMethodStatement(parent)) {
+                if (!isClassMethodStatement(parent) && !isInterfaceMethodStatement(parent)) {
                     this._references.functionExpressions.push(expression);
                 }
             },
@@ -3384,6 +3380,7 @@ export class References {
 
     public functionExpressions = [] as FunctionExpression[];
     public functionStatements = [] as FunctionStatement[];
+
     /**
      * A map of function statements, indexed by fully-namespaced lower function name.
      */
@@ -3404,7 +3401,7 @@ export class References {
         if (!this._interfaceStatementLookup) {
             this._interfaceStatementLookup = new Map();
             for (const stmt of this.interfaceStatements) {
-                this._interfaceStatementLookup.set(stmt.fullName.toLowerCase(), stmt);
+                this._interfaceStatementLookup.set(stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt);
             }
         }
         return this._interfaceStatementLookup;
@@ -3539,7 +3536,7 @@ export function getBscTypeFromExpression(expression: Expression, functionExpress
             return new ArrayType(...innerTypes);
             //function call
         } else if (isNewExpression(expression)) {
-            return getTypeFromNewExpression(expression, functionExpression); // new CustomType(expression.className.getName(ParseMode.BrighterScript));
+            return getTypeFromNewExpression(expression, functionExpression);
             //Function call
         } else if (isCallExpression(expression)) {
             return getTypeFromCallExpression(expression, functionExpression);

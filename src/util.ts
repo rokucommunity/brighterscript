@@ -1030,9 +1030,8 @@ export class Util {
                 }
                 if (!typeClass && allowBrighterscriptTypes) {
                     typeClass = new LazyType((context) => {
-                        return context?.scope?.getClass(typeText, currentNamespaceName?.getName())?.getCustomType();
+                        return context?.scope?.getNamedTypeStatement(typeText, currentNamespaceName?.getName())?.getThisBscType();
                     });
-
                 }
 
                 return typeClass;

@@ -1,6 +1,6 @@
 /* eslint-disable no-bitwise */
 import type { CancellationToken } from 'vscode-languageserver';
-import type { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement, EnumStatement, EnumMemberStatement } from '../parser/Statement';
+import type { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement, EnumStatement, EnumMemberStatement, InterfaceStatement, InterfaceMethodStatement, InterfaceFieldStatement } from '../parser/Statement';
 import type { AALiteralExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, Expression, FunctionExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NamespacedVariableNameExpression, NewExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
 import { isExpression, isStatement } from './reflection';
 
@@ -99,6 +99,9 @@ export function createVisitor(
         ClassFieldStatement?: (statement: ClassFieldStatement, parent?: Statement) => Statement | void;
         EnumStatement?: (statement: EnumStatement, parent?: Statement) => Statement | void;
         EnumMemberStatement?: (statement: EnumMemberStatement, parent?: Statement) => Statement | void;
+        InterfaceStatement?: (statement: InterfaceStatement, parent?: Statement) => Statement | void;
+        InterfaceMethodStatement?: (statement: InterfaceMethodStatement, parent?: Statement) => Statement | void;
+        InterfaceFieldStatement?: (statement: InterfaceFieldStatement, parent?: Statement) => Statement | void;
         //expressions
         BinaryExpression?: (expression: BinaryExpression, parent?: Statement | Expression) => Expression | void;
         CallExpression?: (expression: CallExpression, parent?: Statement | Expression) => Expression | void;
