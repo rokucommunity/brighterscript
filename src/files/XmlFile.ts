@@ -193,16 +193,28 @@ export class XmlFile {
 
         this.getCommentFlags(this.parser.tokens as any[]);
 
-        if (!this.parser.ast.root) {
-            //skip empty XML
-            return;
-        }
-
         //notify AST ready
         this.program.plugins.emit('afterFileParse', this);
 
-        //initial validation
-        this.validateComponent(this.parser.ast);
+        //emit an event before starting to validate this file
+        this.program.plugins.emit('beforeFileValidate', {
+            file: this,
+            program: this.program
+        });
+
+        //emit an event to allow plugins to contribute to the file validation process
+        this.program.plugins.emit('onFileValidate', {
+            file: this,
+            program: this.program
+        });
+
+        if (this.parser.ast.root) {
+
+            //initial validation
+            this.validateComponent(this.parser.ast);
+        } else {
+            //skip empty XML
+        }
     }
 
     /**
