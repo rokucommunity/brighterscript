@@ -1,5 +1,6 @@
 import { expect, assert } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
+import type { Expression } from './Expression';
 import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
 import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
@@ -8,6 +9,9 @@ import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
+import { BrsTranspileState } from './BrsTranspileState';
+import { SourceNode } from 'source-map';
+import { BrsFile, Program } from '..';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -39,6 +43,72 @@ describe('parser', () => {
             expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
                 'main'
             ]);
+        });
+
+        function expressionsToStrings(expressions: Set<Expression>) {
+            return [...expressions.values()].map(x => {
+                const file = new BrsFile('', '', new Program({} as any));
+                const state = new BrsTranspileState(file);
+                return new SourceNode(null, null, null, x.transpile(state)).toString();
+            });
+        }
+
+        it('works for references.expressions', () => {
+            const parser = Parser.parse(`
+                a += 1 + 2
+                a++
+                a--
+                some.node@.doCallfunc()
+                bravo(3 + 4).jump(callMe())
+                obj = {
+                    val1: someValue
+                }
+                arr = [
+                    one
+                ]
+                thing = alpha.bravo
+                alpha.charlie()
+                delta(alpha.delta)
+                call1().a.b.call2()
+                class Person
+                    name as string = "bob"
+                end class
+                function thing(p1 = name.space.getSomething())
+
+                end function
+            `);
+            const expected = [
+                'a += 1 + 2',
+                'a++',
+                'a--',
+                //currently the "toString" does a transpile, so that's why this is different.
+                'some.node.callfunc("doCallfunc", invalid)',
+                '3 + 4',
+                'callMe()',
+                'bravo(3 + 4).jump(callMe())',
+                'someValue',
+                '{\n    val1: someValue\n}',
+                'one',
+                '[\n    one\n]',
+                'alpha.bravo',
+                'alpha.charlie()',
+                'alpha.delta',
+                'delta(alpha.delta)',
+                'call1().a.b.call2()',
+                '"bob"',
+                'name.space.getSomething()'
+            ].sort();
+
+            expect(
+                expressionsToStrings(parser.references.expressions).sort()
+            ).to.eql(expected);
+
+            //tell the parser we modified the AST and need to regenerate references
+            parser.invalidateReferences();
+
+            expect(
+                expressionsToStrings(parser.references.expressions).sort()
+            ).to.eql(expected);
         });
     });
 
