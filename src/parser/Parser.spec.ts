@@ -53,8 +53,13 @@ describe('parser', () => {
             });
         }
 
-        it.only('works for references.expressions', () => {
+        it('works for references.expressions', () => {
             const parser = Parser.parse(`
+                a += 1 + 2
+                a++
+                a--
+                some.node@.doCallfunc()
+                bravo(3 + 4).jump(callMe())
                 obj = {
                     val1: someValue
                 }
@@ -64,8 +69,7 @@ describe('parser', () => {
                 thing = alpha.bravo
                 alpha.charlie()
                 delta(alpha.delta)
-                a += 1 + 2
-                bravo(1 + 2).jump(callMe())
+                call1().a.b.call2()
                 class Person
                     name as string = "bob"
                 end class
@@ -74,6 +78,14 @@ describe('parser', () => {
                 end function
             `);
             const expected = [
+                'a += 1 + 2',
+                'a++',
+                'a--',
+                //currently the "toString" does a transpile, so that's why this is different.
+                'some.node.callfunc("doCallfunc", invalid)',
+                '3 + 4',
+                'callMe()',
+                'bravo(3 + 4).jump(callMe())',
                 'someValue',
                 '{\n    val1: someValue\n}',
                 'one',
@@ -82,13 +94,11 @@ describe('parser', () => {
                 'alpha.charlie()',
                 'alpha.delta',
                 'delta(alpha.delta)',
-                '1 + 2',
-                '1 + 2',
-                'callMe()',
-                'bravo(1 + 2).jump(callMe())',
+                'call1().a.b.call2()',
                 '"bob"',
                 'name.space.getSomething()'
             ].sort();
+
             expect(
                 expressionsToStrings(parser.references.expressions).sort()
             ).to.eql(expected);

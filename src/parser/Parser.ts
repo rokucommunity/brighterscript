@@ -916,6 +916,9 @@ export class Parser {
                 new BinaryExpression(new VariableExpression(name, this.currentNamespaceName), operator, value),
                 this.currentFunctionExpression
             );
+            //remove the right-hand-side expression from this assignment operator, and replace with the full assignment expression
+            this._references.expressions.delete(value);
+            this._references.expressions.add(result);
         }
         this._references.assignmentStatements.push(result);
         return result;
@@ -1851,7 +1854,9 @@ export class Parser {
                 throw this.lastDiagnosticAsError();
             }
 
-            return new IncrementStatement(expr, operator);
+            const result = new IncrementStatement(expr, operator);
+            this._references.expressions.add(result);
+            return result;
         }
 
         if (isCallExpression(expr) || isCallfuncExpression(expr)) {
@@ -2279,6 +2284,8 @@ export class Parser {
                 expr = this.indexedGet(expr);
             } else if (this.match(TokenKind.Callfunc)) {
                 expr = this.callfunc(expr);
+                //store this callfunc expression in references
+                referenceCallExpression = expr;
             } else if (this.match(TokenKind.Dot)) {
                 if (this.match(TokenKind.LeftSquareBracket)) {
                     expr = this.indexedGet(expr);
@@ -2771,6 +2778,43 @@ export class Parser {
      */
     private findReferences() {
         this._references = new References();
+        const excludedExpressions = new Set<Expression>();
+
+        const visitCallExpression = (e: CallExpression | CallfuncExpression) => {
+            for (const p of e.args) {
+                this._references.expressions.add(p);
+            }
+            //add calls that were not excluded (from loop below)
+            if (!excludedExpressions.has(e)) {
+                this._references.expressions.add(e);
+            }
+
+            //if this call is part of a longer expression that includes a call higher up, find that higher one and remove it
+            if (e.callee) {
+                let node: Expression = e.callee;
+                while (node) {
+                    //the primary goal for this loop. If we found a parent call expression, remove it from `references`
+                    if (isCallExpression(node)) {
+                        this.references.expressions.delete(node);
+                        excludedExpressions.add(node);
+                        //stop here. even if there are multiple calls in the chain, each child will find and remove its closest parent, so that reduces excess walking.
+                        break;
+
+                        //when we hit a variable expression, we're definitely at the leftmost expression so stop
+                    } else if (isVariableExpression(node)) {
+                        break;
+                        //if
+
+                    } else if (isDottedGetExpression(node) || isIndexedGetExpression(node)) {
+                        node = node.obj;
+                    } else {
+                        //some expression we don't understand. log it and quit the loop
+                        this.logger.info('Encountered unknown expression while calculating function expression chain', node);
+                        break;
+                    }
+                }
+            }
+        };
 
         this.ast.walk(createVisitor({
             AssignmentStatement: s => {
@@ -2811,10 +2855,11 @@ export class Parser {
             ExpressionStatement: s => {
                 this._references.expressions.add(s.expression);
             },
+            CallfuncExpression: e => {
+                visitCallExpression(e);
+            },
             CallExpression: e => {
-                for (const p of e.args) {
-                    this._references.expressions.add(p);
-                }
+                visitCallExpression(e);
             },
             AALiteralExpression: e => {
                 this.addPropertyHints(e);
@@ -2825,11 +2870,25 @@ export class Parser {
                     }
                 }
             },
+            ArrayLiteralExpression: e => {
+                for (const element of e.elements) {
+                    //keep everything except comments
+                    if (!isCommentStatement(element)) {
+                        this._references.expressions.add(element);
+                    }
+                }
+            },
             DottedGetExpression: e => {
                 this.addPropertyHints(e.name);
             },
             DottedSetStatement: e => {
                 this.addPropertyHints(e.name);
+            },
+            UnaryExpression: e => {
+                this._references.expressions.add(e);
+            },
+            IncrementStatement: e => {
+                this._references.expressions.add(e);
             }
         }), {
             walkMode: WalkMode.visitAllRecursive
