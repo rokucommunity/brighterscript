@@ -896,7 +896,6 @@ describe('Scope', () => {
 
     describe('enums', () => {
         it('gets enum completions', () => {
-            //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile('source/main.bs', `
                 enum foo
                     bar1
@@ -943,9 +942,6 @@ describe('Scope', () => {
                 DiagnosticMessages.unknownEnumValue('bad2', 'test.foo2'),
                 DiagnosticMessages.unknownEnumValue('bad3', 'test.nested.foo3')
             ]);
-
-
         });
-
     });
 });
