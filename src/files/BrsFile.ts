@@ -276,11 +276,13 @@ export class BrsFile {
             //find all places where a sub/function is being called
             this.findFunctionCalls();
 
+            //emit an event before starting to validate this file
             this.program.plugins.emit('beforeFileValidate', {
                 file: this,
                 program: this.program
             });
 
+            //emit an event to allow plugins to contribute to the file validation process
             this.program.plugins.emit('onFileValidate', {
                 file: this,
                 program: this.program

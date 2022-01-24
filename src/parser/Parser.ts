@@ -513,8 +513,6 @@ export class Parser {
         //consume the final `end interface` token
         const endInterfaceToken = this.consumeToken(TokenKind.EndInterface);
 
-        this.consumeStatementSeparators();
-
         const statement = new InterfaceStatement(
             interfaceToken,
             nameToken,
@@ -585,7 +583,6 @@ export class Parser {
         //consume the final `end interface` token
         result.tokens.endEnum = this.consumeToken(TokenKind.EndEnum);
 
-        this.consumeStatementSeparators();
         this._references.enumStatements.push(result);
         this.exitAnnotationBlock(parentAnnotations);
         return result;
