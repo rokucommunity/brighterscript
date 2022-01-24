@@ -388,7 +388,7 @@ export class Scope {
                             classStatements: {},
                             functionStatements: {},
                             statements: [],
-                            enumStatements: new Map<string, EnumStatement>(),
+                            enumStatements: new Map<string, EnumStatement>()
                         });
                     }
                 }
@@ -431,7 +431,7 @@ export class Scope {
                         fullName: key,
                         nameRange: es.range,
                         lastPartName: es.name,
-                        statement: es,
+                        statement: es
                     });
                     for (const ems of es.getMembers()) {
                         const fullMemberName = `${key}.${ems.name.toLowerCase()}`;
@@ -440,7 +440,7 @@ export class Scope {
                             fullName: fullMemberName,
                             nameRange: ems.range,
                             lastPartName: ems.name,
-                            statement: es,
+                            statement: es
                         });
                     }
                 }
