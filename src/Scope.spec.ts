@@ -893,8 +893,9 @@ describe('Scope', () => {
             expect(keys).includes('foo3.bar3_2');
         });
     });
+
     describe('enums', () => {
-        it.only('gets enum completions', () => {
+        it('gets enum completions', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile('source/main.bs', `
                 enum foo
@@ -939,8 +940,8 @@ describe('Scope', () => {
             program.validate();
             expectDiagnostics(program, [
                 DiagnosticMessages.unknownEnumValue('bad1', 'foo'),
-                DiagnosticMessages.unknownEnumValue('bad2', 'foo2'),
-                DiagnosticMessages.unknownEnumValue('bad3', 'foo3')
+                DiagnosticMessages.unknownEnumValue('bad2', 'test.foo2'),
+                DiagnosticMessages.unknownEnumValue('bad3', 'test.nested.foo3')
             ]);
 
 
