@@ -1,6 +1,6 @@
 /* eslint-disable no-bitwise */
-import type { Token, Identifier } from '../lexer';
-import { TokenKind } from '../lexer';
+import type { Token, Identifier } from '../lexer/Token';
+import { TokenKind } from '../lexer/TokenKind';
 import type { Block, CommentStatement, FunctionStatement } from './Statement';
 import type { Range } from 'vscode-languageserver';
 import util from '../util';

@@ -1,21 +1,16 @@
-import type {
-    Token,
-    Identifier,
-    BlockTerminator
-} from '../lexer';
+import type { Token, Identifier } from '../lexer/Token';
+import { isToken } from '../lexer/Token';
+import type { BlockTerminator } from '../lexer/TokenKind';
+import { Lexer } from '../lexer/Lexer';
 import {
-    TokenKind,
     AllowedLocalIdentifiers,
     AssignmentOperators,
     DisallowedLocalIdentifiersText,
     DisallowedFunctionIdentifiersText,
     AllowedProperties,
-    Lexer,
     BrighterScriptSourceLiterals,
-    isToken,
-    DeclarableTypes
-} from '../lexer';
-
+    DeclarableTypes, TokenKind
+} from '../lexer/TokenKind';
 import type {
     Statement,
     PrintSeparatorTab,
@@ -35,6 +30,8 @@ import {
     DimStatement,
     DottedSetStatement,
     EndStatement,
+    EnumStatement,
+    EnumMemberStatement,
     ExitForStatement,
     ExitWhileStatement,
     ExpressionStatement,
@@ -59,7 +56,6 @@ import {
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { util } from '../util';
-
 import type { Expression } from './Expression';
 import {
     AALiteralExpression,
@@ -75,6 +71,7 @@ import {
     LiteralExpression,
     NamespacedVariableNameExpression,
     NewExpression,
+    RegexLiteralExpression,
     UnaryExpression,
     VariableExpression,
     XmlAttributeGetExpression,
@@ -93,7 +90,6 @@ import { Logger } from '../Logger';
 import { isAAMemberExpression, isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
-import { EnumMemberStatement, EnumStatement, RegexLiteralExpression } from '.';
 import { Cache } from '../Cache';
 
 export class Parser {

@@ -1,10 +1,10 @@
 import { expect } from 'chai';
 import * as assert from 'assert';
-
 import { Parser } from '../../Parser';
-import { TokenKind, Lexer } from '../../../lexer';
+import { Lexer } from '../../../lexer/Lexer';
+import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, rangeMatch, token } from '../Parser.spec';
-import { isBlock, isCommentStatement, isIfStatement } from '../../../astUtils';
+import { isBlock, isCommentStatement, isIfStatement } from '../../../astUtils/reflection';
 import type { Block, IfStatement } from '../../Statement';
 
 describe('parser if statements', () => {
