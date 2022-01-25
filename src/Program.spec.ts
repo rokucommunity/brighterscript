@@ -2335,4 +2335,34 @@ describe('Program', () => {
             }
         });
     });
+
+    describe('plugins', () => {
+        it('emits file validation events', () => {
+            const plugin = {
+                name: 'test',
+                beforeFileValidate: sinon.spy(),
+                onFileValidate: sinon.spy(),
+                afterFileValidate: sinon.spy()
+            };
+            program.plugins.add(plugin);
+            program.addOrReplaceFile('source/main.brs', '');
+            expect(plugin.beforeFileValidate.callCount).to.equal(1);
+            expect(plugin.onFileValidate.callCount).to.equal(1);
+            expect(plugin.afterFileValidate.callCount).to.equal(1);
+        });
+
+        it('emits file validation events', () => {
+            const plugin = {
+                name: 'test',
+                beforeFileValidate: sinon.spy(),
+                onFileValidate: sinon.spy(),
+                afterFileValidate: sinon.spy()
+            };
+            program.plugins.add(plugin);
+            program.addOrReplaceFile('components/main.xml', '');
+            expect(plugin.beforeFileValidate.callCount).to.equal(1);
+            expect(plugin.onFileValidate.callCount).to.equal(1);
+            expect(plugin.afterFileValidate.callCount).to.equal(1);
+        });
+    });
 });
