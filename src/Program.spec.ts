@@ -15,8 +15,10 @@ import { EmptyStatement } from './parser/Statement';
 import { expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { Logger } from './Logger';
-import { createToken, createVisitor, isBrsFile, WalkMode } from './astUtils';
-import { TokenKind } from './lexer';
+import { createToken } from './astUtils/creators';
+import { createVisitor, WalkMode } from './astUtils/visitors';
+import { isBrsFile } from './astUtils/reflection';
+import { TokenKind } from './lexer/TokenKind';
 import type { LiteralExpression } from './parser/Expression';
 
 let sinon = sinonImport.createSandbox();

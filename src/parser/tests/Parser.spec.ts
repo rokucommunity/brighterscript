@@ -1,7 +1,7 @@
-import type { Token } from '../../lexer';
-import { TokenKind, ReservedWords } from '../../lexer';
+import type { Token } from '../../lexer/Token';
+import { TokenKind, ReservedWords } from '../../lexer/TokenKind';
 import { interpolatedRange } from '../../astUtils/creators';
-import type { Range } from '../../astUtils';
+import type { Range } from 'vscode-languageserver';
 
 /* A set of utilities to be used while writing tests for the BRS parser. */
 
