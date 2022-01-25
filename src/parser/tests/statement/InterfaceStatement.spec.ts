@@ -62,7 +62,7 @@ describe('InterfaceStatement', () => {
         `, undefined, undefined, undefined, true);
     });
 
-    it('allows declaring multiple interfaces in a file', ()=>{
+    it('allows declaring multiple interfaces in a file', () => {
         program.addOrReplaceFile('source/interfaces.bs', `
             interface Iface1
                 name as dynamic
