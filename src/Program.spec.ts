@@ -15,8 +15,10 @@ import { EmptyStatement } from './parser/Statement';
 import { expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { Logger } from './Logger';
-import { createToken, createVisitor, isBrsFile, WalkMode } from './astUtils';
-import { TokenKind } from './lexer';
+import { createToken } from './astUtils/creators';
+import { createVisitor, WalkMode } from './astUtils/visitors';
+import { isBrsFile } from './astUtils/reflection';
+import { TokenKind } from './lexer/TokenKind';
 import type { LiteralExpression } from './parser/Expression';
 
 let sinon = sinonImport.createSandbox();
@@ -2333,6 +2335,36 @@ describe('Program', () => {
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
             }
+        });
+    });
+
+    describe('plugins', () => {
+        it('emits file validation events', () => {
+            const plugin = {
+                name: 'test',
+                beforeFileValidate: sinon.spy(),
+                onFileValidate: sinon.spy(),
+                afterFileValidate: sinon.spy()
+            };
+            program.plugins.add(plugin);
+            program.addOrReplaceFile('source/main.brs', '');
+            expect(plugin.beforeFileValidate.callCount).to.equal(1);
+            expect(plugin.onFileValidate.callCount).to.equal(1);
+            expect(plugin.afterFileValidate.callCount).to.equal(1);
+        });
+
+        it('emits file validation events', () => {
+            const plugin = {
+                name: 'test',
+                beforeFileValidate: sinon.spy(),
+                onFileValidate: sinon.spy(),
+                afterFileValidate: sinon.spy()
+            };
+            program.plugins.add(plugin);
+            program.addOrReplaceFile('components/main.xml', '');
+            expect(plugin.beforeFileValidate.callCount).to.equal(1);
+            expect(plugin.onFileValidate.callCount).to.equal(1);
+            expect(plugin.afterFileValidate.callCount).to.equal(1);
         });
     });
 });

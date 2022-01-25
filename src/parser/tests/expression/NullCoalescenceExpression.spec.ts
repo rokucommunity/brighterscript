@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-for-in-array */
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { Lexer } from '../../../lexer';
+import { Lexer } from '../../../lexer/Lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { AssignmentStatement, ExpressionStatement, ForEachStatement } from '../../Statement';
 import type {
@@ -14,7 +14,7 @@ import {
     LiteralExpression,
     NullCoalescingExpression
 } from '../../Expression';
-import { Program } from '../../..';
+import { Program } from '../../../Program';
 import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 
 describe('NullCoalescingExpression', () => {

@@ -22,8 +22,8 @@ import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope } from './astUtils/reflection';
 import type { FunctionStatement, Statement } from './parser/Statement';
-import { ParseMode } from './parser';
-import { TokenKind } from './lexer';
+import { ParseMode } from './parser/Parser';
+import { TokenKind } from './lexer/TokenKind';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { AstEditor } from './astUtils/AstEditor';
 const startOfSourcePkgPath = `source${path.sep}`;
@@ -1264,7 +1264,7 @@ export class Program {
     }
 
     /**
-     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     * Find a list of files in the program that have a class with the given name (case INsensitive)
      */
     public findFilesForClass(className: string) {
         const files = [] as BscFile[];

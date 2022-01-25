@@ -3,7 +3,7 @@ import { LiteralExpression } from '../../Expression';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { expectDiagnostics, expectInstanceOf, expectZeroDiagnostics } from '../../../testHelpers.spec';
 import { ParseMode, Parser } from '../../Parser';
-import { EnumStatement } from '../../Statement';
+import { EnumStatement, InterfaceStatement } from '../../Statement';
 
 describe('EnumStatement', () => {
     it('parses empty enum statement', () => {
@@ -124,5 +124,37 @@ describe('EnumStatement', () => {
         expectDiagnostics(parser, [
             DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('enum declarations')
         ]);
+    });
+
+    it('allows enum at top of file', () => {
+        const parser = Parser.parse(`
+            enum Direction
+                value1
+            end enum
+
+            interface Person
+                name as string
+            end interface
+        `, { mode: ParseMode.BrighterScript });
+
+        expectZeroDiagnostics(parser);
+        expect(parser.statements[0]).instanceof(EnumStatement);
+        expect(parser.statements[1]).instanceof(InterfaceStatement);
+    });
+
+    it('allows enum at bottom of file', () => {
+        const parser = Parser.parse(`
+            interface Person
+                name as string
+            end interface
+
+            enum Direction
+                value1
+            end enum
+        `, { mode: ParseMode.BrighterScript });
+
+        expectZeroDiagnostics(parser);
+        expect(parser.statements[0]).instanceof(InterfaceStatement);
+        expect(parser.statements[1]).instanceof(EnumStatement);
     });
 });

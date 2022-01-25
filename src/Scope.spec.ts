@@ -9,7 +9,7 @@ import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
-import type { FunctionStatement, NamespaceStatement } from './parser';
+import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -939,12 +939,9 @@ describe('Scope', () => {
             program.validate();
             expectDiagnostics(program, [
                 DiagnosticMessages.unknownEnumValue('bad1', 'foo'),
-                DiagnosticMessages.unknownEnumValue('bad2', 'foo2'),
-                DiagnosticMessages.unknownEnumValue('bad3', 'foo3')
+                DiagnosticMessages.unknownEnumValue('bad2', 'test.foo2'),
+                DiagnosticMessages.unknownEnumValue('bad3', 'test.nested.foo3')
             ]);
-
-
         });
-
     });
 });
