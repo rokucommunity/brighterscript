@@ -90,7 +90,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAAMemberExpression, isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { EnumMemberStatement, EnumStatement, RegexLiteralExpression } from '.';
@@ -1007,6 +1007,9 @@ export class Parser {
                 new BinaryExpression(new VariableExpression(name, this.currentNamespaceName), operator, value),
                 this.currentFunctionExpression
             );
+            //remove the right-hand-side expression from this assignment operator, and replace with the full assignment expression
+            this._references.expressions.delete(value);
+            this._references.expressions.add(result);
         }
         this._references.assignmentStatements.push(result);
         return result;
@@ -1947,7 +1950,9 @@ export class Parser {
                 throw this.lastDiagnosticAsError();
             }
 
-            return new IncrementStatement(expr, operator);
+            const result = new IncrementStatement(expr, operator);
+            this._references.expressions.add(result);
+            return result;
         }
 
         if (isCallExpression(expr) || isCallfuncExpression(expr)) {
@@ -2196,7 +2201,9 @@ export class Parser {
     }
 
     private expression(): Expression {
-        return this.anonymousFunction();
+        const expression = this.anonymousFunction();
+        this._references.expressions.add(expression);
+        return expression;
     }
 
     private anonymousFunction(): Expression {
@@ -2362,14 +2369,19 @@ export class Parser {
             return this.newExpression();
         }
         let expr = this.primary();
-
+        //an expression to keep for _references
+        let referenceCallExpression: Expression;
         while (true) {
             if (this.match(TokenKind.LeftParen)) {
                 expr = this.finishCall(this.previous(), expr);
+                //store this call expression in references
+                referenceCallExpression = expr;
             } else if (this.match(TokenKind.LeftSquareBracket)) {
                 expr = this.indexedGet(expr);
             } else if (this.match(TokenKind.Callfunc)) {
                 expr = this.callfunc(expr);
+                //store this callfunc expression in references
+                referenceCallExpression = expr;
             } else if (this.match(TokenKind.Dot)) {
                 if (this.match(TokenKind.LeftSquareBracket)) {
                     expr = this.indexedGet(expr);
@@ -2404,6 +2416,10 @@ export class Parser {
             } else {
                 break;
             }
+        }
+        //if we found a callExpression, add it to `expressions` in references
+        if (referenceCallExpression) {
+            this._references.expressions.add(referenceCallExpression);
         }
         return expr;
     }
@@ -2858,13 +2874,56 @@ export class Parser {
      */
     private findReferences() {
         this._references = new References();
+        const excludedExpressions = new Set<Expression>();
+
+        const visitCallExpression = (e: CallExpression | CallfuncExpression) => {
+            for (const p of e.args) {
+                this._references.expressions.add(p);
+            }
+            //add calls that were not excluded (from loop below)
+            if (!excludedExpressions.has(e)) {
+                this._references.expressions.add(e);
+            }
+
+            //if this call is part of a longer expression that includes a call higher up, find that higher one and remove it
+            if (e.callee) {
+                let node: Expression = e.callee;
+                while (node) {
+                    //the primary goal for this loop. If we found a parent call expression, remove it from `references`
+                    if (isCallExpression(node)) {
+                        this.references.expressions.delete(node);
+                        excludedExpressions.add(node);
+                        //stop here. even if there are multiple calls in the chain, each child will find and remove its closest parent, so that reduces excess walking.
+                        break;
+
+                        //when we hit a variable expression, we're definitely at the leftmost expression so stop
+                    } else if (isVariableExpression(node)) {
+                        break;
+                        //if
+
+                    } else if (isDottedGetExpression(node) || isIndexedGetExpression(node)) {
+                        node = node.obj;
+                    } else {
+                        //some expression we don't understand. log it and quit the loop
+                        this.logger.info('Encountered unknown expression while calculating function expression chain', node);
+                        break;
+                    }
+                }
+            }
+        };
 
         this.ast.walk(createVisitor({
             AssignmentStatement: s => {
                 this._references.assignmentStatements.push(s);
+                this.references.expressions.add(s.value);
             },
             ClassStatement: s => {
                 this._references.classStatements.push(s);
+            },
+            ClassFieldStatement: s => {
+                if (s.initialValue) {
+                    this._references.expressions.add(s.initialValue);
+                }
             },
             NamespaceStatement: s => {
                 this._references.namespaceStatements.push(s);
@@ -2885,9 +2944,35 @@ export class Parser {
             },
             NewExpression: e => {
                 this._references.newExpressions.push(e);
+                for (const p of e.call.args) {
+                    this._references.expressions.add(p);
+                }
+            },
+            ExpressionStatement: s => {
+                this._references.expressions.add(s.expression);
+            },
+            CallfuncExpression: e => {
+                visitCallExpression(e);
+            },
+            CallExpression: e => {
+                visitCallExpression(e);
             },
             AALiteralExpression: e => {
                 this.addPropertyHints(e);
+                this._references.expressions.add(e);
+                for (const member of e.elements) {
+                    if (isAAMemberExpression(member)) {
+                        this._references.expressions.add(member.value);
+                    }
+                }
+            },
+            ArrayLiteralExpression: e => {
+                for (const element of e.elements) {
+                    //keep everything except comments
+                    if (!isCommentStatement(element)) {
+                        this._references.expressions.add(element);
+                    }
+                }
             },
             DottedGetExpression: e => {
                 this.addPropertyHints(e.name);
@@ -2897,6 +2982,12 @@ export class Parser {
             },
             EnumStatement: e => {
                 this._references.enumStatements.push(e);
+            },
+            UnaryExpression: e => {
+                this._references.expressions.add(e);
+            },
+            IncrementStatement: e => {
+                this._references.expressions.add(e);
             }
         }), {
             walkMode: WalkMode.visitAllRecursive
@@ -2980,6 +3071,18 @@ export class References {
             return result;
         });
     }
+
+    /**
+     * A collection of full expressions. This excludes intermediary expressions.
+     *
+     * Example 1:
+     * `a.b.c` is composed of `a` (variableExpression)  `.b` (DottedGetExpression) `.c` (DottedGetExpression)
+     * This will only contain the final `.c` DottedGetExpression because `.b` and `a` can both be derived by walking back from the `.c` DottedGetExpression.
+     *
+     * Example 2:
+     * `name.space.doSomething(a.b.c)` will result in 2 entries in this list. the `CallExpression` for `doSomething`, and the `.c` DottedGetExpression.
+     */
+    public expressions = new Set<Expression>();
 
     public importStatements = [] as ImportStatement[];
     public libraryStatements = [] as LibraryStatement[];
