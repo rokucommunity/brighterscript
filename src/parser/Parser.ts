@@ -474,8 +474,6 @@ export class Parser {
         //consume the final `end interface` token
         const endInterfaceToken = this.consumeToken(TokenKind.EndInterface);
 
-        this.consumeStatementSeparators();
-
         const statement = new InterfaceStatement(
             interfaceToken,
             nameToken,
