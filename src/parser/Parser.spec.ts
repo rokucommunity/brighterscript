@@ -11,7 +11,8 @@ import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from 
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
-import { BrsFile, Program } from '..';
+import { BrsFile } from '../files/BrsFile';
+import { Program } from '../Program';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
