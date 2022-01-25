@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import { Parser } from '../../Parser';
-import { Lexer, DisallowedLocalIdentifiersText, TokenKind } from '../../../lexer';
+import { Lexer } from '../../../lexer/Lexer';
+import { DisallowedLocalIdentifiersText, TokenKind } from '../../../lexer/TokenKind';
 import { Range } from 'vscode-languageserver';
 import type { AAMemberExpression } from '../../Expression';
 import { expectZeroDiagnostics } from '../../../testHelpers.spec';

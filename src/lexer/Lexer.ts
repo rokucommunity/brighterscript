@@ -1,11 +1,10 @@
 /* eslint-disable func-names */
-import { TokenKind, ReservedWords, Keywords } from './TokenKind';
+import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes } from './TokenKind';
 import type { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
 import type { Range, Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
-import { PreceedingRegexTypes } from '.';
 
 export class Lexer {
     /**
