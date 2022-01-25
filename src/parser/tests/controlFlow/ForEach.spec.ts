@@ -1,11 +1,11 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { TokenKind } from '../../../lexer';
+import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
+import { Range } from 'vscode-languageserver';
 import { ForEachStatement } from '../../Statement';
 import { VariableExpression } from '../../Expression';
-import { Range } from 'vscode-languageserver';
 
 describe('parser foreach loops', () => {
     it('requires a name and target', () => {

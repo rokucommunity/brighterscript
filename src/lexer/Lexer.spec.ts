@@ -1,7 +1,7 @@
 /* eslint no-template-curly-in-string: 0 */
 import { expect } from 'chai';
 
-import { TokenKind } from '.';
+import { TokenKind } from './TokenKind';
 import { Lexer } from './Lexer';
 import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';

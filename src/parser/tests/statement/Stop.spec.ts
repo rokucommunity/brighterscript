@@ -1,7 +1,8 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { TokenKind, Lexer } from '../../../lexer';
+import { Lexer } from '../../../lexer/Lexer';
+import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, token } from '../Parser.spec';
 
 describe('stop statement', () => {

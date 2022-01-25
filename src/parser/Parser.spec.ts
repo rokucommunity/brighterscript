@@ -1,5 +1,6 @@
 import { expect, assert } from 'chai';
-import { Lexer, ReservedWords } from '../lexer';
+import { Lexer } from '../lexer/Lexer';
+import { ReservedWords } from '../lexer/TokenKind';
 import type { Expression } from './Expression';
 import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
@@ -7,11 +8,12 @@ import type { AssignmentStatement, ClassStatement, Statement } from './Statement
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils';
+import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils/reflection';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
-import { BrsFile, Program } from '..';
+import { BrsFile } from '../files/BrsFile';
+import { Program } from '../Program';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {

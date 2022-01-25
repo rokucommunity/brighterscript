@@ -1,6 +1,6 @@
 /* eslint-disable no-bitwise */
-import type { Token, Identifier } from '../lexer';
-import { CompoundAssignmentOperators, TokenKind } from '../lexer';
+import type { Token, Identifier } from '../lexer/Token';
+import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
 import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, AnnotationExpression, FunctionParameterExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';

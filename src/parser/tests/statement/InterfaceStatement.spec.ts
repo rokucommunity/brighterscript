@@ -1,4 +1,4 @@
-import { getTestGetTypedef } from '../../../testHelpers.spec';
+import { expectZeroDiagnostics, getTestGetTypedef } from '../../../testHelpers.spec';
 import { standardizePath as s } from '../../../util';
 import { Program } from '../../../Program';
 
@@ -60,5 +60,18 @@ describe('InterfaceStatement', () => {
                 someField as string
             end interface
         `, undefined, undefined, undefined, true);
+    });
+
+    it('allows declaring multiple interfaces in a file', () => {
+        program.addOrReplaceFile('source/interfaces.bs', `
+            interface Iface1
+                name as dynamic
+            end interface
+            interface IFace2
+                prop as dynamic
+            end interface
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
     });
 });
