@@ -254,7 +254,7 @@ export class ProgramBuilder {
     }
 
     private printDiagnostics(diagnostics?: BsDiagnostic[]) {
-        if (this.options.showDiagnosticsInConsole === false) {
+        if (this.options?.showDiagnosticsInConsole === false) {
             return;
         }
         if (!diagnostics) {
