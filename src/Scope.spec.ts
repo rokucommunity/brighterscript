@@ -9,7 +9,7 @@ import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
-import type { FunctionStatement, NamespaceStatement } from './parser';
+import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();

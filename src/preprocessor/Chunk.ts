@@ -1,4 +1,4 @@
-import type { Token } from '../lexer';
+import type { Token } from '../lexer/Token';
 import type { Range } from 'vscode-languageserver';
 import util from '../util';
 

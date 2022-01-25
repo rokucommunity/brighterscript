@@ -3,7 +3,7 @@ import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
 import { isBrsFile, isCustomType } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnGetSemanticTokensEvent } from '../../interfaces';
-import { ParseMode } from '../../parser';
+import { ParseMode } from '../../parser/Parser';
 import util from '../../util';
 
 export class SemanticTokensProcessor {
