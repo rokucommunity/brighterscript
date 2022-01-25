@@ -14,7 +14,7 @@ import {
     LiteralExpression,
     NullCoalescingExpression
 } from '../../Expression';
-import { Program } from '../../..';
+import { Program } from '../../../Program';
 import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 
 describe('NullCoalescingExpression', () => {
