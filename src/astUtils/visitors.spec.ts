@@ -4,7 +4,7 @@ import { CancellationTokenSource, Range } from 'vscode-languageserver';
 import { expect } from 'chai';
 import * as sinon from 'sinon';
 import { Program } from '../Program';
-import { BrsFile } from '../files/BrsFile';
+import type { BrsFile } from '../files/BrsFile';
 import type { Statement } from '../parser/Statement';
 import { PrintStatement, Block, ReturnStatement } from '../parser/Statement';
 import type { Expression } from '../parser/Expression';
@@ -17,7 +17,6 @@ import { createStackedVisitor } from './stackedVisitor';
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
     let program: Program;
-    let file: BrsFile;
 
     const PRINTS_SRC = `
         sub Main()
@@ -76,7 +75,6 @@ describe('astUtils visitors', () => {
 
     beforeEach(() => {
         program = new Program({ rootDir: rootDir });
-        file = new BrsFile('abs.bs', 'rel.bs', program);
     });
     afterEach(() => {
         program.dispose();
@@ -104,7 +102,7 @@ describe('astUtils visitors', () => {
                 name: 'walker',
                 afterFileParse: file => walker(file as BrsFile)
             });
-            file = program.addOrReplaceFile('source/main.brs', PRINTS_SRC);
+            program.addOrReplaceFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
                 'Block:0',                // Main sub body
                 'PrintStatement:1',       // print 1
@@ -141,7 +139,7 @@ describe('astUtils visitors', () => {
                 name: 'walker',
                 afterFileParse: file => walker(file as BrsFile)
             });
-            file = program.addOrReplaceFile('source/main.brs', PRINTS_SRC);
+            program.addOrReplaceFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
                 'Block',                // Main sub body
                 'PrintStatement',       // print 1
@@ -186,7 +184,7 @@ describe('astUtils visitors', () => {
                 name: 'walker',
                 afterFileParse: file => walker(file as BrsFile)
             });
-            file = program.addOrReplaceFile('source/main.brs', PRINTS_SRC);
+            program.addOrReplaceFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
                 'Block',                // Main sub body
                 'PrintStatement',       // print 1
