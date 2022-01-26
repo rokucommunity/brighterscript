@@ -3132,23 +3132,12 @@ export class Parser {
             },
             FunctionStatement: s => {
                 this._references.functionStatements.push(s);
-                //add the initial set of function expressions for function statements
-                this._references.functionExpressions.push(s.func);
             },
             ImportStatement: s => {
                 this._references.importStatements.push(s);
             },
             LibraryStatement: s => {
                 this._references.libraryStatements.push(s);
-            }
-        }), {
-            walkMode: WalkMode.visitStatements
-        });
-
-        let func: FunctionExpression;
-        let visitor = createVisitor({
-            AssignmentStatement: s => {
-                this._references.assignmentStatements.push(s);
             },
             FunctionExpression: (expression, parent) => {
                 if (!isClassMethodStatement(parent)) {
@@ -3199,17 +3188,9 @@ export class Parser {
             IncrementStatement: e => {
                 this._references.expressions.add(e);
             }
+        }), {
+            walkMode: WalkMode.visitAllRecursive
         });
-
-        //walk all function expressions (we'll add new ones as we move along too)
-        for (let i = 0; i < this._references.functionExpressions.length; i++) {
-            func = this._references.functionExpressions[i];
-
-            //walk this function expression
-            func.body.walk(visitor, {
-                walkMode: WalkMode.visitAll
-            });
-        }
     }
 
     public getContainingClass(currentToken: Token): ClassStatement {

@@ -81,17 +81,18 @@ describe('parser', () => {
             `);
             parser.invalidateReferences();
             expect(
-                parser.references.functionExpressions[0].symbolTable.getOwnSymbols().map(x => x.name)
+                parser.references.functionExpressions.map(x => {
+                    return x.symbolTable.getOwnSymbols().map(x => x.name);
+                })
             ).to.eql([
-                'outerName',
-                'speak',
-                'age'
-            ]);
-
-            expect(
-                parser.references.functionExpressions[1].symbolTable.getOwnSymbols().map(x => x.name)
-            ).to.eql([
-                'innerName'
+                [
+                    'outerName',
+                    'speak',
+                    'age'
+                ],
+                [
+                    'innerName'
+                ]
             ]);
         });
 
