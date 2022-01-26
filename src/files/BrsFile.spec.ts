@@ -1032,6 +1032,7 @@ describe('BrsFile', () => {
                 end sub
                 import "file.brs"
             `);
+            program.validate();
             expectDiagnostics(file, [
                 DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile()
             ]);
@@ -1050,6 +1051,7 @@ describe('BrsFile', () => {
                 end sub
                 Library "v30/bslCore.brs"
             `);
+            program.validate();
             expectDiagnostics(file, [
                 DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile()
             ]);
@@ -1061,6 +1063,7 @@ describe('BrsFile', () => {
                     Library "v30/bslCore.brs"
                 end sub
             `);
+            program.validate();
             expectDiagnostics(file, [
                 DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile()
             ]);

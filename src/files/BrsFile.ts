@@ -265,19 +265,8 @@ export class BrsFile {
             //find all places where a sub/function is being called
             this.findFunctionCalls();
 
-            //emit an event before starting to validate this file
-            this.program.plugins.emit('beforeFileValidate', {
-                file: this,
-                program: this.program
-            });
-
-            //emit an event to allow plugins to contribute to the file validation process
-            this.program.plugins.emit('onFileValidate', {
-                file: this,
-                program: this.program
-            });
-
-            this.findAndValidateImportAndImportStatements();
+            //register all import statements for use in the rest of the program
+            this.registerImports();
 
             //attach this file to every diagnostic
             for (let diagnostic of this.diagnostics) {
@@ -293,11 +282,26 @@ export class BrsFile {
         }
     }
 
-    public validate() { }
+    private registerImports() {
+        for (const statement of this.parser?.references?.importStatements ?? []) {
+            //register import statements
+            if (isImportStatement(statement) && statement.filePathToken) {
+                this.ownScriptImports.push({
+                    filePathRange: statement.filePathToken.range,
+                    pkgPath: util.getPkgPathFromTarget(this.pkgPath, statement.filePath),
+                    sourceFile: this,
+                    text: statement.filePathToken?.text
+                });
+            }
+        }
+    }
 
-    public findAndValidateImportAndImportStatements() {
+    public validate() {
+        this.validateImportStatements();
+    }
+
+    public validateImportStatements() {
         let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement>;
-
         for (let stmt of this.ast.statements) {
             //skip comments
             if (isCommentStatement(stmt)) {
@@ -317,16 +321,6 @@ export class BrsFile {
             ...this._parser.references.importStatements
         ];
         for (let result of statements) {
-            //register import statements
-            if (isImportStatement(result) && result.filePathToken) {
-                this.ownScriptImports.push({
-                    filePathRange: result.filePathToken.range,
-                    pkgPath: util.getPkgPathFromTarget(this.pkgPath, result.filePath),
-                    sourceFile: this,
-                    text: result.filePathToken?.text
-                });
-            }
-
             //if this statement is not one of the top-of-file statements,
             //then add a diagnostic explaining that it is invalid
             if (!topOfFileIncludeStatements.includes(result)) {

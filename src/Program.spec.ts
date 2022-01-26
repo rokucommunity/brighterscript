@@ -2348,7 +2348,7 @@ describe('Program', () => {
     });
 
     describe('plugins', () => {
-        it('emits file validation events', () => {
+        it('emits brs file validation events', () => {
             const plugin = {
                 name: 'test',
                 beforeFileValidate: sinon.spy(),
@@ -2357,12 +2357,13 @@ describe('Program', () => {
             };
             program.plugins.add(plugin);
             program.setFile('source/main.brs', '');
+            program.validate();
             expect(plugin.beforeFileValidate.callCount).to.equal(1);
             expect(plugin.onFileValidate.callCount).to.equal(1);
             expect(plugin.afterFileValidate.callCount).to.equal(1);
         });
 
-        it('emits file validation events', () => {
+        it('emits xml file validation events', () => {
             const plugin = {
                 name: 'test',
                 beforeFileValidate: sinon.spy(),
@@ -2370,7 +2371,12 @@ describe('Program', () => {
                 afterFileValidate: sinon.spy()
             };
             program.plugins.add(plugin);
-            program.setFile('components/main.xml', '');
+            program.setFile('components/main.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                </component>
+            `);
+            program.validate();
             expect(plugin.beforeFileValidate.callCount).to.equal(1);
             expect(plugin.onFileValidate.callCount).to.equal(1);
             expect(plugin.afterFileValidate.callCount).to.equal(1);

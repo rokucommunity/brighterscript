@@ -3329,10 +3329,9 @@ export enum TokenUsage {
  */
 export interface TokenChainMember {
     /**
-        * The token
-        */
+     * The token
+     */
     token: Token;
-
     /**
      * Is it impossible to know the the type of this token (for now)
      */
