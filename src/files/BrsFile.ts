@@ -7,11 +7,13 @@ import * as path from 'path';
 import type { NamespaceContainer, Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import type { Callable, CallableArg, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
-import type { Token } from '../lexer';
-import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords, isToken } from '../lexer';
-import { Parser, ParseMode, getBscTypeFromExpression, TokenUsage } from '../parser';
-import type { TokenChainMember, DottedGetExpression } from '../parser';
-import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
+import type { Token } from '../lexer/Token';
+import { isToken } from '../lexer/Token';
+import { Lexer } from '../lexer/Lexer';
+import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
+import type { TokenChainMember } from '../parser/Parser';
+import { Parser, ParseMode, getBscTypeFromExpression, TokenUsage } from '../parser/Parser';
+import type { FunctionExpression, VariableExpression, Expression, DottedGetExpression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
 import type { FileLink, Program, SignatureInfoObj } from '../Program';
 import { standardizePath as s, util } from '../util';
@@ -262,6 +264,18 @@ export class BrsFile {
 
             //find all places where a sub/function is being called
             this.findFunctionCalls();
+
+            //emit an event before starting to validate this file
+            this.program.plugins.emit('beforeFileValidate', {
+                file: this,
+                program: this.program
+            });
+
+            //emit an event to allow plugins to contribute to the file validation process
+            this.program.plugins.emit('onFileValidate', {
+                file: this,
+                program: this.program
+            });
 
             this.findAndValidateImportAndImportStatements();
 

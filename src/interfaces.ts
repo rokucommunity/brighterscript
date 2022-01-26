@@ -6,7 +6,8 @@ import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { Expression, FunctionStatement, FunctionExpression } from './parser';
+import type { FunctionStatement } from './parser/Statement';
+import type { Expression, FunctionExpression } from './parser/Expression';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
@@ -198,7 +199,17 @@ export interface CompilerPlugin {
     //file events
     beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
     afterFileParse?: PluginHandler<AfterFileParseEvent>;
+    /**
+     * Called before each file is validated
+     */
     beforeFileValidate?: PluginHandler<BeforeFileValidateEvent>;
+    /**
+     * Called during the file validation process. If your plugin contributes file validations, this is a good place to contribute them.
+     */
+    onFileValidate?: PluginHandler<OnFileValidateEvent>;
+    /**
+     * Called after each file is validated
+     */
     afterFileValidate?: PluginHandler<AfterFileValidateEvent>;
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
@@ -296,13 +307,17 @@ export interface AfterFileParseEvent {
     program: Program;
     file: BscFile;
 }
-export interface BeforeFileValidateEvent {
+export interface BeforeFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;
-    file: BscFile;
+    file: T;
 }
-export interface AfterFileValidateEvent {
+export interface OnFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;
-    file: BscFile;
+    file: T;
+}
+export interface AfterFileValidateEvent<T extends BscFile = BscFile> {
+    program: Program;
+    file: T;
 }
 export interface BeforeFileTranspileEvent {
     program: Program;

@@ -1,4 +1,4 @@
-import type { Position, Range } from './astUtils';
+import type { Position, Range } from 'vscode-languageserver';
 import { getTypeFromContext } from './types/BscType';
 import { DynamicType } from './types/DynamicType';
 import type { BscType, TypeContext } from './types/BscType';

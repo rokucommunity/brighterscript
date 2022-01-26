@@ -6,6 +6,8 @@ import { Program } from './Program';
 import { expectDiagnostics, trim } from './testHelpers.spec';
 import { standardizePath as s, util } from './util';
 let rootDir = s`${process.cwd()}/rootDir`;
+import { createSandbox } from 'sinon';
+const sinon = createSandbox();
 
 describe('XmlScope', () => {
     let program: Program;
@@ -13,10 +15,12 @@ describe('XmlScope', () => {
         program = new Program({
             rootDir: rootDir
         });
+        sinon.restore();
     });
 
     afterEach(() => {
         program.dispose();
+        sinon.restore();
     });
 
     describe('constructor', () => {

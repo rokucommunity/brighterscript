@@ -1,12 +1,12 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { TokenKind } from '../../../lexer';
+import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import type { AssignmentStatement } from '../../Statement';
 import type { AALiteralExpression } from '../../Expression';
-import { isCommentStatement } from '../../../astUtils';
+import { isCommentStatement } from '../../../astUtils/reflection';
 
 describe('parser associative array literals', () => {
     describe('empty associative arrays', () => {

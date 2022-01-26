@@ -8,7 +8,7 @@ import type { BrsFile } from '../files/BrsFile';
 import type { Statement } from '../parser/Statement';
 import { PrintStatement, Block, ReturnStatement } from '../parser/Statement';
 import type { Expression } from '../parser/Expression';
-import { TokenKind } from '../lexer';
+import { TokenKind } from '../lexer/TokenKind';
 import { createVisitor, WalkMode, walkStatements } from './visitors';
 import { isPrintStatement } from './reflection';
 import { createToken } from './creators';

@@ -9,7 +9,7 @@ import { Logger, LogLevel } from './Logger';
 import * as diagnosticUtils from './diagnosticUtils';
 import type { BscFile, BsDiagnostic } from '.';
 import { Range } from '.';
-import { DiagnosticSeverity } from './astUtils';
+import { DiagnosticSeverity } from 'vscode-languageserver';
 import { BrsFile } from './files/BrsFile';
 import { expectZeroDiagnostics } from './testHelpers.spec';
 

@@ -1,4 +1,4 @@
-import type { Position } from '../astUtils';
+import type { Position } from 'vscode-languageserver';
 import { isLazyType } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
 import type { Scope } from '../Scope';

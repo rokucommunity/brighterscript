@@ -7,7 +7,7 @@ import { expect } from 'chai';
 import { TranspileState } from './TranspileState';
 import type { SGComponent } from './SGTypes';
 import { SGTag } from './SGTypes';
-import { createSGComponent, createSGInterfaceField, createSGInterfaceFunction, createSGScript } from '../astUtils';
+import { createSGComponent, createSGInterfaceField, createSGInterfaceFunction, createSGScript } from '../astUtils/creators';
 const sinon = createSandbox();
 
 describe('SGTypes', () => {

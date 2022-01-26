@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { TokenKind, Lexer, AllowedLocalIdentifiers, AllowedProperties } from '../lexer';
+import { TokenKind, AllowedLocalIdentifiers, AllowedProperties } from '../lexer/TokenKind';
+import { Lexer } from '../lexer/Lexer';
 import { Parser, ParseMode } from './Parser';
 import type { FunctionStatement, AssignmentStatement, ClassFieldStatement } from './Statement';
 import { ClassStatement } from './Statement';

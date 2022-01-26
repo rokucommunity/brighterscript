@@ -10,7 +10,7 @@ import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCust
 import type { BscFile, BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
-import { TokenKind } from '../lexer';
+import { TokenKind } from '../lexer/TokenKind';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType, TypeContext } from '../types/BscType';
 import { getTypeFromContext } from '../types/BscType';

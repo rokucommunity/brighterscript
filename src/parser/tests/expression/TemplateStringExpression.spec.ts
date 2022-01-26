@@ -3,7 +3,7 @@
 
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { Lexer } from '../../../lexer';
+import { Lexer } from '../../../lexer/Lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { AssignmentStatement } from '../../Statement';
 import { Program } from '../../../Program';

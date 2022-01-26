@@ -1,4 +1,4 @@
-import { isCustomType } from '../astUtils';
+import { isCustomType } from '../astUtils/reflection';
 import type { BscType, TypeContext } from './BscType';
 import type { CustomType } from './CustomType';
 

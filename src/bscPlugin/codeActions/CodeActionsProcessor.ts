@@ -6,7 +6,7 @@ import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { BscFile, OnGetCodeActionsEvent } from '../../interfaces';
-import { ParseMode } from '../../parser';
+import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
 
 export class CodeActionsProcessor {

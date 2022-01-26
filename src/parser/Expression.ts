@@ -1,6 +1,6 @@
 /* eslint-disable no-bitwise */
-import type { Token, Identifier } from '../lexer';
-import { TokenKind } from '../lexer';
+import type { Token, Identifier } from '../lexer/Token';
+import { TokenKind } from '../lexer/TokenKind';
 import type { Block, CommentStatement, FunctionStatement, LabelStatement } from './Statement';
 import type { Range } from 'vscode-languageserver';
 import util, { MAX_PARAM_COUNT } from '../util';

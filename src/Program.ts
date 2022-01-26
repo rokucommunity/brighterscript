@@ -22,8 +22,8 @@ import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope, isSGInterfaceFunction } from './astUtils/reflection';
 import type { FunctionStatement, Statement } from './parser/Statement';
-import { ParseMode } from './parser';
-import { TokenKind } from './lexer';
+import { ParseMode } from './parser/Parser';
+import { TokenKind } from './lexer/TokenKind';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { util as rokuDeployUtil } from 'roku-deploy';
 import { AstEditor } from './astUtils/AstEditor';
@@ -620,6 +620,11 @@ export class Program {
                         file: file
                     });
 
+                    //emit an event to allow plugins to contribute to the file validation process
+                    this.plugins.emit('onFileValidate', {
+                        program: this,
+                        file: file
+                    });
                     //call file.validate() IF the file has that function defined
                     file.validate?.();
                     file.isValidated = true;
@@ -1393,7 +1398,7 @@ export class Program {
     }
 
     /**
-     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     * Find a list of files in the program that have a class with the given name (case INsensitive)
      */
     public findFilesForClass(className: string) {
         const files = [] as BscFile[];

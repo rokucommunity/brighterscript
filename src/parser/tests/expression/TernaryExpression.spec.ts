@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-for-in-array */
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { TokenKind } from '../../../lexer';
+import { TokenKind } from '../../../lexer/TokenKind';
 import { Parser, ParseMode } from '../../Parser';
 import { token, EOF } from '../Parser.spec';
 import type { PrintStatement } from '../../Statement';
