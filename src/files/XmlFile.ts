@@ -193,24 +193,15 @@ export class XmlFile {
 
         this.getCommentFlags(this.parser.tokens as any[]);
 
-        //notify AST ready
-        this.program.plugins.emit('afterFileParse', this);
+        //needsTranspiled should be true if an import is brighterscript
+        this.needsTranspiled = this.needsTranspiled || this.ast.component?.scripts?.some(
+            script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
+        );
+    }
 
-        //emit an event before starting to validate this file
-        this.program.plugins.emit('beforeFileValidate', {
-            file: this,
-            program: this.program
-        });
 
-        //emit an event to allow plugins to contribute to the file validation process
-        this.program.plugins.emit('onFileValidate', {
-            file: this,
-            program: this.program
-        });
-
+    public validate() {
         if (this.parser.ast.root) {
-
-            //initial validation
             this.validateComponent(this.parser.ast);
         } else {
             //skip empty XML
@@ -265,10 +256,6 @@ export class XmlFile {
             });
         }
 
-        //needsTranspiled should be true if an import is brighterscript
-        this.needsTranspiled = this.needsTranspiled || component.scripts.some(
-            script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
-        );
 
         //catch script imports with same path as the auto-imported codebehind file
         const scriptTagImports = this.parser.references.scriptTagImports;
