@@ -809,8 +809,18 @@ export class Program {
         if (!file) {
             return null;
         }
+        /**
+         * Is this thing alive?
+         */
 
-        return Promise.resolve(file.getHover(position));
+
+        //check for living
+        const isAlive = true;
+        console.log(isAlive);
+
+        const hover = file.getHover(position);
+
+        return Promise.resolve(hover);
     }
 
     /**

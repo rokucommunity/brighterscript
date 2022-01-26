@@ -1208,6 +1208,14 @@ export class Util {
         }
         return result;
     }
+
+    /**
+     * Wrap the given code in a markdown code fence (with the language)
+     */
+    public mdFence(code: string, language = '') {
+        return '```' + language + '\n' + code + '\n```';
+    }
+
 }
 
 /**
