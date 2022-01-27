@@ -2360,13 +2360,12 @@ describe('BrsFile', () => {
                 name: 'transform callback',
                 afterFileParse: onParsed
             });
-            const file = new BrsFile(`absolute_path/file${ext}`, `relative_path/file${ext}`, program);
-            expect(file.extension).to.equal(ext);
-            file.parse(`
+            file = program.addOrReplaceFile({ src: `absolute_path/file${ext}`, dest: `relative_path/file${ext}` }, `
                 sub Sum()
                     print "hello world"
                 end sub
             `);
+            expect(file.extension).to.equal(ext);
             return file;
         }
 
