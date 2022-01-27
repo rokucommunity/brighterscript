@@ -1502,15 +1502,17 @@ export class BrsFile {
             } else if (token.kind === TokenKind.Newline || token.kind === TokenKind.Whitespace) {
                 //skip these tokens
                 continue;
+
+                //any other token means there are no more comments
+            } else {
+                break;
             }
         }
-        const docBlock = comments.reverse().map(x => x.text.replace(/^('|rem)/i, '')).join('\n');
-        return [
-            //doc block
-            util.mdFence(callable.type.toString(), 'brightscript'),
-            '***',
-            docBlock
-        ].join('\n');
+        let result = util.mdFence(callable.type.toString(), 'brightscript');
+        if (comments.length > 0) {
+            result += '\n***\n' + comments.reverse().map(x => x.text.replace(/^('|rem)/i, '')).join('\n');
+        }
+        return result;
     }
 
     public getSignatureHelpForNamespaceMethods(callableName: string, dottedGetText: string, scope: Scope): { key: string; signature: SignatureInformation }[] {

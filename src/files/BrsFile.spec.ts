@@ -1546,7 +1546,11 @@ describe('BrsFile', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(1, 25, 1, 29));
-            expect(hover.contents).to.equal('function Main(count? as dynamic) as dynamic');
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'function Main(count? as dynamic) as dynamic',
+                '```'
+            ].join('\n'));
         });
 
         it('finds variable function hover in same scope', () => {
@@ -1562,7 +1566,11 @@ describe('BrsFile', () => {
             let hover = file.getHover(Position.create(5, 24));
 
             expect(hover.range).to.eql(Range.create(5, 20, 5, 29));
-            expect(hover.contents).to.equal('sub sayMyName(name as string) as void');
+            expect(hover.contents).to.equal(trim`
+                \`\`\`brightscript
+                sub sayMyName(name as string) as void
+                \`\`\``
+            );
         });
 
         it('finds function hover in file scope', () => {
@@ -1579,7 +1587,11 @@ describe('BrsFile', () => {
             let hover = file.getHover(Position.create(2, 25));
 
             expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
-            expect(hover.contents).to.equal('sub sayMyName() as void');
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName() as void',
+                '```'
+            ].join('\n'));
         });
 
         it('finds function hover in scope', () => {
@@ -1604,7 +1616,62 @@ describe('BrsFile', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
-            expect(hover.contents).to.equal('sub sayMyName(name as string) as void');
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName(name as string) as void',
+                '```'
+            ].join('\n'));
+        });
+
+        it('includes markdown comments in hover.', async () => {
+            let rootDir = process.cwd();
+            program = new Program({
+                rootDir: rootDir
+            });
+
+            const file = program.addOrReplaceFile('source/lib.brs', `
+                '
+                ' The main function
+                '
+                sub main()
+                    log("hello")
+                end sub
+
+                '
+                ' Prints a message to the log.
+                ' Works with *markdown* **content**
+                '
+                sub log(message as string)
+                    print message
+                end sub
+            `);
+
+            //hover over log("hello")
+            expect(
+                (await program.getHover(file.pathAbsolute, Position.create(5, 22))).contents
+            ).to.equal([
+                '```brightscript',
+                'sub log(message as string) as void',
+                '```',
+                '***',
+                '',
+                ' Prints a message to the log.',
+                ' Works with *markdown* **content**',
+                ''
+            ].join('\n'));
+
+            //hover over sub ma|in()
+            expect(
+                (await program.getHover(file.pathAbsolute, Position.create(4, 22))).contents
+            ).to.equal(trim`
+                \`\`\`brightscript
+                sub main() as void
+                \`\`\`
+                ***
+
+                 The main function
+                `
+            );
         });
 
         it('handles mixed case `then` partions of conditionals', () => {
