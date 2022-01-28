@@ -845,8 +845,9 @@ export class Program {
         if (!file) {
             return null;
         }
+        const hover = file.getHover(position);
 
-        return Promise.resolve(file.getHover(position));
+        return Promise.resolve(hover);
     }
 
     /**

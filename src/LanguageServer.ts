@@ -893,16 +893,6 @@ export class LanguageServer {
 
         //return the first non-falsey hover. TODO is there a way to handle multiple hover results?
         let hover = hovers.filter((x) => !!x)[0];
-
-        //TODO improve this to support more than just .brs files
-        if (hover?.contents) {
-            //create fenced code block to get colorization
-            hover.contents = {
-                //TODO - make the program.getHover call figure out what language this is for
-                language: 'brightscript',
-                value: hover.contents as string
-            };
-        }
         return hover;
     }
 

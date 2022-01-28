@@ -1416,6 +1416,7 @@ export class BrsFile {
     }
 
     public getHover(position: Position): Hover {
+        const fence = (code: string) => util.mdFence(code, 'brightscript');
         //get the token at the position
         let token = this.getTokenAt(position);
 
@@ -1452,7 +1453,7 @@ export class BrsFile {
                         return {
                             range: token.range,
                             //append the variable name to the front for scope
-                            contents: typeText
+                            contents: fence(typeText)
                         };
                     }
                 }
@@ -1460,7 +1461,7 @@ export class BrsFile {
                     if (labelStatement.name.toLocaleLowerCase() === lowerTokenText) {
                         return {
                             range: token.range,
-                            contents: `${labelStatement.name}: label`
+                            contents: fence(`${labelStatement.name}: label`)
                         };
                     }
                 }
@@ -1475,11 +1476,39 @@ export class BrsFile {
                 if (callable) {
                     return {
                         range: token.range,
-                        contents: callable.type.toString()
+                        contents: this.getCallableDocumentation(callable)
                     };
                 }
             }
         }
+    }
+
+    /**
+     * Build a hover documentation for a callable.
+     */
+    private getCallableDocumentation(callable: Callable) {
+        const comments = [] as Token[];
+        const tokens = callable.file.parser.tokens as Token[];
+        const idx = tokens.indexOf(callable.functionStatement.func.functionType);
+        for (let i = idx - 1; i >= 0; i--) {
+            const token = tokens[i];
+            //skip whitespace and newline chars
+            if (token.kind === TokenKind.Comment) {
+                comments.push(token);
+            } else if (token.kind === TokenKind.Newline || token.kind === TokenKind.Whitespace) {
+                //skip these tokens
+                continue;
+
+                //any other token means there are no more comments
+            } else {
+                break;
+            }
+        }
+        let result = util.mdFence(callable.type.toString(), 'brightscript');
+        if (comments.length > 0) {
+            result += '\n***\n' + comments.reverse().map(x => x.text.replace(/^('|rem)/i, '')).join('\n');
+        }
+        return result;
     }
 
     public getSignatureHelpForNamespaceMethods(callableName: string, dottedGetText: string, scope: Scope): { key: string; signature: SignatureInformation }[] {
