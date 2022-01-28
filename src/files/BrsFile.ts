@@ -1489,7 +1489,7 @@ export class BrsFile {
     private getCallableDocumentation(callable: Callable) {
         const comments = [] as Token[];
         const tokens = callable.file.parser.tokens as Token[];
-        const idx = tokens.indexOf(callable.functionStatement.func.functionType);
+        const idx = tokens.indexOf(callable.functionStatement?.func.functionType);
         for (let i = idx - 1; i >= 0; i--) {
             const token = tokens[i];
             //skip whitespace and newline chars

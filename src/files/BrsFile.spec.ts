@@ -1573,6 +1573,39 @@ describe('BrsFile', () => {
             ].join('\n'));
         });
 
+        it('does not crash when hovering on built-in functions', async () => {
+            let file = program.addOrReplaceFile('source/main.brs', `
+                function doUcase(text)
+                    return ucase(text)
+                end function
+            `);
+
+            expect(
+                (await program.getHover(file.pathAbsolute, Position.create(2, 30))).contents
+            ).to.equal([
+                '```brightscript',
+                'function UCase(s? as string) as string',
+                '```'
+            ].join('\n'));
+        });
+
+        it('does not crash when hovering on object method call', async () => {
+            let file = program.addOrReplaceFile('source/main.brs', `
+                function getInstr(url, text)
+                    return url.instr(text)
+                end function
+            `);
+
+            expect(
+                (await program.getHover(file.pathAbsolute, Position.create(2, 35))).contents
+            ).to.equal([
+                '```brightscript',
+                //TODO this really shouldn't be returning the global function, but it does...so make sure it doesn't crash right now.
+                'function Instr(start? as integer, text? as string, substring? as string) as integer',
+                '```'
+            ].join('\n'));
+        });
+
         it('finds function hover in file scope', () => {
             let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
