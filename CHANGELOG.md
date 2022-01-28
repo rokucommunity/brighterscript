@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.43.1](https://github.com/rokucommunity/brighterscript/compare/v0.43.0...v0.43.1) - 2022-01-28
+### Fixed
+ - crash when hovering over global functions ([#497](https://github.com/rokucommunity/brighterscript/pull/497))
+
+
+
 ## [0.43.0](https://github.com/rokucommunity/brighterscript/compare/v0.42.0...v0.43.0) - 2022-01-28
 ### Added
  - show function documentation when hovering over functions. ([#495](https://github.com/rokucommunity/brighterscript/pull/495))
