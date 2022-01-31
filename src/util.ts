@@ -26,7 +26,7 @@ import type { DottedGetExpression, Expression, NamespacedVariableNameExpression,
 import { Logger, LogLevel } from './Logger';
 import type { Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isDottedGetExpression, isExpression, isInvalidType, isVariableExpression, isVoidType } from './astUtils/reflection';
+import { isDottedGetExpression, isExpression, isVariableExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import { SGAttribute } from './parser/SGTypes';
