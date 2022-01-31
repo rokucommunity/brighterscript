@@ -26,7 +26,7 @@ import { DynamicType } from '../types/DynamicType';
 import { util } from '../util';
 import { ArrayType } from '../types/ArrayType';
 
-describe.only('parser', () => {
+describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
         expect(Parser.parse([])).to.deep.include({
             statements: [],

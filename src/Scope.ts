@@ -341,6 +341,15 @@ export class Scope {
     }
 
     /**
+     * Get the global callable with the specified name.
+     * If there are overridden callables with the same name, the closest callable to this scope is returned
+     * @param name
+     */
+    public getGlobalCallableByName(name: string) {
+        return globalCallableMap.get(name.toLowerCase());
+    }
+
+    /**
      * Iterate over Brs files not shadowed by typedefs
      */
     public enumerateBrsFiles(callback: (file: BrsFile) => void) {

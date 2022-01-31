@@ -29,7 +29,6 @@ import type { BscType, SymbolContainer } from '../types/BscType';
 import { getTypeFromContext } from '../types/BscType';
 import { UninitializedType } from '../types/UninitializedType';
 import { InvalidType } from '../types/InvalidType';
-import { globalCallableMap } from '../globalCallables';
 import { DynamicType } from '../types/DynamicType';
 import type { SymbolTable } from '../SymbolTable';
 
@@ -889,7 +888,7 @@ export class BrsFile {
             symbolType = currentSymbolTable.getSymbolType(tokenLowerText, true, typeContext);
             if (tokenFoundCount === 0 && !symbolType) {
                 //check for global callable
-                symbolType = globalCallableMap.get(tokenLowerText)?.type;
+                symbolType = scope.getGlobalCallableByName(tokenLowerText)?.type;
             }
             if (symbolType) {
                 // found this symbol, and it's valid. increase found counter
