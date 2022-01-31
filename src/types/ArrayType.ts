@@ -3,7 +3,11 @@ import type { BscType } from './BscType';
 
 export class ArrayType implements BscType {
     constructor(...innerTypes: BscType[]) {
-        this.innerTypes = innerTypes;
+        const innerTypesWithStrings = innerTypes.map((innerType) => {
+            return { innerType: innerType, typeToString: innerType.toString() };
+        });
+        // gets unique types
+        this.innerTypes = [...new Map(innerTypesWithStrings.map(item => [item.typeToString, item])).values()].map(it => it.innerType);
     }
     public innerTypes: BscType[] = [];
 

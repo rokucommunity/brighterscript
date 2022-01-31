@@ -3382,7 +3382,10 @@ export function getBscTypeFromExpression(expression: Expression, functionExpress
             return new ObjectType(expression.memberTable);
             //Array literal
         } else if (isArrayLiteralExpression(expression)) {
-            return new ArrayType();
+            const innerTypes = expression.elements.filter((element) => !isCommentStatement(element)).map((element) => {
+                return getBscTypeFromExpression(element, functionExpression);
+            });
+            return new ArrayType(...innerTypes);
             //function call
         } else if (isNewExpression(expression)) {
             return getTypeFromNewExpression(expression, functionExpression); // new CustomType(expression.className.getName(ParseMode.BrighterScript));
