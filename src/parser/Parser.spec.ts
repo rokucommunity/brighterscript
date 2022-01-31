@@ -24,8 +24,9 @@ import { CustomType } from '../types/CustomType';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import { util } from '../util';
+import { ArrayType } from '../types/ArrayType';
 
-describe('parser', () => {
+describe.only('parser', () => {
     it('emits empty object when empty token list is provided', () => {
         expect(Parser.parse([])).to.deep.include({
             statements: [],
@@ -1244,6 +1245,21 @@ describe('parser', () => {
             const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
             // Return type is LazyType, because "Person" is not fully known yet
             expect(type.returnType).to.be.instanceof(LazyType);
+        });
+
+        it('supports function with array return type', () => {
+            const parser = parse(`
+                sub main()
+                    getNums = sub() as integer[]
+                        return [1,2,3]
+                    end sub
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const func = (parser.ast.statements[0] as FunctionStatement).func;
+            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
+            expect(type.returnType).to.be.instanceof(ArrayType);
+            expect((type.returnType as ArrayType).defaultType).to.be.instanceof(IntegerType);
         });
     });
 
