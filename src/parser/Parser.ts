@@ -2435,7 +2435,7 @@ export class Parser {
             typeToken = this.advance();
         } else if (this.options.mode === ParseMode.BrighterScript) {
             try {
-                // see if we can get a namespaced identifer
+                // see if we can get a namespaced identifier
                 const qualifiedType = this.getNamespacedVariableNameExpression();
                 typeToken = createToken(TokenKind.Identifier, qualifiedType.getName(this.options.mode), qualifiedType.range);
             } catch {
@@ -2445,6 +2445,18 @@ export class Parser {
         } else {
             // just get whatever's next
             typeToken = this.advance();
+        }
+
+        if (typeToken && this.options.mode === ParseMode.BrighterScript) {
+            // Check if it is an array - that is, if it has `[]` after the type
+            // eg. `string[]` or `SomeKlass[]`
+            if (this.check(TokenKind.LeftSquareBracket)) {
+                this.advance();
+                if (this.check(TokenKind.RightSquareBracket)) {
+                    const rightBracket = this.advance();
+                    typeToken = createToken(TokenKind.Identifier, typeToken.text + '[]', util.getRange(typeToken, rightBracket));
+                }
+            }
         }
         return typeToken;
     }

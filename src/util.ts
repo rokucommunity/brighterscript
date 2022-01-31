@@ -26,11 +26,13 @@ import type { DottedGetExpression, Expression, NamespacedVariableNameExpression,
 import { Logger, LogLevel } from './Logger';
 import type { Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isDottedGetExpression, isExpression, isVariableExpression } from './astUtils/reflection';
+import { isDottedGetExpression, isExpression, isInvalidType, isVariableExpression, isVoidType } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import { SGAttribute } from './parser/SGTypes';
 import { LazyType } from './types/LazyType';
+import type { BscType } from './types/BscType';
+import { ArrayType } from './types/ArrayType';
 
 export class Util {
     public clearConsole() {
@@ -940,7 +942,7 @@ export class Util {
     /**
      * Convert a token into a BscType
      */
-    public tokenToBscType(token: Token, allowCustomType = true, currentNamespaceName?: NamespacedVariableNameExpression) {
+    public tokenToBscType(token: Token, allowBrighterscriptTypes = true, currentNamespaceName?: NamespacedVariableNameExpression) {
         if (!token) {
             return new DynamicType();
         }
@@ -980,34 +982,65 @@ export class Util {
             case TokenKind.Void:
                 return new VoidType();
             case TokenKind.Identifier:
-                switch (token.text.toLowerCase()) {
+                let tokenText = token.text.replace(/\s/g, '').toLowerCase();
+                // regular expression to find a type with optional pair of square brackets afterwards
+                const regex = /([\w._]+)(\[\]){0,1}/;
+                const found = regex.exec(tokenText);
+                const typeText = found[1] ?? tokenText;
+                const isArray = !!found[2];
+                let typeClass: BscType;
+                switch (typeText) {
                     case 'boolean':
-                        return new BooleanType();
+                        typeClass = new BooleanType();
+                        break;
                     case 'double':
-                        return new DoubleType();
+                        typeClass = new DoubleType();
+                        break;
                     case 'float':
-                        return new FloatType();
+                        typeClass = new FloatType();
+                        break;
                     case 'function':
-                        return new FunctionType(new DynamicType());
+                        typeClass = new FunctionType(new DynamicType());
+                        break;
                     case 'integer':
-                        return new IntegerType();
+                        typeClass = new IntegerType();
+                        break;
                     case 'invalid':
-                        return new InvalidType();
+                        typeClass = new InvalidType();
+                        break;
                     case 'longinteger':
-                        return new LongIntegerType();
+                        typeClass = new LongIntegerType();
+                        break;
                     case 'object':
-                        return new ObjectType();
+                        typeClass = new ObjectType();
+                        break;
                     case 'string':
-                        return new StringType();
+                        typeClass = new StringType();
+                        break;
                     case 'void':
-                        return new VoidType();
+                        typeClass = new VoidType();
+                        break;
+                    case 'dynamic':
+                        typeClass = new DynamicType();
+                        break;
                 }
-                if (allowCustomType) {
-                    return new LazyType((context) => {
-                        return context?.scope?.getClass(token.text, currentNamespaceName?.getName())?.getCustomType();
+                if (!typeClass && allowBrighterscriptTypes) {
+                    typeClass = new LazyType((context) => {
+                        return context?.scope?.getClass(typeText, currentNamespaceName?.getName())?.getCustomType();
                     });
 
                 }
+                // TODO: Can Arrays be of inner type invalid or void?
+
+                // If this token denotes an array (e.g. ends in `[]`) then may it an array with correct inner type
+                if (allowBrighterscriptTypes && isArray) {
+                    typeClass = new ArrayType(typeClass);
+                } else if (!allowBrighterscriptTypes && isArray) {
+                    // we shouldn't allow array types to be defined when not in Brighterscript mode
+                    // so a type like `string[]` wouldn't be defined
+                    return undefined;
+                }
+                return typeClass;
         }
     }
 

@@ -1,5 +1,6 @@
 import { isArrayType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
+import { DynamicType } from './DynamicType';
 
 export class ArrayType implements BscType {
     constructor(...innerTypes: BscType[]) {
@@ -47,6 +48,10 @@ export class ArrayType implements BscType {
 
     public toTypeString(): string {
         return 'object';
+    }
+
+    public get defaultType(): BscType {
+        return this.innerTypes?.length === 1 ? this.innerTypes[0] : new DynamicType();
     }
 
     public equals(targetType: BscType): boolean {

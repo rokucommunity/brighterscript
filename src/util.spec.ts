@@ -7,6 +7,11 @@ import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import type { CallableParam } from './interfaces';
 import { IntegerType } from './types/IntegerType';
+import { createToken, TokenKind } from '.';
+import { isBooleanType, isIntegerType, isFloatType, isObjectType, isFunctionType, isStringType, isLazyType, isArrayType, isDynamicType } from './astUtils/reflection';
+import type { ArrayType } from './types/ArrayType';
+
+
 const sinon = createSandbox();
 let tempDir = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tempDir}/rootDir`;
@@ -713,6 +718,72 @@ describe('util', () => {
                 text: 'i',
                 range: util.createRange(2, 21, 2, 22)
             }]);
+        });
+    });
+
+    describe('tokenToBscType', () => {
+
+        it('handles type tokens', () => {
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.Boolean)))).be.true;
+            expect(isIntegerType(util.tokenToBscType(createToken(TokenKind.Integer)))).be.true;
+            expect(isFloatType(util.tokenToBscType(createToken(TokenKind.Float)))).be.true;
+            expect(isObjectType(util.tokenToBscType(createToken(TokenKind.Object)))).be.true;
+            expect(isStringType(util.tokenToBscType(createToken(TokenKind.String)))).be.true;
+        });
+
+        it('handles literals', () => {
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.True)))).be.true;
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.False)))).be.true;
+            expect(isIntegerType(util.tokenToBscType(createToken(TokenKind.IntegerLiteral, '123')))).be.true;
+            expect(isFloatType(util.tokenToBscType(createToken(TokenKind.FloatLiteral, '3.14')))).be.true;
+            expect(isStringType(util.tokenToBscType(createToken(TokenKind.StringLiteral, 'hello')))).be.true;
+        });
+
+        it('handles identifiers', () => {
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.Identifier, 'boolean')))).be.true;
+            expect(isIntegerType(util.tokenToBscType(createToken(TokenKind.Identifier, 'integer')))).be.true;
+            expect(isFloatType(util.tokenToBscType(createToken(TokenKind.Identifier, 'float')))).be.true;
+            expect(isStringType(util.tokenToBscType(createToken(TokenKind.Identifier, 'string')))).be.true;
+            expect(isFunctionType(util.tokenToBscType(createToken(TokenKind.Identifier, 'function')))).be.true;
+            expect(isObjectType(util.tokenToBscType(createToken(TokenKind.Identifier, 'object')))).be.true;
+            expect(isDynamicType(util.tokenToBscType(createToken(TokenKind.Identifier, 'dynamic')))).be.true;
+        });
+
+        it('ignores case and whitespace of identifiers', () => {
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.Identifier, 'boolean')))).be.true;
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.Identifier, 'BOOLEAN')))).be.true;
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.Identifier, 'Boolean')))).be.true;
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.Identifier, '  boolean   ')))).be.true;
+        });
+
+        it('includes custom types, returned as lazy', () => {
+            expect(isLazyType(util.tokenToBscType(createToken(TokenKind.Identifier, 'SomeKlass'), true))).be.true;
+        });
+
+        it('gets array types from identifiers', () => {
+            expect(isArrayType(util.tokenToBscType(createToken(TokenKind.Identifier, 'boolean[]')))).be.true;
+            expect(isArrayType(util.tokenToBscType(createToken(TokenKind.Identifier, 'integer[]')))).be.true;
+            expect(isArrayType(util.tokenToBscType(createToken(TokenKind.Identifier, 'string[]')))).be.true;
+        });
+
+        it('gets array types from identifiers with custom types', () => {
+            expect(isArrayType(util.tokenToBscType(createToken(TokenKind.Identifier, 'SomeKlass[]')))).be.true;
+            expect(isArrayType(util.tokenToBscType(createToken(TokenKind.Identifier, 'MyNamespace.Klass[]')))).be.true;
+        });
+
+        it('sets the default type of an array type', () => {
+            expect(isBooleanType((util.tokenToBscType(createToken(TokenKind.Identifier, 'boolean[]')) as ArrayType).defaultType)).be.true;
+            expect(isStringType((util.tokenToBscType(createToken(TokenKind.Identifier, 'string[]')) as ArrayType).defaultType)).be.true;
+        });
+
+        it('sets the default type of an array type to a customType', () => {
+            expect(isLazyType((util.tokenToBscType(createToken(TokenKind.Identifier, 'MyKlass[]')) as ArrayType).defaultType)).be.true;
+        });
+
+        it('does not return array types or custom types if allowBrighterscriptTypes flag is false', () => {
+            expect(util.tokenToBscType(createToken(TokenKind.Identifier, 'string[]'), false)).be.undefined;
+            expect(util.tokenToBscType(createToken(TokenKind.Identifier, 'SomeKlass'), false)).be.undefined;
+            expect(util.tokenToBscType(createToken(TokenKind.Identifier, 'SomeKlass[]'), false)).be.undefined;
         });
     });
 });
