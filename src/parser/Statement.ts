@@ -2208,14 +2208,14 @@ export class EnumStatement extends Statement implements TypedefProvider {
     }
 
     /**
-     * The name of the interface (without the namespace prefix)
+     * The name of the enum (without the namespace prefix)
      */
     public get name() {
         return this.tokens.name?.text;
     }
 
     /**
-     * The name of the interface WITH its leading namespace (if applicable)
+     * The name of the enum WITH its leading namespace (if applicable)
      */
     public get fullName() {
         const name = this.tokens.name?.text;

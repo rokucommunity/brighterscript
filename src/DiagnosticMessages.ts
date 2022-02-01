@@ -645,7 +645,13 @@ export let DiagnosticMessages = {
         message: `Value is required for ${expectedType} enum`,
         code: 1125,
         severity: DiagnosticSeverity.Error
+    }),
+    unknownEnumValue: (name: string, enumName: string) => ({
+        message: `Enum value ${name} is not found in enum ${enumName}`,
+        code: 1126,
+        severity: DiagnosticSeverity.Error
     })
+
 };
 
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;

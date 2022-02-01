@@ -7,17 +7,18 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
 import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement } from './parser/Statement';
-import type { NewExpression } from './parser/Expression';
+import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement } from './parser/Statement';
+import type { DottedGetExpression, NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
+import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDottedGetExpression, isEnumStatement, isFunctionStatement, isFunctionType, isVariableExpression, isXmlFile } from './astUtils/reflection';
+import { createVisitor, WalkMode } from './astUtils/visitors';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -52,6 +53,12 @@ export class Scope {
      */
     public get namespaceLookup() {
         return this.cache.getOrAdd('namespaceLookup', () => this.buildNamespaceLookup());
+    }
+    /**
+     * A dictionary of enums, indexed by the lower case full name of each enum.
+     */
+    public get enumLookup() {
+        return this.cache.getOrAdd('enumLookup', () => this.buildEnumLookup());
     }
 
     /**
@@ -105,6 +112,28 @@ export class Scope {
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (lowerClassName) {
                             map.set(lowerClassName, { item: cls, file: file });
+                        }
+                    }
+                }
+            });
+            return map;
+        });
+    }
+
+    /**
+     * A dictionary of all enums in this scope. This includes namespaced enums always with their full name.
+     * The key is stored in lower case
+     */
+    public getEnumMap(): Map<string, FileLink<EnumStatement>> {
+        return this.cache.getOrAdd('enumMap', () => {
+            const map = new Map<string, FileLink<EnumStatement>>();
+            this.enumerateBrsFiles((file) => {
+                if (isBrsFile(file)) {
+                    for (let enumStmt of file.parser.references.enumStatements) {
+                        const lowerEnumName = enumStmt.fullName.toLowerCase();
+                        //only track enums with a defined name (i.e. exclude nameless malformed enums)
+                        if (lowerEnumName) {
+                            map.set(lowerEnumName, { item: enumStmt, file: file });
                         }
                     }
                 }
@@ -360,7 +389,8 @@ export class Scope {
                             namespaces: new Map<string, NamespaceContainer>(),
                             classStatements: {},
                             functionStatements: {},
-                            statements: []
+                            statements: [],
+                            enumStatements: new Map<string, EnumStatement>()
                         });
                     }
                 }
@@ -371,6 +401,8 @@ export class Scope {
                         ns.classStatements[statement.name.text.toLowerCase()] = statement;
                     } else if (isFunctionStatement(statement) && statement.name) {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
+                    } else if (isEnumStatement(statement) && statement.fullName) {
+                        ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
                     }
                 }
             }
@@ -390,6 +422,35 @@ export class Scope {
         });
         return namespaceLookup;
     }
+
+    public buildEnumLookup() {
+        let lookup = new Map<string, EnumContainer>();
+        this.enumerateBrsFiles((file) => {
+            for (let [key, es] of file.parser.references.enumStatementLookup) {
+                if (!lookup.has(key)) {
+                    lookup.set(key, {
+                        file: file,
+                        fullName: key,
+                        nameRange: es.range,
+                        lastPartName: es.name,
+                        statement: es
+                    });
+                    for (const ems of es.getMembers()) {
+                        const fullMemberName = `${key}.${ems.name.toLowerCase()}`;
+                        lookup.set(fullMemberName, {
+                            file: file,
+                            fullName: fullMemberName,
+                            nameRange: ems.range,
+                            lastPartName: ems.name,
+                            statement: es
+                        });
+                    }
+                }
+            }
+        });
+        return lookup;
+    }
+
 
     public getAllNamespaceStatements() {
         let result = [] as NamespaceStatement[];
@@ -467,6 +528,7 @@ export class Scope {
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.diagnosticDetectInvalidFunctionExpressionTypes(file);
+            this.detectUnknownEnumMembers(file);
         });
     }
 
@@ -1001,6 +1063,46 @@ export class Scope {
         }
         return items;
     }
+
+    private detectUnknownEnumMembers(file: BrsFile) {
+        if (!isBrsFile(file)) {
+            return;
+        }
+        file.parser.ast.walk(createVisitor({
+            DottedGetExpression: (dge) => {
+                let nameParts = this.getAllDottedGetParts(dge);
+                let name = nameParts.pop();
+                let parentPath = nameParts.join('.');
+                let ec = this.enumLookup.get(parentPath);
+                if (ec && !this.enumLookup.has(`${parentPath}.${name}`)) {
+                    this.diagnostics.push({
+                        file: file,
+                        ...DiagnosticMessages.unknownEnumValue(name, ec.fullName),
+                        range: dge.range,
+                        relatedInformation: [{
+                            message: 'Enum declared here',
+                            location: Location.create(
+                                URI.file(ec.file.pathAbsolute).toString(),
+                                ec.statement.range
+                            )
+                        }]
+                    });
+
+                }
+            }
+        }), { walkMode: WalkMode.visitAllRecursive });
+    }
+
+    private getAllDottedGetParts(dg: DottedGetExpression) {
+        let parts = [dg?.name?.text];
+        let nextPart = dg.obj;
+        while (isDottedGetExpression(nextPart) || isVariableExpression(nextPart)) {
+            parts.push(nextPart?.name?.text);
+            nextPart = isDottedGetExpression(nextPart) ? nextPart.obj : undefined;
+        }
+        return parts.reverse();
+    }
+
 }
 
 interface NamespaceContainer {
@@ -1011,7 +1113,16 @@ interface NamespaceContainer {
     statements: Statement[];
     classStatements: Record<string, ClassStatement>;
     functionStatements: Record<string, FunctionStatement>;
+    enumStatements: Map<string, EnumStatement>;
     namespaces: Map<string, NamespaceContainer>;
+}
+
+interface EnumContainer {
+    file: BscFile;
+    fullName: string;
+    nameRange: Range;
+    lastPartName: string;
+    statement: EnumStatement;
 }
 
 interface AugmentedNewExpression extends NewExpression {

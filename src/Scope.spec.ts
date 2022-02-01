@@ -845,4 +845,113 @@ describe('Scope', () => {
             program['scopes']['source'].buildNamespaceLookup();
         });
     });
+
+    describe('buildEnumLookup', () => {
+
+        it('builds enum lookup', () => {
+            const sourceScope = program.getScopeByName('source');
+            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+            program.addOrReplaceFile('source/main.bs', `
+                enum foo
+                    bar1
+                    bar2
+                end enum
+
+                namespace test
+                    function fooFace2()
+                    end function
+
+                    class fooClass2
+                    end class
+
+                    enum foo2
+                        bar2_1
+                        bar2_2
+                    end enum
+                end namespace
+
+                function fooFace()
+                end function
+
+                class fooClass
+                end class
+
+                enum foo3
+                    bar3_1
+                    bar3_2
+                end enum
+            `);
+            // program.validate();
+            let lookup = sourceScope.enumLookup;
+
+            expect(
+                [...lookup.keys()]
+            ).to.eql([
+                'foo',
+                'foo.bar1',
+                'foo.bar2',
+                'test.foo2',
+                'test.foo2.bar2_1',
+                'test.foo2.bar2_2',
+                'foo3',
+                'foo3.bar3_1',
+                'foo3.bar3_2'
+            ]);
+        });
+    });
+    describe('enums', () => {
+        it('gets enum completions', () => {
+            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+            program.addOrReplaceFile('source/main.bs', `
+                enum foo
+                    bar1
+                    bar2
+                end enum
+
+                sub Main()
+                    g1 = foo.bar1
+                    g2 = test.foo2.bar2_1
+                    g3 = test.foo2.bar2_1
+                    g4 = test.nested.foo3.bar3_1
+                    b1 = foo.bad1
+                    b2 = test.foo2.bad2
+                    b4 = test.nested.foo3.bad3
+                    'unknown namespace
+                    b3 = test.foo3.bar3_1
+                end sub
+
+                namespace test
+                    function fooFace2()
+                    end function
+
+                    class fooClass2
+                    end class
+
+                    enum foo2
+                        bar2_1
+                        bar2_2
+                    end enum
+                end namespace
+
+                function fooFace()
+                end function
+
+                class fooClass
+                end class
+
+                namespace test.nested
+                    enum foo3
+                        bar3_1
+                        bar3_2
+                    end enum
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.unknownEnumValue('bad1', 'foo'),
+                DiagnosticMessages.unknownEnumValue('bad2', 'test.foo2'),
+                DiagnosticMessages.unknownEnumValue('bad3', 'test.nested.foo3')
+            ]);
+        });
+    });
 });
