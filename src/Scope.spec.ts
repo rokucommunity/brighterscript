@@ -899,7 +899,6 @@ describe('Scope', () => {
             ]);
         });
     });
-
     describe('enums', () => {
         it('gets enum completions', () => {
             program.addOrReplaceFile('source/main.bs', `
