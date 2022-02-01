@@ -1654,7 +1654,11 @@ describe('BrsFile', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(1, 25, 1, 29));
-            expect(hover.contents).to.equal('function Main(count? as dynamic) as dynamic');
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'function Main(count? as dynamic) as dynamic',
+                '```'
+            ].join('\n'));
         });
 
         it('finds variable function hover in same scope', () => {
@@ -1670,7 +1674,44 @@ describe('BrsFile', () => {
             let hover = file.getHover(Position.create(5, 24));
 
             expect(hover.range).to.eql(Range.create(5, 20, 5, 29));
-            expect(hover.contents).to.equal('sub sayMyName(name as string) as void');
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName(name as string) as void',
+                '```'
+            ].join('\n'));
+        });
+
+        it('does not crash when hovering on built-in functions', async () => {
+            let file = program.addOrReplaceFile('source/main.brs', `
+                function doUcase(text)
+                    return ucase(text)
+                end function
+            `);
+
+            expect(
+                (await program.getHover(file.pathAbsolute, Position.create(2, 30))).contents
+            ).to.equal([
+                '```brightscript',
+                'function UCase(s? as string) as string',
+                '```'
+            ].join('\n'));
+        });
+
+        it('does not crash when hovering on object method call', async () => {
+            let file = program.addOrReplaceFile('source/main.brs', `
+                function getInstr(url, text)
+                    return url.instr(text)
+                end function
+            `);
+
+            expect(
+                (await program.getHover(file.pathAbsolute, Position.create(2, 35))).contents
+            ).to.equal([
+                '```brightscript',
+                //TODO this really shouldn't be returning the global function, but it does...so make sure it doesn't crash right now.
+                'function Instr(start? as integer, text? as string, substring? as string) as integer',
+                '```'
+            ].join('\n'));
         });
 
         it('finds function hover in file scope', () => {
@@ -1687,7 +1728,11 @@ describe('BrsFile', () => {
             let hover = file.getHover(Position.create(2, 25));
 
             expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
-            expect(hover.contents).to.equal('sub sayMyName() as void');
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName() as void',
+                '```'
+            ].join('\n'));
         });
 
         it('finds function hover in scope', () => {
@@ -1712,7 +1757,62 @@ describe('BrsFile', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
-            expect(hover.contents).to.equal('sub sayMyName(name as string) as void');
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName(name as string) as void',
+                '```'
+            ].join('\n'));
+        });
+
+        it('includes markdown comments in hover.', async () => {
+            let rootDir = process.cwd();
+            program = new Program({
+                rootDir: rootDir
+            });
+
+            const file = program.addOrReplaceFile('source/lib.brs', `
+                '
+                ' The main function
+                '
+                sub main()
+                    log("hello")
+                end sub
+
+                '
+                ' Prints a message to the log.
+                ' Works with *markdown* **content**
+                '
+                sub log(message as string)
+                    print message
+                end sub
+            `);
+
+            //hover over log("hello")
+            expect(
+                (await program.getHover(file.pathAbsolute, Position.create(5, 22))).contents
+            ).to.equal([
+                '```brightscript',
+                'sub log(message as string) as void',
+                '```',
+                '***',
+                '',
+                ' Prints a message to the log.',
+                ' Works with *markdown* **content**',
+                ''
+            ].join('\n'));
+
+            //hover over sub ma|in()
+            expect(
+                (await program.getHover(file.pathAbsolute, Position.create(4, 22))).contents
+            ).to.equal(trim`
+                \`\`\`brightscript
+                sub main() as void
+                \`\`\`
+                ***
+
+                 The main function
+                `
+            );
         });
 
         it('handles mixed case `then` partions of conditionals', () => {
@@ -2401,13 +2501,12 @@ describe('BrsFile', () => {
                 name: 'transform callback',
                 afterFileParse: onParsed
             });
-            const file = new BrsFile(`absolute_path/file${ext}`, `relative_path/file${ext}`, program);
-            expect(file.extension).to.equal(ext);
-            file.parse(`
+            file = program.addOrReplaceFile({ src: `absolute_path/file${ext}`, dest: `relative_path/file${ext}` }, `
                 sub Sum()
                     print "hello world"
                 end sub
             `);
+            expect(file.extension).to.equal(ext);
             return file;
         }
 

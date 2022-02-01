@@ -395,9 +395,26 @@ export class Program {
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
                     brsFile.parse(sourceObj.source);
                 });
+
+                //notify plugins that this file has finished parsing
+                this.plugins.emit('afterFileParse', brsFile);
+
                 file = brsFile;
 
                 brsFile.attachDependencyGraph(this.dependencyGraph);
+
+                this.plugins.emit('beforeFileValidate', {
+                    program: this,
+                    file: file
+                });
+
+                file.validate();
+
+                //emit an event to allow plugins to contribute to the file validation process
+                this.plugins.emit('onFileValidate', {
+                    program: this,
+                    file: file
+                });
 
                 this.plugins.emit('afterFileValidate', brsFile);
             } else if (
@@ -415,9 +432,13 @@ export class Program {
                     source: fileContents
                 };
                 this.plugins.emit('beforeFileParse', sourceObj);
+
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
                     xmlFile.parse(sourceObj.source);
                 });
+
+                //notify plugins that this file has finished parsing
+                this.plugins.emit('afterFileParse', xmlFile);
 
                 file = xmlFile;
 
@@ -427,6 +448,21 @@ export class Program {
 
                 //register this compoent now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
+
+
+                //emit an event before starting to validate this file
+                this.plugins.emit('beforeFileValidate', {
+                    file: file,
+                    program: this
+                });
+
+                xmlFile.validate();
+
+                //emit an event to allow plugins to contribute to the file validation process
+                this.plugins.emit('onFileValidate', {
+                    file: xmlFile,
+                    program: this
+                });
 
                 this.plugins.emit('afterFileValidate', xmlFile);
             } else {
@@ -809,8 +845,9 @@ export class Program {
         if (!file) {
             return null;
         }
+        const hover = file.getHover(position);
 
-        return Promise.resolve(file.getHover(position));
+        return Promise.resolve(hover);
     }
 
     /**

@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.43.1](https://github.com/rokucommunity/brighterscript/compare/v0.43.0...v0.43.1) - 2022-01-28
+### Fixed
+ - crash when hovering over global functions ([#497](https://github.com/rokucommunity/brighterscript/pull/497))
+
+
+
+## [0.43.0](https://github.com/rokucommunity/brighterscript/compare/v0.42.0...v0.43.0) - 2022-01-28
+### Added
+ - show function documentation when hovering over functions. ([#495](https://github.com/rokucommunity/brighterscript/pull/495))
+ - for plugin authors:
+  - added `beforeFileValidate` and `onFileValidate` plugin hooks ([#490](https://github.com/rokucommunity/brighterscript/pull/490))
+  - added `expressions` collection to `BrsFile.parser.references` which includes all the full expressions, which can be used instead of AST walking in many cases. ([#487](https://github.com/rokucommunity/brighterscript/pull/487))
+### Changed
+ - For plugin authors:
+   - move parse and validate events to `Program` class and out of `XmlFile` and `BrsFile`. This only impacts plugins that depend on the `afterFileParse`, `onFileValidate` and `afterFileValidate` events while also constructing those files with their constructors directly. ([#494](https://github.com/rokucommunity/brighterscript/pull/494))
+   - removed internal [barrels](https://github.com/basarat/typescript-book/blob/master/docs/tips/barrel.md). This means plugins can no longer do things like: `import { something} from 'brighterscript/some-path'`. All necessary exports can be done from the top-level brighterscript package directly. ([#492](https://github.com/rokucommunity/brighterscript/pull/492))
+ - use `Map` for `ClassValidator` class lookup instead of an object. ([#481](https://github.com/rokucommunity/brighterscript/pull/481))
+
+
+
+### Fixed
+ - bug preventing code to come after an interface statement. ([#493](https://github.com/rokucommunity/brighterscript/pull/493))
+ - don't crash on null options in `printDiagnostics`. ([3147202](https://github.com/rokucommunity/brighterscript/commit/3147202b948d08be198255c068f082857c9de1f0))
+
 ## [0.42.0](https://github.com/rokucommunity/brighterscript/compare/v0.41.6...v0.42.0) - 2022-01-10
 ### Added
  - AST editing utility for transformations during between the begin and end transpile lifecycle events. See [the documentation](https://github.com/rokucommunity/brighterscript/blob/master/docs/plugins.md#modifying-code) for more info. ([#478](https://github.com/rokucommunity/brighterscript/pull/478))
