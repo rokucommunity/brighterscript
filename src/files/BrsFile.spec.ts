@@ -171,7 +171,6 @@ describe('BrsFile', () => {
         });
 
         describe('namespaces', () => {
-
             it('gets namespace completions', () => {
                 program.addOrReplaceFile('source/main.bs', `
                     namespace foo.bar

@@ -1101,7 +1101,7 @@ export class Scope {
      * @param expression
      * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
      */
-    getAllDottedGetParts(expression: Expression) {
+    private getAllDottedGetParts(expression: Expression) {
         const parts: string[] = [];
         let nextPart = expression;
         while (nextPart) {
