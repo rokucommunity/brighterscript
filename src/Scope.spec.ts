@@ -852,45 +852,51 @@ describe('Scope', () => {
             const sourceScope = program.getScopeByName('source');
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile('source/main.bs', `
-            enum foo
-            bar1
-            bar2
-            end enum
+                enum foo
+                    bar1
+                    bar2
+                end enum
 
-            namespace test
-            function fooFace2()
-            end function
-            class fooClass2
-            end class
+                namespace test
+                    function fooFace2()
+                    end function
 
-            enum foo2
-            bar2_1
-            bar2_2
-            end enum
-            end namespace
-            function fooFace()
-            end function
-            class fooClass
-            end class
-            enum foo3
-            bar3_1
-            bar3_2
-            end enum
+                    class fooClass2
+                    end class
+
+                    enum foo2
+                        bar2_1
+                        bar2_2
+                    end enum
+                end namespace
+
+                function fooFace()
+                end function
+
+                class fooClass
+                end class
+
+                enum foo3
+                    bar3_1
+                    bar3_2
+                end enum
             `);
             // program.validate();
             let lookup = sourceScope.enumLookup;
 
-            expect(lookup).to.not.be.empty;
-            let keys = [...lookup.keys()];
-            expect(keys).includes('foo');
-            expect(keys).includes('foo.bar1');
-            expect(keys).includes('foo.bar2');
-            expect(keys).includes('test.foo2');
-            expect(keys).includes('test.foo2.bar2_1');
-            expect(keys).includes('test.foo2.bar2_2');
-            expect(keys).includes('foo3');
-            expect(keys).includes('foo3.bar3_1');
-            expect(keys).includes('foo3.bar3_2');
+            expect(
+                [...lookup.keys()]
+            ).to.eql([
+                'foo',
+                'foo.bar1',
+                'foo.bar2',
+                'test.foo2',
+                'test.foo2.bar2_1',
+                'test.foo2.bar2_2',
+                'foo3',
+                'foo3.bar3_1',
+                'foo3.bar3_2'
+            ]);
         });
     });
     describe('enums', () => {
@@ -917,6 +923,7 @@ describe('Scope', () => {
                 namespace test
                     function fooFace2()
                     end function
+
                     class fooClass2
                     end class
 
@@ -925,10 +932,13 @@ describe('Scope', () => {
                         bar2_2
                     end enum
                 end namespace
+
                 function fooFace()
                 end function
+
                 class fooClass
                 end class
+
                 namespace test.nested
                     enum foo3
                         bar3_1
