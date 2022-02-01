@@ -3055,7 +3055,6 @@ export class References {
     }
     private _interfaceStatementLookup: Map<string, InterfaceStatement>;
 
-
     public enumStatements = [] as EnumStatement[];
 
     public get enumStatementLookup() {

@@ -8,7 +8,7 @@ import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableC
 import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement } from './parser/Statement';
-import type { DottedGetExpression, NewExpression } from './parser/Expression';
+import type { Expression, NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
@@ -18,7 +18,6 @@ import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDottedGetExpression, isEnumStatement, isFunctionStatement, isFunctionType, isVariableExpression, isXmlFile } from './astUtils/reflection';
-import { createVisitor, WalkMode } from './astUtils/visitors';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -1068,41 +1067,57 @@ export class Scope {
         if (!isBrsFile(file)) {
             return;
         }
-        file.parser.ast.walk(createVisitor({
-            DottedGetExpression: (dge) => {
-                let nameParts = this.getAllDottedGetParts(dge);
-                let name = nameParts.pop();
-                let parentPath = nameParts.join('.');
-                let ec = this.enumLookup.get(parentPath);
-                if (ec && !this.enumLookup.has(`${parentPath}.${name}`)) {
-                    this.diagnostics.push({
-                        file: file,
-                        ...DiagnosticMessages.unknownEnumValue(name, ec.fullName),
-                        range: dge.range,
-                        relatedInformation: [{
-                            message: 'Enum declared here',
-                            location: Location.create(
-                                URI.file(ec.file.pathAbsolute).toString(),
-                                ec.statement.range
-                            )
-                        }]
-                    });
+        (file.parser as any)._references = undefined;
+        for (const expression of file.parser.references.expressions) {
+            let nameParts = this.getAllDottedGetParts(expression);
 
-                }
+            //skip all expressions that aren't fully dotted gets, because they can't be full enum values
+            if (!nameParts) {
+                continue;
             }
-        }), { walkMode: WalkMode.visitAllRecursive });
+            let name = nameParts.pop();
+            let parentPath = nameParts.join('.');
+            let ec = this.enumLookup.get(parentPath);
+            if (ec && !this.enumLookup.has(`${parentPath}.${name}`)) {
+                this.diagnostics.push({
+                    file: file,
+                    ...DiagnosticMessages.unknownEnumValue(name, ec.fullName),
+                    range: expression.range,
+                    relatedInformation: [{
+                        message: 'Enum declared here',
+                        location: Location.create(
+                            URI.file(ec.file.pathAbsolute).toString(),
+                            ec.statement.range
+                        )
+                    }]
+                });
+
+            }
+        }
     }
 
-    private getAllDottedGetParts(dg: DottedGetExpression) {
-        let parts = [dg?.name?.text];
-        let nextPart = dg.obj;
-        while (isDottedGetExpression(nextPart) || isVariableExpression(nextPart)) {
-            parts.push(nextPart?.name?.text);
-            nextPart = isDottedGetExpression(nextPart) ? nextPart.obj : undefined;
+    /**
+     * Gets each part of the dotted get.
+     * @param expression
+     * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
+     */
+    private getAllDottedGetParts(expression: Expression) {
+        const parts: string[] = [];
+        let nextPart = expression;
+        while (nextPart) {
+            if (isDottedGetExpression(nextPart)) {
+                parts.push(nextPart?.name?.text);
+                nextPart = nextPart.obj;
+            } else if (isVariableExpression(nextPart)) {
+                parts.push(nextPart?.name?.text);
+                break;
+            } else {
+                //we found a non-DottedGet expression, so return because this whole operation is invalid.
+                return undefined;
+            }
         }
         return parts.reverse();
     }
-
 }
 
 interface NamespaceContainer {

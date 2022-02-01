@@ -901,7 +901,6 @@ describe('Scope', () => {
     });
     describe('enums', () => {
         it('gets enum completions', () => {
-            //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile('source/main.bs', `
                 enum foo
                     bar1
