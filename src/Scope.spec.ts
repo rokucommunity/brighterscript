@@ -884,7 +884,6 @@ describe('Scope', () => {
             // program.validate();
             let lookup = sourceScope.enumLookup;
 
-            expect(lookup).to.not.be.empty;
             expect(
                 [...lookup.keys()]
             ).to.eql([

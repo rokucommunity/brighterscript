@@ -15,9 +15,9 @@ import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isDottedGetExpression, isVariableExpression, isEnumStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
+import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDottedGetExpression, isEnumStatement, isFunctionStatement, isFunctionType, isVariableExpression, isXmlFile } from './astUtils/reflection';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
