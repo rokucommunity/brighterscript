@@ -64,19 +64,19 @@ export class FunctionType implements BscType {
         }
     }
 
-    public isConvertibleTo(targetType: BscType, context) {
+    public isConvertibleTo(targetType: BscType, context?: TypeContext) {
         return this.isAssignableTo(targetType, context);
     }
 
-    public toString() {
+    public toString(context?: TypeContext) {
         let paramTexts = [];
         for (let param of this.params) {
-            paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString()}`);
+            paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString(context)}`);
         }
         if (this.isNew) {
             return `new ${this.name ?? ''}(${paramTexts.join(', ')})`;
         }
-        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
+        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}) as ${this.returnType.toString(context)}`;
 
     }
 

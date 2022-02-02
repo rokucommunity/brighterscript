@@ -3412,6 +3412,11 @@ export function getBscTypeFromExpression(expression: Expression, functionExpress
             return getTypeFromVariableExpression(expression, functionExpression);
         } else if (isDottedGetExpression(expression)) {
             return getTypeFromDottedGetExpression(expression, functionExpression);
+        } else if (isIndexedGetExpression(expression)) {
+            const source = getBscTypeFromExpression(expression.obj, functionExpression);
+            if (isArrayType(source)) {
+                return source.defaultType;
+            }
         }
     } catch (e) {
         //do nothing. Just return dynamic

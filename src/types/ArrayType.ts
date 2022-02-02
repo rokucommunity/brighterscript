@@ -1,5 +1,5 @@
 import { isArrayType, isDynamicType, isObjectType } from '../astUtils/reflection';
-import type { BscType } from './BscType';
+import type { BscType, TypeContext } from './BscType';
 import { DynamicType } from './DynamicType';
 
 export class ArrayType implements BscType {
@@ -12,7 +12,7 @@ export class ArrayType implements BscType {
     }
     public innerTypes: BscType[] = [];
 
-    public isAssignableTo(targetType: BscType) {
+    public isAssignableTo(targetType: BscType, context?: TypeContext) {
         if (isArrayType(targetType)) {
             //this array type is assignable to the target IF
             //1. all of the types in this array are present in the target
@@ -22,7 +22,7 @@ export class ArrayType implements BscType {
                 for (let targetInnerType of targetType.innerTypes) {
                     //TODO TYPES is this loop correct? It ends after 1 iteration but we might need to do more iterations
 
-                    if (innerType.isAssignableTo(targetInnerType)) {
+                    if (innerType.isAssignableTo(targetInnerType, context)) {
                         continue outer;
                     }
 
@@ -38,12 +38,12 @@ export class ArrayType implements BscType {
         return false;
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+    public isConvertibleTo(targetType: BscType, context?: TypeContext) {
+        return this.isAssignableTo(targetType, context);
     }
 
-    public toString() {
-        return `Array<${this.innerTypes.map((x) => x.toString()).join(' | ')}>`;
+    public toString(context?: TypeContext) {
+        return `Array<${this.innerTypes.map((x) => x.toString(context)).join(' | ')}>`;
     }
 
     public toTypeString(): string {
@@ -54,7 +54,7 @@ export class ArrayType implements BscType {
         return this.innerTypes?.length === 1 ? this.innerTypes[0] : new DynamicType();
     }
 
-    public equals(targetType: BscType): boolean {
-        return isArrayType(targetType) && this.isAssignableTo(targetType);
+    public equals(targetType: BscType, context?: TypeContext): boolean {
+        return isArrayType(targetType) && this.isAssignableTo(targetType, context);
     }
 }

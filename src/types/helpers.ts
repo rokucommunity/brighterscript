@@ -108,5 +108,6 @@ export function getTypeFromDottedGetExpression(expr: DottedGetExpression, functi
     const currentToken = isCallExpression(expr) ? ((expr.callee) as any).name : expr.name;
 
     return resolveLazyType(currentToken, functionExpression);
-
 }
+
+

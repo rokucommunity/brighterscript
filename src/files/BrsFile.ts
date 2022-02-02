@@ -908,7 +908,9 @@ export class BrsFile {
 
             if (isArrayType(symbolType) && tokenUsage === TokenUsage.ArrayReference) {
                 symbolType = getTypeFromContext(symbolType.defaultType, typeContext);
-            } else if (symbolType?.memberTable) {
+            }
+
+            if (symbolType?.memberTable) {
                 if (isCustomType(symbolType)) {
                     // we're currently looking at a customType, that has it's own symbol table
                     // use the name of the custom type
@@ -1455,16 +1457,17 @@ export class BrsFile {
 
             for (const scope of this.program.getScopesForFile(this)) {
                 scope.linkSymbolTable();
+                const typeContext = { file: this, scope: scope, position: position };
                 const typeTextPair = this.getSymbolTypeFromToken(token, func, scope);
                 if (typeTextPair) {
                     let scopeTypeText = '';
 
                     if (isFunctionType(typeTextPair.type)) {
-                        scopeTypeText = typeTextPair.type?.toString();
+                        scopeTypeText = typeTextPair.type?.toString(typeContext);
                     } else if (typeTextPair.useExpandedTextOnly) {
                         scopeTypeText = typeTextPair.expandedTokenText;
                     } else {
-                        scopeTypeText = `${typeTextPair.expandedTokenText} as ${typeTextPair.type?.toString()}`;
+                        scopeTypeText = `${typeTextPair.expandedTokenText} as ${typeTextPair.type?.toString(typeContext)}`;
                     }
 
                     if (scopeTypeText && !typeTexts.includes(scopeTypeText)) {
