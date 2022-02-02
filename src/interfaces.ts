@@ -10,7 +10,7 @@ import type { ProgramBuilder } from './ProgramBuilder';
 import type { FunctionStatement } from './parser/Statement';
 import type { Expression } from './parser/Expression';
 import type { TranspileState } from './parser/TranspileState';
-import type { CodeWithSourceMap, SourceMapGenerator, SourceNode } from 'source-map';
+import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
 

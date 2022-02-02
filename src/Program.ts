@@ -26,7 +26,7 @@ import { ParseMode } from './parser/Parser';
 import { TokenKind } from './lexer/TokenKind';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { AstEditor } from './astUtils/AstEditor';
-import { SourceMapGenerator } from 'source-map';
+import type { SourceMapGenerator } from 'source-map';
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -1389,7 +1389,7 @@ export class Program {
     }
 }
 
-interface FileTranspileResult {
+export interface FileTranspileResult {
     pathAbsolute: string;
     pkgPath: string;
     code: string;
