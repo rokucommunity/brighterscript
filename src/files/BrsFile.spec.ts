@@ -1584,7 +1584,7 @@ describe('BrsFile', () => {
                 (await program.getHover(file.pathAbsolute, Position.create(2, 30))).contents
             ).to.equal([
                 '```brightscript',
-                'function UCase(s? as string) as string',
+                'function UCase(s as string) as string',
                 '```'
             ].join('\n'));
         });
@@ -1601,7 +1601,7 @@ describe('BrsFile', () => {
             ).to.equal([
                 '```brightscript',
                 //TODO this really shouldn't be returning the global function, but it does...so make sure it doesn't crash right now.
-                'function Instr(start? as integer, text? as string, substring? as string) as integer',
+                'function Instr(start as integer, text as string, substring as string) as integer',
                 '```'
             ].join('\n'));
         });
