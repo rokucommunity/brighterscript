@@ -8,7 +8,7 @@ import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableC
 import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement } from './parser/Statement';
-import type { Expression, NewExpression } from './parser/Expression';
+import type { NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
@@ -17,7 +17,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDottedGetExpression, isEnumStatement, isFunctionStatement, isFunctionType, isVariableExpression, isXmlFile } from './astUtils/reflection';
+import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -1069,7 +1069,7 @@ export class Scope {
         }
         (file.parser as any)._references = undefined;
         for (const expression of file.parser.references.expressions) {
-            let nameParts = this.getAllDottedGetParts(expression);
+            let nameParts = util.getAllDottedGetParts(expression);
 
             //skip all expressions that aren't fully dotted gets, because they can't be full enum values
             if (!nameParts) {
@@ -1094,29 +1094,6 @@ export class Scope {
 
             }
         }
-    }
-
-    /**
-     * Gets each part of the dotted get.
-     * @param expression
-     * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
-     */
-    private getAllDottedGetParts(expression: Expression) {
-        const parts: string[] = [];
-        let nextPart = expression;
-        while (nextPart) {
-            if (isDottedGetExpression(nextPart)) {
-                parts.push(nextPart?.name?.text);
-                nextPart = nextPart.obj;
-            } else if (isVariableExpression(nextPart)) {
-                parts.push(nextPart?.name?.text);
-                break;
-            } else {
-                //we found a non-DottedGet expression, so return because this whole operation is invalid.
-                return undefined;
-            }
-        }
-        return parts.reverse();
     }
 }
 

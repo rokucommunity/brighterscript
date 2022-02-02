@@ -1,11 +1,28 @@
 import { expect } from 'chai';
 import { LiteralExpression } from '../../Expression';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { expectDiagnostics, expectInstanceOf, expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectInstanceOf, expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 import { ParseMode, Parser } from '../../Parser';
+import { standardizePath as s } from '../../../util';
 import { EnumStatement, InterfaceStatement } from '../../Statement';
+import { Program } from '../../../Program';
+import { createSandbox } from 'sinon';
+
+const sinon = createSandbox();
 
 describe('EnumStatement', () => {
+    let rootDir = s`${process.cwd()}/.tmp/rootDir`;
+    let program: Program;
+    let testTranspile = getTestTranspile(() => [program, rootDir]);
+
+    beforeEach(() => {
+        program = new Program({ rootDir: rootDir, sourceMap: true });
+    });
+    afterEach(() => {
+        sinon.restore();
+        program.dispose();
+    });
+
     it('parses empty enum statement', () => {
         const parser = Parser.parse(`
             enum SomeEnum
@@ -156,5 +173,38 @@ describe('EnumStatement', () => {
         expectZeroDiagnostics(parser);
         expect(parser.statements[0]).instanceof(InterfaceStatement);
         expect(parser.statements[1]).instanceof(EnumStatement);
+    });
+
+    describe.only('transpile', () => {
+        it('replaces enum values from separate file with literals', () => {
+            program.addOrReplaceFile('source/enum.bs', `
+                enum CharacterType
+                    Human = "Human"
+                    Zombie = "Zombie"
+                end enum
+                namespace Locations
+                    enum Houses
+                        TownHouse
+                        FarmHouse
+                    end enum
+                end namespace
+            `);
+
+            testTranspile(`
+                sub test()
+                    print CharacterType.Human
+                    print CharacterType.Zombie
+                    print Locations.Houses.TownHouse
+                    print Locations.Houses.FarmHouse
+                end sub
+            `, `
+                sub test()
+                    print "Human"
+                    print "Zombie"
+                    print 0
+                    print 1
+                end sub
+            `);
+        });
     });
 });

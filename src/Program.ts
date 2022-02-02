@@ -693,6 +693,19 @@ export class Program {
         return result;
     }
 
+    /**
+     * Get the first found scope for a file.
+     */
+    public getFirstScopeForFile(file: XmlFile | BrsFile) {
+        for (let key in this.scopes) {
+            let scope = this.scopes[key];
+
+            if (scope.hasFile(file)) {
+                return scope;
+            }
+        }
+    }
+
     public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {
         let results = new Map<Statement, FileLink<Statement>>();
         const filesSearched = new Set<BrsFile>();

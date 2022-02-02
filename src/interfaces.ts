@@ -253,10 +253,10 @@ export interface OnFileValidateEvent<T extends BscFile = BscFile> {
     file: T;
 }
 
-export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty'>;
+export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty' | 'overrideTranspileResult'>;
 
-export interface BeforeFileTranspileEvent {
-    file: BscFile;
+export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
+    file: TFile;
     outputPath: string;
     /**
      * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
@@ -266,8 +266,8 @@ export interface BeforeFileTranspileEvent {
     editor: Editor;
 }
 
-export interface AfterFileTranspileEvent {
-    file: BscFile;
+export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
+    file: TFile;
     outputPath: string;
     /**
      * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
