@@ -510,9 +510,9 @@ export class BrsFile {
 
                 functionType.setName(assignment.name.text);
                 for (let param of assignment.value.parameters) {
-                    let isRequired = !param.defaultValue;
+                    let isOptional = !!param.defaultValue;
                     //TODO compute optional parameters
-                    functionType.addParameter(param.name.text, param.type, isRequired);
+                    functionType.addParameter(param.name.text, param.type, isOptional);
                 }
                 return functionType;
 
@@ -573,8 +573,8 @@ export class BrsFile {
                     isRestArgument: false
                 };
                 params.push(callableParam);
-                let isRequired = !param.defaultValue;
-                functionType.addParameter(callableParam.name, callableParam.type, isRequired);
+                let isOptional = !!param.defaultValue;
+                functionType.addParameter(callableParam.name, callableParam.type, isOptional);
             }
 
             this.callables.push({

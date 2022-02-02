@@ -10,7 +10,7 @@ import type { ProgramBuilder } from './ProgramBuilder';
 import type { FunctionStatement } from './parser/Statement';
 import type { Expression } from './parser/Expression';
 import type { TranspileState } from './parser/TranspileState';
-import type { SourceNode } from 'source-map';
+import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
 
@@ -269,6 +269,18 @@ export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
 export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
     file: TFile;
     outputPath: string;
+    /**
+     * The resulting transpiled file contents
+     */
+    code: string;
+    /**
+     * The sourceMaps for the generated code (if emitting source maps is enabled)
+     */
+    map?: SourceMapGenerator;
+    /**
+     * The generated type definition file contents (if emitting type definitions are enabled)
+     */
+    typedef?: string;
     /**
      * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
      * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
