@@ -8,7 +8,7 @@ import type { AssignmentStatement, ClassStatement, Statement } from './Statement
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isBlock, isCommentStatement, isCustomType, isDynamicType, isFunctionStatement, isIfStatement, isIntegerType, isLazyType, isUninitializedType } from '../astUtils/reflection';
+import { isBlock, isCommentStatement, isDynamicType, isFunctionStatement, isIfStatement, isIntegerType, isLazyType, isUninitializedType } from '../astUtils/reflection';
 import { expectSymbolTableEquals, expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
