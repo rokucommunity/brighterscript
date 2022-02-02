@@ -85,7 +85,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Position, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isInvalidType, isLiteralExpression, isNewExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isInvalidType, isLiteralExpression, isNewExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { BscType } from '../types/BscType';
@@ -1212,8 +1212,12 @@ export class Parser {
         }
 
         let endFor = this.advance();
-        //TODO TYPES infer type from `target`
-        const itemType = new DynamicType();
+        let itemType = new DynamicType();
+
+        const targetType = getBscTypeFromExpression(target, this.currentFunctionExpression);
+        if (isArrayType(targetType)) {
+            itemType = targetType.defaultType;
+        }
 
         this.currentSymbolTable.addSymbol(name.text, name.range, itemType);
 

@@ -838,7 +838,7 @@ export class BrsFile {
      * @returns the BscType, expanded text (e.g <Class.field>) and classStatement (if available) for the token
      */
     public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): TokenSymbolLookup {
-        if (!scope) {
+        if (!scope || !currentToken) {
             return undefined;
         }
         const cachedSymbolData = scope.symbolCache.get(currentToken);
@@ -868,6 +868,7 @@ export class BrsFile {
         const typeContext = { file: this, scope: scope, position: tokenChain[0]?.token.range.start };
         for (const tokenChainMember of tokenChain) {
             const token = tokenChainMember?.token;
+            const tokenUsage = tokenChainMember?.usage;
             const tokenLowerText = token.text.toLowerCase();
 
             if (tokenLowerText === 'super' && isClassStatement(symbolContainer as any) && tokenFoundCount === 0) {
@@ -900,12 +901,14 @@ export class BrsFile {
                 // the next symbol to check will be the return value of this function
                 symbolType = getTypeFromContext(symbolType.returnType, typeContext);
                 if (tokenFoundCount < tokenChain.length) {
-                    // We're still
+                    // We still have more tokens, but remember the last known reference
                     symbolTypeBeforeReference = symbolType;
                 }
             }
 
-            if (symbolType?.memberTable) {
+            if (isArrayType(symbolType) && tokenUsage === TokenUsage.ArrayReference) {
+                symbolType = getTypeFromContext(symbolType.defaultType, typeContext);
+            } else if (symbolType?.memberTable) {
                 if (isCustomType(symbolType)) {
                     // we're currently looking at a customType, that has it's own symbol table
                     // use the name of the custom type
@@ -932,9 +935,10 @@ export class BrsFile {
                 tokenText.push(token.text);
                 break;
             }
-            if (tokenText.length > 2) {
-                tokenText.shift(); // only care about last two symbols
-            }
+
+        }
+        if (tokenText.length > 2) {
+            tokenText = tokenText.slice(-2); // only care about last two symbols
         }
         let expandedTokenText = tokenText.join('.');
         let backUpReturnType: BscType;
