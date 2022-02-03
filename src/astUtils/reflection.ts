@@ -139,7 +139,7 @@ export function isInterfaceFieldStatement(element: Statement | Expression | unde
     return element?.constructor.name === 'InterfaceFieldStatement';
 }
 export function isEnumStatement(element: Statement | Expression | undefined): element is EnumStatement {
-    return element?.constructor.name === 'ClassFieldStatement';
+    return element?.constructor.name === 'EnumStatement';
 }
 export function isEnumMemberStatement(element: Statement | Expression | undefined): element is EnumMemberStatement {
     return element?.constructor.name === 'EnumMemberStatement';
