@@ -1,5 +1,5 @@
 /**
- * Synchronous cache
+ * A cache that will call the factory to create the item if it doesn't exist
  */
 export class Cache<TKey = any, TValue = any> {
     private cache = new Map<TKey, TValue>();
