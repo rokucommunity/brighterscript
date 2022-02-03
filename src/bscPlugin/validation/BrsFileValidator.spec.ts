@@ -23,6 +23,7 @@ describe('BrsFileValidator', () => {
                     name
                 end enum
             `);
+            program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.duplicateIdentifier('name'),
                 range: util.createRange(3, 20, 3, 24)
@@ -36,6 +37,7 @@ describe('BrsFileValidator', () => {
                     b = "c"
                 end enum
             `);
+            program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueMustBeType('integer'),
                 range: util.createRange(3, 24, 3, 27)
@@ -49,6 +51,7 @@ describe('BrsFileValidator', () => {
                     b = 1
                 end enum
             `);
+            program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueMustBeType('string'),
                 range: util.createRange(3, 24, 3, 25)
@@ -62,6 +65,7 @@ describe('BrsFileValidator', () => {
                     b
                 end enum
             `);
+            program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueIsRequired('string'),
                 range: util.createRange(3, 20, 3, 21)
@@ -75,6 +79,7 @@ describe('BrsFileValidator', () => {
                     b = "b" 'since this is the only value present, this is a string enum
                 end enum
             `);
+            program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.enumValueIsRequired('string'),
                 range: util.createRange(2, 20, 2, 21)

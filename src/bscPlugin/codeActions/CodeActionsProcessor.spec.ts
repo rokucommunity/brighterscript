@@ -23,6 +23,7 @@ describe('CodeActionsProcessor', () => {
                 <component name="comp1">
                 </component>
             `);
+            program.validate();
             expectCodeActions(() => {
                 program.getCodeActions(
                     file.pathAbsolute,
@@ -69,12 +70,12 @@ describe('CodeActionsProcessor', () => {
                 <component name="comp1" attr2="attr3" attr3="attr3">
                 </component>
             `);
+            program.validate();
             const codeActions = program.getCodeActions(
                 file.pathAbsolute,
                 //<comp|onent name="comp1">
                 util.createRange(1, 5, 1, 5)
             );
-
             expect(
                 codeActions[0].edit.changes[URI.file(s`${rootDir}/components/comp1.xml`).toString()][0].range
             ).to.eql(
