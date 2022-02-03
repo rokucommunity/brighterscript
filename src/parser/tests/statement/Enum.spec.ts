@@ -7,6 +7,10 @@ import { standardizePath as s } from '../../../util';
 import { EnumStatement, InterfaceStatement } from '../../Statement';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
+import { BrsFile } from '../../../files/BrsFile';
+import { CancellationTokenSource } from 'vscode-languageserver-protocol';
+import { WalkMode } from '../../../astUtils/visitors';
+import { isEnumStatement } from '../../../astUtils/reflection';
 
 const sinon = createSandbox();
 
@@ -175,7 +179,77 @@ describe('EnumStatement', () => {
         expect(parser.statements[1]).instanceof(EnumStatement);
     });
 
-    describe.only('transpile', () => {
+    describe('getMemberValueMap', () => {
+        function expectMemberValueMap(code: string, expected: Record<string, string>) {
+            const file = program.addOrReplaceFile<BrsFile>('source/lib.brs', code);
+            const cancel = new CancellationTokenSource();
+            let firstEnum: EnumStatement;
+            file.ast.walk(statement => {
+                if (isEnumStatement(statement)) {
+                    firstEnum = statement;
+                    cancel.cancel();
+                }
+            }, {
+                walkMode: WalkMode.visitStatements,
+                cancel: cancel.token
+            });
+            expect(firstEnum).to.exist;
+            const values = firstEnum.getMemberValueMap();
+            expect(Object.fromEntries(values)).to.eql(expected);
+        }
+
+        it('defaults first enum value to 0', () => {
+            expectMemberValueMap(`
+                enum Direction
+                    up
+                    down
+                    left
+                    right
+                end enum
+            `, {
+                up: '0',
+                down: '1',
+                left: '2',
+                right: '3'
+            });
+        });
+
+        it('continues incrementing after defined int value', () => {
+            expectMemberValueMap(`
+                enum Direction
+                    up
+                    down = 9
+                    left
+                    right = 20
+                    other
+                end enum
+            `, {
+                up: '0',
+                down: '9',
+                left: '10',
+                right: '20',
+                other: '21'
+            });
+        });
+
+        it('returns string values when defined', () => {
+            expectMemberValueMap(`
+                enum Direction
+                    up = "up"
+                    down = "DOWN"
+                    left = "LeFt"
+                    right = "righT"
+                end enum
+            `, {
+                up: '"up"',
+                down: '"DOWN"',
+                left: '"LeFt"',
+                right: '"righT"'
+            });
+        });
+    });
+
+    describe('transpile', () => {
         it('replaces enum values from separate file with literals', () => {
             program.addOrReplaceFile('source/enum.bs', `
                 enum CharacterType
@@ -189,7 +263,6 @@ describe('EnumStatement', () => {
                     end enum
                 end namespace
             `);
-
             testTranspile(`
                 sub test()
                     print CharacterType.Human

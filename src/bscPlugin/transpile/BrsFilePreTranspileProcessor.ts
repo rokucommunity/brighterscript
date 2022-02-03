@@ -1,7 +1,6 @@
+import { Cache } from '../../Cache';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BeforeFileTranspileEvent } from '../../interfaces';
-import type { Expression } from '../../parser/Expression';
-import type { Scope } from '../../Scope';
 import util from '../../util';
 
 export class BrsFilePreTranspileProcessor {
@@ -15,23 +14,19 @@ export class BrsFilePreTranspileProcessor {
     }
 
     private replaceEnumValues() {
-        const firstScope = this.event.file.program.getFirstScopeForFile(this.event.file)[0];
+        const enumMap = new Cache<string, Map<string, string>>();
+        const firstScope = this.event.file.program.getFirstScopeForFile(this.event.file);
         for (const expression of this.event.file.parser.references.expressions) {
-            // const parts = util.getAllDottedGetParts(expression)?.map(x => x.toLowerCase());
-            // const memberName = parts.pop();
-            // const enumName = parts.join('.');
-            if (true || this.isEnumValue(expression, firstScope)) {
-                //hijack the `transpile` method until we have a better way of replacing the expression itself
-                this.event.editor.overrideTranspileResult(expression, '12345');
+            const parts = util.getAllDottedGetParts(expression)?.map(x => x.toLowerCase());
+            const memberName = parts.pop();
+            const enumName = parts.join('.');
+            const theEnum = firstScope.enumLookup.get(enumName);
+            const values = enumMap.getOrAdd(enumName, () => theEnum.statement.getMemberValueMap());
+            if (theEnum) {
+                const value = values.get(memberName);
+                this.event.editor.overrideTranspileResult(expression, value);
             }
         }
     }
 
-    /**
-     * Is the given expression a valid enum value?
-     */
-    private isEnumValue(expression: Expression, scope: Scope) {
-        const fullExpression = util.getAllDottedGetParts(expression)?.map(x => x.toLowerCase()).join('.');
-        return scope.enumLookup.has(fullExpression);
-    }
 }

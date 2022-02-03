@@ -17,6 +17,7 @@ import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
+import { LiteralExpression } from '..';
 
 /**
  * A BrightScript statement
@@ -2205,6 +2206,38 @@ export class EnumStatement extends Statement implements TypedefProvider {
             }
         }
         return result;
+    }
+
+    /**
+     * Get a map of member names and their values.
+     * All values are stored as their AST LiteralExpression representation (i.e. string enum values include the wrapping quotes)
+     */
+    public getMemberValueMap() {
+        const result = new Map<string, string>();
+        const members = this.getMembers();
+        const type = (members.find(x => x.value)?.value as LiteralExpression)?.token?.kind ?? TokenKind.IntegerLiteral;
+        //strings
+        if (type === TokenKind.StringLiteral) {
+            for (const member of members) {
+                result.set(member.name?.toLowerCase(), (member.value as LiteralExpression).token.text);
+            }
+
+            //integers
+        } else {
+            let currentValue = 0;
+            for (const member of members) {
+                if (member.value) {
+                    currentValue = parseInt((member.value as LiteralExpression).token.text);
+                }
+                result.set(member.name?.toLowerCase(), currentValue.toString());
+                currentValue++;
+            }
+        }
+        return result;
+    }
+
+    public getMemberValue(name: string) {
+        return this.getMemberValueMap().get(name.toLowerCase());
     }
 
     /**

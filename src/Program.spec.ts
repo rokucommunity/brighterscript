@@ -202,6 +202,17 @@ describe('Program', () => {
     });
 
     describe('validate', () => {
+        it('retains expressions after validate', () => {
+            const file = program.addOrReplaceFile<BrsFile>('source/main.bs', `
+                sub test()
+                    print a.b.c
+                end sub
+            `);
+            //disable the plugins
+            expect(file.parser.references.expressions).to.be.lengthOf(1);
+            program.validate();
+            expect(file.parser.references.expressions).to.be.lengthOf(1);
+        });
         it('catches duplicate XML component names', () => {
             //add 2 components which both reference the same errored file
             program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, trim`

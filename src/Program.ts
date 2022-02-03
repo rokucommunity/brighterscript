@@ -697,7 +697,7 @@ export class Program {
     /**
      * Get the first found scope for a file.
      */
-    public getFirstScopeForFile(file: XmlFile | BrsFile) {
+    public getFirstScopeForFile(file: XmlFile | BrsFile): Scope {
         for (let key in this.scopes) {
             let scope = this.scopes[key];
 

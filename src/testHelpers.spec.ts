@@ -194,7 +194,9 @@ export function expectInstanceOf<T>(items: any[], constructors: Array<new (...ar
 }
 
 export function getTestTranspile(scopeGetter: () => [Program, string]) {
-    return getTestFileAction((file) => file.transpile(), scopeGetter);
+    return getTestFileAction((file) => {
+        return file.program['_getTranspiledFileContents'](file);
+    }, scopeGetter);
 }
 
 export function getTestGetTypedef(scopeGetter: () => [Program, string]) {
