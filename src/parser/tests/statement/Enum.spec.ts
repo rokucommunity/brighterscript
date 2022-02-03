@@ -195,7 +195,12 @@ describe('EnumStatement', () => {
             });
             expect(firstEnum).to.exist;
             const values = firstEnum.getMemberValueMap();
-            expect(Object.fromEntries(values)).to.eql(expected);
+            expect(
+                [...values].reduce((prev, [key, value]) => {
+                    prev[key] = value;
+                    return prev;
+                }, {})
+            ).to.eql(expected);
         }
 
         it('defaults first enum value to 0', () => {
