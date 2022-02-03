@@ -72,6 +72,13 @@ export class BrsFile {
      * The key used to identify this file in the dependency graph
      */
     public dependencyGraphKey: string;
+
+    /**
+     * Indicates whether this file needs to be validated.
+     * Files are only ever validated a single time
+     */
+    public isValidated = false;
+
     /**
      * The all-lowercase extension for this file (including the leading dot)
      */
@@ -223,6 +230,8 @@ export class BrsFile {
 
             //if we have a typedef file, skip parsing this file
             if (this.hasTypedef) {
+                //skip validation since the typedef is shadowing this file
+                this.isValidated = true;
                 return;
             }
 

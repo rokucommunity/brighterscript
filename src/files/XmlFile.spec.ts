@@ -192,7 +192,8 @@ describe('XmlFile', () => {
         });
 
         it('Adds error when no component is declared in xml', () => {
-            file = program.addOrReplaceFile('components/comp.xml', '<script type="text/brightscript" uri="ChildScene.brs" />');
+            program.addOrReplaceFile('components/comp.xml', '<script type="text/brightscript" uri="ChildScene.brs" />');
+            program.validate();
             expectDiagnostics(program, [
                 {
                     ...DiagnosticMessages.xmlUnexpectedTag('script'),
@@ -572,7 +573,7 @@ describe('XmlFile', () => {
         });
 
         it('adds warning when no "extends" attribute is found', () => {
-            file = program.addOrReplaceFile<XmlFile>(
+            program.addOrReplaceFile<XmlFile>(
                 {
                     src: `${rootDir}/components/comp1.xml`,
                     dest: `components/comp1.xml`
@@ -583,8 +584,8 @@ describe('XmlFile', () => {
                     </component>
                 `
             );
-
-            expectDiagnostics(file, [
+            program.validate();
+            expectDiagnostics(program, [
                 DiagnosticMessages.xmlComponentMissingExtendsAttribute()
             ]);
         });
