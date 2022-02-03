@@ -996,41 +996,45 @@ describe('BrsFile', () => {
         });
 
         it('adds error for library statements NOT at top of file', () => {
-            let file = program.addOrReplaceFile('source/main.bs', `
+            program.addOrReplaceFile('source/file.brs', ``);
+            program.addOrReplaceFile('source/main.bs', `
                 sub main()
                 end sub
                 import "file.brs"
             `);
-            expectDiagnostics(file, [
+            program.validate();
+            expectDiagnostics(program, [
                 DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile()
             ]);
         });
 
         it('supports library imports', () => {
-            file.parse(`
+            program.addOrReplaceFile('source/main.brs', `
                 Library "v30/bslCore.brs"
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('adds error for library statements NOT at top of file', () => {
-            let file = program.addOrReplaceFile('source/main.brs', `
+            program.addOrReplaceFile('source/main.brs', `
                 sub main()
                 end sub
                 Library "v30/bslCore.brs"
             `);
-            expectDiagnostics(file, [
+            program.validate();
+            expectDiagnostics(program, [
                 DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile()
             ]);
         });
 
         it('adds error for library statements inside of function body', () => {
-            let file = program.addOrReplaceFile('source/main.brs', `
+            program.addOrReplaceFile('source/main.brs', `
                 sub main()
                     Library "v30/bslCore.brs"
                 end sub
             `);
-            expectDiagnostics(file, [
+            program.validate();
+            expectDiagnostics(program, [
                 DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile()
             ]);
         });

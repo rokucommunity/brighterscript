@@ -47,6 +47,12 @@ export class XmlFile {
     private unsubscribeFromDependencyGraph: () => void;
 
     /**
+     * Indicates whether this file needs to be validated.
+     * Files are only ever validated a single time
+     */
+    public isValidated = false;
+
+    /**
      * The extension for this file
      */
     public extension: string;

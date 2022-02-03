@@ -2406,6 +2406,7 @@ describe('Program', () => {
             };
             program.plugins.add(plugin);
             program.addOrReplaceFile('source/main.brs', '');
+            program.validate();
             expect(plugin.beforeFileValidate.callCount).to.equal(1);
             expect(plugin.onFileValidate.callCount).to.equal(1);
             expect(plugin.afterFileValidate.callCount).to.equal(1);
@@ -2420,6 +2421,7 @@ describe('Program', () => {
             };
             program.plugins.add(plugin);
             program.addOrReplaceFile('components/main.xml', '');
+            program.validate();
             expect(plugin.beforeFileValidate.callCount).to.equal(1);
             expect(plugin.onFileValidate.callCount).to.equal(1);
             expect(plugin.afterFileValidate.callCount).to.equal(1);

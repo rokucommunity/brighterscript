@@ -404,20 +404,6 @@ export class Program {
 
                 brsFile.attachDependencyGraph(this.dependencyGraph);
 
-                this.plugins.emit('beforeFileValidate', {
-                    program: this,
-                    file: file
-                });
-
-                file.validate();
-
-                //emit an event to allow plugins to contribute to the file validation process
-                this.plugins.emit('onFileValidate', {
-                    program: this,
-                    file: file
-                });
-
-                this.plugins.emit('afterFileValidate', brsFile);
             } else if (
                 //is xml file
                 fileExtension === '.xml' &&
@@ -450,22 +436,6 @@ export class Program {
                 //register this compoent now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
 
-
-                //emit an event before starting to validate this file
-                this.plugins.emit('beforeFileValidate', {
-                    file: file,
-                    program: this
-                });
-
-                xmlFile.validate();
-
-                //emit an event to allow plugins to contribute to the file validation process
-                this.plugins.emit('onFileValidate', {
-                    file: xmlFile,
-                    program: this
-                });
-
-                this.plugins.emit('afterFileValidate', xmlFile);
             } else {
                 //TODO do we actually need to implement this? Figure out how to handle img paths
                 // let genericFile = this.files[pathAbsolute] = <any>{
@@ -587,17 +557,10 @@ export class Program {
             this.diagnostics = [];
             this.plugins.emit('beforeProgramValidate', this);
 
-            this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
-                for (let scopeName in this.scopes) {
-                    let scope = this.scopes[scopeName];
-                    scope.validate();
-                }
-            });
+            //validate every file
+            for (const file of Object.values(this.files)) {
 
-            //find any files NOT loaded into a scope
-            for (let filePath in this.files) {
-                let file = this.files[filePath];
-
+                //find any files NOT loaded into a scope
                 if (!this.fileIsIncludedInAnyScope(file)) {
                     this.logger.debug('Program.validate(): fileNotReferenced by any scope', () => chalk.green(file?.pkgPath));
                     //the file is not loaded in any scope
@@ -607,7 +570,34 @@ export class Program {
                         range: util.createRange(0, 0, 0, Number.MAX_VALUE)
                     });
                 }
+
+                //for every unvalidated file, validate it
+                if (!file.isValidated) {
+                    this.plugins.emit('beforeFileValidate', {
+                        program: this,
+                        file: file
+                    });
+
+                    //emit an event to allow plugins to contribute to the file validation process
+                    this.plugins.emit('onFileValidate', {
+                        program: this,
+                        file: file
+                    });
+                    //call file.validate() IF the file has that function defined
+                    file.validate?.();
+                    file.isValidated = true;
+
+                    this.plugins.emit('afterFileValidate', file);
+                }
             }
+
+
+            this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
+                for (let scopeName in this.scopes) {
+                    let scope = this.scopes[scopeName];
+                    scope.validate();
+                }
+            });
 
             this.detectDuplicateComponentNames();
 
