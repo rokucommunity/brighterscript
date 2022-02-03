@@ -250,6 +250,42 @@ describe('EnumStatement', () => {
     });
 
     describe('transpile', () => {
+        it('supports default-as-integer', () => {
+            testTranspile(`
+                enum Direction
+                    up
+                    down
+                    left
+                    right
+                end enum
+                sub main()
+                    print Direction.up, Direction.down, Direction.left, Direction.right
+                end sub
+            `, `
+                sub main()
+                    print 0, 1, 2, 3
+                end sub
+            `);
+        });
+
+        it('supports string enums', () => {
+            testTranspile(`
+                enum Direction
+                    up = "up"
+                    down = "down"
+                    left = "left"
+                    right = "right"
+                end enum
+                sub main()
+                    print Direction.up, Direction.down, Direction.left, Direction.right
+                end sub
+            `, `
+                sub main()
+                    print "up", "down", "left", "right"
+                end sub
+            `);
+        });
+
         it('replaces enum values from separate file with literals', () => {
             program.addOrReplaceFile('source/enum.bs', `
                 enum CharacterType
