@@ -1067,7 +1067,6 @@ export class Scope {
         if (!isBrsFile(file)) {
             return;
         }
-        (file.parser as any)._references = undefined;
         for (const expression of file.parser.references.expressions) {
             let nameParts = util.getAllDottedGetParts(expression);
 
