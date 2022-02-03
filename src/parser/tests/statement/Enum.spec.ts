@@ -7,7 +7,7 @@ import { standardizePath as s } from '../../../util';
 import { EnumStatement, InterfaceStatement } from '../../Statement';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
-import { BrsFile } from '../../../files/BrsFile';
+import type { BrsFile } from '../../../files/BrsFile';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import { WalkMode } from '../../../astUtils/visitors';
 import { isEnumStatement } from '../../../astUtils/reflection';
