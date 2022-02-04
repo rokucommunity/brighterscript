@@ -7,7 +7,7 @@ import { standardizePath as s, util } from '../../util';
 
 const rootDir = s`${process.cwd()}/.tmp/rootDir`;
 
-describe('SemanticTokensProcessor', () => {
+describe('BrsFileSemanticTokensProcessor', () => {
     let program: Program;
     beforeEach(() => {
         program = new Program({
