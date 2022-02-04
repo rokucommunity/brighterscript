@@ -281,6 +281,7 @@ export class Program {
                 }, diagnostics);
                 return finalDiagnostics;
             });
+
             this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
             return filteredDiagnostics;
         });
@@ -471,7 +472,6 @@ export class Program {
             const sourceScope = new Scope('source', this, 'scope:source');
             sourceScope.attachDependencyGraph(this.dependencyGraph);
             this.addScope(sourceScope);
-            this.getFileByPathAbsolute('asdf');
         }
     }
 
@@ -494,6 +494,7 @@ export class Program {
     /**
      * Get a list of files for the given (platform-normalized) pkgPath array.
      * Missing files are just ignored.
+     * @deprecated use `getFiles` instead, which auto-detects the path types
      */
     public getFilesByPkgPaths<T extends BscFile[]>(pkgPaths: string[]) {
         return pkgPaths
@@ -504,7 +505,7 @@ export class Program {
     /**
      * Get a file with the specified (platform-normalized) pkg path.
      * If not found, return undefined
-     * @deprecated use `getFiles` instead, which auto-detects the path type
+     * @deprecated use `getFile` instead, which auto-detects the path type
      */
     public getFileByPkgPath<T extends BscFile>(pkgPath: string) {
         return this.pkgMap[pkgPath.toLowerCase()] as T;
@@ -670,6 +671,17 @@ export class Program {
             }
         }
         return false;
+    }
+
+    /**
+     * Get the files for a list of filePaths
+     * @param filePaths can be an array of srcPath or a destPath strings
+     * @param normalizePath should this function repair and standardize the paths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
+     */
+    public getFiles<T extends BscFile>(filePaths: string[], normalizePath = true) {
+        return filePaths
+            .map(filePath => this.getFile(filePath, normalizePath))
+            .filter(file => file !== undefined) as T[];
     }
 
     /**

@@ -117,7 +117,7 @@ export class XmlFile {
                 .filter(x => util.getExtension(x) !== '.d.bs');
 
             let result = [] as string[];
-            let filesInProgram = this.program.getFilesByPkgPaths(allDependencies);
+            let filesInProgram = this.program.getFiles(allDependencies);
             for (let file of filesInProgram) {
                 result.push(file.pkgPath);
             }
