@@ -204,6 +204,7 @@ export interface CompilerPlugin {
     beforeScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
+    onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
     afterScopeValidate?: ValidateHandler;
     //file events
     beforeFileParse?: (source: SourceObj) => void;
@@ -251,6 +252,11 @@ export interface BeforeFileValidateEvent<T extends BscFile = BscFile> {
 export interface OnFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
+}
+
+export interface OnScopeValidateEvent {
+    program: Program;
+    scope: Scope;
 }
 
 export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty' | 'overrideTranspileResult'>;
@@ -313,3 +319,8 @@ export interface ExpressionInfo {
 }
 
 export type DiagnosticCode = number | string;
+
+export interface FileLink<T> {
+    item: T;
+    file: BrsFile;
+}

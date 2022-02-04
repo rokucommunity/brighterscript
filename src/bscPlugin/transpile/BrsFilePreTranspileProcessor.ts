@@ -14,17 +14,21 @@ export class BrsFilePreTranspileProcessor {
     }
 
     private replaceEnumValues() {
-        const enumMap = new Cache<string, Map<string, string>>();
-        const firstScope = this.event.file.program.getFirstScopeForFile(this.event.file);
+        const membersByEnum = new Cache<string, Map<string, string>>();
+
+        const enumLookup = this.event.file.program.getFirstScopeForFile(this.event.file)?.getEnumMap();
         for (const expression of this.event.file.parser.references.expressions) {
             const parts = util.getAllDottedGetParts(expression)?.map(x => x.toLowerCase());
             if (parts) {
+                //get the name of the enum member
                 const memberName = parts.pop();
+                //get the name of the enum (including leading namespace if applicable)
                 const enumName = parts.join('.');
-                const theEnum = firstScope.enumLookup.get(enumName);
-                const values = enumMap.getOrAdd(enumName, () => theEnum.statement.getMemberValueMap());
+                const lowerEnumName = enumName.toLowerCase();
+                const theEnum = enumLookup.get(lowerEnumName).item;
                 if (theEnum) {
-                    const value = values.get(memberName);
+                    const members = membersByEnum.getOrAdd(lowerEnumName, () => theEnum.getMemberValueMap());
+                    const value = members?.get(memberName);
                     this.event.editor.overrideTranspileResult(expression, value);
                 }
             }

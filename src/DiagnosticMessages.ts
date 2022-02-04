@@ -637,7 +637,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     enumValueMustBeType: (expectedType: string) => ({
-        message: `Enum value must be type ${expectedType}`,
+        message: `Enum value must be type '${expectedType}'`,
         code: 1124,
         severity: DiagnosticSeverity.Error
     }),
@@ -647,7 +647,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     unknownEnumValue: (name: string, enumName: string) => ({
-        message: `Enum value ${name} is not found in enum ${enumName}`,
+        message: `Property '${name}' does not exist on enum '${enumName}'`,
         code: 1126,
         severity: DiagnosticSeverity.Error
     })

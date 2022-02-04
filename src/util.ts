@@ -1221,7 +1221,7 @@ export class Util {
      * @param expression
      * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
      */
-    public getAllDottedGetParts(expression: Expression) {
+    public getAllDottedGetParts(expression: Expression): string[] | undefined {
         const parts: string[] = [];
         let nextPart = expression;
         while (nextPart) {

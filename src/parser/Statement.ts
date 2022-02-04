@@ -2323,6 +2323,9 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         super();
     }
 
+    /**
+     * The name of the member
+     */
     public get name() {
         return this.tokens.name.text;
     }

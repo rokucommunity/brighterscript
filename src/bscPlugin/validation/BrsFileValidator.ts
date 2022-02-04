@@ -12,10 +12,10 @@ export class BrsFileValidator {
     }
 
     public process() {
-        this.validateEnums();
+        this.validateEnumDeclarations();
     }
 
-    public validateEnums() {
+    public validateEnumDeclarations() {
         const diagnostics = [] as BsDiagnostic[];
         for (const stmt of this.event.file.parser.references.enumStatements) {
             const members = stmt.getMembers();
@@ -38,9 +38,7 @@ export class BrsFileValidator {
                     memberNames.add(memberNameLower);
                 }
 
-                /**
-                 * Enforce all member values are the same type
-                 */
+                //Enforce all member values are the same type
                 this.validateEnumValueTypes(diagnostics, member, enumValueKind);
 
             }

@@ -4,8 +4,8 @@ import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
-import type { FileLink, Program } from './Program';
+import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink } from './interfaces';
+import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement } from './parser/Statement';
 import type { NewExpression } from './parser/Expression';
@@ -52,12 +52,6 @@ export class Scope {
      */
     public get namespaceLookup() {
         return this.cache.getOrAdd('namespaceLookup', () => this.buildNamespaceLookup());
-    }
-    /**
-     * A dictionary of enums, indexed by the lower case full name of each enum.
-     */
-    public get enumLookup() {
-        return this.cache.getOrAdd('enumLookup', () => this.buildEnumLookup());
     }
 
     /**
@@ -127,13 +121,11 @@ export class Scope {
         return this.cache.getOrAdd('enumMap', () => {
             const map = new Map<string, FileLink<EnumStatement>>();
             this.enumerateBrsFiles((file) => {
-                if (isBrsFile(file)) {
-                    for (let enumStmt of file.parser.references.enumStatements) {
-                        const lowerEnumName = enumStmt.fullName.toLowerCase();
-                        //only track enums with a defined name (i.e. exclude nameless malformed enums)
-                        if (lowerEnumName) {
-                            map.set(lowerEnumName, { item: enumStmt, file: file });
-                        }
+                for (let enumStmt of file.parser.references.enumStatements) {
+                    const lowerEnumName = enumStmt.fullName.toLowerCase();
+                    //only track enums with a defined name (i.e. exclude nameless malformed enums)
+                    if (lowerEnumName) {
+                        map.set(lowerEnumName, { item: enumStmt, file: file });
                     }
                 }
             });
@@ -422,35 +414,6 @@ export class Scope {
         return namespaceLookup;
     }
 
-    public buildEnumLookup() {
-        let lookup = new Map<string, EnumContainer>();
-        this.enumerateBrsFiles((file) => {
-            for (let [key, es] of file.parser.references.enumStatementLookup) {
-                if (!lookup.has(key)) {
-                    lookup.set(key, {
-                        file: file,
-                        fullName: key,
-                        nameRange: es.range,
-                        lastPartName: es.name,
-                        statement: es
-                    });
-                    for (const ems of es.getMembers()) {
-                        const fullMemberName = `${key}.${ems.name.toLowerCase()}`;
-                        lookup.set(fullMemberName, {
-                            file: file,
-                            fullName: fullMemberName,
-                            nameRange: ems.range,
-                            lastPartName: ems.name,
-                            statement: es
-                        });
-                    }
-                }
-            }
-        });
-        return lookup;
-    }
-
-
     public getAllNamespaceStatements() {
         let result = [] as NamespaceStatement[];
         this.enumerateBrsFiles((file) => {
@@ -501,6 +464,10 @@ export class Scope {
 
             this.program.plugins.emit('beforeScopeValidate', this, files, callableContainerMap);
 
+            this.program.plugins.emit('onScopeValidate', {
+                program: this.program,
+                scope: this
+            });
             this._validate(callableContainerMap);
 
             this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
@@ -527,7 +494,6 @@ export class Scope {
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.diagnosticDetectInvalidFunctionExpressionTypes(file);
-            this.detectUnknownEnumMembers(file);
         });
     }
 
@@ -1062,38 +1028,6 @@ export class Scope {
         }
         return items;
     }
-
-    private detectUnknownEnumMembers(file: BrsFile) {
-        if (!isBrsFile(file)) {
-            return;
-        }
-        for (const expression of file.parser.references.expressions) {
-            let nameParts = util.getAllDottedGetParts(expression);
-
-            //skip all expressions that aren't fully dotted gets, because they can't be full enum values
-            if (!nameParts) {
-                continue;
-            }
-            let name = nameParts.pop();
-            let parentPath = nameParts.join('.');
-            let ec = this.enumLookup.get(parentPath);
-            if (ec && !this.enumLookup.has(`${parentPath}.${name}`)) {
-                this.diagnostics.push({
-                    file: file,
-                    ...DiagnosticMessages.unknownEnumValue(name, ec.fullName),
-                    range: expression.range,
-                    relatedInformation: [{
-                        message: 'Enum declared here',
-                        location: Location.create(
-                            URI.file(ec.file.pathAbsolute).toString(),
-                            ec.statement.range
-                        )
-                    }]
-                });
-
-            }
-        }
-    }
 }
 
 interface NamespaceContainer {
@@ -1106,14 +1040,6 @@ interface NamespaceContainer {
     functionStatements: Record<string, FunctionStatement>;
     enumStatements: Map<string, EnumStatement>;
     namespaces: Map<string, NamespaceContainer>;
-}
-
-interface EnumContainer {
-    file: BscFile;
-    fullName: string;
-    nameRange: Range;
-    lastPartName: string;
-    statement: EnumStatement;
 }
 
 interface AugmentedNewExpression extends NewExpression {

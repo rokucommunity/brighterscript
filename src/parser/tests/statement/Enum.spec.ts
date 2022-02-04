@@ -3,7 +3,7 @@ import { LiteralExpression } from '../../Expression';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { expectDiagnostics, expectInstanceOf, expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 import { ParseMode, Parser } from '../../Parser';
-import { standardizePath as s } from '../../../util';
+import { util, standardizePath as s } from '../../../util';
 import { EnumStatement, InterfaceStatement } from '../../Statement';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
@@ -14,7 +14,7 @@ import { isEnumStatement } from '../../../astUtils/reflection';
 
 const sinon = createSandbox();
 
-describe('EnumStatement', () => {
+describe.only('EnumStatement', () => {
     let rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
@@ -177,6 +177,124 @@ describe('EnumStatement', () => {
         expectZeroDiagnostics(parser);
         expect(parser.statements[0]).instanceof(InterfaceStatement);
         expect(parser.statements[1]).instanceof(EnumStatement);
+    });
+
+    describe('validation', () => {
+        it('flags duplicate members', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                enum Direction
+                    name
+                    name
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.duplicateIdentifier('name'),
+                range: util.createRange(3, 20, 3, 24)
+            }]);
+        });
+
+        it('flags mismatched enum value types', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                enum Direction
+                    a = 1
+                    b = "c"
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.enumValueMustBeType('integer'),
+                range: util.createRange(3, 24, 3, 27)
+            }]);
+        });
+
+        it('flags mismatched enum value types', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                enum Direction
+                    a = "a"
+                    b = 1
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.enumValueMustBeType('string'),
+                range: util.createRange(3, 24, 3, 25)
+            }]);
+        });
+
+        it('flags missing value for string enum', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                enum Direction
+                    a = "a"
+                    b
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.enumValueIsRequired('string'),
+                range: util.createRange(3, 20, 3, 21)
+            }]);
+        });
+
+        it('flags missing value for string enum', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                enum Direction
+                    a
+                    b = "b" 'since this is the only value present, this is a string enum
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.enumValueIsRequired('string'),
+                range: util.createRange(2, 20, 2, 21)
+            }]);
+        });
+
+        it('catches unknown non-namespaced enum members', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                enum Direction
+                    up
+                end enum
+
+                sub main()
+                    print Direction.up
+                    print Direction.DOWN
+                    print Direction.down
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.unknownEnumValue('DOWN', 'Direction'),
+                range: util.createRange(7, 36, 7, 40)
+            }, {
+                ...DiagnosticMessages.unknownEnumValue('down', 'Direction'),
+                range: util.createRange(8, 36, 8, 40)
+            }]);
+        });
+
+        it('catches unknown namespaced enum members', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                namespace Enums
+                    enum Direction
+                        up
+                    end enum
+                end namespace
+
+                sub main()
+                    print Enums.Direction.up
+                    print Enums.Direction.DOWN
+                    print Enums.Direction.down
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.unknownEnumValue('DOWN', 'Enums.Direction'),
+                range: util.createRange(9, 42, 9, 46)
+            }, {
+                ...DiagnosticMessages.unknownEnumValue('down', 'Enums.Direction'),
+                range: util.createRange(10, 42, 10, 46)
+            }]);
+        });
     });
 
     describe('getMemberValueMap', () => {

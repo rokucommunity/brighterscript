@@ -847,7 +847,6 @@ describe('Scope', () => {
     });
 
     describe('buildEnumLookup', () => {
-
         it('builds enum lookup', () => {
             const sourceScope = program.getScopeByName('source');
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
@@ -870,35 +869,23 @@ describe('Scope', () => {
                     end enum
                 end namespace
 
-                function fooFace()
-                end function
-
-                class fooClass
-                end class
-
                 enum foo3
                     bar3_1
                     bar3_2
                 end enum
             `);
             // program.validate();
-            let lookup = sourceScope.enumLookup;
 
             expect(
-                [...lookup.keys()]
+                [...sourceScope.getEnumMap().keys()]
             ).to.eql([
                 'foo',
-                'foo.bar1',
-                'foo.bar2',
                 'test.foo2',
-                'test.foo2.bar2_1',
-                'test.foo2.bar2_2',
-                'foo3',
-                'foo3.bar3_1',
-                'foo3.bar3_2'
+                'foo3'
             ]);
         });
     });
+
     describe('enums', () => {
         it('gets enum completions', () => {
             program.addOrReplaceFile('source/main.bs', `
