@@ -441,6 +441,11 @@ export class Scope {
 
             this.program.plugins.emit('beforeScopeValidate', this, files, callableContainerMap);
 
+            this.program.plugins.emit('onScopeValidate', {
+                program: this.program,
+                scope: this
+            });
+
             this._validate(callableContainerMap);
 
             this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
