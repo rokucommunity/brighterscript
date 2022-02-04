@@ -2810,11 +2810,11 @@ describe('BrsFile', () => {
         });
 
         it('call parse when previously skipped', () => {
-            program.addOrReplaceFile<BrsFile>('source/main.d.bs', `
+            program.addOrReplaceFile<BrsFile>('source/main.d.bs', `'typedef
                 sub main()
                 end sub
             `);
-            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', `
+            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', `'source
                 sub main()
                 end sub
             `);

@@ -71,6 +71,25 @@ export class Util {
     /**
      * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
      */
+    public sanitizePkgPath(pkgPath: string) {
+        pkgPath = pkgPath.replace(/\\/g, '/');
+        //if there's no protocol, assume it's supposed to start with `pkg:/`
+        if (!this.startsWithProtocol(pkgPath)) {
+            pkgPath = 'pkg:/' + pkgPath;
+        }
+        return pkgPath;
+    }
+
+    /**
+     * Determine if the given path starts with a protocol
+     */
+    public startsWithProtocol(path: string) {
+        return !!/^[-a-z]+:\//i.exec(path);
+    }
+
+    /**
+     * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
+     */
     public getRokuPkgPath(pkgPath: string) {
         pkgPath = pkgPath.replace(/\\/g, '/');
         return 'pkg:/' + pkgPath;
@@ -1103,6 +1122,15 @@ export class Util {
     }
 
     /**
+     * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
+     */
+    public standardizePath(thePath: string) {
+        return util.driveLetterToLower(
+            rokuDeploy.standardizePath(thePath)
+        );
+    }
+
+    /**
      * Copy the version of bslib from local node_modules to the staging folder
      */
     public async copyBslibToStaging(stagingDir: string) {
@@ -1216,6 +1244,28 @@ export class Util {
         return '```' + language + '\n' + code + '\n```';
     }
 
+    /**
+     * Gets each part of the dotted get.
+     * @param expression
+     * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
+     */
+    public getAllDottedGetParts(expression: Expression): string[] | undefined {
+        const parts: string[] = [];
+        let nextPart = expression;
+        while (nextPart) {
+            if (isDottedGetExpression(nextPart)) {
+                parts.push(nextPart?.name?.text);
+                nextPart = nextPart.obj;
+            } else if (isVariableExpression(nextPart)) {
+                parts.push(nextPart?.name?.text);
+                break;
+            } else {
+                //we found a non-DottedGet expression, so return because this whole operation is invalid.
+                return undefined;
+            }
+        }
+        return parts.reverse();
+    }
 }
 
 /**

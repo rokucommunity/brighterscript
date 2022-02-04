@@ -319,3 +319,8 @@ export interface ExpressionInfo {
 }
 
 export type DiagnosticCode = number | string;
+
+export interface FileLink<T> {
+    item: T;
+    file: BrsFile;
+}
