@@ -1216,7 +1216,7 @@ export class Parser {
 
         const targetType = getBscTypeFromExpression(target, this.currentFunctionExpression);
         if (isArrayType(targetType)) {
-            itemType = targetType.defaultType;
+            itemType = targetType.getDefaultType();
         }
 
         this.currentSymbolTable.addSymbol(name.text, name.range, itemType);
@@ -3219,7 +3219,10 @@ export class Parser {
         return this.references.namespaceStatements.find((cs) => util.rangeContains(cs.range, currentToken.range.start));
     }
     public getContainingFunctionExpression(currentToken: Token): FunctionExpression {
-        return this.references.functionExpressions.find((fe) => util.rangeContains(fe.range, currentToken.range.start));
+        return this.getContainingFunctionExpressionByPosition(currentToken.range.start);
+    }
+    public getContainingFunctionExpressionByPosition(position: Position): FunctionExpression {
+        return this.references.functionExpressions.find((fe) => util.rangeContains(fe.range, position));
     }
 
     public dispose() {
@@ -3415,7 +3418,7 @@ export function getBscTypeFromExpression(expression: Expression, functionExpress
         } else if (isIndexedGetExpression(expression)) {
             const source = getBscTypeFromExpression(expression.obj, functionExpression);
             if (isArrayType(source)) {
-                return source.defaultType;
+                return source.getDefaultType();
             }
         }
     } catch (e) {

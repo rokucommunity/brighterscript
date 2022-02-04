@@ -1259,7 +1259,7 @@ describe('parser', () => {
             const func = (parser.ast.statements[0] as FunctionStatement).func;
             const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
             expect(type.returnType).to.be.instanceof(ArrayType);
-            expect((type.returnType as ArrayType).defaultType).to.be.instanceof(IntegerType);
+            expect((type.returnType as ArrayType).getDefaultType()).to.be.instanceof(IntegerType);
         });
     });
 

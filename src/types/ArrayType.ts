@@ -4,11 +4,7 @@ import { DynamicType } from './DynamicType';
 
 export class ArrayType implements BscType {
     constructor(...innerTypes: BscType[]) {
-        const innerTypesWithStrings = innerTypes.map((innerType) => {
-            return { innerType: innerType, typeToString: innerType.toString() };
-        });
-        // gets unique types
-        this.innerTypes = [...new Map(innerTypesWithStrings.map(item => [item.typeToString, item])).values()].map(it => it.innerType);
+        this.innerTypes = this.getUniqueTypesByAssignability(innerTypes);
     }
     public innerTypes: BscType[] = [];
 
@@ -45,22 +41,51 @@ export class ArrayType implements BscType {
     public toString(context?: TypeContext) {
         // TODO TYPES: When we support union types, the output should be more like:
         // `Array<${this.innerTypes.map((x) => x.toString(context)).join(' | ')}>`;
-        return `${this.defaultType.toString(context)}[]`;
+        return `${this.getDefaultType(context).toString(context)}[]`;
     }
 
     public toJsString(context?: TypeContext) {
-        return `Array<${this.innerTypes.map((x) => x.toString(context)).join(' | ')}>`;
+        const uniqueInnerTypes = this.getUniqueTypesByAssignability(this.innerTypes);
+
+        return `Array<${uniqueInnerTypes.map((x) => x.toString(context)).join(' | ')}>`;
     }
 
     public toTypeString(): string {
         return 'object';
     }
 
-    public get defaultType(): BscType {
-        return this.innerTypes?.length === 1 ? this.innerTypes[0] : new DynamicType();
+    public getDefaultType(context?: TypeContext): BscType {
+        const uniqueInnerTypes = this.getUniqueTypesByAssignability(this.innerTypes, context);
+        return uniqueInnerTypes?.length === 1 ? uniqueInnerTypes[0] : new DynamicType();
     }
 
     public equals(targetType: BscType, context?: TypeContext): boolean {
         return isArrayType(targetType) && this.isAssignableTo(targetType, context);
+    }
+
+
+    private getUniqueTypesByAssignability(innerTypes: BscType[], context?: TypeContext): BscType[] {
+        const uniqueTypes: BscType[] = [];
+        for (const innerType of innerTypes) {
+            let shouldAddType = true;
+            for (let i = 0; i < uniqueTypes.length; i++) {
+                const uniqueType = uniqueTypes[i];
+                if (innerType.isAssignableTo(uniqueType, context)) {
+                    // this type is already assignable to the existing type
+                    shouldAddType = false;
+                    break;
+                } else if (uniqueType.isAssignableTo(innerType, context)) {
+                    // an existing type is assignable to this type. replace the existing type with this
+                    // as this is more general
+                    shouldAddType = false;
+                    uniqueTypes[i] = innerType;
+                    break;
+                }
+            }
+            if (shouldAddType) {
+                uniqueTypes.push(innerType);
+            }
+        }
+        return uniqueTypes;
     }
 }

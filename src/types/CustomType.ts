@@ -15,7 +15,8 @@ export class CustomType implements BscType, SymbolContainer {
         return 'object';
     }
 
-    public isAssignableTo(targetType: BscType, context?: TypeContext, ancestorTypes?: CustomType[]) {
+    public isAssignableTo(targetType: BscType, context?: TypeContext) {
+        const ancestorTypes = context?.scope?.getAncestorTypeListByContext(this, context);
         if (ancestorTypes?.find(ancestorType => targetType.equals(ancestorType, context))) {
             return true;
         }

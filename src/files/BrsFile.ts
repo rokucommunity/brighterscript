@@ -907,7 +907,7 @@ export class BrsFile {
             }
 
             if (isArrayType(symbolType) && tokenUsage === TokenUsage.ArrayReference) {
-                symbolType = getTypeFromContext(symbolType.defaultType, typeContext);
+                symbolType = getTypeFromContext(symbolType.getDefaultType(typeContext), typeContext);
             }
 
             if (symbolType?.memberTable) {

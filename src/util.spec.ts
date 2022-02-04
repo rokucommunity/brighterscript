@@ -772,12 +772,12 @@ describe('util', () => {
         });
 
         it('sets the default type of an array type', () => {
-            expect(isBooleanType((util.tokenToBscType(createToken(TokenKind.Identifier, 'boolean[]')) as ArrayType).defaultType)).be.true;
-            expect(isStringType((util.tokenToBscType(createToken(TokenKind.Identifier, 'string[]')) as ArrayType).defaultType)).be.true;
+            expect(isBooleanType((util.tokenToBscType(createToken(TokenKind.Identifier, 'boolean[]')) as ArrayType).getDefaultType())).be.true;
+            expect(isStringType((util.tokenToBscType(createToken(TokenKind.Identifier, 'string[]')) as ArrayType).getDefaultType())).be.true;
         });
 
         it('sets the default type of an array type to a customType', () => {
-            expect(isLazyType((util.tokenToBscType(createToken(TokenKind.Identifier, 'MyKlass[]')) as ArrayType).defaultType)).be.true;
+            expect(isLazyType((util.tokenToBscType(createToken(TokenKind.Identifier, 'MyKlass[]')) as ArrayType).getDefaultType())).be.true;
         });
 
         it('does not return array types or custom types if allowBrighterscriptTypes flag is false', () => {

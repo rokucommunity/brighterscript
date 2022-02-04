@@ -7,7 +7,7 @@ import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableC
 import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement } from './parser/Statement';
-import type { NewExpression } from './parser/Expression';
+import type { FunctionExpression, NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { standardizePath as s, util } from './util';
 import type { MinMax } from './util';
@@ -23,6 +23,7 @@ import type { CustomType } from './types/CustomType';
 import { UninitializedType } from './types/UninitializedType';
 import { ObjectType } from './types/ObjectType';
 import { getTypeFromContext } from './types/BscType';
+import type { BscType, TypeContext } from './types/BscType';
 import { DynamicType } from './types/DynamicType';
 import type { Token } from './lexer/Token';
 
@@ -147,9 +148,18 @@ export class Scope {
         });
     }
 
-    public getAncestorTypeList(className: string, namespaceName?: string): CustomType[] {
+    public getAncestorTypeListByContext(thisType: BscType, context?: TypeContext): CustomType[] {
+        const funcExpr = context?.file?.getFunctionExpressionAtPosition(context?.position);
+        if (isCustomType(thisType)) {
+            return this.getAncestorTypeList(thisType.name, funcExpr);
+        }
+        return [];
+    }
+
+    public getAncestorTypeList(className: string, functionExpression?: FunctionExpression): CustomType[] {
+        const lowerNamespaceName = functionExpression.namespaceName?.getName().toLowerCase();
         const ancestors: CustomType[] = [];
-        let currentClass = this.getClassFileLink(className, namespaceName)?.item;
+        let currentClass = this.getClassFileLink(className, lowerNamespaceName)?.item;
         if (currentClass) {
             ancestors.push(currentClass?.getCustomType());
         }
@@ -775,19 +785,13 @@ export class Scope {
                             break;
                         }
                         let argType = arg.type ?? new UninitializedType();
-                        let assignable = false;
                         const paramType = getTypeFromContext(param.type, paramTypeContext);
                         if (!paramType) {
                             // other error - can not determine what type this parameter should be
                             continue;
                         }
                         argType = getTypeFromContext(argType, argTypeContext);
-                        if (isCustomType(argType)) {
-                            const lowerNamespaceName = expCall.functionExpression.namespaceName?.getName().toLowerCase();
-                            assignable = argType.isAssignableTo(paramType, argTypeContext, this.getAncestorTypeList(argType.name, lowerNamespaceName));
-                        } else {
-                            assignable = argType?.isAssignableTo(paramType, argTypeContext);
-                        }
+                        let assignable = argType?.isAssignableTo(paramType, argTypeContext);
                         if (!assignable) {
                             // TODO TYPES: perhaps this should be a strict mode setting?
                             assignable = argType?.isConvertibleTo(paramType, argTypeContext);
