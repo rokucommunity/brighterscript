@@ -10,6 +10,7 @@ import { expectDiagnostics, expectZeroDiagnostics, trim } from './testHelpers.sp
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { OnScopeValidateEvent } from './interfaces';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -503,8 +504,6 @@ describe('Scope', () => {
         });
 
         it('Emits validation events', () => {
-            const validateStartScope = sinon.spy();
-            const validateEndScope = sinon.spy();
             program.addOrReplaceFile('source/file.brs', ``);
             program.addOrReplaceFile('components/comp.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -515,18 +514,28 @@ describe('Scope', () => {
             program.addOrReplaceFile(s`components/comp.brs`, ``);
             const sourceScope = program.getScopeByName('source');
             const compScope = program.getScopeByName('components/comp.xml');
-            program.plugins = new PluginInterface([{
+            program.plugins = new PluginInterface([], new Logger());
+            const plugin = program.plugins.add({
                 name: 'Emits validation events',
-                beforeScopeValidate: validateStartScope,
-                afterScopeValidate: validateEndScope
-            }], new Logger());
+                beforeScopeValidate: sinon.spy(),
+                onScopeValidate: sinon.spy(),
+                afterScopeValidate: sinon.spy()
+            });
             program.validate();
-            expect(validateStartScope.callCount).to.equal(2);
-            expect(validateStartScope.calledWith(sourceScope)).to.be.true;
-            expect(validateStartScope.calledWith(compScope)).to.be.true;
-            expect(validateEndScope.callCount).to.equal(2);
-            expect(validateEndScope.calledWith(sourceScope)).to.be.true;
-            expect(validateEndScope.calledWith(compScope)).to.be.true;
+            const scopeNames = program.getScopes().map(x => x.name).filter(x => x !== 'global').sort();
+
+            expect(plugin.beforeScopeValidate.callCount).to.equal(2);
+            expect(plugin.beforeScopeValidate.calledWith(sourceScope)).to.be.true;
+            expect(plugin.beforeScopeValidate.calledWith(compScope)).to.be.true;
+
+            expect(plugin.onScopeValidate.callCount).to.equal(2);
+            expect(plugin.onScopeValidate.getCalls().map(
+                x => (x.args[0] as OnScopeValidateEvent).scope.name
+            ).sort()).to.eql(scopeNames);
+
+            expect(plugin.afterScopeValidate.callCount).to.equal(2);
+            expect(plugin.afterScopeValidate.calledWith(sourceScope)).to.be.true;
+            expect(plugin.afterScopeValidate.calledWith(compScope)).to.be.true;
         });
 
         describe('custom types', () => {

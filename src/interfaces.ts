@@ -237,9 +237,9 @@ export interface OnGetCodeActionsEvent {
     codeActions: CodeAction[];
 }
 
-export interface OnGetSemanticTokensEvent {
+export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
     program: Program;
-    file: BscFile;
+    file: T;
     scopes: Scope[];
     semanticTokens: SemanticToken[];
 }

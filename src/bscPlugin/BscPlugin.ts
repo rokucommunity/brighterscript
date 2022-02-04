@@ -2,7 +2,7 @@ import { isBrsFile } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
 import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
-import { SemanticTokensProcessor } from './semanticTokens/SemanticTokensProcessor';
+import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
 import { BrsFilePreTranspileProcessor } from './transpile/BrsFilePreTranspileProcessor';
 import { BrsFileValidator } from './validation/BrsFileValidator';
 import { ScopeValidator } from './validation/ScopeValidator';
@@ -15,7 +15,9 @@ export class BscPlugin implements CompilerPlugin {
     }
 
     public onGetSemanticTokens(event: OnGetSemanticTokensEvent) {
-        return new SemanticTokensProcessor(event).process();
+        if (isBrsFile(event.file)) {
+            return new BrsFileSemanticTokensProcessor(event as any).process();
+        }
     }
 
     public onFileValidate(event: OnFileValidateEvent) {

@@ -14,7 +14,7 @@ import { isEnumStatement } from '../../../astUtils/reflection';
 
 const sinon = createSandbox();
 
-describe.only('EnumStatement', () => {
+describe('EnumStatement', () => {
     let rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
