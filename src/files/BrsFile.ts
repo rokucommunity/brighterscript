@@ -29,7 +29,6 @@ import type { BscType, SymbolContainer } from '../types/BscType';
 import { getTypeFromContext } from '../types/BscType';
 import { UninitializedType } from '../types/UninitializedType';
 import { InvalidType } from '../types/InvalidType';
-import { globalCallableMap } from '../globalCallables';
 import { DynamicType } from '../types/DynamicType';
 import type { SymbolTable } from '../SymbolTable';
 
@@ -839,7 +838,7 @@ export class BrsFile {
      * @returns the BscType, expanded text (e.g <Class.field>) and classStatement (if available) for the token
      */
     public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): TokenSymbolLookup {
-        if (!scope) {
+        if (!scope || !currentToken) {
             return undefined;
         }
         const cachedSymbolData = scope.symbolCache.get(currentToken);
@@ -869,6 +868,7 @@ export class BrsFile {
         const typeContext = { file: this, scope: scope, position: tokenChain[0]?.token.range.start };
         for (const tokenChainMember of tokenChain) {
             const token = tokenChainMember?.token;
+            const tokenUsage = tokenChainMember?.usage;
             const tokenLowerText = token.text.toLowerCase();
 
             if (tokenLowerText === 'super' && isClassStatement(symbolContainer as any) && tokenFoundCount === 0) {
@@ -889,7 +889,7 @@ export class BrsFile {
             symbolType = currentSymbolTable.getSymbolType(tokenLowerText, true, typeContext);
             if (tokenFoundCount === 0 && !symbolType) {
                 //check for global callable
-                symbolType = globalCallableMap.get(tokenLowerText)?.type;
+                symbolType = scope.getGlobalCallableByName(tokenLowerText)?.type;
             }
             if (symbolType) {
                 // found this symbol, and it's valid. increase found counter
@@ -901,9 +901,13 @@ export class BrsFile {
                 // the next symbol to check will be the return value of this function
                 symbolType = getTypeFromContext(symbolType.returnType, typeContext);
                 if (tokenFoundCount < tokenChain.length) {
-                    // We're still
+                    // We still have more tokens, but remember the last known reference
                     symbolTypeBeforeReference = symbolType;
                 }
+            }
+
+            if (isArrayType(symbolType) && tokenUsage === TokenUsage.ArrayReference) {
+                symbolType = getTypeFromContext(symbolType.getDefaultType(typeContext), typeContext);
             }
 
             if (symbolType?.memberTable) {
@@ -933,9 +937,13 @@ export class BrsFile {
                 tokenText.push(token.text);
                 break;
             }
-            if (tokenText.length > 2) {
-                tokenText.shift(); // only care about last two symbols
-            }
+
+        }
+        if (tokenText.length > 2) {
+            // TokenText is used for hovers. We only need the last two tokens for a hover
+            // So in a long chain (e.g. klass.getData()[0].anotherKlass.property), the hover
+            // for the last token should just be "AnotherKlass.property", not the whole chain
+            tokenText = tokenText.slice(-2);
         }
         let expandedTokenText = tokenText.join('.');
         let backUpReturnType: BscType;
@@ -1452,16 +1460,17 @@ export class BrsFile {
 
             for (const scope of this.program.getScopesForFile(this)) {
                 scope.linkSymbolTable();
+                const typeContext = { file: this, scope: scope, position: position };
                 const typeTextPair = this.getSymbolTypeFromToken(token, func, scope);
                 if (typeTextPair) {
                     let scopeTypeText = '';
 
                     if (isFunctionType(typeTextPair.type)) {
-                        scopeTypeText = typeTextPair.type?.toString();
+                        scopeTypeText = typeTextPair.type?.toString(typeContext);
                     } else if (typeTextPair.useExpandedTextOnly) {
                         scopeTypeText = typeTextPair.expandedTokenText;
                     } else {
-                        scopeTypeText = `${typeTextPair.expandedTokenText} as ${typeTextPair.type?.toString()}`;
+                        scopeTypeText = `${typeTextPair.expandedTokenText} as ${typeTextPair.type?.toString(typeContext)}`;
                     }
 
                     if (scopeTypeText && !typeTexts.includes(scopeTypeText)) {

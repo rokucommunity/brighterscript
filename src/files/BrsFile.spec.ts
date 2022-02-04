@@ -21,6 +21,11 @@ import { expectDiagnostics, expectHasDiagnostics, expectSymbolTableEquals, expec
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
 import { VoidType } from '../types/VoidType';
+import { FloatType } from '../types/FloatType';
+import { ObjectType } from '../types/ObjectType';
+import { ArrayType } from '../types/ArrayType';
+import type { BscType } from '../types/BscType';
+import type { FunctionExpression } from '../parser/Expression';
 
 let sinon = sinonImport.createSandbox();
 
@@ -1690,6 +1695,46 @@ describe('BrsFile', () => {
             expect(variableHover).to.exist;
             expect(variableHover.contents).to.equal('pi as uninitialized | pi as string | pi as float');
         });
+
+        it('finds function with custom types as parameters and return types', () => {
+            let file = program.setFile('source/main.bs', `
+                sub main()
+                    k = new MyKlass()
+                    processMyKlass(k)
+                end sub
+
+                function processMyKlass(data as MyKlass) as MyKlass
+                    return data
+                end function
+
+                class MyKlass
+                end class
+            `);
+
+            let hover = file.getHover(Position.create(3, 29));
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('function processMyKlass(data as MyKlass) as MyKlass');
+        });
+
+        it('finds function with arrays as parameters and return types', () => {
+            let file = program.setFile('source/main.bs', `
+                sub main()
+                    k = new MyKlass()
+                    processData([k])
+                end sub
+
+                function processData(data as MyKlass[]) as MyKlass[]
+                    return data
+                end function
+
+                class MyKlass
+                end class
+            `);
+
+            let hover = file.getHover(Position.create(3, 29));
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('function processData(data as MyKlass[]) as MyKlass[]');
+        });
     });
 
     it('does not throw when encountering incomplete import statement', () => {
@@ -2835,6 +2880,230 @@ describe('BrsFile', () => {
                 new Logger()
             );
             testPluginTranspile();
+        });
+    });
+
+    describe('getSymbolTypeFromToken', () => {
+
+        interface SymbolLookup {
+            line: number;
+            col: number;
+            name: string;
+            type: BscType;
+        }
+
+        function checkSymbolLookups(file: BrsFile, funcExpr: FunctionExpression, lookups: SymbolLookup[]) {
+            const mainScope = program.getScopesForFile(file)[0];
+            mainScope.linkSymbolTable();
+            for (const lookup of lookups) {
+                const position = Position.create(lookup.line, lookup.col);
+                const token = file.parser.getTokenAt(position);
+                const symbol = file.getSymbolTypeFromToken(token, funcExpr, mainScope);
+                const context = {
+                    file: file,
+                    scope: mainScope,
+                    position: position
+                };
+                expect(symbol.expandedTokenText).to.equal(lookup.name);
+                expect(symbol.type.equals(lookup.type, context)).be.true;
+            }
+        }
+
+        it('gets simple types based on the containing function expression', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub doSomething(aInt as integer, aFloat as float, aStr as string, aBool as boolean, aObj as object)
+                    print aInt
+                    print aFloat
+                    print aStr
+                    print aBool
+                    print aObj
+                end sub
+            `);
+            const funcExpr = file.parser.references.functionExpressions[0];
+            const lookups = [
+                { line: 2, col: 28, name: 'aInt', type: new IntegerType() },
+                { line: 3, col: 28, name: 'aFloat', type: new FloatType() },
+                { line: 4, col: 28, name: 'aStr', type: new StringType() },
+                { line: 5, col: 28, name: 'aBool', type: new BooleanType() },
+                { line: 6, col: 28, name: 'aObj', type: new ObjectType() }
+            ];
+            checkSymbolLookups(file, funcExpr, lookups);
+            expectZeroDiagnostics(program);
+        });
+
+        it('gets custom types based on the containing function expression', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub doSomething(klass as MyKlass)
+                    print klass
+                end sub
+
+                class MyKlass
+                end class
+            `);
+            const mainScope = program.getScopesForFile(file)[0];
+            mainScope.linkSymbolTable();
+            const funcExpr = file.parser.references.functionExpressions[0];
+            const token = file.parser.getTokenAt(Position.create(2, 28));
+            const symbol = file.getSymbolTypeFromToken(token, funcExpr, mainScope);
+            expect(symbol.expandedTokenText).to.equal('klass');
+            const classStmt = file.parser.references.classStatements[0];
+            expect(classStmt.name.text).to.equal('MyKlass');
+            expect(symbol.type.isAssignableTo(classStmt.getCustomType())).be.true;
+            expectZeroDiagnostics(program);
+        });
+
+        it('gets types of properties of a klass', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub doSomething()
+                    klass = new MyKlass()
+                    print klass.name
+                    print klass.age
+                    ' verify case insensitivity
+                    print KLASS.NAME
+                    print klass.AGE
+                end sub
+
+                class MyKlass
+                    name as string
+                    age as integer
+                end class
+            `);
+            const funcExpr = file.parser.references.functionExpressions[0];
+            const lookups = [
+                { line: 3, col: 35, name: 'MyKlass.name', type: new StringType() },
+                { line: 4, col: 35, name: 'MyKlass.age', type: new IntegerType() }
+            ];
+            checkSymbolLookups(file, funcExpr, lookups);
+            expectZeroDiagnostics(program);
+        });
+
+        it('gets types of properties of an object', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub doSomething()
+                    obj = { name: "Joe", age: 37}
+                    print obj.name
+                    print obj.age
+                end sub
+            `);
+            const funcExpr = file.parser.references.functionExpressions[0];
+            const lookups = [
+                { line: 3, col: 32, name: 'obj.name', type: new StringType() },
+                { line: 4, col: 32, name: 'obj.age', type: new IntegerType() }
+            ];
+            checkSymbolLookups(file, funcExpr, lookups);
+            expectZeroDiagnostics(program);
+        });
+
+        it('gets return types of functions', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub doSomething()
+                    pi = makeKlass().getSelf().getPi()
+                    print pi
+                end sub
+
+                function makeKlass() as MyKlass
+                    return new MyKlass()
+                end function
+
+                class MyKlass
+                    function getPi() as float
+                        return 3.14
+                    end function
+
+                    function getSelf() as MyKlass
+                        return m
+                    end function
+                end class
+            `);
+            const mainScope = program.getScopesForFile(file)[0];
+            mainScope.linkSymbolTable();
+            const funcExpr = file.parser.references.functionExpressions[0];
+            const klassMemberTable = file.parser.references.classStatements[0].memberTable;
+            const lookups = [
+                { line: 2, col: 31, name: 'makeKlass', type: file.parser.references.functionExpressions[1].getFunctionType() },
+                // The expanded text for this should probably be MyKlass.getSelf()
+                { line: 2, col: 41, name: 'MyKlass.MyKlass', type: klassMemberTable.getSymbol('getSelf')[0].type },
+                { line: 2, col: 51, name: 'MyKlass.getPi', type: klassMemberTable.getSymbol('getPi')[0].type },
+                { line: 3, col: 28, name: 'pi', type: new FloatType() }
+            ];
+
+            checkSymbolLookups(file, funcExpr, lookups);
+            expectZeroDiagnostics(program);
+        });
+
+
+        it('gets types of elements of arrays', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub doSomething(words as string[], klasses as MyKlass[])
+                    myWord = words[0]
+                    pi = klasses[0].getPi()
+                    print myWord
+                    print pi
+                end sub
+
+                class MyKlass
+                    function getPi() as float
+                        return 3.14
+                    end function
+                end class
+            `);
+            const mainScope = program.getScopesForFile(file)[0];
+            mainScope.linkSymbolTable();
+            const funcExpr = file.parser.references.functionExpressions[0];
+            const klassMemberTable = file.parser.references.classStatements[0].memberTable;
+            const lookups = [
+                { line: 2, col: 34, name: 'words', type: new ArrayType(new StringType()) },
+                { line: 3, col: 41, name: 'MyKlass.getPi', type: klassMemberTable.getSymbol('getPi')[0].type },
+                { line: 4, col: 28, name: 'myWord', type: new StringType() },
+                { line: 5, col: 28, name: 'pi', type: new FloatType() }
+            ];
+
+            checkSymbolLookups(file, funcExpr, lookups);
+            expectZeroDiagnostics(program);
+        });
+
+        it('gets types of elements of arrays via square bracket reference', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                function printFirst(numbers as float[]) as float
+                    firstFloat = numbers[0]
+                    print firstFloat
+                    return firstFloat
+                end function
+            `);
+            const mainScope = program.getScopesForFile(file)[0];
+            mainScope.linkSymbolTable();
+            const funcExpr = file.parser.references.functionExpressions[0];
+            const lookups = [
+                { line: 2, col: 26, name: 'firstFloat', type: new FloatType() },
+                { line: 3, col: 32, name: 'firstFloat', type: new FloatType() }
+            ];
+
+            checkSymbolLookups(file, funcExpr, lookups);
+            expectZeroDiagnostics(program);
+        });
+
+        it('gets types of elements of arrays after for each', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                function printAllReturnFirst(numbers as float[]) as float
+                    for each num in numbers
+                        print num
+                    end for
+
+                    firstFloat = numbers[0]
+                    print firstFloat
+                    return firstFloat
+                end function
+            `);
+            const mainScope = program.getScopesForFile(file)[0];
+            mainScope.linkSymbolTable();
+            const funcExpr = file.parser.references.functionExpressions[0];
+            const lookups = [
+                { line: 6, col: 26, name: 'firstFloat', type: new FloatType() },
+                { line: 7, col: 32, name: 'firstFloat', type: new FloatType() }
+            ];
+
+            checkSymbolLookups(file, funcExpr, lookups);
+            expectZeroDiagnostics(program);
         });
     });
 });

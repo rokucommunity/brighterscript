@@ -1,6 +1,4 @@
-import { isCustomType } from '../astUtils/reflection';
 import type { BscType, TypeContext } from './BscType';
-import type { CustomType } from './CustomType';
 
 /**
  * A type whose actual type is not computed until requested.
@@ -19,11 +17,8 @@ export class LazyType implements BscType {
         return this.factory(context);
     }
 
-    public isAssignableTo(targetType: BscType, context?: TypeContext, potentialAncestorTypes?: CustomType[]) {
+    public isAssignableTo(targetType: BscType, context?: TypeContext) {
         const foundType = this.getTypeFromContext(context);
-        if (isCustomType(foundType)) {
-            return foundType.isAssignableTo(targetType, context, potentialAncestorTypes);
-        }
         return foundType?.isAssignableTo(targetType, context);
     }
 

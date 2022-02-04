@@ -8,7 +8,7 @@ import type { AssignmentStatement, ClassStatement, Statement } from './Statement
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isLazyType, isUninitializedType } from '../astUtils/reflection';
+import { isBlock, isCommentStatement, isDynamicType, isFunctionStatement, isIfStatement, isIntegerType, isLazyType, isUninitializedType } from '../astUtils/reflection';
 import { expectSymbolTableEquals, expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
@@ -24,6 +24,7 @@ import { CustomType } from '../types/CustomType';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import { util } from '../util';
+import { ArrayType } from '../types/ArrayType';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -1245,6 +1246,21 @@ describe('parser', () => {
             // Return type is LazyType, because "Person" is not fully known yet
             expect(type.returnType).to.be.instanceof(LazyType);
         });
+
+        it('supports function with array return type', () => {
+            const parser = parse(`
+                sub main()
+                    getNums = sub() as integer[]
+                        return [1,2,3]
+                    end sub
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const func = (parser.ast.statements[0] as FunctionStatement).func;
+            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
+            expect(type.returnType).to.be.instanceof(ArrayType);
+            expect((type.returnType as ArrayType).getDefaultType()).to.be.instanceof(IntegerType);
+        });
     });
 
     describe('symbolTable', () => {
@@ -1335,7 +1351,7 @@ describe('parser', () => {
                 `, ParseMode.BrighterScript);
                 expectZeroDiagnostics(parser.diagnostics);
                 const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;
-                expect(currentSymbolTable.getSymbolType('i').toString()).to.eq('integer');
+                expect(isIntegerType(currentSymbolTable.getSymbolType('i'))).to.be.true;
             });
 
 
@@ -1349,7 +1365,51 @@ describe('parser', () => {
                 `, ParseMode.BrighterScript);
                 expectZeroDiagnostics(parser.diagnostics);
                 const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;
-                expect(currentSymbolTable.getSymbolType('datum').toString()).to.eq('dynamic');
+                expect(isDynamicType(currentSymbolTable.getSymbolType('datum'))).to.be.true;
+            });
+
+            it('determines the type of the variable in a for each if the target is an array literal', () => {
+                const parser = parse(`
+                    sub doLoop()
+                        someData = [1,2,3]
+                        for each datum in someData
+                        print datum
+                        end for
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(parser.diagnostics);
+                const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;
+                expect(isIntegerType(currentSymbolTable.getSymbolType('datum'))).to.be.true;
+            });
+
+            it('determines the type of the variable in a for each if the target is an array', () => {
+                const parser = parse(`
+                    sub doLoop(someData as integer[])
+                        for each datum in someData
+                        print datum
+                        end for
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(parser.diagnostics);
+                const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;
+                expect(isIntegerType(currentSymbolTable.getSymbolType('datum'))).to.be.true;
+            });
+
+            it('determines the type of the variable in a for each if the target is an array of some custom type', () => {
+                const parser = parse(`
+                    sub doLoop(someData as MyKlass[])
+                        for each datum in someData
+                        print datum.name
+                        end for
+                    end sub
+
+                    class MyKlass
+                        name as string
+                    end class
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(parser.diagnostics);
+                const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;
+                expect(isLazyType(currentSymbolTable.getSymbol('datum')[0].type)).to.be.true;
             });
         });
 

@@ -1,4 +1,4 @@
-import { isDynamicType, isObjectType } from '../astUtils/reflection';
+import { isCustomType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import type { SymbolTable } from '../SymbolTable';
 import type { BscType, SymbolContainer, TypeContext } from './BscType';
 
@@ -15,7 +15,8 @@ export class CustomType implements BscType, SymbolContainer {
         return 'object';
     }
 
-    public isAssignableTo(targetType: BscType, context?: TypeContext, ancestorTypes?: CustomType[]) {
+    public isAssignableTo(targetType: BscType, context?: TypeContext) {
+        const ancestorTypes = context?.scope?.getAncestorTypeListByContext(this, context);
         if (ancestorTypes?.find(ancestorType => targetType.equals(ancestorType, context))) {
             return true;
         }
@@ -31,6 +32,6 @@ export class CustomType implements BscType, SymbolContainer {
     }
 
     public equals(targetType: BscType, context?: TypeContext): boolean {
-        return this.toString() === targetType?.toString(context);
+        return isCustomType(targetType) && this.toString() === targetType?.toString();
     }
 }

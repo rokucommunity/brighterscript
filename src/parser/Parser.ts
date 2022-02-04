@@ -85,7 +85,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Position, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isInvalidType, isLiteralExpression, isNewExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isInvalidType, isLiteralExpression, isNewExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { BscType } from '../types/BscType';
@@ -1212,8 +1212,12 @@ export class Parser {
         }
 
         let endFor = this.advance();
-        //TODO TYPES infer type from `target`
-        const itemType = new DynamicType();
+        let itemType = new DynamicType();
+
+        const targetType = getBscTypeFromExpression(target, this.currentFunctionExpression);
+        if (isArrayType(targetType)) {
+            itemType = targetType.getDefaultType();
+        }
 
         this.currentSymbolTable.addSymbol(name.text, name.range, itemType);
 
@@ -2435,7 +2439,7 @@ export class Parser {
             typeToken = this.advance();
         } else if (this.options.mode === ParseMode.BrighterScript) {
             try {
-                // see if we can get a namespaced identifer
+                // see if we can get a namespaced identifier
                 const qualifiedType = this.getNamespacedVariableNameExpression();
                 typeToken = createToken(TokenKind.Identifier, qualifiedType.getName(this.options.mode), qualifiedType.range);
             } catch {
@@ -2445,6 +2449,18 @@ export class Parser {
         } else {
             // just get whatever's next
             typeToken = this.advance();
+        }
+
+        if (typeToken && this.options.mode === ParseMode.BrighterScript) {
+            // Check if it is an array - that is, if it has `[]` after the type
+            // eg. `string[]` or `SomeKlass[]`
+            if (this.check(TokenKind.LeftSquareBracket)) {
+                this.advance();
+                if (this.check(TokenKind.RightSquareBracket)) {
+                    const rightBracket = this.advance();
+                    typeToken = createToken(TokenKind.Identifier, typeToken.text + '[]', util.getRange(typeToken, rightBracket));
+                }
+            }
         }
         return typeToken;
     }
@@ -3203,7 +3219,10 @@ export class Parser {
         return this.references.namespaceStatements.find((cs) => util.rangeContains(cs.range, currentToken.range.start));
     }
     public getContainingFunctionExpression(currentToken: Token): FunctionExpression {
-        return this.references.functionExpressions.find((fe) => util.rangeContains(fe.range, currentToken.range.start));
+        return this.getContainingFunctionExpressionByPosition(currentToken.range.start);
+    }
+    public getContainingFunctionExpressionByPosition(position: Position): FunctionExpression {
+        return this.references.functionExpressions.find((fe) => util.rangeContains(fe.range, position));
     }
 
     public dispose() {
@@ -3382,7 +3401,10 @@ export function getBscTypeFromExpression(expression: Expression, functionExpress
             return new ObjectType(expression.memberTable);
             //Array literal
         } else if (isArrayLiteralExpression(expression)) {
-            return new ArrayType();
+            const innerTypes = expression.elements.filter((element) => !isCommentStatement(element)).map((element) => {
+                return getBscTypeFromExpression(element, functionExpression);
+            });
+            return new ArrayType(...innerTypes);
             //function call
         } else if (isNewExpression(expression)) {
             return getTypeFromNewExpression(expression, functionExpression); // new CustomType(expression.className.getName(ParseMode.BrighterScript));
@@ -3393,6 +3415,11 @@ export function getBscTypeFromExpression(expression: Expression, functionExpress
             return getTypeFromVariableExpression(expression, functionExpression);
         } else if (isDottedGetExpression(expression)) {
             return getTypeFromDottedGetExpression(expression, functionExpression);
+        } else if (isIndexedGetExpression(expression)) {
+            const source = getBscTypeFromExpression(expression.obj, functionExpression);
+            if (isArrayType(source)) {
+                return source.getDefaultType();
+            }
         }
     } catch (e) {
         //do nothing. Just return dynamic

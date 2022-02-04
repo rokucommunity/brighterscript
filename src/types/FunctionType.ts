@@ -1,6 +1,6 @@
 import { isFunctionType, isDynamicType } from '../astUtils/reflection';
 import type { CallableParam } from '../interfaces';
-import type { BscType } from './BscType';
+import type { BscType, TypeContext } from './BscType';
 import { DynamicType } from './DynamicType';
 
 export class FunctionType implements BscType {
@@ -38,20 +38,20 @@ export class FunctionType implements BscType {
         return this;
     }
 
-    public isAssignableTo(targetType: BscType) {
+    public isAssignableTo(targetType: BscType, context?: TypeContext) {
         if (isFunctionType(targetType)) {
             //compare all parameters
             let len = Math.max(this.params.length, targetType.params.length);
             for (let i = 0; i < len; i++) {
                 let myParam = this.params[i];
                 let targetParam = targetType.params[i];
-                if (!myParam || !targetParam || !myParam.type.isAssignableTo(targetParam.type)) {
+                if (!myParam || !targetParam || !myParam.type.isAssignableTo(targetParam.type, context)) {
                     return false;
                 }
             }
 
             //compare return type
-            if (!this.returnType || !targetType.returnType || !this.returnType.isAssignableTo(targetType.returnType)) {
+            if (!this.returnType || !targetType.returnType || !this.returnType.isAssignableTo(targetType.returnType, context)) {
                 return false;
             }
 
@@ -64,19 +64,19 @@ export class FunctionType implements BscType {
         }
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+    public isConvertibleTo(targetType: BscType, context?: TypeContext) {
+        return this.isAssignableTo(targetType, context);
     }
 
-    public toString() {
+    public toString(context?: TypeContext) {
         let paramTexts = [];
         for (let param of this.params) {
-            paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString()}`);
+            paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString(context)}`);
         }
         if (this.isNew) {
             return `new ${this.name ?? ''}(${paramTexts.join(', ')})`;
         }
-        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
+        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}) as ${this.returnType.toString(context)}`;
 
     }
 
@@ -84,7 +84,7 @@ export class FunctionType implements BscType {
         return 'Function';
     }
 
-    public equals(targetType: BscType): boolean {
-        return (isFunctionType(targetType)) && this.isAssignableTo(targetType);
+    public equals(targetType: BscType, context?: TypeContext): boolean {
+        return (isFunctionType(targetType)) && this.isAssignableTo(targetType, context);
     }
 }
