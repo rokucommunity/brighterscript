@@ -794,12 +794,11 @@ export class Program {
 
     /**
      * Find all available completion items at the given position
-     * @param pathAbsolute
-     * @param lineIndex
-     * @param columnIndex
+     * @param filePath can be a srcPath or a destPath
+     * @param position the position (line & column) where completions should be found
      */
-    public getCompletions(pathAbsolute: string, position: Position) {
-        let file = this.getFile(pathAbsolute);
+    public getCompletions(filePath: string, position: Position) {
+        let file = this.getFile(filePath);
         if (!file) {
             return [];
         }

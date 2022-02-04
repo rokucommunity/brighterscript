@@ -964,21 +964,17 @@ export class BrsFile {
         let completionName = this.getPartialVariableName(currentToken)?.toLowerCase();
         let scopes = this.program.getScopesForFile(this);
         for (let scope of scopes) {
-            let enumMap = scope.getEnumMap();
-            for (const key of [...enumMap.keys()]) {
-                let enumStmt = enumMap.get(key).item;
-                if (completionName.startsWith(enumStmt.fullName) && completionName.length > enumStmt.fullName.length) {
-
+            for (const [, value] of scope.getEnumMap()) {
+                const enumStmt = value.item;
+                if (completionName.startsWith(enumStmt.fullName.toLowerCase()) && completionName.length > enumStmt.fullName.length) {
                     for (const member of enumStmt.getMembers()) {
                         const name = enumStmt.fullName + '.' + member.name;
-                        if (name.startsWith(completionName)) {
-                            if (!results.has(name)) {
-                                results.set(name, {
-                                    label: member.name,
-                                    kind: CompletionItemKind.EnumMember
-                                });
-
-                            }
+                        const nameLower = name.toLowerCase();
+                        if (nameLower.startsWith(completionName)) {
+                            results.set(nameLower, {
+                                label: member.name,
+                                kind: CompletionItemKind.EnumMember
+                            });
                         }
                     }
                 }

@@ -8,7 +8,7 @@ import { EnumStatement, InterfaceStatement } from '../../Statement';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
 import type { BrsFile } from '../../../files/BrsFile';
-import { CancellationTokenSource } from 'vscode-languageserver-protocol';
+import { CancellationTokenSource, CompletionItem, CompletionItemKind } from 'vscode-languageserver-protocol';
 import { WalkMode } from '../../../astUtils/visitors';
 import { isEnumStatement } from '../../../astUtils/reflection';
 
@@ -440,20 +440,53 @@ describe('EnumStatement', () => {
         });
     });
 
-    // describe('completions', () => {
-    //     it.only('gets enum completions', () => {
-    //         const file = program.addOrReplaceFile('source/main.bs', `
-    //             enum Direction
-    //                 up
-    //                 down
-    //             end enum
+    describe('completions', () => {
+        it('gets enum member completions for non-namespaced enum', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                enum Direction
+                    up
+                    down
+                end enum
 
-    //             sub Main()
-    //                 print Direction.
-    //             end sub
-    //         `);
-    //         program.validate();
-    //         program.getCompletions(
-    //     });
-    // });
+                sub Main()
+                    print Direction.
+                end sub
+            `);
+            program.validate();
+            expect(
+                program.getCompletions('source/main.bs', util.createPosition(7, 36))
+            ).to.eql([{
+                label: 'up',
+                kind: CompletionItemKind.EnumMember
+            }, {
+                label: 'down',
+                kind: CompletionItemKind.EnumMember
+            }] as CompletionItem[]);
+        });
+
+        it('gets enum member completions for namespaced enum', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                namespace Enums
+                    enum Direction
+                        up
+                        down
+                    end enum
+                end namespace
+
+                sub Main()
+                    print Enums.Direction.
+                end sub
+            `);
+            program.validate();
+            expect(
+                program.getCompletions('source/main.bs', util.createPosition(9, 42))
+            ).to.eql([{
+                label: 'up',
+                kind: CompletionItemKind.EnumMember
+            }, {
+                label: 'down',
+                kind: CompletionItemKind.EnumMember
+            }] as CompletionItem[]);
+        });
+    });
 });
