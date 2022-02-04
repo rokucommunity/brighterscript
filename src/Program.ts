@@ -125,11 +125,11 @@ export class Program {
      */
     public get bslibPkgPath() {
         //if there's an aliased (preferred) version of bslib from roku_modules loaded into the program, use that
-        if (this.getFileByPkgPath(bslibAliasedRokuModulesPkgPath)) {
+        if (this.getFile(bslibAliasedRokuModulesPkgPath)) {
             return bslibAliasedRokuModulesPkgPath;
 
             //if there's a non-aliased version of bslib from roku_modules, use that
-        } else if (this.getFileByPkgPath(bslibNonAliasedRokuModulesPkgPath)) {
+        } else if (this.getFile(bslibNonAliasedRokuModulesPkgPath)) {
             return bslibNonAliasedRokuModulesPkgPath;
 
             //default to the embedded version
@@ -281,6 +281,7 @@ export class Program {
                 }, diagnostics);
                 return finalDiagnostics;
             });
+
             this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
             return filteredDiagnostics;
         });
@@ -479,6 +480,7 @@ export class Program {
      * Roku is a case insensitive file system. It is an error to have multiple files
      * with the same path with only case being different.
      * @param pathAbsolute
+     * @deprecated use `getFile` instead, which auto-detects the path type
      */
     public getFileByPathAbsolute<T extends BrsFile | XmlFile>(pathAbsolute: string) {
         pathAbsolute = s`${pathAbsolute}`;
@@ -492,6 +494,7 @@ export class Program {
     /**
      * Get a list of files for the given (platform-normalized) pkgPath array.
      * Missing files are just ignored.
+     * @deprecated use `getFiles` instead, which auto-detects the path types
      */
     public getFilesByPkgPaths<T extends BscFile[]>(pkgPaths: string[]) {
         return pkgPaths
@@ -502,6 +505,7 @@ export class Program {
     /**
      * Get a file with the specified (platform-normalized) pkg path.
      * If not found, return undefined
+     * @deprecated use `getFile` instead, which auto-detects the path type
      */
     public getFileByPkgPath<T extends BscFile>(pkgPath: string) {
         return this.pkgMap[pkgPath.toLowerCase()] as T;
@@ -509,25 +513,24 @@ export class Program {
 
     /**
      * Remove a set of files from the program
-     * @param absolutePaths
+     * @param filePaths can be an array of srcPath or destPath strings
+     * @param normalizePath should this function repair and standardize the filePaths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
      */
-    public removeFiles(absolutePaths: string[]) {
-        for (let pathAbsolute of absolutePaths) {
-            this.removeFile(pathAbsolute);
+    public removeFiles(srcPaths: string[], normalizePath = true) {
+        for (let srcPath of srcPaths) {
+            this.removeFile(srcPath, normalizePath);
         }
     }
 
     /**
      * Remove a file from the program
-     * @param pathAbsolute
+     * @param filePath can be a srcPath, a pkgPath, or a destPath (same as pkgPath but without `pkg:/`)
+     * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
-    public removeFile(pathAbsolute: string) {
-        this.logger.debug('Program.removeFile()', pathAbsolute);
-        if (!path.isAbsolute(pathAbsolute)) {
-            throw new Error(`Path must be absolute: "${pathAbsolute}"`);
-        }
+    public removeFile(filePath: string, normalizePath = true) {
+        this.logger.debug('Program.removeFile()', filePath);
 
-        let file = this.getFile(pathAbsolute);
+        let file = this.getFile(filePath, normalizePath);
         if (file) {
             this.plugins.emit('beforeFileDispose', file);
 
@@ -671,8 +674,19 @@ export class Program {
     }
 
     /**
+     * Get the files for a list of filePaths
+     * @param filePaths can be an array of srcPath or a destPath strings
+     * @param normalizePath should this function repair and standardize the paths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
+     */
+    public getFiles<T extends BscFile>(filePaths: string[], normalizePath = true) {
+        return filePaths
+            .map(filePath => this.getFile(filePath, normalizePath))
+            .filter(file => file !== undefined) as T[];
+    }
+
+    /**
      * Get the file at the given path
-     * @param filePath can be a srcPath, a pkgPath, or a destPath (same as pkgPath but without `pkg:/`)
+     * @param filePath can be a srcPath or a destPath
      * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
     public getFile<T extends BscFile>(filePath: string, normalizePath = true) {
