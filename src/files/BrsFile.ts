@@ -940,7 +940,10 @@ export class BrsFile {
 
         }
         if (tokenText.length > 2) {
-            tokenText = tokenText.slice(-2); // only care about last two symbols
+            // TokenText is used for hovers. We only need the last two tokens for a hover
+            // So in a long chain (e.g. klass.getData()[0].anotherKlass.property), the hover
+            // for the last token should just be "AnotherKlass.property", not the whole chain
+            tokenText = tokenText.slice(-2);
         }
         let expandedTokenText = tokenText.join('.');
         let backUpReturnType: BscType;

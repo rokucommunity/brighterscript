@@ -1370,12 +1370,12 @@ describe('parser', () => {
 
             it('determines the type of the variable in a for each if the target is an array literal', () => {
                 const parser = parse(`
-                sub doLoop()
-                    someData = [1,2,3]
-                    for each datum in someData
-                      print datum
-                    end for
-                end sub
+                    sub doLoop()
+                        someData = [1,2,3]
+                        for each datum in someData
+                        print datum
+                        end for
+                    end sub
                 `, ParseMode.BrighterScript);
                 expectZeroDiagnostics(parser.diagnostics);
                 const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;
@@ -1384,11 +1384,11 @@ describe('parser', () => {
 
             it('determines the type of the variable in a for each if the target is an array', () => {
                 const parser = parse(`
-                sub doLoop(someData as integer[])
-                    for each datum in someData
-                      print datum
-                    end for
-                end sub
+                    sub doLoop(someData as integer[])
+                        for each datum in someData
+                        print datum
+                        end for
+                    end sub
                 `, ParseMode.BrighterScript);
                 expectZeroDiagnostics(parser.diagnostics);
                 const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;
@@ -1397,15 +1397,15 @@ describe('parser', () => {
 
             it('determines the type of the variable in a for each if the target is an array of some custom type', () => {
                 const parser = parse(`
-                sub doLoop(someData as MyKlass[])
-                    for each datum in someData
-                      print datum.name
-                    end for
-                end sub
+                    sub doLoop(someData as MyKlass[])
+                        for each datum in someData
+                        print datum.name
+                        end for
+                    end sub
 
-                class MyKlass
-                    name as string
-                end class
+                    class MyKlass
+                        name as string
+                    end class
                 `, ParseMode.BrighterScript);
                 expectZeroDiagnostics(parser.diagnostics);
                 const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;

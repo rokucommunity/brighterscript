@@ -1733,7 +1733,7 @@ describe('BrsFile', () => {
 
             let hover = file.getHover(Position.create(3, 29));
             expect(hover).to.exist;
-            expect(hover.contents).to.equal('function processData(data as Array<MyKlass>) as Array<MyKlass>');
+            expect(hover.contents).to.equal('function processData(data as MyKlass[]) as MyKlass[]');
         });
     });
 
@@ -2958,6 +2958,9 @@ describe('BrsFile', () => {
                     klass = new MyKlass()
                     print klass.name
                     print klass.age
+                    ' verify case insensitivity
+                    print KLASS.NAME
+                    print klass.AGE
                 end sub
 
                 class MyKlass

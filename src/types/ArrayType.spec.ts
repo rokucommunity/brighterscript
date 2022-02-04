@@ -18,12 +18,20 @@ describe('ArrayType', () => {
     });
 
     it('sets the innerTypes to unique types', () => {
-        expect(new ArrayType(new BooleanType(), new BooleanType()).toString()).to.eql('Array<boolean>');
-        expect(new ArrayType(new BooleanType(), new StringType(), new BooleanType()).toString()).to.eql('Array<boolean | string>');
+        const boolArray = new ArrayType(new BooleanType(), new BooleanType());
+        expect(boolArray.innerTypes.length).to.eql(1);
+        expect(boolArray.innerTypes[0].equals(new BooleanType())).to.be.true;
+        expect(boolArray.toJsString()).to.eql('Array<boolean>');
+
+        const multiTypeArray = new ArrayType(new BooleanType(), new StringType(), new BooleanType());
+        expect(multiTypeArray.innerTypes.length).to.eql(2);
+        expect(multiTypeArray.innerTypes[0].equals(new BooleanType())).to.be.true;
+        expect(multiTypeArray.innerTypes[1].equals(new StringType())).to.be.true;
+        expect(multiTypeArray.toJsString()).to.eql('Array<boolean | string>');
     });
 
     it('sets the innerTypes to custom types', () => {
-        expect(new ArrayType(new CustomType('MyKlass')).toString()).to.eql('Array<MyKlass>');
+        expect(new ArrayType(new CustomType('MyKlass')).toString()).to.eql('MyKlass[]');
     });
 
     it('is not equivalent to other types', () => {
@@ -36,8 +44,14 @@ describe('ArrayType', () => {
     });
 
     describe('toString', () => {
-        it('prints inner types', () => {
-            expect(new ArrayType(new BooleanType(), new StringType()).toString()).to.eql('Array<boolean | string>');
+        it('returns the default type', () => {
+            expect(new ArrayType(new BooleanType()).toString()).to.eql('boolean[]');
+            expect(new ArrayType(new StringType()).toString()).to.eql('string[]');
+            expect(new ArrayType(new CustomType('MyKlass')).toString()).to.eql('MyKlass[]');
+        });
+
+        it('returns dynamic if more than one type is assigned', () => {
+            expect(new ArrayType(new BooleanType(), new StringType()).toString()).to.eql('dynamic[]');
         });
     });
 });

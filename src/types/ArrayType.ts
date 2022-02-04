@@ -43,6 +43,12 @@ export class ArrayType implements BscType {
     }
 
     public toString(context?: TypeContext) {
+        // TODO TYPES: When we support union types, the output should be more like:
+        // `Array<${this.innerTypes.map((x) => x.toString(context)).join(' | ')}>`;
+        return `${this.defaultType.toString(context)}[]`;
+    }
+
+    public toJsString(context?: TypeContext) {
         return `Array<${this.innerTypes.map((x) => x.toString(context)).join(' | ')}>`;
     }
 
