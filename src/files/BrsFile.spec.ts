@@ -278,6 +278,7 @@ describe('BrsFile', () => {
             });
 
         });
+
         it('always includes `m`', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `

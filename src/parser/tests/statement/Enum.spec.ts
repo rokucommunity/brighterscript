@@ -439,4 +439,21 @@ describe('EnumStatement', () => {
             `);
         });
     });
+
+    // describe('completions', () => {
+    //     it.only('gets enum completions', () => {
+    //         const file = program.addOrReplaceFile('source/main.bs', `
+    //             enum Direction
+    //                 up
+    //                 down
+    //             end enum
+
+    //             sub Main()
+    //                 print Direction.
+    //             end sub
+    //         `);
+    //         program.validate();
+    //         program.getCompletions(
+    //     });
+    // });
 });

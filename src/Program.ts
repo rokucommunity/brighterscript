@@ -293,10 +293,10 @@ export class Program {
     /**
      * Determine if the specified file is loaded in this program right now.
      * @param filePath
+     * @param normalizePath should the provided path be normalized before use
      */
-    public hasFile(filePath: string) {
-        filePath = s`${filePath}`;
-        return this.files[filePath] !== undefined;
+    public hasFile(filePath: string, normalizePath = true) {
+        return !!this.getFile(filePath, normalizePath);
     }
 
     public getPkgPath(...args: any[]): any { //eslint-disable-line
@@ -330,6 +330,24 @@ export class Program {
      */
     public getComponentScope(componentName: string) {
         return this.getComponent(componentName)?.scope;
+    }
+
+    /**
+     * Update internal maps with this file reference
+     */
+    private assignFile<T extends BscFile = BscFile>(file: T) {
+        this.files[file.pathAbsolute.toLowerCase()] = file;
+        this.pkgMap[file.pkgPath.toLowerCase()] = file;
+        return file;
+    }
+
+    /**
+     * Remove this file from internal maps
+     */
+    private unassignFile<T extends BscFile = BscFile>(file: T) {
+        delete this.files[file.pathAbsolute.toLowerCase()];
+        delete this.pkgMap[file.pkgPath.toLowerCase()];
+        return file;
     }
 
     /**
@@ -369,7 +387,10 @@ export class Program {
             let file: BscFile | undefined;
 
             if (fileExtension === '.brs' || fileExtension === '.bs') {
-                let brsFile = new BrsFile(srcPath, pkgPath, this);
+                //add the file to the program
+                const brsFile = this.assignFile(
+                    new BrsFile(srcPath, pkgPath, this)
+                );
 
                 //add file to the `source` dependency list
                 if (brsFile.pkgPath.startsWith(startOfSourcePkgPath)) {
@@ -377,10 +398,6 @@ export class Program {
                     this.dependencyGraph.addDependency('scope:source', brsFile.dependencyGraphKey);
                 }
 
-
-                //add the file to the program
-                this.files[srcPath] = brsFile;
-                this.pkgMap[brsFile.pkgPath.toLowerCase()] = brsFile;
                 let sourceObj: SourceObj = {
                     pathAbsolute: srcPath,
                     source: fileContents
@@ -404,10 +421,11 @@ export class Program {
                 //resides in the components folder (Roku will only parse xml files in the components folder)
                 pkgPath.toLowerCase().startsWith(util.pathSepNormalize(`components/`))
             ) {
-                let xmlFile = new XmlFile(srcPath, pkgPath, this);
                 //add the file to the program
-                this.files[srcPath] = xmlFile;
-                this.pkgMap[xmlFile.pkgPath.toLowerCase()] = xmlFile;
+                const xmlFile = this.assignFile(
+                    new XmlFile(srcPath, pkgPath, this)
+                );
+
                 let sourceObj: SourceObj = {
                     pathAbsolute: srcPath,
                     source: fileContents
@@ -524,8 +542,7 @@ export class Program {
                 this.plugins.emit('afterScopeDispose', scope);
             }
             //remove the file from the program
-            delete this.files[file.pathAbsolute];
-            delete this.pkgMap[file.pkgPath.toLowerCase()];
+            this.unassignFile(file);
 
             this.dependencyGraph.remove(file.dependencyGraphKey);
 
@@ -655,11 +672,21 @@ export class Program {
 
     /**
      * Get the file at the given path
-     * @param pathAbsolute
+     * @param filePath can be a srcPath, a pkgPath, or a destPath (same as pkgPath but without `pkg:/`)
+     * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
-    private getFile<T extends BscFile>(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
-        return this.files[pathAbsolute] as T;
+    public getFile<T extends BscFile>(filePath: string, normalizePath = true) {
+        if (typeof filePath !== 'string') {
+            return undefined;
+        } else if (path.isAbsolute(filePath)) {
+            return this.files[
+                (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase()
+            ] as T;
+        } else {
+            return this.pkgMap[
+                (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase()
+            ] as T;
+        }
     }
 
     /**

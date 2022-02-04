@@ -119,13 +119,11 @@ describe('LanguageServer', () => {
 
     function addScriptFile(name: string, contents: string, extension = 'brs') {
         const filePath = s`components/${name}.${extension}`;
-        program.addOrReplaceFile(filePath, contents);
-        for (const key in program.files) {
-            if (key.includes(filePath)) {
-                const document = TextDocument.create(util.pathToUri(key), 'brightscript', 1, contents);
-                svr.documents._documents[document.uri] = document;
-                return document;
-            }
+        const file = program.addOrReplaceFile(filePath, contents);
+        if (file) {
+            const document = TextDocument.create(util.pathToUri(file.pathAbsolute), 'brightscript', 1, contents);
+            svr.documents._documents[document.uri] = document;
+            return document;
         }
     }
 

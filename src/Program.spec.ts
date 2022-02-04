@@ -515,7 +515,7 @@ describe('Program', () => {
     describe('hasFile', () => {
         it('recognizes when it has a file loaded', () => {
             expect(program.hasFile('file1.brs')).to.be.false;
-            program.addOrReplaceFile({ src: 'file1.brs', dest: 'file1.brs' }, `'comment`);
+            program.addOrReplaceFile('file1.brs', `'comment`);
             expect(program.hasFile('file1.brs')).to.be.true;
         });
     });
