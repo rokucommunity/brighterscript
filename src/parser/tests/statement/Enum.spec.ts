@@ -488,5 +488,30 @@ describe('EnumStatement', () => {
                 kind: CompletionItemKind.EnumMember
             }] as CompletionItem[]);
         });
+
+        it('gets enum member completions for namespace-inferred enum', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                namespace Name.Space
+                    enum Direction
+                        up
+                        down
+                    end enum
+
+                    sub WriteMessage()
+                        print Direction.
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expect(
+                program.getCompletions('source/main.bs', util.createPosition(8, 40))
+            ).to.eql([{
+                label: 'up',
+                kind: CompletionItemKind.EnumMember
+            }, {
+                label: 'down',
+                kind: CompletionItemKind.EnumMember
+            }] as CompletionItem[]);
+        });
     });
 });

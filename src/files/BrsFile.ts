@@ -710,6 +710,19 @@ export class BrsFile {
     }
 
     /**
+     * Find the NamespaceStatement enclosing the given position
+     * @param position
+     * @param functionScopes
+     */
+    public getNamespaceStatementForPosition(position: Position): NamespaceStatement {
+        for (const statement of this.parser.references.namespaceStatements) {
+            if (util.rangeContains(statement.range, position)) {
+                return statement;
+            }
+        }
+    }
+
+    /**
      * Get completions available at the given cursor. This aggregates all values from this file and the current scope.
      */
     public getCompletions(position: Position, scope?: Scope): CompletionItem[] {
@@ -956,27 +969,29 @@ export class BrsFile {
         }
         return [...results.values()];
     }
+
     private getEnumMemberStatementCompletions(currentToken: Token, parseMode: ParseMode): CompletionItem[] {
-        if (parseMode === ParseMode.BrightScript) {
+        if (parseMode === ParseMode.BrightScript || !currentToken) {
             return [];
         }
-        let results = new Map<string, CompletionItem>();
-        let completionName = this.getPartialVariableName(currentToken)?.toLowerCase();
+        const results = new Map<string, CompletionItem>();
+        const completionName = this.getPartialVariableName(currentToken)?.toLowerCase();
+        const namespaceNameLower = this.getNamespaceStatementForPosition(currentToken.range.end)?.name.toLowerCase();
+        const enumNameLower = completionName?.split(/\.\w?$/)[0]?.toLowerCase();
         let scopes = this.program.getScopesForFile(this);
         for (let scope of scopes) {
-            for (const [, value] of scope.getEnumMap()) {
-                const enumStmt = value.item;
-                if (completionName.startsWith(enumStmt.fullName.toLowerCase()) && completionName.length > enumStmt.fullName.length) {
-                    for (const member of enumStmt.getMembers()) {
-                        const name = enumStmt.fullName + '.' + member.name;
-                        const nameLower = name.toLowerCase();
-                        if (nameLower.startsWith(completionName)) {
-                            results.set(nameLower, {
-                                label: member.name,
-                                kind: CompletionItemKind.EnumMember
-                            });
-                        }
-                    }
+            const enumMap = scope.getEnumMap();
+            //get the enum statement with this name (check without namespace prefix first, then with inferred namespace prefix next)
+            const enumStatement = (enumMap.get(enumNameLower) ?? enumMap.get(namespaceNameLower + '.' + enumNameLower))?.item;
+            //if we found an enum with this name
+            if (enumStatement) {
+                for (const member of enumStatement.getMembers()) {
+                    const name = enumStatement.fullName + '.' + member.name;
+                    const nameLower = name.toLowerCase();
+                    results.set(nameLower, {
+                        label: member.name,
+                        kind: CompletionItemKind.EnumMember
+                    });
                 }
             }
         }
