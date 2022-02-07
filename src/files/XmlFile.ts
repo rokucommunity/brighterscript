@@ -50,6 +50,12 @@ export class XmlFile {
     private unsubscribeFromDependencyGraph: () => void;
 
     /**
+     * Indicates whether this file needs to be validated.
+     * Files are only ever validated a single time
+     */
+    public isValidated = false;
+
+    /**
      * The extension for this file
      */
     public extension: string;
@@ -180,11 +186,6 @@ export class XmlFile {
     public fileContents: string;
 
     /**
-     * Indicates whether this file needs to be validated.
-     */
-    public isValidated = false;
-
-    /**
      * Calculate the AST for this file
      * @param fileContents
      */
@@ -197,6 +198,15 @@ export class XmlFile {
             file: this
         }));
         this.getCommentFlags(this.parser.tokens as any[]);
+    }
+
+
+    public validate() {
+        if (this.parser.ast.root) {
+            this.validateComponent(this.parser.ast);
+        } else {
+            //skip empty XML
+        }
     }
 
     /**
@@ -218,11 +228,6 @@ export class XmlFile {
         }
         this.commentFlags.push(...processor.commentFlags);
         this.diagnostics.push(...processor.diagnostics);
-    }
-
-    public validate() {
-        //initial validation
-        this.validateComponent(this.parser.ast);
     }
 
     private validateComponent(ast: SGAst) {

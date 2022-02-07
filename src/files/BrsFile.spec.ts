@@ -1032,44 +1032,45 @@ describe('BrsFile', () => {
         });
 
         it('adds error for library statements NOT at top of file', () => {
-            let file = program.setFile('source/main.bs', `
+            program.setFile('source/file.brs', ``);
+            program.setFile('source/main.bs', `
                 sub main()
                 end sub
                 import "file.brs"
             `);
             program.validate();
-            expectDiagnostics(file, [
+            expectDiagnostics(program, [
                 DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile()
             ]);
         });
 
         it('supports library imports', () => {
-            file.parse(`
+            program.setFile('source/main.brs', `
                 Library "v30/bslCore.brs"
             `);
-            expectZeroDiagnostics(file);
+            expectZeroDiagnostics(program);
         });
 
         it('adds error for library statements NOT at top of file', () => {
-            let file = program.setFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                 end sub
                 Library "v30/bslCore.brs"
             `);
             program.validate();
-            expectDiagnostics(file, [
+            expectDiagnostics(program, [
                 DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile()
             ]);
         });
 
         it('adds error for library statements inside of function body', () => {
-            let file = program.setFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     Library "v30/bslCore.brs"
                 end sub
             `);
             program.validate();
-            expectDiagnostics(file, [
+            expectDiagnostics(program, [
                 DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile()
             ]);
         });
@@ -1558,7 +1559,11 @@ describe('BrsFile', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(1, 25, 1, 29));
-            expect(hover.contents).to.equal('function Main(count? as integer) as dynamic');
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'function Main(count? as integer) as dynamic',
+                '```'
+            ].join('\n'));
         });
 
         it('finds variable function hover in same scope', () => {
@@ -1574,7 +1579,43 @@ describe('BrsFile', () => {
             let hover = file.getHover(Position.create(5, 24));
 
             expect(hover.range).to.eql(Range.create(5, 20, 5, 29));
-            expect(hover.contents).to.equal('sub (name as string) as void');
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub (name as string) as void',
+                '```'
+            ].join('\n'));
+        });
+
+        it('does not crash when hovering on built-in functions', async () => {
+            let file = program.setFile('source/main.brs', `
+                function doUcase(text)
+                    return ucase(text)
+                end function
+            `);
+
+            expect(
+                (await program.getHover(file.srcPath, Position.create(2, 30))).contents
+            ).to.equal([
+                '```brightscript',
+                'function UCase(s as string) as string',
+                '```'
+            ].join('\n'));
+        });
+
+        it('does not crash when hovering on object method call', async () => {
+            let file = program.setFile('source/main.brs', `
+                function getInstr(url, text)
+                    return url.instr(text)
+                end function
+            `);
+
+            expect(
+                (await program.getHover(file.srcPath, Position.create(2, 35))).contents
+            ).to.equal([
+                '```brightscript',
+                'instr as dynamic',
+                '```'
+            ].join('\n'));
         });
 
         it('finds function hover in file scope', () => {
@@ -1591,7 +1632,11 @@ describe('BrsFile', () => {
             let hover = file.getHover(Position.create(2, 25));
 
             expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
-            expect(hover.contents).to.equal('sub sayMyName() as void');
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName() as void',
+                '```'
+            ].join('\n'));
         });
 
         it('finds function hover in scope', () => {
@@ -1616,7 +1661,62 @@ describe('BrsFile', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
-            expect(hover.contents).to.equal('sub sayMyName(name as string) as void');
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName(name as string) as void',
+                '```'
+            ].join('\n'));
+        });
+
+        it('includes markdown comments in hover.', async () => {
+            let rootDir = process.cwd();
+            program = new Program({
+                rootDir: rootDir
+            });
+
+            const file = program.setFile('source/lib.brs', `
+                '
+                ' The main function
+                '
+                sub main()
+                    log("hello")
+                end sub
+
+                '
+                ' Prints a message to the log.
+                ' Works with *markdown* **content**
+                '
+                sub log(message as string)
+                    print message
+                end sub
+            `);
+
+            //hover over log("hello")
+            expect(
+                (await program.getHover(file.srcPath, Position.create(5, 22))).contents
+            ).to.equal([
+                '```brightscript',
+                'sub log(message as string) as void',
+                '```',
+                '***',
+                '',
+                ' Prints a message to the log.',
+                ' Works with *markdown* **content**',
+                ''
+            ].join('\n'));
+
+            //hover over sub ma|in()
+            expect(
+                (await program.getHover(file.srcPath, Position.create(4, 22))).contents
+            ).to.equal(trim`
+                \`\`\`brightscript
+                sub main() as void
+                \`\`\`
+                ***
+
+                 The main function
+                `
+            );
         });
 
         it('handles mixed case `then` partions of conditionals', () => {
@@ -1647,7 +1747,6 @@ describe('BrsFile', () => {
             `);
             expectZeroDiagnostics(mainFile);
         });
-
 
         it('displays the context from multiple scopes', () => {
 
@@ -1688,12 +1787,18 @@ describe('BrsFile', () => {
 
             program.validate();
             let funcCallHover = commonFile.getHover(Position.create(2, 27));
-            expect(funcCallHover).to.exist;
-            expect(funcCallHover.contents).to.equal('getPi as uninitialized | function getPi() as string | function getPi() as float');
+            expect(funcCallHover?.contents).to.equal([
+                '```brightscript',
+                'function getPi() as string | function getPi() as float | getPi as uninitialized',
+                '```'
+            ].join('\n'));
 
             let variableHover = commonFile.getHover(Position.create(3, 27));
-            expect(variableHover).to.exist;
-            expect(variableHover.contents).to.equal('pi as uninitialized | pi as string | pi as float');
+            expect(variableHover?.contents).to.equal([
+                '```brightscript',
+                'pi as string | pi as float | pi as uninitialized',
+                '```'
+            ].join('\n'));
         });
 
         it('finds function with custom types as parameters and return types', () => {
@@ -1713,7 +1818,11 @@ describe('BrsFile', () => {
 
             let hover = file.getHover(Position.create(3, 29));
             expect(hover).to.exist;
-            expect(hover.contents).to.equal('function processMyKlass(data as MyKlass) as MyKlass');
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'function processMyKlass(data as MyKlass) as MyKlass',
+                '```'
+            ].join('\n'));
         });
 
         it('finds function with arrays as parameters and return types', () => {
@@ -1733,7 +1842,11 @@ describe('BrsFile', () => {
 
             let hover = file.getHover(Position.create(3, 29));
             expect(hover).to.exist;
-            expect(hover.contents).to.equal('function processData(data as MyKlass[]) as MyKlass[]');
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'function processData(data as MyKlass[]) as MyKlass[]',
+                '```'
+            ].join('\n'));
         });
     });
 
@@ -2393,7 +2506,7 @@ describe('BrsFile', () => {
                 name: 'transform callback',
                 afterFileParse: onParsed
             });
-            file = program.setFile(`source/file.${ext}`, `
+            file = program.setFile({ src: `absolute_path/file${ext}`, dest: `relative_path/file${ext}` }, `
                 sub Sum()
                 print "hello world"
                 end sub

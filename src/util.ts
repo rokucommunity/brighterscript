@@ -1393,12 +1393,19 @@ export class Util {
         return result;
     }
 
+    /*
+     * Wrap the given code in a markdown code fence (with the language)
+     */
+    public mdFence(code: string, language = '') {
+        return '```' + language + '\n' + code + '\n```';
+    }
+
     /**
-    * Finds a callable from a container map based on the name AND number of arguments
-    * If the callable was called in a function in a namespace, functions in that namespace are preferred
-    * The first callable that matches the name AND will accept the number of arguments given is returned
-    * @return a callable containers that matches the call
-    */
+     * Finds a callable from a container map based on the name AND number of arguments
+     * If the callable was called in a function in a namespace, functions in that namespace are preferred
+     * The first callable that matches the name AND will accept the number of arguments given is returned
+     * @return a callable containers that matches the call
+     */
     public getCallableContainerByFunctionCall(callablesByLowerName: CallableContainerMap, expCall: FunctionCall): CallableContainer {
         const callablesWithThisName = this.getCallableContainersByName(callablesByLowerName, expCall);
         if (callablesWithThisName?.length > 0) {
@@ -1410,7 +1417,6 @@ export class Util {
             }
         }
     }
-
 }
 
 /**

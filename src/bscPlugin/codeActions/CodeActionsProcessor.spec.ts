@@ -76,7 +76,6 @@ describe('CodeActionsProcessor', () => {
                 //<comp|onent name="comp1">
                 util.createRange(1, 5, 1, 5)
             );
-
             expect(
                 codeActions[0].edit.changes[URI.file(s`${rootDir}/components/comp1.xml`).toString()][0].range
             ).to.eql(

@@ -10,6 +10,7 @@ import { expectDiagnostics, expectZeroDiagnostics, trim } from './testHelpers.sp
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { OnScopeValidateEvent } from './interfaces';
 import type { FunctionType } from './types/FunctionType';
 import { isFloatType } from './astUtils/reflection';
 import type { SymbolTable } from './SymbolTable';
@@ -905,8 +906,6 @@ describe('Scope', () => {
         });
 
         it('Emits validation events', () => {
-            const validateStartScope = sinon.spy();
-            const validateEndScope = sinon.spy();
             program.setFile('source/file.brs', ``);
             program.setFile('components/comp.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -916,19 +915,25 @@ describe('Scope', () => {
             `);
             program.setFile(s`components/comp.brs`, ``);
             const sourceScope = program.getScopeByName('source');
-            const compScope = program.getScopeByName('pkg:/components/comp.xml');
-            program.plugins = new PluginInterface([{
+            const compScope = program.getScopeByName('components/comp.xml');
+            program.plugins = new PluginInterface([], new Logger());
+            const plugin = program.plugins.add({
                 name: 'Emits validation events',
-                beforeScopeValidate: validateStartScope,
-                afterScopeValidate: validateEndScope
-            }], new Logger());
+                beforeScopeValidate: sinon.spy(),
+                onScopeValidate: sinon.spy(),
+                afterScopeValidate: sinon.spy()
+            });
             program.validate();
-            expect(validateStartScope.callCount).to.equal(2);
-            expect(validateStartScope.getCalls()[0].args[0].scope).to.eql(sourceScope);
-            expect(validateStartScope.getCalls()[1].args[0].scope).to.eql(compScope);
-            expect(validateEndScope.callCount).to.equal(2);
-            expect(validateEndScope.getCalls()[0].args[0].scope).to.eql(sourceScope);
-            expect(validateEndScope.getCalls()[1].args[0].scope).to.eql(compScope);
+            const scopeNames = program.getScopes().map(x => x.name).filter(x => x !== 'global').sort();
+
+            expect(plugin.beforeScopeValidate.callCount).to.equal(2);
+
+            expect(plugin.onScopeValidate.callCount).to.equal(2);
+            expect(plugin.onScopeValidate.getCalls().map(
+                x => (x.args[0] as OnScopeValidateEvent).scope.name
+            ).sort()).to.eql(scopeNames);
+
+            expect(plugin.afterScopeValidate.callCount).to.equal(2);
         });
 
         describe('custom types', () => {

@@ -9,7 +9,7 @@ import type { ProgramBuilder } from './ProgramBuilder';
 import type { FunctionStatement } from './parser/Statement';
 import type { Expression, FunctionExpression } from './parser/Expression';
 import type { TranspileState } from './parser/TranspileState';
-import type { SourceNode } from 'source-map';
+import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { Token } from './lexer/Token';
 import type { AstEditor } from './astUtils/AstEditor';
@@ -195,6 +195,7 @@ export interface CompilerPlugin {
     beforeScopeDispose?: PluginHandler<BeforeScopeDisposeEvent>;
     afterScopeDispose?: PluginHandler<AfterScopeDisposeEvent>;
     beforeScopeValidate?: PluginHandler<BeforeScopeValidateEvent>;
+    onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
     afterScopeValidate?: PluginHandler<AfterScopeValidateEvent>;
     //file events
     beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
@@ -307,6 +308,12 @@ export interface AfterFileParseEvent {
     program: Program;
     file: BscFile;
 }
+export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
+    program: Program;
+    file: T;
+    scopes: Scope[];
+    semanticTokens: SemanticToken[];
+}
 export interface BeforeFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
@@ -353,11 +360,9 @@ export interface TranspileEntry {
     outputPath: string;
 }
 
-export interface OnGetSemanticTokensEvent {
+export interface OnScopeValidateEvent {
     program: Program;
-    file: BscFile;
-    scopes: Scope[];
-    semanticTokens: SemanticToken[];
+    scope: Scope;
 }
 
 export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty'>;
@@ -376,6 +381,18 @@ export interface BeforeFileTranspileEvent {
 export interface AfterFileTranspileEvent {
     file: BscFile;
     outputPath: string;
+    /**
+     * The resulting transpiled file contents
+     */
+    code: string;
+    /**
+     * The sourceMaps for the generated code (if emitting source maps is enabled)
+     */
+    map?: SourceMapGenerator;
+    /**
+     * The generated type definition file contents (if emitting type definitions are enabled)
+     */
+    typedef?: string;
     /**
      * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
      * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want

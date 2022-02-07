@@ -32,7 +32,6 @@ import { InvalidType } from '../types/InvalidType';
 import { DynamicType } from '../types/DynamicType';
 import type { SymbolTable } from '../SymbolTable';
 
-
 /**
  * Holds all details about this file within the scope of the whole program
  */
@@ -78,15 +77,17 @@ export class BrsFile {
      * The key used to identify this file in the dependency graph
      */
     public dependencyGraphKey: string;
+
+    /**
+     * Indicates whether this file needs to be validated.
+     * Files are only ever validated a single time
+     */
+    public isValidated = false;
+
     /**
      * The all-lowercase extension for this file (including the leading dot)
      */
     public extension: string;
-
-    /**
-     * Indicates whether this file needs to be validated.
-     */
-    public isValidated = false;
 
     private diagnostics = [] as BsDiagnostic[];
 
@@ -213,6 +214,8 @@ export class BrsFile {
 
             //if we have a typedef file, skip parsing this file
             if (this.hasTypedef) {
+                //skip validation since the typedef is shadowing this file
+                this.isValidated = true;
                 return;
             }
 
@@ -296,10 +299,13 @@ export class BrsFile {
     }
 
     public validate() {
-        this.validateImportStatements();
+        //only validate the file if it was actually parsed (skip files containing typedefs)
+        if (!this.hasTypedef) {
+            this.validateImportStatements();
+        }
     }
 
-    public validateImportStatements() {
+    private validateImportStatements() {
         let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement>;
         for (let stmt of this.ast.statements) {
             //skip comments
@@ -1424,6 +1430,7 @@ export class BrsFile {
     }
 
     public getHover(position: Position): Hover {
+        const fence = (code: string) => util.mdFence(code, 'brightscript');
         //get the token at the position
         let token = this.parser.getTokenAt(position);
 
@@ -1456,9 +1463,10 @@ export class BrsFile {
                     }
                 }
             }
-            const typeTexts: string[] = [];
-
-            for (const scope of this.program.getScopesForFile(this)) {
+            const typeTexts = new Set<string>();
+            const fileScopes = this.program.getScopesForFile(this).sort((a, b) => a.dependencyGraphKey?.localeCompare(b.dependencyGraphKey));
+            const callables = [] as Callable[];
+            for (const scope of fileScopes) {
                 scope.linkSymbolTable();
                 const typeContext = { file: this, scope: scope, position: position };
                 const typeTextPair = this.getSymbolTypeFromToken(token, func, scope);
@@ -1467,41 +1475,86 @@ export class BrsFile {
 
                     if (isFunctionType(typeTextPair.type)) {
                         scopeTypeText = typeTextPair.type?.toString(typeContext);
+                        //keep unique references to the callables for this function
+                        if (!typeTexts.has(scopeTypeText)) {
+                            callables.push(
+                                scope.getCallableByName(lowerTokenText)
+                            );
+                        }
                     } else if (typeTextPair.useExpandedTextOnly) {
                         scopeTypeText = typeTextPair.expandedTokenText;
                     } else {
                         scopeTypeText = `${typeTextPair.expandedTokenText} as ${typeTextPair.type?.toString(typeContext)}`;
                     }
 
-                    if (scopeTypeText && !typeTexts.includes(scopeTypeText)) {
-                        typeTexts.push(scopeTypeText);
+                    if (scopeTypeText) {
+                        typeTexts.add(scopeTypeText);
                     }
                 }
                 scope.unlinkSymbolTable();
             }
 
-            const typeText = typeTexts.join(' | ');
-            if (typeText) {
+            if (callables.length === typeTexts.size) {
+                //this is a function in all scopes, so build the function hover
                 return {
                     range: token.range,
-                    contents: typeText
+                    contents: this.getCallableDocumentation([...typeTexts], callables)
+                };
+            } else if (typeTexts?.size > 0) {
+                const typeText = [...typeTexts].join(' | ');
+                return {
+                    range: token.range,
+                    contents: fence(typeText)
                 };
             }
         }
 
-        //look through all callables in relevant scopes
-        {
-            let scopes = this.program.getScopesForFile(this);
-            for (let scope of scopes) {
-                let callable = scope.getCallableByName(lowerTokenText);
-                if (callable) {
-                    return {
-                        range: token.range,
-                        contents: callable.type.toString()
-                    };
-                }
+        // //look through all callables in relevant scopes
+        // {
+        //     let scopes = this.program.getScopesForFile(this);
+        //     for (let scope of scopes) {
+        //         let callable = scope.getCallableByName(lowerTokenText);
+        //         if (callable) {
+        //             return {
+        //                 range: token.range,
+        //                 contents: this.getCallableDocumentation(callables)
+        //             };
+        //         }
+        //     }
+        // }
+    }
+
+    /**
+     * Build a hover documentation for a callable.
+     */
+    private getCallableDocumentation(typeTexts: string[], callables: Callable[]) {
+        const callable = callables[0];
+        const typeText = typeTexts[0];
+
+        const comments = [] as Token[];
+        const tokens = callable?.file.parser.tokens as Token[];
+        const idx = tokens?.indexOf(callable.functionStatement?.func.functionType);
+        for (let i = idx - 1; i >= 0; i--) {
+            const token = tokens[i];
+            //skip whitespace and newline chars
+            if (token.kind === TokenKind.Comment) {
+                comments.push(token);
+            } else if (token.kind === TokenKind.Newline || token.kind === TokenKind.Whitespace) {
+                //skip these tokens
+                continue;
+
+                //any other token means there are no more comments
+            } else {
+                break;
             }
         }
+        //message indicating if there are variations. example: (+3 variations) if there are 4 unique function signatures
+        const multiText = callables.length > 1 ? ` (+${callables.length - 1} variations)` : '';
+        let result = util.mdFence(typeText + multiText, 'brightscript');
+        if (comments.length > 0) {
+            result += '\n***\n' + comments.reverse().map(x => x.text.replace(/^('|rem)/i, '')).join('\n');
+        }
+        return result;
     }
 
     public getSignatureHelpForNamespaceMethods(callableName: string, dottedGetText: string, scope: Scope): { key: string; signature: SignatureInformation }[] {

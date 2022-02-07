@@ -45,10 +45,14 @@ Full compiler lifecycle:
         - `beforeFileParse`
         - `afterFileParse`
         - `afterScopeCreate` (component scope)
-        - `afterFileValidate`
     - `beforeProgramValidate`
+    - For each file:
+        - `beforeFileValidate`
+        - `onFileValidate`
+        - `afterFileValidate`
     - For each scope:
         - `beforeScopeValidate`
+        - `onScopeValidate`
         - `afterScopeValidate`
     - `afterProgramValidate`
 - `beforePrepublish`

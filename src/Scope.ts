@@ -510,6 +510,11 @@ export class Scope {
             //get a list of all callables, indexed by their lower case names
             let callableContainerMap = util.getCallableContainersByLowerName(callables);
 
+            this.program.plugins.emit('onScopeValidate', {
+                program: this.program,
+                scope: this
+            });
+
             this._validate(callableContainerMap);
 
             // unlink the symbol table so it can't be accessed from the wrong scope

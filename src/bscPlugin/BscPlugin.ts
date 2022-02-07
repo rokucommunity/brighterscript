@@ -1,6 +1,7 @@
+import { isBrsFile } from '../astUtils/reflection';
 import type { CompilerPlugin, OnGetCodeActionsEvent, OnGetSemanticTokensEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
-import { SemanticTokensProcessor } from './semanticTokens/SemanticTokensProcessor';
+import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
 
 export class BscPlugin implements CompilerPlugin {
     public name = 'BscPlugin';
@@ -10,6 +11,8 @@ export class BscPlugin implements CompilerPlugin {
     }
 
     public onGetSemanticTokens(event: OnGetSemanticTokensEvent) {
-        return new SemanticTokensProcessor(event).process();
+        if (isBrsFile(event.file)) {
+            return new BrsFileSemanticTokensProcessor(event as any).process();
+        }
     }
 }

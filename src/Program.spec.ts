@@ -1641,6 +1641,64 @@ describe('Program', () => {
         expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/bslib.brs`)).is.true;
     });
 
+    describe('getTranspiledFileContents', () => {
+        it('fires plugin events', () => {
+            const file = program.setFile('source/main.brs', trim`
+                sub main()
+                    print "hello world"
+                end sub
+            `);
+            const plugin = program.plugins.add({
+                name: 'TestPlugin',
+                beforeFileTranspile: (event) => {
+                    const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
+                    event.editor.setProperty((stmt.expressions[0] as LiteralExpression).token, 'text', '"hello there"');
+                },
+                afterFileTranspile: sinon.spy()
+            });
+            expect(
+                program.getTranspiledFileContents(file.srcPath).code
+            ).to.eql(trim`
+                sub main()
+                    print "hello there"
+                end sub`
+            );
+            expect(plugin.afterFileTranspile.callCount).to.be.greaterThan(0);
+        });
+
+        it('allows events to modify the file contents', async () => {
+            program.options.emitDefinitions = true;
+            program.plugins.add({
+                name: 'TestPlugin',
+                afterFileTranspile: (event) => {
+                    event.code = `'code comment\n${event.code}`;
+                    event.typedef = `'typedef comment\n${event.typedef}`;
+                }
+            });
+            program.setFile('source/lib.bs', `
+                sub log(message)
+                    print message
+                end sub
+            `);
+            await program.transpile([], stagingFolderPath);
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/lib.brs`).toString()
+            ).to.eql(trim`
+                'code comment
+                sub log(message)
+                    print message
+                end sub`
+            );
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/lib.d.bs`).toString()
+            ).to.eql(trim`
+                'typedef comment
+                sub log(message)
+                end sub
+            `);
+        });
+    });
+
     describe('transpile', () => {
 
         it('sets needsTranspiled=true when there is at least one edit', async () => {
@@ -2371,11 +2429,7 @@ describe('Program', () => {
                 afterFileValidate: sinon.spy()
             };
             program.plugins.add(plugin);
-            program.setFile('components/main.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="Component1" extends="Scene">
-                </component>
-            `);
+            program.setFile('components/main.xml', '');
             program.validate();
             expect(plugin.beforeFileValidate.callCount).to.equal(1);
             expect(plugin.onFileValidate.callCount).to.equal(1);

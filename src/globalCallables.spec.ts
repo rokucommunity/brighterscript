@@ -1,7 +1,8 @@
-import { standardizePath as s } from './util';
+import util, { standardizePath as s } from './util';
 import { Program } from './Program';
 import { expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics } from './testHelpers.spec';
 import { DiagnosticMessages } from './DiagnosticMessages';
+import { expect } from 'chai';
 
 let tmpPath = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tmpPath}/rootDir`;
@@ -41,6 +42,33 @@ describe('globalCallables', () => {
         expectDiagnostics(program, [
             DiagnosticMessages.mismatchArgumentCount('1-6', 0)
         ]);
+    });
+
+    it('handles optional params properly', () => {
+        program.setFile('source/main.brs', `
+            sub main()
+                print Mid("value1", 1) 'third param is optional
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('hover shows correct for optional params', async () => {
+        const file = program.setFile('source/main.brs', `
+            sub main()
+                print Mid("value1", 1)
+            end sub
+        `);
+        program.validate();
+        const hover = await program.getHover(file.srcPath, util.createPosition(2, 25));
+        expect(
+            hover.contents.toString().replace('\r\n', '\n')
+        ).to.eql([
+            '```brightscript',
+            'function Mid(s as string, p as integer, n? as integer) as string',
+            '```'
+        ].join('\n'));
     });
 
     describe('bslCore', () => {

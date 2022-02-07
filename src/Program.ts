@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileReference, FileObj, BscFile, SemanticToken, BeforeFileParseEvent, BeforeFileTranspileEvent } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, BscFile, SemanticToken, BeforeFileParseEvent, BeforeFileTranspileEvent, AfterFileTranspileEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -27,6 +27,7 @@ import { TokenKind } from './lexer/TokenKind';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { util as rokuDeployUtil } from 'roku-deploy';
 import { AstEditor } from './astUtils/AstEditor';
+import type { SourceMapGenerator } from 'source-map';
 
 const bslibNonAliasedRokuModulesPkgPath = `pkg:/source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = `pkg:/source/roku_modules/bslib/bslib.brs`;
@@ -442,21 +443,24 @@ export class Program {
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
                     brsFile.parse(beforeFileParseEvent.source);
                 });
-                file = brsFile;
 
-                brsFile.attachDependencyGraph(this.dependencyGraph);
-
+                //notify plugins that this file has finished parsing
                 this.plugins.emit('afterFileParse', {
                     program: this,
                     file: brsFile
                 });
+
+                file = brsFile;
+
+                brsFile.attachDependencyGraph(this.dependencyGraph);
+
             } else if (
                 //is xml file
                 fileExtension === '.xml' &&
                 //resides in the components folder (Roku will only parse xml files in the components folder)
                 lowerPkgPath.startsWith('pkg:/components/')
             ) {
-                let xmlFile = new XmlFile(srcPath, pkgPath, this);
+                const xmlFile = new XmlFile(srcPath, pkgPath, this);
 
                 this.assignFile(xmlFile);
 
@@ -465,6 +469,12 @@ export class Program {
 
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
                     xmlFile.parse(beforeFileParseEvent.source);
+                });
+
+                //notify plugins that this file has finished parsing
+                this.plugins.emit('afterFileParse', {
+                    program: this,
+                    file: xmlFile
                 });
 
                 file = xmlFile;
@@ -476,10 +486,6 @@ export class Program {
                 //register this compoent now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
 
-                this.plugins.emit('afterFileParse', {
-                    program: this,
-                    file: xmlFile
-                });
             } else {
                 //TODO do we actually need to implement this? Figure out how to handle img paths
                 // let genericFile = this.files[srcPath] = <any>{
@@ -921,8 +927,9 @@ export class Program {
         if (!file) {
             return null;
         }
+        const hover = file.getHover(position);
 
-        return Promise.resolve(file.getHover(position));
+        return Promise.resolve(hover);
     }
 
     /**
@@ -1275,13 +1282,61 @@ export class Program {
      * This does not write anything to the file system.
      * @param srcPath The absolute path to the source file on disk
      */
-    public getTranspiledFileContents(srcPath: string) {
-        let file = this.getFile(srcPath);
-        let result = file.transpile();
+    public getTranspiledFileContents(pathAbsolute: string) {
+        return this._getTranspiledFileContents(
+            this.getFile(pathAbsolute)
+        );
+    }
+
+    /**
+     * Internal function used to transpile files.
+     * This does not write anything to the file system
+     */
+    private _getTranspiledFileContents(file: BscFile, outputPath?: string): FileTranspileResult {
+        const editor = new AstEditor();
+
+        this.plugins.emit('beforeFileTranspile', {
+            file: file,
+            program: this,
+            outputPath: outputPath,
+            editor: editor
+        });
+
+        //if we have any edits, assume the file needs to be transpiled
+        if (editor.hasChanges) {
+            //use the `editor` because it'll track the previous value for us and revert later on
+            editor.setProperty(file, 'needsTranspiled', true);
+        }
+
+        //transpile the file
+        const result = file.transpile();
+
+        //generate the typedef if enabled
+        let typedef: string;
+        if (isBrsFile(file) && this.options.emitDefinitions) {
+            typedef = file.getTypedef();
+        }
+
+        const event: AfterFileTranspileEvent = {
+            file: file,
+            program: this,
+            outputPath: outputPath,
+            editor: editor,
+            code: result.code,
+            map: result.map,
+            typedef: typedef
+        };
+        this.plugins.emit('afterFileTranspile', event);
+
+        //undo all `editor` edits that may have been applied to this file.
+        editor.undoAll();
+
         return {
-            ...result,
             srcPath: file.srcPath,
-            pkgPath: file.pkgPath
+            pkgPath: file.pkgPath,
+            code: event.code,
+            map: event.map,
+            typedef: event.typedef
         };
     }
 
@@ -1333,14 +1388,9 @@ export class Program {
                 return;
             }
 
-            this.plugins.emit('beforeFileTranspile', entry);
             const { file, outputPath } = entry;
-            //if we have any edits, assume the file needs to be transpiled
-            if (entry.editor.hasChanges) {
-                //use the `editor` because it'll track the previous value for us and revert later on
-                entry.editor.setProperty(file, 'needsTranspiled', true);
-            }
-            const result = file.transpile();
+
+            const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
 
             //make sure the full dir path exists
             await fsExtra.ensureDir(path.dirname(outputPath));
@@ -1348,22 +1398,16 @@ export class Program {
             if (await fsExtra.pathExists(outputPath)) {
                 throw new Error(`Error while transpiling "${file.srcPath}". A file already exists at "${outputPath}" and will not be overwritten.`);
             }
-            const writeMapPromise = result.map ? fsExtra.writeFile(`${outputPath}.map`, result.map.toString()) : null;
+            const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, fileTranspileResult.map.toString()) : null;
             await Promise.all([
-                fsExtra.writeFile(outputPath, result.code),
+                fsExtra.writeFile(outputPath, fileTranspileResult.code),
                 writeMapPromise
             ]);
 
-            if (isBrsFile(file) && this.options.emitDefinitions) {
-                const typedef = file.getTypedef();
+            if (fileTranspileResult.typedef) {
                 const typedefPath = outputPath.replace(/\.brs$/i, '.d.bs');
-                await fsExtra.writeFile(typedefPath, typedef);
+                await fsExtra.writeFile(typedefPath, fileTranspileResult.typedef);
             }
-
-            this.plugins.emit('afterFileTranspile', entry);
-
-            //undo all `editor` edits that may have been applied to this file.
-            (entry.editor as AstEditor).undoAll();
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
@@ -1449,4 +1493,12 @@ export class Program {
         this.globalScope.dispose();
         this.dependencyGraph.dispose();
     }
+}
+
+export interface FileTranspileResult {
+    srcPath: string;
+    pkgPath: string;
+    code: string;
+    map: SourceMapGenerator;
+    typedef: string;
 }

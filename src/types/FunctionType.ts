@@ -29,7 +29,7 @@ export class FunctionType implements BscType {
             this.params.push({
                 name: paramOrName,
                 type: type ?? new DynamicType(),
-                isOptional: !!isOptional,
+                isOptional: isOptional === true ? true : false,
                 isRestArgument: false
             });
         } else {
