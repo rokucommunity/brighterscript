@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -47,12 +47,6 @@ export interface SignatureInfoObj {
     key: string;
     signature: SignatureInformation;
 }
-
-export interface FileLink<T> {
-    item: T;
-    file: BrsFile;
-}
-
 
 interface PartialStatementInfo {
     commaCount: number;
@@ -131,11 +125,11 @@ export class Program {
      */
     public get bslibPkgPath() {
         //if there's an aliased (preferred) version of bslib from roku_modules loaded into the program, use that
-        if (this.getFileByPkgPath(bslibAliasedRokuModulesPkgPath)) {
+        if (this.getFile(bslibAliasedRokuModulesPkgPath)) {
             return bslibAliasedRokuModulesPkgPath;
 
             //if there's a non-aliased version of bslib from roku_modules, use that
-        } else if (this.getFileByPkgPath(bslibNonAliasedRokuModulesPkgPath)) {
+        } else if (this.getFile(bslibNonAliasedRokuModulesPkgPath)) {
             return bslibNonAliasedRokuModulesPkgPath;
 
             //default to the embedded version
@@ -287,6 +281,7 @@ export class Program {
                 }, diagnostics);
                 return finalDiagnostics;
             });
+
             this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
             return filteredDiagnostics;
         });
@@ -299,10 +294,10 @@ export class Program {
     /**
      * Determine if the specified file is loaded in this program right now.
      * @param filePath
+     * @param normalizePath should the provided path be normalized before use
      */
-    public hasFile(filePath: string) {
-        filePath = s`${filePath}`;
-        return this.files[filePath] !== undefined;
+    public hasFile(filePath: string, normalizePath = true) {
+        return !!this.getFile(filePath, normalizePath);
     }
 
     public getPkgPath(...args: any[]): any { //eslint-disable-line
@@ -336,6 +331,24 @@ export class Program {
      */
     public getComponentScope(componentName: string) {
         return this.getComponent(componentName)?.scope;
+    }
+
+    /**
+     * Update internal maps with this file reference
+     */
+    private assignFile<T extends BscFile = BscFile>(file: T) {
+        this.files[file.pathAbsolute.toLowerCase()] = file;
+        this.pkgMap[file.pkgPath.toLowerCase()] = file;
+        return file;
+    }
+
+    /**
+     * Remove this file from internal maps
+     */
+    private unassignFile<T extends BscFile = BscFile>(file: T) {
+        delete this.files[file.pathAbsolute.toLowerCase()];
+        delete this.pkgMap[file.pkgPath.toLowerCase()];
+        return file;
     }
 
     /**
@@ -375,7 +388,10 @@ export class Program {
             let file: BscFile | undefined;
 
             if (fileExtension === '.brs' || fileExtension === '.bs') {
-                let brsFile = new BrsFile(srcPath, pkgPath, this);
+                //add the file to the program
+                const brsFile = this.assignFile(
+                    new BrsFile(srcPath, pkgPath, this)
+                );
 
                 //add file to the `source` dependency list
                 if (brsFile.pkgPath.startsWith(startOfSourcePkgPath)) {
@@ -383,10 +399,6 @@ export class Program {
                     this.dependencyGraph.addDependency('scope:source', brsFile.dependencyGraphKey);
                 }
 
-
-                //add the file to the program
-                this.files[srcPath] = brsFile;
-                this.pkgMap[brsFile.pkgPath.toLowerCase()] = brsFile;
                 let sourceObj: SourceObj = {
                     pathAbsolute: srcPath,
                     source: fileContents
@@ -410,10 +422,11 @@ export class Program {
                 //resides in the components folder (Roku will only parse xml files in the components folder)
                 pkgPath.toLowerCase().startsWith(util.pathSepNormalize(`components/`))
             ) {
-                let xmlFile = new XmlFile(srcPath, pkgPath, this);
                 //add the file to the program
-                this.files[srcPath] = xmlFile;
-                this.pkgMap[xmlFile.pkgPath.toLowerCase()] = xmlFile;
+                const xmlFile = this.assignFile(
+                    new XmlFile(srcPath, pkgPath, this)
+                );
+
                 let sourceObj: SourceObj = {
                     pathAbsolute: srcPath,
                     source: fileContents
@@ -467,6 +480,7 @@ export class Program {
      * Roku is a case insensitive file system. It is an error to have multiple files
      * with the same path with only case being different.
      * @param pathAbsolute
+     * @deprecated use `getFile` instead, which auto-detects the path type
      */
     public getFileByPathAbsolute<T extends BrsFile | XmlFile>(pathAbsolute: string) {
         pathAbsolute = s`${pathAbsolute}`;
@@ -480,6 +494,7 @@ export class Program {
     /**
      * Get a list of files for the given (platform-normalized) pkgPath array.
      * Missing files are just ignored.
+     * @deprecated use `getFiles` instead, which auto-detects the path types
      */
     public getFilesByPkgPaths<T extends BscFile[]>(pkgPaths: string[]) {
         return pkgPaths
@@ -490,6 +505,7 @@ export class Program {
     /**
      * Get a file with the specified (platform-normalized) pkg path.
      * If not found, return undefined
+     * @deprecated use `getFile` instead, which auto-detects the path type
      */
     public getFileByPkgPath<T extends BscFile>(pkgPath: string) {
         return this.pkgMap[pkgPath.toLowerCase()] as T;
@@ -497,25 +513,24 @@ export class Program {
 
     /**
      * Remove a set of files from the program
-     * @param absolutePaths
+     * @param filePaths can be an array of srcPath or destPath strings
+     * @param normalizePath should this function repair and standardize the filePaths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
      */
-    public removeFiles(absolutePaths: string[]) {
-        for (let pathAbsolute of absolutePaths) {
-            this.removeFile(pathAbsolute);
+    public removeFiles(filePaths: string[], normalizePath = true) {
+        for (let filiePath of filePaths) {
+            this.removeFile(filiePath, normalizePath);
         }
     }
 
     /**
      * Remove a file from the program
-     * @param pathAbsolute
+     * @param filePath can be a srcPath, a pkgPath, or a destPath (same as pkgPath but without `pkg:/`)
+     * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
-    public removeFile(pathAbsolute: string) {
-        this.logger.debug('Program.removeFile()', pathAbsolute);
-        if (!path.isAbsolute(pathAbsolute)) {
-            throw new Error(`Path must be absolute: "${pathAbsolute}"`);
-        }
+    public removeFile(filePath: string, normalizePath = true) {
+        this.logger.debug('Program.removeFile()', filePath);
 
-        let file = this.getFile(pathAbsolute);
+        let file = this.getFile(filePath, normalizePath);
         if (file) {
             this.plugins.emit('beforeFileDispose', file);
 
@@ -530,8 +545,7 @@ export class Program {
                 this.plugins.emit('afterScopeDispose', scope);
             }
             //remove the file from the program
-            delete this.files[file.pathAbsolute];
-            delete this.pkgMap[file.pkgPath.toLowerCase()];
+            this.unassignFile(file);
 
             this.dependencyGraph.remove(file.dependencyGraphKey);
 
@@ -660,12 +674,33 @@ export class Program {
     }
 
     /**
-     * Get the file at the given path
-     * @param pathAbsolute
+     * Get the files for a list of filePaths
+     * @param filePaths can be an array of srcPath or a destPath strings
+     * @param normalizePath should this function repair and standardize the paths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
      */
-    private getFile<T extends BscFile>(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
-        return this.files[pathAbsolute] as T;
+    public getFiles<T extends BscFile>(filePaths: string[], normalizePath = true) {
+        return filePaths
+            .map(filePath => this.getFile(filePath, normalizePath))
+            .filter(file => file !== undefined) as T[];
+    }
+
+    /**
+     * Get the file at the given path
+     * @param filePath can be a srcPath or a destPath
+     * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
+     */
+    public getFile<T extends BscFile>(filePath: string, normalizePath = true) {
+        if (typeof filePath !== 'string') {
+            return undefined;
+        } else if (path.isAbsolute(filePath)) {
+            return this.files[
+                (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase()
+            ] as T;
+        } else {
+            return this.pkgMap[
+                (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase()
+            ] as T;
+        }
     }
 
     /**
@@ -682,6 +717,19 @@ export class Program {
             }
         }
         return result;
+    }
+
+    /**
+     * Get the first found scope for a file.
+     */
+    public getFirstScopeForFile(file: XmlFile | BrsFile): Scope {
+        for (let key in this.scopes) {
+            let scope = this.scopes[key];
+
+            if (scope.hasFile(file)) {
+                return scope;
+            }
+        }
     }
 
     public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {
