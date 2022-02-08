@@ -17,7 +17,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile, TokenSymbolLookup } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDynamicType, isEnumStatement, isFunctionStatement, isFunctionType, isInvalidType, isUniversalFunctionType, isVariableExpression, isXmlFile } from './astUtils/reflection';
+import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDynamicType, isEnumStatement, isFunctionStatement, isFunctionType, isInvalidType, isUniversalFunctionType, isVariableExpression, isXmlFile, isArrayType } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { BscType, TypeContext } from './types/BscType';
 import { getTypeFromContext } from './types/BscType';
@@ -737,29 +737,34 @@ export class Scope {
     */
     private diagnosticDetectInvalidFunctionExpressionTypes(file: BrsFile) {
         for (let func of file.parser.references.functionExpressions) {
-            const returnType = getTypeFromContext(func.returnType, { file: file, scope: this, position: func.range?.start });
-            if (!returnType && func.returnTypeToken) {
+            const returnType = getTypeFromContext(func.getReturnType(), { file: file, scope: this, position: func.range?.start });
+            if (!returnType && func.returnType) {
                 // check if this custom type is in our class map
-                const returnTypeName = func.returnTypeToken.text;
+                const returnTypeName = func.returnType.getText();
                 const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
                 if (!this.hasClass(returnTypeName, currentNamespaceName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.invalidFunctionReturnType(returnTypeName),
-                        range: func.returnTypeToken.range,
+                        range: func.returnType.range,
                         file: file
                     });
                 }
             }
 
             for (let param of func.parameters) {
-                const paramType = getTypeFromContext(param.type, { file: file, scope: this, position: param.range?.start });
-                if (!paramType && param.typeToken) {
-                    const paramTypeName = param.typeToken.text;
+                const typeContext = { file: file, scope: this, position: param.range?.start };
+                let paramType = getTypeFromContext(param.getType(), typeContext);
+                while (isArrayType(paramType)) {
+                    paramType = getTypeFromContext(paramType.getDefaultType(typeContext), typeContext);
+                }
+
+                if (!paramType && param.type) {
+                    const paramTypeName = param.type.getText();
                     const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
                     if (!this.hasClass(paramTypeName, currentNamespaceName)) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.functionParameterTypeIsInvalid(param.name.text, paramTypeName),
-                            range: param.typeToken.range,
+                            range: param.type.range,
                             file: file
                         });
 

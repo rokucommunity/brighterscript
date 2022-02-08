@@ -8,7 +8,7 @@ import type { AssignmentStatement, ClassStatement, Statement } from './Statement
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isBlock, isCommentStatement, isDynamicType, isFunctionStatement, isIfStatement, isIntegerType, isLazyType, isUninitializedType } from '../astUtils/reflection';
+import { isArrayType, isBlock, isCommentStatement, isDynamicType, isFloatType, isFunctionStatement, isIfStatement, isIntegerType, isLazyType, isStringType, isUninitializedType } from '../astUtils/reflection';
 import { expectSymbolTableEquals, expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
@@ -1340,6 +1340,50 @@ describe('parser', () => {
             ]);
         });
 
+        it('finds arrays of primitives', () => {
+            const parser = parse(`
+                function alert(numbers as integer[], words as string[]) as float[]
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const symbolTable = parser.references.functionExpressions[0].symbolTable;
+            const numArraySymbolType = symbolTable.getSymbolType('numbers');
+            const wordArraySymbolType = symbolTable.getSymbolType('words');
+            expect(isArrayType(numArraySymbolType)).to.be.true;
+            expect(isIntegerType((numArraySymbolType as ArrayType).getDefaultType())).to.be.true;
+            expect(isArrayType(wordArraySymbolType)).to.be.true;
+            expect(isStringType((wordArraySymbolType as ArrayType).getDefaultType())).to.be.true;
+            const funcReturnType = parser.references.functionExpressions[0].getReturnType();
+            expect(isArrayType(funcReturnType)).to.be.true;
+            expect(isFloatType((funcReturnType as ArrayType).getDefaultType())).to.be.true;
+        });
+
+        it('finds multidimensional arrays', () => {
+            const parser = parse(`
+                sub alert(data as integer[][])
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const symbolTable = parser.references.functionExpressions[0].symbolTable;
+            const dataType = symbolTable.getSymbolType('data');
+            expect(isArrayType(dataType)).to.be.true;
+            expect(isArrayType((dataType as ArrayType).getDefaultType())).to.be.true;
+            expect(isIntegerType(((dataType as ArrayType).getDefaultType() as ArrayType).getDefaultType())).to.be.true;
+        });
+
+        it('finds arrays of custom types', () => {
+            const parser = parse(`
+                sub alert(data as SomeKlass[])
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const symbolTable = parser.references.functionExpressions[0].symbolTable;
+            const dataType = symbolTable.getSymbolType('data');
+            expect(isArrayType(dataType)).to.be.true;
+            expect(isLazyType((dataType as ArrayType).getDefaultType())).to.be.true;
+        });
+
+
         describe('loops', () => {
             it('stores the loop variable in a for loop', () => {
                 const parser = parse(`
@@ -1386,7 +1430,7 @@ describe('parser', () => {
                 const parser = parse(`
                     sub doLoop(someData as integer[])
                         for each datum in someData
-                        print datum
+                            print datum
                         end for
                     end sub
                 `, ParseMode.BrighterScript);
@@ -1399,7 +1443,7 @@ describe('parser', () => {
                 const parser = parse(`
                     sub doLoop(someData as MyKlass[])
                         for each datum in someData
-                        print datum.name
+                            print datum.name
                         end for
                     end sub
 
@@ -1410,6 +1454,22 @@ describe('parser', () => {
                 expectZeroDiagnostics(parser.diagnostics);
                 const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;
                 expect(isLazyType(currentSymbolTable.getSymbol('datum')[0].type)).to.be.true;
+            });
+
+            it('determines the type of the variable in a for each if the target is a multidimensional array', () => {
+                const parser = parse(`
+                    sub doLoop(data as float[][])
+                        for each row in data
+                            for each item in row
+                                print item
+                            end for
+                        end for
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(parser.diagnostics);
+                const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;
+                expect(isArrayType(currentSymbolTable.getSymbol('row')[0].type)).to.be.true;
+                expect(isFloatType(currentSymbolTable.getSymbol('item')[0].type)).to.be.true;
             });
         });
 
@@ -1593,7 +1653,6 @@ describe('parser', () => {
         tokenChainResponse = parser.getTokenChain(floatFuncToken);
         expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
         expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['someObj', 'float', 'someFunc']);
-
     });
 });
 

@@ -32,7 +32,6 @@ import { SourceNode } from 'source-map';
 import { SGAttribute } from './parser/SGTypes';
 import { LazyType } from './types/LazyType';
 import type { BscType } from './types/BscType';
-import { ArrayType } from './types/ArrayType';
 import { UniversalFunctionType } from './types/UniversalFunctionType';
 
 export class Util {
@@ -986,12 +985,7 @@ export class Util {
             case TokenKind.Void:
                 return new VoidType();
             case TokenKind.Identifier:
-                let tokenText = token.text.replace(/\s/g, '').toLowerCase();
-                // regular expression to find a type with optional pair of square brackets afterwards
-                const regex = /([\w._]+)(\[\]){0,1}/;
-                const found = regex.exec(tokenText);
-                const typeText = found[1] ?? tokenText;
-                const isArray = !!found[2];
+                let typeText = token.text.trim().toLowerCase();
                 let typeClass: BscType;
                 switch (typeText) {
                     case 'boolean':
@@ -1034,19 +1028,11 @@ export class Util {
                     });
 
                 }
-                // TODO: Can Arrays be of inner type invalid or void?
 
-                // If this token denotes an array (e.g. ends in `[]`) then may it an array with correct inner type
-                if (allowBrighterscriptTypes && isArray) {
-                    typeClass = new ArrayType(typeClass);
-                } else if (!allowBrighterscriptTypes && isArray) {
-                    // we shouldn't allow array types to be defined when not in Brighterscript mode
-                    // so a type like `string[]` wouldn't be defined
-                    return undefined;
-                }
                 return typeClass;
         }
     }
+
 
     /**
      * Get the extension for the given file path. Basically the part after the final dot, except for

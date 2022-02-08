@@ -17,6 +17,7 @@ import type { BscType, SymbolContainer } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
 import { FunctionType } from '../types/FunctionType';
 import { ObjectType } from '../types/ObjectType';
+import { ArrayType } from '../types/ArrayType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -131,7 +132,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly leftParen: Token,
         readonly rightParen: Token,
         readonly asToken?: Token,
-        readonly returnTypeToken?: Token,
+        readonly returnType?: TypeExpression,
         /**
          * If this function is enclosed within another function, this will reference that parent function
          */
@@ -140,16 +141,16 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly parentSymbolTable?: SymbolTable
     ) {
         super();
-        if (this.returnTypeToken) {
-            this.returnType = util.tokenToBscType(this.returnTypeToken, true, namespaceName);
+        if (this.returnType) {
+            this._returnType = this.returnType.type;
         } else if (this.functionType.text.toLowerCase() === 'sub') {
-            this.returnType = new VoidType();
+            this._returnType = new VoidType();
         } else {
-            this.returnType = new DynamicType();
+            this._returnType = new DynamicType();
         }
         this.symbolTable = new SymbolTable(parentSymbolTable);
         for (let param of parameters) {
-            this.symbolTable.addSymbol(param.name.text, param.name.range, param.type);
+            this.symbolTable.addSymbol(param.name.text, param.name.range, param.getType());
         }
     }
 
@@ -168,7 +169,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 ...(this.parameters ?? []),
                 this.rightParen,
                 this.asToken,
-                this.returnTypeToken,
+                this.returnType,
                 this.body,
                 this.end
             );
@@ -181,10 +182,14 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
     public labelStatements = [] as LabelStatement[];
 
+
+    private _returnType: BscType;
     /**
      * The type this function returns
      */
-    public returnType: BscType;
+    public getReturnType() {
+        return this._returnType;
+    }
 
     /**
      * The list of function calls that are declared within this function scope. This excludes CallExpressions
@@ -241,7 +246,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 state.transpileToken(this.asToken),
                 ' ',
                 //return type
-                state.sourceNode(this.returnTypeToken, this.returnType.toTypeString(state.typeContext))
+                state.sourceNode(this.returnType, this.getReturnType().toTypeString(state.typeContext))
             );
         }
         if (includeBody) {
@@ -271,16 +276,18 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
             //This is the core of full-program walking...it allows us to step into sub functions
             if (options.walkMode & InternalWalkMode.recurseChildFunctions) {
+                walk(this, 'returnType', visitor, options);
                 walk(this, 'body', visitor, options);
+
             }
         }
     }
 
     getFunctionType(): FunctionType {
-        let functionType = new FunctionType(this.returnType);
+        let functionType = new FunctionType(this.getReturnType());
         functionType.isSub = this.functionType.text === 'sub';
         for (let param of this.parameters) {
-            functionType.addParameter(param.name.text, param.type, param.isOptional);
+            functionType.addParameter(param.name.text, param.getType(), param.isOptional);
         }
         return functionType;
     }
@@ -289,18 +296,22 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 export class FunctionParameterExpression extends Expression {
     constructor(
         public name: Identifier,
-        public type: BscType,
+        private typeInContext: BscType,
         public equalsToken?: Token,
         public defaultValue?: Expression,
         public asToken?: Token,
-        public typeToken?: Token,
+        public type?: TypeExpression,
         readonly namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
-        this.range = util.createBoundingRange(this.name, this.equalsToken, this.defaultValue, this.asToken, this.typeToken);
+        this.range = util.createBoundingRange(this.name, this.equalsToken, this.defaultValue, this.asToken, this.type);
     }
 
     public readonly range: Range;
+
+    public getType() {
+        return this.typeInContext;
+    }
 
     public transpile(state: BrsTranspileState) {
         let result = [
@@ -317,7 +328,7 @@ export class FunctionParameterExpression extends Expression {
             result.push(' ');
             result.push(state.transpileToken(this.asToken));
             result.push(' ');
-            result.push(state.sourceNode(this.typeToken, this.type.toTypeString(state.typeContext)));
+            result.push(state.sourceNode(this.type, this.getType().toTypeString(state.typeContext)));
         }
 
         return result;
@@ -327,6 +338,7 @@ export class FunctionParameterExpression extends Expression {
         // eslint-disable-next-line no-bitwise
         if (this.defaultValue && options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'defaultValue', visitor, options);
+            walk(this, 'type', visitor, options);
         }
     }
 
@@ -1475,6 +1487,135 @@ export class RegexLiteralExpression extends Expression {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+}
+
+export class TypeExpression extends Expression {
+    public constructor(
+        private tokens: {
+            type?: Token;
+        },
+        public namespaceName?: NamespacedVariableNameExpression
+    ) {
+        super();
+    }
+
+    public get range() {
+        const lastToken = this.tokens.type;
+        return util.createRangeFromPositions(this.tokens.type?.range.start, lastToken?.range.end);
+    }
+
+    private _type: BscType;
+    /**
+     * The this TypeExpression refers to
+     */
+    public get type(): BscType {
+        if (this._type) {
+            return this._type;
+        }
+        this._type = this.getType(ParseMode.BrighterScript);
+        return this._type;
+    }
+
+    /**
+     * Derive a BscType from the type token
+     * Can deal with multiple brackets to make multidimensional arrays, eg. float[][]
+     * Defaults to `DynamicType`
+     */
+    getType(parseMode: ParseMode = ParseMode.BrighterScript) {
+        let exprType = this.tokens.type
+            ? util.tokenToBscType(this.tokens.type, parseMode === ParseMode.BrighterScript, this.namespaceName)
+            : new DynamicType();
+        return exprType;
+    }
+
+    /**
+     * Is this a valid, (eg. known) type?
+     */
+    isValidType(parseMode: ParseMode = ParseMode.BrighterScript) {
+        return !!util.tokenToBscType(this.tokens.type, parseMode === ParseMode.BrighterScript, this.namespaceName);
+    }
+
+    /**
+     * Gives a human readable string that says the type
+     * @returns text to display to show the type
+     */
+    getText(): string {
+        let result = this.tokens.type.text;
+        return result;
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        let result = [];
+        //type declaration
+        result.push(state.sourceNode({ range: this.range }, this.type.toTypeString(state.typeContext)));
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+}
+
+export class ArrayTypeExpression extends TypeExpression {
+    public constructor(
+        public innerTypes: TypeExpression[], // this is an array so that in the future when we support union types
+        private bracketTokens: {
+            leftBracket?: Token;
+            rightBracket?: Token;
+        },
+        public namespaceName?: NamespacedVariableNameExpression
+    ) {
+        super({}, namespaceName);
+
+    }
+
+    /*
+     * TODO - Support union types
+    */
+    private get defaultTypeExpression() {
+        return this.innerTypes[0];
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(this.defaultTypeExpression.range.start, this.bracketTokens.rightBracket?.range.end);
+    }
+
+    /**
+     * Derive a BscType from the type token
+     * Returns an array type with the inner types based on the inner type expressions
+     */
+    getType(parseMode: ParseMode = ParseMode.BrighterScript) {
+        const innerBscTypes = this.innerTypes.map(inner => inner.getType(parseMode));
+        return new ArrayType(...innerBscTypes);
+    }
+
+    /**
+     * Is this a valid, (eg. known) type?
+     */
+    isValidType(parseMode: ParseMode = ParseMode.BrighterScript) {
+        if (parseMode === ParseMode.BrighterScript) {
+            return this.innerTypes.reduce((validSoFar, innerType) => {
+                return validSoFar && innerType.isValidType(parseMode);
+            }, true);
+        }
+        return false;
+    }
+
+    /**
+     * Gives a human readable string that says the type
+     * @returns text to display to show the type
+     */
+    getText(): string {
+        return this.defaultTypeExpression.getText() + '[]';
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            for (let i = 0; i < this.innerTypes.length; i++) {
+                walk(this.innerTypes, i, visitor, options, this);
+            }
+        }
     }
 }
 
