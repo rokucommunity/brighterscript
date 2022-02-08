@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileReference, FileObj, BscFile, SemanticToken, BeforeFileParseEvent, BeforeFileTranspileEvent, AfterFileTranspileEvent } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, BeforeFileParseEvent, BeforeFileTranspileEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -47,11 +47,6 @@ export interface SignatureInfoObj {
     index: number;
     key: string;
     signature: SignatureInformation;
-}
-
-export interface FileLink<T> {
-    item: T;
-    file: BrsFile;
 }
 
 interface PartialStatementInfo {
@@ -300,6 +295,7 @@ export class Program {
                 }, diagnostics);
                 return finalDiagnostics;
             });
+
             this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
             return filteredDiagnostics;
         });
@@ -347,17 +343,19 @@ export class Program {
     /**
      * Update internal maps with this file reference
      */
-    private assignFile(file: BscFile) {
+    private assignFile<T extends BscFile>(file: T) {
         this.files[file.srcPath.toLowerCase()] = file;
         this.pkgMap[file.pkgPath.toLowerCase()] = file;
+        return file;
     }
 
     /**
      * Remove this file from internal maps
      */
-    private unassignFile(file: BscFile) {
+    private unassignFile<T extends BscFile>(file: T) {
         delete this.files[file.srcPath.toLowerCase()];
         delete this.pkgMap[file.pkgPath.toLowerCase()];
+        return file;
     }
 
     /**
@@ -427,7 +425,10 @@ export class Program {
             } as BeforeFileParseEvent;
 
             if (fileExtension === '.brs' || fileExtension === '.bs') {
-                let brsFile = new BrsFile(srcPath, pkgPath, this);
+                //add the file to the program
+                const brsFile = this.assignFile(
+                    new BrsFile(srcPath, pkgPath, this)
+                );
 
                 //add file to the `source` dependency list
                 if (brsFile.pkgPath.startsWith('pkg:/source/')) {
@@ -460,11 +461,11 @@ export class Program {
                 //resides in the components folder (Roku will only parse xml files in the components folder)
                 lowerPkgPath.startsWith('pkg:/components/')
             ) {
-                const xmlFile = new XmlFile(srcPath, pkgPath, this);
-
-                this.assignFile(xmlFile);
-
                 //add the file to the program
+                const xmlFile = this.assignFile(
+                    new XmlFile(srcPath, pkgPath, this)
+                );
+
                 this.plugins.emit('beforeFileParse', beforeFileParseEvent);
 
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
@@ -513,11 +514,12 @@ export class Program {
 
     /**
      * Remove a set of files from the program
-     * @param srcPaths
+     * @param filePaths can be an array of srcPath or destPath strings
+     * @param normalizePath should this function repair and standardize the filePaths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
      */
-    public removeFiles(srcPaths: string[]) {
-        for (let srcPath of srcPaths) {
-            this.removeFile(srcPath);
+    public removeFiles(filePaths: string[], normalizePath = true) {
+        for (let filiePath of filePaths) {
+            this.removeFile(filiePath, normalizePath);
         }
     }
 
@@ -525,7 +527,6 @@ export class Program {
      * Remove a file from the program
      * @param filePath can be a srcPath, a pkgPath, or a destPath (same as pkgPath but without `pkg:/`)
      * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
-
      */
     public removeFile(filePath: string, normalizePath = true) {
         this.logger.debug('Program.removeFile()', filePath);
@@ -759,6 +760,19 @@ export class Program {
             }
         }
         return result;
+    }
+
+    /**
+     * Get the first found scope for a file.
+     */
+    public getFirstScopeForFile(file: XmlFile | BrsFile): Scope {
+        for (let key in this.scopes) {
+            let scope = this.scopes[key];
+
+            if (scope.hasFile(file)) {
+                return scope;
+            }
+        }
     }
 
     public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {
@@ -1347,7 +1361,7 @@ export class Program {
             return collection;
         }, {});
 
-        const entries = [] as BeforeFileTranspileEvent[];
+        const entries: BeforeFileTranspileEvent[] = [];
         for (const key in this.files) {
             const file = this.files[key];
             let filePathObj = mappedFileEntries[s`${file.srcPath}`];

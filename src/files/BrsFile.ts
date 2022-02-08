@@ -6,7 +6,7 @@ import chalk from 'chalk';
 import * as path from 'path';
 import type { NamespaceContainer, Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
-import type { Callable, CallableArg, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
+import type { Callable, CallableArg, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink } from '../interfaces';
 import type { Token } from '../lexer/Token';
 import { isToken } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
@@ -15,7 +15,8 @@ import type { TokenChainMember } from '../parser/Parser';
 import { Parser, ParseMode, getBscTypeFromExpression, TokenUsage } from '../parser/Parser';
 import type { FunctionExpression, VariableExpression, Expression, DottedGetExpression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
-import type { FileLink, Program, SignatureInfoObj } from '../Program';
+import type { Program, SignatureInfoObj } from '../Program';
+import { DynamicType } from '../types/DynamicType';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
@@ -29,7 +30,6 @@ import type { BscType, SymbolContainer } from '../types/BscType';
 import { getTypeFromContext } from '../types/BscType';
 import { UninitializedType } from '../types/UninitializedType';
 import { InvalidType } from '../types/InvalidType';
-import { DynamicType } from '../types/DynamicType';
 import type { SymbolTable } from '../SymbolTable';
 
 /**

@@ -121,9 +121,11 @@ describe('LanguageServer', () => {
     function addScriptFile(name: string, contents: string, extension = 'brs') {
         const pkgPath = `pkg:/components/${name}.${extension}`;
         const file = program.setFile<XmlFile>(pkgPath, contents);
-        const document = TextDocument.create(util.pathToUri(file.srcPath), 'brightscript', 1, contents);
-        svr.documents._documents[document.uri] = document;
-        return document;
+        if (file) {
+            const document = TextDocument.create(util.pathToUri(file.srcPath), 'brightscript', 1, contents);
+            svr.documents._documents[document.uri] = document;
+            return document;
+        }
     }
 
     function writeToFs(srcPath: string, contents: string) {

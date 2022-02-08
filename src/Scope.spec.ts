@@ -914,8 +914,6 @@ describe('Scope', () => {
                 </component>
             `);
             program.setFile(s`components/comp.brs`, ``);
-            const sourceScope = program.getScopeByName('source');
-            const compScope = program.getScopeByName('components/comp.xml');
             program.plugins = new PluginInterface([], new Logger());
             const plugin = program.plugins.add({
                 name: 'Emits validation events',

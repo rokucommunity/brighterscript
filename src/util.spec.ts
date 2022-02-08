@@ -43,12 +43,6 @@ describe('util', () => {
         });
     });
 
-    describe('getRokuPkgPath', () => {
-        it('replaces more than one windows slash in a path', () => {
-            expect(util.sanitizePkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
-        });
-    });
-
     describe('loadConfigFile', () => {
         it('returns undefined when no path is provided', () => {
             expect(util.loadConfigFile(undefined)).to.be.undefined;

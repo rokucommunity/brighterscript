@@ -1212,13 +1212,16 @@ export class Util {
         }
     }
 
+    /**
+     * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
+     */
     public standardizePath(thePath: string) {
         return util.driveLetterToLower(
             rokuDeploy.standardizePath(thePath)
         );
     }
 
-    /*
+    /**
      * Copy the version of bslib from local node_modules to the staging folder
      */
     public async copyBslibToStaging(stagingDir: string) {
