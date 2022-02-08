@@ -1,7 +1,7 @@
 import type { BscFile, BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { Diagnostic } from 'vscode-languageserver';
+import type { CompletionItem, Diagnostic, Position } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from 'chai';
 import type { CodeActionShorthand } from './CodeActionUtil';
@@ -258,4 +258,54 @@ function getTestFileAction(
             map: codeWithMap.map
         };
     };
+}
+
+/**
+ * Create a new object based on the keys from another object
+ */
+function pick<T extends Record<string, any>>(example: T, subject: Record<string, any>): T {
+    if (!subject) {
+        return subject as T;
+    }
+    const result = {};
+    for (const key of Object.keys(example)) {
+        result[key] = subject?.[key];
+    }
+    return result as T;
+}
+
+/**
+ * Test a set of completions includes the provided items
+ */
+export function expectCompletionsIncludes(completions: CompletionItem[], expectedItems: Array<string | Partial<CompletionItem>>) {
+    for (const expectedItem of expectedItems) {
+        if (typeof expectedItem === 'string') {
+            expect(completions.map(x => x.label)).includes(expectedItem);
+        } else {
+            //match all existing properties of the expectedItem
+            let actualItem = pick(
+                expectedItem,
+                completions.find(x => x.label === expectedItem.label)
+            );
+            expect(actualItem).to.eql(expectedItem);
+        }
+    }
+}
+
+/**
+ * Expect that the completions list does not include the provided items
+ */
+export function expectCompletionsExcludes(completions: CompletionItem[], expectedItems: Array<string | Partial<CompletionItem>>) {
+    for (const expectedItem of expectedItems) {
+        if (typeof expectedItem === 'string') {
+            expect(completions.map(x => x.label)).not.includes(expectedItem);
+        } else {
+            //match all existing properties of the expectedItem
+            let actualItem = pick(
+                expectedItem,
+                completions.find(x => x.label === expectedItem.label)
+            );
+            expect(actualItem).to.not.eql(expectedItem);
+        }
+    }
 }

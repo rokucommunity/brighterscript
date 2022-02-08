@@ -50,7 +50,7 @@ export class ScopeValidator {
                 //get the name of the enum (including leading namespace if applicable)
                 const enumName = parts.join('.');
                 const lowerEnumName = enumName.toLowerCase();
-                const theEnum = enumLookup.get(lowerEnumName).item;
+                const theEnum = enumLookup.get(lowerEnumName)?.item;
                 if (theEnum) {
                     const members = membersByEnum.getOrAdd(lowerEnumName, () => theEnum.getMemberValueMap());
                     const value = members?.get(memberName.toLowerCase());

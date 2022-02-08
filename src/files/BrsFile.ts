@@ -772,18 +772,17 @@ export class BrsFile {
             }
         }
 
-        //temporary workaround - the enums are not appearing on namspace, so we have to look them up first
-        let enumCompletions = this.getEnumStatementCompletions(currentToken, this.parseMode);
-        let namespaceCompletions = this.getNamespaceCompletions(currentToken, this.parseMode, scope);
+        const namespaceCompletions = this.getNamespaceCompletions(currentToken, this.parseMode, scope);
         if (namespaceCompletions.length > 0) {
-            return [...namespaceCompletions, ...enumCompletions];
+            return [...namespaceCompletions];
         }
 
-        let enumMemberCompletions = this.getEnumMemberStatementCompletions(currentToken, this.parseMode);
+        const enumMemberCompletions = this.getEnumMemberStatementCompletions(currentToken, this.parseMode, scope);
         if (enumMemberCompletions.length > 0) {
-            // no other completion is valid, in this case
+            // no other completion is valid in this case
             return enumMemberCompletions;
         }
+
         //determine if cursor is inside a function
         let functionScope = this.getFunctionScopeAtPosition(position);
         if (!functionScope) {
@@ -792,14 +791,19 @@ export class BrsFile {
                 // there's a new keyword, so only class types are viable here
                 return [...this.getGlobalClassStatementCompletions(currentToken, this.parseMode)];
             } else {
-                return [...KeywordCompletions, ...this.getGlobalClassStatementCompletions(currentToken, this.parseMode), ...namespaceCompletions, ...this.getEnumStatementCompletions(currentToken, this.parseMode)];
+                return [
+                    ...KeywordCompletions,
+                    ...this.getGlobalClassStatementCompletions(currentToken, this.parseMode),
+                    ...namespaceCompletions,
+                    ...this.getEnumStatementCompletions(currentToken, this.parseMode, scope)
+                ];
             }
         }
 
         const classNameCompletions = this.getGlobalClassStatementCompletions(currentToken, this.parseMode);
         const newToken = this.getTokenBefore(currentToken, TokenKind.New);
         if (newToken) {
-            //we are after a new keyword; so we can only be namespaces or classes at this point
+            //we are after a new keyword; so we can only be top-level namespaces or classes at this point
             result.push(...classNameCompletions);
             result.push(...namespaceCompletions);
             return result;
@@ -833,7 +837,7 @@ export class BrsFile {
             result.push(...classNameCompletions);
 
             //include enums
-            result.push(...enumCompletions);
+            result.push(...this.getEnumStatementCompletions(currentToken, this.parseMode, scope));
 
             //include the global callables
             result.push(...scope.getCallablesAsCompletions(this.parseMode));
@@ -945,54 +949,49 @@ export class BrsFile {
         return [...results.values()];
     }
 
-    private getEnumStatementCompletions(currentToken: Token, parseMode: ParseMode): CompletionItem[] {
-        if (parseMode === ParseMode.BrightScript) {
+    private getEnumStatementCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
+        if (parseMode !== ParseMode.BrighterScript) {
             return [];
         }
         let results = new Map<string, CompletionItem>();
-        let completionName = this.getPartialVariableName(currentToken)?.toLowerCase();
-        let scopes = this.program.getScopesForFile(this);
-        for (let scope of scopes) {
-            let enumMap = scope.getEnumMap();
-            for (const key of [...enumMap.keys()]) {
-                let es = enumMap.get(key).item;
-                if (es.fullName.startsWith(completionName)) {
+        let enumMap = scope.getEnumMap();
+        for (const key of [...enumMap.keys()]) {
+            let enumStatement = enumMap.get(key).item;
 
-                    if (!results.has(es.fullName)) {
-                        results.set(es.fullName, {
-                            label: es.name,
-                            kind: CompletionItemKind.Enum
-                        });
-                    }
-                }
+            if (!results.has(enumStatement.fullName)) {
+                results.set(enumStatement.fullName, {
+                    label: enumStatement.name,
+                    kind: CompletionItemKind.Enum
+                });
             }
         }
         return [...results.values()];
     }
 
-    private getEnumMemberStatementCompletions(currentToken: Token, parseMode: ParseMode): CompletionItem[] {
+    private getEnumMemberStatementCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
         if (parseMode === ParseMode.BrightScript || !currentToken) {
             return [];
         }
         const results = new Map<string, CompletionItem>();
         const completionName = this.getPartialVariableName(currentToken)?.toLowerCase();
-        const namespaceNameLower = this.getNamespaceStatementForPosition(currentToken.range.end)?.name.toLowerCase();
+        //if we don't have a completion name, or if there's no period in the name, then this is not to the right of an enum name
+        if (!completionName || !completionName.includes('.')) {
+            return [];
+        }
         const enumNameLower = completionName?.split(/\.\w?$/)[0]?.toLowerCase();
-        let scopes = this.program.getScopesForFile(this);
-        for (let scope of scopes) {
-            const enumMap = scope.getEnumMap();
-            //get the enum statement with this name (check without namespace prefix first, then with inferred namespace prefix next)
-            const enumStatement = (enumMap.get(enumNameLower) ?? enumMap.get(namespaceNameLower + '.' + enumNameLower))?.item;
-            //if we found an enum with this name
-            if (enumStatement) {
-                for (const member of enumStatement.getMembers()) {
-                    const name = enumStatement.fullName + '.' + member.name;
-                    const nameLower = name.toLowerCase();
-                    results.set(nameLower, {
-                        label: member.name,
-                        kind: CompletionItemKind.EnumMember
-                    });
-                }
+        const namespaceNameLower = this.getNamespaceStatementForPosition(currentToken.range.end)?.name.toLowerCase();
+        const enumMap = scope.getEnumMap();
+        //get the enum statement with this name (check without namespace prefix first, then with inferred namespace prefix next)
+        const enumStatement = (enumMap.get(enumNameLower) ?? enumMap.get(namespaceNameLower + '.' + enumNameLower))?.item;
+        //if we found an enum with this name
+        if (enumStatement) {
+            for (const member of enumStatement.getMembers()) {
+                const name = enumStatement.fullName + '.' + member.name;
+                const nameLower = name.toLowerCase();
+                results.set(nameLower, {
+                    label: member.name,
+                    kind: CompletionItemKind.EnumMember
+                });
             }
         }
         return [...results.values()];
@@ -1004,13 +1003,14 @@ export class BrsFile {
             return [];
         }
 
-        let completionName = this.getPartialVariableName(currentToken, [TokenKind.New]);
-        if (!completionName) {
+        const completionName = this.getPartialVariableName(currentToken, [TokenKind.New]);
+        //if we don't have a completion name, or if there's no period in the name, then this is not a namespaced variable
+        if (!completionName || !completionName.includes('.')) {
             return [];
         }
         //remove any trailing identifer and then any trailing dot, to give us the
         //name of its immediate parent namespace
-        let closestParentNamespaceName = completionName.replace(/\.([a-z0-9_]*)?$/gi, '');
+        let closestParentNamespaceName = completionName.replace(/\.([a-z0-9_]*)?$/gi, '').toLowerCase();
         let newToken = this.getTokenBefore(currentToken, TokenKind.New);
 
         let result = new Map<string, CompletionItem>();
@@ -1020,7 +1020,7 @@ export class BrsFile {
             //NameA
             //NameA.NameB
             //NameA.NameB.NameC
-            if (namespace.fullName.toLowerCase() === closestParentNamespaceName.toLowerCase()) {
+            if (namespace.fullName.toLowerCase() === closestParentNamespaceName) {
                 //add all of this namespace's immediate child namespaces, bearing in mind if we are after a new keyword
                 for (let [, ns] of namespace.namespaces) {
                     if (!newToken || ns.statements.find((s) => isClassStatement(s))) {
@@ -1036,26 +1036,20 @@ export class BrsFile {
                 //add function and class statement completions
                 for (let stmt of namespace.statements) {
                     if (isClassStatement(stmt)) {
-                        if (!result.has(stmt.name.text)) {
-                            result.set(stmt.name.text, {
-                                label: stmt.name.text,
-                                kind: CompletionItemKind.Class
-                            });
-                        }
+                        result.set(stmt.name.text, {
+                            label: stmt.name.text,
+                            kind: CompletionItemKind.Class
+                        });
                     } else if (isFunctionStatement(stmt) && !newToken) {
-                        if (!result.has(stmt.name.text)) {
-                            result.set(stmt.name.text, {
-                                label: stmt.name.text,
-                                kind: CompletionItemKind.Function
-                            });
-                        }
+                        result.set(stmt.name.text, {
+                            label: stmt.name.text,
+                            kind: CompletionItemKind.Function
+                        });
                     } else if (isEnumStatement(stmt) && !newToken) {
-                        if (!result.has(stmt.name)) {
-                            result.set(stmt.name, {
-                                label: stmt.name,
-                                kind: CompletionItemKind.Enum
-                            });
-                        }
+                        result.set(stmt.name, {
+                            label: stmt.name,
+                            kind: CompletionItemKind.Enum
+                        });
                     }
                 }
             }

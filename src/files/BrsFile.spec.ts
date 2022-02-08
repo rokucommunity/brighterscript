@@ -1,7 +1,7 @@
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
 import * as path from 'path';
-import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
+import { CompletionItem, CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import type { Callable, CommentFlag, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
 import { BooleanType } from '../types/BooleanType';
@@ -17,7 +17,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, expectCompletionsIncludes, expectCompletionsExcludes } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
 
@@ -171,6 +171,25 @@ describe('BrsFile', () => {
         });
 
         describe('namespaces', () => {
+            it('gets full namespace completions at any point through the leading identifier', () => {
+                program.addOrReplaceFile('source/main.bs', `
+                    sub main()
+                        foo.bar
+                    end sub
+
+                    namespace foo.bar
+                    end namespace
+
+                    class Person
+                    end class
+                `);
+
+                const result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 24)).map(x => x.label);
+                expect(result).includes('main');
+                expect(result).includes('foo');
+                expect(result).includes('Person');
+            });
+
             it('gets namespace completions', () => {
                 program.addOrReplaceFile('source/main.bs', `
                     namespace foo.bar
@@ -196,42 +215,101 @@ describe('BrsFile', () => {
         });
 
         describe('enums', () => {
-            it('gets enum completions', () => {
+            it.only('gets enum statement completions from global enum', () => {
                 program.addOrReplaceFile('source/main.bs', `
-                    enum foo
-                        bar1
-                        bar2
-                    end enum
-
                     sub Main()
-                        print "hello"
-                        foo.ba
-                        test.foo2.ba
+                        direction.ba
                     end sub
-
-                    namespace test
-                        function fooFace2()
-                        end function
-                        class fooClass2
-                        end class
-
-                        enum foo2
-                            bar2_1
-                            bar2_2
-                        end enum
-                    end namespace
-                    function fooFace()
-                    end function
-                    class fooClass
-                    end class
-                    enum foo3
-                        bar3_1
-                        bar3_2
+                    enum Direction
+                        up
+                        down
                     end enum
                 `);
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 25)), [{
+                    label: 'Direction',
+                    kind: CompletionItemKind.Enum
+                }]);
+            });
+
+            it('gets enum member completions from global enum', () => {
+                program.addOrReplaceFile('source/main.bs', `
+                    sub Main()
+                        direction.ba
+                    end sub
+                    enum Direction
+                        up
+                        down
+                    end enum
+                `);
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 34)), [{
+                    label: 'up',
+                    kind: CompletionItemKind.EnumMember
+                }, {
+                    label: 'down',
+                    kind: CompletionItemKind.EnumMember
+                }]);
+            });
+
+            it('includes enum member completions from namespace enum', () => {
+                program.addOrReplaceFile('source/main.bs', `
+                    sub Main()
+                        enums.direction.ba
+                    end sub
+                    namespace enums
+                        enum Direction
+                            up
+                            down
+                        end enum
+                    end namespace
+                `);
+                //should NOT find these enums
+                expectCompletionsExcludes(program.getCompletions('source/main.brs', util.createPosition(2, 28)), [{
+                    label: 'up',
+                    kind: CompletionItemKind.EnumMember
+                }, {
+                    label: 'down',
+                    kind: CompletionItemKind.EnumMember
+                }]);
+            });
+
+            it('excludes enum member completions from namespace enum', () => {
+                program.addOrReplaceFile('source/main.bs', `
+                    sub Main()
+                        direction.ba
+                    end sub
+                    namespace enums
+                        enum Direction
+                            up
+                            down
+                        end enum
+                    end namespace
+                `);
+                //should NOT find these enums
+                expectCompletionsExcludes(program.getCompletions('source/main.brs', util.createPosition(2, 28)), [{
+                    label: 'up',
+                    kind: CompletionItemKind.EnumMember
+                }, {
+                    label: 'down',
+                    kind: CompletionItemKind.EnumMember
+                }]);
+            });
+
+
+            it.skip('stuff', () => {
 
                 let result;
-                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 26));
+                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 26));
+                expect(result.map(x => x.label)).include.members([
+                    'foo',
+                    'fooFace',
+                    'fooClass',
+                    'foo3'
+                ]);
+                expect(result[2].kind).to.equal(CompletionItemKind.Enum);
+                expect(result[3].kind).to.equal(CompletionItemKind.Enum);
+
+
+                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 27));
                 expect(result.map(x => x.label)).include.members([
                     'foo',
                     'foo3',
@@ -241,18 +319,7 @@ describe('BrsFile', () => {
                 expect(result[2].kind).to.equal(CompletionItemKind.Enum);
                 expect(result[3].kind).to.equal(CompletionItemKind.Enum);
 
-
-                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 27));
-                expect(result.map(x => x.label)).include.members([
-                    'foo',
-                    'foo3',
-                    'fooFace',
-                    'fooClass'
-                ]);
-                expect(result[2].kind).to.equal(CompletionItemKind.Enum);
-                expect(result[3].kind).to.equal(CompletionItemKind.Enum);
-
-                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 30));
+                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 30));
                 expect(result.map(x => x.label)).include.members([
                     'bar1',
                     'bar2'
@@ -260,7 +327,7 @@ describe('BrsFile', () => {
                 expect(result[0].kind).to.equal(CompletionItemKind.EnumMember);
                 expect(result[1].kind).to.equal(CompletionItemKind.EnumMember);
 
-                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(9, 33));
+                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 33));
                 expect(result.map(x => x.label)).include.members([
                     'foo2',
                     'fooFace2',
@@ -268,7 +335,7 @@ describe('BrsFile', () => {
                 ]);
                 expect(result[2].kind).to.equal(CompletionItemKind.Enum);
 
-                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(9, 36));
+                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 36));
                 expect(result.map(x => x.label)).include.members([
                     'bar2_1',
                     'bar2_2'
