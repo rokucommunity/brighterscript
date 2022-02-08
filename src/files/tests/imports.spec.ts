@@ -53,7 +53,7 @@ describe('import statements', () => {
                 return true
             end function
         `);
-        let files = program.getFiles().filter(x => !!x).map(x => {
+        let files = program.getAllFiles().filter(x => !!x).map(x => {
             return {
                 src: x.srcPath,
                 dest: util.removeProtocol(x.pkgPath)

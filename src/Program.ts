@@ -160,7 +160,7 @@ export class Program {
     /**
      * Get a copy of the list of files currently loaded in the program
      */
-    public getFiles() {
+    public getAllFiles() {
         return Object.values(this.files);
     }
 
@@ -725,6 +725,17 @@ export class Program {
             }
         }
         return false;
+    }
+
+    /**
+     * Get the files for a list of filePaths
+     * @param filePaths can be an array of srcPath or a destPath strings
+     * @param normalizePath should this function repair and standardize the paths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
+     */
+    public getFiles<T extends BscFile>(filePaths: string[], normalizePath = true) {
+        return filePaths
+            .map(filePath => this.getFile(filePath, normalizePath))
+            .filter(file => file !== undefined) as T[];
     }
 
     /**

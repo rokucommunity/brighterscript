@@ -81,25 +81,25 @@ describe('Program', () => {
         });
 
         it('only parses xml files as components when file is found within the "components" folder', () => {
-            expect(program.getFiles().length).to.equal(0);
+            expect(program.getAllFiles().length).to.equal(0);
 
             program.setFile({
                 src: s`${rootDir}/components/comp1.xml`,
                 dest: util.pathSepNormalize(`components/comp1.xml`)
             }, '');
-            expect(program.getFiles().length).to.equal(1);
+            expect(program.getAllFiles().length).to.equal(1);
 
             program.setFile({
                 src: s`${rootDir}/notComponents/comp1.xml`,
                 dest: util.pathSepNormalize(`notComponents/comp1.xml`)
             }, '');
-            expect(program.getFiles().length).to.equal(1);
+            expect(program.getAllFiles().length).to.equal(1);
 
             program.setFile({
                 src: s`${rootDir}/componentsExtra/comp1.xml`,
                 dest: util.pathSepNormalize(`componentsExtra/comp1.xml`)
             }, '');
-            expect(program.getFiles().length).to.equal(1);
+            expect(program.getAllFiles().length).to.equal(1);
         });
 
         it('supports empty statements for transpile', async () => {
