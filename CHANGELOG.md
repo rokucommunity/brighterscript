@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.14](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.13...v1.0.0-alpha.14) - 2022-02-08
+### Added
+ - array type support for parameters and return types ([#499](https://github.com/rokucommunity/brighterscript/pull/499))
+ - all changes from [v0.42.0](#0420---2022-01-10)
+
+
+
 ## [0.44.0](https://github.com/rokucommunity/brighterscript/compare/v0.43.1...v0.44.0) - 2022-02-08
 ### Added
  - `onScopeValidate` plugin event useful when plugins want to contribute scope validations ([#505](https://github.com/rokucommunity/brighterscript/pull/505))
@@ -43,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [v1.0.0-alpha.13](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.12...v1.0.0-alpha.13) - 2022-01-10
+## [1.0.0-alpha.13](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.12...v1.0.0-alpha.13) - 2022-01-10
 ### Added
  - all changes from [v0.42.0](#0420---2022-01-10)
 
@@ -83,7 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [v1.0.0-alpha.12](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.11...v1.0.0-alpha.12) - 2021-10-17
+## [1.0.0-alpha.12](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.11...v1.0.0-alpha.12) - 2021-10-17
 ### Added
  - all changes from [v0.41.2](#0411---2021-10-17)
 
