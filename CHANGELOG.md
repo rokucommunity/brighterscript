@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.44.0](https://github.com/rokucommunity/brighterscript/compare/v0.43.1...v0.44.0) - 2022-02-08
+### Added
+ - `onScopeValidate` plugin event useful when plugins want to contribute scope validations ([#505](https://github.com/rokucommunity/brighterscript/pull/505))
+### Changed
+ - show plugin transpile modifications in the `getTranspiledFile` callback (used for "show preview" functionality in vscode) ([#502](https://github.com/rokucommunity/brighterscript/pull/502))
+ - make `Program.getFile` more flexible, and deprecate `Program.getFileByPkgPath`, `Program.getFileByPathAbsolute` ([#506](https://github.com/rokucommunity/brighterscript/pull/506))
+ - add `Program.getFiles` and deprecate `Program.getFilesByPkgPath` ([#506](https://github.com/rokucommunity/brighterscript/pull/506))
+ - move file validation plugin event emitting into `Program.validate()` which means you can't trigger those events by calling `File.validate()` anymore.  ([#504](https://github.com/rokucommunity/brighterscript/pull/504))
+ - support generics for `Cache` class ([#503](https://github.com/rokucommunity/brighterscript/pull/503))
+### Fixed
+ - bug in hover showing required params as optional and optional params as required ([#501](https://github.com/rokucommunity/brighterscript/pull/501))
+
+
+
 ## [0.43.1](https://github.com/rokucommunity/brighterscript/compare/v0.43.0...v0.43.1) - 2022-01-28
 ### Fixed
  - crash when hovering over global functions ([#497](https://github.com/rokucommunity/brighterscript/pull/497))
