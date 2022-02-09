@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { LiteralExpression } from '../../Expression';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { expectDiagnostics, expectInstanceOf, expectZeroDiagnostics, getTestTranspile, trim } from '../../../testHelpers.spec';
+import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectInstanceOf, expectZeroDiagnostics, getTestTranspile, trim } from '../../../testHelpers.spec';
 import { ParseMode, Parser } from '../../Parser';
 import { util, standardizePath as s } from '../../../util';
 import { EnumStatement, InterfaceStatement } from '../../Statement';
@@ -532,77 +532,238 @@ describe('EnumStatement', () => {
     });
 
     describe('completions', () => {
-        it('gets enum member completions for non-namespaced enum', () => {
+        it('gets enum statement completions from global enum', () => {
             program.addOrReplaceFile('source/main.bs', `
+                sub Main()
+                    direction.down
+                end sub
                 enum Direction
                     up
                     down
                 end enum
-
-                sub Main()
-                    print Direction.
-                end sub
             `);
-            program.validate();
-            expect(
-                program.getCompletions('source/main.bs', util.createPosition(7, 36))
-            ).to.eql([{
+            //      |direction.down
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 25)), [{
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }]);
+            //      dire|ction.down
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 28)), [{
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }]);
+            //      direction|.down
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 33)), [{
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }]);
+        });
+
+        it('gets enum member completions from global enum', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                sub Main()
+                    direction.down
+                end sub
+                enum Direction
+                    up
+                    down
+                end enum
+            `);
+            //      direction.|down
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 34)), [{
                 label: 'up',
                 kind: CompletionItemKind.EnumMember
             }, {
                 label: 'down',
                 kind: CompletionItemKind.EnumMember
-            }] as CompletionItem[]);
+            }]);
+            //      direction.do|wn
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 36)), [{
+                label: 'up',
+                kind: CompletionItemKind.EnumMember
+            }, {
+                label: 'down',
+                kind: CompletionItemKind.EnumMember
+            }]);
+            //      direction.down|
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 38)), [{
+                label: 'up',
+                kind: CompletionItemKind.EnumMember
+            }, {
+                label: 'down',
+                kind: CompletionItemKind.EnumMember
+            }]);
         });
 
-        it('gets enum member completions for namespaced enum', () => {
+        it('gets enum statement completions from namespaced enum', () => {
             program.addOrReplaceFile('source/main.bs', `
-                namespace Enums
+                sub Main()
+                    enums.direction.down
+                end sub
+                namespace enums
                     enum Direction
                         up
                         down
                     end enum
                 end namespace
-
-                sub Main()
-                    print Enums.Direction.
-                end sub
             `);
-            program.validate();
-            expect(
-                program.getCompletions('source/main.bs', util.createPosition(9, 42))
-            ).to.eql([{
+            //      enums.|direction.down
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 30)), [{
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }]);
+            //      enums.dire|ction.down
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 34)), [{
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }]);
+            //      enums.direction|.down
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 39)), [{
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }]);
+        });
+
+        it('gets enum member completions from namespaced enum', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                sub Main()
+                    enums.direction.down
+                end sub
+                namespace enums
+                    enum Direction
+                        up
+                        down
+                    end enum
+                end namespace
+            `);
+            //      enums.direction.|down
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 40)), [{
                 label: 'up',
                 kind: CompletionItemKind.EnumMember
             }, {
                 label: 'down',
                 kind: CompletionItemKind.EnumMember
-            }] as CompletionItem[]);
+            }]);
+            //      enums.direction.do|wn
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 42)), [{
+                label: 'up',
+                kind: CompletionItemKind.EnumMember
+            }, {
+                label: 'down',
+                kind: CompletionItemKind.EnumMember
+            }]);
+            //      enums.direction.down|
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 44)), [{
+                label: 'up',
+                kind: CompletionItemKind.EnumMember
+            }, {
+                label: 'down',
+                kind: CompletionItemKind.EnumMember
+            }]);
         });
 
-        it('gets enum member completions for namespace-inferred enum', () => {
+        it('excludes enum member completions from namespace enum', () => {
             program.addOrReplaceFile('source/main.bs', `
-                namespace Name.Space
+                sub Main()
+                    direction.ba
+                end sub
+                namespace enums
                     enum Direction
                         up
                         down
                     end enum
+                end namespace
+            `);
+            //should NOT find these enums
+            expectCompletionsExcludes(program.getCompletions('source/main.brs', util.createPosition(2, 28)), [{
+                label: 'up',
+                kind: CompletionItemKind.EnumMember
+            }, {
+                label: 'down',
+                kind: CompletionItemKind.EnumMember
+            }]);
+        });
 
-                    sub WriteMessage()
-                        print Direction.
+        it('infers namespace for enum statement completions', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                namespace enums
+                    sub Main()
+                        direction.down
+                    end sub
+                    enum Direction
+                        up
+                        down
+                    end enum
+                end namespace
+            `);
+            //          dire|ction.down
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 33)), [{
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }]);
+        });
+
+        it('infers namespace for enum member completions', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                namespace enums
+                    sub Main()
+                        direction.down
+                    end sub
+                    enum Direction
+                        up
+                        down
+                    end enum
+                end namespace
+            `);
+            //          direction.do|wn
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 40)), [{
+                label: 'up',
+                kind: CompletionItemKind.EnumMember
+            }, {
+                label: 'down',
+                kind: CompletionItemKind.EnumMember
+            }]);
+        });
+
+        it('supports explicit namespace for enum statement completions', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                namespace enums
+                    sub Main()
+                        enums.direction.down
+                    end sub
+                    enum Direction
+                        up
+                        down
+                    end enum
+                end namespace
+            `);
+            //          enums.dire|ction.down
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 38)), [{
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }]);
+        });
+
+        it('supports explicit namespace for enum statement completions', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                namespace logger
+                    sub log()
+                        enums.direction.down
                     end sub
                 end namespace
+                namespace enums
+                    enum Direction
+                        up
+                        down
+                    end enum
+                end namespace
             `);
-            program.validate();
-            expect(
-                program.getCompletions('source/main.bs', util.createPosition(8, 40))
-            ).to.eql([{
-                label: 'up',
-                kind: CompletionItemKind.EnumMember
-            }, {
-                label: 'down',
-                kind: CompletionItemKind.EnumMember
-            }] as CompletionItem[]);
+            //          enums.dire|ction.down
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 38)), [{
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }]);
         });
     });
+
 });
