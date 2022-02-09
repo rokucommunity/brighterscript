@@ -542,17 +542,17 @@ describe('EnumStatement', () => {
                 end enum
             `);
             //      |direction.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 25)), [{
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 20)), [{
                 label: 'Direction',
                 kind: CompletionItemKind.Enum
             }]);
             //      dire|ction.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 28)), [{
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 24)), [{
                 label: 'Direction',
                 kind: CompletionItemKind.Enum
             }]);
             //      direction|.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 33)), [{
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 29)), [{
                 label: 'Direction',
                 kind: CompletionItemKind.Enum
             }]);
@@ -569,7 +569,7 @@ describe('EnumStatement', () => {
                 end enum
             `);
             //      direction.|down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 34)), [{
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 30)), [{
                 label: 'up',
                 kind: CompletionItemKind.EnumMember
             }, {
@@ -577,7 +577,7 @@ describe('EnumStatement', () => {
                 kind: CompletionItemKind.EnumMember
             }]);
             //      direction.do|wn
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 36)), [{
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 32)), [{
                 label: 'up',
                 kind: CompletionItemKind.EnumMember
             }, {
@@ -585,7 +585,7 @@ describe('EnumStatement', () => {
                 kind: CompletionItemKind.EnumMember
             }]);
             //      direction.down|
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 38)), [{
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 34)), [{
                 label: 'up',
                 kind: CompletionItemKind.EnumMember
             }, {
@@ -607,17 +607,17 @@ describe('EnumStatement', () => {
                 end namespace
             `);
             //      enums.|direction.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 30)), [{
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 26)), [{
                 label: 'Direction',
                 kind: CompletionItemKind.Enum
             }]);
             //      enums.dire|ction.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 34)), [{
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 30)), [{
                 label: 'Direction',
                 kind: CompletionItemKind.Enum
             }]);
             //      enums.direction|.down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 39)), [{
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 35)), [{
                 label: 'Direction',
                 kind: CompletionItemKind.Enum
             }]);
@@ -636,7 +636,7 @@ describe('EnumStatement', () => {
                 end namespace
             `);
             //      enums.direction.|down
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 40)), [{
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 36)), [{
                 label: 'up',
                 kind: CompletionItemKind.EnumMember
             }, {
@@ -644,7 +644,7 @@ describe('EnumStatement', () => {
                 kind: CompletionItemKind.EnumMember
             }]);
             //      enums.direction.do|wn
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 42)), [{
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 38)), [{
                 label: 'up',
                 kind: CompletionItemKind.EnumMember
             }, {
@@ -652,7 +652,7 @@ describe('EnumStatement', () => {
                 kind: CompletionItemKind.EnumMember
             }]);
             //      enums.direction.down|
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 44)), [{
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 40)), [{
                 label: 'up',
                 kind: CompletionItemKind.EnumMember
             }, {
@@ -715,7 +715,7 @@ describe('EnumStatement', () => {
                 end namespace
             `);
             //          direction.do|wn
-            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 40)), [{
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 36)), [{
                 label: 'up',
                 kind: CompletionItemKind.EnumMember
             }, {
