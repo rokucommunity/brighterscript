@@ -184,7 +184,7 @@ class DocCompiler {
             //use the current bsconfig
             ...(this.bsconfig ?? {})
         });
-        const file = program.addOrReplaceFile({ src: `${__dirname}/rootDir/source/main.bs`, dest: 'source/main.bs' }, code);
+        const file = program.setFile({ src: `${__dirname}/rootDir/source/main.bs`, dest: 'source/main.bs' }, code);
         program.validate();
         let tranpileResult = file.transpile();
         return tranpileResult.code;

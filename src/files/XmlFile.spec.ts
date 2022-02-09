@@ -49,7 +49,7 @@ describe('XmlFile', () => {
                     }
                 }
             });
-            file = program.addOrReplaceFile('components/ChildScene.xml', trim`
+            file = program.setFile('components/ChildScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="Scene">
                 </component>
@@ -88,7 +88,7 @@ describe('XmlFile', () => {
         });
 
         it('supports importing BrighterScript files', () => {
-            file = program.addOrReplaceFile({ src: `${rootDir}/components/custom.xml`, dest: 'components/custom.xml' }, trim`
+            file = program.setFile({ src: `${rootDir}/components/custom.xml`, dest: 'components/custom.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="Scene">
                     <script type="text/brightscript" uri="ChildScene.bs" />
@@ -99,7 +99,7 @@ describe('XmlFile', () => {
             );
         });
         it('does not include commented-out script imports', () => {
-            file = program.addOrReplaceFile({ src: `${rootDir}/components/custom.xml`, dest: 'components/custom.xml' }, trim`
+            file = program.setFile({ src: `${rootDir}/components/custom.xml`, dest: 'components/custom.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="Scene">
                     <script type="text/brightscript" uri="ChildScene.brs" />
@@ -192,7 +192,7 @@ describe('XmlFile', () => {
         });
 
         it('Adds error when no component is declared in xml', () => {
-            program.addOrReplaceFile('components/comp.xml', '<script type="text/brightscript" uri="ChildScene.brs" />');
+            program.setFile('components/comp.xml', '<script type="text/brightscript" uri="ChildScene.brs" />');
             program.validate();
             expectDiagnostics(program, [
                 {
@@ -204,7 +204,7 @@ describe('XmlFile', () => {
         });
 
         it('adds error when component does not declare a name', () => {
-            file = program.addOrReplaceFile('components/comp.xml', trim`
+            file = program.setFile('components/comp.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component extends="ParentScene">
                     <script type="text/brightscript" uri="ChildScene.brs" />
@@ -219,7 +219,7 @@ describe('XmlFile', () => {
         });
 
         it('catches xml parse errors', () => {
-            file = program.addOrReplaceFile('components/comp.xml', trim`
+            file = program.setFile('components/comp.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component 1extends="ParentScene">
                 </component>
@@ -262,7 +262,7 @@ describe('XmlFile', () => {
         });
 
         it('resolves relative paths', () => {
-            file = program.addOrReplaceFile({
+            file = program.setFile({
                 src: `${rootDir}/components/comp1.xml`,
                 dest: 'components/comp1.xml'
             }, trim`
@@ -279,7 +279,7 @@ describe('XmlFile', () => {
         });
 
         it('finds correct position for empty uri in script tag', () => {
-            file = program.addOrReplaceFile({
+            file = program.setFile({
                 src: `${rootDir}/components/comp1.xml`,
                 dest: 'components/comp1.xml'
             }, trim`
@@ -297,7 +297,7 @@ describe('XmlFile', () => {
 
     describe('doesReferenceFile', () => {
         it('compares case insensitive', () => {
-            let xmlFile = program.addOrReplaceFile({
+            let xmlFile = program.setFile({
                 src: `${rootDir}/components/comp1.xml`,
                 dest: 'components/comp1.xml'
             }, trim`
@@ -306,7 +306,7 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="HeroGrid.brs" />
                 </component>
             `);
-            let brsFile = program.addOrReplaceFile({
+            let brsFile = program.setFile({
                 src: `${rootDir}/components/HEROGRID.brs`,
                 dest: `components/HEROGRID.brs`
             }, ``);
@@ -316,19 +316,19 @@ describe('XmlFile', () => {
 
     describe('autoImportComponentScript', () => {
         it('is not enabled by default', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/components/comp1.xml`, dest: 'components/comp1.xml' }, trim`
+            program.setFile({ src: `${rootDir}/components/comp1.xml`, dest: 'components/comp1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="GrandparentScene">
                     <script type="text/brightscript" uri="./lib.brs" />
                 </component>
             `);
 
-            program.addOrReplaceFile({ src: `${rootDir}/components/lib.brs`, dest: 'components/lib.brs' }, `
+            program.setFile({ src: `${rootDir}/components/lib.brs`, dest: 'components/lib.brs' }, `
                 function libFunc()
                 end function
             `);
 
-            program.addOrReplaceFile({ src: `${rootDir}/components/comp1.bs`, dest: 'components/comp1.bs' }, `
+            program.setFile({ src: `${rootDir}/components/comp1.bs`, dest: 'components/comp1.bs' }, `
                 function init()
                     libFunc()
                 end function
@@ -345,19 +345,19 @@ describe('XmlFile', () => {
                 rootDir: rootDir,
                 autoImportComponentScript: true
             });
-            program.addOrReplaceFile({ src: `${rootDir}/components/comp1.xml`, dest: 'components/comp1.xml' }, trim`
+            program.setFile({ src: `${rootDir}/components/comp1.xml`, dest: 'components/comp1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="GrandparentScene">
                     <script type="text/brightscript" uri="./lib.brs" />
                 </component>
             `);
 
-            program.addOrReplaceFile({ src: `${rootDir}/components/lib.brs`, dest: 'components/lib.brs' }, `
+            program.setFile({ src: `${rootDir}/components/lib.brs`, dest: 'components/lib.brs' }, `
                 function libFunc()
                 end function
             `);
 
-            program.addOrReplaceFile({ src: `${rootDir}/components/comp1.bs`, dest: 'components/comp1.bs' }, `
+            program.setFile({ src: `${rootDir}/components/comp1.bs`, dest: 'components/comp1.bs' }, `
                 function init()
                     libFunc()
                 end function
@@ -394,15 +394,15 @@ describe('XmlFile', () => {
         });
 
         it('returns empty set when out of range', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/components/Component1.brs`, dest: 'components/component1.brs' }, ``);
+            program.setFile({ src: `${rootDir}/components/Component1.brs`, dest: 'components/component1.brs' }, ``);
             expect(file.getCompletions(Position.create(99, 99))).to.be.empty;
         });
 
         //TODO - refine this test once cdata scripts are supported
         it('prevents scope completions entirely', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/components/Component1.brs`, dest: 'components/component1.brs' }, ``);
+            program.setFile({ src: `${rootDir}/components/Component1.brs`, dest: 'components/component1.brs' }, ``);
 
-            let xmlFile = program.addOrReplaceFile({ src: `${rootDir}/components/Component1.xml`, dest: 'components/component1.xml' }, trim`
+            let xmlFile = program.setFile({ src: `${rootDir}/components/Component1.xml`, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="GrandparentScene">
                     <script type="text/brightscript" uri="./Component1.brs" />
@@ -415,7 +415,7 @@ describe('XmlFile', () => {
 
     describe('getAllDependencies', () => {
         it('returns own imports', () => {
-            file = program.addOrReplaceFile('components/comp1.xml', trim`
+            file = program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="BaseScene">
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
@@ -429,7 +429,7 @@ describe('XmlFile', () => {
     });
 
     it('invalidates dependent scopes on change', () => {
-        let xmlFile = program.addOrReplaceFile<XmlFile>({
+        let xmlFile = program.setFile<XmlFile>({
             src: `${rootDir}/components/comp1.xml`,
             dest: `components/comp1.xml`
         }, trim`
@@ -444,7 +444,7 @@ describe('XmlFile', () => {
         expect(scope.isValidated);
 
         //add lib1
-        program.addOrReplaceFile({
+        program.setFile({
             src: `${rootDir}/source/lib.bs`,
             dest: `source/lib.bs`
         }, ``);
@@ -454,7 +454,7 @@ describe('XmlFile', () => {
         expect(scope.isValidated).to.be.true;
 
         //update lib1 to include an import
-        program.addOrReplaceFile({
+        program.setFile({
             src: `${rootDir}/source/lib.bs`,
             dest: `source/lib.bs`
         }, `
@@ -467,7 +467,7 @@ describe('XmlFile', () => {
         expect(scope.isValidated).to.be.true;
 
         //add the lib2 imported from lib
-        program.addOrReplaceFile({
+        program.setFile({
             src: `${rootDir}/source/lib2.bs`,
             dest: `source/lib2.bs`
         }, ``);
@@ -482,7 +482,7 @@ describe('XmlFile', () => {
     });
 
     it('does not invalidate unrelated scopes on change', () => {
-        let xmlFile1 = program.addOrReplaceFile<XmlFile>({
+        let xmlFile1 = program.setFile<XmlFile>({
             src: `${rootDir}/components/comp1.xml`,
             dest: `components/comp1.xml`
         }, trim`
@@ -492,7 +492,7 @@ describe('XmlFile', () => {
             </component>
         `);
 
-        let xmlFile2 = program.addOrReplaceFile<XmlFile>({
+        let xmlFile2 = program.setFile<XmlFile>({
             src: `${rootDir}/components/comp2.xml`,
             dest: `components/comp2.xml`
         }, trim`
@@ -507,7 +507,7 @@ describe('XmlFile', () => {
         expect(program.getScopesForFile(xmlFile2)[0].isValidated).to.be.true;
 
         //add the lib file
-        program.addOrReplaceFile({
+        program.setFile({
             src: `${rootDir}/source/lib.brs`,
             dest: `source/lib.brs`
         }, ``);
@@ -527,7 +527,7 @@ describe('XmlFile', () => {
 
     describe('component extends', () => {
         it('works for single-line', () => {
-            file = program.addOrReplaceFile(
+            file = program.setFile(
                 {
                     src: `${rootDir}/components/comp1.xml`,
                     dest: `components/comp1.xml`
@@ -542,7 +542,7 @@ describe('XmlFile', () => {
         });
 
         it('works for multi-line', () => {
-            file = program.addOrReplaceFile(
+            file = program.setFile(
                 {
                     src: `${rootDir}/components/comp1.xml`,
                     dest: `components/comp1.xml`
@@ -558,7 +558,7 @@ describe('XmlFile', () => {
         });
 
         it('does not throw when unable to find extends', () => {
-            file = program.addOrReplaceFile(
+            file = program.setFile(
                 {
                     src: `${rootDir}/components/comp1.xml`,
                     dest: `components/comp1.xml`
@@ -573,7 +573,7 @@ describe('XmlFile', () => {
         });
 
         it('adds warning when no "extends" attribute is found', () => {
-            program.addOrReplaceFile<XmlFile>(
+            program.setFile<XmlFile>(
                 {
                     src: `${rootDir}/components/comp1.xml`,
                     dest: `components/comp1.xml`
@@ -596,11 +596,11 @@ describe('XmlFile', () => {
             autoImportComponentScript: true,
             rootDir: rootDir
         });
-        program.addOrReplaceFile({
+        program.setFile({
             src: `${rootDir}/components/SimpleScene.bs`,
             dest: `components/SimpleScene.bs`
         }, '');
-        program.addOrReplaceFile({
+        program.setFile({
             src: `${rootDir}/components/SimpleScene.xml`,
             dest: `components/SimpleScene.xml`
         }, trim`
@@ -660,7 +660,7 @@ describe('XmlFile', () => {
                     file.needsTranspiled = true;
                 }
             });
-            const file = program.addOrReplaceFile('components/file.xml', trim`
+            const file = program.setFile('components/file.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Comp" extends="Group">
                 </component>
@@ -696,8 +696,8 @@ describe('XmlFile', () => {
         });
 
         it('does not include bslib script if already there from ropm', () => {
-            program.addOrReplaceFile('source/roku_modules/bslib/bslib.brs', ``);
-            program.addOrReplaceFile('source/lib.bs', ``);
+            program.setFile('source/roku_modules/bslib/bslib.brs', ``);
+            program.setFile('source/lib.bs', ``);
             //include a bs file to force transpile for the xml file
             testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -715,7 +715,7 @@ describe('XmlFile', () => {
         });
 
         it('does not transpile xml file when bslib script is already present', () => {
-            const file = program.addOrReplaceFile('components/comp.xml', trim`
+            const file = program.setFile('components/comp.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Comp" extends="Group">
                     <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
@@ -731,9 +731,9 @@ describe('XmlFile', () => {
          * There was a bug that would incorrectly replace one of the script paths on the second or third transpile, so this test verifies it doesn't do that anymore
          */
         it('does not mangle scripts on multiple transpile', async () => {
-            program.addOrReplaceFile('components/SimpleScene.bs', ``);
+            program.setFile('components/SimpleScene.bs', ``);
 
-            program.addOrReplaceFile(`components/SimpleScene.xml`, trim`
+            program.setFile(`components/SimpleScene.xml`, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene">
                     <script type="text/brightscript" uri="SimpleScene.bs" />
@@ -758,7 +758,7 @@ describe('XmlFile', () => {
         });
 
         it('keeps all content of the XML', () => {
-            program.addOrReplaceFile(`components/SimpleScene.bs`, `
+            program.setFile(`components/SimpleScene.bs`, `
                 sub b()
                 end sub
             `);
@@ -800,10 +800,10 @@ describe('XmlFile', () => {
         });
 
         it('changes file extensions from bs to brs', () => {
-            program.addOrReplaceFile(`components/SimpleScene.bs`, `
+            program.setFile(`components/SimpleScene.bs`, `
                 import "pkg:/source/lib.bs"
             `);
-            program.addOrReplaceFile('source/lib.bs', ``);
+            program.setFile('source/lib.bs', ``);
 
             testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -821,7 +821,7 @@ describe('XmlFile', () => {
         });
 
         it('does not fail on missing script type', () => {
-            program.addOrReplaceFile('components/SimpleScene.brs', '');
+            program.setFile('components/SimpleScene.brs', '');
             testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene">
@@ -837,7 +837,7 @@ describe('XmlFile', () => {
         });
 
         it('returns the XML unmodified if needsTranspiled is false', () => {
-            let file = program.addOrReplaceFile(
+            let file = program.setFile(
                 { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
                 trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -858,7 +858,7 @@ describe('XmlFile', () => {
         });
 
         it('needsTranspiled is false by default', () => {
-            let file = program.addOrReplaceFile(
+            let file = program.setFile(
                 { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
                 trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -869,7 +869,7 @@ describe('XmlFile', () => {
         });
 
         it('needsTranspiled is true if an import is brighterscript', () => {
-            let file = program.addOrReplaceFile(
+            let file = program.setFile(
                 { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
                 trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -882,7 +882,7 @@ describe('XmlFile', () => {
 
         it('simple source mapping includes sourcemap reference', () => {
             program.options.sourceMap = true;
-            let file = program.addOrReplaceFile(
+            let file = program.setFile(
                 { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
                 trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -897,7 +897,7 @@ describe('XmlFile', () => {
 
         it('AST-based source mapping includes sourcemap reference', () => {
             program.options.sourceMap = true;
-            let file = program.addOrReplaceFile(
+            let file = program.setFile(
                 { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
                 trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -920,7 +920,7 @@ describe('XmlFile', () => {
                 name: 'Transform plugins',
                 afterFileParse: file => validateXml(file as XmlFile)
             });
-            file = program.addOrReplaceFile<XmlFile>('components/component.xml', trim`
+            file = program.setFile<XmlFile>('components/component.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Cmp1" extends="Scene">
                 </component>
@@ -954,7 +954,7 @@ describe('XmlFile', () => {
             }
         });
 
-        program.addOrReplaceFile('components/comp.xml', trim`
+        program.setFile('components/comp.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="Cmp1" extends="Scene">
             </component>
@@ -968,43 +968,43 @@ describe('XmlFile', () => {
 
     describe('typedef', () => {
         it('loads d.bs files from parent scope', () => {
-            program.addOrReplaceFile<XmlFile>('components/ParentComponent.xml', trim`
+            program.setFile<XmlFile>('components/ParentComponent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentComponent" extends="Scene">
                     <script uri="ParentComponent.brs" />
                 </component>
             `);
 
-            program.addOrReplaceFile('components/ParentComponent.d.bs', `
+            program.setFile('components/ParentComponent.d.bs', `
                 import "Lib.brs"
                 namespace Parent
                     sub log()
                     end sub
                 end namespace
             `);
-            program.addOrReplaceFile('components/ParentComponent.brs', `
+            program.setFile('components/ParentComponent.brs', `
                 sub Parent_log()
                 end sub
             `);
 
-            program.addOrReplaceFile('components/Lib.d.bs', `
+            program.setFile('components/Lib.d.bs', `
                 namespace Lib
                     sub log()
                     end sub
                 end namespace
             `);
-            program.addOrReplaceFile('components/Lib.brs', `
+            program.setFile('components/Lib.brs', `
                 sub Lib_log()
                 end sub
             `);
 
-            program.addOrReplaceFile<XmlFile>('components/ChildComponent.xml', trim`
+            program.setFile<XmlFile>('components/ChildComponent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildComponent" extends="ParentComponent">
                     <script uri="ChildComponent.bs" />
                 </component>
             `);
-            program.addOrReplaceFile('components/ChildComponent.bs', `
+            program.setFile('components/ChildComponent.bs', `
                 sub init()
                     Parent.log()
                     Lib.log()
@@ -1020,13 +1020,13 @@ describe('XmlFile', () => {
         });
 
         it('loads `d.bs` files into scope', () => {
-            const xmlFile = program.addOrReplaceFile<XmlFile>('components/Component1.xml', trim`
+            const xmlFile = program.setFile<XmlFile>('components/Component1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                     <script uri="Component1.brs" />
                 </component>
             `);
-            program.addOrReplaceFile('components/Component1.d.bs', `
+            program.setFile('components/Component1.d.bs', `
                 sub logInfo()
                 end sub
             `);
@@ -1035,15 +1035,15 @@ describe('XmlFile', () => {
         });
 
         it('does not include `d.bs` script during transpile', () => {
-            program.addOrReplaceFile('source/logger.d.bs', `
+            program.setFile('source/logger.d.bs', `
                 sub logInfo()
                 end sub
             `);
-            program.addOrReplaceFile('source/logger.brs', `
+            program.setFile('source/logger.brs', `
                 sub logInfo()
                 end sub
             `);
-            program.addOrReplaceFile('components/Component1.bs', `
+            program.setFile('components/Component1.bs', `
                 import "pkg:/source/logger.brs"
                 sub init()
                 end sub
@@ -1064,7 +1064,7 @@ describe('XmlFile', () => {
         });
 
         it('does not load .brs information into scope if related d.bs is in scope', () => {
-            const xmlFile = program.addOrReplaceFile<XmlFile>('components/Component1.xml', trim`
+            const xmlFile = program.setFile<XmlFile>('components/Component1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                     <script uri="Component1.brs" />
@@ -1073,7 +1073,7 @@ describe('XmlFile', () => {
             const scope = program.getScopesForFile(xmlFile)[0];
 
             //load brs file
-            program.addOrReplaceFile('components/Component1.brs', `
+            program.setFile('components/Component1.brs', `
                 sub logInfo()
                 end sub
                 sub logWarning()
@@ -1085,7 +1085,7 @@ describe('XmlFile', () => {
             expect(functionNames).to.include('logWarning');
 
             //load d.bs file, which should shadow out the .brs file
-            program.addOrReplaceFile('components/Component1.d.bs', `
+            program.setFile('components/Component1.d.bs', `
                 sub logError()
                 end sub
             `);
@@ -1097,7 +1097,7 @@ describe('XmlFile', () => {
         });
 
         it('updates xml scope when typedef disappears', () => {
-            const xmlFile = program.addOrReplaceFile<XmlFile>('components/Component1.xml', trim`
+            const xmlFile = program.setFile<XmlFile>('components/Component1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                     <script uri="Component1.brs" />
@@ -1106,12 +1106,12 @@ describe('XmlFile', () => {
             const scope = program.getScopesForFile(xmlFile)[0];
 
             //load brs file
-            program.addOrReplaceFile('components/Component1.brs', `
+            program.setFile('components/Component1.brs', `
                 sub logBrs()
                 end sub
             `);
             //load d.bs file, which should shadow out the .brs file
-            const typedef = program.addOrReplaceFile('components/Component1.d.bs', `
+            const typedef = program.setFile('components/Component1.d.bs', `
                 sub logTypedef()
                 end sub
             `);
@@ -1131,7 +1131,7 @@ describe('XmlFile', () => {
     });
 
     it('finds script imports for single-quoted script tags', () => {
-        const file = program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+        const file = program.setFile<XmlFile>('components/file.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="Cmp1" extends="Scene">
                 <script uri='SingleQuotedFile.brs' />
@@ -1143,7 +1143,7 @@ describe('XmlFile', () => {
     describe('commentFlags', () => {
         it('ignores warning from previous line comment', () => {
             //component without a name attribute
-            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+            program.setFile<XmlFile>('components/file.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <!--bs:disable-next-line-->
                 <component>
@@ -1155,7 +1155,7 @@ describe('XmlFile', () => {
 
         it('ignores warning from previous line just for the specified code', () => {
             //component without a name attribute
-            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+            program.setFile<XmlFile>('components/file.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <!--bs:disable-next-line 1006-->
                 <component>
@@ -1169,7 +1169,7 @@ describe('XmlFile', () => {
 
         it('ignores warning from previous line comment', () => {
             //component without a name attribute
-            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+            program.setFile<XmlFile>('components/file.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component> <!--bs:disable-line-->
                 </component>
@@ -1180,7 +1180,7 @@ describe('XmlFile', () => {
 
         it('ignores warning from previous line just for the specified code', () => {
             //component without a name attribute
-            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+            program.setFile<XmlFile>('components/file.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component> <!--bs:disable-line 1006-->
                 </component>
@@ -1194,16 +1194,16 @@ describe('XmlFile', () => {
 
     describe('duplicate components', () => {
         it('more gracefully handles multiple components with the same name', () => {
-            program.addOrReplaceFile('components/comp1.brs', ``);
-            program.addOrReplaceFile('components/comp1.xml', trim`
+            program.setFile('components/comp1.brs', ``);
+            program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="comp1" extends="Group">
                     <script uri="comp1.brs" />
                 </component>
             `);
             //add another component with the same name
-            program.addOrReplaceFile('components/comp2.brs', ``);
-            program.addOrReplaceFile('components/comp2.xml', trim`
+            program.setFile('components/comp2.brs', ``);
+            program.setFile('components/comp2.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="comp1" extends="Group">
                     <script uri="comp2.brs" />
@@ -1218,7 +1218,7 @@ describe('XmlFile', () => {
 
         it('maintains consistent component selection', () => {
             //add comp2 first
-            const comp2 = program.addOrReplaceFile('components/comp2.xml', trim`
+            const comp2 = program.setFile('components/comp2.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="comp1">
                 </component>
@@ -1226,7 +1226,7 @@ describe('XmlFile', () => {
             expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
 
             //add comp1. it should become the main component with this name
-            const comp1 = program.addOrReplaceFile('components/comp1.xml', trim`
+            const comp1 = program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="comp1" extends="Group">
                 </component>
@@ -1238,7 +1238,7 @@ describe('XmlFile', () => {
             expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
 
             //add comp3
-            program.addOrReplaceFile('components/comp3.xml', trim`
+            program.setFile('components/comp3.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="comp1">
                 </component>
