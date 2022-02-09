@@ -1,5 +1,13 @@
 import { expect } from 'chai';
+import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { AstEditor } from './AstEditor';
+import { util } from '../util';
+import { createToken } from '../astUtils/creators';
+import { TokenKind } from '../lexer/TokenKind';
+import { Program } from '../Program';
+import { BrsFile } from '../files/BrsFile';
+import { LiteralExpression } from '../parser/Expression';
+import { SourceNode } from 'source-map';
 
 describe('AstEditor', () => {
     let changer: AstEditor;
@@ -157,5 +165,39 @@ describe('AstEditor', () => {
 
         changer.undoAll();
         expect(obj).to.eql(getTestObject());
+    });
+
+    describe('overrideTranspileResult', () => {
+        const state = new BrsTranspileState(new BrsFile('', '', new Program({})));
+        function transpileToString(transpilable: { transpile: (state: BrsTranspileState) => any }) {
+            if (transpilable.transpile) {
+                const result = transpilable.transpile(state);
+                if (Array.isArray(result)) {
+                    return new SourceNode(null, null, null, result).toString();
+                }
+            }
+        }
+        it('overrides existing transpile method', () => {
+            const expression = new LiteralExpression(createToken(TokenKind.IntegerLiteral, 'original'));
+
+            expect(transpileToString(expression)).to.eql('original');
+
+            changer.overrideTranspileResult(expression, 'replaced');
+            expect(transpileToString(expression)).to.eql('replaced');
+
+            changer.undoAll();
+            expect(transpileToString(expression)).to.eql('original');
+        });
+
+        it('gracefully handles missing transpile method', () => {
+            const expression = {
+                range: util.createRange(1, 2, 3, 4)
+            } as any;
+            expect(expression.transpile).not.to.exist;
+            changer.overrideTranspileResult(expression, 'replaced');
+            expect(transpileToString(expression)).to.eql('replaced');
+            changer.undoAll();
+            expect(expression.transpile).not.to.exist;
+        });
     });
 });
