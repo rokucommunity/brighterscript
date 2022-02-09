@@ -3,8 +3,10 @@ import { URI } from 'vscode-uri';
 import { isBrsFile } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
+import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
 import type { DottedGetExpression } from '../../parser/Expression';
+import type { EnumStatement } from '../../parser/Statement';
 import util from '../../util';
 
 export class ScopeValidator {
@@ -15,6 +17,7 @@ export class ScopeValidator {
 
     public process() {
         this.validateEnumUsage();
+        this.detectDuplicateEnums();
     }
 
 
@@ -71,6 +74,46 @@ export class ScopeValidator {
                 }
             }
         });
+        this.event.scope.addDiagnostics(diagnostics);
+    }
+
+    private detectDuplicateEnums() {
+        const diagnostics: BsDiagnostic[] = [];
+        const enumLocationsByName = new Cache<string, Array<{ file: BrsFile; statement: EnumStatement }>>();
+        this.event.scope.enumerateBrsFiles((file) => {
+            for (const enumStatement of file.parser.references.enumStatements) {
+                const fullName = enumStatement.fullName;
+                const nameLower = fullName?.toLowerCase();
+                if (nameLower?.length > 0) {
+                    enumLocationsByName.getOrAdd(nameLower, () => []).push({
+                        file: file,
+                        statement: enumStatement
+                    });
+                }
+            }
+        });
+
+        //now that we've collected all enum declarations, flag duplicates
+        for (const enumLocations of enumLocationsByName.values()) {
+            //sort by srcPath to keep the primary enum location consistent
+            enumLocations.sort((a, b) => a.file?.pathAbsolute?.localeCompare(b.file?.pathAbsolute));
+            const primaryEnum = enumLocations.shift();
+            const fullName = primaryEnum.statement.fullName;
+            for (const duplicateEnumInfo of enumLocations) {
+                diagnostics.push({
+                    ...DiagnosticMessages.duplicateEnumDeclaration(this.event.scope.name, fullName),
+                    file: duplicateEnumInfo.file,
+                    range: duplicateEnumInfo.statement.tokens.name.range,
+                    relatedInformation: [{
+                        message: 'Enum declared here',
+                        location: Location.create(
+                            URI.file(primaryEnum.file.pathAbsolute).toString(),
+                            primaryEnum.statement.tokens.name.range
+                        )
+                    }]
+                });
+            }
+        }
         this.event.scope.addDiagnostics(diagnostics);
     }
 }

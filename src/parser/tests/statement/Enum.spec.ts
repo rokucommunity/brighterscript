@@ -1,17 +1,18 @@
 import { expect } from 'chai';
 import { LiteralExpression } from '../../Expression';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { expectDiagnostics, expectInstanceOf, expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectInstanceOf, expectZeroDiagnostics, getTestTranspile, trim } from '../../../testHelpers.spec';
 import { ParseMode, Parser } from '../../Parser';
 import { util, standardizePath as s } from '../../../util';
 import { EnumStatement, InterfaceStatement } from '../../Statement';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
 import type { BrsFile } from '../../../files/BrsFile';
-import type { CompletionItem } from 'vscode-languageserver-protocol';
+import { CompletionItem, Location } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver-protocol';
 import { WalkMode } from '../../../astUtils/visitors';
 import { isEnumStatement } from '../../../astUtils/reflection';
+import { URI } from 'vscode-uri';
 
 const sinon = createSandbox();
 
@@ -180,7 +181,96 @@ describe('EnumStatement', () => {
         expect(parser.statements[1]).instanceof(EnumStatement);
     });
 
+    it('allows enum in namespace', () => {
+        const parser = Parser.parse(`
+            namespace entities
+                enum Person
+                    name
+                end enum
+            end namespace
+
+            enum Direction
+                up
+            end enum
+        `, { mode: ParseMode.BrighterScript });
+
+        expectZeroDiagnostics(parser);
+        expect(parser.references.enumStatements.map(x => x.fullName)).to.eql([
+            'entities.Person',
+            'Direction'
+        ]);
+    });
+
     describe('validation', () => {
+
+        it('catches duplicate enums from same file', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                enum Direction
+                    up
+                end enum
+
+                enum Direction
+                    up
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.duplicateEnumDeclaration('source', 'Direction'),
+                relatedInformation: [{
+                    location: Location.create(
+                        URI.file(s`${rootDir}/source/main.bs`).toString(),
+                        util.createRange(1, 21, 1, 30)
+                    ),
+                    message: 'Enum declared here'
+                }]
+            }]);
+        });
+
+        it('catches duplicate enums from different files in same scope', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                enum Direction
+                    up
+                end enum
+            `);
+            program.addOrReplaceFile('source/lib.bs', `
+                enum Direction
+                    up
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.duplicateEnumDeclaration('source', 'Direction'),
+                relatedInformation: [{
+                    location: Location.create(
+                        URI.file(s`${rootDir}/source/lib.bs`).toString(),
+                        util.createRange(1, 21, 1, 30)
+                    ),
+                    message: 'Enum declared here'
+                }]
+            }]);
+        });
+
+        it('allows duplicate enums across different scopes', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                enum Direction
+                    up
+                end enum
+            `);
+            program.addOrReplaceFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp1" extends="Scene">
+                    <script uri="comp1.bs" />
+                </component>
+            `);
+            program.addOrReplaceFile('components/comp1.bs', `
+                enum Direction
+                    up
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('flags duplicate members', () => {
             program.addOrReplaceFile('source/main.bs', `
                 enum Direction
@@ -195,7 +285,7 @@ describe('EnumStatement', () => {
             }]);
         });
 
-        it('flags mismatched enum value types', () => {
+        it('flags mixed enum value types with int first', () => {
             program.addOrReplaceFile('source/main.bs', `
                 enum Direction
                     a = 1
@@ -209,7 +299,7 @@ describe('EnumStatement', () => {
             }]);
         });
 
-        it('flags mismatched enum value types', () => {
+        it('flags mixed enum value types with string first', () => {
             program.addOrReplaceFile('source/main.bs', `
                 enum Direction
                     a = "a"
@@ -223,7 +313,7 @@ describe('EnumStatement', () => {
             }]);
         });
 
-        it('flags missing value for string enum', () => {
+        it('flags missing value for string enum when string is first item', () => {
             program.addOrReplaceFile('source/main.bs', `
                 enum Direction
                     a = "a"
@@ -237,7 +327,7 @@ describe('EnumStatement', () => {
             }]);
         });
 
-        it('flags missing value for string enum', () => {
+        it('flags missing value for string enum where string is not first item', () => {
             program.addOrReplaceFile('source/main.bs', `
                 enum Direction
                     a

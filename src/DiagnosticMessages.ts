@@ -650,8 +650,12 @@ export let DiagnosticMessages = {
         message: `Property '${name}' does not exist on enum '${enumName}'`,
         code: 1126,
         severity: DiagnosticSeverity.Error
+    }),
+    duplicateEnumDeclaration: (scopeName: string, enumName: string) => ({
+        message: `Scope '${scopeName}' already contains an enum with name '${enumName}'`,
+        code: 1127,
+        severity: DiagnosticSeverity.Error
     })
-
 };
 
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
