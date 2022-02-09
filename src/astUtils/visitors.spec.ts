@@ -102,7 +102,7 @@ describe('astUtils visitors', () => {
                 name: 'walker',
                 afterFileParse: file => walker(file as BrsFile)
             });
-            program.addOrReplaceFile('source/main.brs', PRINTS_SRC);
+            program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
                 'Block:0',                // Main sub body
                 'PrintStatement:1',       // print 1
@@ -139,7 +139,7 @@ describe('astUtils visitors', () => {
                 name: 'walker',
                 afterFileParse: file => walker(file as BrsFile)
             });
-            program.addOrReplaceFile('source/main.brs', PRINTS_SRC);
+            program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
                 'Block',                // Main sub body
                 'PrintStatement',       // print 1
@@ -184,7 +184,7 @@ describe('astUtils visitors', () => {
                 name: 'walker',
                 afterFileParse: file => walker(file as BrsFile)
             });
-            program.addOrReplaceFile('source/main.brs', PRINTS_SRC);
+            program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
                 'Block',                // Main sub body
                 'PrintStatement',       // print 1
@@ -264,7 +264,7 @@ describe('astUtils visitors', () => {
                 afterFileParse: (file) => walker(file as BrsFile)
             });
 
-            program.addOrReplaceFile('source/main.brs', EXPRESSIONS_SRC);
+            program.setFile('source/main.brs', EXPRESSIONS_SRC);
             expect(actual).to.deep.equal([
                 //The comment statement is weird because it can't be both a statement and expression, but is treated that way. Just ignore it for now until we refactor comments.
                 //'CommentStatement:1:CommentStatement',          // '<comment>
@@ -312,7 +312,7 @@ describe('astUtils visitors', () => {
 
     describe('walk', () => {
         function testWalk(text: string, expectedConstructors: string[], walkMode = WalkMode.visitAllRecursive) {
-            const file = program.addOrReplaceFile<BrsFile>('source/main.bs', text);
+            const file = program.setFile<BrsFile>('source/main.bs', text);
             const items = [];
             let index = 1;
             file.ast.walk((element: any) => {
@@ -326,7 +326,7 @@ describe('astUtils visitors', () => {
         }
 
         it('Walks through all expressions until cancelled', () => {
-            const file = program.addOrReplaceFile<BrsFile>('source/main.bs', `
+            const file = program.setFile<BrsFile>('source/main.bs', `
                 sub logger(message = "nil" as string)
                     innerLog = sub(message = "nil" as string)
                         print message

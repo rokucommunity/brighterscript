@@ -266,7 +266,7 @@ describe('ternary expressions', () => {
         });
 
         it('uses the proper prefix when aliased package is installed', () => {
-            program.addOrReplaceFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
+            program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
             testTranspile(
                 `a = user = invalid ? "no user" : "logged in"`,
                 `a = rokucommunity_bslib_ternary(user = invalid, "no user", "logged in")`

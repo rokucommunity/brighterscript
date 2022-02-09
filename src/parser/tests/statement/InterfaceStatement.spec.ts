@@ -63,7 +63,7 @@ describe('InterfaceStatement', () => {
     });
 
     it('allows declaring multiple interfaces in a file', () => {
-        program.addOrReplaceFile('source/interfaces.bs', `
+        program.setFile('source/interfaces.bs', `
             interface Iface1
                 name as dynamic
             end interface
