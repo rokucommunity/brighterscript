@@ -203,7 +203,7 @@ describe('Program', () => {
 
     describe('validate', () => {
         it('retains expressions after validate', () => {
-            const file = program.addOrReplaceFile<BrsFile>('source/main.bs', `
+            const file = program.setFile<BrsFile>('source/main.bs', `
                 sub test()
                     print a.b.c
                 end sub

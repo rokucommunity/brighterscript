@@ -203,7 +203,7 @@ describe('EnumStatement', () => {
     describe('validation', () => {
 
         it('catches duplicate enums from same file', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 enum Direction
                     up
                 end enum
@@ -226,12 +226,12 @@ describe('EnumStatement', () => {
         });
 
         it('catches duplicate enums from different files in same scope', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 enum Direction
                     up
                 end enum
             `);
-            program.addOrReplaceFile('source/lib.bs', `
+            program.setFile('source/lib.bs', `
                 enum Direction
                     up
                 end enum
@@ -250,18 +250,18 @@ describe('EnumStatement', () => {
         });
 
         it('allows duplicate enums across different scopes', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 enum Direction
                     up
                 end enum
             `);
-            program.addOrReplaceFile('components/comp1.xml', trim`
+            program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Comp1" extends="Scene">
                     <script uri="comp1.bs" />
                 </component>
             `);
-            program.addOrReplaceFile('components/comp1.bs', `
+            program.setFile('components/comp1.bs', `
                 enum Direction
                     up
                 end enum
@@ -271,7 +271,7 @@ describe('EnumStatement', () => {
         });
 
         it('flags duplicate members', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 enum Direction
                     name
                     name
@@ -285,7 +285,7 @@ describe('EnumStatement', () => {
         });
 
         it('flags mixed enum value types with int first', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 enum Direction
                     a = 1
                     b = "c"
@@ -299,7 +299,7 @@ describe('EnumStatement', () => {
         });
 
         it('flags mixed enum value types with string first', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 enum Direction
                     a = "a"
                     b = 1
@@ -313,7 +313,7 @@ describe('EnumStatement', () => {
         });
 
         it('flags missing value for string enum when string is first item', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 enum Direction
                     a = "a"
                     b
@@ -327,7 +327,7 @@ describe('EnumStatement', () => {
         });
 
         it('flags missing value for string enum where string is not first item', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 enum Direction
                     a
                     b = "b" 'since this is the only value present, this is a string enum
@@ -341,7 +341,7 @@ describe('EnumStatement', () => {
         });
 
         it('catches unknown non-namespaced enum members', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 enum Direction
                     up
                 end enum
@@ -363,7 +363,7 @@ describe('EnumStatement', () => {
         });
 
         it('catches unknown namespaced enum members', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 namespace Enums
                     enum Direction
                         up
@@ -389,7 +389,7 @@ describe('EnumStatement', () => {
 
     describe('getMemberValueMap', () => {
         function expectMemberValueMap(code: string, expected: Record<string, string>) {
-            const file = program.addOrReplaceFile<BrsFile>('source/lib.brs', code);
+            const file = program.setFile<BrsFile>('source/lib.brs', code);
             const cancel = new CancellationTokenSource();
             let firstEnum: EnumStatement;
             file.ast.walk(statement => {
@@ -500,7 +500,7 @@ describe('EnumStatement', () => {
         });
 
         it('replaces enum values from separate file with literals', () => {
-            program.addOrReplaceFile('source/enum.bs', `
+            program.setFile('source/enum.bs', `
                 enum CharacterType
                     Human = "Human"
                     Zombie = "Zombie"
@@ -532,7 +532,7 @@ describe('EnumStatement', () => {
 
     describe('completions', () => {
         it('gets enum statement completions from global enum', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 sub Main()
                     direction.down
                 end sub
@@ -559,7 +559,7 @@ describe('EnumStatement', () => {
         });
 
         it('gets enum member completions from global enum', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 sub Main()
                     direction.down
                 end sub
@@ -595,7 +595,7 @@ describe('EnumStatement', () => {
         });
 
         it('gets enum statement completions from namespaced enum', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 sub Main()
                     enums.direction.down
                 end sub
@@ -624,7 +624,7 @@ describe('EnumStatement', () => {
         });
 
         it('gets enum member completions from namespaced enum', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 sub Main()
                     enums.direction.down
                 end sub
@@ -662,7 +662,7 @@ describe('EnumStatement', () => {
         });
 
         it('excludes enum member completions from namespace enum', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 sub Main()
                     direction.ba
                 end sub
@@ -684,7 +684,7 @@ describe('EnumStatement', () => {
         });
 
         it('infers namespace for enum statement completions', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 namespace enums
                     sub Main()
                         direction.down
@@ -703,7 +703,7 @@ describe('EnumStatement', () => {
         });
 
         it('infers namespace for enum member completions', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 namespace enums
                     sub Main()
                         direction.down
@@ -725,7 +725,7 @@ describe('EnumStatement', () => {
         });
 
         it('supports explicit namespace for enum statement completions', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 namespace enums
                     sub Main()
                         enums.direction.down
@@ -744,7 +744,7 @@ describe('EnumStatement', () => {
         });
 
         it('supports explicit namespace for enum statement completions', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 namespace logger
                     sub log()
                         enums.direction.down

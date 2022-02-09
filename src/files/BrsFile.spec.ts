@@ -171,7 +171,7 @@ describe('BrsFile', () => {
         });
 
         it('includes every type of item at base level', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 sub main()
                     print
                 end sub
@@ -204,7 +204,7 @@ describe('BrsFile', () => {
 
         describe('namespaces', () => {
             it('gets full namespace completions at any point through the leading identifier', () => {
-                program.addOrReplaceFile('source/main.bs', `
+                program.setFile('source/main.bs', `
                     sub main()
                         foo.bar
                     end sub
@@ -223,7 +223,7 @@ describe('BrsFile', () => {
             });
 
             it('gets namespace completions', () => {
-                program.addOrReplaceFile('source/main.bs', `
+                program.setFile('source/main.bs', `
                     namespace foo.bar
                         function sayHello()
                         end function
