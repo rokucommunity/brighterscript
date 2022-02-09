@@ -8,7 +8,8 @@ import { EnumStatement, InterfaceStatement } from '../../Statement';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
 import type { BrsFile } from '../../../files/BrsFile';
-import { CancellationTokenSource, CompletionItem, CompletionItemKind } from 'vscode-languageserver-protocol';
+import type { CompletionItem } from 'vscode-languageserver-protocol';
+import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver-protocol';
 import { WalkMode } from '../../../astUtils/visitors';
 import { isEnumStatement } from '../../../astUtils/reflection';
 

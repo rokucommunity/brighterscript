@@ -978,7 +978,7 @@ export class BrsFile {
         if (!completionName || !completionName.includes('.')) {
             return [];
         }
-        const enumNameLower = completionName?.split(/\.\w?$/)[0]?.toLowerCase();
+        const enumNameLower = completionName?.split(/\.(\w+)?$/)[0]?.toLowerCase();
         const namespaceNameLower = this.getNamespaceStatementForPosition(currentToken.range.end)?.name.toLowerCase();
         const enumMap = scope.getEnumMap();
         //get the enum statement with this name (check without namespace prefix first, then with inferred namespace prefix next)

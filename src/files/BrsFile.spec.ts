@@ -1,7 +1,7 @@
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
 import * as path from 'path';
-import { CompletionItem, CompletionItemKind, Position, Range } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import type { Callable, CommentFlag, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
 import { BooleanType } from '../types/BooleanType';
@@ -215,17 +215,28 @@ describe('BrsFile', () => {
         });
 
         describe('enums', () => {
-            it.only('gets enum statement completions from global enum', () => {
+            it('gets enum statement completions from global enum', () => {
                 program.addOrReplaceFile('source/main.bs', `
                     sub Main()
-                        direction.ba
+                        direction.down
                     end sub
                     enum Direction
                         up
                         down
                     end enum
                 `);
+                //      |direction.down
                 expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 25)), [{
+                    label: 'Direction',
+                    kind: CompletionItemKind.Enum
+                }]);
+                //      dire|ction.down
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 28)), [{
+                    label: 'Direction',
+                    kind: CompletionItemKind.Enum
+                }]);
+                //      direction|.down
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 33)), [{
                     label: 'Direction',
                     kind: CompletionItemKind.Enum
                 }]);
@@ -234,14 +245,31 @@ describe('BrsFile', () => {
             it('gets enum member completions from global enum', () => {
                 program.addOrReplaceFile('source/main.bs', `
                     sub Main()
-                        direction.ba
+                        direction.down
                     end sub
                     enum Direction
                         up
                         down
                     end enum
                 `);
+                //      direction.|down
                 expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 34)), [{
+                    label: 'up',
+                    kind: CompletionItemKind.EnumMember
+                }, {
+                    label: 'down',
+                    kind: CompletionItemKind.EnumMember
+                }]);
+                //      direction.do|wn
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 36)), [{
+                    label: 'up',
+                    kind: CompletionItemKind.EnumMember
+                }, {
+                    label: 'down',
+                    kind: CompletionItemKind.EnumMember
+                }]);
+                //      direction.down|
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 38)), [{
                     label: 'up',
                     kind: CompletionItemKind.EnumMember
                 }, {
@@ -250,10 +278,10 @@ describe('BrsFile', () => {
                 }]);
             });
 
-            it('includes enum member completions from namespace enum', () => {
+            it('gets enum statement completions from namespaced enum', () => {
                 program.addOrReplaceFile('source/main.bs', `
                     sub Main()
-                        enums.direction.ba
+                        enums.direction.down
                     end sub
                     namespace enums
                         enum Direction
@@ -262,8 +290,53 @@ describe('BrsFile', () => {
                         end enum
                     end namespace
                 `);
-                //should NOT find these enums
-                expectCompletionsExcludes(program.getCompletions('source/main.brs', util.createPosition(2, 28)), [{
+                //      enums.|direction.down
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 30)), [{
+                    label: 'Direction',
+                    kind: CompletionItemKind.Enum
+                }]);
+                //      enums.dire|ction.down
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 34)), [{
+                    label: 'Direction',
+                    kind: CompletionItemKind.Enum
+                }]);
+                //      enums.direction|.down
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 39)), [{
+                    label: 'Direction',
+                    kind: CompletionItemKind.Enum
+                }]);
+            });
+
+            it('gets enum member completions from namespaced enum', () => {
+                program.addOrReplaceFile('source/main.bs', `
+                    sub Main()
+                        enums.direction.down
+                    end sub
+                    namespace enums
+                        enum Direction
+                            up
+                            down
+                        end enum
+                    end namespace
+                `);
+                //      enums.direction.|down
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 40)), [{
+                    label: 'up',
+                    kind: CompletionItemKind.EnumMember
+                }, {
+                    label: 'down',
+                    kind: CompletionItemKind.EnumMember
+                }]);
+                //      enums.direction.do|wn
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 42)), [{
+                    label: 'up',
+                    kind: CompletionItemKind.EnumMember
+                }, {
+                    label: 'down',
+                    kind: CompletionItemKind.EnumMember
+                }]);
+                //      enums.direction.down|
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 44)), [{
                     label: 'up',
                     kind: CompletionItemKind.EnumMember
                 }, {
@@ -294,56 +367,86 @@ describe('BrsFile', () => {
                 }]);
             });
 
-
-            it.skip('stuff', () => {
-
-                let result;
-                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 26));
-                expect(result.map(x => x.label)).include.members([
-                    'foo',
-                    'fooFace',
-                    'fooClass',
-                    'foo3'
-                ]);
-                expect(result[2].kind).to.equal(CompletionItemKind.Enum);
-                expect(result[3].kind).to.equal(CompletionItemKind.Enum);
-
-
-                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 27));
-                expect(result.map(x => x.label)).include.members([
-                    'foo',
-                    'foo3',
-                    'fooFace',
-                    'fooClass'
-                ]);
-                expect(result[2].kind).to.equal(CompletionItemKind.Enum);
-                expect(result[3].kind).to.equal(CompletionItemKind.Enum);
-
-                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 30));
-                expect(result.map(x => x.label)).include.members([
-                    'bar1',
-                    'bar2'
-                ]);
-                expect(result[0].kind).to.equal(CompletionItemKind.EnumMember);
-                expect(result[1].kind).to.equal(CompletionItemKind.EnumMember);
-
-                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 33));
-                expect(result.map(x => x.label)).include.members([
-                    'foo2',
-                    'fooFace2',
-                    'fooClass2'
-                ]);
-                expect(result[2].kind).to.equal(CompletionItemKind.Enum);
-
-                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 36));
-                expect(result.map(x => x.label)).include.members([
-                    'bar2_1',
-                    'bar2_2'
-                ]);
-                expect(result[0].kind).to.equal(CompletionItemKind.EnumMember);
-                expect(result[1].kind).to.equal(CompletionItemKind.EnumMember);
+            it('infers namespace for enum statement completions', () => {
+                program.addOrReplaceFile('source/main.bs', `
+                    namespace enums
+                        sub Main()
+                            direction.down
+                        end sub
+                        enum Direction
+                            up
+                            down
+                        end enum
+                    end namespace
+                `);
+                //          dire|ction.down
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 33)), [{
+                    label: 'Direction',
+                    kind: CompletionItemKind.Enum
+                }]);
             });
 
+            it('infers namespace for enum member completions', () => {
+                program.addOrReplaceFile('source/main.bs', `
+                    namespace enums
+                        sub Main()
+                            direction.down
+                        end sub
+                        enum Direction
+                            up
+                            down
+                        end enum
+                    end namespace
+                `);
+                //          direction.do|wn
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 40)), [{
+                    label: 'up',
+                    kind: CompletionItemKind.EnumMember
+                }, {
+                    label: 'down',
+                    kind: CompletionItemKind.EnumMember
+                }]);
+            });
+
+            it('supports explicit namespace for enum statement completions', () => {
+                program.addOrReplaceFile('source/main.bs', `
+                    namespace enums
+                        sub Main()
+                            enums.direction.down
+                        end sub
+                        enum Direction
+                            up
+                            down
+                        end enum
+                    end namespace
+                `);
+                //          enums.dire|ction.down
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 38)), [{
+                    label: 'Direction',
+                    kind: CompletionItemKind.Enum
+                }]);
+            });
+
+            it('supports explicit namespace for enum statement completions', () => {
+                program.addOrReplaceFile('source/main.bs', `
+                    namespace logger
+                        sub log()
+                            enums.direction.down
+                        end sub
+                    end namespace
+                    namespace enums
+                        enum Direction
+                            up
+                            down
+                        end enum
+                    end namespace
+                `);
+                //          enums.dire|ction.down
+                expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 38)), [{
+                    label: 'Direction',
+                    kind: CompletionItemKind.Enum
+                }]);
+            });
         });
 
         it('always includes `m`', () => {
