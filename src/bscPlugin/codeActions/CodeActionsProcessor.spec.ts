@@ -18,7 +18,7 @@ describe('CodeActionsProcessor', () => {
 
     describe('getCodeActions', () => {
         it('suggests `extends=Group`', () => {
-            const file = program.addOrReplaceFile('components/comp1.xml', trim`
+            const file = program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="comp1">
                 </component>
@@ -65,7 +65,7 @@ describe('CodeActionsProcessor', () => {
         });
 
         it('adds attribute at end of component with multiple attributes`', () => {
-            const file = program.addOrReplaceFile('components/comp1.xml', trim`
+            const file = program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="comp1" attr2="attr3" attr3="attr3">
                 </component>
@@ -85,30 +85,30 @@ describe('CodeActionsProcessor', () => {
 
         it('does not produce duplicate code actions for bs imports', () => {
             //define the function in two files
-            program.addOrReplaceFile('components/lib1.brs', `
+            program.setFile('components/lib1.brs', `
                 sub doSomething()
                 end sub
             `);
-            program.addOrReplaceFile('components/lib2.brs', `
+            program.setFile('components/lib2.brs', `
                 sub doSomething()
                 end sub
             `);
 
             //use the function in this file
-            const componentCommonFile = program.addOrReplaceFile('components/ComponentCommon.bs', `
+            const componentCommonFile = program.setFile('components/ComponentCommon.bs', `
                 sub init()
                     doSomething()
                 end sub
             `);
 
             //import the file in two scopes
-            program.addOrReplaceFile('components/comp1.xml', trim`
+            program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene">
                     <script uri="ComponentCommon.bs" />
                 </component>
             `);
-            program.addOrReplaceFile('components/comp2.xml', trim`
+            program.setFile('components/comp2.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene">
                     <script uri="ComponentCommon.bs" />
@@ -131,21 +131,21 @@ describe('CodeActionsProcessor', () => {
 
         it('does not suggest imports for brs files', () => {
             //import the file in two scopes
-            program.addOrReplaceFile('components/comp1.xml', trim`
+            program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene">
                     <script uri="comp1.brs" />
                 </component>
             `);
             //import the function here
-            const file = program.addOrReplaceFile('components/comp1.brs', `
+            const file = program.setFile('components/comp1.brs', `
                 sub init()
                     DoSomething()
                 end sub
             `);
 
             //define the function here
-            program.addOrReplaceFile('source/lib.brs', `
+            program.setFile('source/lib.brs', `
                 sub DoSomething()
                 end sub
             `);
@@ -163,19 +163,19 @@ describe('CodeActionsProcessor', () => {
 
         it('suggests class imports', () => {
             //import the file in two scopes
-            program.addOrReplaceFile('components/comp1.xml', trim`
+            program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene">
                     <script uri="comp1.bs" />
                 </component>
             `);
-            const file = program.addOrReplaceFile('components/comp1.bs', `
+            const file = program.setFile('components/comp1.bs', `
                 sub init()
                     dude = new Person()
                 end sub
             `);
 
-            program.addOrReplaceFile('source/Person.bs', `
+            program.setFile('source/Person.bs', `
                 class Person
                 end class
             `);
@@ -195,19 +195,19 @@ describe('CodeActionsProcessor', () => {
 
         it('suggests class imports', () => {
             //import the file in two scopes
-            program.addOrReplaceFile('components/comp1.xml', trim`
+            program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene">
                     <script uri="comp1.bs" />
                 </component>
             `);
             //import the function here
-            const file = program.addOrReplaceFile('components/comp1.bs', `
+            const file = program.setFile('components/comp1.bs', `
                 sub init()
                     kitty = new Animals.Cat()
                 end sub
             `);
-            program.addOrReplaceFile('source/Animals.bs', `
+            program.setFile('source/Animals.bs', `
                 namespace Animals
                     class Cat
                     end class

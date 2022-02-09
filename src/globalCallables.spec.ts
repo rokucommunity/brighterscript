@@ -22,7 +22,7 @@ describe('globalCallables', () => {
 
     describe('Roku_ads', () => {
         it('exists', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     adIface = Roku_Ads()
                 end sub
@@ -33,7 +33,7 @@ describe('globalCallables', () => {
     });
 
     it('isOptional defaults to false', () => {
-        program.addOrReplaceFile('source/main.brs', `
+        program.setFile('source/main.brs', `
             sub main()
                 thing = createObject()
             end sub
@@ -45,7 +45,7 @@ describe('globalCallables', () => {
     });
 
     it('handles optional params properly', () => {
-        program.addOrReplaceFile('source/main.brs', `
+        program.setFile('source/main.brs', `
             sub main()
                 print Mid("value1", 1) 'third param is optional
             end sub
@@ -55,7 +55,7 @@ describe('globalCallables', () => {
     });
 
     it('hover shows correct for optional params', async () => {
-        const file = program.addOrReplaceFile('source/main.brs', `
+        const file = program.setFile('source/main.brs', `
             sub main()
                 print Mid("value1", 1)
             end sub
@@ -73,7 +73,7 @@ describe('globalCallables', () => {
 
     describe('bslCore', () => {
         it('exists', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 Library "v30/bslCore.brs"
 
                 sub main()
@@ -89,7 +89,7 @@ describe('globalCallables', () => {
 
     describe('val', () => {
         it('allows single parameter', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print val("1001")
                 end sub
@@ -99,7 +99,7 @@ describe('globalCallables', () => {
         });
 
         it('allows both parameters', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print val("1001", 10)
                 end sub
@@ -111,7 +111,7 @@ describe('globalCallables', () => {
 
     describe('StrI', () => {
         it('allows single parameter', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print StrI(2)
                 end sub
@@ -121,7 +121,7 @@ describe('globalCallables', () => {
         });
 
         it('allows both parameters', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print StrI(2, 10)
                 end sub
@@ -133,7 +133,7 @@ describe('globalCallables', () => {
 
     describe('parseJson', () => {
         it('allows single parameter', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print ParseJson("{}")
                 end sub
@@ -143,7 +143,7 @@ describe('globalCallables', () => {
         });
 
         it('allows 2 parameters', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                 print ParseJson("{}", "i")
                 end sub

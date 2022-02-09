@@ -21,7 +21,7 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
         const promises = [];
         for (const file of files) {
             promises.push(
-                builder.program.addOrReplaceFile(file.pkgPath, file.fileContents)
+                (builder.program.addOrReplaceFile ?? builder.program.setFile)(file.pkgPath, file.fileContents)
             );
         }
         // eslint-disable-next-line @typescript-eslint/no-floating-promises
