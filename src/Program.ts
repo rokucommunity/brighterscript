@@ -354,18 +354,37 @@ export class Program {
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
-     * @param relativePath the file path relative to the root dir
+     * @param srcPath the file path relative to the root dir
+     * @param fileContents the file contents
+     * @deprecated use `setFile` instead
+     */
+    public addOrReplaceFile<T extends BscFile>(srcPath: string, fileContents: string): T;
+    /**
+     * Load a file into the program. If that file already exists, it is replaced.
+     * @param fileEntry an object that specifies src and dest for the file.
+     * @param fileContents the file contents. If not provided, the file will be loaded from disk
+     * @deprecated use `setFile` instead
+     */
+    public addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
+    public addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
+        return this.setFile<T>(fileParam as any, fileContents);
+    }
+
+    /**
+     * Load a file into the program. If that file already exists, it is replaced.
+     * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
+     * @param srcDestOrPkgPath the absolute path, the pkg path (i.e. `pkg:/path/to/file.brs`), or the destPath (i.e. `path/to/file.brs` relative to `pkg:/`)
      * @param fileContents the file contents
      */
-    public addOrReplaceFile<T extends BscFile>(relativePath: string, fileContents: string): T;
+    public setFile<T extends BscFile>(srcDestOrPkgPath: string, fileContents: string): T;
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * @param fileEntry an object that specifies src and dest for the file.
      * @param fileContents the file contents. If not provided, the file will be loaded from disk
      */
-    public addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
-    public addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
-        assert.ok(fileParam, 'fileEntry is required');
+    public setFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
+    public setFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
+        assert.ok(fileParam, 'fileParam is required');
         let srcPath: string;
         let pkgPath: string;
         if (typeof fileParam === 'string') {
@@ -375,7 +394,7 @@ export class Program {
             srcPath = s`${fileParam.src}`;
             pkgPath = s`${fileParam.dest}`;
         }
-        let file = this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(srcPath)], () => {
+        let file = this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
 
             assert.ok(srcPath, 'fileEntry.src is required');
             assert.ok(pkgPath, 'fileEntry.dest is required');

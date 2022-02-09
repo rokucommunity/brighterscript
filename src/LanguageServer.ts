@@ -846,7 +846,7 @@ export class LanguageServer {
 
             //if we got a dest path, then the program wants this file
             if (destPath) {
-                program.addOrReplaceFile(
+                program.setFile(
                     {
                         src: change.pathAbsolute,
                         dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
@@ -864,7 +864,7 @@ export class LanguageServer {
             //sometimes "changed" events are emitted on files that were actually deleted,
             //so determine file existance and act accordingly
             if (await util.pathExists(change.pathAbsolute)) {
-                program.addOrReplaceFile(
+                program.setFile(
                     {
                         src: change.pathAbsolute,
                         dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
@@ -930,7 +930,7 @@ export class LanguageServer {
                     if (workspace.builder.program.hasFile(filePath)) {
                         let rootDir = workspace.builder.program.options.rootDir ?? workspace.builder.program.options.cwd;
                         let dest = rokuDeploy.getDestPath(filePath, workspace.builder.program.options.files, rootDir);
-                        workspace.builder.program.addOrReplaceFile({
+                        workspace.builder.program.setFile({
                             src: filePath,
                             dest: dest
                         }, documentText);

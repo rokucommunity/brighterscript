@@ -41,7 +41,7 @@ describe('BrsFile', () => {
     });
 
     it('supports the third parameter in CreateObject', () => {
-        program.addOrReplaceFile('source/main.brs', `
+        program.setFile('source/main.brs', `
             sub main()
                 regexp = CreateObject("roRegex", "[a-z]+", "i")
             end sub
@@ -51,7 +51,7 @@ describe('BrsFile', () => {
     });
 
     it('supports the 6 params in CreateObject for roRegion', () => {
-        program.addOrReplaceFile('source/main.brs', `
+        program.setFile('source/main.brs', `
             sub createRegion(bitmap as object)
                 region = CreateObject("roRegion", bitmap, 20, 40, 100, 200)
             end sub
@@ -84,7 +84,7 @@ describe('BrsFile', () => {
         } as StandardizedFileEntry;
 
         it('creates proper tokens', () => {
-            file = program.addOrReplaceFile<BrsFile>(entry, `call(ModuleA.ModuleB.ModuleC.`);
+            file = program.setFile<BrsFile>(entry, `call(ModuleA.ModuleB.ModuleC.`);
             expect(file['getPartialVariableName'](file.parser.tokens[7])).to.equal('ModuleA.ModuleB.ModuleC.');
             expect(file['getPartialVariableName'](file.parser.tokens[6])).to.equal('ModuleA.ModuleB.ModuleC');
             expect(file['getPartialVariableName'](file.parser.tokens[5])).to.equal('ModuleA.ModuleB.');
@@ -96,14 +96,14 @@ describe('BrsFile', () => {
 
     describe('getScopesForFile', () => {
         it('finds the scope for the file', () => {
-            let file = program.addOrReplaceFile('source/main.brs', ``);
+            let file = program.setFile('source/main.brs', ``);
             expect(program.getScopesForFile(file)[0]?.name).to.equal('source');
         });
     });
 
     describe('getCompletions', () => {
         it('does not crash for callfunc on a function call', () => {
-            const file = program.addOrReplaceFile('source/main.brs', `
+            const file = program.setFile('source/main.brs', `
                 sub main()
                     getManager()@.
                 end sub
@@ -114,7 +114,7 @@ describe('BrsFile', () => {
         });
 
         it('suggests pkg paths in strings that match that criteria', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print "pkg:"
                 end sub
@@ -127,7 +127,7 @@ describe('BrsFile', () => {
         });
 
         it('suggests libpkg paths in strings that match that criteria', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print "libpkg:"
                 end sub
@@ -140,7 +140,7 @@ describe('BrsFile', () => {
         });
 
         it('suggests pkg paths in template strings', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print \`pkg:\`
                 end sub
@@ -154,7 +154,7 @@ describe('BrsFile', () => {
 
         it('waits for the file to be processed before collecting completions', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub Main()
                     print "hello"
                     Say
@@ -248,7 +248,7 @@ describe('BrsFile', () => {
 
         it('always includes `m`', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -261,7 +261,7 @@ describe('BrsFile', () => {
 
         it('does not fail for missing previousToken', () => {
             //add a single character to the file, and get completions after it
-            program.addOrReplaceFile('source/main.brs', `i`);
+            program.setFile('source/main.brs', `i`);
             expect(() => {
                 program.getCompletions(`${rootDir}/source/main.brs`, Position.create(0, 1)).map(x => x.label);
             }).not.to.throw;
@@ -269,7 +269,7 @@ describe('BrsFile', () => {
 
         it('includes all keywords`', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -294,7 +294,7 @@ describe('BrsFile', () => {
 
         it('does not provide completions within a comment', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     'some comment
                 end sub
@@ -307,7 +307,7 @@ describe('BrsFile', () => {
 
         it('does not provide duplicate entries for variables', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     name = "bob"
                     age = 12
@@ -325,7 +325,7 @@ describe('BrsFile', () => {
 
         it('does not include `as` and `string` text options when used in function params', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
 
                 end sub
@@ -338,7 +338,7 @@ describe('BrsFile', () => {
 
         it('does not provide intellisense results when inside a comment', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
                     'this is a comment
                 end sub
@@ -350,7 +350,7 @@ describe('BrsFile', () => {
 
         it('does provide intellisence for labels only after a goto keyword', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
                     something:
                     goto \nend sub
@@ -366,7 +366,7 @@ describe('BrsFile', () => {
     describe('comment flags', () => {
         describe('bs:disable-next-line', () => {
             it('disables critical diagnostic issues', () => {
-                program.addOrReplaceFile('source/main.brs', `
+                program.setFile('source/main.brs', `
                     sub main()
                         Dim requestData
                     end sub
@@ -375,7 +375,7 @@ describe('BrsFile', () => {
                 program.validate();
                 expectHasDiagnostics(program);
 
-                program.addOrReplaceFile('source/main.brs', `
+                program.setFile('source/main.brs', `
                     sub main()
                         'bs:disable-next-line
                         Dim requestData
@@ -387,7 +387,7 @@ describe('BrsFile', () => {
             });
 
             it('works with leading whitespace', () => {
-                program.addOrReplaceFile('source/main.brs', `
+                program.setFile('source/main.brs', `
                     sub main()
                         ' bs:disable-next-line
                         =asdf=sadf=
@@ -399,7 +399,7 @@ describe('BrsFile', () => {
             });
 
             it('works for all', () => {
-                let file = program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line
                         name = "bob
@@ -417,7 +417,7 @@ describe('BrsFile', () => {
             });
 
             it('works for specific codes', () => {
-                let file = program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line: 1083, 1001
                         name = "bob
@@ -434,7 +434,7 @@ describe('BrsFile', () => {
             });
 
             it('recognizes non-numeric codes', () => {
-                let file = program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line: LINT9999
                         name = "bob
@@ -446,7 +446,7 @@ describe('BrsFile', () => {
 
             it('supports disabling non-numeric error codes', () => {
                 const program = new Program({});
-                const file = program.addOrReplaceFile('source/main.brs', `
+                const file = program.setFile('source/main.brs', `
                     sub main()
                         something = true 'bs:disable-line: LINT1005
                     end sub
@@ -462,7 +462,7 @@ describe('BrsFile', () => {
             });
 
             it('adds diagnostics for unknown numeric diagnostic codes', () => {
-                program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         print "hi" 'bs:disable-line: 123456 999999   aaaab
                     end sub
@@ -482,7 +482,7 @@ describe('BrsFile', () => {
 
         describe('bs:disable-line', () => {
             it('works for all', () => {
-                let file = program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         z::;;%%%%%% 'bs:disable-line
                     end sub
@@ -499,7 +499,7 @@ describe('BrsFile', () => {
             });
 
             it('works for specific codes', () => {
-                program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         'should not have any errors
                         DoSomething(1) 'bs:disable-line:1002
@@ -521,7 +521,7 @@ describe('BrsFile', () => {
                 //the current version of BRS causes parse errors after the `parse` keyword, showing error in comments
                 //the program should ignore all diagnostics found in brs:* comment lines EXCEPT
                 //for the diagnostics about using unknown error codes
-                program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         stop 'bs:disable-line
                         print "need a valid line to fix stop error"
@@ -535,7 +535,7 @@ describe('BrsFile', () => {
 
     describe('parse', () => {
         it('supports iife in assignment', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     result = sub()
                     end sub()
@@ -548,7 +548,7 @@ describe('BrsFile', () => {
 
         it('uses the proper parse mode based on file extension', () => {
             function testParseMode(destPath: string, expectedParseMode: ParseMode) {
-                const file = program.addOrReplaceFile<BrsFile>(destPath, '');
+                const file = program.setFile<BrsFile>(destPath, '');
                 expect(file.parseMode).to.equal(expectedParseMode);
             }
 
@@ -562,7 +562,7 @@ describe('BrsFile', () => {
         });
 
         it('supports labels and goto statements', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     'multiple goto statements on one line
                     goto myLabel : goto myLabel
@@ -573,7 +573,7 @@ describe('BrsFile', () => {
         });
 
         it('supports empty print statements', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                    print
                 end sub
@@ -584,7 +584,7 @@ describe('BrsFile', () => {
         describe('conditional compile', () => {
 
             it('works for upper case keywords', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #CONST someFlag = true
                         #IF someFlag
@@ -600,7 +600,7 @@ describe('BrsFile', () => {
             });
 
             it('supports single-word #elseif and #endif', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #const someFlag = true
                         #if someFlag
@@ -614,7 +614,7 @@ describe('BrsFile', () => {
             });
 
             it('supports multi-word #else if and #end if', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #const someFlag = true
                         #if someFlag
@@ -628,7 +628,7 @@ describe('BrsFile', () => {
             });
 
             it('does not choke on invalid code inside a false conditional compile', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #if false
                             non-commented code here should not cause parse errors
@@ -639,7 +639,7 @@ describe('BrsFile', () => {
             });
 
             it('detects syntax error in #if', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #if true1
                             print "true"
@@ -652,7 +652,7 @@ describe('BrsFile', () => {
             });
 
             it('detects syntax error in #const', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #if %
                             print "true"
@@ -666,7 +666,7 @@ describe('BrsFile', () => {
             });
 
             it('detects #const name using reserved word', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #const function = true
                     end sub
@@ -678,7 +678,7 @@ describe('BrsFile', () => {
             });
 
             it('detects syntax error in #const', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #const someConst = 123
                     end sub
@@ -690,7 +690,7 @@ describe('BrsFile', () => {
         });
 
         it('supports stop statement', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                    stop
                 end sub
@@ -699,7 +699,7 @@ describe('BrsFile', () => {
         });
 
         it('supports single-line if statements', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     if 1 < 2: return true: end if
                     if 1 < 2: return true
@@ -1072,8 +1072,8 @@ describe('BrsFile', () => {
         });
 
         it('adds error for library statements NOT at top of file', () => {
-            program.addOrReplaceFile('source/file.brs', ``);
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/file.brs', ``);
+            program.setFile('source/main.bs', `
                 sub main()
                 end sub
                 import "file.brs"
@@ -1085,14 +1085,14 @@ describe('BrsFile', () => {
         });
 
         it('supports library imports', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 Library "v30/bslCore.brs"
             `);
             expectZeroDiagnostics(program);
         });
 
         it('adds error for library statements NOT at top of file', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                 end sub
                 Library "v30/bslCore.brs"
@@ -1104,7 +1104,7 @@ describe('BrsFile', () => {
         });
 
         it('adds error for library statements inside of function body', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     Library "v30/bslCore.brs"
                 end sub
@@ -1125,7 +1125,7 @@ describe('BrsFile', () => {
         });
 
         it('succeeds when finding variables with "sub" in them', () => {
-            let file = program.addOrReplaceFile('source/main.brs', `
+            let file = program.setFile('source/main.brs', `
                 function DoSomething()
                     return value.subType()
                 end function
@@ -1378,7 +1378,7 @@ describe('BrsFile', () => {
         });
 
         it('finds function calls nested inside statements', () => {
-            program.addOrReplaceFile(`source/main.brs`, `
+            program.setFile(`source/main.brs`, `
                 sub main()
                     if true then
                         DoesNotExist(1, 2)
@@ -1426,7 +1426,7 @@ describe('BrsFile', () => {
         });
 
         it('finds return type', () => {
-            let file = program.addOrReplaceFile('source/main.brs', `
+            let file = program.setFile('source/main.brs', `
                 function DoSomething() as string
                 end function
             `);
@@ -1529,7 +1529,7 @@ describe('BrsFile', () => {
         });
 
         it('finds value from global return', () => {
-            let file = program.addOrReplaceFile('source/main.brs', `
+            let file = program.setFile('source/main.brs', `
                 sub Main()
                    myName = GetName()
                 end sub
@@ -1580,7 +1580,7 @@ describe('BrsFile', () => {
 
     describe('getHover', () => {
         it('works for param types', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething(name as string)
                     name = 1
                     sayMyName = function(name as string)
@@ -1601,7 +1601,7 @@ describe('BrsFile', () => {
 
         //ignore this for now...it's not a huge deal
         it('does not match on keywords or data types', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
                 end sub
                 sub as()
@@ -1614,7 +1614,7 @@ describe('BrsFile', () => {
         });
 
         it('finds declared function', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 function Main(count = 1)
                     firstName = "bob"
                     age = 21
@@ -1634,7 +1634,7 @@ describe('BrsFile', () => {
         });
 
         it('finds variable function hover in same scope', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     sayMyName = sub(name as string)
                     end sub
@@ -1654,7 +1654,7 @@ describe('BrsFile', () => {
         });
 
         it('does not crash when hovering on built-in functions', async () => {
-            let file = program.addOrReplaceFile('source/main.brs', `
+            let file = program.setFile('source/main.brs', `
                 function doUcase(text)
                     return ucase(text)
                 end function
@@ -1670,7 +1670,7 @@ describe('BrsFile', () => {
         });
 
         it('does not crash when hovering on object method call', async () => {
-            let file = program.addOrReplaceFile('source/main.brs', `
+            let file = program.setFile('source/main.brs', `
                 function getInstr(url, text)
                     return url.instr(text)
                 end function
@@ -1687,7 +1687,7 @@ describe('BrsFile', () => {
         });
 
         it('finds function hover in file scope', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     sayMyName()
                 end sub
@@ -1713,13 +1713,13 @@ describe('BrsFile', () => {
                 rootDir: rootDir
             });
 
-            let mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     sayMyName()
                 end sub
             `);
 
-            program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+            program.setFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub sayMyName(name as string)
 
                 end sub
@@ -1742,7 +1742,7 @@ describe('BrsFile', () => {
                 rootDir: rootDir
             });
 
-            const file = program.addOrReplaceFile('source/lib.brs', `
+            const file = program.setFile('source/lib.brs', `
                 '
                 ' The main function
                 '
@@ -1788,7 +1788,7 @@ describe('BrsFile', () => {
         });
 
         it('handles mixed case `then` partions of conditionals', () => {
-            let mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     if true then
                         print "works"
@@ -1797,7 +1797,7 @@ describe('BrsFile', () => {
             `);
 
             expectZeroDiagnostics(mainFile);
-            mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     if true Then
                         print "works"
@@ -1806,7 +1806,7 @@ describe('BrsFile', () => {
             `);
             expectZeroDiagnostics(mainFile);
 
-            mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     if true THEN
                         print "works"
@@ -1818,7 +1818,7 @@ describe('BrsFile', () => {
     });
 
     it('does not throw when encountering incomplete import statement', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
             import
             sub main()
             end sub
@@ -2378,7 +2378,7 @@ describe('BrsFile', () => {
         });
 
         it('simple mapped files include a reference to the source map', () => {
-            let file = program.addOrReplaceFile('source/logger.brs', trim`
+            let file = program.setFile('source/logger.brs', trim`
                 sub logInfo()
                 end sub
             `);
@@ -2388,7 +2388,7 @@ describe('BrsFile', () => {
         });
 
         it('AST generated files include a reference to the source map', () => {
-            let file = program.addOrReplaceFile('source/logger.brs', trim`
+            let file = program.setFile('source/logger.brs', trim`
                 sub logInfo()
                 end sub
             `);
@@ -2398,7 +2398,7 @@ describe('BrsFile', () => {
         });
 
         it('replaces custom types in parameter types and return types', () => {
-            program.addOrReplaceFile('source/SomeKlass.bs', `
+            program.setFile('source/SomeKlass.bs', `
                 class SomeKlass
                 end class
             `);
@@ -2424,7 +2424,7 @@ describe('BrsFile', () => {
     describe('callfunc operator', () => {
         describe('transpile', () => {
             it('does not produce diagnostics', () => {
-                program.addOrReplaceFile('source/main.bs', `
+                program.setFile('source/main.bs', `
                     sub main()
                         someObject@.someFunction(paramObject.value)
                     end sub
@@ -2473,7 +2473,7 @@ describe('BrsFile', () => {
                 name: 'transform callback',
                 afterFileParse: onParsed
             });
-            file = program.addOrReplaceFile({ src: `absolute_path/file${ext}`, dest: `relative_path/file${ext}` }, `
+            file = program.setFile({ src: `absolute_path/file${ext}`, dest: `relative_path/file${ext}` }, `
                 sub Sum()
                     print "hello world"
                 end sub
@@ -2498,17 +2498,17 @@ describe('BrsFile', () => {
     describe('typedefKey', () => {
         it('works for .brs files', () => {
             expect(
-                s((program.addOrReplaceFile<BrsFile>('source/main.brs', '')).typedefKey)
+                s((program.setFile<BrsFile>('source/main.brs', '')).typedefKey)
             ).to.equal(
                 s`${rootDir.toLowerCase()}/source/main.d.bs`
             );
         });
         it('returns undefined for files that should not have a typedef', () => {
-            expect((program.addOrReplaceFile<BrsFile>('source/main.bs', '')).typedefKey).to.be.undefined;
+            expect((program.setFile<BrsFile>('source/main.bs', '')).typedefKey).to.be.undefined;
 
-            expect((program.addOrReplaceFile<BrsFile>('source/main.d.bs', '')).typedefKey).to.be.undefined;
+            expect((program.setFile<BrsFile>('source/main.d.bs', '')).typedefKey).to.be.undefined;
 
-            const xmlFile = program.addOrReplaceFile<BrsFile>('components/comp.xml', '');
+            const xmlFile = program.setFile<BrsFile>('components/comp.xml', '');
             expect(xmlFile.typedefKey).to.be.undefined;
         });
     });
@@ -2517,14 +2517,14 @@ describe('BrsFile', () => {
     describe('type definitions', () => {
         it('only exposes defined functions even if source has more', () => {
             //parse the .brs file first so it doesn't know about the typedef
-            program.addOrReplaceFile<BrsFile>('source/main.brs', `
+            program.setFile<BrsFile>('source/main.brs', `
                 sub main()
                 end sub
                 sub speak()
                 end sub
             `);
 
-            program.addOrReplaceFile('source/main.d.bs', `
+            program.setFile('source/main.d.bs', `
                 sub main()
                 end sub
             `);
@@ -2536,7 +2536,7 @@ describe('BrsFile', () => {
         });
 
         it('reacts to typedef file changes', () => {
-            let file = program.addOrReplaceFile<BrsFile>('source/main.brs', `
+            let file = program.setFile<BrsFile>('source/main.brs', `
                 sub main()
                 end sub
                 sub speak()
@@ -2545,7 +2545,7 @@ describe('BrsFile', () => {
             expect(file.hasTypedef).to.be.false;
             expect(file.typedefFile).not.to.exist;
 
-            program.addOrReplaceFile('source/main.d.bs', `
+            program.setFile('source/main.d.bs', `
                 sub main()
                 end sub
             `);
@@ -2553,7 +2553,7 @@ describe('BrsFile', () => {
             expect(file.typedefFile).to.exist;
 
             //add replace file, does it still find the typedef
-            file = program.addOrReplaceFile<BrsFile>('source/main.brs', `
+            file = program.setFile<BrsFile>('source/main.brs', `
                 sub main()
                 end sub
                 sub speak()
@@ -2571,33 +2571,33 @@ describe('BrsFile', () => {
 
     describe('typedef', () => {
         it('sets typedef path properly', () => {
-            expect((program.addOrReplaceFile<BrsFile>('source/main1.brs', '')).typedefKey).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
-            expect((program.addOrReplaceFile<BrsFile>('source/main2.d.bs', '')).typedefKey).to.equal(undefined);
-            expect((program.addOrReplaceFile<BrsFile>('source/main3.bs', '')).typedefKey).to.equal(undefined);
+            expect((program.setFile<BrsFile>('source/main1.brs', '')).typedefKey).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
+            expect((program.setFile<BrsFile>('source/main2.d.bs', '')).typedefKey).to.equal(undefined);
+            expect((program.setFile<BrsFile>('source/main3.bs', '')).typedefKey).to.equal(undefined);
             //works for dest with `.brs` extension
-            expect((program.addOrReplaceFile<BrsFile>({ src: 'source/main4.bs', dest: 'source/main4.brs' }, '')).typedefKey).to.equal(undefined);
+            expect((program.setFile<BrsFile>({ src: 'source/main4.bs', dest: 'source/main4.brs' }, '')).typedefKey).to.equal(undefined);
         });
 
         it('does not link when missing from program', () => {
-            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            const file = program.setFile<BrsFile>('source/main.brs', ``);
             expect(file.typedefFile).not.to.exist;
         });
 
         it('links typedef when added BEFORE .brs file', () => {
-            const typedef = program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
-            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            const typedef = program.setFile<BrsFile>('source/main.d.bs', ``);
+            const file = program.setFile<BrsFile>('source/main.brs', ``);
             expect(file.typedefFile).to.equal(typedef);
         });
 
         it('links typedef when added AFTER .brs file', () => {
-            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
-            const typedef = program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
+            const file = program.setFile<BrsFile>('source/main.brs', ``);
+            const typedef = program.setFile<BrsFile>('source/main.d.bs', ``);
             expect(file.typedefFile).to.eql(typedef);
         });
 
         it('removes typedef link when typedef is removed', () => {
-            const typedef = program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
-            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            const typedef = program.setFile<BrsFile>('source/main.d.bs', ``);
+            const file = program.setFile<BrsFile>('source/main.brs', ``);
             program.removeFile(typedef.pathAbsolute);
             expect(file.typedefFile).to.be.undefined;
         });
@@ -2605,7 +2605,7 @@ describe('BrsFile', () => {
 
     describe('getTypedef', () => {
         function testTypedef(original: string, expected: string) {
-            let file = program.addOrReplaceFile<BrsFile>('source/main.brs', original);
+            let file = program.setFile<BrsFile>('source/main.brs', original);
             expect(file.getTypedef()).to.eql(expected);
         }
 
@@ -2868,7 +2868,7 @@ describe('BrsFile', () => {
 
     describe('parser getter', () => {
         it('recreates the parser when missing', () => {
-            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', `
+            const file = program.setFile<BrsFile>('source/main.brs', `
                 sub main()
                 end sub
             `);
@@ -2886,11 +2886,11 @@ describe('BrsFile', () => {
         });
 
         it('call parse when previously skipped', () => {
-            program.addOrReplaceFile<BrsFile>('source/main.d.bs', `'typedef
+            program.setFile<BrsFile>('source/main.d.bs', `'typedef
                 sub main()
                 end sub
             `);
-            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', `'source
+            const file = program.setFile<BrsFile>('source/main.brs', `'source
                 sub main()
                 end sub
             `);

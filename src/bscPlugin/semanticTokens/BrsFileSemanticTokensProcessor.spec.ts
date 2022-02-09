@@ -19,7 +19,7 @@ describe('BrsFileSemanticTokensProcessor', () => {
     });
 
     it('matches each namespace section', () => {
-        const file = program.addOrReplaceFile<BrsFile>('source/main.bs', `
+        const file = program.setFile<BrsFile>('source/main.bs', `
             namespace Earthlings.Humanoids
                 class Person
                 end class
