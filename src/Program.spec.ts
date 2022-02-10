@@ -12,7 +12,7 @@ import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { Logger } from './Logger';
 import { createToken } from './astUtils/creators';
@@ -736,15 +736,26 @@ describe('Program', () => {
                     end sub
                 end namespace
                 sub main()
-
+                    print
                 end sub
             `);
-            let completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 23)).map(x => x.label);
-            expect(completions).to.include('NameA');
-            expect(completions).not.to.include('NameB');
-            expect(completions).not.to.include('NameA.NameB');
-            expect(completions).not.to.include('NameA.NameB.NameC');
-            expect(completions).not.to.include('NameA.NameB.NameC.DoSomething');
+            expectCompletionsIncludes(program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 25)), [{
+                label: 'NameA',
+                kind: CompletionItemKind.Module
+            }]);
+            expectCompletionsExcludes(program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 25)), [{
+                label: 'NameB',
+                kind: CompletionItemKind.Module
+            }, {
+                label: 'NameA.NameB',
+                kind: CompletionItemKind.Module
+            }, {
+                label: 'NameA.NameB.NameC',
+                kind: CompletionItemKind.Module
+            }, {
+                label: 'NameA.NameB.NameC.DoSomething',
+                kind: CompletionItemKind.Module
+            }]);
         });
 
         it('resolves completions for namespaces with next namespace part for brighterscript file', () => {

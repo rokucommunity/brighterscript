@@ -673,13 +673,11 @@ describe('EnumStatement', () => {
                     end enum
                 end namespace
             `);
-            //should NOT find these enums
-            expectCompletionsExcludes(program.getCompletions('source/main.brs', util.createPosition(2, 28)), [{
-                label: 'up',
-                kind: CompletionItemKind.EnumMember
-            }, {
-                label: 'down',
-                kind: CompletionItemKind.EnumMember
+            //should NOT find Direction because it's not directly available at the top level (you need to go through `enums.` to get at it)
+            //      dire|ction.down
+            expectCompletionsExcludes(program.getCompletions('source/main.bs', util.createPosition(2, 24)), [{
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
             }]);
         });
 
@@ -694,10 +692,17 @@ describe('EnumStatement', () => {
                         down
                     end enum
                 end namespace
+                enum Logic
+                    yes
+                    no
+                end enum
             `);
             //          dire|ction.down
             expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(3, 33)), [{
                 label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }, {
+                label: 'Logic',
                 kind: CompletionItemKind.Enum
             }]);
         });

@@ -715,9 +715,11 @@ export class BrsFile {
      * @param functionScopes
      */
     public getNamespaceStatementForPosition(position: Position): NamespaceStatement {
-        for (const statement of this.parser.references.namespaceStatements) {
-            if (util.rangeContains(statement.range, position)) {
-                return statement;
+        if (position) {
+            for (const statement of this.parser.references.namespaceStatements) {
+                if (util.rangeContains(statement.range, position)) {
+                    return statement;
+                }
             }
         }
     }
@@ -795,7 +797,7 @@ export class BrsFile {
                     ...KeywordCompletions,
                     ...this.getGlobalClassStatementCompletions(currentToken, this.parseMode),
                     ...namespaceCompletions,
-                    ...this.getEnumStatementCompletions(currentToken, this.parseMode, scope)
+                    ...this.getNonNamespacedEnumStatementCompletions(currentToken, this.parseMode, scope)
                 ];
             }
         }
@@ -837,7 +839,7 @@ export class BrsFile {
             result.push(...classNameCompletions);
 
             //include enums
-            result.push(...this.getEnumStatementCompletions(currentToken, this.parseMode, scope));
+            result.push(...this.getNonNamespacedEnumStatementCompletions(currentToken, this.parseMode, scope));
 
             //include the global callables
             result.push(...scope.getCallablesAsCompletions(this.parseMode));
@@ -935,7 +937,6 @@ export class BrsFile {
         let scopes = this.program.getScopesForFile(this);
         for (let scope of scopes) {
             let classMap = scope.getClassMap();
-            // let viableKeys = [...classMap.keys()].filter((k) => k.startsWith(completionName));
             for (const key of [...classMap.keys()]) {
                 let cs = classMap.get(key).item;
                 if (!results.has(cs.name.text)) {
@@ -949,17 +950,19 @@ export class BrsFile {
         return [...results.values()];
     }
 
-    private getEnumStatementCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
+    private getNonNamespacedEnumStatementCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
         if (parseMode !== ParseMode.BrighterScript) {
             return [];
         }
-        let results = new Map<string, CompletionItem>();
-        let enumMap = scope.getEnumMap();
+        const containingNamespaceName = this.getNamespaceStatementForPosition(currentToken?.range?.start)?.name + '.';
+        const results = new Map<string, CompletionItem>();
+        const enumMap = scope.getEnumMap();
         for (const key of [...enumMap.keys()]) {
-            let enumStatement = enumMap.get(key).item;
-
-            if (!results.has(enumStatement.fullName)) {
-                results.set(enumStatement.fullName, {
+            const enumStatement = enumMap.get(key).item;
+            const fullName = enumStatement.fullName;
+            //if the enum is contained within our own namespace, or if it's a non-namespaced enum
+            if (fullName.startsWith(containingNamespaceName) || !fullName.includes('.')) {
+                results.set(fullName, {
                     label: enumStatement.name,
                     kind: CompletionItemKind.Enum
                 });
