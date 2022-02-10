@@ -1,3 +1,6 @@
+import type { Expression } from '../parser/Expression';
+import type { Statement } from '../parser/Statement';
+
 export class AstEditor {
     private changes: Change[] = [];
 
@@ -15,6 +18,17 @@ export class AstEditor {
         const change = new EditPropertyChange(obj, key, newValue);
         this.changes.push(change);
         change.apply();
+    }
+
+    /**
+     * Set custom text that will be emitted during transpile instead of the original text.
+     */
+    public overrideTranspileResult(node: Expression | Statement, value: string) {
+        this.setProperty(node, 'transpile', (state) => {
+            return [
+                state.sourceNode(node, value)
+            ];
+        });
     }
 
     /**
