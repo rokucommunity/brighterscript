@@ -64,29 +64,6 @@
                 "!**/node_modules/typescript/**",
                 "!**/node_modules/vscode-languageserver/**"
             ]
-        },
-        {
-            "name": "Debug Doc Generator old",
-            "type": "node",
-            "request": "launch",
-            "smartStep": true,
-            "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
-            "sourceMaps": true,
-            "args": [
-                "scripts/compile-doc-examples.ts"
-            ],
-            "skipFiles": [
-                "${workspaceFolder}/node_modules/**/*.js",
-                "<node_internals>/**/*.js"
-            ],
-            "cwd": "${workspaceRoot}",
-            "protocol": "inspector",
-            "internalConsoleOptions": "openOnSessionStart",
-            "resolveSourceMapLocations": [
-                "${workspaceFolder}/**",
-                "!**/node_modules/typescript/**",
-                "!**/node_modules/vscode-languageserver/**"
-            ]
         }
     ]
 }
