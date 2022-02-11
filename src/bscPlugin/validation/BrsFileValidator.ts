@@ -1,3 +1,4 @@
+import { isLiteralExpression } from '../..';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, OnFileValidateEvent } from '../../interfaces';
@@ -48,10 +49,14 @@ export class BrsFileValidator {
     }
 
     private validateEnumValueTypes(diagnostics: BsDiagnostic[], member: EnumMemberStatement, enumValueKind: TokenKind) {
-        const memberValueKind = (member.value as LiteralExpression)?.token.kind;
+        const memberValueKind = (member.value as LiteralExpression)?.token?.kind;
 
-        //is integer enum, has value, that value type is not integer
-        if (enumValueKind === TokenKind.IntegerLiteral && memberValueKind && memberValueKind !== enumValueKind) {
+        if (
+            //is integer enum, has value, that value type is not integer
+            (enumValueKind === TokenKind.IntegerLiteral && memberValueKind && memberValueKind !== enumValueKind) ||
+            //has value, that value is not a literal
+            (member.value && !isLiteralExpression(member.value))
+        ) {
             diagnostics.push({
                 file: this.event.file,
                 ...DiagnosticMessages.enumValueMustBeType(

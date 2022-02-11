@@ -326,6 +326,41 @@ describe('EnumStatement', () => {
             }]);
         });
 
+        it('allows mixing-and-matching int and hex int', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    a = 1
+                    b = &HFF
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows floats', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    a = 1.2
+                    b = 5.2345
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('only support non-object literals', () => {
+            program.setFile('source/main.bs', `
+                enum AppConfig
+                    serverInfo = {}
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.enumValueMustBeType('integer'),
+                range: util.createRange(2, 33, 2, 35)
+            }]);
+        });
+
         it('flags missing value for string enum where string is not first item', () => {
             program.setFile('source/main.bs', `
                 enum Direction
