@@ -854,4 +854,44 @@ describe('Scope', () => {
             program['scopes']['source'].buildNamespaceLookup();
         });
     });
+
+    describe('buildEnumLookup', () => {
+        it('builds enum lookup', () => {
+            const sourceScope = program.getScopeByName('source');
+            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+            program.setFile('source/main.bs', `
+                enum foo
+                    bar1
+                    bar2
+                end enum
+
+                namespace test
+                    function fooFace2()
+                    end function
+
+                    class fooClass2
+                    end class
+
+                    enum foo2
+                        bar2_1
+                        bar2_2
+                    end enum
+                end namespace
+
+                enum foo3
+                    bar3_1
+                    bar3_2
+                end enum
+            `);
+            // program.validate();
+
+            expect(
+                [...sourceScope.getEnumMap().keys()]
+            ).to.eql([
+                'foo',
+                'test.foo2',
+                'foo3'
+            ]);
+        });
+    });
 });

@@ -535,9 +535,9 @@ export class Program {
      * @param filePaths can be an array of srcPath or destPath strings
      * @param normalizePath should this function repair and standardize the filePaths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
      */
-    public removeFiles(filePaths: string[], normalizePath = true) {
-        for (let filiePath of filePaths) {
-            this.removeFile(filiePath, normalizePath);
+    public removeFiles(srcPaths: string[], normalizePath = true) {
+        for (let srcPath of srcPaths) {
+            this.removeFile(srcPath, normalizePath);
         }
     }
 
@@ -813,12 +813,11 @@ export class Program {
 
     /**
      * Find all available completion items at the given position
-     * @param pathAbsolute
-     * @param lineIndex
-     * @param columnIndex
+     * @param filePath can be a srcPath or a destPath
+     * @param position the position (line & column) where completions should be found
      */
-    public getCompletions(pathAbsolute: string, position: Position) {
-        let file = this.getFile(pathAbsolute);
+    public getCompletions(filePath: string, position: Position) {
+        let file = this.getFile(filePath);
         if (!file) {
             return [];
         }

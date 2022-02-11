@@ -17,7 +17,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
+import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
 
@@ -168,6 +168,82 @@ describe('BrsFile', () => {
             let names = result.map(x => x.label);
             expect(names).to.includes('Main');
             expect(names).to.includes('SayHello');
+        });
+
+        it('includes every type of item at base level', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print
+                end sub
+                sub speak()
+                end sub
+                namespace stuff
+                end namespace
+                class Person
+                end class
+                enum Direction
+                end enum
+            `);
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 26)), [{
+                label: 'main',
+                kind: CompletionItemKind.Function
+            }, {
+                label: 'speak',
+                kind: CompletionItemKind.Function
+            }, {
+                label: 'stuff',
+                kind: CompletionItemKind.Module
+            }, {
+                label: 'Person',
+                kind: CompletionItemKind.Class
+            }, {
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }]);
+        });
+
+        describe('namespaces', () => {
+            it('gets full namespace completions at any point through the leading identifier', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        foo.bar
+                    end sub
+
+                    namespace foo.bar
+                    end namespace
+
+                    class Person
+                    end class
+                `);
+
+                const result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 24)).map(x => x.label);
+                expect(result).includes('main');
+                expect(result).includes('foo');
+                expect(result).includes('Person');
+            });
+
+            it('gets namespace completions', () => {
+                program.setFile('source/main.bs', `
+                    namespace foo.bar
+                        function sayHello()
+                        end function
+                    end namespace
+
+                    sub Main()
+                        print "hello"
+                        foo.ba
+                        foo.bar.
+                    end sub
+                `);
+
+                let result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 30));
+                let names = result.map(x => x.label);
+                expect(names).to.includes('bar');
+
+                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(9, 32));
+                names = result.map(x => x.label);
+                expect(names).to.includes('sayHello');
+            });
         });
 
         it('always includes `m`', () => {

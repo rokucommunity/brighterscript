@@ -46,22 +46,23 @@
         },
         {
             "name": "Debug Doc Generator",
-            "type": "node",
+            "type": "pwa-node",
             "request": "launch",
-            "runtimeExecutable": "node",
-            "runtimeArgs": [
-                "--nolazy",
-                "-r",
-                "ts-node/register/transpile-only"
-            ],
             "args": [
                 "scripts/compile-doc-examples.ts"
             ],
+            "runtimeArgs": [
+                "--nolazy",
+                "-r",
+                "ts-node/register"
+            ],
+            "sourceMaps": true,
             "cwd": "${workspaceRoot}",
-            "internalConsoleOptions": "openOnSessionStart",
-            "skipFiles": [
-                "<node_internals>/**",
-                "node_modules/**"
+            "protocol": "inspector",
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/**",
+                "!**/node_modules/typescript/**",
+                "!**/node_modules/vscode-languageserver/**"
             ]
         }
     ]

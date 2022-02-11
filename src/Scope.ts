@@ -7,7 +7,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement } from './parser/Statement';
+import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement } from './parser/Statement';
 import type { NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { standardizePath as s, util } from './util';
@@ -15,9 +15,9 @@ import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
+import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -106,6 +106,26 @@ export class Scope {
                         if (lowerClassName) {
                             map.set(lowerClassName, { item: cls, file: file });
                         }
+                    }
+                }
+            });
+            return map;
+        });
+    }
+
+    /**
+     * A dictionary of all enums in this scope. This includes namespaced enums always with their full name.
+     * The key is stored in lower case
+     */
+    public getEnumMap(): Map<string, FileLink<EnumStatement>> {
+        return this.cache.getOrAdd('enumMap', () => {
+            const map = new Map<string, FileLink<EnumStatement>>();
+            this.enumerateBrsFiles((file) => {
+                for (let enumStmt of file.parser.references.enumStatements) {
+                    const lowerEnumName = enumStmt.fullName.toLowerCase();
+                    //only track enums with a defined name (i.e. exclude nameless malformed enums)
+                    if (lowerEnumName) {
+                        map.set(lowerEnumName, { item: enumStmt, file: file });
                     }
                 }
             });
@@ -360,7 +380,8 @@ export class Scope {
                             namespaces: new Map<string, NamespaceContainer>(),
                             classStatements: {},
                             functionStatements: {},
-                            statements: []
+                            statements: [],
+                            enumStatements: new Map<string, EnumStatement>()
                         });
                     }
                 }
@@ -371,6 +392,8 @@ export class Scope {
                         ns.classStatements[statement.name.text.toLowerCase()] = statement;
                     } else if (isFunctionStatement(statement) && statement.name) {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
+                    } else if (isEnumStatement(statement) && statement.fullName) {
+                        ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
                     }
                 }
             }
@@ -445,7 +468,6 @@ export class Scope {
                 program: this.program,
                 scope: this
             });
-
             this._validate(callableContainerMap);
 
             this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
@@ -1016,6 +1038,7 @@ interface NamespaceContainer {
     statements: Statement[];
     classStatements: Record<string, ClassStatement>;
     functionStatements: Record<string, FunctionStatement>;
+    enumStatements: Map<string, EnumStatement>;
     namespaces: Map<string, NamespaceContainer>;
 }
 

@@ -30,6 +30,8 @@ import {
     DimStatement,
     DottedSetStatement,
     EndStatement,
+    EnumStatement,
+    EnumMemberStatement,
     ExitForStatement,
     ExitWhileStatement,
     ExpressionStatement,
@@ -88,6 +90,7 @@ import { Logger } from '../Logger';
 import { isAAMemberExpression, isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
+import { Cache } from '../Cache';
 
 export class Parser {
     /**
@@ -340,6 +343,22 @@ export class Parser {
         }
     }
 
+    /**
+     * Try to get an identifier. If not found, add diagnostic and return undefined
+     */
+    private tryIdentifier(...additionalTokenKinds: TokenKind[]): Identifier | undefined {
+        const identifier = this.tryConsume(
+            DiagnosticMessages.expectedIdentifier(),
+            TokenKind.Identifier,
+            ...additionalTokenKinds
+        ) as Identifier;
+        if (identifier) {
+            // force the name into an identifier so the AST makes some sense
+            identifier.kind = TokenKind.Identifier;
+            return identifier;
+        }
+    }
+
     private identifier(...additionalTokenKinds: TokenKind[]) {
         const identifier = this.consume(
             DiagnosticMessages.expectedIdentifier(),
@@ -349,6 +368,21 @@ export class Parser {
         // force the name into an identifier so the AST makes some sense
         identifier.kind = TokenKind.Identifier;
         return identifier;
+    }
+
+    private enumMemberStatement() {
+        const statement = new EnumMemberStatement({} as any);
+        statement.tokens.name = this.consume(
+            DiagnosticMessages.expectedClassFieldIdentifier(),
+            TokenKind.Identifier,
+            ...AllowedProperties
+        ) as Identifier;
+        //look for `= SOME_EXPRESSION`
+        if (this.check(TokenKind.Equal)) {
+            statement.tokens.equal = this.advance();
+            statement.value = this.expression();
+        }
+        return statement;
     }
 
     /**
@@ -486,6 +520,67 @@ export class Parser {
         this._references.interfaceStatements.push(statement);
         this.exitAnnotationBlock(parentAnnotations);
         return statement;
+    }
+
+    private enumDeclaration(): EnumStatement {
+        const result = new EnumStatement({} as any, [], this.currentNamespaceName);
+        this.warnIfNotBrighterScriptMode('enum declarations');
+
+        const parentAnnotations = this.enterAnnotationBlock();
+
+        result.tokens.enum = this.consume(
+            DiagnosticMessages.expectedKeyword(TokenKind.Enum),
+            TokenKind.Enum
+        );
+
+        result.tokens.name = this.tryIdentifier();
+
+        this.consumeStatementSeparators();
+        //gather up all members
+        while (this.checkAny(TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
+            try {
+                let decl: EnumMemberStatement | CommentStatement;
+
+                //collect leading annotations
+                if (this.check(TokenKind.At)) {
+                    this.annotationExpression();
+                }
+
+                //members
+                if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
+                    decl = this.enumMemberStatement();
+
+                    //comments
+                } else if (this.check(TokenKind.Comment)) {
+                    decl = this.commentStatement();
+                }
+
+                if (decl) {
+                    this.consumePendingAnnotations(decl);
+                    result.body.push(decl);
+                } else {
+                    //we didn't find a declaration...flag tokens until next line
+                    this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
+                }
+            } catch (e) {
+                //throw out any failed members and move on to the next line
+                this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
+            }
+
+            //ensure statement separator
+            this.consumeStatementSeparators();
+            //break out of this loop if we encountered the `EndEnum` token
+            if (this.check(TokenKind.EndEnum)) {
+                break;
+            }
+        }
+
+        //consume the final `end interface` token
+        result.tokens.endEnum = this.consumeToken(TokenKind.EndEnum);
+
+        this._references.enumStatements.push(result);
+        this.exitAnnotationBlock(parentAnnotations);
+        return result;
     }
 
     /**
@@ -1034,6 +1129,10 @@ export class Parser {
             return this.namespaceStatement();
         }
 
+        if (this.check(TokenKind.Enum)) {
+            return this.enumDeclaration();
+        }
+
         // TODO: support multi-statements
         return this.setStatement();
     }
@@ -1247,7 +1346,8 @@ export class Parser {
         if (firstIdentifier) {
             // force it into an identifier so the AST makes some sense
             firstIdentifier.kind = TokenKind.Identifier;
-            expr = new VariableExpression(firstIdentifier, null);
+            const varExpr = new VariableExpression(firstIdentifier, null);
+            expr = varExpr;
 
             //consume multiple dot identifiers (i.e. `Name.Space.Can.Have.Many.Parts`)
             while (this.check(TokenKind.Dot)) {
@@ -2291,8 +2391,8 @@ export class Parser {
 
                     // force it into an identifier so the AST makes some sense
                     name.kind = TokenKind.Identifier;
-
                     expr = new DottedGetExpression(expr, name as Identifier, dot);
+
                     this.addPropertyHints(name);
                 }
             } else if (this.check(TokenKind.At)) {
@@ -2876,6 +2976,9 @@ export class Parser {
             DottedSetStatement: e => {
                 this.addPropertyHints(e.name);
             },
+            EnumStatement: e => {
+                this._references.enumStatements.push(e);
+            },
             UnaryExpression: e => {
                 this._references.expressions.add(e);
             },
@@ -2908,6 +3011,7 @@ export interface ParseOptions {
 }
 
 export class References {
+    private cache = new Cache();
     public assignmentStatements = [] as AssignmentStatement[];
     public classStatements = [] as ClassStatement[];
 
@@ -2950,6 +3054,18 @@ export class References {
         return this._interfaceStatementLookup;
     }
     private _interfaceStatementLookup: Map<string, InterfaceStatement>;
+
+    public enumStatements = [] as EnumStatement[];
+
+    public get enumStatementLookup() {
+        return this.cache.getOrAdd('enums', () => {
+            const result = new Map<string, EnumStatement>();
+            for (const stmt of this.enumStatements) {
+                result.set(stmt.fullName.toLowerCase(), stmt);
+            }
+            return result;
+        });
+    }
 
     /**
      * A collection of full expressions. This excludes intermediary expressions.

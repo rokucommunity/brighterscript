@@ -635,6 +635,26 @@ export let DiagnosticMessages = {
         message: `Cannot find type with name '${typeName}'`,
         code: 1123,
         severity: DiagnosticSeverity.Error
+    }),
+    enumValueMustBeType: (expectedType: string) => ({
+        message: `Enum value must be type '${expectedType}'`,
+        code: 1124,
+        severity: DiagnosticSeverity.Error
+    }),
+    enumValueIsRequired: (expectedType: string) => ({
+        message: `Value is required for ${expectedType} enum`,
+        code: 1125,
+        severity: DiagnosticSeverity.Error
+    }),
+    unknownEnumValue: (name: string, enumName: string) => ({
+        message: `Property '${name}' does not exist on enum '${enumName}'`,
+        code: 1126,
+        severity: DiagnosticSeverity.Error
+    }),
+    duplicateEnumDeclaration: (scopeName: string, enumName: string) => ({
+        message: `Scope '${scopeName}' already contains an enum with name '${enumName}'`,
+        code: 1127,
+        severity: DiagnosticSeverity.Error
     })
 };
 

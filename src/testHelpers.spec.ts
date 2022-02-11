@@ -1,7 +1,7 @@
 import type { BscFile, BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { Diagnostic } from 'vscode-languageserver';
+import type { CompletionItem, Diagnostic } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from 'chai';
 import type { CodeActionShorthand } from './CodeActionUtil';
@@ -183,8 +183,20 @@ export function expectCodeActions(test: () => any, expected: CodeActionShorthand
     expect(args).to.eql(expected);
 }
 
+export function expectInstanceOf<T>(items: any[], constructors: Array<new (...args: any[]) => T>) {
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const constructor = constructors[i];
+        if (!(item instanceof constructor)) {
+            throw new Error(`Expected index ${i} to be instanceof ${constructor.name} but instead found ${item.constructor?.name}`);
+        }
+    }
+}
+
 export function getTestTranspile(scopeGetter: () => [Program, string]) {
-    return getTestFileAction((file) => file.transpile(), scopeGetter);
+    return getTestFileAction((file) => {
+        return file.program['_getTranspiledFileContents'](file);
+    }, scopeGetter);
 }
 
 export function getTestGetTypedef(scopeGetter: () => [Program, string]) {
@@ -210,7 +222,7 @@ function getTestFileAction(
         }
         let codeWithMap = action(file);
 
-        let sources = [codeWithMap.code, expected];
+        let sources = [trimMap(codeWithMap.code), expected];
         for (let i = 0; i < sources.length; i++) {
             if (formatType === 'trim') {
                 let lines = sources[i].split('\n');
@@ -237,7 +249,7 @@ function getTestFileAction(
 
             }
         }
-        expect(trimMap(sources[0])).to.equal(sources[1]);
+        expect(sources[0]).to.equal(sources[1]);
         return {
             file: file,
             source: source,
@@ -246,4 +258,54 @@ function getTestFileAction(
             map: codeWithMap.map
         };
     };
+}
+
+/**
+ * Create a new object based on the keys from another object
+ */
+function pick<T extends Record<string, any>>(example: T, subject: Record<string, any>): T {
+    if (!subject) {
+        return subject as T;
+    }
+    const result = {};
+    for (const key of Object.keys(example)) {
+        result[key] = subject?.[key];
+    }
+    return result as T;
+}
+
+/**
+ * Test a set of completions includes the provided items
+ */
+export function expectCompletionsIncludes(completions: CompletionItem[], expectedItems: Array<string | Partial<CompletionItem>>) {
+    for (const expectedItem of expectedItems) {
+        if (typeof expectedItem === 'string') {
+            expect(completions.map(x => x.label)).includes(expectedItem);
+        } else {
+            //match all existing properties of the expectedItem
+            let actualItem = pick(
+                expectedItem,
+                completions.find(x => x.label === expectedItem.label)
+            );
+            expect(actualItem).to.eql(expectedItem);
+        }
+    }
+}
+
+/**
+ * Expect that the completions list does not include the provided items
+ */
+export function expectCompletionsExcludes(completions: CompletionItem[], expectedItems: Array<string | Partial<CompletionItem>>) {
+    for (const expectedItem of expectedItems) {
+        if (typeof expectedItem === 'string') {
+            expect(completions.map(x => x.label)).not.includes(expectedItem);
+        } else {
+            //match all existing properties of the expectedItem
+            let actualItem = pick(
+                expectedItem,
+                completions.find(x => x.label === expectedItem.label)
+            );
+            expect(actualItem).to.not.eql(expectedItem);
+        }
+    }
 }

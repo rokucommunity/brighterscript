@@ -1243,6 +1243,41 @@ export class Util {
     public mdFence(code: string, language = '') {
         return '```' + language + '\n' + code + '\n```';
     }
+
+    /**
+     * Gets each part of the dotted get.
+     * @param expression
+     * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
+     */
+    public getAllDottedGetParts(expression: Expression): string[] | undefined {
+        const parts: string[] = [];
+        let nextPart = expression;
+        while (nextPart) {
+            if (isDottedGetExpression(nextPart)) {
+                parts.push(nextPart?.name?.text);
+                nextPart = nextPart.obj;
+            } else if (isVariableExpression(nextPart)) {
+                parts.push(nextPart?.name?.text);
+                break;
+            } else {
+                //we found a non-DottedGet expression, so return because this whole operation is invalid.
+                return undefined;
+            }
+        }
+        return parts.reverse();
+    }
+
+    /**
+     * Returns an integer if valid, or undefined. Eliminates checking for NaN
+     */
+    public parseInt(value: any) {
+        const result = parseInt(value);
+        if (!isNaN(result)) {
+            return result;
+        } else {
+            return undefined;
+        }
+    }
 }
 
 /**
