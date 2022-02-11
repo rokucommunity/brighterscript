@@ -498,6 +498,20 @@ describe('EnumStatement', () => {
     });
 
     describe('transpile', () => {
+        it('includes original value when no value could be computed', () => {
+            testTranspile(`
+                sub main()
+                    print Direction.up
+                end sub
+                enum Direction
+                    up = {}
+                end enum
+            `, `
+                sub main()
+                    print invalid
+                end sub
+            `, undefined, undefined, false);
+        });
         it('writes all literal values as-is (even if there are errors)', () => {
             testTranspile(`
                 sub main()
