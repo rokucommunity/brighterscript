@@ -2233,7 +2233,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
                 //all other values
             } else {
-                result.set(member.name?.toLowerCase(), (member.value as LiteralExpression).token.text);
+                result.set(member.name?.toLowerCase(), (member.value as LiteralExpression)?.token?.text);
             }
         }
         return result;
