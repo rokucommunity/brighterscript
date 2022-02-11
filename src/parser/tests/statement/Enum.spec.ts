@@ -593,6 +593,30 @@ describe('EnumStatement', () => {
     });
 
     describe('completions', () => {
+        it('does not crash when completing enum members with unsupported values', () => {
+            program.setFile('source/main.bs', `
+                sub Main()
+                    direction.obj
+                end sub
+                enum Direction
+                    up
+                    down
+                    obj = {}
+                end enum
+            `);
+            //      direction.|obj
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 30)), [{
+                label: 'up',
+                kind: CompletionItemKind.EnumMember
+            }, {
+                label: 'down',
+                kind: CompletionItemKind.EnumMember
+            }, {
+                label: 'obj',
+                kind: CompletionItemKind.EnumMember
+            }]);
+        });
+
         it('gets enum statement completions from global enum', () => {
             program.setFile('source/main.bs', `
                 sub Main()
