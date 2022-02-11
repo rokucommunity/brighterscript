@@ -46,22 +46,46 @@
         },
         {
             "name": "Debug Doc Generator",
-            "type": "node",
+            "type": "pwa-node",
             "request": "launch",
-            "runtimeExecutable": "node",
-            "runtimeArgs": [
-                "--nolazy",
-                "-r",
-                "ts-node/register/transpile-only"
-            ],
             "args": [
                 "scripts/compile-doc-examples.ts"
             ],
+            "runtimeArgs": [
+                "--nolazy",
+                "-r",
+                "ts-node/register"
+            ],
+            "sourceMaps": true,
             "cwd": "${workspaceRoot}",
-            "internalConsoleOptions": "openOnSessionStart",
+            "protocol": "inspector",
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/**",
+                "!**/node_modules/typescript/**",
+                "!**/node_modules/vscode-languageserver/**"
+            ]
+        },
+        {
+            "name": "Debug Doc Generator old",
+            "type": "node",
+            "request": "launch",
+            "smartStep": true,
+            "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
+            "sourceMaps": true,
+            "args": [
+                "scripts/compile-doc-examples.ts"
+            ],
             "skipFiles": [
-                "<node_internals>/**",
-                "node_modules/**"
+                "${workspaceFolder}/node_modules/**/*.js",
+                "<node_internals>/**/*.js"
+            ],
+            "cwd": "${workspaceRoot}",
+            "protocol": "inspector",
+            "internalConsoleOptions": "openOnSessionStart",
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/**",
+                "!**/node_modules/typescript/**",
+                "!**/node_modules/vscode-languageserver/**"
             ]
         }
     ]
