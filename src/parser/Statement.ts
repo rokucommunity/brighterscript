@@ -2214,22 +2214,26 @@ export class EnumStatement extends Statement implements TypedefProvider {
     public getMemberValueMap() {
         const result = new Map<string, string>();
         const members = this.getMembers();
-        const type = (members.find(x => x.value)?.value as LiteralExpression)?.token?.kind ?? TokenKind.IntegerLiteral;
-        //strings
-        if (type === TokenKind.StringLiteral) {
-            for (const member of members) {
-                result.set(member.name?.toLowerCase(), (member.value as LiteralExpression).token.text);
-            }
+        let currentIntValue = 0;
+        for (const member of members) {
+            //if there is no value, assume an integer and increment the int counter
+            if (!member.value) {
+                result.set(member.name?.toLowerCase(), currentIntValue.toString());
+                currentIntValue++;
 
-            //integers
-        } else {
-            let currentValue = 0;
-            for (const member of members) {
-                if (member.value) {
-                    currentValue = parseInt((member.value as LiteralExpression).token.text);
+                //if explicit integer value, use it and increment the int counter
+            } else if (isLiteralExpression(member.value) && member.value.token.kind === TokenKind.IntegerLiteral) {
+                //try parsing as integer literal, then as hex integer literal.
+                let tokenIntValue = util.parseInt(member.value.token.text) ?? util.parseInt(member.value.token.text.replace(/&h/i, '0x'));
+                if (tokenIntValue !== undefined) {
+                    currentIntValue = tokenIntValue;
+                    currentIntValue++;
                 }
-                result.set(member.name?.toLowerCase(), currentValue.toString());
-                currentValue++;
+                result.set(member.name?.toLowerCase(), member.value.token.text);
+
+                //all other values
+            } else {
+                result.set(member.name?.toLowerCase(), (member.value as LiteralExpression).token.text);
             }
         }
         return result;

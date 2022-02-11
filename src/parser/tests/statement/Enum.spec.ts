@@ -463,6 +463,33 @@ describe('EnumStatement', () => {
     });
 
     describe('transpile', () => {
+        it('writes all literal values as-is (even if there are errors)', () => {
+            testTranspile(`
+                sub main()
+                    print Direction.up
+                    print Direction.down
+                    print Direction.left
+                    print Direction.right
+                    print Direction.upRight
+                end sub
+                enum Direction
+                    up = 1
+                    down = "asdf"
+                    left = 3.14
+                    right = &HFF '255
+                    upRight ' will be 256 since hex ints are parsed as ints
+                end enum
+            `, `
+                sub main()
+                    print 1
+                    print "asdf"
+                    print 3.14
+                    print &HFF
+                    print 256
+                end sub
+            `, 'trim', undefined, false);
+        });
+
         it('supports default-as-integer', () => {
             testTranspile(`
                 enum Direction

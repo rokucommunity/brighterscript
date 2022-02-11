@@ -222,7 +222,7 @@ function getTestFileAction(
         }
         let codeWithMap = action(file);
 
-        let sources = [codeWithMap.code, expected];
+        let sources = [trimMap(codeWithMap.code), expected];
         for (let i = 0; i < sources.length; i++) {
             if (formatType === 'trim') {
                 let lines = sources[i].split('\n');
@@ -249,7 +249,7 @@ function getTestFileAction(
 
             }
         }
-        expect(trimMap(sources[0])).to.equal(sources[1]);
+        expect(sources[0]).to.equal(sources[1]);
         return {
             file: file,
             source: source,

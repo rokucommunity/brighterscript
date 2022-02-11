@@ -1266,6 +1266,18 @@ export class Util {
         }
         return parts.reverse();
     }
+
+    /**
+     * Returns an integer if valid, or undefined. Eliminates checking for NaN
+     */
+    public parseInt(value: any) {
+        const result = parseInt(value);
+        if (!isNaN(result)) {
+            return result;
+        } else {
+            return undefined;
+        }
+    }
 }
 
 /**
