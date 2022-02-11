@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.45.0](https://github.com/rokucommunity/brighterscript/compare/v0.44.0...v0.45.0) - 2022-02-11
+### Added
+ - `enum` language feature ([#484](https://github.com/rokucommunity/brighterscript/pull/484))
+ - transpile override for plugins when providing AST edits. ([#511](https://github.com/rokucommunity/brighterscript/pull/511))
+ - `setFile` method to align with v1. ([#510](https://github.com/rokucommunity/brighterscript/pull/510))
+### Changed
+ - deprecated `addOrReplaceFile` method to align with v1. ([#510](https://github.com/rokucommunity/brighterscript/pull/510))
+ - internal `Cache` method now extends `Map` instead of keeping an internal map. ([#509](https://github.com/rokucommunity/brighterscript/pull/509))
+
+
+
 ## [0.44.0](https://github.com/rokucommunity/brighterscript/compare/v0.43.1...v0.44.0) - 2022-02-08
 ### Added
  - `onScopeValidate` plugin event useful when plugins want to contribute scope validations ([#505](https://github.com/rokucommunity/brighterscript/pull/505))
