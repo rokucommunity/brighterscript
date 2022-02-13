@@ -18,9 +18,11 @@ describe('parser try/catch', () => {
         expect(stmt).to.be.instanceof(TryCatchStatement);
         expect(stmt.tryToken?.text).to.eql('try');
         expect(stmt.tryBranch).to.exist.and.ownProperty('statements').to.be.lengthOf(1);
-        expect(stmt.catchToken?.text).to.eql('catch');
-        expect(stmt.exceptionVariable.text).to.eql('e');
-        expect(stmt.catchBranch).to.exist.and.ownProperty('statements').to.be.lengthOf(1);
+        expect(stmt.catchStatement).to.exist;
+        const cstmt = stmt.catchStatement;
+        expect(cstmt.catchToken?.text).to.eql('catch');
+        expect(cstmt.exceptionVariable.text).to.eql('e');
+        expect(cstmt.catchBranch).to.exist.and.ownProperty('statements').to.be.lengthOf(1);
         expect(stmt.endTryToken?.text).to.eql('end try');
     });
 

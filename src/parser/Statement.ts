@@ -2099,9 +2099,7 @@ export class TryCatchStatement extends Statement {
     constructor(
         public tryToken: Token,
         public tryBranch?: Block,
-        public catchToken?: Token,
-        public exceptionVariable?: Identifier,
-        public catchBranch?: Block,
+        public catchStatement?: CatchStatement,
         public endTryToken?: Token
     ) {
         super();
@@ -2110,7 +2108,7 @@ export class TryCatchStatement extends Statement {
     public get range() {
         return util.createRangeFromPositions(
             this.tryToken.range.start,
-            (this.endTryToken ?? this.catchBranch ?? this.exceptionVariable ?? this.catchToken ?? this.tryBranch ?? this.tryToken).range.end
+            (this.endTryToken ?? this.catchStatement ?? this.tryBranch ?? this.tryToken).range.end
         );
     }
 
@@ -2120,10 +2118,7 @@ export class TryCatchStatement extends Statement {
             ...this.tryBranch.transpile(state),
             state.newline,
             state.indent(),
-            state.transpileToken(this.catchToken),
-            ' ',
-            state.transpileToken(this.exceptionVariable),
-            ...this.catchBranch.transpile(state),
+            ...(this.catchStatement?.transpile(state) ?? []),
             state.newline,
             state.indent(),
             state.transpileToken(this.endTryToken)
@@ -2133,6 +2128,38 @@ export class TryCatchStatement extends Statement {
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (this.tryBranch && options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'tryBranch', visitor, options);
+            walk(this, 'catchStatement', visitor, options);
+        }
+    }
+}
+
+export class CatchStatement extends Statement {
+    constructor(
+        public catchToken: Token,
+        public exceptionVariable?: Identifier,
+        public catchBranch?: Block
+    ) {
+        super();
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            this.catchToken.range.start,
+            (this.catchBranch ?? this.exceptionVariable ?? this.catchToken).range.end
+        );
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [
+            state.transpileToken(this.catchToken),
+            ' ',
+            this.exceptionVariable?.text ?? 'e',
+            ...(this.catchBranch?.transpile(state) ?? [])
+        ];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.catchBranch && options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'catchBranch', visitor, options);
         }
     }

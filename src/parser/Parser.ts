@@ -23,6 +23,7 @@ import {
     AssignmentStatement,
     Block,
     Body,
+    CatchStatement,
     ClassFieldStatement,
     ClassMethodStatement,
     ClassStatement,
@@ -1598,21 +1599,21 @@ export class Parser {
                 statement.endTryToken = this.advance();
             }
             return statement;
-        } else {
-            statement.catchToken = this.advance();
         }
+        const catchStmt = new CatchStatement(this.advance());
+        statement.catchStatement = catchStmt;
 
         const exceptionVarToken = this.tryConsume(DiagnosticMessages.missingExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers);
         if (exceptionVarToken) {
             // force it into an identifier so the AST makes some sense
             exceptionVarToken.kind = TokenKind.Identifier;
-            statement.exceptionVariable = exceptionVarToken as Identifier;
+            catchStmt.exceptionVariable = exceptionVarToken as Identifier;
         }
 
         //ensure statement sepatator
         this.consumeStatementSeparators();
 
-        statement.catchBranch = this.block(TokenKind.EndTry);
+        catchStmt.catchBranch = this.block(TokenKind.EndTry);
 
         if (this.peek().kind !== TokenKind.EndTry) {
             this.diagnostics.push({
