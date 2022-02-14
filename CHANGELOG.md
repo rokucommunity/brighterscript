@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.15](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.14...v1.0.0-alpha.15) - 2022-02-14
+### Added
+ - all changes from [v0.45.0](#0450---2022-02-11)
+
+
+
 ## [0.45.0](https://github.com/rokucommunity/brighterscript/compare/v0.44.0...v0.45.0) - 2022-02-11
 ### Added
  - `enum` language feature ([#484](https://github.com/rokucommunity/brighterscript/pull/484))
@@ -20,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-alpha.14](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.13...v1.0.0-alpha.14) - 2022-02-08
 ### Added
  - array type support for parameters and return types ([#499](https://github.com/rokucommunity/brighterscript/pull/499))
- - all changes from [v0.42.0](#0420---2022-01-10)
+ - all changes from 0.43.0, 0.43.1, 0.44.0
 
 
 
