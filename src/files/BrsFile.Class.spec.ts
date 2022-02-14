@@ -728,7 +728,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it.skip('detects calls to unknown m methods', () => {
-        program.setFile({ src: `$ { rootDir } / source / main.brs`, dest: 'source/main.brs' }, `
+        program.setFile('source/main.brs', `
             class Animal
                 sub new ()
                     m.methodThatDoesNotExist()
@@ -742,7 +742,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('detects duplicate member names', () => {
-        program.setFile({ src: `${rootDir} / source / main.bs`, dest: 'source/main.bs' }, `
+        program.setFile('source/main.bs', `
             class Animal
                 public name
                 public name
@@ -772,7 +772,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('detects mismatched member type in child class', () => {
-        program.setFile({ src: `${rootDir} / source / main.bs`, dest: 'source/main.bs' }, `
+        program.setFile('source/main.bs', `
             class Animal
                 public name
             end class
@@ -789,8 +789,8 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('allows untyped overridden field in child class', () => {
-        program.setFile({ src: `${rootDir} /source/main.bs`, dest: 'source/main.bs' }, `
-        class Animal
+        program.setFile('source/main.bs', `
+            class Animal
                 public name
             end class
             class Duck extends Animal
@@ -837,7 +837,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('detects overridden methods without override keyword', () => {
-        program.setFile({ src: `$ { rootDir }/source/main.bs`, dest: 'source/main.brs' }, `
+        program.setFile('source/main.bs', `
             class Animal
                 sub speak()
                 end sub
@@ -854,7 +854,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('detects overridden methods with different visibility', () => {
-        program.setFile({ src: `$ { rootDir }/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile('source/main.bs', `
             class Animal
                 sub speakInPublic()
                 end sub
@@ -881,7 +881,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('allows overridden methods with matching visibility', () => {
-        program.setFile({ src: `$ { rootDir }/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile('source/main.bs', `
             class Animal
                 sub speakInPublic()
                 end sub
@@ -961,8 +961,8 @@ describe('BrsFile BrighterScript classes', () => {
                 namespace Vertibrates
                     class Bird
                     end class
-                                    end namespace
-                                        `);
+                end namespace
+            `);
             program.setFile('source/Duck.bs', `
                 class Duck extends Vertibrates.GroundedBird
                     sub speak()
@@ -977,7 +977,6 @@ describe('BrsFile BrighterScript classes', () => {
         });
 
         it('namespaced parent class from inside namespace', () => {
-            program.setFile('source/main.bs', ``);
             program.setFile('source/vertibrates.bs', `
                 namespace Vertibrates
                     class Bird
@@ -1018,7 +1017,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('supports newable class namespace inference', () => {
-        program.setFile({ src: `$ { rootDir }/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile('source/main.bs', `
             namespace NameA.NameB
                 class Duck
                 end class
@@ -1032,14 +1031,14 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('catches extending unknown namespaced class', () => {
-        program.setFile({ src: `$ { rootDir }/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile('source/main.bs', `
             namespace NameA.NameB
                 class Animal
                 end class
                 class Duck extends NameA.NameB.Animal1
                 end class
-                                        end namespace
-                                            `);
+            end namespace
+        `);
         program.validate();
         expectDiagnostics(program, [
             DiagnosticMessages.classCouldNotBeFound('NameA.NameB.Animal1', 'source')
@@ -1047,7 +1046,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('supports omitting namespace prefix for items in same namespace', () => {
-        program.setFile({ src: `$ { rootDir }/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile('source/main.bs', `
             namespace NameA.NameB
                 class Animal
                 end class
@@ -1060,7 +1059,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('catches duplicate root-level class declarations', () => {
-        program.setFile({ src: `$ { rootDir }/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile('source/main.bs', `
             class Animal
             end class
             class Animal
@@ -1073,14 +1072,14 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('catches duplicate namespace-level class declarations', () => {
-        program.setFile({ src: `$ { rootDir }/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile('source/main.bs', `
             namespace NameA.NameB
                 class Animal
                 end class
                 class Animal
                 end class
-                                end namespace
-                                    `);
+            end namespace
+        `);
         program.validate();
         expectDiagnostics(program, [
             DiagnosticMessages.duplicateClassDeclaration('source', 'NameA.NameB.Animal')
@@ -1088,7 +1087,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('catches namespaced class name which is the same as a global class', () => {
-        program.setFile({ src: `$ { rootDir }/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile('source/main.bs', `
             namespace NameA.NameB
                 class Animal
                 end class
@@ -1244,7 +1243,7 @@ describe('BrsFile BrighterScript classes', () => {
 
     it('does not crash when parent class is missing', () => {
         const file = program.setFile<BrsFile>('source/ClassB.bs', `
-    class ClassB extends ClassA
+            class ClassB extends ClassA
             end class
         `);
         doesNotThrow(() => {

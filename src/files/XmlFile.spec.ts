@@ -87,7 +87,7 @@ describe('XmlFile', () => {
         });
 
         it('supports importing BrighterScript files', () => {
-            const file = program.setFile<XmlFile>({ src: `${rootDir}/components/custom.xml`, dest: 'components/custom.xml' }, trim`
+            file = program.setFile({ src: `${rootDir}/components/custom.xml`, dest: 'components/custom.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="Scene">
                     <script type="text/brightscript" uri="ChildScene.bs" />
@@ -98,7 +98,7 @@ describe('XmlFile', () => {
             );
         });
         it('does not include commented-out script imports', () => {
-            const file = program.setFile<XmlFile>({ src: `${rootDir}/components/custom.xml`, dest: 'components/custom.xml' }, trim`
+            file = program.setFile({ src: `${rootDir}/components/custom.xml`, dest: 'components/custom.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="Scene">
                     <script type="text/brightscript" uri="ChildScene.brs" />
@@ -199,7 +199,7 @@ describe('XmlFile', () => {
         });
 
         it('adds error when component does not declare a name', () => {
-            const file = program.setFile<XmlFile>('components/comp.xml', trim`
+            file = program.setFile('components/comp.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component extends="ParentScene">
                     <script type="text/brightscript" uri="ChildScene.brs" />
@@ -214,7 +214,7 @@ describe('XmlFile', () => {
         });
 
         it('catches xml parse errors', () => {
-            const file = program.setFile<XmlFile>('components/comp.xml', trim`
+            file = program.setFile('components/comp.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component 1extends="ParentScene">
                 </component>
@@ -834,7 +834,9 @@ describe('XmlFile', () => {
         });
 
         it('returns the XML unmodified if needsTranspiled is false', () => {
-            let file = program.setFile('components/SimpleScene.xml', trim`
+            let file = program.setFile(
+                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
+                trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <!-- should stay as-is -->
                 <component name="SimpleScene" extends="Scene" >
@@ -853,7 +855,9 @@ describe('XmlFile', () => {
         });
 
         it('needsTranspiled is false by default', () => {
-            let file = program.setFile('components/SimpleScene.xml', trim`
+            let file = program.setFile(
+                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
+                trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene" >
                 </component>
@@ -862,7 +866,9 @@ describe('XmlFile', () => {
         });
 
         it('needsTranspiled is true if an import is brighterscript', () => {
-            let file = program.setFile('components/SimpleScene.xml', trim`
+            let file = program.setFile(
+                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
+                trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene" >
                     <script type="text/brightscript" uri="SimpleScene.bs"/>
@@ -874,7 +880,9 @@ describe('XmlFile', () => {
 
         it('simple source mapping includes sourcemap reference', () => {
             program.options.sourceMap = true;
-            let file = program.setFile('components/SimpleScene.xml', trim`
+            let file = program.setFile(
+                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
+                trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene">
                 </component>
@@ -887,7 +895,9 @@ describe('XmlFile', () => {
 
         it('AST-based source mapping includes sourcemap reference', () => {
             program.options.sourceMap = true;
-            let file = program.setFile('components/SimpleScene.xml', trim`
+            let file = program.setFile(
+                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
+                trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene">
                 </component>

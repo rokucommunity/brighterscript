@@ -12,7 +12,7 @@ import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { Logger } from './Logger';
 import { createToken } from './astUtils/creators';
@@ -209,6 +209,17 @@ describe('Program', () => {
     });
 
     describe('validate', () => {
+        it('retains expressions after validate', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub test()
+                    print a.b.c
+                end sub
+            `);
+            //disable the plugins
+            expect(file.parser.references.expressions).to.be.lengthOf(1);
+            program.validate();
+            expect(file.parser.references.expressions).to.be.lengthOf(1);
+        });
         it('catches duplicate XML component names', () => {
             //add 2 components which both reference the same errored file
             program.setFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, trim`
@@ -511,12 +522,12 @@ describe('Program', () => {
     describe('hasFile', () => {
         it('recognizes when it has a file loaded', () => {
             expect(program.hasFile('file1.brs')).to.be.false;
-            program.setFile({ src: 'file1.brs', dest: 'file1.brs' }, `'comment`);
+            program.setFile('file1.brs', `'comment`);
             expect(program.hasFile('file1.brs')).to.be.true;
         });
     });
 
-    describe('addOrReplaceFile', () => {
+    describe('setFile', () => {
         it('links xml scopes based on xml parent-child relationships', () => {
             program.setFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -732,15 +743,26 @@ describe('Program', () => {
                     end sub
                 end namespace
                 sub main()
-
+                    print
                 end sub
             `);
-            let completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 23)).map(x => x.label);
-            expect(completions).to.include('NameA');
-            expect(completions).not.to.include('NameB');
-            expect(completions).not.to.include('NameA.NameB');
-            expect(completions).not.to.include('NameA.NameB.NameC');
-            expect(completions).not.to.include('NameA.NameB.NameC.DoSomething');
+            expectCompletionsIncludes(program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 25)), [{
+                label: 'NameA',
+                kind: CompletionItemKind.Module
+            }]);
+            expectCompletionsExcludes(program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 25)), [{
+                label: 'NameB',
+                kind: CompletionItemKind.Module
+            }, {
+                label: 'NameA.NameB',
+                kind: CompletionItemKind.Module
+            }, {
+                label: 'NameA.NameB.NameC',
+                kind: CompletionItemKind.Module
+            }, {
+                label: 'NameA.NameB.NameC.DoSomething',
+                kind: CompletionItemKind.Module
+            }]);
         });
 
         it('resolves completions for namespaces with next namespace part for brighterscript file', () => {

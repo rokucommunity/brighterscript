@@ -406,7 +406,7 @@ export class Program {
             pkgPath = util.sanitizePkgPath(fileParam.dest);
         }
         const lowerPkgPath = pkgPath.toLowerCase();
-        return this.logger.time(LogLevel.debug, ['program.setFile()', chalk.green(srcPath)], () => {
+        return this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
 
             assert.ok(srcPath, 'srcPath is required');
             assert.ok(pkgPath, 'pkgPath is required');
@@ -517,9 +517,9 @@ export class Program {
      * @param filePaths can be an array of srcPath or destPath strings
      * @param normalizePath should this function repair and standardize the filePaths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
      */
-    public removeFiles(filePaths: string[], normalizePath = true) {
-        for (let filiePath of filePaths) {
-            this.removeFile(filiePath, normalizePath);
+    public removeFiles(srcPaths: string[], normalizePath = true) {
+        for (let srcPath of srcPaths) {
+            this.removeFile(srcPath, normalizePath);
         }
     }
 

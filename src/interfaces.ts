@@ -326,15 +326,41 @@ export interface AfterFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
 }
-export interface BeforeFileTranspileEvent {
+
+export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
     program: Program;
-    file: BscFile;
+    file: TFile;
     outputPath: string;
+    /**
+     * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
+     * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
+     * the changes to persist in the in-memory file.
+     */
+    editor: Editor;
 }
-export interface AfterFileTranspileEvent {
+
+export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
     program: Program;
-    file: BscFile;
+    file: TFile;
     outputPath: string;
+    /**
+     * The resulting transpiled file contents
+     */
+    code: string;
+    /**
+     * The sourceMaps for the generated code (if emitting source maps is enabled)
+     */
+    map?: SourceMapGenerator;
+    /**
+     * The generated type definition file contents (if emitting type definitions are enabled)
+     */
+    typedef?: string;
+    /**
+     * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
+     * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
+     * the changes to persist in the in-memory file.
+     */
+    editor: Editor;
 }
 export interface BeforeFileDisposeEvent {
     program: Program;
@@ -365,41 +391,7 @@ export interface OnScopeValidateEvent {
     scope: Scope;
 }
 
-export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty'>;
-
-export interface BeforeFileTranspileEvent {
-    file: BscFile;
-    outputPath: string;
-    /**
-     * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
-     * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
-     * the changes to persist in the in-memory file.
-     */
-    editor: Editor;
-}
-
-export interface AfterFileTranspileEvent {
-    file: BscFile;
-    outputPath: string;
-    /**
-     * The resulting transpiled file contents
-     */
-    code: string;
-    /**
-     * The sourceMaps for the generated code (if emitting source maps is enabled)
-     */
-    map?: SourceMapGenerator;
-    /**
-     * The generated type definition file contents (if emitting type definitions are enabled)
-     */
-    typedef?: string;
-    /**
-     * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
-     * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
-     * the changes to persist in the in-memory file.
-     */
-    editor: Editor;
-}
+export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty' | 'overrideTranspileResult'>;
 
 export interface SemanticToken {
     range: Range;
