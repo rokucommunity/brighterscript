@@ -165,7 +165,7 @@ describe('diagnosticUtils', () => {
         });
     });
 
-    describe.only('getDiagnosticLine', () => {
+    describe('getDiagnosticLine', () => {
         const color = ((text: string) => text) as any;
 
         function testGetDiagnosticLine(range: Range, squigglyText: string, lineLength = 20) {
