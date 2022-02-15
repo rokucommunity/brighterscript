@@ -3,7 +3,6 @@ import { expect } from 'chai';
 import * as diagnosticUtils from './diagnosticUtils';
 import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 import { util } from './util';
-import { BrsFile } from './files/BrsFile';
 import chalk from 'chalk';
 
 describe('diagnosticUtils', () => {
