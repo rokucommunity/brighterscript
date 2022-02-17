@@ -836,9 +836,10 @@ export class ForStatement extends Statement {
         state.lineage.unshift(this);
         result.push(...this.body.transpile(state));
         state.lineage.shift();
-        if (this.body.statements.length > 0) {
-            result.push('\n');
-        }
+
+        // add new line before "end for"
+        result.push('\n');
+
         //end for
         result.push(
             state.indent(),
@@ -903,9 +904,10 @@ export class ForEachStatement extends Statement {
         state.lineage.unshift(this);
         result.push(...this.body.transpile(state));
         state.lineage.shift();
-        if (this.body.statements.length > 0) {
-            result.push('\n');
-        }
+
+        // add new line before "end for"
+        result.push('\n');
+
         //end for
         result.push(
             state.indent(),
