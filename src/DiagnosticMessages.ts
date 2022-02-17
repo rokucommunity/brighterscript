@@ -175,8 +175,8 @@ export let DiagnosticMessages = {
         code: 1031,
         severity: DiagnosticSeverity.Error
     }),
-    expectedClassKeyword: () => ({
-        message: `Expected 'class' keyword`,
+    expectedKeyword: (kind: TokenKind) => ({
+        message: `Expected '${kind}' keyword`,
         code: 1032,
         severity: DiagnosticSeverity.Error
     }),
@@ -423,8 +423,8 @@ export let DiagnosticMessages = {
         code: 1080,
         severity: DiagnosticSeverity.Error
     }),
-    foundUnexpectedToken: (text: string) => ({
-        message: `Found unexpected token '${text}'`,
+    unexpectedToken: (text: string) => ({
+        message: `Unexpected token '${text}'`,
         code: 1081,
         severity: DiagnosticSeverity.Error
     }),
@@ -511,8 +511,8 @@ export let DiagnosticMessages = {
         code: 1097,
         severity: DiagnosticSeverity.Error
     }),
-    memberAlreadyExistsInParentClass: (memberType: string, parentClassName: string) => ({
-        message: `A ${memberType} with this name already exists in inherited class '${parentClassName}'`,
+    childFieldTypeNotAssignableToBaseProperty: (childTypeName: string, baseTypeName: string, fieldName: string, childFieldType: string, parentFieldType: string) => ({
+        message: `Field '${fieldName}' in class '${childTypeName}' is not assignable to the same field in base class '${baseTypeName}'. Type '${childFieldType}' is not assignable to type '${parentFieldType}'.`,
         code: 1098,
         severity: DiagnosticSeverity.Error
     }),
@@ -566,8 +566,8 @@ export let DiagnosticMessages = {
         code: 1108,
         severity: DiagnosticSeverity.Error
     }),
-    expectedTokenAButFoundTokenB: (tokenA: string, tokenB: string) => ({
-        message: `Expected '${tokenA}' but instead found ${tokenB}`,
+    expectedToken: (tokenKind: string) => ({
+        message: `Expected '${tokenKind}'`,
         code: 1109,
         severity: DiagnosticSeverity.Error
     }),
@@ -626,9 +626,39 @@ export let DiagnosticMessages = {
         code: 1121,
         severity: DiagnosticSeverity.Error
     }),
+    mismatchedOverriddenMemberVisibility: (childClassName: string, memberName: string, childAccessModifier: string, ancestorAccessModifier: string, ancestorClassName: string) => ({
+        message: `Access modifier mismatch: '${memberName}' is ${childAccessModifier} in type '${childClassName}' but is ${ancestorAccessModifier} in base type '${ancestorClassName}'.`,
+        code: 1122,
+        severity: DiagnosticSeverity.Error
+    }),
+    cannotFindType: (typeName: string) => ({
+        message: `Cannot find type with name '${typeName}'`,
+        code: 1123,
+        severity: DiagnosticSeverity.Error
+    }),
+    enumValueMustBeType: (expectedType: string) => ({
+        message: `Enum value must be type '${expectedType}'`,
+        code: 1124,
+        severity: DiagnosticSeverity.Error
+    }),
+    enumValueIsRequired: (expectedType: string) => ({
+        message: `Value is required for ${expectedType} enum`,
+        code: 1125,
+        severity: DiagnosticSeverity.Error
+    }),
+    unknownEnumValue: (name: string, enumName: string) => ({
+        message: `Property '${name}' does not exist on enum '${enumName}'`,
+        code: 1126,
+        severity: DiagnosticSeverity.Error
+    }),
+    duplicateEnumDeclaration: (scopeName: string, enumName: string) => ({
+        message: `Scope '${scopeName}' already contains an enum with name '${enumName}'`,
+        code: 1127,
+        severity: DiagnosticSeverity.Error
+    }),
     argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string) => ({
         message: `Argument of type '${actualTypeString}' is not assignable to parameter of type '${expectedTypeString}'`,
-        code: 1122,
+        code: 1128,
         severity: DiagnosticSeverity.Error
     })
 };

@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import type { DimStatement } from '../..';
+import type { DimStatement } from '../../Statement';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Parser } from '../../Parser';
 

@@ -1,4 +1,4 @@
-import type { BscType } from './BscType';
+import type { BscType, TypeContext } from './BscType';
 
 /**
  * A type whose actual type is not computed until requested.
@@ -6,33 +6,35 @@ import type { BscType } from './BscType';
  */
 export class LazyType implements BscType {
     constructor(
-        private factory: () => BscType
+        private factory: (context?: TypeContext) => BscType
     ) {
-
     }
 
     public get type() {
         return this.factory();
     }
-
-    public isAssignableTo(targetType: BscType) {
-        return this.type.isAssignableTo(targetType);
+    public getTypeFromContext(context?: TypeContext) {
+        return this.factory(context);
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.type.isConvertibleTo(targetType);
+    public isAssignableTo(targetType: BscType, context?: TypeContext) {
+        const foundType = this.getTypeFromContext(context);
+        return foundType?.isAssignableTo(targetType, context);
     }
 
-    public toString() {
-        return this.type.toString();
+    public isConvertibleTo(targetType: BscType, context?: TypeContext) {
+        return this.getTypeFromContext(context)?.isConvertibleTo(targetType, context);
     }
 
-    public toTypeString(): string {
-        return this.type.toTypeString();
+    public toString(context?: TypeContext) {
+        return this.getTypeFromContext(context)?.toString(context);
     }
 
-    public equals(targetType: BscType): boolean {
-        return this.type.equals(targetType);
+    public toTypeString(context?: TypeContext): string {
+        return this.getTypeFromContext(context)?.toTypeString(context);
+    }
+
+    public equals(targetType: BscType, context?: TypeContext): boolean {
+        return this.getTypeFromContext(context)?.equals(targetType, context);
     }
 }
-

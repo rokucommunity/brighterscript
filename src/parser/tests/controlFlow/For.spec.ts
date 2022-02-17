@@ -1,10 +1,10 @@
 import { expect } from 'chai';
 import { Parser } from '../../Parser';
-import { TokenKind } from '../../../lexer';
+import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
-import type { ForStatement } from '../..';
-import { LiteralExpression } from '../..';
+import type { ForStatement } from '../../Statement';
+import { LiteralExpression } from '../../Expression';
 
 describe('parser for loops', () => {
     it('accepts a \'step\' clause', () => {
@@ -128,8 +128,8 @@ describe('parser for loops', () => {
                 text: 'to',
                 isReserved: false,
                 range: {
-                    start: { line: 0, column: 10 },
-                    end: { start: 0, column: 12 }
+                    start: { line: 0, character: 10 },
+                    end: { line: 0, character: 12 }
                 }
             },
             {

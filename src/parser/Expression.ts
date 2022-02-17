@@ -1,21 +1,22 @@
 /* eslint-disable no-bitwise */
-import type { Token, Identifier } from '../lexer';
-import { TokenKind } from '../lexer';
+import type { Token, Identifier } from '../lexer/Token';
+import { TokenKind } from '../lexer/TokenKind';
 import type { Block, CommentStatement, FunctionStatement, LabelStatement } from './Statement';
 import type { Range } from 'vscode-languageserver';
-import util from '../util';
+import util, { MAX_PARAM_COUNT } from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
-import { ParseMode } from './Parser';
+import { getBscTypeFromExpression, ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { walk, InternalWalkMode } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
-import type { BscType } from '../types/BscType';
+import type { BscType, SymbolContainer } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
 import { FunctionType } from '../types/FunctionType';
+import { ObjectType } from '../types/ObjectType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -71,7 +72,7 @@ export class BinaryExpression extends Expression {
 }
 
 export class CallExpression extends Expression {
-    static MaximumArguments = 32;
+    static MaximumArguments = MAX_PARAM_COUNT;
 
     constructor(
         readonly callee: Expression,
@@ -163,8 +164,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         this.tokens.returnType = returnTypeToken;
 
         if (this.tokens.returnType) {
-            this.returnType = util.tokenToBscType(this.tokens.returnType);
-        } else if (this.isSub) {
+            this.returnType = util.tokenToBscType(this.tokens.returnType, true, namespaceName);
+        } else if (this.tokens.beginKeyword.text.toLowerCase() === 'sub') {
             this.returnType = new VoidType();
         } else {
             this.returnType = new DynamicType();
@@ -280,7 +281,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 state.transpileToken(this.tokens.as),
                 ' ',
                 //return type
-                state.sourceNode(this.tokens.returnType, this.returnType.toTypeString())
+                state.sourceNode(this.tokens.returnType, this.returnType.toTypeString(state.typeContext))
             );
         }
         if (includeBody) {
@@ -319,9 +320,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         let functionType = new FunctionType(this.returnType);
         functionType.isSub = this.tokens.beginKeyword.text.toLowerCase() === 'sub';
         for (let param of this.parameters) {
-            let isRequired = !param.defaultValue;
-            //TODO compute optional parameters
-            functionType.addParameter(param.tokens.name.text, param.type, isRequired);
+            functionType.addParameter(param.tokens.name.text, param.type, param.isOptional);
         }
         return functionType;
     }
@@ -380,7 +379,7 @@ export class FunctionParameterExpression extends Expression {
             result.push(' ');
             result.push(state.transpileToken(this.tokens.as));
             result.push(' ');
-            result.push(state.sourceNode(this.tokens.type, this.type.toTypeString()));
+            result.push(state.sourceNode(this.tokens.type, this.type.toTypeString(state.typeContext)));
         }
 
         return result;
@@ -391,6 +390,10 @@ export class FunctionParameterExpression extends Expression {
         if (this.defaultValue && options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'defaultValue', visitor, options);
         }
+    }
+
+    get isOptional(): boolean {
+        return !!this.defaultValue;
     }
 }
 
@@ -427,7 +430,7 @@ export class NamespacedVariableNameExpression extends Expression {
         return parts;
     }
 
-    getName(parseMode: ParseMode) {
+    getName(parseMode: ParseMode = ParseMode.BrighterScript) {
         if (parseMode === ParseMode.BrighterScript) {
             return this.getNameParts().join('.');
         } else {
@@ -754,7 +757,8 @@ export class AAMemberExpression extends Expression {
         keyToken: Token,
         colonToken: Token,
         /** The expression evaluated to determine the member's initial value. */
-        public value: Expression
+        public value: Expression,
+        public type: BscType
     ) {
         super();
         this.tokens.key = keyToken;
@@ -763,6 +767,7 @@ export class AAMemberExpression extends Expression {
     }
 
     public range: Range;
+    public commaToken?: Token;
 
     public tokens = {} as {
         key: Token;
@@ -779,17 +784,22 @@ export class AAMemberExpression extends Expression {
     }
 }
 
-export class AALiteralExpression extends Expression {
+export class AALiteralExpression extends Expression implements SymbolContainer {
     constructor(
         readonly elements: Array<AAMemberExpression | CommentStatement>,
         openSquareBracketToken: Token,
-        closeSquareBracketToken: Token
+        closeSquareBracketToken: Token,
+        readonly functionExpression: FunctionExpression
     ) {
         super();
         this.tokens.openSquareBracket = openSquareBracketToken;
         this.tokens.closeSquareBracket = closeSquareBracketToken;
         this.range = util.createRangeFromPositions(this.tokens.openSquareBracket.range.start, this.tokens.closeSquareBracket.range.end);
+        this.buildSymbolTable();
     }
+
+    readonly symbolTable: SymbolTable = new SymbolTable();
+    readonly memberTable: SymbolTable = new SymbolTable();
 
     public readonly range: Range;
 
@@ -797,6 +807,16 @@ export class AALiteralExpression extends Expression {
         openSquareBracket: Token;
         closeSquareBracket: Token;
     };
+
+    public buildSymbolTable() {
+        this.symbolTable.clear();
+        this.symbolTable.addSymbol('m', { start: this.tokens.openSquareBracket.range.start, end: this.tokens.closeSquareBracket.range.end }, new ObjectType(this.memberTable));
+        for (const element of this.elements) {
+            if (isAAMemberExpression(element)) {
+                this.memberTable.addSymbol(element.tokens.key.text, element.tokens.key.range, getBscTypeFromExpression(element.value, this.functionExpression));
+            }
+        }
+    }
 
     transpile(state: BrsTranspileState) {
         let result = [];
@@ -1012,7 +1032,8 @@ export class SourceLiteralExpression extends Expression {
         let text: string;
         switch (this.tokens.value.kind) {
             case TokenKind.SourceFilePathLiteral:
-                text = `"${fileUrl(state.srcPath)}"`;
+                const pathUrl = fileUrl(state.srcPath);
+                text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}"`;
                 break;
             case TokenKind.SourceLineNumLiteral:
                 text = `${this.tokens.value.range.start.line + 1}`;
@@ -1024,21 +1045,14 @@ export class SourceLiteralExpression extends Expression {
                 text = `"${this.getFunctionName(state, ParseMode.BrighterScript)}"`;
                 break;
             case TokenKind.SourceLocationLiteral:
-                text = `"${fileUrl(state.srcPath)}:${this.tokens.value.range.start.line + 1}"`;
+                const locationUrl = fileUrl(state.srcPath);
+                text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.tokens.value.range.start.line + 1}"`;
                 break;
             case TokenKind.PkgPathLiteral:
-                let pkgPath1 = `pkg:/${state.file.pkgPath}`
-                    .replace(/\\/g, '/')
-                    .replace(/\.bs$/i, '.brs');
-
-                text = `"${pkgPath1}"`;
+                text = `"${state.file.pkgPath.replace(/\.bs$/i, '.brs')}"`;
                 break;
             case TokenKind.PkgLocationLiteral:
-                let pkgPath2 = `pkg:/${state.file.pkgPath}`
-                    .replace(/\\/g, '/')
-                    .replace(/\.bs$/i, '.brs');
-
-                text = `"${pkgPath2}:" + str(LINE_NUM)`;
+                text = `"${state.file.pkgPath.replace(/\.bs$/i, '.brs')}:" + str(LINE_NUM)`;
                 break;
             case TokenKind.LineNumLiteral:
             default:
@@ -1624,6 +1638,49 @@ export class NullCoalescingExpression extends Expression {
             walk(this, 'consequent', visitor, options);
             walk(this, 'alternate', visitor, options);
         }
+    }
+}
+
+export class RegexLiteralExpression extends Expression {
+    public constructor(
+        public tokens: {
+            regexLiteral: Token;
+        }
+    ) {
+        super();
+    }
+
+    public get range() {
+        return this.tokens.regexLiteral.range;
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        let text = this.tokens.regexLiteral?.text ?? '';
+        let flags = '';
+        //get any flags from the end
+        const flagMatch = /\/([a-z]+)$/i.exec(text);
+        if (flagMatch) {
+            text = text.substring(0, flagMatch.index + 1);
+            flags = flagMatch[1];
+        }
+        let pattern = text
+            //remove leading and trailing slashes
+            .substring(1, text.length - 1)
+            //escape quotemarks
+            .split('"').join('" + chr(34) + "');
+
+        return [
+            state.sourceNode(this.tokens.regexLiteral, [
+                'CreateObject("roRegex", ',
+                `"${pattern}", `,
+                `"${flags}"`,
+                ')'
+            ])
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
     }
 }
 

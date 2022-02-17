@@ -9,8 +9,9 @@ import { Logger, LogLevel } from './Logger';
 import * as diagnosticUtils from './diagnosticUtils';
 import type { BscFile, BsDiagnostic } from '.';
 import { Range } from '.';
-import { DiagnosticSeverity } from './astUtils';
+import { DiagnosticSeverity } from 'vscode-languageserver';
 import { BrsFile } from './files/BrsFile';
+import { expectZeroDiagnostics } from './testHelpers.spec';
 
 describe('ProgramBuilder', () => {
 
@@ -55,7 +56,7 @@ describe('ProgramBuilder', () => {
                 dest: 'file4.xml'
             }]));
 
-            let stub = sinon.stub(builder.program, 'addOrReplaceFile');
+            let stub = sinon.stub(builder.program, 'setFile');
             sinon.stub(builder, 'getFileContents').returns(Promise.resolve(''));
             await builder['loadAllFilesAST']();
             expect(stub.getCalls()).to.be.lengthOf(3);
@@ -70,7 +71,7 @@ describe('ProgramBuilder', () => {
             fsExtra.outputFileSync(s`${rootDir}/source/main.d.bs`, '');
             fsExtra.outputFileSync(s`${rootDir}/source/lib.d.bs`, '');
             fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
-            const stub = sinon.stub(builder.program, 'addOrReplaceFile');
+            const stub = sinon.stub(builder.program, 'setFile');
             await builder['loadAllFilesAST']();
             const srcPaths = stub.getCalls().map(x => x.args[0].src);
             //the d files should be first
@@ -145,9 +146,7 @@ describe('ProgramBuilder', () => {
                     dest: 'source/lib.brs'
                 }]
             });
-            const diagnostics = builder.getDiagnostics();
-            expect(diagnostics.map(x => x.message)).to.eql([]);
-            expect(builder.program.getFileByPathAbsolute(s``));
+            expectZeroDiagnostics(builder);
         });
     });
 
@@ -239,7 +238,7 @@ describe('ProgramBuilder', () => {
             f1.fileContents = `l1\nl2\nl3`;
             sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
-            sinon.stub(builder.program, 'getFileByPathAbsolute').returns(f1);
+            sinon.stub(builder.program, 'getFile').returns(f1);
 
             let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
@@ -257,7 +256,7 @@ describe('ProgramBuilder', () => {
         f1.fileContents = null;
         sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
-        sinon.stub(builder.program, 'getFileByPathAbsolute').returns(f1);
+        sinon.stub(builder.program, 'getFile').returns(f1);
 
         let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
@@ -272,7 +271,7 @@ describe('ProgramBuilder', () => {
         let diagnostics = createBsDiagnostic('p1', ['m1']);
         sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
-        sinon.stub(builder.program, 'getFileByPathAbsolute').returns(null);
+        sinon.stub(builder.program, 'getFile').returns(null);
 
         let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
@@ -311,4 +310,3 @@ function createDiagnostic(
     };
     return diagnostic;
 }
-

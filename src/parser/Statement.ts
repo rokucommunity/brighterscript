@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
-import type { Token, Identifier } from '../lexer';
-import { CompoundAssignmentOperators, TokenKind } from '../lexer';
-import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, AnnotationExpression } from './Expression';
+import type { Token, Identifier } from '../lexer/Token';
+import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
+import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, AnnotationExpression, FunctionParameterExpression, LiteralExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
@@ -10,11 +10,15 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode, Parser } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInvalidType, isLiteralExpression, isVoidType } from '../astUtils/reflection';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isTypedefProvider, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
+import type { BscType, SymbolContainer } from '../types/BscType';
+import type { SourceNode } from 'source-map';
+import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
+import { CustomType } from '../types/CustomType';
 
 /**
  * A BrightScript statement
@@ -113,10 +117,10 @@ export class Body extends Statement implements TypedefProvider {
         let result = [];
         for (const statement of this.statements) {
             //if the current statement supports generating typedef, call it
-            if ('getTypedef' in statement) {
+            if (isTypedefProvider(statement)) {
                 result.push(
                     state.indent(),
-                    ...(statement as TypedefProvider).getTypedef(state),
+                    ...statement.getTypedef(state),
                     state.newline
                 );
             }
@@ -297,8 +301,8 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
         return result;
     }
 
-    public getTypedef(state: BrsTranspileState) {
-        return this.transpile(state);
+    public getTypedef(state: TranspileState) {
+        return this.transpile(state as BrsTranspileState);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1353,7 +1357,288 @@ export class ImportStatement extends Statement implements TypedefProvider {
     }
 }
 
-export class ClassStatement extends Statement implements TypedefProvider {
+export class InterfaceStatement extends Statement implements TypedefProvider {
+    constructor(
+        interfaceToken: Token,
+        name: Identifier,
+        extendsToken: Token,
+        public parentInterfaceName: NamespacedVariableNameExpression,
+        public body: Statement[],
+        endInterfaceToken: Token,
+        public namespaceName: NamespacedVariableNameExpression
+    ) {
+        super();
+        this.tokens.interface = interfaceToken;
+        this.tokens.name = name;
+        this.tokens.extends = extendsToken;
+        this.tokens.endInterface = endInterfaceToken;
+    }
+
+    public tokens = {} as {
+        interface: Token;
+        name: Identifier;
+        extends: Token;
+        endInterface: Token;
+    };
+
+    public range: Range;
+
+    public get fields() {
+        return this.body.filter(x => isInterfaceFieldStatement(x));
+    }
+
+    public get methods() {
+        return this.body.filter(x => isInterfaceMethodStatement(x));
+    }
+
+    /**
+     * The name of the interface WITH its leading namespace (if applicable)
+     */
+    public get fullName() {
+        const name = this.tokens.name?.text;
+        if (name) {
+            if (this.namespaceName) {
+                let namespaceName = this.namespaceName.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this interface doesn't have a name
+            return undefined;
+        }
+    }
+
+    /**
+     * The name of the interface (without the namespace prefix)
+     */
+    public get name() {
+        return this.tokens.name?.text;
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        //interfaces should completely disappear at runtime
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
+            this.tokens.interface.text,
+            ' ',
+            this.tokens.name.text
+        );
+        const parentInterfaceName = this.parentInterfaceName?.getName(ParseMode.BrighterScript);
+        if (parentInterfaceName) {
+            result.push(
+                ' extends ',
+                parentInterfaceName
+            );
+        }
+        const body = this.body ?? [];
+        if (body.length > 0) {
+            state.blockDepth++;
+        }
+        for (const statement of body) {
+            if (isInterfaceMethodStatement(statement) || isInterfaceFieldStatement(statement)) {
+                result.push(
+                    state.newline,
+                    state.indent(),
+                    ...statement.getTypedef(state)
+                );
+            } else {
+                result.push(
+                    state.newline,
+                    state.indent(),
+                    ...statement.transpile(state)
+                );
+            }
+        }
+        if (body.length > 0) {
+            state.blockDepth--;
+        }
+        result.push(
+            state.newline,
+            state.indent(),
+            'end interface',
+            state.newline
+        );
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            for (let i = 0; i < this.body.length; i++) {
+                walk(this.body, i, visitor, options, this);
+            }
+        }
+    }
+}
+
+export class InterfaceFieldStatement extends Statement implements TypedefProvider {
+    public transpile(state: BrsTranspileState): TranspileResult {
+        throw new Error('Method not implemented.');
+    }
+    constructor(
+        nameToken: Identifier,
+        asToken: Token,
+        typeToken: Token,
+        public type: BscType
+    ) {
+        super();
+        this.tokens.name = nameToken;
+        this.tokens.as = asToken;
+        this.tokens.type = typeToken;
+    }
+    public get range() {
+        return util.createRangeFromPositions(
+            this.tokens.name.range.start,
+            (this.tokens.type ?? this.tokens.as ?? this.tokens.name).range.end
+        );
+    }
+
+    public tokens = {} as {
+        name: Identifier;
+        as: Token;
+        type: Token;
+    };
+
+    public get name() {
+        return this.tokens.name.text;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
+        const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+
+        result.push(
+            this.tokens.name.text
+        );
+        if (this.tokens.type?.text?.length > 0) {
+            result.push(
+                ' as ',
+                this.tokens.type.text
+            );
+        }
+        return result;
+    }
+
+}
+
+export class InterfaceMethodStatement extends Statement implements TypedefProvider {
+    public transpile(state: BrsTranspileState): TranspileResult {
+        throw new Error('Method not implemented.');
+    }
+    constructor(
+        functionTypeToken: Token,
+        nameToken: Identifier,
+        leftParen: Token,
+        public params: FunctionParameterExpression[],
+        rightParen: Token,
+        asToken?: Token,
+        returnTypeToken?: Token,
+        public returnType?: BscType
+    ) {
+        super();
+        this.tokens.functionType = functionTypeToken;
+        this.tokens.name = nameToken;
+        this.tokens.leftParen = leftParen;
+        this.tokens.rightParen = rightParen;
+        this.tokens.as = asToken;
+        this.tokens.returnType = returnTypeToken;
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            this.tokens.name.range.start,
+            (
+                this.tokens.returnType ??
+                this.tokens.as ??
+                this.tokens.rightParen ??
+                this.params?.[this.params?.length - 1] ??
+                this.tokens.leftParen ??
+                this.tokens.name ??
+                this.tokens.functionType
+            ).range.end
+        );
+    }
+
+    public tokens = {} as {
+        functionType: Token;
+        name: Identifier;
+        leftParen: Token;
+        rightParen: Token;
+        as: Token;
+        returnType: Token;
+    };
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+
+        result.push(
+            this.tokens.functionType.text,
+            ' ',
+            this.tokens.name.text,
+            '('
+        );
+        const params = this.params ?? [];
+        for (let i = 0; i < params.length; i++) {
+            if (i > 0) {
+                result.push(', ');
+            }
+            const param = params[i];
+            result.push(param.tokens.name.text);
+            if (param.tokens.type?.text?.length > 0) {
+                result.push(
+                    ' as ',
+                    param.tokens.type.text
+                );
+            }
+        }
+        result.push(
+            ')'
+        );
+        if (this.tokens.returnType?.text.length > 0) {
+            result.push(
+                ' as ',
+                this.tokens.returnType.text
+            );
+        }
+        return result;
+    }
+}
+
+export class ClassStatement extends Statement implements TypedefProvider, SymbolContainer {
+    readonly symbolTable: SymbolTable = new SymbolTable();
+    readonly memberTable: SymbolTable = new SymbolTable();
 
     constructor(
         classToken: Token,
@@ -1365,7 +1650,8 @@ export class ClassStatement extends Statement implements TypedefProvider {
         endToken: Token,
         extendsToken?: Token,
         readonly parentClassName?: NamespacedVariableNameExpression,
-        readonly namespaceName?: NamespacedVariableNameExpression
+        readonly namespaceName?: NamespacedVariableNameExpression,
+        readonly currentSymbolTable?: SymbolTable
     ) {
         super();
         this.tokens.class = classToken;
@@ -1373,6 +1659,8 @@ export class ClassStatement extends Statement implements TypedefProvider {
         this.tokens.endClass = endToken;
         this.tokens.extends = extendsToken;
         this.body = this.body ?? [];
+        this.symbolTable.setParent(currentSymbolTable);
+
         for (let statement of this.body) {
             if (isClassMethodStatement(statement)) {
                 this.methods.push(statement);
@@ -1422,6 +1710,38 @@ export class ClassStatement extends Statement implements TypedefProvider {
     public methods = [] as ClassMethodStatement[];
     public fields = [] as ClassFieldStatement[];
 
+    public getCustomType(): CustomType {
+        return new CustomType(this.getName(ParseMode.BrighterScript), this.memberTable);
+    }
+
+    public getConstructorFunctionType() {
+        const constructFunc = this.getConstructorFunction() ?? this.getEmptyNewFunction();
+        const constructorFuncType = constructFunc.func.getFunctionType();
+        constructorFuncType.setName(this.getName(ParseMode.BrighterScript));
+        constructorFuncType.isNew = true;
+        return constructorFuncType;
+    }
+
+    public buildSymbolTable(parentClass?: ClassStatement) {
+        this.symbolTable.clear();
+        this.symbolTable.addSymbol('m', this.tokens.name?.range, this.getCustomType());
+        this.memberTable.clear();
+        if (parentClass) {
+            this.symbolTable.addSymbol('super', this.parentClassName?.range, parentClass.getConstructorFunctionType());
+            this.memberTable.setParent(parentClass?.memberTable);
+        }
+
+        for (const statement of this.methods) {
+            statement?.func.symbolTable.setParent(this.symbolTable);
+            const funcType = statement?.func.getFunctionType();
+            funcType.setName(this.getName(ParseMode.BrighterScript) + '.' + statement?.tokens?.name?.text);
+            this.memberTable.addSymbol(statement?.tokens?.name?.text, statement?.range, funcType);
+        }
+        for (const statement of this.fields) {
+            this.memberTable.addSymbol(statement?.tokens?.name?.text, statement?.range, statement.getType());
+        }
+    }
+
     transpile(state: BrsTranspileState) {
         let result = [];
         //make the builder
@@ -1460,10 +1780,10 @@ export class ClassStatement extends Statement implements TypedefProvider {
         result.push(state.newline);
         state.blockDepth++;
         for (const member of this.body) {
-            if ('getTypedef' in member) {
+            if (isTypedefProvider(member)) {
                 result.push(
                     state.indent(),
-                    ...(member as TypedefProvider).getTypedef(state),
+                    ...member.getTypedef(state),
                     state.newline
                 );
             }
@@ -1501,6 +1821,28 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     public hasParentClass() {
         return !!this.parentClassName;
+    }
+
+    /**
+     * Gets an array of possible parent class names, taking into account the namespace this class was created under
+     * @returns array of possible parent class names
+     */
+    public getPossibleFullParentNames(): string[] {
+        if (!this.hasParentClass()) {
+            return [];
+        }
+        if (this.parentClassName?.getNameParts().length > 1) {
+            // The specified parent class already has a dot, so it must already reference a namespace
+            return [this.parentClassName.getName()];
+        }
+        const names = [];
+
+        if (this.namespaceName) {
+            // We're under a namespace, so the full parent name MIGHT be with this namespace too
+            names.push(this.namespaceName.getName() + '.' + this.parentClassName.getName());
+        }
+        names.push(this.parentClassName.getName());
+        return names;
     }
 
     /**
@@ -1910,7 +2252,8 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
         asToken?: Token,
         typeToken?: Token,
         equalToken?: Token,
-        readonly initialValue?: Expression
+        readonly initialValue?: Expression,
+        readonly namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
         this.tokens.accessModifier = accessModifierToken;
@@ -1934,11 +2277,11 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
 
     /**
      * Derive a ValueKind from the type token, or the initial value.
-     * Defaults to `ValueKind.Dynamic`
+     * Defaults to `DynamicType`
      */
-    getType() {
+    getType(parseMode: ParseMode = ParseMode.BrighterScript) {
         if (this.tokens.type) {
-            return util.tokenToBscType(this.tokens.type);
+            return util.tokenToBscType(this.tokens.type, parseMode === ParseMode.BrighterScript, this.namespaceName);
         } else if (isLiteralExpression(this.initialValue)) {
             return this.initialValue.type;
         } else {
@@ -1963,8 +2306,8 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
                 );
             }
 
-            let type = this.getType();
-            if (isInvalidType(type) || isVoidType(type)) {
+            let type = this.getType(ParseMode.BrightScript);
+            if (!type || isInvalidType(type) || isVoidType(type)) {
                 type = new DynamicType();
             }
 
@@ -2086,6 +2429,199 @@ export class ThrowStatement extends Statement {
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (this.expression && options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'expression', visitor, options);
+        }
+    }
+}
+
+
+export class EnumStatement extends Statement implements TypedefProvider {
+
+    constructor(
+        public tokens: {
+            enum: Token;
+            name: Identifier;
+            endEnum: Token;
+        },
+        public body: Array<EnumMemberStatement | CommentStatement>,
+        public namespaceName?: NamespacedVariableNameExpression
+    ) {
+        super();
+        this.body = this.body ?? [];
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            this.tokens.enum.range.start ?? Position.create(0, 0),
+            (this.tokens.endEnum ?? this.tokens.name ?? this.tokens.enum).range.end
+        );
+    }
+
+    public getMembers() {
+        const result = [] as EnumMemberStatement[];
+        for (const statement of this.body) {
+            if (isEnumMemberStatement(statement)) {
+                result.push(statement);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Get a map of member names and their values.
+     * All values are stored as their AST LiteralExpression representation (i.e. string enum values include the wrapping quotes)
+     */
+    public getMemberValueMap() {
+        const result = new Map<string, string>();
+        const members = this.getMembers();
+        let currentIntValue = 0;
+        for (const member of members) {
+            //if there is no value, assume an integer and increment the int counter
+            if (!member.value) {
+                result.set(member.name?.toLowerCase(), currentIntValue.toString());
+                currentIntValue++;
+
+                //if explicit integer value, use it and increment the int counter
+            } else if (isLiteralExpression(member.value) && member.value.tokens.value.kind === TokenKind.IntegerLiteral) {
+                //try parsing as integer literal, then as hex integer literal.
+                let tokenIntValue = util.parseInt(member.value.tokens.value.text) ?? util.parseInt(member.value.tokens.value.text.replace(/&h/i, '0x'));
+                if (tokenIntValue !== undefined) {
+                    currentIntValue = tokenIntValue;
+                    currentIntValue++;
+                }
+                result.set(member.name?.toLowerCase(), member.value.tokens.value.text);
+
+                //all other values
+            } else {
+                result.set(member.name?.toLowerCase(), (member.value as LiteralExpression)?.tokens.value?.text ?? 'invalid');
+            }
+        }
+        return result;
+    }
+
+    public getMemberValue(name: string) {
+        return this.getMemberValueMap().get(name.toLowerCase());
+    }
+
+    /**
+     * The name of the enum (without the namespace prefix)
+     */
+    public get name() {
+        return this.tokens.name?.text;
+    }
+
+    /**
+     * The name of the enum WITH its leading namespace (if applicable)
+     */
+    public get fullName() {
+        const name = this.tokens.name?.text;
+        if (name) {
+            if (this.namespaceName) {
+                let namespaceName = this.namespaceName.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this doesn't have a name
+            return undefined;
+        }
+    }
+
+    transpile(state: BrsTranspileState) {
+        //enum declarations do not exist at runtime, so don't transpile anything...
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
+            this.tokens.enum.text ?? 'enum',
+            ' ',
+            this.tokens.name.text
+        );
+        result.push(state.newline);
+        state.blockDepth++;
+        for (const member of this.body) {
+            if (isTypedefProvider(member)) {
+                result.push(
+                    state.indent(),
+                    ...member.getTypedef(state),
+                    state.newline
+                );
+            }
+        }
+        state.blockDepth--;
+        result.push(
+            state.indent(),
+            this.tokens.endEnum.text ?? 'end enum'
+        );
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            for (let i = 0; i < this.body.length; i++) {
+                walk(this.body, i, visitor, options, this);
+            }
+        }
+    }
+}
+
+export class EnumMemberStatement extends Statement implements TypedefProvider {
+
+    public constructor(
+        public tokens: {
+            name: Identifier;
+            equal?: Token;
+        },
+        public value?: Expression
+    ) {
+        super();
+    }
+
+    /**
+     * The name of the member
+     */
+    public get name() {
+        return this.tokens.name.text;
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            (this.tokens.name ?? this.tokens.equal ?? this.value).range.start ?? Position.create(0, 0),
+            (this.value ?? this.tokens.equal ?? this.tokens.name).range.end
+        );
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
+        const result = [
+            this.tokens.name.text
+        ] as TranspileResult;
+        if (this.tokens.equal) {
+            result.push(' ', this.tokens.equal.text, ' ');
+            if (this.value) {
+                result.push(
+                    ...this.value.transpile(state)
+                );
+            }
+        }
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.value && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
         }
     }
 }

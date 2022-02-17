@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, FunctionCall } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, FunctionCall, CallableParam, TranspileResult } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -22,14 +22,17 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
+import type { DottedGetExpression, Expression, NamespacedVariableNameExpression, VariableExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
-import type { Token } from './lexer';
-import { TokenKind } from './lexer';
-import { isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
-import { CustomType } from './types/CustomType';
+import type { Locatable, Token } from './lexer/Token';
+import { TokenKind } from './lexer/TokenKind';
+import { isDottedGetExpression, isExpression, isVariableExpression } from './astUtils/reflection';
+import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
-import type { SGAttribute } from './parser/SGTypes';
+import { SGAttribute } from './parser/SGTypes';
+import { LazyType } from './types/LazyType';
+import type { BscType } from './types/BscType';
+import { ArrayType } from './types/ArrayType';
 
 export class Util {
     public clearConsole() {
@@ -70,9 +73,20 @@ export class Util {
     /**
      * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
      */
-    public getRokuPkgPath(pkgPath: string) {
+    public sanitizePkgPath(pkgPath: string) {
         pkgPath = pkgPath.replace(/\\/g, '/');
-        return 'pkg:/' + pkgPath;
+        //if there's no protocol, assume it's supposed to start with `pkg:/`
+        if (!this.startsWithProtocol(pkgPath)) {
+            pkgPath = 'pkg:/' + pkgPath;
+        }
+        return pkgPath;
+    }
+
+    /**
+     * Determine if the given path starts with a protocol
+     */
+    public startsWithProtocol(path: string) {
+        return !!/^[-a-z]+:\//i.exec(path);
     }
 
     /**
@@ -142,7 +156,7 @@ export class Util {
                 colIndex++;
             }
         }
-        return util.createRange(lineIndex, colIndex, lineIndex, colIndex + length);
+        return this.createRange(lineIndex, colIndex, lineIndex, colIndex + length);
     }
 
     /**
@@ -178,7 +192,7 @@ export class Util {
                 let diagnostic = {
                     ...DiagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
                     file: {
-                        pathAbsolute: configFilePath
+                        srcPath: configFilePath
                     },
                     range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
                 } as BsDiagnostic;
@@ -389,32 +403,28 @@ export class Util {
     }
 
     /**
-     * Given an absolute path to a source file, and a target path,
-     * compute the pkg path for the target relative to the source file's location
-     * @param containingFilePathAbsolute
-     * @param targetPath
+     * Compute the pkg path for the target relative to the source file's location
+     * @param sourcePkgPath The pkgPath of the file that contains the target path
+     * @param targetPath a full pkgPath, or a path relative to the containing file
      */
-    public getPkgPathFromTarget(containingFilePathAbsolute: string, targetPath: string) {
-        //if the target starts with 'pkg:', it's an absolute path. Return as is
-        if (targetPath.startsWith('pkg:/')) {
-            targetPath = targetPath.substring(5);
-            if (targetPath === '') {
-                return null;
-            } else {
-                return path.normalize(targetPath);
-            }
-        }
-        if (targetPath === 'pkg:') {
+    public getPkgPathFromTarget(sourcePkgPath: string, targetPath: string) {
+        const [protocol] = /^[-a-z0-9_]+:\/?/i.exec(targetPath) ?? [];
+
+        //if the target path is only a file protocol (with or without the trailing slash such as `pkg:` or `pkg:/`), nothing more can be done
+        if (targetPath?.length === protocol?.length) {
             return null;
         }
+        //if the target starts with 'pkg:', return as-is
+        if (protocol) {
+            return targetPath;
+        }
 
-        //remove the filename
-        let containingFolder = path.normalize(path.dirname(containingFilePathAbsolute));
         //start with the containing folder, split by slash
-        let result = containingFolder.split(path.sep);
+        const containingFolder = path.posix.normalize(path.dirname(sourcePkgPath));
+        let result = containingFolder.split(/[\\/]/);
 
         //split on slash
-        let targetParts = path.normalize(targetPath).split(path.sep);
+        let targetParts = path.posix.normalize(targetPath).split(/[\\/]/);
 
         for (let part of targetParts) {
             if (part === '' || part === '.') {
@@ -428,7 +438,7 @@ export class Util {
                 result.push(part);
             }
         }
-        return result.join(path.sep);
+        return result.join('/');
     }
 
     /**
@@ -611,9 +621,10 @@ export class Util {
 
     /**
      * Given a file path, convert it to a URI string
+     * @param srcPath The absolute path to the source file on disk
      */
-    public pathToUri(pathAbsolute: string) {
-        return URI.file(pathAbsolute).toString();
+    public pathToUri(srcPath: string) {
+        return URI.file(srcPath).toString();
     }
 
     /**
@@ -642,7 +653,8 @@ export class Util {
 
     /**
      * Given a path to a brs file, compute the path to a theoretical d.bs file.
-     * Only `.brs` files can have typedef path, so return undefined for everything else
+     * Only `.brs` files can have a typedef, so return undefined for everything else
+     * @param brsSrcPath The absolute path to the .brs source file on disk
      */
     public getTypedefPath(brsSrcPath: string) {
         const typedefPath = brsSrcPath
@@ -661,11 +673,12 @@ export class Util {
      * @param diagnostic
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
+        const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
         for (let flag of diagnostic.file?.commentFlags ?? []) {
             //this diagnostic is affected by this flag
             if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
                 //if the flag acts upon this diagnostic's code
-                if (flag.codes === null || flag.codes.includes(diagnostic.code as number)) {
+                if (flag.codes === null || flag.codes.includes(diagnosticCode)) {
                     return true;
                 }
             }
@@ -948,7 +961,7 @@ export class Util {
     /**
      * Convert a token into a BscType
      */
-    public tokenToBscType(token: Token, allowCustomType = true) {
+    public tokenToBscType(token: Token, allowBrighterscriptTypes = true, currentNamespaceName?: NamespacedVariableNameExpression) {
         if (!token) {
             return new DynamicType();
         }
@@ -988,31 +1001,64 @@ export class Util {
             case TokenKind.Void:
                 return new VoidType();
             case TokenKind.Identifier:
-                switch (token.text.toLowerCase()) {
+                let tokenText = token.text.replace(/\s/g, '').toLowerCase();
+                // regular expression to find a type with optional pair of square brackets afterwards
+                const regex = /([\w._]+)(\[\]){0,1}/;
+                const found = regex.exec(tokenText);
+                const typeText = found[1] ?? tokenText;
+                const isArray = !!found[2];
+                let typeClass: BscType;
+                switch (typeText) {
                     case 'boolean':
-                        return new BooleanType();
+                        typeClass = new BooleanType();
+                        break;
                     case 'double':
-                        return new DoubleType();
+                        typeClass = new DoubleType();
+                        break;
                     case 'float':
-                        return new FloatType();
+                        typeClass = new FloatType();
+                        break;
                     case 'function':
-                        return new FunctionType(new DynamicType());
+                        typeClass = new FunctionType(new DynamicType());
+                        break;
                     case 'integer':
-                        return new IntegerType();
+                        typeClass = new IntegerType();
+                        break;
                     case 'invalid':
-                        return new InvalidType();
+                        typeClass = new InvalidType();
+                        break;
                     case 'longinteger':
-                        return new LongIntegerType();
+                        typeClass = new LongIntegerType();
+                        break;
                     case 'object':
-                        return new ObjectType();
+                        typeClass = new ObjectType();
+                        break;
                     case 'string':
-                        return new StringType();
+                        typeClass = new StringType();
+                        break;
                     case 'void':
-                        return new VoidType();
+                        typeClass = new VoidType();
+                        break;
+                    case 'dynamic':
+                        typeClass = new DynamicType();
+                        break;
                 }
-                if (allowCustomType) {
-                    return new CustomType(token.text);
+                if (!typeClass && allowBrighterscriptTypes) {
+                    typeClass = new LazyType((context) => {
+                        return context?.scope?.getClass(typeText, currentNamespaceName?.getName())?.getCustomType();
+                    });
                 }
+                // TODO: Can Arrays be of inner type invalid or void?
+
+                // If this token denotes an array (e.g. ends in `[]`) then may it an array with correct inner type
+                if (allowBrighterscriptTypes && isArray) {
+                    typeClass = new ArrayType(typeClass);
+                } else if (!allowBrighterscriptTypes && isArray) {
+                    // we shouldn't allow array types to be defined when not in Brighterscript mode
+                    // so a type like `string[]` wouldn't be defined
+                    return undefined;
+                }
+                return typeClass;
         }
     }
 
@@ -1059,7 +1105,7 @@ export class Util {
                         plugin.name = pathOrModule;
                     }
                     acc.push(plugin);
-                } catch (err) {
+                } catch (err: any) {
                     if (onError) {
                         onError(pathOrModule, err);
                     } else {
@@ -1097,9 +1143,7 @@ export class Util {
         const variableExpressions = [] as VariableExpression[];
         const uniqueVarNames = new Set<string>();
 
-        // Collect all expressions. Most of these expressions are fairly small so this should be quick!
-        // This should only be called during transpile time and only when we actually need it.
-        expression?.walk((expression) => {
+        function expressionWalker(expression) {
             if (isExpression(expression)) {
                 expressions.push(expression);
             }
@@ -1107,9 +1151,17 @@ export class Util {
                 variableExpressions.push(expression);
                 uniqueVarNames.add(expression.tokens.name.text);
             }
-        }, {
+        }
+
+        // Collect all expressions. Most of these expressions are fairly small so this should be quick!
+        // This should only be called during transpile time and only when we actually need it.
+        expression?.walk(expressionWalker, {
             walkMode: WalkMode.visitExpressions
         });
+
+        //handle the expression itself (for situations when expression is a VariableExpression)
+        expressionWalker(expression);
+
         return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: [...uniqueVarNames] };
     }
 
@@ -1133,20 +1185,58 @@ export class Util {
     }
 
     /**
-     * Creates a new SGAttribute object, but keeps the existing Range references (since those shouldn't ever get changed directly)
+     * Creates a new SGAttribute object, but keeps the existing Range references (since those should be immutable)
      */
     public cloneSGAttribute(attr: SGAttribute, value: string) {
-        return {
-            key: {
-                text: attr.key.text,
-                range: attr.range
-            },
-            value: {
-                text: value,
-                range: attr.value.range
-            },
-            range: attr.range
-        } as SGAttribute;
+        return new SGAttribute(
+            { text: attr.tokens.key.text, range: attr.range },
+            { text: '=' },
+            { text: '"' },
+            { text: value, range: attr.tokens.value.range },
+            { text: '"' }
+        );
+    }
+
+    /**
+     * Shorthand for creating a new source node
+     */
+    public sourceNode(source: string, locatable: { range: Range }, code: string | SourceNode | TranspileResult): SourceNode | undefined {
+        if (code !== undefined) {
+            const node = new SourceNode(
+                null,
+                null,
+                source,
+                code
+            );
+            if (locatable.range) {
+                //convert 0-based Range line to 1-based SourceNode line
+                node.line = locatable.range.start.line + 1;
+                //SourceNode columns are 0-based so no conversion necessary
+                node.column = locatable.range.start.character;
+            }
+            return node;
+        }
+    }
+
+    /**
+     * Remove leading simple protocols from a path (if present)
+     */
+    public removeProtocol(pkgPath: string) {
+        let match = /^[-a-z_]+:\//.exec(pkgPath);
+        if (match) {
+            return pkgPath.substring(match[0].length);
+        } else {
+            return pkgPath;
+        }
+    }
+
+    /**
+     * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
+     */
+    public standardizePath(thePath: string) {
+        return util.driveLetterToLower(
+            rokuDeploy.standardizePath(thePath)
+        );
     }
 
     /**
@@ -1193,13 +1283,61 @@ export class Util {
     }
 
     /**
-     * Finds the array of callables from a container map, taking into account the function from which it was called
+     * Gets the minimum and maximum number of allowed params
+     * @param params The list of callable parameters to check
+     * @returns the minimum and maximum number of allowed params
+     */
+    public getMinMaxParamCount(params: CallableParam[]): MinMax {
+        //get min/max parameter count for callable
+        let minParams = 0;
+        let maxParams = 0;
+        let continueCheckingForRequired = true;
+        for (let param of params) {
+            maxParams++;
+            //optional parameters must come last, so we can assume that minParams won't increase once we hit
+            //the first isOptional
+            if (continueCheckingForRequired && !param.isOptional) {
+                minParams++;
+            } else {
+                continueCheckingForRequired = false;
+            }
+        }
+        return { min: minParams, max: maxParams };
+    }
+
+    /**
+     * Gets the minimum and maximum number of allowed params for ALL functions with the name of the function call
+     * @param callablesByLowerName The map of callable containers
+     * @param expCall function call expression to use for the name
+     * @returns the minimum and maximum number of allowed params
+     */
+    public getMinMaxParamCountByFunctionCall(callablesByLowerName: CallableContainerMap, expCall: FunctionCall): MinMax {
+        const callablesWithThisName = this.getCallableContainersByName(callablesByLowerName, expCall);
+        if (callablesWithThisName?.length > 0) {
+            const paramCount = { min: MAX_PARAM_COUNT, max: 0 };
+            for (const callableContainer of callablesWithThisName) {
+                let specificParamCount = util.getMinMaxParamCount(callableContainer.callable.params);
+                if (specificParamCount.max > paramCount.max) {
+                    paramCount.max = specificParamCount.max;
+                }
+                if (specificParamCount.min < paramCount.min) {
+                    paramCount.min = specificParamCount.min;
+                }
+            }
+            return paramCount;
+        }
+    }
+
+    /**
+     * Finds the array of callables from a container map, based on the name of the function call
      * If the callable was called in a function in a namespace, functions in that namespace are preferred
+     * @param callablesByLowerName The map of callable containers
+     * @param expCall function call expression to use for the name
      * @return an array with callable containers - could be empty if nothing was found
      */
-    public getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName: CallableContainerMap, expCall: FunctionCall): CallableContainer[] {
+    public getCallableContainersByName(callablesByLowerName: CallableContainerMap, expCall: FunctionCall): CallableContainer[] {
         let callablesWithThisName: CallableContainer[] = [];
-        const lowerName = expCall.name.toLowerCase();
+        const lowerName = expCall.name.text.toLowerCase();
         if (expCall.functionExpression.namespaceName) {
             // prefer namespaced function
             const potentialNamespacedCallable = expCall.functionExpression.namespaceName.getName(ParseMode.BrightScript).toLowerCase() + '_' + lowerName;
@@ -1212,6 +1350,129 @@ export class Util {
         return callablesWithThisName;
     }
 
+    /**
+     * Sort an array of objects that have a Range
+     */
+    public sortByRange(locatables: Locatable[]) {
+        //sort the tokens by range
+        return locatables.sort((a, b) => {
+            //start line
+            if (a.range.start.line < b.range.start.line) {
+                return -1;
+            }
+            if (a.range.start.line > b.range.start.line) {
+                return 1;
+            }
+            //start char
+            if (a.range.start.character < b.range.start.character) {
+                return -1;
+            }
+            if (a.range.start.character > b.range.start.character) {
+                return 1;
+            }
+            //end line
+            if (a.range.end.line < b.range.end.line) {
+                return -1;
+            }
+            if (a.range.end.line > b.range.end.line) {
+                return 1;
+            }
+            //end char
+            if (a.range.end.character < b.range.end.character) {
+                return -1;
+            } else if (a.range.end.character > b.range.end.character) {
+                return 1;
+            }
+            return 0;
+        });
+    }
+
+    /**
+     * Split the given text and return ranges for each chunk.
+     * Only works for single-line strings
+     */
+    public splitGetRange(separator: string, text: string, range: Range) {
+        const chunks = text.split(separator);
+        const result = [] as Array<{ text: string; range: Range }>;
+        let offset = 0;
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
+            //only keep nonzero chunks
+            if (chunk.length > 0) {
+                result.push({
+                    text: chunk,
+                    range: this.createRange(
+                        range.start.line,
+                        range.start.character + offset,
+                        range.end.line,
+                        range.start.character + offset + chunk.length
+                    )
+                });
+            }
+            offset += chunk.length + separator.length;
+        }
+        return result;
+    }
+
+    /*
+     * Wrap the given code in a markdown code fence (with the language)
+     */
+    public mdFence(code: string, language = '') {
+        return '```' + language + '\n' + code + '\n```';
+    }
+
+    /**
+     * Finds a callable from a container map based on the name AND number of arguments
+     * If the callable was called in a function in a namespace, functions in that namespace are preferred
+     * The first callable that matches the name AND will accept the number of arguments given is returned
+     * @return a callable containers that matches the call
+     */
+    public getCallableContainerByFunctionCall(callablesByLowerName: CallableContainerMap, expCall: FunctionCall): CallableContainer {
+        const callablesWithThisName = this.getCallableContainersByName(callablesByLowerName, expCall);
+        if (callablesWithThisName?.length > 0) {
+            for (const callableContainer of callablesWithThisName) {
+                const paramCount = util.getMinMaxParamCount(callableContainer.callable.params);
+                if (paramCount.min <= expCall.args.length && paramCount.max >= expCall.args.length) {
+                    return callableContainer;
+                }
+            }
+        }
+    }
+
+    /**
+     * Gets each part of the dotted get.
+     * @param expression
+     * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
+     */
+    public getAllDottedGetParts(expression: Expression): string[] | undefined {
+        const parts: string[] = [];
+        let nextPart = expression;
+        while (nextPart) {
+            if (isDottedGetExpression(nextPart)) {
+                parts.push(nextPart?.tokens?.name?.text);
+                nextPart = nextPart.obj;
+            } else if (isVariableExpression(nextPart)) {
+                parts.push(nextPart?.tokens?.name?.text);
+                break;
+            } else {
+                //we found a non-DottedGet expression, so return because this whole operation is invalid.
+                return undefined;
+            }
+        }
+        return parts.reverse();
+    }
+
+    /**
+     * Returns an integer if valid, or undefined. Eliminates checking for NaN
+     */
+    public parseInt(value: any) {
+        const result = parseInt(value);
+        if (!isNaN(result)) {
+            return result;
+        } else {
+            return undefined;
+        }
+    }
 }
 
 /**
@@ -1223,13 +1484,17 @@ export function standardizePath(stringParts, ...expressions: any[]) {
     for (let i = 0; i < stringParts.length; i++) {
         result.push(stringParts[i], expressions[i]);
     }
-    return util.driveLetterToLower(
-        rokuDeploy.standardizePath(
-            result.join('')
-        )
-    );
+    return util.standardizePath(result.join(''));
 }
 
 
 export let util = new Util();
 export default util;
+
+
+export interface MinMax {
+    min: number;
+    max: number;
+}
+
+export const MAX_PARAM_COUNT = 32;

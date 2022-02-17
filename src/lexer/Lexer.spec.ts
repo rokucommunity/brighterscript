@@ -1,7 +1,7 @@
 /* eslint no-template-curly-in-string: 0 */
 import { expect } from 'chai';
 
-import { TokenKind } from '.';
+import { TokenKind } from './TokenKind';
 import { Lexer } from './Lexer';
 import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
@@ -1140,6 +1140,17 @@ describe('lexer', () => {
         });
     });
 
+    it('recognizes enum-related keywords', () => {
+        expect(
+            Lexer.scan('enum end enum endenum').tokens.map(x => x.kind)
+        ).to.eql([
+            TokenKind.Enum,
+            TokenKind.EndEnum,
+            TokenKind.EndEnum,
+            TokenKind.Eof
+        ]);
+    });
+
     it('recognizes class-related keywords', () => {
         expect(
             Lexer.scan('class public protected private end class endclass new override').tokens.map(x => x.kind)
@@ -1221,5 +1232,77 @@ describe('lexer', () => {
             TokenKind.Throw,
             TokenKind.Eof
         ]);
+    });
+
+    describe('regular expression literals', () => {
+        function testRegex(...regexps: Array<string | RegExp>) {
+            regexps = regexps.map(x => x.toString());
+            const results = [] as string[];
+            for (const regexp of regexps) {
+                const { tokens } = Lexer.scan(regexp as string);
+                results.push(tokens[0].text);
+            }
+            expect(results).to.eql(regexps);
+        }
+
+        it('recognizes regex literals', () => {
+            testRegex(
+                /simple/,
+                /SimpleWithValidFlags/g,
+                /UnknownFlags/gi,
+                /with spaces/s,
+                /with(parens)and[squarebraces]/,
+                //lots of special characters
+                /.*()^$@/,
+                //captures quote char
+                /"/
+            );
+        });
+
+        it('does not capture multiple divisions on one line as regex', () => {
+            const { tokens } = Lexer.scan(`one = 1/2 + 1/4 + 1/4`, {
+                includeWhitespace: false
+            });
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.IntegerLiteral,
+                TokenKind.Forwardslash,
+                TokenKind.IntegerLiteral,
+                TokenKind.Plus,
+                TokenKind.IntegerLiteral,
+                TokenKind.Forwardslash,
+                TokenKind.IntegerLiteral,
+                TokenKind.Plus,
+                TokenKind.IntegerLiteral,
+                TokenKind.Forwardslash,
+                TokenKind.IntegerLiteral,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('only captures alphanumeric flags', () => {
+            expect(
+                Lexer.scan('speak(/a/)').tokens.map(x => x.kind)
+            ).to.eql([
+                TokenKind.Identifier,
+                TokenKind.LeftParen,
+                TokenKind.RegexLiteral,
+                TokenKind.RightParen,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('handles escape characters properly', () => {
+            testRegex(
+                //an escaped forward slash right next to the end-regexp forwardslash
+                /\//,
+                /\r/,
+                /\n/,
+                /\r\n/,
+                //a literal backslash in front of an escape backslash
+                /\\\n/
+            );
+        });
     });
 });

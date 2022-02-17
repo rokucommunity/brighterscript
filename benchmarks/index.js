@@ -15,6 +15,7 @@ class Runner {
         this.project = options.project;
         this.quick = options.quick;
         this.profile = options.profile;
+        this.tar = options.tar;
     }
     run() {
         this.downloadFiles();
@@ -57,15 +58,21 @@ class Runner {
         }
     }
 
-    buildCurrentTarball() {
+    buildCurrent() {
         const bscDir = path.resolve(__dirname, '..');
         console.log('benchmark: build current brighterscript');
         this.npmSync(['run', 'build'], {
             cwd: bscDir
         });
+        return 'file:' + path.resolve(bscDir);
+    }
+
+    buildCurrentTarball() {
+        const bscDir = path.resolve(__dirname, '..');
+        this.buildCurrent();
         console.log('benchmark: pack current brighterscript');
         const filename = this.npmSync(['pack'], { cwd: bscDir, stdio: 'pipe' }).stdout.toString().trim();
-        return path.resolve(bscDir, filename);
+        return path.resolve(filename);
     }
 
     /**
@@ -79,13 +86,15 @@ class Runner {
         fsExtra.emptyDirSync(nodeModulesDir);
 
         const dependencies = {};
+        console.log(`benchmark: using versions: ${this.versions}`);
         for (let i = 0; i < this.versions.length; i++) {
             const version = this.versions[i];
             const name = `brighterscript${i + 1}`;
 
             //if the version is "current", then make a local copy of the package from the dist folder to install (because npm link makes things slower)
             if (version === 'local') {
-                dependencies[name] = this.buildCurrentTarball();
+                const localVersion = this.tar ? this.buildCurrentTarball() : this.buildCurrent();
+                dependencies[name] = localVersion;
             } else {
                 dependencies[name] = `npm:brighterscript@${version}`;
             }
@@ -201,6 +210,11 @@ let options = yargs
         alias: 'prof',
         description: 'Enable nodejs profiling of each benchmark run',
         default: false
+    })
+    .option('tar', {
+        type: 'boolean',
+        description: 'use a npm-packed tarball for local files instead of using the files directly',
+        default: true
     })
     .strict()
     .check(argv => {

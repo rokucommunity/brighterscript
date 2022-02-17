@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -6,10 +6,13 @@ import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { Expression, FunctionStatement, FunctionExpression } from './parser';
+import type { FunctionStatement } from './parser/Statement';
+import type { Expression, FunctionExpression } from './parser/Expression';
 import type { TranspileState } from './parser/TranspileState';
-import type { SourceNode } from 'source-map';
+import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
+import type { Token } from './lexer/Token';
+import type { AstEditor } from './astUtils/AstEditor';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -64,10 +67,11 @@ export interface FunctionCall {
      */
     range: Range;
     functionExpression: FunctionExpression;
-    file: File;
-    name: string;
+    file: BscFile;
+    name: Token;
     args: CallableArg[];
     nameRange: Range;
+    isDottedInvocation: boolean;
 }
 
 /**
@@ -82,7 +86,10 @@ export interface CallableArg {
 export interface CallableParam {
     name: string;
     type: BscType;
-    isOptional?: boolean;
+    /**
+     * Is this parameter required or optional?
+     */
+    isOptional: boolean;
     /**
      * Indicates that an unlimited number of arguments can be passed in
      */
@@ -114,15 +121,6 @@ export interface FileReference {
      * If the range is null, then this import is derived so skip any location-based logic
      */
     filePathRange?: Range;
-}
-
-export interface File {
-    /**
-     * The absolute path to the file, relative to the pkg
-     */
-    pkgPath: string;
-    pathAbsolute: string;
-    getDiagnostics(): BsDiagnostic[];
 }
 
 export interface VariableDeclaration {
@@ -191,16 +189,28 @@ export interface CompilerPlugin {
     beforeProgramTranspile?: PluginHandler<BeforeProgramTranspileEvent>;
     afterProgramTranspile?: PluginHandler<AfterProgramTranspileEvent>;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: PluginHandler<AfterScopeCreateEvent>;
     beforeScopeDispose?: PluginHandler<BeforeScopeDisposeEvent>;
     afterScopeDispose?: PluginHandler<AfterScopeDisposeEvent>;
     beforeScopeValidate?: PluginHandler<BeforeScopeValidateEvent>;
+    onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
     afterScopeValidate?: PluginHandler<AfterScopeValidateEvent>;
     //file events
     beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
     afterFileParse?: PluginHandler<AfterFileParseEvent>;
+    /**
+     * Called before each file is validated
+     */
     beforeFileValidate?: PluginHandler<BeforeFileValidateEvent>;
+    /**
+     * Called during the file validation process. If your plugin contributes file validations, this is a good place to contribute them.
+     */
+    onFileValidate?: PluginHandler<OnFileValidateEvent>;
+    /**
+     * Called after each file is validated
+     */
     afterFileValidate?: PluginHandler<AfterFileValidateEvent>;
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
@@ -291,30 +301,66 @@ export interface OnScopeGetCodeActionsEvent {
 }
 export interface BeforeFileParseEvent {
     program: Program;
-    pathAbsolute: string;
+    srcPath: string;
     source: string;
 }
 export interface AfterFileParseEvent {
     program: Program;
     file: BscFile;
 }
-export interface BeforeFileValidateEvent {
+export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
     program: Program;
-    file: BscFile;
+    file: T;
+    scopes: Scope[];
+    semanticTokens: SemanticToken[];
 }
-export interface AfterFileValidateEvent {
+export interface BeforeFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;
-    file: BscFile;
+    file: T;
 }
-export interface BeforeFileTranspileEvent {
+export interface OnFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;
-    file: BscFile;
+    file: T;
+}
+export interface AfterFileValidateEvent<T extends BscFile = BscFile> {
+    program: Program;
+    file: T;
+}
+
+export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
+    program: Program;
+    file: TFile;
     outputPath: string;
+    /**
+     * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
+     * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
+     * the changes to persist in the in-memory file.
+     */
+    editor: Editor;
 }
-export interface AfterFileTranspileEvent {
+
+export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
     program: Program;
-    file: BscFile;
+    file: TFile;
     outputPath: string;
+    /**
+     * The resulting transpiled file contents
+     */
+    code: string;
+    /**
+     * The sourceMaps for the generated code (if emitting source maps is enabled)
+     */
+    map?: SourceMapGenerator;
+    /**
+     * The generated type definition file contents (if emitting type definitions are enabled)
+     */
+    typedef?: string;
+    /**
+     * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
+     * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
+     * the changes to persist in the in-memory file.
+     */
+    editor: Editor;
 }
 export interface BeforeFileDisposeEvent {
     program: Program;
@@ -340,13 +386,32 @@ export interface TranspileEntry {
     outputPath: string;
 }
 
+export interface OnScopeValidateEvent {
+    program: Program;
+    scope: Scope;
+}
+
+export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty' | 'overrideTranspileResult'>;
+
+export interface SemanticToken {
+    range: Range;
+    tokenType: SemanticTokenTypes;
+    /**
+     * An optional array of modifiers for this token
+     */
+    tokenModifiers?: SemanticTokenModifiers[];
+}
+
 export interface TypedefProvider {
     getTypedef(state: TranspileState): Array<SourceNode | string>;
 }
 
 export type TranspileResult = Array<(string | SourceNode)>;
 
-export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined> | void;
+/**
+ * @param srcPath The absolute path to the source file on disk
+ */
+export type FileResolver = (srcPath: string) => string | undefined | Thenable<string | undefined> | void;
 
 export interface ExpressionInfo {
     expressions: Expression[];
@@ -355,3 +420,8 @@ export interface ExpressionInfo {
 }
 
 export type DiagnosticCode = number | string;
+
+export interface FileLink<T> {
+    item: T;
+    file: BrsFile;
+}

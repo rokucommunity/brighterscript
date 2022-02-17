@@ -5,9 +5,11 @@ import type { XmlFile } from './files/XmlFile';
 import type { BscFile, CallableContainerMap, FileReference } from './interfaces';
 import type { Program } from './Program';
 import util from './util';
-import { isXmlFile } from './astUtils/reflection';
+import { isSGInterfaceField, isSGInterfaceFunction, isXmlFile, isXmlScope } from './astUtils/reflection';
 import { SGFieldTypes } from './parser/SGTypes';
 import type { SGTag } from './parser/SGTypes';
+import { SymbolTable } from './SymbolTable';
+import { ObjectType } from './types/ObjectType';
 
 export class XmlScope extends Scope {
     constructor(
@@ -39,6 +41,44 @@ export class XmlScope extends Scope {
             }
         });
     }
+    private _topTable: SymbolTable;
+
+    protected clearSymbolTable() {
+        super.clearSymbolTable();
+        this._topTable = null;
+    }
+
+    public get topTable() {
+        if (!this._topTable) {
+            const parentScope = this.getParentScope();
+            this._topTable = new SymbolTable();
+            if (isXmlScope(parentScope)) {
+                this._topTable.setParent(parentScope.topTable);
+            }
+        }
+        return this._topTable;
+    }
+
+    public get memberTable() {
+        if (!this._memberTable) {
+            this._memberTable = new SymbolTable(this.getParentScope()?.memberTable);
+            const interfaceMembers = this.xmlFile.parser.ast?.component?.interfaceMembers ?? [];
+
+            for (const member of interfaceMembers) {
+                //validate functions
+                if (isSGInterfaceFunction(member)) {
+                    if (member.name) {
+                        // TODO TYPES: Should add something here for @callFunc types?
+                        // this.callFuncTable.addSymbol(member.name, member.range, member.functionType);
+                    }
+                } else if (isSGInterfaceField(member) && member?.id) {
+                    this.topTable.addSymbol(member.id, member.range, member.bscType);
+                }
+            }
+            this._memberTable.addSymbol('top', this.xmlFile.fileRange, new ObjectType(this.topTable));
+        }
+        return this._memberTable;
+    }
 
     protected _validate(callableContainerMap: CallableContainerMap) {
         //validate brs files
@@ -52,48 +92,52 @@ export class XmlScope extends Scope {
     }
 
     private diagnosticValidateInterface(callableContainerMap: CallableContainerMap) {
-        if (!this.xmlFile.parser.ast?.component?.api) {
+        const interfaceMembers = this.xmlFile.parser.ast?.component?.interfaceMembers ?? [];
+
+        if (interfaceMembers.length === 0) {
             return;
         }
-        const { api } = this.xmlFile.parser.ast.component;
-        //validate functions
-        for (const fun of api.functions) {
-            const name = fun.name;
-            if (!name) {
-                this.diagnosticMissingAttribute(fun, 'name');
-            } else if (!callableContainerMap.has(name.toLowerCase())) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.xmlFunctionNotFound(name),
-                    range: fun.getAttribute('name').value.range,
-                    file: this.xmlFile
-                });
-            }
-        }
-        //validate fields
-        for (const field of api.fields) {
-            const { id, type } = field;
-            if (!id) {
-                this.diagnosticMissingAttribute(field, 'id');
-            }
-            if (!type) {
-                if (!field.alias) {
-                    this.diagnosticMissingAttribute(field, 'type');
+        for (const member of interfaceMembers) {
+            //validate functions
+            if (isSGInterfaceFunction(member)) {
+                const name = member.name;
+                if (!name) {
+                    this.diagnosticMissingAttribute(member, 'name');
+                } else if (!callableContainerMap.has(name.toLowerCase())) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.xmlFunctionNotFound(name),
+                        range: member.getAttribute('name').tokens.value.range,
+                        file: this.xmlFile
+                    });
                 }
-            } else if (!SGFieldTypes.includes(type.toLowerCase())) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.xmlInvalidFieldType(type),
-                    range: field.getAttribute('type').value.range,
-                    file: this.xmlFile
-                });
+                //validate fields
+            } else {
+                if (!member.id) {
+                    this.diagnosticMissingAttribute(member, 'id');
+                }
+                const type = member.type;
+                if (!type) {
+                    if (!member.alias) {
+                        this.diagnosticMissingAttribute(member, 'type');
+                    }
+                } else if (!SGFieldTypes.includes(type.toLowerCase())) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.xmlInvalidFieldType(type),
+                        range: member.getAttribute('type').tokens.value.range,
+                        file: this.xmlFile
+                    });
+                }
             }
         }
     }
 
     private diagnosticMissingAttribute(tag: SGTag, name: string) {
-        const { text, range } = tag.tag;
         this.diagnostics.push({
-            ...DiagnosticMessages.xmlTagMissingAttribute(text, name),
-            range: range,
+            ...DiagnosticMessages.xmlTagMissingAttribute(
+                tag.tokens.startTagName.text,
+                name
+            ),
+            range: tag.tokens.startTagName.range,
             file: this.xmlFile
         });
     }
@@ -148,7 +192,7 @@ export class XmlScope extends Scope {
             ] as BscFile[];
             let scriptPkgPaths = this.xmlFile.getOwnDependencies();
             for (let scriptPkgPath of scriptPkgPaths) {
-                let file = this.program.getFileByPkgPath(scriptPkgPath);
+                let file = this.program.getFile(scriptPkgPath);
                 if (file) {
                     result.push(file);
                 }
@@ -171,7 +215,7 @@ export class XmlScope extends Scope {
         ) {
             results.push({
                 range: util.createRange(0, 0, 0, 0),
-                uri: util.pathToUri(file.parentComponent.pathAbsolute)
+                uri: util.pathToUri(file.parentComponent.srcPath)
             });
         }
         return results;

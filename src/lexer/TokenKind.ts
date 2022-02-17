@@ -52,6 +52,7 @@ export enum TokenKind {
     DoubleLiteral = 'DoubleLiteral',
     LongIntegerLiteral = 'LongIntegerLiteral',
     EscapedCharCodeLiteral = 'EscapedCharCodeLiteral', //this is used to capture things like `\n`, `\r\n` in template strings
+    RegexLiteral = 'RegexLiteral',
 
     //types
     Void = 'Void',
@@ -146,6 +147,8 @@ export enum TokenKind {
     EndClass = 'EndClass',
     Namespace = 'Namespace',
     EndNamespace = 'EndNamespace',
+    Enum = 'Enum',
+    EndEnum = 'EndEnum',
     Public = 'Public',
     Protected = 'Protected',
     Private = 'Private',
@@ -153,6 +156,7 @@ export enum TokenKind {
     New = 'New',
     Override = 'Override',
     Import = 'Import',
+    EndInterface = 'EndInterface',
 
     //brighterscript source literals
     LineNumLiteral = 'LineNumLiteral',
@@ -283,6 +287,9 @@ export const Keywords: Record<string, TokenKind> = {
     class: TokenKind.Class,
     endclass: TokenKind.EndClass,
     'end class': TokenKind.EndClass,
+    enum: TokenKind.Enum,
+    endenum: TokenKind.EndEnum,
+    'end enum': TokenKind.EndEnum,
     public: TokenKind.Public,
     protected: TokenKind.Protected,
     private: TokenKind.Private,
@@ -304,7 +311,9 @@ export const Keywords: Record<string, TokenKind> = {
     catch: TokenKind.Catch,
     endtry: TokenKind.EndTry,
     'end try': TokenKind.EndTry,
-    throw: TokenKind.Throw
+    throw: TokenKind.Throw,
+    'end interface': TokenKind.EndInterface,
+    endinterface: TokenKind.EndInterface
 };
 //hide the constructor prototype method because it causes issues
 Keywords.constructor = undefined;
@@ -319,6 +328,7 @@ export type BlockTerminator =
     | TokenKind.EndSub
     | TokenKind.EndFunction
     | TokenKind.EndNamespace
+    | TokenKind.EndInterface
     | TokenKind.Catch
     | TokenKind.EndTry;
 
@@ -423,7 +433,8 @@ export const AllowedProperties = [
     TokenKind.Try,
     TokenKind.Catch,
     TokenKind.EndTry,
-    TokenKind.Throw
+    TokenKind.Throw,
+    TokenKind.EndInterface
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */
@@ -592,3 +603,47 @@ export const DeclarableTypes = [
     TokenKind.Void,
     TokenKind.Function
 ];
+
+/**
+ * The tokens that might preceed a regex literal
+ */
+export const PreceedingRegexTypes = new Set([
+    TokenKind.Print,
+    TokenKind.Question,
+    TokenKind.QuestionQuestion,
+    TokenKind.LeftSquareBracket,
+    TokenKind.LeftParen,
+    TokenKind.LeftCurlyBrace,
+    TokenKind.Caret,
+    TokenKind.Minus,
+    TokenKind.Plus,
+    TokenKind.Star,
+    TokenKind.Forwardslash,
+    TokenKind.Mod,
+    TokenKind.Backslash,
+    TokenKind.LeftShift,
+    TokenKind.RightShift,
+    TokenKind.MinusEqual,
+    TokenKind.PlusEqual,
+    TokenKind.StarEqual,
+    TokenKind.ForwardslashEqual,
+    TokenKind.BackslashEqual,
+    TokenKind.LeftShiftEqual,
+    TokenKind.RightShiftEqual,
+    TokenKind.Less,
+    TokenKind.LessEqual,
+    TokenKind.Greater,
+    TokenKind.GreaterEqual,
+    TokenKind.Equal,
+    TokenKind.LessGreater,
+    TokenKind.And,
+    TokenKind.Or,
+    TokenKind.If,
+    TokenKind.Not,
+    TokenKind.To,
+    TokenKind.Newline,
+    TokenKind.Throw,
+    TokenKind.Throw,
+    TokenKind.Colon,
+    TokenKind.Semicolon
+]);

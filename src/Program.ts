@@ -1,14 +1,14 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, SymbolInformation } from 'vscode-languageserver';
 import { Location, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, BeforeFileParseEvent } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, BeforeFileParseEvent, BeforeFileTranspileEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -20,24 +20,33 @@ import type { ManifestValue } from './preprocessor/Manifest';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope, isSGInterfaceFunction } from './astUtils/reflection';
 import type { FunctionStatement, Statement } from './parser/Statement';
-import { ParseMode } from './parser';
-import { TokenKind } from './lexer';
+import { ParseMode } from './parser/Parser';
+import { TokenKind } from './lexer/TokenKind';
 import { BscPlugin } from './bscPlugin/BscPlugin';
-const startOfSourcePkgPath = `source${path.sep}`;
-const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
-const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
+import { util as rokuDeployUtil } from 'roku-deploy';
+import { AstEditor } from './astUtils/AstEditor';
+import type { SourceMapGenerator } from 'source-map';
+
+const bslibNonAliasedRokuModulesPkgPath = `pkg:/source/roku_modules/rokucommunity_bslib/bslib.brs`;
+const bslibAliasedRokuModulesPkgPath = `pkg:/source/roku_modules/bslib/bslib.brs`;
+
+export interface SourceObj {
+    srcPath: string;
+    source: string;
+    definitions?: string;
+}
+
+export interface TranspileObj {
+    file: BscFile;
+    outputPath: string;
+}
 
 export interface SignatureInfoObj {
     index: number;
     key: string;
     signature: SignatureInformation;
-}
-
-export interface FileLink<T> {
-    item: T;
-    file: BrsFile;
 }
 
 interface PartialStatementInfo {
@@ -117,16 +126,16 @@ export class Program {
      */
     public get bslibPkgPath() {
         //if there's an aliased (preferred) version of bslib from roku_modules loaded into the program, use that
-        if (this.getFileByPkgPath(bslibAliasedRokuModulesPkgPath)) {
+        if (this.getFile(bslibAliasedRokuModulesPkgPath)) {
             return bslibAliasedRokuModulesPkgPath;
 
             //if there's a non-aliased version of bslib from roku_modules, use that
-        } else if (this.getFileByPkgPath(bslibNonAliasedRokuModulesPkgPath)) {
+        } else if (this.getFile(bslibNonAliasedRokuModulesPkgPath)) {
             return bslibNonAliasedRokuModulesPkgPath;
 
             //default to the embedded version
         } else {
-            return `source${path.sep}bslib.brs`;
+            return `pkg:/source/bslib.brs`;
         }
     }
 
@@ -138,12 +147,22 @@ export class Program {
         }
     }
 
+    /**
+     * A map of every file loaded ino this program, indexed by its lower-case pkgPath
+     */
+    private pkgMap = {} as Record<string, BscFile>;
 
     /**
-     * A map of every file loaded into this program, indexed by its original file location
+     * A map of every file loaded into this program, indexed by its lower-case srcPath
      */
-    public files = {} as Record<string, BscFile>;
-    private pkgMap = {} as Record<string, BscFile>;
+    private files = {} as Record<string, BscFile>;
+
+    /**
+     * Get a copy of the list of files currently loaded in the program
+     */
+    public getAllFiles() {
+        return Object.values(this.files);
+    }
 
     private scopes = {} as Record<string, Scope>;
 
@@ -233,9 +252,9 @@ export class Program {
      * by any scope in the program.
      */
     public getUnreferencedFiles() {
-        let result = [] as File[];
-        for (let filePath in this.files) {
-            let file = this.files[filePath];
+        let result = [] as BscFile[];
+        for (let key in this.files) {
+            const file = this.files[key];
             if (!this.fileIsIncludedInAnyScope(file)) {
                 //no scopes reference this file. add it to the list
                 result.push(file);
@@ -276,6 +295,7 @@ export class Program {
                 }, diagnostics);
                 return finalDiagnostics;
             });
+
             this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
             return filteredDiagnostics;
         });
@@ -288,14 +308,10 @@ export class Program {
     /**
      * Determine if the specified file is loaded in this program right now.
      * @param filePath
+     * @param normalizePath should the provided path be normalized before use
      */
-    public hasFile(filePath: string) {
-        filePath = s`${filePath}`;
-        return this.files[filePath] !== undefined;
-    }
-
-    public getPkgPath(...args: any[]): any { //eslint-disable-line
-        throw new Error('Not implemented');
+    public hasFile(filePath: string, normalizePath = true) {
+        return !!this.getFile(filePath, normalizePath);
     }
 
     /**
@@ -306,9 +322,6 @@ export class Program {
         if (!scopeName) {
             return undefined;
         }
-        //most scopes are xml file pkg paths. however, the ones that are not are single names like "global" and "scope",
-        //so it's safe to run the standardizePkgPath method
-        scopeName = s`${scopeName}`;
         let key = Object.keys(this.scopes).find(x => x.toLowerCase() === scopeName.toLowerCase());
         return this.scopes[key];
     }
@@ -328,33 +341,75 @@ export class Program {
     }
 
     /**
+     * Update internal maps with this file reference
+     */
+    private assignFile<T extends BscFile>(file: T) {
+        this.files[file.srcPath.toLowerCase()] = file;
+        this.pkgMap[file.pkgPath.toLowerCase()] = file;
+        return file;
+    }
+
+    /**
+     * Remove this file from internal maps
+     */
+    private unassignFile<T extends BscFile>(file: T) {
+        delete this.files[file.srcPath.toLowerCase()];
+        delete this.pkgMap[file.pkgPath.toLowerCase()];
+        return file;
+    }
+
+    /**
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
-     * @param relativePath the file path relative to the root dir
+     * @param srcDestOrPkgPath the absolute path, or the pkg path (i.e. `pkg:/path/to/file.brs`) or the destPath (i.e. `path/to/file.brs` relative to `pkg:/`)
      * @param fileContents the file contents
      */
-    public addOrReplaceFile<T extends BscFile>(relativePath: string, fileContents: string): T;
+    public setFile<T extends BscFile>(srcDestOrPkgPath: string, fileContents: string): T;
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * @param fileEntry an object that specifies src and dest for the file.
      * @param fileContents the file contents. If not provided, the file will be loaded from disk
      */
-    public addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
-    public addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
-        assert.ok(fileParam, 'fileEntry is required');
+    public setFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
+    public setFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
+        assert.ok(fileParam, 'fileParam is required');
         let srcPath: string;
         let pkgPath: string;
         if (typeof fileParam === 'string') {
-            srcPath = s`${this.options.rootDir}/${fileParam}`;
-            pkgPath = s`${fileParam}`;
+            //is a pkg path
+            if (fileParam.startsWith('pkg:/')) {
+                //srcPath is the pkgPath relative to the rootDir
+                srcPath = s`${this.options.rootDir}/${fileParam.substring(5)}`;
+                pkgPath = fileParam;
+
+                //is a srcPath (absolute path to src file location)
+            } else if (path.isAbsolute(fileParam)) {
+                srcPath = util.standardizePath(fileParam);
+                //assume the file path is a sub path of rootDir
+                pkgPath = util.sanitizePkgPath(
+                    rokuDeployUtil.stringReplaceInsensitive(
+                        srcPath,
+                        this.options.rootDir,
+                        ''
+                    )
+                );
+
+                //is destPath (path relative to rootDir and `pkg:/`)
+            } else {
+                srcPath = s`${this.options.rootDir}/${fileParam}`;
+                pkgPath = util.sanitizePkgPath(fileParam);
+            }
+
+            //is a FileObj
         } else {
             srcPath = s`${fileParam.src}`;
-            pkgPath = s`${fileParam.dest}`;
+            pkgPath = util.sanitizePkgPath(fileParam.dest);
         }
-        return this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(srcPath)], () => {
+        const lowerPkgPath = pkgPath.toLowerCase();
+        return this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
 
-            assert.ok(srcPath, 'fileEntry.src is required');
-            assert.ok(pkgPath, 'fileEntry.dest is required');
+            assert.ok(srcPath, 'srcPath is required');
+            assert.ok(pkgPath, 'pkgPath is required');
 
             //if the file is already loaded, remove it
             if (this.hasFile(srcPath)) {
@@ -365,51 +420,62 @@ export class Program {
 
             const beforeFileParseEvent = {
                 program: this,
-                pathAbsolute: srcPath,
+                srcPath: srcPath,
                 source: fileContents
             } as BeforeFileParseEvent;
 
             if (fileExtension === '.brs' || fileExtension === '.bs') {
-                let brsFile = new BrsFile(srcPath, pkgPath, this);
+                //add the file to the program
+                const brsFile = this.assignFile(
+                    new BrsFile(srcPath, pkgPath, this)
+                );
 
                 //add file to the `source` dependency list
-                if (brsFile.pkgPath.startsWith(startOfSourcePkgPath)) {
+                if (brsFile.pkgPath.startsWith('pkg:/source/')) {
                     this.createSourceScope();
                     this.dependencyGraph.addDependency('scope:source', brsFile.dependencyGraphKey);
                 }
 
-
                 //add the file to the program
-                this.files[srcPath] = brsFile;
-                this.pkgMap[brsFile.pkgPath.toLowerCase()] = brsFile;
+                this.assignFile(brsFile);
 
                 this.plugins.emit('beforeFileParse', beforeFileParseEvent);
 
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
                     brsFile.parse(beforeFileParseEvent.source);
                 });
-                file = brsFile;
 
-                brsFile.attachDependencyGraph(this.dependencyGraph);
-
+                //notify plugins that this file has finished parsing
                 this.plugins.emit('afterFileParse', {
                     program: this,
                     file: brsFile
                 });
+
+                file = brsFile;
+
+                brsFile.attachDependencyGraph(this.dependencyGraph);
+
             } else if (
                 //is xml file
                 fileExtension === '.xml' &&
                 //resides in the components folder (Roku will only parse xml files in the components folder)
-                pkgPath.toLowerCase().startsWith(util.pathSepNormalize(`components/`))
+                lowerPkgPath.startsWith('pkg:/components/')
             ) {
-                let xmlFile = new XmlFile(srcPath, pkgPath, this);
                 //add the file to the program
-                this.files[srcPath] = xmlFile;
-                this.pkgMap[xmlFile.pkgPath.toLowerCase()] = xmlFile;
+                const xmlFile = this.assignFile(
+                    new XmlFile(srcPath, pkgPath, this)
+                );
+
                 this.plugins.emit('beforeFileParse', beforeFileParseEvent);
 
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
                     xmlFile.parse(beforeFileParseEvent.source);
+                });
+
+                //notify plugins that this file has finished parsing
+                this.plugins.emit('afterFileParse', {
+                    program: this,
+                    file: xmlFile
                 });
 
                 file = xmlFile;
@@ -421,14 +487,10 @@ export class Program {
                 //register this compoent now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
 
-                this.plugins.emit('afterFileParse', {
-                    program: this,
-                    file: xmlFile
-                });
             } else {
                 //TODO do we actually need to implement this? Figure out how to handle img paths
-                // let genericFile = this.files[pathAbsolute] = <any>{
-                //     pathAbsolute: pathAbsolute,
+                // let genericFile = this.files[srcPath] = <any>{
+                //     srcPath: srcPath,
                 //     pkgPath: pkgPath,
                 //     wasProcessed: true
                 // } as File;
@@ -451,59 +513,25 @@ export class Program {
     }
 
     /**
-     * Find the file by its absolute path. This is case INSENSITIVE, since
-     * Roku is a case insensitive file system. It is an error to have multiple files
-     * with the same path with only case being different.
-     * @param pathAbsolute
-     */
-    public getFileByPathAbsolute<T extends BrsFile | XmlFile>(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
-        for (let filePath in this.files) {
-            if (filePath.toLowerCase() === pathAbsolute.toLowerCase()) {
-                return this.files[filePath] as T;
-            }
-        }
-    }
-
-    /**
-     * Get a list of files for the given (platform-normalized) pkgPath array.
-     * Missing files are just ignored.
-     */
-    public getFilesByPkgPaths<T extends BscFile[]>(pkgPaths: string[]) {
-        return pkgPaths
-            .map(pkgPath => this.getFileByPkgPath(pkgPath))
-            .filter(file => file !== undefined) as T;
-    }
-
-    /**
-     * Get a file with the specified (platform-normalized) pkg path.
-     * If not found, return undefined
-     */
-    public getFileByPkgPath<T extends BscFile>(pkgPath: string) {
-        return this.pkgMap[pkgPath.toLowerCase()] as T;
-    }
-
-    /**
      * Remove a set of files from the program
-     * @param absolutePaths
+     * @param filePaths can be an array of srcPath or destPath strings
+     * @param normalizePath should this function repair and standardize the filePaths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
      */
-    public removeFiles(absolutePaths: string[]) {
-        for (let pathAbsolute of absolutePaths) {
-            this.removeFile(pathAbsolute);
+    public removeFiles(srcPaths: string[], normalizePath = true) {
+        for (let srcPath of srcPaths) {
+            this.removeFile(srcPath, normalizePath);
         }
     }
 
     /**
      * Remove a file from the program
-     * @param pathAbsolute
+     * @param filePath can be a srcPath, a pkgPath, or a destPath (same as pkgPath but without `pkg:/`)
+     * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
-    public removeFile(pathAbsolute: string) {
-        this.logger.debug('Program.removeFile()', pathAbsolute);
-        if (!path.isAbsolute(pathAbsolute)) {
-            throw new Error(`Path must be absolute: "${pathAbsolute}"`);
-        }
+    public removeFile(filePath: string, normalizePath = true) {
+        this.logger.debug('Program.removeFile()', filePath);
 
-        let file = this.getFile(pathAbsolute);
+        let file = this.getFile(filePath, normalizePath);
         if (file) {
             this.plugins.emit('beforeFileDispose', {
                 program: this,
@@ -527,13 +555,12 @@ export class Program {
                 });
             }
             //remove the file from the program
-            delete this.files[file.pathAbsolute];
-            delete this.pkgMap[file.pkgPath.toLowerCase()];
+            this.unassignFile(file);
 
             this.dependencyGraph.remove(file.dependencyGraphKey);
 
             //if this is a pkg:/source file, notify the `source` scope that it has changed
-            if (file.pkgPath.startsWith(startOfSourcePkgPath)) {
+            if (file.pkgPath.startsWith('pkg:/source/')) {
                 this.dependencyGraph.removeDependency('scope:source', file.dependencyGraphKey);
             }
 
@@ -545,6 +572,26 @@ export class Program {
                 program: this,
                 file: file
             });
+        }
+    }
+
+    /**
+     * Remove all files from the program that are in the specified folder path (recursive)
+     * @param folderSrcPath The absolute path to the folder on disk
+     * @param normalizePath should the provided path be normalized before use?
+     */
+    public removeFilesInFolder(folderSrcPath: string, normalizePath = true) {
+        if (normalizePath) {
+            folderSrcPath = util.standardizePath(folderSrcPath);
+        }
+        const lowerFolderSrcPath = folderSrcPath.toLowerCase();
+        for (const key in this.files) {
+            const file = this.files[key];
+            const lowerSrcPath = file.srcPath.toLowerCase();
+            //if the file path starts with the parent path and the file path does not exactly match the folder path
+            if (lowerSrcPath.toLowerCase().startsWith(lowerFolderSrcPath) && lowerSrcPath !== lowerFolderSrcPath) {
+                this.removeFile(file.srcPath, false);
+            }
         }
     }
 
@@ -580,6 +627,11 @@ export class Program {
                         file: file
                     });
 
+                    //emit an event to allow plugins to contribute to the file validation process
+                    this.plugins.emit('onFileValidate', {
+                        program: this,
+                        file: file
+                    });
                     //call file.validate() IF the file has that function defined
                     file.validate?.();
                     file.isValidated = true;
@@ -623,21 +675,23 @@ export class Program {
      * Flag all duplicate component names
      */
     private detectDuplicateComponentNames() {
-        const componentsByName = Object.keys(this.files).reduce<Record<string, XmlFile[]>>((map, filePath) => {
-            const file = this.files[filePath];
+        const componentsByName = new Map<string, XmlFile[]>();
+        for (const key in this.files) {
+            const file = this.files[key];
             //if this is an XmlFile, and it has a valid `componentName` property
-            if (isXmlFile(file) && file.componentName?.text) {
-                let lowerName = file.componentName.text.toLowerCase();
-                if (!map[lowerName]) {
-                    map[lowerName] = [];
+            if (isXmlFile(file)) {
+                const componentNameLower = file.componentName?.text.toLowerCase();
+                if (componentNameLower) {
+                    if (!componentsByName.has(componentNameLower)) {
+                        componentsByName.set(componentNameLower, [file]);
+                    } else {
+                        componentsByName.get(componentNameLower).push(file);
+                    }
                 }
-                map[lowerName].push(file);
             }
-            return map;
-        }, {});
+        }
 
-        for (let name in componentsByName) {
-            const xmlFiles = componentsByName[name];
+        for (const xmlFiles of componentsByName.values()) {
             //add diagnostics for every duplicate component with this name
             if (xmlFiles.length > 1) {
                 for (let xmlFile of xmlFiles) {
@@ -649,7 +703,7 @@ export class Program {
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
                                 location: Location.create(
-                                    URI.file(xmlFile.pathAbsolute).toString(),
+                                    URI.file(xmlFile.srcPath).toString(),
                                     x.componentName.range
                                 ),
                                 message: 'Also defined here'
@@ -674,12 +728,33 @@ export class Program {
     }
 
     /**
-     * Get the file at the given path
-     * @param pathAbsolute
+     * Get the files for a list of filePaths
+     * @param filePaths can be an array of srcPath or a destPath strings
+     * @param normalizePath should this function repair and standardize the paths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
      */
-    private getFile<T extends BscFile>(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
-        return this.files[pathAbsolute] as T;
+    public getFiles<T extends BscFile>(filePaths: string[], normalizePath = true) {
+        return filePaths
+            .map(filePath => this.getFile(filePath, normalizePath))
+            .filter(file => file !== undefined) as T[];
+    }
+
+    /**
+     * Get the file at the given path
+     * @param filePath can be a srcPath, a pkgPath, or a destPath (same as pkgPath but without `pkg:/`)
+     * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
+     */
+    public getFile<T extends BscFile>(filePath: string, normalizePath = true) {
+        if (typeof filePath !== 'string') {
+            return undefined;
+        } else if (path.isAbsolute(filePath)) {
+            return this.files[
+                (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase()
+            ] as T;
+        } else {
+            return this.pkgMap[
+                (normalizePath ? util.sanitizePkgPath(filePath) : filePath).toLowerCase()
+            ] as T;
+        }
     }
 
     /**
@@ -696,6 +771,19 @@ export class Program {
             }
         }
         return result;
+    }
+
+    /**
+     * Get the first found scope for a file.
+     */
+    public getFirstScopeForFile(file: XmlFile | BrsFile): Scope {
+        for (let key in this.scopes) {
+            let scope = this.scopes[key];
+
+            if (scope.hasFile(file)) {
+                return scope;
+            }
+        }
     }
 
     public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {
@@ -732,9 +820,12 @@ export class Program {
         let funcNames = new Set<string>();
         let currentScope = scope;
         while (isXmlScope(currentScope)) {
-            for (let name of currentScope.xmlFile.ast.component.api?.functions.map((f) => f.name) ?? []) {
-                if (!filterName || name === filterName) {
-                    funcNames.add(name);
+            for (let member of currentScope.xmlFile.ast.component?.interfaceMembers ?? []) {
+                if (isSGInterfaceFunction(member)) {
+                    const name = member.name;
+                    if (!filterName || name === filterName) {
+                        funcNames.add(name);
+                    }
                 }
             }
             currentScope = currentScope.getParentScope() as XmlScope;
@@ -760,18 +851,18 @@ export class Program {
 
     /**
      * Find all available completion items at the given position
-     * @param pathAbsolute
+     * @param srcPath The absolute path to the source file on disk
      * @param lineIndex
      * @param columnIndex
      */
-    public getCompletions(pathAbsolute: string, position: Position) {
-        let file = this.getFile(pathAbsolute);
+    public getCompletions(srcPath: string, position: Position) {
+        let file = this.getFile(srcPath);
         if (!file) {
             return [];
         }
         let result = [] as CompletionItem[];
 
-        if (isBrsFile(file) && file.isPositionNextToTokenKind(position, TokenKind.Callfunc)) {
+        if (isBrsFile(file) && file.parser.isPositionNextToTokenKind(position, TokenKind.Callfunc)) {
             // is next to a @. callfunc invocation - must be an interface method
             for (const scope of this.getScopes().filter((s) => isXmlScope(s))) {
                 let fileLinks = this.getStatementsForXmlFile(scope as XmlScope);
@@ -792,7 +883,12 @@ export class Program {
 
         //get the completions from all scopes for this file
         let allCompletions = util.flatMap(
-            scopes.map(ctx => file.getCompletions(position, ctx)),
+            scopes.map(ctx => {
+                ctx.linkSymbolTable();
+                const completions = file.getCompletions(position, ctx);
+                ctx.unlinkSymbolTable();
+                return completions;
+            }),
             c => c
         );
 
@@ -812,22 +908,25 @@ export class Program {
      * Goes through each file and builds a list of workspace symbols for the program. Used by LanguageServer's onWorkspaceSymbol functionality
      */
     public getWorkspaceSymbols() {
-        const results = Object.keys(this.files).map(key => {
+        const result = [] as SymbolInformation[];
+        for (const key in this.files) {
             const file = this.files[key];
             if (isBrsFile(file)) {
-                return file.getWorkspaceSymbols();
+                result.push(
+                    ...file.getWorkspaceSymbols()
+                );
             }
-            return [];
-        });
-        return util.flatMap(results, c => c);
+        }
+        return result;
     }
 
     /**
      * Given a position in a file, if the position is sitting on some type of identifier,
      * go to the definition of that identifier (where this thing was first defined)
+     * @param srcPath The absolute path to the source file on disk
      */
-    public getDefinition(pathAbsolute: string, position: Position) {
-        let file = this.getFile(pathAbsolute);
+    public getDefinition(srcPath: string, position: Position) {
+        let file = this.getFile(srcPath);
         if (!file) {
             return [];
         }
@@ -844,22 +943,27 @@ export class Program {
         }
     }
 
-    public getHover(pathAbsolute: string, position: Position) {
+    /**
+     * @param srcPath The absolute path to the source file on disk
+     */
+    public getHover(srcPath: string, position: Position) {
         //find the file
-        let file = this.getFile(pathAbsolute);
+        let file = this.getFile(srcPath);
         if (!file) {
             return null;
         }
+        const hover = file.getHover(position);
 
-        return Promise.resolve(file.getHover(position));
+        return Promise.resolve(hover);
     }
 
     /**
      * Compute code actions for the given file and range
+     * @param srcPath The absolute path to the source file on disk
      */
-    public getCodeActions(pathAbsolute: string, range: Range) {
+    public getCodeActions(srcPath: string, range: Range) {
         const codeActions = [] as CodeAction[];
-        const file = this.getFile(pathAbsolute);
+        const file = this.getFile(srcPath);
         if (file) {
             const diagnostics = this
                 //get all current diagnostics (filtered by diagnostic filters)
@@ -883,8 +987,25 @@ export class Program {
         return codeActions;
     }
 
+    /**
+     * Get semantic tokens for the specified file
+     */
+    public getSemanticTokens(srcPath: string) {
+        const file = this.getFile(srcPath);
+        if (file) {
+            const result = [] as SemanticToken[];
+            this.plugins.emit('onGetSemanticTokens', {
+                program: this,
+                file: file,
+                scopes: this.getScopesForFile(file),
+                semanticTokens: result
+            });
+            return result;
+        }
+    }
+
     public getSignatureHelp(filepath: string, position: Position): SignatureInfoObj[] {
-        let file: BrsFile = this.getFile(filepath);
+        let file = this.getFile(filepath);
         if (!file || !isBrsFile(file)) {
             return [];
         }
@@ -909,9 +1030,11 @@ export class Program {
             //if m class reference.. then
             //only get statements from the class I am in..
             if (functionExpression) {
-                let myClass = file.getClassFromMReference(position, file.getTokenAt(position), functionExpression);
-                if (myClass) {
-                    for (let scope of this.getScopesForFile(myClass.file)) {
+                const currentToken = file.parser.getTokenAt(position);
+                for (let scope of this.getScopesForFile(file)) {
+                    scope.linkSymbolTable();
+                    let myClass = file.getClassFromToken(currentToken, functionExpression, scope);
+                    if (myClass) {
                         let classes = scope.getClassHierarchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
                         //and anything from any class in scope to a non m class
                         for (let statement of [...classes].filter((i) => isClassMethodStatement(i.item))) {
@@ -923,7 +1046,9 @@ export class Program {
                             }
                         }
                     }
+                    scope.unlinkSymbolTable();
                 }
+
             }
 
             if (identifierInfo.dotPart) {
@@ -988,12 +1113,12 @@ export class Program {
         if (!itemCounts.isArgStartFound) {
             //try to get sig help based on the name
             index = position.character;
-            let currentToken = file.getTokenAt(position);
+            let currentToken = file.parser.getTokenAt(position);
             if (currentToken && currentToken.kind !== TokenKind.Comment) {
                 name = file.getPartialVariableName(currentToken, [TokenKind.New]);
                 if (!name) {
                     //try the previous token, incase we're on a bracket
-                    currentToken = file.getPreviousToken(currentToken);
+                    currentToken = file.parser.getPreviousToken(currentToken);
                     name = file.getPartialVariableName(currentToken, [TokenKind.New]);
                 }
                 if (name?.indexOf('.')) {
@@ -1109,9 +1234,12 @@ export class Program {
 
     }
 
-    public getReferences(pathAbsolute: string, position: Position) {
+    /**
+     * @param srcPath The absolute path to the source file on disk
+     */
+    public getReferences(srcPath: string, position: Position) {
         //find the file
-        let file = this.getFile(pathAbsolute);
+        let file = this.getFile(srcPath);
         if (!file) {
             return null;
         }
@@ -1134,8 +1262,8 @@ export class Program {
         let resultPkgPaths = {} as Record<string, boolean>;
 
         //restrict to only .brs files
-        for (let key in this.files) {
-            let file = this.files[key];
+        for (const key in this.files) {
+            const file = this.files[key];
             if (
                 //is a BrightScript or BrighterScript file
                 (file.extension === '.bs' || file.extension === '.brs') &&
@@ -1144,15 +1272,13 @@ export class Program {
             ) {
                 //add the relative path
                 let relativePath = util.getRelativePath(sourcePkgPath, file.pkgPath).replace(/\\/g, '/');
-                let pkgPathStandardized = file.pkgPath.replace(/\\/g, '/');
-                let filePkgPath = `pkg:/${pkgPathStandardized}`;
-                let lowerFilePkgPath = filePkgPath.toLowerCase();
-                if (!resultPkgPaths[lowerFilePkgPath]) {
-                    resultPkgPaths[lowerFilePkgPath] = true;
+                const lowerPkgPath = file.pkgPath.toLowerCase();
+                if (!resultPkgPaths[lowerPkgPath]) {
+                    resultPkgPaths[lowerPkgPath] = true;
 
                     result.push({
                         label: relativePath,
-                        detail: file.pathAbsolute,
+                        detail: file.srcPath,
                         kind: CompletionItemKind.File,
                         textEdit: {
                             newText: relativePath,
@@ -1162,11 +1288,11 @@ export class Program {
 
                     //add the absolute path
                     result.push({
-                        label: filePkgPath,
-                        detail: file.pathAbsolute,
+                        label: file.pkgPath,
+                        detail: file.srcPath,
                         kind: CompletionItemKind.File,
                         textEdit: {
-                            newText: filePkgPath,
+                            newText: file.pkgPath,
                             range: scriptImport.filePathRange
                         }
                     });
@@ -1179,43 +1305,102 @@ export class Program {
     /**
      * Transpile a single file and get the result as a string.
      * This does not write anything to the file system.
+     * @param srcPath The absolute path to the source file on disk
      */
     public getTranspiledFileContents(pathAbsolute: string) {
-        let file = this.getFile(pathAbsolute);
-        let result = file.transpile();
+        return this._getTranspiledFileContents(
+            this.getFile(pathAbsolute)
+        );
+    }
+
+    /**
+     * Internal function used to transpile files.
+     * This does not write anything to the file system
+     */
+    private _getTranspiledFileContents(file: BscFile, outputPath?: string): FileTranspileResult {
+        const editor = new AstEditor();
+
+        this.plugins.emit('beforeFileTranspile', {
+            file: file,
+            program: this,
+            outputPath: outputPath,
+            editor: editor
+        });
+
+        //if we have any edits, assume the file needs to be transpiled
+        if (editor.hasChanges) {
+            //use the `editor` because it'll track the previous value for us and revert later on
+            editor.setProperty(file, 'needsTranspiled', true);
+        }
+
+        //transpile the file
+        const result = file.transpile();
+
+        //generate the typedef if enabled
+        let typedef: string;
+        if (isBrsFile(file) && this.options.emitDefinitions) {
+            typedef = file.getTypedef();
+        }
+
+        const event: AfterFileTranspileEvent = {
+            file: file,
+            program: this,
+            outputPath: outputPath,
+            editor: editor,
+            code: result.code,
+            map: result.map,
+            typedef: typedef
+        };
+        this.plugins.emit('afterFileTranspile', event);
+
+        //undo all `editor` edits that may have been applied to this file.
+        editor.undoAll();
+
         return {
-            ...result,
-            pathAbsolute: file.pathAbsolute,
-            pkgPath: file.pkgPath
+            srcPath: file.srcPath,
+            pkgPath: file.pkgPath,
+            code: event.code,
+            map: event.map,
+            typedef: event.typedef
         };
     }
 
     public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
-        // map fileEntries using their path as key, to avoid excessive "find()" operations
+        // map fileEntries using their path as key to avoid excessive "find()" operations
         const mappedFileEntries = fileEntries.reduce<Record<string, FileObj>>((collection, entry) => {
             collection[s`${entry.src}`] = entry;
             return collection;
         }, {});
 
-        const entries = Object.values(this.files).map(file => {
-            let filePathObj = mappedFileEntries[s`${file.pathAbsolute}`];
+        const entries: BeforeFileTranspileEvent[] = [];
+        for (const key in this.files) {
+            const file = this.files[key];
+            let filePathObj = mappedFileEntries[s`${file.srcPath}`];
             if (!filePathObj) {
                 //this file has been added in-memory, from a plugin, for example
                 filePathObj = {
                     //add an interpolated src path (since it doesn't actually exist in memory)
-                    src: `bsc:/${file.pkgPath}`,
+                    src: `bsc-in-memory:/${util.removeProtocol(file.pkgPath)}`,
                     dest: file.pkgPath
                 };
             }
-            //replace the file extension
-            let outputPath = filePathObj.dest.replace(/\.bs$/gi, '.brs');
+
+            //prep the output path
+            let outputPath = filePathObj.dest
+                //replace any leading protocol
+                .replace(/^[-a-z_]+:\//, '')
+                //change any .bs file extension to .brs
+                .replace(/\.bs$/gi, '.brs');
+
             //prepend the staging folder path
             outputPath = s`${stagingFolderPath}/${outputPath}`;
-            return {
+            entries.push({
                 file: file,
-                outputPath: outputPath
-            };
-        });
+                program: this,
+                outputPath: outputPath,
+                editor: new AstEditor()
+            });
+        }
 
         this.plugins.emit('beforeProgramTranspile', {
             program: this,
@@ -1227,41 +1412,31 @@ export class Program {
             if (isBrsFile(entry.file) && entry.file.isTypedef) {
                 return;
             }
-            this.plugins.emit('beforeFileTranspile', {
-                program: this,
-                file: entry.file,
-                outputPath: entry.outputPath
-            });
+
             const { file, outputPath } = entry;
-            const result = file.transpile();
+
+            const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
 
             //make sure the full dir path exists
             await fsExtra.ensureDir(path.dirname(outputPath));
 
             if (await fsExtra.pathExists(outputPath)) {
-                throw new Error(`Error while transpiling "${file.pathAbsolute}". A file already exists at "${outputPath}" and will not be overwritten.`);
+                throw new Error(`Error while transpiling "${file.srcPath}". A file already exists at "${outputPath}" and will not be overwritten.`);
             }
-            const writeMapPromise = result.map ? fsExtra.writeFile(`${outputPath}.map`, result.map.toString()) : null;
+            const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, fileTranspileResult.map.toString()) : null;
             await Promise.all([
-                fsExtra.writeFile(outputPath, result.code),
+                fsExtra.writeFile(outputPath, fileTranspileResult.code),
                 writeMapPromise
             ]);
 
-            if (isBrsFile(file) && this.options.emitDefinitions) {
-                const typedef = file.getTypedef();
+            if (fileTranspileResult.typedef) {
                 const typedefPath = outputPath.replace(/\.brs$/i, '.d.bs');
-                await fsExtra.writeFile(typedefPath, typedef);
+                await fsExtra.writeFile(typedefPath, fileTranspileResult.typedef);
             }
-
-            this.plugins.emit('afterFileTranspile', {
-                program: this,
-                file: entry.file,
-                outputPath: entry.outputPath
-            });
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
-        if (!this.getFileByPkgPath(bslibAliasedRokuModulesPkgPath) && !this.getFileByPkgPath(s`source/bslib.brs`)) {
+        if (!this.getFile(bslibAliasedRokuModulesPkgPath) && !this.getFile(`pkg:/source/bslib.brs`)) {
             promises.push(util.copyBslibToStaging(stagingFolderPath));
         }
         await Promise.all(promises);
@@ -1292,7 +1467,7 @@ export class Program {
     }
 
     /**
-     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     * Find a list of files in the program that have a class with the given name (case INsensitive)
      */
     public findFilesForClass(className: string) {
         const files = [] as BscFile[];
@@ -1333,13 +1508,22 @@ export class Program {
     private _manifest: Map<string, ManifestValue>;
 
     public dispose() {
-        for (let filePath in this.files) {
-            this.files[filePath].dispose();
+        for (const key in this.files) {
+            const file = this.files[key];
+            file.dispose?.();
         }
         for (let name in this.scopes) {
-            this.scopes[name].dispose();
+            this.scopes[name]?.dispose();
         }
         this.globalScope.dispose();
         this.dependencyGraph.dispose();
     }
+}
+
+export interface FileTranspileResult {
+    srcPath: string;
+    pkgPath: string;
+    code: string;
+    map: SourceMapGenerator;
+    typedef: string;
 }

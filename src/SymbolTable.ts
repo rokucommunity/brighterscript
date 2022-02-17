@@ -1,7 +1,7 @@
-import type { Range } from './astUtils';
-import type { BscType } from './types/BscType';
+import type { Position, Range } from 'vscode-languageserver';
+import { getTypeFromContext } from './types/BscType';
 import { DynamicType } from './types/DynamicType';
-import { UninitializedType } from './types/UninitializedType';
+import type { BscType, TypeContext } from './types/BscType';
 
 
 /**
@@ -22,8 +22,19 @@ export class SymbolTable {
     /**
      * Get list of symbols declared directly in this SymbolTable (excludes parent SymbolTable).
      */
-    public get ownSymbols(): BscSymbol[] {
+    public getOwnSymbols(): BscSymbol[] {
         return [].concat(...this.symbolMap.values());
+    }
+
+    /**
+     * Get list of all symbols declared in this SymbolTable (includes parent SymbolTable).
+     */
+    public getAllSymbols(): BscSymbol[] {
+        let symbols = this.getOwnSymbols();
+        if (this.parent) {
+            symbols = symbols.concat(this.parent.getAllSymbols());
+        }
+        return symbols;
     }
 
     /**
@@ -90,30 +101,38 @@ export class SymbolTable {
      * Gets the type for a symbol
      * @param name the name of the symbol to get the type for
      * @param searchParent should we look to our parent if we don't have the symbol?
+     * @param context the context for where this type was referenced - used ONLY for lazy types
      * @returns The type, if found. If the type has ever changed, return DynamicType. If not found, returns UninitializedType
      */
-    getSymbolType(name: string, searchParent = true): BscType {
+    getSymbolType(name: string, searchParent = true, context?: TypeContext): BscType {
         const key = name.toLowerCase();
         const symbols = this.symbolMap.get(key);
         if (symbols?.length > 1) {
             //Check if each time it was set, it was set to the same type
-            // TODO handle union types
-            let sameImpliedType = true;
-            let impliedType = symbols[0].type;
+            // TODO TYPES handle union types
+            let sameInferredType = true;
+            let inferredType: BscType;
             for (const symbol of symbols) {
-                sameImpliedType = (impliedType.equals(symbol.type));
-                if (!sameImpliedType) {
+                if ((context?.position && isPositionBefore(symbol.range?.end, context.position)) || !context?.position) {
+                    // if we're looking at context with a position, only look at types that were set before
+                    const existingType = getTypeFromContext(symbol.type, context);
+                    // if the type is not known yet, imply that the first assignment is the type
+                    inferredType = inferredType ?? existingType;
+                    sameInferredType = (inferredType?.equals(existingType, context));
+                }
+                if (!sameInferredType) {
                     break;
                 }
             }
-            return sameImpliedType ? impliedType : new DynamicType();
+            return sameInferredType ? inferredType : new DynamicType();
         } else if (symbols?.length === 1) {
-            return symbols[0].type;
+            return getTypeFromContext(symbols[0].type, context);
         }
         if (searchParent) {
-            return this.parent?.getSymbolType(name) ?? new UninitializedType();
+            const parentContext = context ? { file: context?.file, scope: context?.scope } : undefined;
+            return this.parent?.getSymbolType(name, true, parentContext) ?? undefined;
         } else {
-            return new UninitializedType();
+            return undefined;
         }
     }
 
@@ -133,6 +152,10 @@ export class SymbolTable {
             }
         }
     }
+
+    clear() {
+        this.symbolMap.clear();
+    }
 }
 
 
@@ -140,4 +163,12 @@ export interface BscSymbol {
     name: string;
     range: Range;
     type: BscType;
+}
+
+
+function isPositionBefore(pos1: Position, pos2: Position): boolean {
+    if (pos1?.line < pos2?.line) {
+        return true;
+    }
+    return false;
 }

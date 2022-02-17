@@ -6,10 +6,6 @@ describe('Cache', () => {
     beforeEach(() => {
         cache = new Cache();
     });
-    it('instantiates a new internal cache on construct', () => {
-        let cache = new Cache();
-        expect((cache as any).cache).to.exist;
-    });
 
     describe('getOrAdd', () => {
         it('adds items to the cache', () => {

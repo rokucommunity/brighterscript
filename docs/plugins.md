@@ -45,10 +45,14 @@ Full compiler lifecycle:
         - `beforeFileParse`
         - `afterFileParse`
         - `afterScopeCreate` (component scope)
-        - `afterFileValidate`
     - `beforeProgramValidate`
+    - For each file:
+        - `beforeFileValidate`
+        - `onFileValidate`
+        - `afterFileValidate`
     - For each scope:
         - `beforeScopeValidate`
+        - `onScopeValidate`
         - `afterScopeValidate`
     - `afterProgramValidate`
 - `beforePrepublish`
@@ -149,7 +153,7 @@ interface FileObj {
 }
 
 interface SourceObj {
-    pathAbsolute: string;
+    srcPath: string;
     source: string;
 }
 
@@ -228,32 +232,44 @@ export default function () {
 };
 ```
 
-### Example AST modifier plugin
+## Modifying code
+Sometimes plugins will want to modify code before the project is transpiled. While you can technically edit the AST directly at any point in the file's lifecycle, this is not recommended as those changes will remain changed as long as that file exists in memory and could cause issues with file validation if the plugin is used in a language-server context (i.e. inside vscode).
 
-AST modification can be done after parsing (`afterFileParsed`), but it is recommended to modify the AST only before transpilation (`beforeFileTranspile`), otherwise it could cause problems if the plugin is used in a language-server context.
+Instead, we provide an instace of an `AstEditor` class in the `beforeFileTranspile` event that allows you to modify AST before the file is transpiled, and then those modifications are undone `afterFileTranspile`.
+
+For example, consider the following brightscript code:
+```brightscript
+sub main()
+    print "hello <FIRST_NAME>"
+end sub
+```
+
+Here's the plugin:
 
 ```typescript
-// removePrint.ts
-import { CompilerPlugin, Program, TranspileObj } from 'brighterscript';
-import { EmptyStatement } from 'brighterscript/dist/parser';
-import { isBrsFile, createStatementEditor, editStatements } from 'brighterscript/dist/parser/ASTUtils';
+import { CompilerPlugin, BeforeFileTranspileEvent, isBrsFile, WalkMode, createVisitor, TokenKind } from './';
 
 // plugin factory
 export default function () {
     return {
         name: 'removePrint',
         // transform AST before transpilation
-        beforeFileTranspile: (entry: TranspileObj) => {
-            if (isBrsFile(entry.file)) {
-                // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
-                entry.file.parser.functionExpressions.forEach((fun) => {
-                    const visitor = createStatementEditor({
-                        PrintStatement: (statement) => new EmptyStatement()
-                    });
-                    editStatements(fun.body, visitor);
+        beforeFileTranspile: (event: BeforeFileTranspileEvent) => {
+            if (isBrsFile(event.file)) {
+                event.file.ast.walk(createVisitor({
+                    LiteralExpression: (literal) => {
+                        //replace every occurance of <FIRST_NAME> in strings with "world"
+                        if (literal.token.kind === TokenKind.StringLiteral && literal.token.text.includes('<FIRST_NAME>')) {
+                            event.editor.setProperty(literal.token, 'text', literal.token.text.replace('<FIRST_NAME>', 'world'));
+                        }
+                    }
+                }), {
+                    walkMode: WalkMode.visitExpressionsRecursive
                 });
             }
         }
     } as CompilerPlugin;
 };
 ```
+
+This plugin will search through every LiteralExpression in the entire project, and every time we find a string literal, we will replace `<FIRST_NAME>` with `world`. This is done with the `event.editor` object. `editor` allows you to apply edits to the AST, and then the brighterscript compiler will `undo` those edits once the file has been transpiled.

@@ -5,6 +5,13 @@ import { Position, Range } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
+import type { CallableParam } from './interfaces';
+import { IntegerType } from './types/IntegerType';
+import { createToken, TokenKind } from '.';
+import { isBooleanType, isIntegerType, isFloatType, isObjectType, isFunctionType, isStringType, isLazyType, isArrayType, isDynamicType } from './astUtils/reflection';
+import type { ArrayType } from './types/ArrayType';
+
+
 const sinon = createSandbox();
 let tempDir = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tempDir}/rootDir`;
@@ -33,12 +40,6 @@ describe('util', () => {
         it('retains original drive casing for windows', () => {
             expect(util.uriToPath(`file:///C:${path.sep}something`)).to.equal(`C:${path.sep}something`);
             expect(util.uriToPath(`file:///c:${path.sep}something`)).to.equal(`c:${path.sep}something`);
-        });
-    });
-
-    describe('getRokuPkgPath', () => {
-        it('replaces more than one windows slash in a path', () => {
-            expect(util.getRokuPkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
         });
     });
 
@@ -350,24 +351,19 @@ describe('util', () => {
     });
 
     describe('getPkgPathFromTarget', () => {
-        it('works with both types of separators', () => {
-            expect(util.getPkgPathFromTarget('components/component1.xml', '../lib.brs')).to.equal('lib.brs');
-            expect(util.getPkgPathFromTarget('components\\component1.xml', '../lib.brs')).to.equal('lib.brs');
-        });
-
         it('resolves single dot directory', () => {
-            expect(util.getPkgPathFromTarget('components/component1.xml', './lib.brs')).to.equal(s`components/lib.brs`);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', './lib.brs')).to.equal(`pkg:/components/lib.brs`);
         });
 
         it('resolves absolute pkg paths as relative paths', () => {
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/source/lib.brs')).to.equal(s`source/lib.brs`);
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/lib.brs')).to.equal(`lib.brs`);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', 'pkg:/source/lib.brs')).to.equal(`pkg:/source/lib.brs`);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', 'pkg:/lib.brs')).to.equal(`pkg:/lib.brs`);
         });
 
         it('resolves gracefully for invalid values', () => {
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/')).to.equal(null);
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:')).to.equal(null);
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg')).to.equal(s`components/pkg`);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', 'pkg:/')).to.equal(null);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', 'pkg:')).to.equal(null);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', 'pkg')).to.equal(`pkg:/components/pkg`);
         });
     });
 
@@ -603,6 +599,185 @@ describe('util', () => {
                 util.createRange(0, 1, 0, 3),
                 util.createRange(0, 1, 2, 0)
             )).to.be.true;
+        });
+    });
+
+    describe('removeProtocol', () => {
+        it('removes pkg:/', () => {
+            expect(
+                util.removeProtocol('pkg:/some/path')
+            ).to.eql(
+                'some/path'
+            );
+        });
+        it('removes libpkg:/', () => {
+            expect(
+                util.removeProtocol('libpkg:/some/path')
+            ).to.eql(
+                'some/path'
+            );
+        });
+        it('removes file:/', () => {
+            expect(
+                util.removeProtocol('file:/some/path')
+            ).to.eql(
+                'some/path'
+            );
+        });
+        it('does nothing when protocol is missing', () => {
+            expect(
+                util.removeProtocol('some/path')
+            ).to.eql(
+                'some/path'
+            );
+        });
+    });
+
+    describe('getMinMaxParamCount', () => {
+
+        it('finds correct number of params with no args', () => {
+            const params: CallableParam[] = [];
+            const count = util.getMinMaxParamCount(params);
+            expect(count.min).to.equal(0);
+            expect(count.max).to.equal(0);
+        });
+
+        it('finds correct number of params', () => {
+            const params: CallableParam[] = [{ name: 'a', type: new IntegerType(), isOptional: false }, { name: 'b', type: new IntegerType(), isOptional: false }];
+            const count = util.getMinMaxParamCount(params);
+            expect(count.min).to.equal(2);
+            expect(count.max).to.equal(2);
+        });
+
+        it('finds correct number of params with optional params', () => {
+            const params: CallableParam[] = [{ name: 'a', type: new IntegerType(), isOptional: false }, { name: 'b', type: new IntegerType(), isOptional: false }, { name: 'c', type: new IntegerType(), isOptional: true }, { name: 'd', type: new IntegerType(), isOptional: true }];
+            const count = util.getMinMaxParamCount(params);
+            expect(count.min).to.equal(2);
+            expect(count.max).to.equal(4);
+        });
+    });
+
+    it('sortByRange', () => {
+        const front = {
+            range: util.createRange(1, 1, 1, 2)
+        };
+        const middle = {
+            range: util.createRange(1, 3, 1, 4)
+        };
+        const back = {
+            range: util.createRange(1, 5, 1, 6)
+        };
+        expect(
+            util.sortByRange([middle, front, back])
+        ).to.eql([
+            front, middle, back
+        ]);
+    });
+
+    describe('splitWithLocation', () => {
+        it('works with no split items', () => {
+            expect(
+                util.splitGetRange('.', 'hello', util.createRange(2, 10, 2, 15))
+            ).to.eql([{
+                text: 'hello',
+                range: util.createRange(2, 10, 2, 15)
+            }]);
+        });
+
+        it('handles empty chunks', () => {
+            expect(
+                util.splitGetRange('l', 'hello', util.createRange(2, 10, 2, 15))
+            ).to.eql([{
+                text: 'he',
+                range: util.createRange(2, 10, 2, 12)
+            }, {
+                text: 'o',
+                range: util.createRange(2, 14, 2, 15)
+            }]);
+        });
+
+        it('handles multiple non-empty chunks', () => {
+            expect(
+                util.splitGetRange('.', 'abc.d.efgh.i', util.createRange(2, 10, 2, 2))
+            ).to.eql([{
+                text: 'abc',
+                range: util.createRange(2, 10, 2, 13)
+            }, {
+                text: 'd',
+                range: util.createRange(2, 14, 2, 15)
+            }, {
+                text: 'efgh',
+                range: util.createRange(2, 16, 2, 20)
+            }, {
+                text: 'i',
+                range: util.createRange(2, 21, 2, 22)
+            }]);
+        });
+    });
+
+    describe('tokenToBscType', () => {
+
+        it('handles type tokens', () => {
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.Boolean)))).be.true;
+            expect(isIntegerType(util.tokenToBscType(createToken(TokenKind.Integer)))).be.true;
+            expect(isFloatType(util.tokenToBscType(createToken(TokenKind.Float)))).be.true;
+            expect(isObjectType(util.tokenToBscType(createToken(TokenKind.Object)))).be.true;
+            expect(isStringType(util.tokenToBscType(createToken(TokenKind.String)))).be.true;
+        });
+
+        it('handles literals', () => {
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.True)))).be.true;
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.False)))).be.true;
+            expect(isIntegerType(util.tokenToBscType(createToken(TokenKind.IntegerLiteral, '123')))).be.true;
+            expect(isFloatType(util.tokenToBscType(createToken(TokenKind.FloatLiteral, '3.14')))).be.true;
+            expect(isStringType(util.tokenToBscType(createToken(TokenKind.StringLiteral, 'hello')))).be.true;
+        });
+
+        it('handles identifiers', () => {
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.Identifier, 'boolean')))).be.true;
+            expect(isIntegerType(util.tokenToBscType(createToken(TokenKind.Identifier, 'integer')))).be.true;
+            expect(isFloatType(util.tokenToBscType(createToken(TokenKind.Identifier, 'float')))).be.true;
+            expect(isStringType(util.tokenToBscType(createToken(TokenKind.Identifier, 'string')))).be.true;
+            expect(isFunctionType(util.tokenToBscType(createToken(TokenKind.Identifier, 'function')))).be.true;
+            expect(isObjectType(util.tokenToBscType(createToken(TokenKind.Identifier, 'object')))).be.true;
+            expect(isDynamicType(util.tokenToBscType(createToken(TokenKind.Identifier, 'dynamic')))).be.true;
+        });
+
+        it('ignores case and whitespace of identifiers', () => {
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.Identifier, 'boolean')))).be.true;
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.Identifier, 'BOOLEAN')))).be.true;
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.Identifier, 'Boolean')))).be.true;
+            expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.Identifier, '  boolean   ')))).be.true;
+        });
+
+        it('includes custom types, returned as lazy', () => {
+            expect(isLazyType(util.tokenToBscType(createToken(TokenKind.Identifier, 'SomeKlass'), true))).be.true;
+        });
+
+        it('gets array types from identifiers', () => {
+            expect(isArrayType(util.tokenToBscType(createToken(TokenKind.Identifier, 'boolean[]')))).be.true;
+            expect(isArrayType(util.tokenToBscType(createToken(TokenKind.Identifier, 'integer[]')))).be.true;
+            expect(isArrayType(util.tokenToBscType(createToken(TokenKind.Identifier, 'string[]')))).be.true;
+        });
+
+        it('gets array types from identifiers with custom types', () => {
+            expect(isArrayType(util.tokenToBscType(createToken(TokenKind.Identifier, 'SomeKlass[]')))).be.true;
+            expect(isArrayType(util.tokenToBscType(createToken(TokenKind.Identifier, 'MyNamespace.Klass[]')))).be.true;
+        });
+
+        it('sets the default type of an array type', () => {
+            expect(isBooleanType((util.tokenToBscType(createToken(TokenKind.Identifier, 'boolean[]')) as ArrayType).getDefaultType())).be.true;
+            expect(isStringType((util.tokenToBscType(createToken(TokenKind.Identifier, 'string[]')) as ArrayType).getDefaultType())).be.true;
+        });
+
+        it('sets the default type of an array type to a customType', () => {
+            expect(isLazyType((util.tokenToBscType(createToken(TokenKind.Identifier, 'MyKlass[]')) as ArrayType).getDefaultType())).be.true;
+        });
+
+        it('does not return array types or custom types if allowBrighterscriptTypes flag is false', () => {
+            expect(util.tokenToBscType(createToken(TokenKind.Identifier, 'string[]'), false)).be.undefined;
+            expect(util.tokenToBscType(createToken(TokenKind.Identifier, 'SomeKlass'), false)).be.undefined;
+            expect(util.tokenToBscType(createToken(TokenKind.Identifier, 'SomeKlass[]'), false)).be.undefined;
         });
     });
 });

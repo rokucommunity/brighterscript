@@ -3,7 +3,7 @@
 
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { Lexer } from '../../../lexer';
+import { Lexer } from '../../../lexer/Lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { AssignmentStatement } from '../../Statement';
 import { Program } from '../../../Program';
@@ -75,7 +75,7 @@ describe('TemplateStringExpression', () => {
         });
 
         it('uses the proper prefix when aliased package is installed', () => {
-            program.addOrReplaceFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
+            program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
             testTranspile(
                 'a = `${one},${two}`',
                 `a = rokucommunity_bslib_toString(one) + "," + rokucommunity_bslib_toString(two)`

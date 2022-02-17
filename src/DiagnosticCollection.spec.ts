@@ -87,7 +87,7 @@ describe('DiagnosticCollection', () => {
     function removeDiagnostic(filePath: string, message: string) {
         for (let i = 0; i < diagnostics.length; i++) {
             const diagnostic = diagnostics[i];
-            if (diagnostic.file.pathAbsolute === filePath && diagnostic.message === message) {
+            if (diagnostic.file.srcPath === filePath && diagnostic.message === message) {
                 diagnostics.splice(i, 1);
                 return;
             }
@@ -99,7 +99,7 @@ describe('DiagnosticCollection', () => {
         for (const message of messages) {
             diagnostics.push({
                 file: {
-                    pathAbsolute: filePath
+                    srcPath: filePath
                 } as BscFile,
                 range: util.createRange(0, 0, 0, 0),
                 //the code doesn't matter as long as the messages are different, so just enforce unique messages for this test files

@@ -18,9 +18,13 @@ import type {
     ReferenceParams,
     SignatureHelp,
     SignatureHelpParams,
-    CodeActionParams
-} from 'vscode-languageserver';
+    CodeActionParams,
+    SemanticTokensOptions,
+    SemanticTokens,
+    SemanticTokensParams
+} from 'vscode-languageserver/node';
 import {
+    SemanticTokensRequest,
     createConnection,
     DidChangeConfigurationNotification,
     FileChangeType,
@@ -28,7 +32,7 @@ import {
     TextDocuments,
     TextDocumentSyncKind,
     CodeActionKind
-} from 'vscode-languageserver';
+} from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { BsConfig } from './BsConfig';
@@ -41,10 +45,10 @@ import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { isBrsFile } from './astUtils/reflection';
+import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 
 export class LanguageServer {
-    //cast undefined as any to get around strictNullChecks...it's ok in this case
-    private connection: Connection = <any>undefined;
+    private connection = undefined as Connection;
 
     public workspaces = [] as Workspace[];
 
@@ -146,6 +150,9 @@ export class LanguageServer {
 
         this.connection.onCodeAction(this.onCodeAction.bind(this));
 
+        //TODO switch to a more specific connection function call once they actually add it
+        this.connection.onRequest(SemanticTokensRequest.method, this.onFullSemanticTokens.bind(this));
+
         /*
         this.connection.onDidOpenTextDocument((params) => {
              // A text document got opened in VSCode.
@@ -199,6 +206,10 @@ export class LanguageServer {
                 },
                 documentSymbolProvider: true,
                 workspaceSymbolProvider: true,
+                semanticTokensProvider: {
+                    legend: semanticTokensLegend,
+                    full: true
+                } as SemanticTokensOptions,
                 referencesProvider: true,
                 codeActionProvider: {
                     codeActionKinds: [CodeActionKind.Refactor]
@@ -261,7 +272,7 @@ export class LanguageServer {
             await this.waitAllProgramFirstRuns(false);
             workspaceCreatedDeferred.resolve();
             await this.sendDiagnostics();
-        } catch (e) {
+        } catch (e: any) {
             this.sendCriticalFailure(
                 `Critical failure during BrighterScript language server startup.
                 Please file a github issue and include the contents of the 'BrighterScript Language Server' output channel.
@@ -292,7 +303,7 @@ export class LanguageServer {
         for (let workspace of workspaces) {
             try {
                 await workspace.firstRunPromise;
-            } catch (e) {
+            } catch (e: any) {
                 status = 'critical-error';
                 //the first run failed...that won't change unless we reload the workspace, so replace with resolved promise
                 //so we don't show this error again
@@ -318,8 +329,8 @@ export class LanguageServer {
      * Event handler for when the program wants to load file contents.
      * anytime the program wants to load a file, check with our in-memory document cache first
      */
-    private documentFileResolver(pathAbsolute) {
-        let pathUri = URI.file(pathAbsolute).toString();
+    private documentFileResolver(srcPath: string) {
+        let pathUri = URI.file(srcPath).toString();
         let document = this.documents.get(pathUri);
         if (document) {
             return document.getText();
@@ -436,10 +447,13 @@ export class LanguageServer {
         });
     }
 
-    private async createStandaloneFileWorkspace(filePathAbsolute: string) {
+    /**
+     * @param srcPath The absolute path to the source file on disk
+     */
+    private async createStandaloneFileWorkspace(srcPath: string) {
         //skip this workspace if we already have it
-        if (this.standaloneFileWorkspaces[filePathAbsolute]) {
-            return this.standaloneFileWorkspaces[filePathAbsolute];
+        if (this.standaloneFileWorkspaces[srcPath]) {
+            return this.standaloneFileWorkspaces[srcPath];
         }
 
         let builder = new ProgramBuilder();
@@ -451,10 +465,10 @@ export class LanguageServer {
         builder.addFileResolver(this.documentFileResolver.bind(this));
 
         //get the path to the directory where this file resides
-        let cwd = path.dirname(filePathAbsolute);
+        let cwd = path.dirname(srcPath);
 
         //get the closest config file and use most of the settings from that
-        let configFilePath = await util.findClosestConfigFile(filePathAbsolute);
+        let configFilePath = await util.findClosestConfigFile(srcPath);
         let project: BsConfig = {};
         if (configFilePath) {
             project = util.normalizeAndResolveConfig({ project: configFilePath });
@@ -462,8 +476,8 @@ export class LanguageServer {
         //override the rootDir and files array
         project.rootDir = cwd;
         project.files = [{
-            src: filePathAbsolute,
-            dest: path.basename(filePathAbsolute)
+            src: srcPath,
+            dest: path.basename(srcPath)
         }];
 
         let firstRunPromise = builder.run({
@@ -485,14 +499,14 @@ export class LanguageServer {
         let newWorkspace: Workspace = {
             builder: builder,
             firstRunPromise: firstRunPromise,
-            workspacePath: filePathAbsolute,
+            workspacePath: srcPath,
             isFirstRunComplete: false,
             isFirstRunSuccessful: false,
             configFilePath: configFilePath,
             isStandaloneFileWorkspace: true
         };
 
-        this.standaloneFileWorkspaces[filePathAbsolute] = newWorkspace;
+        this.standaloneFileWorkspaces[srcPath] = newWorkspace;
 
         await firstRunPromise.then(() => {
             newWorkspace.isFirstRunComplete = true;
@@ -708,14 +722,14 @@ export class LanguageServer {
         let changes = params.changes.map(x => {
             return {
                 type: x.type,
-                pathAbsolute: s`${URI.parse(x.uri).fsPath}`
+                srcPath: s`${URI.parse(x.uri).fsPath}`
             };
         });
 
-        let keys = changes.map(x => x.pathAbsolute);
+        let keys = changes.map(x => x.srcPath);
 
         //filter the list of changes to only the ones that made it through the debounce unscathed
-        changes = changes.filter(x => keys.includes(x.pathAbsolute));
+        changes = changes.filter(x => keys.includes(x.srcPath));
 
         //if we have changes to work with
         if (changes.length > 0) {
@@ -724,7 +738,7 @@ export class LanguageServer {
             {
                 let workspacesToReload = [] as Workspace[];
                 //get the file paths as a string array
-                let filePaths = changes.map((x) => x.pathAbsolute);
+                let filePaths = changes.map((x) => x.srcPath);
 
                 for (let workspace of workspaces) {
                     if (workspace.configFilePath && filePaths.includes(workspace.configFilePath)) {
@@ -746,7 +760,7 @@ export class LanguageServer {
                 //get only creation items
                 .filter(change => change.type === FileChangeType.Created)
                 //keep only the directories
-                .filter(change => util.isDirectorySync(change.pathAbsolute));
+                .filter(change => util.isDirectorySync(change.srcPath));
 
             //remove the created directories from the changes array (we will add back each of their files next)
             changes = changes.filter(x => !directoryChanges.includes(x));
@@ -754,7 +768,7 @@ export class LanguageServer {
             //look up every file in each of the newly added directories
             const newFileChanges = directoryChanges
                 //take just the path
-                .map(x => x.pathAbsolute)
+                .map(x => x.srcPath)
                 //exclude the roku deploy staging folder
                 .filter(dirPath => !dirPath.includes('.roku-deploy-staging'))
                 //get the files for each folder recursively
@@ -766,14 +780,14 @@ export class LanguageServer {
                     });
                     return files.map(x => {
                         return {
-                            type: FileChangeType.Created as FileChangeType,
-                            pathAbsolute: s`${x}`
+                            type: FileChangeType.Created,
+                            srcPath: s`${x}`
                         };
                     });
                 });
 
             //add the new file changes to the changes array.
-            changes.push(...newFileChanges);
+            changes.push(...newFileChanges as any);
 
             //give every workspace the chance to handle file changes
             await Promise.all(
@@ -788,12 +802,12 @@ export class LanguageServer {
      * any file changes you receive with no unexpected side-effects
      * @param changes
      */
-    public async handleFileChanges(workspace: Workspace, changes: { type: FileChangeType; pathAbsolute: string }[]) {
+    public async handleFileChanges(workspace: Workspace, changes: { type: FileChangeType; srcPath: string }[]) {
         //this loop assumes paths are both file paths and folder paths, which eliminates the need to detect.
         //All functions below can handle being given a file path AND a folder path, and will only operate on the one they are looking for
         let consumeCount = 0;
         await Promise.all(changes.map(async (change) => {
-            await this.keyedThrottler.run(change.pathAbsolute, async () => {
+            await this.keyedThrottler.run(change.srcPath, async () => {
                 consumeCount += await this.handleFileChange(workspace, change) ? 1 : 0;
             });
         }));
@@ -808,7 +822,7 @@ export class LanguageServer {
      * any file changes you receive with no unexpected side-effects
      * @param changes
      */
-    private async handleFileChange(workspace: Workspace, change: { type: FileChangeType; pathAbsolute: string }) {
+    private async handleFileChange(workspace: Workspace, change: { type: FileChangeType; srcPath: string }) {
         const program = workspace.builder.program;
         const options = workspace.builder.options;
         const rootDir = workspace.builder.rootDir;
@@ -816,11 +830,11 @@ export class LanguageServer {
         //deleted
         if (change.type === FileChangeType.Deleted) {
             //try to act on this path as a directory
-            workspace.builder.removeFilesInFolder(change.pathAbsolute);
+            workspace.builder.program.removeFilesInFolder(change.srcPath);
 
             //if this is a file loaded in the program, remove it
-            if (program.hasFile(change.pathAbsolute)) {
-                program.removeFile(change.pathAbsolute);
+            if (program.hasFile(change.srcPath)) {
+                program.removeFile(change.srcPath);
                 return true;
             } else {
                 return false;
@@ -831,16 +845,16 @@ export class LanguageServer {
             // thanks to `onDidChangeWatchedFiles`, we can safely assume that all "Created" changes are file paths, (not directories)
 
             //get the dest path for this file.
-            let destPath = rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir);
+            let destPath = rokuDeploy.getDestPath(change.srcPath, options.files, rootDir);
 
             //if we got a dest path, then the program wants this file
             if (destPath) {
-                program.addOrReplaceFile(
+                program.setFile(
                     {
-                        src: change.pathAbsolute,
-                        dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
+                        src: change.srcPath,
+                        dest: rokuDeploy.getDestPath(change.srcPath, options.files, rootDir)
                     },
-                    await workspace.builder.getFileContents(change.pathAbsolute)
+                    await workspace.builder.getFileContents(change.srcPath)
                 );
                 return true;
             } else {
@@ -849,19 +863,19 @@ export class LanguageServer {
             }
 
             //changed
-        } else if (program.hasFile(change.pathAbsolute)) {
+        } else if (program.hasFile(change.srcPath)) {
             //sometimes "changed" events are emitted on files that were actually deleted,
             //so determine file existance and act accordingly
-            if (await util.pathExists(change.pathAbsolute)) {
-                program.addOrReplaceFile(
+            if (await util.pathExists(change.srcPath)) {
+                program.setFile(
                     {
-                        src: change.pathAbsolute,
-                        dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
+                        src: change.srcPath,
+                        dest: rokuDeploy.getDestPath(change.srcPath, options.files, rootDir)
                     },
-                    await workspace.builder.getFileContents(change.pathAbsolute)
+                    await workspace.builder.getFileContents(change.srcPath)
                 );
             } else {
-                program.removeFile(change.pathAbsolute);
+                program.removeFile(change.srcPath);
             }
             return true;
         }
@@ -872,26 +886,16 @@ export class LanguageServer {
         //ensure programs are initialized
         await this.waitAllProgramFirstRuns();
 
-        let pathAbsolute = util.uriToPath(params.textDocument.uri);
+        let srcPath = util.uriToPath(params.textDocument.uri);
         let workspaces = this.getWorkspaces();
         let hovers = await Promise.all(
             Array.prototype.concat.call([],
-                workspaces.map(async (x) => x.builder.program.getHover(pathAbsolute, params.position))
+                workspaces.map(async (x) => x.builder.program.getHover(srcPath, params.position))
             )
         ) as Hover[];
 
         //return the first non-falsey hover. TODO is there a way to handle multiple hover results?
         let hover = hovers.filter((x) => !!x)[0];
-
-        //TODO improve this to support more than just .brs files
-        if (hover?.contents) {
-            //create fenced code block to get colorization
-            hover.contents = {
-                //TODO - make the program.getHover call figure out what language this is for
-                language: 'brightscript',
-                value: hover.contents as string
-            };
-        }
         return hover;
     }
 
@@ -929,7 +933,7 @@ export class LanguageServer {
                     if (workspace.builder.program.hasFile(filePath)) {
                         let rootDir = workspace.builder.program.options.rootDir ?? workspace.builder.program.options.cwd;
                         let dest = rokuDeploy.getDestPath(filePath, workspace.builder.program.options.files, rootDir);
-                        workspace.builder.program.addOrReplaceFile({
+                        workspace.builder.program.setFile({
                             src: filePath,
                             dest: dest
                         }, documentText);
@@ -938,7 +942,7 @@ export class LanguageServer {
             });
             // validate all workspaces
             await this.validateAllThrottled();
-        } catch (e) {
+        } catch (e: any) {
             this.sendCriticalFailure(`Critical error parsing/ validating ${filePath}: ${e.message}`);
         }
     }
@@ -956,7 +960,7 @@ export class LanguageServer {
             );
 
             await this.sendDiagnostics();
-        } catch (e) {
+        } catch (e: any) {
             this.connection.console.error(e);
             this.sendCriticalFailure(`Critical error validating workspace: ${e.message}${e.stack ?? ''}`);
         }
@@ -990,9 +994,9 @@ export class LanguageServer {
 
         await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
 
-        const pathAbsolute = util.uriToPath(params.textDocument.uri);
+        const srcPath = util.uriToPath(params.textDocument.uri);
         for (const workspace of this.getWorkspaces()) {
-            const file = workspace.builder.program.getFileByPathAbsolute(pathAbsolute);
+            const file = workspace.builder.program.getFile(srcPath);
             if (isBrsFile(file)) {
                 return file.getDocumentSymbols();
             }
@@ -1003,11 +1007,11 @@ export class LanguageServer {
     private async onDefinition(params: TextDocumentPositionParams) {
         await this.waitAllProgramFirstRuns();
 
-        const pathAbsolute = util.uriToPath(params.textDocument.uri);
+        const srcPath = util.uriToPath(params.textDocument.uri);
 
         const results = util.flatMap(
             await Promise.all(this.getWorkspaces().map(workspace => {
-                return workspace.builder.program.getDefinition(pathAbsolute, params.position);
+                return workspace.builder.program.getDefinition(srcPath, params.position);
             })),
             c => c
         );
@@ -1038,7 +1042,7 @@ export class LanguageServer {
                 activeParameter: activeParameter
             };
             return results;
-        } catch (e) {
+        } catch (e: any) {
             this.connection.console.error(`error in onSignatureHelp: ${e.stack ?? e.message ?? e}`);
             return {
                 signatures: [],
@@ -1053,15 +1057,32 @@ export class LanguageServer {
         await this.waitAllProgramFirstRuns();
 
         const position = params.position;
-        const pathAbsolute = util.uriToPath(params.textDocument.uri);
+        const srcPath = util.uriToPath(params.textDocument.uri);
 
         const results = util.flatMap(
             await Promise.all(this.getWorkspaces().map(workspace => {
-                return workspace.builder.program.getReferences(pathAbsolute, position);
+                return workspace.builder.program.getReferences(srcPath, position);
             })),
             c => c
         );
         return results.filter((r) => r);
+    }
+
+    @AddStackToErrorMessage
+    private async onFullSemanticTokens(params: SemanticTokensParams) {
+        await this.waitAllProgramFirstRuns();
+        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        for (const workspace of this.workspaces) {
+            //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
+            if (workspace.builder.program.hasFile(srcPath)) {
+                let semanticTokens = workspace.builder.program.getSemanticTokens(srcPath);
+                return {
+                    data: encodeSemanticTokens(semanticTokens)
+                } as SemanticTokens;
+            }
+        }
     }
 
     private diagnosticCollection = new DiagnosticCollection();
@@ -1088,14 +1109,17 @@ export class LanguageServer {
         }
     }
 
-    private async transpileFile(pathAbsolute: string) {
+    /**
+     * @param srcPath The absolute path to the source file on disk
+     */
+    private async transpileFile(srcPath: string) {
         //wait all program first runs
         await this.waitAllProgramFirstRuns();
         let workspaces = this.getWorkspaces();
         //find the first workspace that has this file
         for (let workspace of workspaces) {
-            if (workspace.builder.program.hasFile(pathAbsolute)) {
-                return workspace.builder.program.getTranspiledFileContents(pathAbsolute);
+            if (workspace.builder.program.hasFile(srcPath)) {
+                return workspace.builder.program.getTranspiledFileContents(srcPath);
             }
         }
     }
@@ -1142,7 +1166,7 @@ function AddStackToErrorMessage(target: any, propertyKey: string, descriptor: Pr
             } else {
                 return result;
             }
-        } catch (e) {
+        } catch (e: any) {
             if (e?.stack) {
                 e.message = e.stack;
             }

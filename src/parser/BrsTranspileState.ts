@@ -1,5 +1,7 @@
 import type { Range } from 'vscode-languageserver';
 import type { BrsFile } from '../files/BrsFile';
+import type { Scope } from '../Scope';
+import type { TypeContext } from '../types/BscType';
 import type { ClassStatement } from './Statement';
 import { TranspileState } from './TranspileState';
 
@@ -7,7 +9,7 @@ export class BrsTranspileState extends TranspileState {
     public constructor(
         public file: BrsFile
     ) {
-        super(file.pathAbsolute, file.program.options);
+        super(file.srcPath, file.program.options);
         this.bslibPrefix = this.file.program.bslibPrefix;
     }
 
@@ -28,4 +30,15 @@ export class BrsTranspileState extends TranspileState {
      * Used by ClassMethodStatements to determine information about their enclosing class
      */
     public classStatement?: ClassStatement;
+
+    /**
+     * Transpilation of LazyTypes needs access to the scope - just pick the first
+     */
+    public get scope(): Scope {
+        return this.file.program.getScopesForFile(this.file)[0];
+    }
+
+    public get typeContext(): TypeContext {
+        return { file: this.file, scope: this.scope };
+    }
 }

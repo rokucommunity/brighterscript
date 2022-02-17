@@ -55,14 +55,18 @@ export class TranspileState {
      * Shorthand for creating a new source node
      */
     public sourceNode(locatable: { range?: Range }, code: string | SourceNode | Array<string | SourceNode>): SourceNode | undefined {
-        return new SourceNode(
-            //convert 0-based range line to 1-based SourceNode line
-            locatable.range.start.line + 1,
-            //range and SourceNode character are both 0-based, so no conversion necessary
-            locatable.range.start.character,
-            this.srcPath,
-            code
-        );
+        if (locatable.range) {
+            return new SourceNode(
+                //convert 0-based range line to 1-based SourceNode line
+                locatable.range.start.line + 1,
+                //range and SourceNode character are both 0-based, so no conversion necessary
+                locatable.range.start.character,
+                this.srcPath,
+                code
+            );
+        } else {
+            return new SourceNode(null, null, this.srcPath, code);
+        }
     }
 
     /**
@@ -84,9 +88,12 @@ export class TranspileState {
     /**
      * Create a SourceNode from a token, accounting for missing range and multi-line text
      */
-    public transpileToken(token: { range?: Range; text: string }) {
+    public transpileToken(token: { range?: Range; text: string }, defaultValue?: string) {
+        if (!token && defaultValue !== undefined) {
+            return new SourceNode(null, null, null, defaultValue);
+        }
         if (!token.range) {
-            return token.text;
+            return new SourceNode(null, null, null, token.text);
         }
         //split multi-line text
         if (token.range.end.line > token.range.start.line) {
