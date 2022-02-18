@@ -7,7 +7,7 @@ import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
 import { Position } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
-import { ParseMode, Parser } from './Parser';
+import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isTypedefProvider, isVoidType } from '../astUtils/reflection';
