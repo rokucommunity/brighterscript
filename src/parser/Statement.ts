@@ -12,7 +12,7 @@ import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isTypedefProvider, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
-import { createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
+import { createClassMethodStatement, createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { SourceNode } from 'source-map';
@@ -1669,15 +1669,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
             }
         }
     }
+
     private getEmptyNewFunction() {
-        let stmt = (Parser.parse(`
-            class UtilClass
-                sub new()
-                end sub
-            end class
-        `, { mode: ParseMode.BrighterScript }).statements[0] as ClassStatement).memberMap.new as ClassMethodStatement;
-        //TODO make locations point to 0,0 (might not matter?)
-        return stmt;
+        return createClassMethodStatement('new', TokenKind.Sub);
     }
 
     /**
