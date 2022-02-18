@@ -1,4 +1,4 @@
-import { isFunctionType, isDynamicType } from '../astUtils/reflection';
+import { isFunctionType, isDynamicType, isGenericFunctionType } from '../astUtils/reflection';
 import type { CallableParam } from '../interfaces';
 import type { BscType, TypeContext } from './BscType';
 import { DynamicType } from './DynamicType';
@@ -56,6 +56,8 @@ export class FunctionType implements BscType {
             }
 
             //made it here, all params and return type are equivalent
+            return true;
+        } else if (isGenericFunctionType(targetType)) {
             return true;
         } else if (isDynamicType(targetType)) {
             return true;

@@ -1704,6 +1704,45 @@ describe('Scope', () => {
             expect(properties).to.contain('foo');
         });
 
+        it('allows `Function` to have zero or more parameters', () => {
+            program.setFile('source/main.brs', `
+                sub callFuncWithParam(func as Function, value)
+                    func(value)
+                end sub
+
+                sub printValue(value)
+                    print value
+                end sub
+
+                sub main()
+                    callFuncWithParam(printValue, "hello world")
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows any functional param to match `as Function` ', () => {
+            program.setFile('source/main.brs', `
+                sub callFuncWithParam(func as Function)
+                    print func
+                end sub
+
+                sub printValue(value)
+                    print value
+                end sub
+
+                sub main()
+                    callFuncWithParam(printValue)
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+
     });
     describe('buildNamespaceLookup', () => {
         it('does not crash when class statement is missing `name` prop', () => {
