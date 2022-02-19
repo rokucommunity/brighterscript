@@ -15,6 +15,7 @@ import type { FunctionType } from './types/FunctionType';
 import { isFloatType } from './astUtils/reflection';
 import type { SymbolTable } from './SymbolTable';
 import type { Scope } from './Scope';
+import { GenericFunctionType } from './types/GenericFunctionType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -1742,6 +1743,27 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('validates a non-function being used where a function is expected as a parameter', () => {
+            program.setFile('source/main.brs', `
+                sub callFuncWithParam(func as Function)
+                    func("helloWorld")
+                end sub
+
+                sub printValue(value)
+                    print value
+                end sub
+
+                sub main()
+                    myString = "hello"
+                    callFuncWithParam(myString) ' error
+                end sub
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('string', (new GenericFunctionType()).toString()).message
+            ]);
+        });
 
     });
     describe('buildNamespaceLookup', () => {
