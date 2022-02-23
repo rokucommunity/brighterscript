@@ -33,7 +33,7 @@ import { SGAttribute } from './parser/SGTypes';
 import { LazyType } from './types/LazyType';
 import type { BscType } from './types/BscType';
 import { ArrayType } from './types/ArrayType';
-import { GenericFunctionType } from './types/GenericFunctionType';
+import { UniversalFunctionType } from './types/UniversalFunctionType';
 
 export class Util {
     public clearConsole() {
@@ -962,7 +962,7 @@ export class Util {
             case TokenKind.FloatLiteral:
                 return new FloatType();
             case TokenKind.Function:
-                return new GenericFunctionType();
+                return new UniversalFunctionType();
             case TokenKind.Integer:
             case TokenKind.IntegerLiteral:
                 return new IntegerType();

@@ -17,7 +17,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile, TokenSymbolLookup } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDynamicType, isEnumStatement, isFunctionStatement, isFunctionType, isGenericFunctionType, isInvalidType, isVariableExpression, isXmlFile } from './astUtils/reflection';
+import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDynamicType, isEnumStatement, isFunctionStatement, isFunctionType, isInvalidType, isUniversalFunctionType, isVariableExpression, isXmlFile } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { BscType, TypeContext } from './types/BscType';
 import { getTypeFromContext } from './types/BscType';
@@ -792,7 +792,10 @@ export class Scope {
                         }
                     }
                 }
-                if (isFunctionType(funcType)) {
+
+                if (isUniversalFunctionType(funcType)) {
+                    // This is a generic function, and it is callable
+                } else if (isFunctionType(funcType)) {
                     // Check for Argument count mismatch.
                     //get min/max parameter count for callable
                     let paramCount = util.getMinMaxParamCount(funcType.params);
@@ -830,8 +833,6 @@ export class Scope {
                             });
                         }
                     }
-                } else if (isGenericFunctionType(symbolTypeInfo.type)) {
-                    // This is a generic function, and it is callable
                 } else if (isInvalidType(symbolTypeInfo.type)) {
                     // TODO TYPES: standard member functions like integer.ToStr() are not detectable yet.
                 } else if (isDynamicType(symbolTypeInfo.type)) {

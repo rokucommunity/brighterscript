@@ -23,7 +23,7 @@ import type { UninitializedType } from '../types/UninitializedType';
 import type { ArrayType } from '../types/ArrayType';
 import type { LazyType } from '../types/LazyType';
 import type { SGInterfaceField, SGInterfaceFunction, SGNode } from '../parser/SGTypes';
-import type { GenericFunctionType } from '../types/GenericFunctionType';
+import type { UniversalFunctionType } from '../types/UniversalFunctionType';
 
 // File reflection
 
@@ -245,10 +245,10 @@ export function isStringType(value: any): value is StringType {
     return value?.constructor.name === 'StringType';
 }
 export function isFunctionType(e: any): e is FunctionType {
-    return e?.constructor.name === 'FunctionType';
+    return e?.constructor.name === 'FunctionType' || e?.constructor.name === 'UniversalFunctionType';
 }
-export function isGenericFunctionType(e: any): e is GenericFunctionType {
-    return e?.constructor.name === 'GenericFunctionType';
+export function isUniversalFunctionType(e: any): e is UniversalFunctionType {
+    return e?.constructor.name === 'UniversalFunctionType';
 }
 export function isBooleanType(e: any): e is BooleanType {
     return e?.constructor.name === 'BooleanType';

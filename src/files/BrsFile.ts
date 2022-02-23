@@ -22,7 +22,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isArrayType, isCustomType, isDynamicType, isObjectType, isPrimitiveType, isRegexLiteralExpression, isGenericFunctionType } from '../astUtils/reflection';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isArrayType, isCustomType, isDynamicType, isObjectType, isPrimitiveType, isRegexLiteralExpression, isUniversalFunctionType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -932,13 +932,6 @@ export class BrsFile {
                 // this is a function, and it is in the start or middle of the chain
                 // the next symbol to check will be the return value of this function
                 symbolType = getTypeFromContext(symbolType.returnType, typeContext);
-                if (tokenFoundCount < tokenChain.length) {
-                    // We still have more tokens, but remember the last known reference
-                    symbolTypeBeforeReference = symbolType;
-                }
-            } else if (isGenericFunctionType(symbolType)) {
-                // this is a generic function passed in as a param. assume it returns dynamic
-                symbolType = new DynamicType();
                 if (tokenFoundCount < tokenChain.length) {
                     // We still have more tokens, but remember the last known reference
                     symbolTypeBeforeReference = symbolType;

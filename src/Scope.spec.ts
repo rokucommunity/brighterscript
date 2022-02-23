@@ -12,10 +12,10 @@ import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import type { OnScopeValidateEvent } from './interfaces';
 import type { FunctionType } from './types/FunctionType';
-import { isFloatType } from './astUtils/reflection';
+import { isFloatType, isUniversalFunctionType } from './astUtils/reflection';
 import type { SymbolTable } from './SymbolTable';
 import type { Scope } from './Scope';
-import { GenericFunctionType } from './types/GenericFunctionType';
+import { UniversalFunctionType } from './types/UniversalFunctionType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -1705,7 +1705,7 @@ describe('Scope', () => {
             expect(properties).to.contain('foo');
         });
 
-        it('allows `Function` to have zero or more parameters', () => {
+        it('allows `Function` param type to have zero or more parameters', () => {
             program.setFile('source/main.brs', `
                 sub callFuncWithParam(func as Function, value)
                     func(value)
@@ -1761,8 +1761,58 @@ describe('Scope', () => {
 
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.argumentTypeMismatch('string', (new GenericFunctionType()).toString()).message
+                DiagnosticMessages.argumentTypeMismatch('string', (new UniversalFunctionType()).toString()).message
             ]);
+        });
+
+        it('allows a function result to be used as a parameter ', () => {
+            program.setFile('source/main.brs', `
+                sub callFuncWithParam(func as Function)
+                    print func
+                end sub
+
+                function getFunc() as Function
+                    return printValue
+                end function
+
+                sub printValue(value)
+                    print value
+                end sub
+
+                sub main()
+                    callFuncWithParam(getFunc())
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows a universal function result to be used as an assignment ', () => {
+            program.setFile('source/main.brs', `
+                sub callFuncWithParam(func as Function)
+                    print func
+                end sub
+
+                function getFunc() as Function
+                    return printValue
+                end function
+
+                sub printValue(value)
+                    print value
+                end sub
+
+                sub main()
+                    someFunc = getFunc()
+                    callFuncWithParam(someFunc)
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainSymbolTable = (program.getScopeByName('source')?.getAllFiles()[0] as BrsFile)?.parser.references.functionStatementLookup.get('main')?.func.symbolTable;
+            expect(mainSymbolTable).not.to.be.undefined;
+            expect(isUniversalFunctionType(mainSymbolTable.getSymbolType('someFunc'))).to.be.true;
         });
 
     });
