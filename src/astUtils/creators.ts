@@ -1,9 +1,10 @@
 import type { Range } from 'vscode-languageserver';
-import type { Token } from '../lexer/Token';
+import type { Identifier, Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Expression, NamespacedVariableNameExpression } from '../parser/Expression';
-import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression } from '../parser/Expression';
+import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../parser/Expression';
 import type { SGAttribute } from '../parser/SGTypes';
+import { Block, ClassMethodStatement } from '../parser/Statement';
 
 /**
  * A range that points to nowhere. Used to give non-null ranges to programmatically-added source code.
@@ -20,22 +21,95 @@ export const interpolatedRange = {
     }
 } as Range;
 
+const tokenDefaults = {
+    [TokenKind.BackTick]: '`',
+    [TokenKind.Backslash]: '\\',
+    [TokenKind.BackslashEqual]: '\\=',
+    [TokenKind.Callfunc]: '@.',
+    [TokenKind.Caret]: '^',
+    [TokenKind.Colon]: ':',
+    [TokenKind.Comma]: ',',
+    [TokenKind.Comment]: '\'',
+    [TokenKind.Dollar]: '$',
+    [TokenKind.Dot]: '.',
+    [TokenKind.EndClass]: 'end class',
+    [TokenKind.EndEnum]: 'end enum',
+    [TokenKind.EndFor]: 'end for',
+    [TokenKind.EndFunction]: 'end function',
+    [TokenKind.EndIf]: 'end if',
+    [TokenKind.EndInterface]: 'end interface',
+    [TokenKind.EndNamespace]: 'end namespace',
+    [TokenKind.EndSub]: 'end sub',
+    [TokenKind.EndTry]: 'end try',
+    [TokenKind.EndWhile]: 'end while',
+    [TokenKind.Equal]: '=',
+    [TokenKind.Greater]: '>',
+    [TokenKind.GreaterEqual]: '>=',
+    [TokenKind.LeftCurlyBrace]: '{',
+    [TokenKind.LeftParen]: '(',
+    [TokenKind.LeftShift]: '<<',
+    [TokenKind.LeftShiftEqual]: '<<=',
+    [TokenKind.LeftSquareBracket]: '[',
+    [TokenKind.Less]: '<',
+    [TokenKind.LessEqual]: '<=',
+    [TokenKind.LessGreater]: '<>',
+    [TokenKind.LineNumLiteral]: 'LINE_NUM',
+    [TokenKind.Minus]: '-',
+    [TokenKind.MinusEqual]: '-=',
+    [TokenKind.MinusMinus]: '--',
+    [TokenKind.Newline]: '\n',
+    [TokenKind.PkgLocationLiteral]: 'PKG_LOCATION',
+    [TokenKind.PkgPathLiteral]: 'PKG_PATH',
+    [TokenKind.Plus]: '+',
+    [TokenKind.PlusEqual]: '+=',
+    [TokenKind.PlusPlus]: '++',
+    [TokenKind.Question]: '?',
+    [TokenKind.QuestionQuestion]: '??',
+    [TokenKind.RightCurlyBrace]: '}',
+    [TokenKind.RightParen]: ')',
+    [TokenKind.RightShift]: '>>',
+    [TokenKind.RightShiftEqual]: '>>=',
+    [TokenKind.RightSquareBracket]: ']',
+    [TokenKind.Semicolon]: ';',
+    [TokenKind.SourceFilePathLiteral]: 'SOURCE_FILE_PATH',
+    [TokenKind.SourceFunctionNameLiteral]: 'SOURCE_FUNCTION_NAME',
+    [TokenKind.SourceLineNumLiteral]: 'SOURCE_LINE_NUM',
+    [TokenKind.SourceLocationLiteral]: 'SOURCE_LOCATION',
+    [TokenKind.Star]: '*',
+    [TokenKind.StarEqual]: '*=',
+    [TokenKind.Tab]: '\t',
+    [TokenKind.TemplateStringExpressionBegin]: '${',
+    [TokenKind.TemplateStringExpressionEnd]: '}',
+    [TokenKind.Whitespace]: ' '
+};
+
 export function createToken<T extends TokenKind>(kind: T, text?: string, range = interpolatedRange): Token & { kind: T } {
     return {
         kind: kind,
-        text: text || kind.toString(),
+        text: text ?? tokenDefaults[kind as string] ?? kind.toString().toLowerCase(),
         isReserved: !text || text === kind.toString(),
         range: range,
         leadingWhitespace: ''
     };
 }
 
-export function createIdentifier(ident: string, range?: Range, namespaceName?: NamespacedVariableNameExpression): VariableExpression {
+export function createIdentifier(name: string, range?: Range): Identifier {
+    return {
+        kind: TokenKind.Identifier,
+        text: name,
+        isReserved: false,
+        range: range,
+        leadingWhitespace: ''
+    };
+}
+
+export function createVariableExpression(ident: string, range?: Range, namespaceName?: NamespacedVariableNameExpression): VariableExpression {
     return new VariableExpression(createToken(TokenKind.Identifier, ident, range), namespaceName);
 }
+
 export function createDottedIdentifier(path: string[], range?: Range, namespaceName?: NamespacedVariableNameExpression): DottedGetExpression {
     const ident = path.pop();
-    const obj = path.length > 1 ? createDottedIdentifier(path, range, namespaceName) : createIdentifier(path[0], range, namespaceName);
+    const obj = path.length > 1 ? createDottedIdentifier(path, range, namespaceName) : createVariableExpression(path[0], range, namespaceName);
     return new DottedGetExpression(obj, createToken(TokenKind.Identifier, ident, range), createToken(TokenKind.Dot, '.', range));
 }
 
@@ -62,6 +136,25 @@ export function createInvalidLiteral(value?: string, range?: Range) {
 }
 export function createBooleanLiteral(value: 'true' | 'false', range?: Range) {
     return new LiteralExpression(createToken(value === 'true' ? TokenKind.True : TokenKind.False, value, range));
+}
+export function createFunctionExpression(kind: TokenKind.Sub | TokenKind.Function) {
+    return new FunctionExpression(
+        [],
+        new Block([], interpolatedRange),
+        createToken(kind),
+        kind === TokenKind.Sub ? createToken(TokenKind.EndSub) : createToken(TokenKind.EndFunction),
+        createToken(TokenKind.LeftParen),
+        createToken(TokenKind.RightParen)
+    );
+}
+
+export function createClassMethodStatement(name: string, kind: TokenKind.Sub | TokenKind.Function = TokenKind.Function) {
+    return new ClassMethodStatement(
+        createToken(TokenKind.Class),
+        createIdentifier(name),
+        createFunctionExpression(kind),
+        null
+    );
 }
 
 export function createCall(callee: Expression, args?: Expression[], namespaceName?: NamespacedVariableNameExpression) {
