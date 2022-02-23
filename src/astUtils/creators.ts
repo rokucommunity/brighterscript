@@ -1,9 +1,9 @@
 import type { Range } from 'vscode-languageserver';
 import type { Identifier, Token } from '../lexer/Token';
+import { SGAttribute, SGComponent, SGInterface, SGInterfaceField, SGInterfaceFunction, SGScript } from '../parser/SGTypes';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Expression, NamespacedVariableNameExpression } from '../parser/Expression';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../parser/Expression';
-import { SGAttribute, SGComponent, SGInterface, SGInterfaceField, SGInterfaceFunction, SGScript } from '../parser/SGTypes';
 import { Block, ClassMethodStatement } from '../parser/Statement';
 
 /**

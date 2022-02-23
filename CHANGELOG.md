@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.45.1](https://github.com/rokucommunity/brighterscript/compare/v0.45.0...v0.45.1) - 2022-02-16
+### Changed
+ - upgrade to  [roku-deploy@3.5.3](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#353---2022-02-16) which fixed a missing typescript definition issue.
+
+
+
 ## [1.0.0-alpha.15](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.14...v1.0.0-alpha.15) - 2022-02-14
 ### Added
  - all changes from [v0.45.0](#0450---2022-02-11)

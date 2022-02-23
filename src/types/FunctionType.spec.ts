@@ -5,6 +5,7 @@ import { FloatType } from './FloatType';
 import { FunctionType } from './FunctionType';
 import { IntegerType } from './IntegerType';
 import { StringType } from './StringType';
+import { UniversalFunctionType } from './UniversalFunctionType';
 import { VoidType } from './VoidType';
 
 describe('FunctionType', () => {
@@ -41,5 +42,11 @@ describe('FunctionType', () => {
         const myFunc = new FunctionType(new IntegerType(), false, [{ name: 'a', type: new StringType(), isOptional: false }, { name: 'b', type: new DynamicType(), isOptional: true }]);
         myFunc.addParameter({ name: 'c', type: new FloatType(), isOptional: true });
         expect(myFunc.params.length).to.equal(3);
+    });
+
+    it('is assignable to a universal function', () => {
+        expect(new FunctionType(new StringType()).setName('myFunc').addParameter('p1', new IntegerType()).isAssignableTo(new UniversalFunctionType()));
+        expect(new FunctionType(new DynamicType()).isAssignableTo(new UniversalFunctionType()));
+        expect(new FunctionType(new VoidType()).isAssignableTo(new UniversalFunctionType()));
     });
 });

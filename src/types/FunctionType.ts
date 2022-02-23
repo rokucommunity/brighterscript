@@ -11,7 +11,8 @@ export class FunctionType implements BscType {
          */
         public isSub = false,
         public params: CallableParam[] = [],
-        public isNew = false
+        public isNew = false,
+        public isVariadic = false
     ) {
     }
 
@@ -40,13 +41,15 @@ export class FunctionType implements BscType {
 
     public isAssignableTo(targetType: BscType, context?: TypeContext) {
         if (isFunctionType(targetType)) {
-            //compare all parameters
-            let len = Math.max(this.params.length, targetType.params.length);
-            for (let i = 0; i < len; i++) {
-                let myParam = this.params[i];
-                let targetParam = targetType.params[i];
-                if (!myParam || !targetParam || !myParam.type.isAssignableTo(targetParam.type, context)) {
-                    return false;
+            if (!targetType.isVariadic) {
+                //compare all parameters
+                let len = Math.max(this.params.length, targetType.params.length);
+                for (let i = 0; i < len; i++) {
+                    let myParam = this.params[i];
+                    let targetParam = targetType.params[i];
+                    if (!myParam || !targetParam || !myParam.type.isAssignableTo(targetParam.type, context)) {
+                        return false;
+                    }
                 }
             }
 
