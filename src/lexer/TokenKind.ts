@@ -45,8 +45,8 @@ export enum TokenKind {
     Identifier = 'Identifier',
     StringLiteral = 'StringLiteral',
     TemplateStringQuasi = 'TemplateStringQuasi',
-    TemplateStringExpressionBegin = 'TemplateStringExpressionBegin',
-    TemplateStringExpressionEnd = 'TemplateStringExpressionEnd',
+    TemplateStringExpressionBegin = 'TemplateStringExpressionBegin', // ${ inside a `
+    TemplateStringExpressionEnd = 'TemplateStringExpressionEnd', // } inside a `
     IntegerLiteral = 'IntegerLiteral',
     FloatLiteral = 'FloatLiteral',
     DoubleLiteral = 'DoubleLiteral',
@@ -159,14 +159,14 @@ export enum TokenKind {
     EndInterface = 'EndInterface',
 
     //brighterscript source literals
-    LineNumLiteral = 'LineNumLiteral',
-    SourceFilePathLiteral = 'SourceFilePathLiteral',
-    SourceLineNumLiteral = 'SourceLineNumLiteral',
-    FunctionNameLiteral = 'FunctionNameLiteral',
-    SourceFunctionNameLiteral = 'SourceFunctionNameLiteral',
-    SourceLocationLiteral = 'SourceLocationLiteral',
-    PkgPathLiteral = 'PkgPathLiteral',
-    PkgLocationLiteral = 'PkgLocationLiteral',
+    LineNumLiteral = 'LineNumLiteral', //LINE_NUM
+    SourceFilePathLiteral = 'SourceFilePathLiteral', // SOURCE_FILE_PATH
+    SourceLineNumLiteral = 'SourceLineNumLiteral', // SOURCE_LINE_NUM
+    FunctionNameLiteral = 'FunctionNameLiteral', // FUNCTION_NAME
+    SourceFunctionNameLiteral = 'SourceFunctionNameLiteral', // SOURCE_FUNCTION_NAME
+    SourceLocationLiteral = 'SourceLocationLiteral', // SOURCE_LOCATION
+    PkgPathLiteral = 'PkgPathLiteral', // PKG_PATH
+    PkgLocationLiteral = 'PkgLocationLiteral', // PKG_LOCATION
 
     //comments
     Comment = 'Comment',
