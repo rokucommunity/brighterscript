@@ -672,10 +672,7 @@ describe('LanguageServer', () => {
             expect(locations.length).to.equal(1);
             const location: Location = locations[0];
             expect(location.uri).to.equal(functionDocument.uri);
-            expect(location.range.start.line).to.equal(2);
-            expect(location.range.start.character).to.equal(20);
-            expect(location.range.end.line).to.equal(4);
-            expect(location.range.end.character).to.equal(32);
+            expect(location.range).to.eql(util.createRange(2, 20, 4, 32));
         });
     });
 
