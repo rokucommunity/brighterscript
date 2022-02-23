@@ -966,6 +966,8 @@ export class Parser {
             func.callExpressions = this.callExpressions;
 
             if (isAnonymous) {
+                //read the range property so it's cached
+                noop(func.range);
                 return func;
             } else {
                 let result = new FunctionStatement(name, func, this.currentNamespaceName);
@@ -1521,6 +1523,8 @@ export class Parser {
             let leftParen = this.advance();
             annotation.call = this.finishCall(leftParen, annotation, false);
         }
+        //read the range property so it's cached
+        noop(annotation.range);
         return annotation;
     }
 
