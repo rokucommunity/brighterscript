@@ -12,9 +12,10 @@ import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import type { OnScopeValidateEvent } from './interfaces';
 import type { FunctionType } from './types/FunctionType';
-import { isFloatType } from './astUtils/reflection';
+import { isFloatType, isUniversalFunctionType } from './astUtils/reflection';
 import type { SymbolTable } from './SymbolTable';
 import type { Scope } from './Scope';
+import { UniversalFunctionType } from './types/UniversalFunctionType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -1702,6 +1703,116 @@ describe('Scope', () => {
             expect(properties).to.contain('obj');
             expect(properties).to.contain('label');
             expect(properties).to.contain('foo');
+        });
+
+        it('allows `Function` param type to have zero or more parameters', () => {
+            program.setFile('source/main.brs', `
+                sub callFuncWithParam(func as Function, value)
+                    func(value)
+                end sub
+
+                sub printValue(value)
+                    print value
+                end sub
+
+                sub main()
+                    callFuncWithParam(printValue, "hello world")
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows any functional param to match `as Function` ', () => {
+            program.setFile('source/main.brs', `
+                sub callFuncWithParam(func as Function)
+                    print func
+                end sub
+
+                sub printValue(value)
+                    print value
+                end sub
+
+                sub main()
+                    callFuncWithParam(printValue)
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates a non-function being used where a function is expected as a parameter', () => {
+            program.setFile('source/main.brs', `
+                sub callFuncWithParam(func as Function)
+                    func("helloWorld")
+                end sub
+
+                sub printValue(value)
+                    print value
+                end sub
+
+                sub main()
+                    myString = "hello"
+                    callFuncWithParam(myString) ' error
+                end sub
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('string', (new UniversalFunctionType()).toString()).message
+            ]);
+        });
+
+        it('allows a function result to be used as a parameter ', () => {
+            program.setFile('source/main.brs', `
+                sub callFuncWithParam(func as Function)
+                    print func
+                end sub
+
+                function getFunc() as Function
+                    return printValue
+                end function
+
+                sub printValue(value)
+                    print value
+                end sub
+
+                sub main()
+                    callFuncWithParam(getFunc())
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows a universal function result to be used as an assignment ', () => {
+            program.setFile('source/main.brs', `
+                sub callFuncWithParam(func as Function)
+                    print func
+                end sub
+
+                function getFunc() as Function
+                    return printValue
+                end function
+
+                sub printValue(value)
+                    print value
+                end sub
+
+                sub main()
+                    someFunc = getFunc()
+                    callFuncWithParam(someFunc)
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainSymbolTable = (program.getScopeByName('source')?.getAllFiles()[0] as BrsFile)?.parser.references.functionStatementLookup.get('main')?.func.symbolTable;
+            expect(mainSymbolTable).not.to.be.undefined;
+            expect(isUniversalFunctionType(mainSymbolTable.getSymbolType('someFunc'))).to.be.true;
         });
 
     });
