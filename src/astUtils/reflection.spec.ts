@@ -5,10 +5,11 @@ import { FunctionExpression, NamespacedVariableNameExpression, BinaryExpression,
 import type { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
 import { isPrintStatement, isIfStatement, isBody, isAssignmentStatement, isBlock, isExpressionStatement, isCommentStatement, isExitForStatement, isExitWhileStatement, isFunctionStatement, isIncrementStatement, isGotoStatement, isLabelStatement, isReturnStatement, isEndStatement, isStopStatement, isForStatement, isForEachStatement, isWhileStatement, isDottedSetStatement, isIndexedSetStatement, isLibraryStatement, isNamespaceStatement, isImportStatement, isExpression, isBinaryExpression, isCallExpression, isFunctionExpression, isNamespacedVariableNameExpression, isDottedGetExpression, isXmlAttributeGetExpression, isIndexedGetExpression, isGroupingExpression, isLiteralExpression, isEscapedCharCodeLiteralExpression, isArrayLiteralExpression, isAALiteralExpression, isUnaryExpression, isVariableExpression, isSourceLiteralExpression, isNewExpression, isCallfuncExpression, isTemplateStringQuasiExpression, isTemplateStringExpression, isTaggedTemplateStringExpression, isBrsFile, isXmlFile, isClassStatement, isStatement, isAnnotationExpression } from './reflection';
-import { createToken, createStringLiteral, createIdentifier, interpolatedRange as range } from './creators';
+import { createToken, createStringLiteral, interpolatedRange as range } from './creators';
 import { Program } from '../Program';
 import { BrsFile } from '../files/BrsFile';
 import { XmlFile } from '../files/XmlFile';
+import { createVariableExpression } from '..';
 
 describe('reflection', () => {
     describe('Files', () => {
@@ -49,7 +50,7 @@ describe('reflection', () => {
         const dottedSet = new DottedSetStatement(expr, ident, expr);
         const indexedSet = new IndexedSetStatement(expr, expr, expr, token, token);
         const library = new LibraryStatement({ library: token, filePath: token });
-        const namespace = new NamespaceStatement(token, new NamespacedVariableNameExpression(createIdentifier('a', range)), body, token);
+        const namespace = new NamespaceStatement(token, new NamespacedVariableNameExpression(createVariableExpression('a', range)), body, token);
         const cls = new ClassStatement(token, ident, [], token);
         const imports = new ImportStatement(token, token);
 
@@ -179,7 +180,7 @@ describe('reflection', () => {
             charCode: 0,
             leadingWhitespace: ''
         };
-        const nsVar = new NamespacedVariableNameExpression(createIdentifier('a', range));
+        const nsVar = new NamespacedVariableNameExpression(createVariableExpression('a', range));
         const binary = new BinaryExpression(expr, token, expr);
         const call = new CallExpression(expr, token, token, [], undefined);
         const fun = new FunctionExpression([], block, token, token, token, token);
