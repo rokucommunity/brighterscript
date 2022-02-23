@@ -794,7 +794,6 @@ export class VariableExpression extends Expression {
     }
 
     public readonly range: Range;
-    public isCalled: boolean;
 
     public getName(parseMode: ParseMode) {
         return parseMode === ParseMode.BrightScript ? this.name.text : this.name.text;
