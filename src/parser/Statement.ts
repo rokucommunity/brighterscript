@@ -340,6 +340,10 @@ export class FunctionStatement extends Statement implements TypedefProvider {
     }
 
     public get range() {
+        return this.cacheRange();
+    }
+
+    public cacheRange() {
         if (!this._range) {
             this._range = this.func?.range ?? this.name.range;
         }
@@ -1129,12 +1133,11 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         this.symbolTable = new SymbolTable(parentSymbolTable);
     }
 
-    /**
-     * The string name for this namespace
-     */
-    public name: string;
-
     public get range() {
+        return this.cacheRange();
+    }
+
+    public cacheRange() {
         if (!this._range) {
             this._range = util.createBoundingRange(
                 this.keyword,
@@ -1146,6 +1149,11 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         return this._range;
     }
     private _range: Range;
+
+    /**
+     * The string name for this namespace
+     */
+    public name: string;
 
     public getName(parseMode: ParseMode) {
         return this.nameExpression.getName(parseMode);
@@ -1951,6 +1959,10 @@ export class ClassMethodStatement extends FunctionStatement {
     }
 
     public get range() {
+        return this.cacheRange();
+    }
+
+    public cacheRange() {
         if (!this._range) {
             this._range = util.createBoundingRange(this.accessModifier, this.override, this.func ?? this.name) ?? interpolatedRange;
         }

@@ -153,10 +153,14 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
     }
 
+    public get range() {
+        return this.cacheRange();
+    }
+
     /**
      * The range of the function
      */
-    public get range() {
+    public cacheRange() {
         if (!this._range) {
             this._range = util.createBoundingRange(
                 this.functionType,
@@ -1229,6 +1233,10 @@ export class AnnotationExpression extends Expression {
     }
 
     public get range() {
+        return this.cacheRange();
+    }
+
+    public cacheRange() {
         if (!this._range) {
             this._range = util.createBoundingRange(this.atToken, this.nameToken, this.call);
         }

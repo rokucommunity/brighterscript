@@ -677,8 +677,8 @@ export class Parser {
 
                     //refer to this statement as parent of the expression
                     functionStatement.func.functionStatement = decl as ClassMethodStatement;
-                    //read the range property so it's cached
-                    noop(decl.range);
+                    //cache the range property so that plugins can't affect it
+                    (decl as ClassMethodStatement).cacheRange();
 
                     //fields
                 } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
@@ -966,15 +966,15 @@ export class Parser {
             func.callExpressions = this.callExpressions;
 
             if (isAnonymous) {
-                //read the range property so it's cached
-                noop(func.range);
+                //cache the range property so that plugins can't affect it
+                func.cacheRange();
                 return func;
             } else {
                 let result = new FunctionStatement(name, func, this.currentNamespaceName);
                 func.functionStatement = result;
                 this._references.functionStatements.push(result);
-                //read the range property so it's cached
-                noop(func.range);
+                //cache the range property so that plugins can't affect it
+                result.cacheRange();
                 return result;
             }
         } finally {
@@ -1402,8 +1402,8 @@ export class Parser {
         result.body = body;
         result.endKeyword = endKeyword;
         this._references.namespaceStatements.push(result);
-        //read the range property so it's cached
-        noop(result.range);
+        //cache the range property so that plugins can't affect it
+        result.cacheRange();
 
         return result;
     }
@@ -1523,8 +1523,8 @@ export class Parser {
             let leftParen = this.advance();
             annotation.call = this.finishCall(leftParen, annotation, false);
         }
-        //read the range property so it's cached
-        noop(annotation.range);
+        //cache the range property so that plugins can't affect it
+        annotation.cacheRange();
         return annotation;
     }
 
@@ -3558,11 +3558,4 @@ export function getBscTypeFromExpression(expression: Expression, functionExpress
     }
     //fallback to dynamic
     return new DynamicType();
-}
-
-/**
- * A function that does nothing
- */
-function noop(...args) {
-
 }
