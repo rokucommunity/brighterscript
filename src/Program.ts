@@ -577,6 +577,8 @@ export class Program {
             if (isXmlFile(file)) {
                 this.unregisterComponent(file);
             }
+            //dispose file
+            file?.dispose();
             this.plugins.emit('afterFileDispose', file);
         }
     }

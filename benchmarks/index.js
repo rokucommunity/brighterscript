@@ -6,7 +6,7 @@ const yargs = require('yargs');
 const readline = require('readline');
 const rimraf = require('rimraf');
 const glob = require('glob');
-
+let nodeParams = ['--max-old-space-size=8192'];
 const tempDir = path.join(__dirname, '.tmp');
 
 class Runner {
@@ -157,7 +157,7 @@ class Runner {
                     cwd: __dirname
                 });
 
-                execSync(`node ${this.profile ? '--prof ' : ''}target-runner.js "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.project}" "${this.quick}"`, {
+                execSync(`node ${nodeParams.join(' ')} ${this.profile ? '--prof ' : ''}target-runner.js "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.project}" "${this.quick}"`, {
                     cwd: path.join(__dirname),
                     stdio: 'inherit'
                 });

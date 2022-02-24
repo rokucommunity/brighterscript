@@ -21,10 +21,8 @@ export class DependencyGraph {
         //sort the dependencies
         dependencies = dependencies?.sort() ?? [];
 
-        let existingNode = this.nodes[key];
-
-        //dispose the existing node
-        existingNode?.dispose();
+        //dispose any existing node
+        this.nodes[key]?.dispose();
 
         //create a new dependency node
         let node = new Node(key, dependencies, this);
@@ -72,6 +70,7 @@ export class DependencyGraph {
      * Remove the item. This will emit an onchange event for all dependent nodes
      */
     public remove(key: string) {
+        this.nodes[key]?.dispose();
         delete this.nodes[key];
         this.emit(key, { sourceKey: key, notifiedKeys: new Set() });
     }
