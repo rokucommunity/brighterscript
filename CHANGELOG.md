@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.45.2](https://github.com/rokucommunity/brighterscript/compare/v0.45.1...v0.45.2) - 2022-02-24
+### Changed
+ - add default token values in creators. [#520](https://github.com/rokucommunity/brighterscript/pull/520)
+### Fixed
+ - significant memory leak [#527](https://github.com/rokucommunity/brighterscript/pull/527)
+ - bug with transpiling empty for loop [#519](https://github.com/rokucommunity/brighterscript/pull/519)
+
+
+
 ## [0.45.1](https://github.com/rokucommunity/brighterscript/compare/v0.45.0...v0.45.1) - 2022-02-16
 ### Changed
  - upgrade to  [roku-deploy@3.5.3](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#353---2022-02-16) which fixed a missing typescript definition issue.
