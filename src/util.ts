@@ -889,29 +889,33 @@ export class Util {
      * righthand range. Returns undefined if none of the items have a range.
      */
     public createBoundingRange(...locatables: Array<{ range?: Range }>) {
-        let leftmost: { range?: Range };
-        let rightmost: { range?: Range };
+        let leftmostRange: Range;
+        let rightmostRange: Range;
 
         for (let i = 0; i < locatables.length; i++) {
             //set the leftmost non-null-range item
             const left = locatables[i];
-            if (!leftmost && left?.range) {
-                leftmost = left;
+            //the range might be a getter, so access it exactly once
+            const leftRange = left?.range;
+            if (!leftmostRange && leftRange) {
+                leftmostRange = leftRange;
             }
 
             //set the rightmost non-null-range item
             const right = locatables[locatables.length - 1 - i];
-            if (!rightmost && right?.range) {
-                rightmost = right;
+            //the range might be a getter, so access it exactly once
+            const rightRange = right?.range;
+            if (!rightmostRange && rightRange) {
+                rightmostRange = rightRange;
             }
 
             //if we have both sides, quit
-            if (leftmost && rightmost) {
+            if (leftmostRange && rightmostRange) {
                 break;
             }
         }
-        if (leftmost) {
-            return this.createRangeFromPositions(leftmost.range.start, rightmost.range.end);
+        if (leftmostRange) {
+            return this.createRangeFromPositions(leftmostRange.start, rightmostRange.end);
         } else {
             return undefined;
         }

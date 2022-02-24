@@ -388,18 +388,19 @@ export class Parser {
     }
 
     private enumMemberStatement() {
-        const statement = new EnumMemberStatement({} as any);
-        statement.tokens.name = this.consume(
+        const tokens = {} as EnumMemberStatement['tokens'];
+        let value: Expression;
+        tokens.name = this.consume(
             DiagnosticMessages.expectedClassFieldIdentifier(),
             TokenKind.Identifier,
             ...AllowedProperties
         ) as Identifier;
         //look for `= SOME_EXPRESSION`
         if (this.check(TokenKind.Equal)) {
-            statement.tokens.equal = this.advance();
-            statement.value = this.expression();
+            tokens.equal = this.advance();
+            value = this.expression();
         }
-        return statement;
+        return new EnumMemberStatement(tokens, value);
     }
 
     /**
@@ -540,17 +541,19 @@ export class Parser {
     }
 
     private enumDeclaration(): EnumStatement {
-        const result = new EnumStatement({} as any, [], this.currentNamespaceName);
         this.warnIfNotBrighterScriptMode('enum declarations');
 
         const parentAnnotations = this.enterAnnotationBlock();
 
-        result.tokens.enum = this.consume(
+        const tokens = {} as EnumStatement['tokens'];
+        const body = [] as EnumStatement['body'];
+
+        tokens.enum = this.consume(
             DiagnosticMessages.expectedKeyword(TokenKind.Enum),
             TokenKind.Enum
         );
 
-        result.tokens.name = this.tryIdentifier();
+        tokens.name = this.tryIdentifier();
 
         this.consumeStatementSeparators();
         //gather up all members
@@ -574,7 +577,7 @@ export class Parser {
 
                 if (decl) {
                     this.consumePendingAnnotations(decl);
-                    result.body.push(decl);
+                    body.push(decl);
                 } else {
                     //we didn't find a declaration...flag tokens until next line
                     this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
@@ -593,7 +596,9 @@ export class Parser {
         }
 
         //consume the final `end interface` token
-        result.tokens.endEnum = this.consumeToken(TokenKind.EndEnum);
+        tokens.endEnum = this.consumeToken(TokenKind.EndEnum);
+
+        const result = new EnumStatement(tokens, body, this.currentNamespaceName);
 
         this._references.enumStatements.push(result);
         this.exitAnnotationBlock(parentAnnotations);
@@ -672,6 +677,8 @@ export class Parser {
 
                     //refer to this statement as parent of the expression
                     functionStatement.func.functionStatement = decl as ClassMethodStatement;
+                    //cache the range property so that plugins can't affect it
+                    (decl as ClassMethodStatement).cacheRange();
 
                     //fields
                 } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
@@ -959,11 +966,15 @@ export class Parser {
             func.callExpressions = this.callExpressions;
 
             if (isAnonymous) {
+                //cache the range property so that plugins can't affect it
+                func.cacheRange();
                 return func;
             } else {
                 let result = new FunctionStatement(name, func, this.currentNamespaceName);
                 func.functionStatement = result;
                 this._references.functionStatements.push(result);
+                //cache the range property so that plugins can't affect it
+                result.cacheRange();
                 return result;
             }
         } finally {
@@ -1391,6 +1402,8 @@ export class Parser {
         result.body = body;
         result.endKeyword = endKeyword;
         this._references.namespaceStatements.push(result);
+        //cache the range property so that plugins can't affect it
+        result.cacheRange();
 
         return result;
     }
@@ -1510,6 +1523,8 @@ export class Parser {
             let leftParen = this.advance();
             annotation.call = this.finishCall(leftParen, annotation, false);
         }
+        //cache the range property so that plugins can't affect it
+        annotation.cacheRange();
         return annotation;
     }
 
@@ -2049,15 +2064,16 @@ export class Parser {
                         ? right
                         : new BinaryExpression(left, operator, right),
                     left.openingSquare,
-                    left.closingSquare
+                    left.closingSquare,
+                    operator
                 );
             } else if (isDottedGetExpression(left)) {
                 const dottedSetStmt = new DottedSetStatement(
                     left.obj,
                     left.name,
-                    operator.kind === TokenKind.Equal
-                        ? right
-                        : new BinaryExpression(left, operator, right)
+                    operator.kind === TokenKind.Equal ? right : new BinaryExpression(left, operator, right),
+                    left.dot,
+                    operator
                 );
                 this._references.dottedSetStatements.push(dottedSetStmt);
                 return dottedSetStmt;
