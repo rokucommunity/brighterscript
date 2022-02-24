@@ -1498,12 +1498,9 @@ export class TypeExpression extends Expression {
         public namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
+        this.range = util.createBoundingRange(this.tokens.type);
     }
-
-    public get range() {
-        const lastToken = this.tokens.type;
-        return util.createRangeFromPositions(this.tokens.type?.range.start, lastToken?.range.end);
-    }
+    public readonly range: Range;
 
     private _type: BscType;
     /**
@@ -1567,8 +1564,9 @@ export class ArrayTypeExpression extends TypeExpression {
         public namespaceName?: NamespacedVariableNameExpression
     ) {
         super({}, namespaceName);
-
+        this.range = util.createBoundingRange(this.bracketTokens.leftBracket, this.bracketTokens.rightBracket, ...this.innerTypes);
     }
+    public readonly range: Range;
 
     /*
      * TODO - Support union types
@@ -1576,11 +1574,6 @@ export class ArrayTypeExpression extends TypeExpression {
     private get defaultTypeExpression() {
         return this.innerTypes[0];
     }
-
-    public get range() {
-        return util.createRangeFromPositions(this.defaultTypeExpression.range.start, this.bracketTokens.rightBracket?.range.end);
-    }
-
     /**
      * Derive a BscType from the type token
      * Returns an array type with the inner types based on the inner type expressions
