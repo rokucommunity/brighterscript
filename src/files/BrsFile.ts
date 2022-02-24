@@ -199,9 +199,7 @@ export class BrsFile {
      * Also notify the dependency graph of our current dependencies so other dependents can be notified.
      */
     public attachDependencyGraph(dependencyGraph: DependencyGraph) {
-        if (this.unsubscribeFromDependencyGraph) {
-            this.unsubscribeFromDependencyGraph();
-        }
+        this.unsubscribeFromDependencyGraph?.();
 
         //event that fires anytime a dependency changes
         this.unsubscribeFromDependencyGraph = dependencyGraph.onchange(this.dependencyGraphKey, () => {
@@ -1789,7 +1787,7 @@ export class BrsFile {
 
     public dispose() {
         this._parser?.dispose();
-        //unsubscribe from any depedency graph subscriptions
+        //unsubscribe from any DependencyGraph subscriptions
         this.unsubscribeFromDependencyGraph?.();
     }
 }
