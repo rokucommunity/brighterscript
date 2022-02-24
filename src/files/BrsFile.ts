@@ -1789,6 +1789,14 @@ export class BrsFile {
         this._parser?.dispose();
         //unsubscribe from any DependencyGraph subscriptions
         this.unsubscribeFromDependencyGraph?.();
+
+        //deleting these properties result in lower memory usage (garbage collection is magic!)
+        delete this.fileContents;
+        delete this._parser;
+        delete this.callables;
+        delete this.functionCalls;
+        delete this._functionScopes;
+        delete this.scopesByFunc;
     }
 }
 
