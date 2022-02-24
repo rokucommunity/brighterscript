@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.16](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.14...v1.0.0-alpha.15) - 2022-02-14
+### Added
+ - all changes from [v0.45.1](#0451---2022-02-16)
+ - all changes from [v0.45.2](#0452---2022-02-24)
+### Fixed
+ - incorrect diagnostics when passing functions as parameters. ([#516](https://github.com/rokucommunity/brighterscript/pull/516), [#517](https://github.com/rokucommunity/brighterscript/pull/517))
+
+
+
 ## [0.45.2](https://github.com/rokucommunity/brighterscript/compare/v0.45.1...v0.45.2) - 2022-02-24
 ### Changed
  - add default token values in creators. [#520](https://github.com/rokucommunity/brighterscript/pull/520)
