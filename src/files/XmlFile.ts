@@ -548,8 +548,7 @@ export class XmlFile {
     }
 
     public dispose() {
-        if (this.unsubscribeFromDependencyGraph) {
-            this.unsubscribeFromDependencyGraph();
-        }
+        //unsubscribe from any depedency graph subscriptions
+        this.unsubscribeFromDependencyGraph?.();
     }
 }

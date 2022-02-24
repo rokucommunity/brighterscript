@@ -1789,6 +1789,8 @@ export class BrsFile {
 
     public dispose() {
         this._parser?.dispose();
+        //unsubscribe from any depedency graph subscriptions
+        this.unsubscribeFromDependencyGraph?.();
     }
 }
 
