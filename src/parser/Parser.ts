@@ -2515,10 +2515,6 @@ export class Parser {
             TokenKind.RightParen
         );
 
-        if (isVariableExpression(callee)) {
-            callee.isCalled = true;
-        }
-
         let expression = new CallExpression(callee, openingParen, closingParen, args, this.currentNamespaceName);
         if (addToCallExpressionList) {
             this.callExpressions.push(expression);

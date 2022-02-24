@@ -6,6 +6,8 @@ const yargs = require('yargs');
 const readline = require('readline');
 const rimraf = require('rimraf');
 const glob = require('glob');
+let nodeParams = ['--max-old-space-size=8192'];
+const tempDir = path.join(__dirname, '.tmp');
 
 class Runner {
     constructor(options) {
@@ -30,7 +32,6 @@ class Runner {
      * Download the necessary files
      */
     downloadFiles() {
-        const tempDir = path.join(__dirname, '.tmp');
         //ensure the `.tmp` folder exists
         fsExtra.ensureDirSync(tempDir);
 
@@ -71,8 +72,15 @@ class Runner {
         const bscDir = path.resolve(__dirname, '..');
         this.buildCurrent();
         console.log('benchmark: pack current brighterscript');
+        //pack the package
         const filename = this.npmSync(['pack'], { cwd: bscDir, stdio: 'pipe' }).stdout.toString().trim();
-        return path.resolve(filename);
+
+        //move the tarball to temp to declutter the outer project
+        let newFilename = path.join(tempDir, path.basename(filename).replace('.tgz', `${Date.now()}.tgz`));
+        fsExtra.renameSync(filename, newFilename);
+
+        //return path to the tarball
+        return path.resolve(newFilename);
     }
 
     /**
@@ -149,7 +157,7 @@ class Runner {
                     cwd: __dirname
                 });
 
-                execSync(`node ${this.profile ? '--prof ' : ''}target-runner.js "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.project}" "${this.quick}"`, {
+                execSync(`node ${nodeParams.join(' ')} ${this.profile ? '--prof ' : ''}target-runner.js "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.project}" "${this.quick}"`, {
                     cwd: path.join(__dirname),
                     stdio: 'inherit'
                 });
