@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.45.3](https://github.com/rokucommunity/brighterscript/compare/v0.45.2...v0.45.3) - 2022-02-25
+### Fixed
+ - source map bug with plugins that used the AST node creation functions depending on `interpolatedRange`. [#528](https://github.com/rokucommunity/brighterscript/pull/528)
+
+
+
 ## [0.45.2](https://github.com/rokucommunity/brighterscript/compare/v0.45.1...v0.45.2) - 2022-02-24
 ### Changed
  - add default token values in creators. [#520](https://github.com/rokucommunity/brighterscript/pull/520)
