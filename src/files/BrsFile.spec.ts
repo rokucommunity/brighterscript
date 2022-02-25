@@ -20,8 +20,8 @@ import PluginInterface from '../PluginInterface';
 import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
-import { Body, ImportStatement } from '../parser/Statement';
-import { createStringLiteral, createToken } from '..';
+import { ImportStatement } from '../parser/Statement';
+import { createToken } from '../astUtils/creators';
 
 let sinon = sinonImport.createSandbox();
 
