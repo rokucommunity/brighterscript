@@ -20,6 +20,8 @@ import PluginInterface from '../PluginInterface';
 import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
+import { ImportStatement } from '../parser/Statement';
+import { createToken } from '../astUtils/creators';
 
 let sinon = sinonImport.createSandbox();
 
@@ -65,6 +67,17 @@ describe('BrsFile', () => {
         expect(new BrsFile(`${rootDir}/source/main.brs`, 'source/main.brs', program).needsTranspiled).to.be.false;
         //BrighterScript
         expect(new BrsFile(`${rootDir}/source/main.bs`, 'source/main.bs', program).needsTranspiled).to.be.true;
+    });
+
+    it('computes new import statements after clearing parser references', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', ``);
+        expect(file.ownScriptImports).to.be.empty;
+        file.parser.ast.statements.push(
+            new ImportStatement(createToken(TokenKind.Import), createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs'))
+        );
+        expect(file.ownScriptImports).to.be.empty;
+        file.parser.invalidateReferences();
+        expect(file.ownScriptImports.map(x => x.text)).to.eql(['pkg:/source/lib.brs']);
     });
 
     it('allows adding diagnostics', () => {

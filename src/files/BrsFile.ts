@@ -112,7 +112,25 @@ export class BrsFile {
     /**
      * files referenced by import statements
      */
-    public ownScriptImports = [] as FileReference[];
+    public get ownScriptImports() {
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const result = this._parser?.references['cache'].getOrAdd('BrsFile_ownScriptImports', () => {
+            const result = [] as FileReference[];
+            for (const statement of this.parser?.references?.importStatements ?? []) {
+                //register import statements
+                if (isImportStatement(statement) && statement.filePathToken) {
+                    result.push({
+                        filePathRange: statement.filePathToken.range,
+                        pkgPath: util.getPkgPathFromTarget(this.pkgPath, statement.filePath),
+                        sourceFile: this,
+                        text: statement.filePathToken?.text
+                    });
+                }
+            }
+            return result;
+        }) ?? [];
+        return result as FileReference[];
+    }
 
     /**
      * Does this file need to be transpiled?
@@ -281,9 +299,6 @@ export class BrsFile {
             //find all places where a sub/function is being called
             this.findFunctionCalls();
 
-            //register all import statements for use in the rest of the program
-            this.registerImports();
-
             //attach this file to every diagnostic
             for (let diagnostic of this.diagnostics) {
                 diagnostic.file = this;
@@ -295,20 +310,6 @@ export class BrsFile {
                 range: util.createRange(0, 0, 0, Number.MAX_VALUE),
                 ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(serializeError(e)))
             });
-        }
-    }
-
-    private registerImports() {
-        for (const statement of this.parser?.references?.importStatements ?? []) {
-            //register import statements
-            if (isImportStatement(statement) && statement.filePathToken) {
-                this.ownScriptImports.push({
-                    filePathRange: statement.filePathToken.range,
-                    pkgPath: util.getPkgPathFromTarget(this.pkgPath, statement.filePath),
-                    sourceFile: this,
-                    text: statement.filePathToken?.text
-                });
-            }
         }
     }
 
