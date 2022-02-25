@@ -1251,10 +1251,11 @@ export class Program {
     /**
      * Transpile a single file and get the result as a string.
      * This does not write anything to the file system.
+     * @param filePath can be a srcPath or a destPath
      */
-    public getTranspiledFileContents(pathAbsolute: string) {
+    public getTranspiledFileContents(filePath: string) {
         return this._getTranspiledFileContents(
-            this.getFile(pathAbsolute)
+            this.getFile(filePath)
         );
     }
 
