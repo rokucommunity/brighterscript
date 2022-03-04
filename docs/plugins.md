@@ -218,10 +218,10 @@ export default function () {
             }
             // visit function statements and validate their name
             file.parser.functionStatements.forEach((fun) => {
-                if (fun.name.text.toLowerCase() === 'main') {
+                if (fun.name.text.includes('_')) {
                     file.addDiagnostics([{
                         code: 9000,
-                        message: 'Use RunUserInterface as entry point',
+                        message: 'Do not use underscores in function names',
                         range: fun.name.range,
                         file
                     }]);
