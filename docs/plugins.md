@@ -247,12 +247,12 @@ end sub
 Here's the plugin:
 
 ```typescript
-import { CompilerPlugin, BeforeFileTranspileEvent, isBrsFile, WalkMode, createVisitor, TokenKind } from './';
+import { CompilerPlugin, BeforeFileTranspileEvent, isBrsFile, WalkMode, createVisitor, TokenKind } from 'brighterscript';
 
 // plugin factory
 export default function () {
     return {
-        name: 'removePrint',
+        name: 'replacePlaceholders',
         // transform AST before transpilation
         beforeFileTranspile: (event: BeforeFileTranspileEvent) => {
             if (isBrsFile(event.file)) {
@@ -273,3 +273,33 @@ export default function () {
 ```
 
 This plugin will search through every LiteralExpression in the entire project, and every time we find a string literal, we will replace `<FIRST_NAME>` with `world`. This is done with the `event.editor` object. `editor` allows you to apply edits to the AST, and then the brighterscript compiler will `undo` those edits once the file has been transpiled.
+
+## Remove Comment and Print Statements
+
+Another common use case is to remove print statements and comments. Here's a plugin to do that:
+```typescript
+import { isBrsFile, createVisitor, WalkMode, BeforeFileTranspileEvent, CompilerPlugin } from 'brighterscript';
+
+export default function plugin() {
+    return {
+        name: 'removeCommentAndPrintStatements',
+        beforeFileTranspile: (event: BeforeFileTranspileEvent) => {
+            if (isBrsFile(event.file)) {
+                // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
+                for (const func of event.file.parser.references.functionExpressions) {
+                    func.body.walk(createVisitor({
+                        PrintStatement: (statement) => {
+                            event.editor.overrideTranspileResult(statement, '');
+                        },
+                        CommentStatement: (statement) => {
+                            event.editor.overrideTranspileResult(statement, '');
+                        }
+                    }), {
+                        walkMode: WalkMode.visitStatements
+                    });
+                }
+            }
+        }
+    } as CompilerPlugin;
+}
+```
