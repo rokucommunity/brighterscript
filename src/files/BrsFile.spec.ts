@@ -2933,16 +2933,7 @@ describe('BrsFile', () => {
                     fn()
                     print "hello"
                 end sub
-            `, `
-                sub main()
-                    sayHello(sub()
-                        \n                    end sub)
-                    \n                end sub
-
-                sub sayHello(fn)
-                    fn()
-                    \n                end sub
-            `);
+            `, 'sub main()\n    sayHello(sub()\n        \n    end sub)\n    \nend sub\n\nsub sayHello(fn)\n    fn()\n    \nend sub', 'none');
         }
 
         it('can use a plugin object which transforms the AST', () => {
