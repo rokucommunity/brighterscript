@@ -438,7 +438,7 @@ export class ProgramBuilder {
     private async loadAllFilesAST() {
         await this.logger.time(LogLevel.log, ['Parsing files'], async () => {
             let errorCount = 0;
-            let files = await this.logger.time(LogLevel.debug, ['getFlePaths'], async () => {
+            let files = await this.logger.time(LogLevel.debug, ['getFilePaths'], async () => {
                 return util.getFilePaths(this.options);
             });
             this.logger.trace('ProgramBuilder.loadAllFilesAST() files:', files);
