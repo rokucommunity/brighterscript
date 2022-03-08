@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.45.4](https://github.com/rokucommunity/brighterscript/compare/v0.45.2...v0.45.3) - 2022-03-08
+### Fixed
+ - bug that wasn't computing ownScriptImports after calling `invalidateReferences()` [#529](https://github.com/rokucommunity/brighterscript/pull/529)
+ - bug with logger.time() not having accurate timings when run asynchronously [#532](https://github.com/rokucommunity/brighterscript/pull/532)
+
+
+
 ## [0.45.3](https://github.com/rokucommunity/brighterscript/compare/v0.45.2...v0.45.3) - 2022-02-25
 ### Fixed
  - source map bug with plugins that used the AST node creation functions depending on `interpolatedRange`. [#528](https://github.com/rokucommunity/brighterscript/pull/528)
