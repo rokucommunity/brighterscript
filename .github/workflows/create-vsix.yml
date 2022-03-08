@@ -38,5 +38,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: 'Hey there! I just built a new version of the vscode extension based on ${{ github.event.pull_request.head.sha }}. You can downloaded the .vsix [here](${{steps.create-vsix.outputs.workflow-url}}) and then follow [these installation instructions](https://github.com/rokucommunity/vscode-brightscript-language#pre-release-versions).'
+              body: 'Hey there! I just built a new version of the vscode extension based on ${{ github.event.pull_request.head.sha }}. You can download the .vsix [here](${{steps.create-vsix.outputs.workflow-url}}) and then follow [these installation instructions](https://github.com/rokucommunity/vscode-brightscript-language#pre-release-versions).'
             })
