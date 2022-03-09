@@ -148,9 +148,9 @@ export function createFunctionExpression(kind: TokenKind.Sub | TokenKind.Functio
     );
 }
 
-export function createClassMethodStatement(name: string, kind: TokenKind.Sub | TokenKind.Function = TokenKind.Function) {
+export function createClassMethodStatement(name: string, kind: TokenKind.Sub | TokenKind.Function = TokenKind.Function, accessModifier?: Token) {
     return new ClassMethodStatement(
-        createToken(TokenKind.Class),
+        accessModifier,
         createIdentifier(name),
         createFunctionExpression(kind),
         null

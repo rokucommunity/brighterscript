@@ -2629,11 +2629,16 @@ describe('BrsFile', () => {
                     end class
                     class Duck extends Bird
                     end class
-                end namespace`, trim`
+                end namespace
+            `, trim`
                 namespace AnimalKingdom
                     class Bird
+                        sub new()
+                        end sub
                     end class
                     class Duck extends AnimalKingdom.Bird
+                        sub new()
+                        end sub
                     end class
                 end namespace
             `);
@@ -2675,6 +2680,8 @@ describe('BrsFile', () => {
                     function getDuck()
                     end function
                     class Duck
+                        sub new()
+                        end sub
                         @anMember
                         @anMember("field")
                         private thing as dynamic
@@ -2737,6 +2744,8 @@ describe('BrsFile', () => {
                 end namespace
             `, trim`
                 class Person
+                    sub new()
+                    end sub
                     public name as string
                     public age as integer
                     public sub getAge() as integer
@@ -2744,12 +2753,26 @@ describe('BrsFile', () => {
                 end class
                 namespace NameA.NameB
                     class Person
+                        sub new()
+                        end sub
                         public name as string
                         public age as integer
                         public sub getAge() as integer
                         end sub
                     end class
                 end namespace
+            `);
+        });
+
+        it('creates constructor properly', () => {
+            testTypedef(`
+                class Parent
+                end class
+            `, trim`
+                class Parent
+                    sub new()
+                    end sub
+                end class
             `);
         });
 
@@ -2761,6 +2784,8 @@ describe('BrsFile', () => {
                 end class
             `, trim`
                 class Human
+                    sub new()
+                    end sub
                     public firstName as dynamic
                     public lastName as string
                 end class
@@ -2809,6 +2834,8 @@ describe('BrsFile', () => {
                 end class
             `, trim`
                 class Human
+                    sub new()
+                    end sub
                     public firstName as string
                     protected middleName as string
                     private lastName as string
@@ -2836,10 +2863,14 @@ describe('BrsFile', () => {
                 end class
             `, trim`
                 class Animal
+                    sub new()
+                    end sub
                     public sub speak()
                     end sub
                 end class
                 class Dog extends Animal
+                    sub new()
+                    end sub
                     public override sub speak()
                     end sub
                 end class
