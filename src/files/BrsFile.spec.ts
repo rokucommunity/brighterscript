@@ -1879,6 +1879,19 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('handles when only some of the statements have `then`', () => {
+            testTranspile(`
+                if true
+                else if true then
+                else if true
+                else if true then
+                    if true then
+                        return true
+                    end if
+                end if
+            `);
+        });
+
         it('retains casing of parameter types', () => {
             function test(type: string) {
                 testTranspile(`
