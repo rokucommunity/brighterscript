@@ -17,6 +17,10 @@ export class BrsFilePreTranspileProcessor {
         const membersByEnum = new Cache<string, Map<string, string>>();
 
         const enumLookup = this.event.file.program.getFirstScopeForFile(this.event.file)?.getEnumMap();
+        //skip this logic if current scope has no enums
+        if ((enumLookup?.size ?? 0) === 0) {
+            return;
+        }
         for (const expression of this.event.file.parser.references.expressions) {
             const parts = util.getAllDottedGetParts(expression)?.map(x => x.toLowerCase());
             if (parts) {
