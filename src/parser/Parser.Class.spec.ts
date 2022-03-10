@@ -199,7 +199,7 @@ describe('parser class', () => {
             expect(field.accessModifier.kind).to.equal(TokenKind.Public);
             expect(field.name.text).to.equal('firstName');
             expect(field.as.text).to.equal('as');
-            expect(field.type.text).to.equal('string');
+            expect(field.type.getText()).to.equal('string');
         });
 
         it('can be solely an identifier', () => {

@@ -990,6 +990,20 @@ describe('Scope', () => {
                 ]);
             });
 
+            it('detects an unknown array type function parameter', () => {
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    sub a(num as integer)
+                    end sub
+
+                    sub b(unknownParam as someType[]) 'error
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'someType[]').message
+                ]);
+            });
+
             it('detects an unknown field parameter type', () => {
                 program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     class myClass

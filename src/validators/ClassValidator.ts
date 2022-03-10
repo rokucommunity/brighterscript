@@ -212,8 +212,8 @@ export class BsClassValidator {
                             if (!childFieldType.isAssignableTo(ancestorMemberType, this.typeContext)) {
                                 //flag incompatible child field type to ancestor field type
 
-                                const childFieldTypeName = childFieldType?.toString(this.typeContext) ?? member.type?.text;
-                                const ancestorFieldTypeName = ancestorMemberType?.toString(this.typeContext) ?? (ancestorAndMember.member as ClassFieldStatement).type.text;
+                                const childFieldTypeName = childFieldType?.toString(this.typeContext) ?? member.type?.getText();
+                                const ancestorFieldTypeName = ancestorMemberType?.toString(this.typeContext) ?? (ancestorAndMember.member as ClassFieldStatement).type.getText();
                                 this.diagnostics.push({
                                     ...DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty(
                                         classStatement.getName(ParseMode.BrighterScript),
@@ -286,7 +286,7 @@ export class BsClassValidator {
             for (let statement of classStatement.body) {
                 if (isClassFieldStatement(statement)) {
                     let fieldType = getTypeFromContext(statement.getType(), this.typeContext);
-                    const fieldTypeName = fieldType?.toString(this.typeContext) ?? statement.type?.text;
+                    const fieldTypeName = fieldType?.toString(this.typeContext) ?? statement.type?.getText();
                     const lowerFieldTypeName = fieldTypeName?.toLowerCase();
 
                     let addDiagnostic = false;
