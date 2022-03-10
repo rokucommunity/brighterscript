@@ -27,9 +27,9 @@ export class BrsFileSemanticTokensProcessor {
             for (const parm of func.parameters) {
                 if (isCustomType(parm.type)) {
                     classes.push({
-                        className: parm.typeToken.text,
+                        className: parm.type.getText(),
                         namespaceName: parm.namespaceName?.getName(ParseMode.BrighterScript),
-                        range: parm.typeToken.range
+                        range: parm.type.range
                     });
                 }
             }

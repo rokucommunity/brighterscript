@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
-import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, AnnotationExpression, FunctionParameterExpression, LiteralExpression } from './Expression';
+import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, AnnotationExpression, FunctionParameterExpression, LiteralExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
@@ -13,7 +13,7 @@ import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isComm
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createClassMethodStatement, createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
-import type { BscType, SymbolContainer } from '../types/BscType';
+import type { SymbolContainer } from '../types/BscType';
 import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
@@ -1384,15 +1384,13 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     constructor(
         nameToken: Identifier,
         asToken: Token,
-        typeToken: Token,
-        public type: BscType
+        public type?: TypeExpression
     ) {
         super();
         this.tokens.name = nameToken;
         this.tokens.as = asToken;
-        this.tokens.type = typeToken;
 
-        this.range = util.createBoundingRange(this.tokens.name, this.tokens.as, this.tokens.type) ?? interpolatedRange;
+        this.range = util.createBoundingRange(this.tokens.name, this.tokens.as, this.type) ?? interpolatedRange;
     }
 
     public readonly range: Range;
@@ -1400,8 +1398,11 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     public tokens = {} as {
         name: Identifier;
         as: Token;
-        type: Token;
     };
+
+    public getType() {
+        return this.type?.type;
+    }
 
     public get name() {
         return this.tokens.name.text;
@@ -1424,10 +1425,10 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         result.push(
             this.tokens.name.text
         );
-        if (this.tokens.type?.text?.length > 0) {
+        if (this.tokens.as && this.type) {
             result.push(
                 ' as ',
-                this.tokens.type.text
+                ...this.type.transpile(state)
             );
         }
         return result;
@@ -1443,8 +1444,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         public params: FunctionParameterExpression[],
         rightParen: Token,
         asToken?: Token,
-        returnTypeToken?: Token,
-        public returnType?: BscType
+        public returnType?: TypeExpression
     ) {
         super();
         this.tokens.functionType = functionTypeToken;
@@ -1452,7 +1452,6 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         this.tokens.leftParen = leftParen;
         this.tokens.rightParen = rightParen;
         this.tokens.as = asToken;
-        this.tokens.returnType = returnTypeToken;
 
         this.range = util.createBoundingRange(
             this.tokens.name,
@@ -1461,7 +1460,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             ...this.params,
             this.tokens.rightParen,
             this.tokens.as,
-            this.tokens.returnType
+            this.returnType
         ) ?? interpolatedRange;
 
     }
@@ -1474,8 +1473,11 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         leftParen: Token;
         rightParen: Token;
         as: Token;
-        returnType: Token;
     };
+
+    public getReturnType() {
+        return this.returnType.type;
+    }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
@@ -1504,20 +1506,20 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             }
             const param = params[i];
             result.push(param.name.text);
-            if (param.typeToken?.text?.length > 0) {
+            if (param.asToken && param.type) {
                 result.push(
                     ' as ',
-                    param.typeToken.text
+                    ...param.type.transpile(state)
                 );
             }
         }
         result.push(
             ')'
         );
-        if (this.tokens.returnType?.text.length > 0) {
+        if (this.returnType) {
             result.push(
                 ' as ',
-                this.tokens.returnType.text
+                ...this.returnType.transpile(state)
             );
         }
         return result;
@@ -2124,7 +2126,7 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
         readonly accessModifier?: Token,
         readonly name?: Identifier,
         readonly as?: Token,
-        readonly type?: Token,
+        readonly type?: TypeExpression,
         readonly equal?: Token,
         readonly initialValue?: Expression,
         readonly namespaceName?: NamespacedVariableNameExpression
@@ -2148,7 +2150,7 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
      */
     getType(parseMode: ParseMode = ParseMode.BrighterScript) {
         if (this.type) {
-            return util.tokenToBscType(this.type, parseMode === ParseMode.BrighterScript, this.namespaceName);
+            return this.type.type;
         } else if (isLiteralExpression(this.initialValue)) {
             return this.initialValue.type;
         } else {
@@ -2188,7 +2190,8 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (this.initialValue && options.walkMode & InternalWalkMode.walkExpressions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'type', visitor, options);
             walk(this, 'initialValue', visitor, options);
         }
     }

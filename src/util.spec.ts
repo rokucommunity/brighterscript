@@ -8,8 +8,7 @@ import { createSandbox } from 'sinon';
 import type { CallableParam } from './interfaces';
 import { IntegerType } from './types/IntegerType';
 import { createToken, TokenKind } from '.';
-import { isBooleanType, isIntegerType, isFloatType, isObjectType, isFunctionType, isStringType, isLazyType, isArrayType, isDynamicType } from './astUtils/reflection';
-import type { ArrayType } from './types/ArrayType';
+import { isBooleanType, isIntegerType, isFloatType, isObjectType, isFunctionType, isStringType, isLazyType, isDynamicType } from './astUtils/reflection';
 
 
 const sinon = createSandbox();
@@ -743,7 +742,7 @@ describe('util', () => {
             expect(isDynamicType(util.tokenToBscType(createToken(TokenKind.Identifier, 'dynamic')))).be.true;
         });
 
-        it('ignores case and whitespace of identifiers', () => {
+        it('ignores case and surrounding whitespace of identifiers', () => {
             expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.Identifier, 'boolean')))).be.true;
             expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.Identifier, 'BOOLEAN')))).be.true;
             expect(isBooleanType(util.tokenToBscType(createToken(TokenKind.Identifier, 'Boolean')))).be.true;
@@ -752,32 +751,6 @@ describe('util', () => {
 
         it('includes custom types, returned as lazy', () => {
             expect(isLazyType(util.tokenToBscType(createToken(TokenKind.Identifier, 'SomeKlass'), true))).be.true;
-        });
-
-        it('gets array types from identifiers', () => {
-            expect(isArrayType(util.tokenToBscType(createToken(TokenKind.Identifier, 'boolean[]')))).be.true;
-            expect(isArrayType(util.tokenToBscType(createToken(TokenKind.Identifier, 'integer[]')))).be.true;
-            expect(isArrayType(util.tokenToBscType(createToken(TokenKind.Identifier, 'string[]')))).be.true;
-        });
-
-        it('gets array types from identifiers with custom types', () => {
-            expect(isArrayType(util.tokenToBscType(createToken(TokenKind.Identifier, 'SomeKlass[]')))).be.true;
-            expect(isArrayType(util.tokenToBscType(createToken(TokenKind.Identifier, 'MyNamespace.Klass[]')))).be.true;
-        });
-
-        it('sets the default type of an array type', () => {
-            expect(isBooleanType((util.tokenToBscType(createToken(TokenKind.Identifier, 'boolean[]')) as ArrayType).getDefaultType())).be.true;
-            expect(isStringType((util.tokenToBscType(createToken(TokenKind.Identifier, 'string[]')) as ArrayType).getDefaultType())).be.true;
-        });
-
-        it('sets the default type of an array type to a customType', () => {
-            expect(isLazyType((util.tokenToBscType(createToken(TokenKind.Identifier, 'MyKlass[]')) as ArrayType).getDefaultType())).be.true;
-        });
-
-        it('does not return array types or custom types if allowBrighterscriptTypes flag is false', () => {
-            expect(util.tokenToBscType(createToken(TokenKind.Identifier, 'string[]'), false)).be.undefined;
-            expect(util.tokenToBscType(createToken(TokenKind.Identifier, 'SomeKlass'), false)).be.undefined;
-            expect(util.tokenToBscType(createToken(TokenKind.Identifier, 'SomeKlass[]'), false)).be.undefined;
         });
     });
 });

@@ -848,7 +848,9 @@ describe('astUtils visitors', () => {
             `, [
                 'ClassStatement',
                 'ClassFieldStatement',
+                'TypeExpression',
                 'ClassFieldStatement',
+                'TypeExpression',
                 'LiteralExpression',
                 'ClassMethodStatement',
                 'FunctionExpression',
