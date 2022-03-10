@@ -1841,6 +1841,61 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('retains casing of parameter types', () => {
+            function test(type: string) {
+                testTranspile(`
+                    sub one(a as ${type}, b as ${type.toUpperCase()}, c as ${type.toLowerCase()})
+                    end sub
+                `);
+            }
+            test('Boolean');
+            test('Double');
+            test('Dynamic');
+            test('Float');
+            test('Integer');
+            test('LongInteger');
+            test('Object');
+            test('String');
+        });
+
+        it('retains casing of return types', () => {
+            function test(type: string) {
+                testTranspile(`
+                    sub one() as ${type}
+                    end sub
+
+                    sub two() as ${type.toLowerCase()}
+                    end sub
+
+                    sub three() as ${type.toUpperCase()}
+                    end sub
+                `);
+            }
+            test('Boolean');
+            test('Double');
+            test('Dynamic');
+            test('Float');
+            test('Integer');
+            test('LongInteger');
+            test('Object');
+            test('String');
+            test('Void');
+        });
+
+        it('retains casing of literal types', () => {
+            function test(type: string) {
+                testTranspile(`
+                    sub main()
+                        thing = ${type}
+                        thing = ${type.toLowerCase()}
+                        thing = ${type.toUpperCase()}
+                    end sub
+                `);
+            }
+            test('Invalid');
+            test('True');
+            test('False');
+        });
         describe('throwStatement', () => {
             it('transpiles properly', () => {
                 testTranspile(`
