@@ -921,60 +921,66 @@ export class Util {
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (token.kind) {
             case TokenKind.Boolean:
+                return new BooleanType(token.text);
             case TokenKind.True:
             case TokenKind.False:
                 return new BooleanType();
             case TokenKind.Double:
+                return new DoubleType(token.text);
             case TokenKind.DoubleLiteral:
                 return new DoubleType();
             case TokenKind.Dynamic:
-                return new DynamicType();
+                return new DynamicType(token.text);
             case TokenKind.Float:
+                return new FloatType(token.text);
             case TokenKind.FloatLiteral:
                 return new FloatType();
             case TokenKind.Function:
                 //TODO should there be a more generic function type without a signature that's assignable to all other function types?
-                return new FunctionType(new DynamicType());
+                return new FunctionType(new DynamicType(token.text));
             case TokenKind.Integer:
+                return new IntegerType(token.text);
             case TokenKind.IntegerLiteral:
                 return new IntegerType();
             case TokenKind.Invalid:
-                return new InvalidType();
+                return new InvalidType(token.text);
             case TokenKind.LongInteger:
+                return new LongIntegerType(token.text);
             case TokenKind.LongIntegerLiteral:
                 return new LongIntegerType();
             case TokenKind.Object:
-                return new ObjectType();
+                return new ObjectType(token.text);
             case TokenKind.String:
+                return new StringType(token.text);
             case TokenKind.StringLiteral:
             case TokenKind.TemplateStringExpressionBegin:
             case TokenKind.TemplateStringExpressionEnd:
             case TokenKind.TemplateStringQuasi:
                 return new StringType();
             case TokenKind.Void:
-                return new VoidType();
+                return new VoidType(token.text);
             case TokenKind.Identifier:
                 switch (token.text.toLowerCase()) {
                     case 'boolean':
-                        return new BooleanType();
+                        return new BooleanType(token.text);
                     case 'double':
-                        return new DoubleType();
+                        return new DoubleType(token.text);
                     case 'float':
-                        return new FloatType();
+                        return new FloatType(token.text);
                     case 'function':
-                        return new FunctionType(new DynamicType());
+                        return new FunctionType(new DynamicType(token.text));
                     case 'integer':
-                        return new IntegerType();
+                        return new IntegerType(token.text);
                     case 'invalid':
-                        return new InvalidType();
+                        return new InvalidType(token.text);
                     case 'longinteger':
-                        return new LongIntegerType();
+                        return new LongIntegerType(token.text);
                     case 'object':
-                        return new ObjectType();
+                        return new ObjectType(token.text);
                     case 'string':
-                        return new StringType();
+                        return new StringType(token.text);
                     case 'void':
-                        return new VoidType();
+                        return new VoidType(token.text);
                 }
                 if (allowCustomType) {
                     return new CustomType(token.text);

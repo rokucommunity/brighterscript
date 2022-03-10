@@ -431,14 +431,12 @@ export class IfStatement extends Statement {
         results.push(' ');
         //conditions
         results.push(...this.condition.transpile(state));
-        results.push(' ');
         //then
         if (this.tokens.then) {
+            results.push(' ');
             results.push(
                 state.transpileToken(this.tokens.then)
             );
-        } else {
-            results.push('then');
         }
         state.lineage.unshift(this);
 
@@ -467,7 +465,8 @@ export class IfStatement extends Statement {
                 state.lineage.shift();
 
                 if (body.length > 0) {
-                    results.push(' ');
+                    //zero or more spaces between the `else` and the `if`
+                    results.push(this.elseBranch.tokens.if.leadingWhitespace);
                     results.push(...body);
 
                     // stop here because chained if will transpile the rest
@@ -1563,6 +1562,8 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     getTypedef(state: BrsTranspileState) {
+        this.ensureConstructorFunctionExists();
+
         const result = [] as TranspileResult;
         for (let annotation of this.annotations ?? []) {
             result.push(
@@ -1675,6 +1676,16 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     /**
+     * Create an empty `new` function if class is missing it (simplifies transpile logic)
+     */
+    private ensureConstructorFunctionExists() {
+        if (!this.getConstructorFunction()) {
+            this.memberMap.new = this.getEmptyNewFunction();
+            this.body = [this.memberMap.new, ...this.body];
+        }
+    }
+
+    /**
      * Determine if the specified field was declared in one of the ancestor classes
      */
     public isFieldDeclaredByAncestor(fieldName: string, ancestors: ClassStatement[]) {
@@ -1693,6 +1704,8 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * without instantiating the parent constructor at that point in time.
      */
     private getTranspiledBuilder(state: BrsTranspileState) {
+        this.ensureConstructorFunctionExists();
+
         let result = [];
         result.push(`function ${this.getBuilderName(this.getName(ParseMode.BrightScript))}()\n`);
         state.blockDepth++;
@@ -1722,12 +1735,6 @@ export class ClassStatement extends Statement implements TypedefProvider {
             state.indent()
         );
         let parentClassIndex = this.getParentClassIndex(state);
-
-        //create empty `new` function if class is missing it (simplifies transpile logic)
-        if (!this.getConstructorFunction()) {
-            this.memberMap.new = this.getEmptyNewFunction();
-            this.body = [this.memberMap.new, ...this.body];
-        }
 
         for (let statement of this.body) {
             //is field statement
@@ -1853,10 +1860,10 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
 export class ClassMethodStatement extends FunctionStatement {
     constructor(
-        readonly accessModifier: Token,
+        public accessModifier: Token,
         name: Identifier,
         func: FunctionExpression,
-        readonly override: Token
+        public override: Token
     ) {
         super(name, func, undefined);
         this.range = util.createRangeFromPositions(

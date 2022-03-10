@@ -1841,6 +1841,112 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('transpiles if statement keywords as provided', () => {
+            const code = `
+                If True Then
+                    Print True
+                Else If True Then
+                    print True
+                Else If False Then
+                    Print False
+                Else
+                    Print False
+                End If
+            `;
+            testTranspile(code);
+            testTranspile(code.toLowerCase());
+            testTranspile(code.toUpperCase());
+        });
+
+        it('does not transpile `then` tokens', () => {
+            const code = `
+                if true
+                    print true
+                else if true
+                    print false
+                end if
+            `;
+            testTranspile(code);
+        });
+
+        it('honors spacing between multi-word tokens', () => {
+            testTranspile(`
+                if true
+                    print true
+                elseif true
+                    print false
+                endif
+            `);
+        });
+
+        it('handles when only some of the statements have `then`', () => {
+            testTranspile(`
+                if true
+                else if true then
+                else if true
+                else if true then
+                    if true then
+                        return true
+                    end if
+                end if
+            `);
+        });
+
+        it('retains casing of parameter types', () => {
+            function test(type: string) {
+                testTranspile(`
+                    sub one(a as ${type}, b as ${type.toUpperCase()}, c as ${type.toLowerCase()})
+                    end sub
+                `);
+            }
+            test('Boolean');
+            test('Double');
+            test('Dynamic');
+            test('Float');
+            test('Integer');
+            test('LongInteger');
+            test('Object');
+            test('String');
+        });
+
+        it('retains casing of return types', () => {
+            function test(type: string) {
+                testTranspile(`
+                    sub one() as ${type}
+                    end sub
+
+                    sub two() as ${type.toLowerCase()}
+                    end sub
+
+                    sub three() as ${type.toUpperCase()}
+                    end sub
+                `);
+            }
+            test('Boolean');
+            test('Double');
+            test('Dynamic');
+            test('Float');
+            test('Integer');
+            test('LongInteger');
+            test('Object');
+            test('String');
+            test('Void');
+        });
+
+        it('retains casing of literal types', () => {
+            function test(type: string) {
+                testTranspile(`
+                    sub main()
+                        thing = ${type}
+                        thing = ${type.toLowerCase()}
+                        thing = ${type.toUpperCase()}
+                    end sub
+                `);
+            }
+            test('Invalid');
+            test('True');
+            test('False');
+        });
         describe('throwStatement', () => {
             it('transpiles properly', () => {
                 testTranspile(`
@@ -2107,30 +2213,6 @@ describe('BrsFile', () => {
                     stuff = []
                 end sub
         `, null, 'trim');
-        });
-
-        it('adds `then` when missing', () => {
-            testTranspile(`
-                sub a()
-                    if true
-                        print "true"
-                    else if true
-                        print "true"
-                    else
-                        print "true"
-                    end if
-                end sub
-            `, `
-                sub a()
-                    if true then
-                        print "true"
-                    else if true then
-                        print "true"
-                    else
-                        print "true"
-                    end if
-                end sub
-            `, 'trim');
         });
 
         it('does not add leading or trailing newlines', () => {
@@ -2629,11 +2711,16 @@ describe('BrsFile', () => {
                     end class
                     class Duck extends Bird
                     end class
-                end namespace`, trim`
+                end namespace
+            `, trim`
                 namespace AnimalKingdom
                     class Bird
+                        sub new()
+                        end sub
                     end class
                     class Duck extends AnimalKingdom.Bird
+                        sub new()
+                        end sub
                     end class
                 end namespace
             `);
@@ -2675,6 +2762,8 @@ describe('BrsFile', () => {
                     function getDuck()
                     end function
                     class Duck
+                        sub new()
+                        end sub
                         @anMember
                         @anMember("field")
                         private thing as dynamic
@@ -2737,6 +2826,8 @@ describe('BrsFile', () => {
                 end namespace
             `, trim`
                 class Person
+                    sub new()
+                    end sub
                     public name as string
                     public age as integer
                     public sub getAge() as integer
@@ -2744,12 +2835,26 @@ describe('BrsFile', () => {
                 end class
                 namespace NameA.NameB
                     class Person
+                        sub new()
+                        end sub
                         public name as string
                         public age as integer
                         public sub getAge() as integer
                         end sub
                     end class
                 end namespace
+            `);
+        });
+
+        it('creates constructor properly', () => {
+            testTypedef(`
+                class Parent
+                end class
+            `, trim`
+                class Parent
+                    sub new()
+                    end sub
+                end class
             `);
         });
 
@@ -2761,6 +2866,8 @@ describe('BrsFile', () => {
                 end class
             `, trim`
                 class Human
+                    sub new()
+                    end sub
                     public firstName as dynamic
                     public lastName as string
                 end class
@@ -2809,6 +2916,8 @@ describe('BrsFile', () => {
                 end class
             `, trim`
                 class Human
+                    sub new()
+                    end sub
                     public firstName as string
                     protected middleName as string
                     private lastName as string
@@ -2836,10 +2945,14 @@ describe('BrsFile', () => {
                 end class
             `, trim`
                 class Animal
+                    sub new()
+                    end sub
                     public sub speak()
                     end sub
                 end class
                 class Dog extends Animal
+                    sub new()
+                    end sub
                     public override sub speak()
                     end sub
                 end class
