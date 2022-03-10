@@ -21,6 +21,11 @@ Those plugins will be loaded by the VSCode extension and can provide live diagno
 }
 ```
 
+### Usage on the CLI
+```bash
+npx bsc --plugins "./scripts/myPlugin.js" "@rokucommunity/bslint" 
+```
+
 ### Programmatic configuration
 
 When using the compiler API directly, plugins can directly reference your code:
