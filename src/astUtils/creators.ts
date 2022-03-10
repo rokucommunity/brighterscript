@@ -7,17 +7,17 @@ import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpress
 import { Block, ClassMethodStatement } from '../parser/Statement';
 
 /**
- * A range that points to nowhere. Used to give non-null ranges to programmatically-added source code.
- * (Hardcoded range to prevent circular dependency issue in `../util.ts`
+ * A range that points to the beginning of the file. Used to give non-null ranges to programmatically-added source code.
+ * (Hardcoded range to prevent circular dependency issue in `../util.ts`)
  */
 export const interpolatedRange = {
     start: {
-        line: -1,
-        character: -1
+        line: 0,
+        character: 0
     },
     end: {
-        line: -1,
-        character: -1
+        line: 0,
+        character: 0
     }
 } as Range;
 
@@ -148,9 +148,9 @@ export function createFunctionExpression(kind: TokenKind.Sub | TokenKind.Functio
     );
 }
 
-export function createClassMethodStatement(name: string, kind: TokenKind.Sub | TokenKind.Function = TokenKind.Function) {
+export function createClassMethodStatement(name: string, kind: TokenKind.Sub | TokenKind.Function = TokenKind.Function, accessModifier?: Token) {
     return new ClassMethodStatement(
-        createToken(TokenKind.Class),
+        accessModifier,
         createIdentifier(name),
         createFunctionExpression(kind),
         null

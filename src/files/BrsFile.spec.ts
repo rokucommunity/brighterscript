@@ -20,12 +20,14 @@ import PluginInterface from '../PluginInterface';
 import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectSymbolTableEquals, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
+import { ImportStatement } from '../parser/Statement';
+import { createToken } from '../astUtils/creators';
 import { VoidType } from '../types/VoidType';
-import { FloatType } from '../types/FloatType';
-import { ObjectType } from '../types/ObjectType';
+import type { FunctionExpression } from '../parser/Expression';
 import { ArrayType } from '../types/ArrayType';
 import type { BscType } from '../types/BscType';
-import type { FunctionExpression } from '../parser/Expression';
+import { FloatType } from '../types/FloatType';
+import { ObjectType } from '../types/ObjectType';
 
 let sinon = sinonImport.createSandbox();
 
@@ -71,6 +73,17 @@ describe('BrsFile', () => {
         expect(new BrsFile(`${rootDir}/source/main.brs`, 'source/main.brs', program).needsTranspiled).to.be.false;
         //BrighterScript
         expect(new BrsFile(`${rootDir}/source/main.bs`, 'source/main.bs', program).needsTranspiled).to.be.true;
+    });
+
+    it('computes new import statements after clearing parser references', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', ``);
+        expect(file.ownScriptImports).to.be.empty;
+        file.parser.ast.statements.push(
+            new ImportStatement(createToken(TokenKind.Import), createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs'))
+        );
+        expect(file.ownScriptImports).to.be.empty;
+        file.parser.invalidateReferences();
+        expect(file.ownScriptImports.map(x => x.text)).to.eql(['pkg:/source/lib.brs']);
     });
 
     it('allows adding diagnostics', () => {
@@ -2724,11 +2737,16 @@ describe('BrsFile', () => {
                     end class
                     class Duck extends Bird
                     end class
-                end namespace`, trim`
+                end namespace
+            `, trim`
                 namespace AnimalKingdom
                     class Bird
+                        sub new()
+                        end sub
                     end class
                     class Duck extends AnimalKingdom.Bird
+                        sub new()
+                        end sub
                     end class
                 end namespace
             `);
@@ -2770,6 +2788,8 @@ describe('BrsFile', () => {
                     function getDuck()
                     end function
                     class Duck
+                        sub new()
+                        end sub
                         @anMember
                         @anMember("field")
                         private thing as dynamic
@@ -2832,6 +2852,8 @@ describe('BrsFile', () => {
                 end namespace
             `, trim`
                 class Person
+                    sub new()
+                    end sub
                     public name as string
                     public age as integer
                     public sub getAge() as integer
@@ -2839,12 +2861,26 @@ describe('BrsFile', () => {
                 end class
                 namespace NameA.NameB
                     class Person
+                        sub new()
+                        end sub
                         public name as string
                         public age as integer
                         public sub getAge() as integer
                         end sub
                     end class
                 end namespace
+            `);
+        });
+
+        it('creates constructor properly', () => {
+            testTypedef(`
+                class Parent
+                end class
+            `, trim`
+                class Parent
+                    sub new()
+                    end sub
+                end class
             `);
         });
 
@@ -2856,6 +2892,8 @@ describe('BrsFile', () => {
                 end class
             `, trim`
                 class Human
+                    sub new()
+                    end sub
                     public firstName as dynamic
                     public lastName as string
                 end class
@@ -2904,6 +2942,8 @@ describe('BrsFile', () => {
                 end class
             `, trim`
                 class Human
+                    sub new()
+                    end sub
                     public firstName as string
                     protected middleName as string
                     private lastName as string
@@ -2931,10 +2971,14 @@ describe('BrsFile', () => {
                 end class
             `, trim`
                 class Animal
+                    sub new()
+                    end sub
                     public sub speak()
                     end sub
                 end class
                 class Dog extends Animal
+                    sub new()
+                    end sub
                     public override sub speak()
                     end sub
                 end class
@@ -3028,16 +3072,7 @@ describe('BrsFile', () => {
                     fn()
                     print "hello"
                 end sub
-            `, `
-                sub main()
-                    sayHello(sub()
-                        \n                    end sub)
-                    \n                end sub
-
-                sub sayHello(fn)
-                    fn()
-                    \n                end sub
-            `);
+            `, 'sub main()\n    sayHello(sub()\n        \n    end sub)\n    \nend sub\n\nsub sayHello(fn)\n    fn()\n    \nend sub', 'none');
         }
 
         it('can use a plugin object which transforms the AST', () => {
