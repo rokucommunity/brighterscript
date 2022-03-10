@@ -61,12 +61,27 @@ BrighterScript adds several new features to the BrightScript language such as Na
   - And if it's not enough, the [plugin API](https://github.com/rokucommunity/brighterscript/blob/master/docs/plugins.md) allows extending the compiler to provide extra diagnostics or transformations.
 
 ## Who uses Brighterscript?
+<br/>
+<p align="center">
+    <a href="https://www.applicaster.com/">
+        <img src="https://user-images.githubusercontent.com/2544493/96571912-377af280-129a-11eb-8295-49eb12e54aeb.png">
+    </a>&nbsp;&nbsp;&nbsp;
+    <a href="https://www.miraclechannel.ca/corcoplus">
+        <img src="https://user-images.githubusercontent.com/2544493/157429644-ba0d574a-d3c3-425f-8e68-98103fb8f707.png">
+    </a>&nbsp;&nbsp;&nbsp;
+    <a href="https://www.nba.com/">
+        <img src="https://user-images.githubusercontent.com/2544493/157430017-a27b62d0-63de-4e87-a6df-8448007bd24d.png">
+    </a>&nbsp;&nbsp;&nbsp;
+    <a href="https://github.com/georgejecook/rooibos/blob/master/docs/index.md">
+        <img src="https://user-images.githubusercontent.com/2544493/157430331-20913e84-f3f4-447a-b093-8780cd1241e6.png">
+    </a>
+</p>
+<br/>
 
-Brighterscript is used by [applicaster](https://www.applicaster.com/), [The miracle channel](https://miraclechannel.ca/corco/), and in open source projects such as [rooibos](https://github.com/georgejecook/rooibos/blob/master/docs/index.md), the [maestro framework](https://github.com/georgejecook/maestro/blob/master/docs/index.md), and more.
 
-The BrighterScript project is used to power the popular [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=rokucommunity.brightscript) VSCode extension, and other tools.
+The BrighterScript project is used to power the popular [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=rokucommunity.brightscript) VSCode extension, the [maestro framework](https://github.com/georgejecook/maestro/blob/master/docs/index.md), and more.
 
-More projects are adopting BrighterScript all the time, from using the new BrighterScript language features to simply using the compiler as part of their build pipeline. Be sure to watch this space!
+[Contact us](https://github.com/rokucommunity/brighterscript/issues/new) if you use BrighterScript on your project and would like your logo listed above. More projects are adopting BrighterScript all the time, from using the new BrighterScript language features to simply using the compiler in their build pipeline.
 
 ## What's with the name?
 The name BrighterScript is a compliment to everything that is great about Roku's awesome BrightScript language. Naming things is hard, and discoverability and recognizability are both very important. Here are the reasons we chose this name:
