@@ -1841,6 +1841,57 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('transpiles if statement keywords as provided', () => {
+            const code = `
+                If True Then
+                    Print True
+                Else If True Then
+                    print True
+                Else If False Then
+                    Print False
+                Else
+                    Print False
+                End If
+            `;
+            testTranspile(code);
+            testTranspile(code.toLowerCase());
+            testTranspile(code.toUpperCase());
+        });
+
+        it('does not transpile `then` tokens', () => {
+            const code = `
+                if true
+                    print true
+                else if true
+                    print false
+                end if
+            `;
+            testTranspile(code);
+        });
+
+        it('honors spacing between multi-word tokens', () => {
+            testTranspile(`
+                if true
+                    print true
+                elseif true
+                    print false
+                endif
+            `);
+        });
+
+        it('handles when only some of the statements have `then`', () => {
+            testTranspile(`
+                if true
+                else if true then
+                else if true
+                else if true then
+                    if true then
+                        return true
+                    end if
+                end if
+            `);
+        });
+
         it('retains casing of parameter types', () => {
             function test(type: string) {
                 testTranspile(`
@@ -2162,30 +2213,6 @@ describe('BrsFile', () => {
                     stuff = []
                 end sub
         `, null, 'trim');
-        });
-
-        it('adds `then` when missing', () => {
-            testTranspile(`
-                sub a()
-                    if true
-                        print "true"
-                    else if true
-                        print "true"
-                    else
-                        print "true"
-                    end if
-                end sub
-            `, `
-                sub a()
-                    if true then
-                        print "true"
-                    else if true then
-                        print "true"
-                    else
-                        print "true"
-                    end if
-                end sub
-            `, 'trim');
         });
 
         it('does not add leading or trailing newlines', () => {

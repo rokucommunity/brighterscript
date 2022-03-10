@@ -431,14 +431,12 @@ export class IfStatement extends Statement {
         results.push(' ');
         //conditions
         results.push(...this.condition.transpile(state));
-        results.push(' ');
         //then
         if (this.tokens.then) {
+            results.push(' ');
             results.push(
                 state.transpileToken(this.tokens.then)
             );
-        } else {
-            results.push('then');
         }
         state.lineage.unshift(this);
 
@@ -467,7 +465,8 @@ export class IfStatement extends Statement {
                 state.lineage.shift();
 
                 if (body.length > 0) {
-                    results.push(' ');
+                    //zero or more spaces between the `else` and the `if`
+                    results.push(this.elseBranch.tokens.if.leadingWhitespace);
                     results.push(...body);
 
                     // stop here because chained if will transpile the rest
