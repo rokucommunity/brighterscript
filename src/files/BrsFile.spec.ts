@@ -1,6 +1,5 @@
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
-import * as path from 'path';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import type { Callable, CommentFlag, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
@@ -22,11 +21,13 @@ import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
 import { ImportStatement } from '../parser/Statement';
 import { createToken } from '../astUtils/creators';
+import * as fsExtra from 'fs-extra';
 
 let sinon = sinonImport.createSandbox();
 
 describe('BrsFile', () => {
-    let rootDir = s`${process.cwd()}/.tmp/rootDir`;
+    let tempDir = s`${process.cwd()}/.tmp`;
+    let rootDir = s`${tempDir}/rootDir`;
     let program: Program;
     let srcPath = s`${rootDir}/source/main.brs`;
     let destPath = 'source/main.brs';
@@ -34,6 +35,7 @@ describe('BrsFile', () => {
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
+        fsExtra.emptyDirSync(tempDir);
         program = new Program({ rootDir: rootDir, sourceMap: true });
         file = new BrsFile(srcPath, destPath, program);
     });
@@ -3033,50 +3035,43 @@ describe('BrsFile', () => {
     });
 
     describe('Plugins', () => {
-        function testPluginTranspile() {
-            testTranspile(`
-                sub main()
-                    sayHello(sub()
-                        print "sub hello"
-                    end sub)
-                    print "something"
-                end sub
-
-                sub sayHello(fn)
-                    fn()
-                    print "hello"
-                end sub
-            `, 'sub main()\n    sayHello(sub()\n        \n    end sub)\n    \nend sub\n\nsub sayHello(fn)\n    fn()\n    \nend sub', 'none');
-        }
-
-        it('can use a plugin object which transforms the AST', () => {
-            program.plugins = new PluginInterface(
-                util.loadPlugins('', [
-                    require.resolve('../examples/plugins/removePrint')
-                ]),
-                new Logger()
-            );
-            testPluginTranspile();
+        let pluginFileName: string;
+        let idx = 1;
+        beforeEach(() => {
+            pluginFileName = `plugin-${idx++}.js`;
+            fsExtra.outputFileSync(s`${tempDir}/plugins/${pluginFileName}`, `
+                function plugin() {
+                    return {
+                        name: 'lower-file-name',
+                        afterFileParse: (evt) => {
+                            evt._customProp = true;
+                        }
+                    };
+                }
+                exports.default = plugin;
+            `);
         });
 
-        it('can load an absolute plugin which transforms the AST', () => {
+        it('can load an absolute plugin which receives callbacks', () => {
             program.plugins = new PluginInterface(
-                util.loadPlugins('', [
-                    path.resolve(process.cwd(), './dist/examples/plugins/removePrint.js')
+                util.loadPlugins(tempDir, [
+                    s`${tempDir}/plugins/${pluginFileName}`
                 ]),
                 new Logger()
             );
-            testPluginTranspile();
+            const file = program.setFile<any>('source/MAIN.brs', '');
+            expect(file._customProp).to.exist;
         });
 
-        it('can load a relative plugin which transforms the AST', () => {
+        it('can load a relative plugin which receives callbacks', () => {
             program.plugins = new PluginInterface(
-                util.loadPlugins(process.cwd(), [
-                    './dist/examples/plugins/removePrint.js'
+                util.loadPlugins(tempDir, [
+                    `./plugins/${pluginFileName}`
                 ]),
                 new Logger()
             );
-            testPluginTranspile();
+            const file = program.setFile<any>('source/MAIN.brs', '');
+            expect(file._customProp).to.exist;
         });
     });
 });
