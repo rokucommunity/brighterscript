@@ -1,6 +1,5 @@
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
-import * as path from 'path';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import type { Callable, CommentFlag, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
