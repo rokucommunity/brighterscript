@@ -75,7 +75,7 @@ export class XmlScope extends Scope {
                     this.topTable.addSymbol(member.id, member.range, member.bscType);
                 }
             }
-            this._memberTable.addSymbol('top', this.xmlFile.fileRange, new ObjectType(this.topTable));
+            this._memberTable.addSymbol('top', this.xmlFile.fileRange, new ObjectType('object', this.topTable));
         }
         return this._memberTable;
     }

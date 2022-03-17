@@ -3,6 +3,10 @@ import type { BscType } from './BscType';
 
 
 export class LongIntegerType implements BscType {
+    constructor(
+        public typeText?: string
+    ) { }
+
     public isAssignableTo(targetType: BscType) {
         return (
             isLongIntegerType(targetType) ||
@@ -25,7 +29,7 @@ export class LongIntegerType implements BscType {
     }
 
     public toString() {
-        return 'longinteger';
+        return this.typeText ?? 'longinteger';
     }
 
     public toTypeString(): string {

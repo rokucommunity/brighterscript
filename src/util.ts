@@ -953,73 +953,79 @@ export class Util {
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (token.kind) {
             case TokenKind.Boolean:
+                return new BooleanType(token.text);
             case TokenKind.True:
             case TokenKind.False:
                 return new BooleanType();
             case TokenKind.Double:
+                return new DoubleType(token.text);
             case TokenKind.DoubleLiteral:
                 return new DoubleType();
             case TokenKind.Dynamic:
-                return new DynamicType();
+                return new DynamicType(token.text);
             case TokenKind.Float:
+                return new FloatType(token.text);
             case TokenKind.FloatLiteral:
                 return new FloatType();
             case TokenKind.Function:
                 return new UniversalFunctionType();
             case TokenKind.Integer:
+                return new IntegerType(token.text);
             case TokenKind.IntegerLiteral:
                 return new IntegerType();
             case TokenKind.Invalid:
-                return new InvalidType();
+                return new InvalidType(token.text);
             case TokenKind.LongInteger:
+                return new LongIntegerType(token.text);
             case TokenKind.LongIntegerLiteral:
                 return new LongIntegerType();
             case TokenKind.Object:
-                return new ObjectType();
+                return new ObjectType(token.text);
             case TokenKind.String:
+                return new StringType(token.text);
             case TokenKind.StringLiteral:
             case TokenKind.TemplateStringExpressionBegin:
             case TokenKind.TemplateStringExpressionEnd:
             case TokenKind.TemplateStringQuasi:
                 return new StringType();
             case TokenKind.Void:
-                return new VoidType();
+                return new VoidType(token.text);
             case TokenKind.Identifier:
                 let typeText = token.text.trim().toLowerCase();
                 let typeClass: BscType;
                 switch (typeText) {
                     case 'boolean':
-                        typeClass = new BooleanType();
+                        typeClass = new BooleanType(token.text);
                         break;
                     case 'double':
-                        typeClass = new DoubleType();
+                        typeClass = new DoubleType(token.text);
                         break;
                     case 'float':
-                        typeClass = new FloatType();
+                        typeClass = new FloatType(token.text);
                         break;
                     case 'function':
-                        typeClass = new FunctionType(new DynamicType());
+                        typeClass = new FunctionType(new DynamicType(token.text));
                         break;
                     case 'integer':
-                        typeClass = new IntegerType();
+                        typeClass = new IntegerType(token.text);
                         break;
                     case 'invalid':
-                        typeClass = new InvalidType();
+                        typeClass = new InvalidType(token.text);
                         break;
                     case 'longinteger':
-                        typeClass = new LongIntegerType();
+                        typeClass = new LongIntegerType(token.text);
                         break;
                     case 'object':
-                        typeClass = new ObjectType();
+                        typeClass = new ObjectType(token.text);
                         break;
                     case 'string':
-                        typeClass = new StringType();
+                        typeClass = new StringType(token.text);
                         break;
                     case 'void':
-                        typeClass = new VoidType();
+                        typeClass = new VoidType(token.text);
                         break;
                     case 'dynamic':
-                        typeClass = new DynamicType();
+                        typeClass = new DynamicType(token.text);
                         break;
                 }
                 if (!typeClass && allowBrighterscriptTypes) {

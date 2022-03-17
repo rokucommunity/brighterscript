@@ -3,6 +3,10 @@ import type { BscType } from './BscType';
 
 
 export class IntegerType implements BscType {
+    constructor(
+        public typeText?: string
+    ) { }
+
     public isAssignableTo(targetType: BscType) {
         return (
             isIntegerType(targetType) ||
@@ -25,7 +29,7 @@ export class IntegerType implements BscType {
     }
 
     public toString() {
-        return 'integer';
+        return this.typeText ?? 'integer';
     }
 
     public toTypeString(): string {

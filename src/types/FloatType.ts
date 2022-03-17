@@ -2,6 +2,10 @@ import { isDynamicType, isIntegerType, isFloatType, isDoubleType, isLongIntegerT
 import type { BscType } from './BscType';
 
 export class FloatType implements BscType {
+    constructor(
+        public typeText?: string
+    ) { }
+
     public isAssignableTo(targetType: BscType) {
         return (
             isFloatType(targetType) ||
@@ -25,7 +29,7 @@ export class FloatType implements BscType {
     }
 
     public toString() {
-        return 'float';
+        return this.typeText ?? 'float';
     }
 
     public toTypeString(): string {

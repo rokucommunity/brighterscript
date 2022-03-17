@@ -3,9 +3,10 @@ import type { SymbolTable } from '../SymbolTable';
 import type { BscType, SymbolContainer } from './BscType';
 
 export class ObjectType implements BscType, SymbolContainer {
-
-
-    constructor(public memberTable: SymbolTable = null) {
+    constructor(
+        public typeText?: string,
+        public memberTable: SymbolTable = null
+    ) {
     }
 
     public isAssignableTo(targetType: BscType) {
@@ -20,7 +21,7 @@ export class ObjectType implements BscType, SymbolContainer {
     }
 
     public toString() {
-        return 'object';
+        return this.typeText ?? 'object';
     }
 
     public toTypeString(): string {

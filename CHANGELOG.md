@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.45.6](https://github.com/rokucommunity/brighterscript/compare/v0.45.5...v0.45.6) - 2022-03-17
+### Changed
+ - upgrade to  [roku-deploy@3.5.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#354---2022-03-17) which fixed significant performance issues during globbing. ([roku-deploy#86](https://github.com/rokucommunity/roku-deploy/pull/86))
+### Fixed
+ - crash when checking for enums to transpile [#539](https://github.com/rokucommunity/brighterscript/pull/539)
+ - Transpile if statements as written [#537](https://github.com/rokucommunity/brighterscript/pull/537)
+ - Keep the original type case when transpiling. [#536](https://github.com/rokucommunity/brighterscript/pull/536)
+ - Show cli usage in plugins documentation
+
+
+
 ## [0.45.5](https://github.com/rokucommunity/brighterscript/compare/v0.45.4...v0.45.5) - 2022-03-10
 ### Fixed
  - bug with typedefs and auto-generated class constructor functions [#535](https://github.com/rokucommunity/brighterscript/pull/535)

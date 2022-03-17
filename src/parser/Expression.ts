@@ -702,7 +702,7 @@ export class AALiteralExpression extends Expression implements SymbolContainer {
 
     public buildSymbolTable() {
         this.symbolTable.clear();
-        this.symbolTable.addSymbol('m', { start: this.open.range.start, end: this.close.range.end }, new ObjectType(this.memberTable));
+        this.symbolTable.addSymbol('m', { start: this.open.range.start, end: this.close.range.end }, new ObjectType('object', this.memberTable));
         for (const element of this.elements) {
             if (isAAMemberExpression(element)) {
                 this.memberTable.addSymbol(element.keyToken.text, element.keyToken.range, getBscTypeFromExpression(element.value, this.functionExpression));

@@ -1,6 +1,5 @@
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
-import * as path from 'path';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import type { Callable, CommentFlag } from '../interfaces';
 import { Program } from '../Program';
@@ -22,17 +21,19 @@ import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
 import { ImportStatement } from '../parser/Statement';
 import { createToken } from '../astUtils/creators';
-import { VoidType } from '../types/VoidType';
+import * as fsExtra from 'fs-extra';
 import type { FunctionExpression } from '../parser/Expression';
 import { ArrayType } from '../types/ArrayType';
 import type { BscType } from '../types/BscType';
 import { FloatType } from '../types/FloatType';
 import { ObjectType } from '../types/ObjectType';
+import { VoidType } from '../types/VoidType';
 
 let sinon = sinonImport.createSandbox();
 
 describe('BrsFile', () => {
-    let rootDir = s`${process.cwd()}/.tmp/rootDir`;
+    let tempDir = s`${process.cwd()}/.tmp`;
+    let rootDir = s`${tempDir}/rootDir`;
     let program: Program;
     let srcPath = s`${rootDir}/source/main.brs`;
     let destPath = 'source/main.brs';
@@ -40,6 +41,7 @@ describe('BrsFile', () => {
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
+        fsExtra.emptyDirSync(tempDir);
         program = new Program({ rootDir: rootDir, sourceMap: true });
         file = new BrsFile(srcPath, destPath, program);
     });
@@ -1949,6 +1951,112 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('transpiles if statement keywords as provided', () => {
+            const code = `
+                If True Then
+                    Print True
+                Else If True Then
+                    print True
+                Else If False Then
+                    Print False
+                Else
+                    Print False
+                End If
+            `;
+            testTranspile(code);
+            testTranspile(code.toLowerCase());
+            testTranspile(code.toUpperCase());
+        });
+
+        it('does not transpile `then` tokens', () => {
+            const code = `
+                if true
+                    print true
+                else if true
+                    print false
+                end if
+            `;
+            testTranspile(code);
+        });
+
+        it('honors spacing between multi-word tokens', () => {
+            testTranspile(`
+                if true
+                    print true
+                elseif true
+                    print false
+                endif
+            `);
+        });
+
+        it('handles when only some of the statements have `then`', () => {
+            testTranspile(`
+                if true
+                else if true then
+                else if true
+                else if true then
+                    if true then
+                        return true
+                    end if
+                end if
+            `);
+        });
+
+        it('retains casing of parameter types', () => {
+            function test(type: string) {
+                testTranspile(`
+                    sub one(a as ${type}, b as ${type.toUpperCase()}, c as ${type.toLowerCase()})
+                    end sub
+                `);
+            }
+            test('Boolean');
+            test('Double');
+            test('Dynamic');
+            test('Float');
+            test('Integer');
+            test('LongInteger');
+            test('Object');
+            test('String');
+        });
+
+        it('retains casing of return types', () => {
+            function test(type: string) {
+                testTranspile(`
+                    sub one() as ${type}
+                    end sub
+
+                    sub two() as ${type.toLowerCase()}
+                    end sub
+
+                    sub three() as ${type.toUpperCase()}
+                    end sub
+                `);
+            }
+            test('Boolean');
+            test('Double');
+            test('Dynamic');
+            test('Float');
+            test('Integer');
+            test('LongInteger');
+            test('Object');
+            test('String');
+            test('Void');
+        });
+
+        it('retains casing of literal types', () => {
+            function test(type: string) {
+                testTranspile(`
+                    sub main()
+                        thing = ${type}
+                        thing = ${type.toLowerCase()}
+                        thing = ${type.toUpperCase()}
+                    end sub
+                `);
+            }
+            test('Invalid');
+            test('True');
+            test('False');
+        });
         describe('throwStatement', () => {
             it('transpiles properly', () => {
                 testTranspile(`
@@ -2215,30 +2323,6 @@ describe('BrsFile', () => {
                     stuff = []
                 end sub
         `, null, 'trim');
-        });
-
-        it('adds `then` when missing', () => {
-            testTranspile(`
-                sub a()
-                    if true
-                        print "true"
-                    else if true
-                        print "true"
-                    else
-                        print "true"
-                    end if
-                end sub
-            `, `
-                sub a()
-                    if true then
-                        print "true"
-                    else if true then
-                        print "true"
-                    else
-                        print "true"
-                    end if
-                end sub
-            `, 'trim');
         });
 
         it('does not add leading or trailing newlines', () => {
@@ -3059,50 +3143,43 @@ describe('BrsFile', () => {
     });
 
     describe('Plugins', () => {
-        function testPluginTranspile() {
-            testTranspile(`
-                sub main()
-                    sayHello(sub()
-                        print "sub hello"
-                    end sub)
-                    print "something"
-                end sub
-
-                sub sayHello(fn)
-                    fn()
-                    print "hello"
-                end sub
-            `, 'sub main()\n    sayHello(sub()\n        \n    end sub)\n    \nend sub\n\nsub sayHello(fn)\n    fn()\n    \nend sub', 'none');
-        }
-
-        it('can use a plugin object which transforms the AST', () => {
-            program.plugins = new PluginInterface(
-                util.loadPlugins('', [
-                    require.resolve('../examples/plugins/removePrint')
-                ]),
-                new Logger()
-            );
-            testPluginTranspile();
+        let pluginFileName: string;
+        let idx = 1;
+        beforeEach(() => {
+            pluginFileName = `plugin-${idx++}.js`;
+            fsExtra.outputFileSync(s`${tempDir}/plugins/${pluginFileName}`, `
+                function plugin() {
+                    return {
+                        name: 'lower-file-name',
+                        afterFileParse: (evt) => {
+                            evt.file._customProp = true;
+                        }
+                    };
+                }
+                exports.default = plugin;
+            `);
         });
 
-        it('can load an absolute plugin which transforms the AST', () => {
+        it('can load an absolute plugin which receives callbacks', () => {
             program.plugins = new PluginInterface(
-                util.loadPlugins('', [
-                    path.resolve(process.cwd(), './dist/examples/plugins/removePrint.js')
+                util.loadPlugins(tempDir, [
+                    s`${tempDir}/plugins/${pluginFileName}`
                 ]),
                 new Logger()
             );
-            testPluginTranspile();
+            const file = program.setFile<any>('source/MAIN.brs', '');
+            expect(file._customProp).to.exist;
         });
 
-        it('can load a relative plugin which transforms the AST', () => {
+        it('can load a relative plugin which receives callbacks', () => {
             program.plugins = new PluginInterface(
-                util.loadPlugins(process.cwd(), [
-                    './dist/examples/plugins/removePrint.js'
+                util.loadPlugins(tempDir, [
+                    `./plugins/${pluginFileName}`
                 ]),
                 new Logger()
             );
-            testPluginTranspile();
+            const file = program.setFile<any>('source/MAIN.brs', '');
+            expect(file._customProp).to.exist;
         });
     });
 

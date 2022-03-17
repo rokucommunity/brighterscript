@@ -3530,7 +3530,7 @@ export function getBscTypeFromExpression(expression: Expression, functionExpress
             return expression.type;
             //Associative array literal
         } else if (isAALiteralExpression(expression)) {
-            return new ObjectType(expression.memberTable);
+            return new ObjectType('object', expression.memberTable);
             //Array literal
         } else if (isArrayLiteralExpression(expression)) {
             const innerTypes = expression.elements.filter((element) => !isCommentStatement(element)).map((element) => {

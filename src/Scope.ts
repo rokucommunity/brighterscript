@@ -578,7 +578,7 @@ export class Scope {
     public get symbolTable() {
         if (!this._symbolTable) {
             this._symbolTable = new SymbolTable(this.getParentScope()?.symbolTable);
-            this._symbolTable.addSymbol('m', null, new ObjectType(this.memberTable));
+            this._symbolTable.addSymbol('m', null, new ObjectType('object', this.memberTable));
             for (let file of this.getOwnFiles()) {
                 if (isBrsFile(file)) {
                     this._symbolTable.mergeSymbolTable(file.parser?.symbolTable);

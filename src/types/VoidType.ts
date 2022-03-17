@@ -2,6 +2,10 @@ import { isVoidType, isDynamicType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 export class VoidType implements BscType {
+    constructor(
+        public typeText?: string
+    ) { }
+
     public isAssignableTo(targetType: BscType) {
         return (
             isVoidType(targetType) ||
@@ -14,9 +18,8 @@ export class VoidType implements BscType {
     }
 
     public toString() {
-        return 'void';
+        return this.typeText ?? 'void';
     }
-
 
     public toTypeString(): string {
         return this.toString();

@@ -2,6 +2,10 @@ import { isCustomType, isDynamicType, isInvalidType, isObjectType } from '../ast
 import type { BscType } from './BscType';
 
 export class InvalidType implements BscType {
+    constructor(
+        public typeText?: string
+    ) { }
+
     public isAssignableTo(targetType: BscType) {
         return (
             isInvalidType(targetType) ||
@@ -14,7 +18,7 @@ export class InvalidType implements BscType {
     }
 
     public toString() {
-        return 'invalid';
+        return this.typeText ?? 'invalid';
     }
 
     public toTypeString(): string {

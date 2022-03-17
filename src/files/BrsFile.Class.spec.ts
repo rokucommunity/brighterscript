@@ -465,7 +465,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.super0_sayHello = instance.sayHello
                     instance.sayHello = function(text)
                         text = "The duck says " + text
-                        if text <> invalid then
+                        if text <> invalid
                             m.super0_sayHello(text)
                         end if
                     end function

@@ -21,7 +21,6 @@ export class UninitializedType implements BscType {
         return 'uninitialized';
     }
 
-
     public toTypeString(): string {
         return this.toString();
     }
