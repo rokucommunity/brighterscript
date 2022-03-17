@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.17](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.16...v1.0.0-alpha.17) - 2022-03-17
+### Added
+ - `TypeExpression` which will eventually make it easier to parse all types across the project. ([#507](https://github.com/rokucommunity/brighterscript/pull/507)
+ - support for multidimensional arrays ([#507](https://github.com/rokucommunity/brighterscript/pull/507)
+ - all changes from [v0.45.3](#0453---2022-02-25)
+ - all changes from [v0.45.4](#0454---2022-03-08)
+ - all changes from [v0.45.5](#0455---2022-03-10)
+ - all changes from [v0.45.6](#0456---2022-03-17)
+
+
+
 ## [0.45.6](https://github.com/rokucommunity/brighterscript/compare/v0.45.5...v0.45.6) - 2022-03-17
 ### Changed
  - upgrade to  [roku-deploy@3.5.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#354---2022-03-17) which fixed significant performance issues during globbing. ([roku-deploy#86](https://github.com/rokucommunity/roku-deploy/pull/86))
@@ -36,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [1.0.0-alpha.16](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.14...v1.0.0-alpha.15) - 2022-02-14
+## [1.0.0-alpha.16](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.15...v1.0.0-alpha.16) - 2022-02-24
 ### Added
  - all changes from [v0.45.1](#0451---2022-02-16)
  - all changes from [v0.45.2](#0452---2022-02-24)
