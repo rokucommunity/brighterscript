@@ -22,7 +22,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isArrayType, isCustomType, isDynamicType, isObjectType, isPrimitiveType, isRegexLiteralExpression } from '../astUtils/reflection';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isTypedFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isArrayType, isCustomType, isDynamicType, isObjectType, isPrimitiveType, isRegexLiteralExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -714,7 +714,7 @@ export class BrsFile {
         return symbolTable.getAllSymbols().map(bscType => {
             return {
                 label: bscType.name,
-                kind: isFunctionType(bscType.type) ? CompletionItemKind.Method : CompletionItemKind.Field
+                kind: isTypedFunctionType(bscType.type) ? CompletionItemKind.Method : CompletionItemKind.Field
             };
         });
     }
@@ -825,7 +825,7 @@ export class BrsFile {
                 currentClassRef = containingClass;
             } else if (currentTokenLower === 'super') {
                 symbolType = getTypeFromContext(containingClass.symbolTable.getSymbolType(currentTokenLower, true, typeContext), typeContext);
-                if (isFunctionType(symbolType)) {
+                if (isTypedFunctionType(symbolType)) {
                     currentClassRef = scope.getParentClass(containingClass);
                 }
             } else if (func?.functionStatement?.name === currentToken) {
@@ -927,7 +927,7 @@ export class BrsFile {
                 tokenFoundCount++;
             }
             symbolTypeBeforeReference = symbolType;
-            if (isFunctionType(symbolType)) {
+            if (isTypedFunctionType(symbolType)) {
                 // this is a function, and it is in the start or middle of the chain
                 // the next symbol to check will be the return value of this function
                 symbolType = getTypeFromContext(symbolType.returnType, typeContext);
@@ -1547,7 +1547,7 @@ export class BrsFile {
                 if (typeTextPair) {
                     let scopeTypeText = '';
 
-                    if (isFunctionType(typeTextPair.type)) {
+                    if (isTypedFunctionType(typeTextPair.type)) {
                         scopeTypeText = typeTextPair.type?.toString(typeContext);
                         //keep unique references to the callables for this function
                         if (!typeTexts.has(scopeTypeText)) {

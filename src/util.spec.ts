@@ -8,7 +8,7 @@ import { createSandbox } from 'sinon';
 import type { CallableParam } from './interfaces';
 import { IntegerType } from './types/IntegerType';
 import { createToken, TokenKind } from '.';
-import { isBooleanType, isIntegerType, isFloatType, isObjectType, isFunctionType, isStringType, isLazyType, isDynamicType } from './astUtils/reflection';
+import { isBooleanType, isIntegerType, isFloatType, isObjectType, isTypedFunctionType, isStringType, isLazyType, isDynamicType } from './astUtils/reflection';
 
 
 const sinon = createSandbox();
@@ -737,7 +737,7 @@ describe('util', () => {
             expect(isIntegerType(util.tokenToBscType(createToken(TokenKind.Identifier, 'integer')))).be.true;
             expect(isFloatType(util.tokenToBscType(createToken(TokenKind.Identifier, 'float')))).be.true;
             expect(isStringType(util.tokenToBscType(createToken(TokenKind.Identifier, 'string')))).be.true;
-            expect(isFunctionType(util.tokenToBscType(createToken(TokenKind.Identifier, 'function')))).be.true;
+            expect(isTypedFunctionType(util.tokenToBscType(createToken(TokenKind.Identifier, 'function')))).be.true;
             expect(isObjectType(util.tokenToBscType(createToken(TokenKind.Identifier, 'object')))).be.true;
             expect(isDynamicType(util.tokenToBscType(createToken(TokenKind.Identifier, 'dynamic')))).be.true;
         });

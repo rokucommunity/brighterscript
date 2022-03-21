@@ -6,7 +6,7 @@ import type { BscFile, TypedefProvider } from '../interfaces';
 import type { InvalidType } from '../types/InvalidType';
 import type { VoidType } from '../types/VoidType';
 import { InternalWalkMode } from './visitors';
-import type { FunctionType } from '../types/FunctionType';
+import type { TypedFunctionType } from '../types/TypedFunctionType';
 import type { StringType } from '../types/StringType';
 import type { BooleanType } from '../types/BooleanType';
 import type { IntegerType } from '../types/IntegerType';
@@ -23,7 +23,7 @@ import type { UninitializedType } from '../types/UninitializedType';
 import type { ArrayType } from '../types/ArrayType';
 import type { LazyType } from '../types/LazyType';
 import type { SGInterfaceField, SGInterfaceFunction, SGNode } from '../parser/SGTypes';
-import type { UniversalFunctionType } from '../types/UniversalFunctionType';
+import type { FunctionType } from '../types/FunctionType';
 
 // File reflection
 
@@ -248,10 +248,10 @@ export function isStringType(value: any): value is StringType {
     return value?.constructor.name === 'StringType';
 }
 export function isFunctionType(e: any): e is FunctionType {
-    return e?.constructor.name === 'FunctionType' || e?.constructor.name === 'UniversalFunctionType';
+    return e?.constructor.name === 'FunctionType';
 }
-export function isUniversalFunctionType(e: any): e is UniversalFunctionType {
-    return e?.constructor.name === 'UniversalFunctionType';
+export function isTypedFunctionType(e: any): e is TypedFunctionType {
+    return e?.constructor.name === 'TypedFunctionType' || e?.constructor.name === 'FunctionType';
 }
 export function isBooleanType(e: any): e is BooleanType {
     return e?.constructor.name === 'BooleanType';

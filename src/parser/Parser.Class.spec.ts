@@ -6,7 +6,7 @@ import { Parser, ParseMode } from './Parser';
 import type { FunctionStatement, AssignmentStatement, ClassFieldStatement } from './Statement';
 import { ClassStatement } from './Statement';
 import { NewExpression } from './Expression';
-import { isBooleanType, isCustomType, isFunctionType, isIntegerType, isStringType } from '../astUtils/reflection';
+import { isBooleanType, isCustomType, isTypedFunctionType, isIntegerType, isStringType } from '../astUtils/reflection';
 
 describe('parser class', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -475,9 +475,9 @@ describe('parser class', () => {
             animalClassStmt.buildSymbolTable();
             dogClassStmt.buildSymbolTable(animalClassStmt);
             expect(dogClassStmt.symbolTable).to.exist;
-            expect(isFunctionType(dogClassStmt.symbolTable.getSymbolType('super'))).to.be.true;
-            expect(isFunctionType(dogClassStmt.memberTable.getSymbolType('woof'))).to.be.true;
-            expect(isFunctionType(dogClassStmt.memberTable.getSymbolType('sleep'))).to.be.true;
+            expect(isTypedFunctionType(dogClassStmt.symbolTable.getSymbolType('super'))).to.be.true;
+            expect(isTypedFunctionType(dogClassStmt.memberTable.getSymbolType('woof'))).to.be.true;
+            expect(isTypedFunctionType(dogClassStmt.memberTable.getSymbolType('sleep'))).to.be.true;
         });
 
         it('adds methods to class statement member symbol table after building', () => {
@@ -495,8 +495,8 @@ describe('parser class', () => {
             let classStatement = parser.statements[0] as ClassStatement;
             classStatement.buildSymbolTable();
             expect(classStatement.memberTable).to.exist;
-            expect(isFunctionType(classStatement.memberTable.getSymbolType('eat'))).to.be.true;
-            expect(isFunctionType(classStatement.memberTable.getSymbolType('sleep'))).to.be.true;
+            expect(isTypedFunctionType(classStatement.memberTable.getSymbolType('eat'))).to.be.true;
+            expect(isTypedFunctionType(classStatement.memberTable.getSymbolType('sleep'))).to.be.true;
         });
 
         it('adds fields to class statement member symbol table after building', () => {

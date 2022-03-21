@@ -5,7 +5,7 @@ import type { FileReference } from '../interfaces';
 import { BooleanType } from '../types/BooleanType';
 import { DynamicType } from '../types/DynamicType';
 import { FloatType } from '../types/FloatType';
-import { FunctionType } from '../types/FunctionType';
+import { TypedFunctionType } from '../types/TypedFunctionType';
 import { IntegerType } from '../types/IntegerType';
 import { LongIntegerType } from '../types/LongIntegerType';
 import { StringType } from '../types/StringType';
@@ -489,8 +489,8 @@ export class SGInterfaceFunction extends SGTag {
         this.setAttributeValue('name', value);
     }
 
-    get functionType(): FunctionType {
-        const funcType = new FunctionType(new DynamicType());
+    get functionType(): TypedFunctionType {
+        const funcType = new TypedFunctionType(new DynamicType());
         funcType.name = this.name;
         // TODO TYPES: Need to get parameter count/type for these functions for @callFunc usage
         return funcType;

@@ -12,7 +12,7 @@ import * as fsExtra from 'fs-extra';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { doesNotThrow } from 'assert';
 import type { Scope } from '../Scope';
-import { isCustomType, isFunctionType } from '../astUtils/reflection';
+import { isCustomType, isTypedFunctionType } from '../astUtils/reflection';
 import type { CustomType } from '../types/CustomType';
 
 let sinon = sinonImport.createSandbox();
@@ -1615,7 +1615,7 @@ describe('BrsFile BrighterScript classes', () => {
                 expect(token.text).to.equal('getA');
                 const func = klassCode.getFunctionExpressionAtPosition(position);
                 let { type, symbolContainer } = klassCode.getSymbolTypeFromToken(token, func, mainScope);
-                expect(isFunctionType(type)).to.be.true;
+                expect(isTypedFunctionType(type)).to.be.true;
                 expect(isCustomType(symbolContainer)).to.be.true;
                 expect((symbolContainer as CustomType).name).to.equal('KlassA');
             });
@@ -1627,7 +1627,7 @@ describe('BrsFile BrighterScript classes', () => {
                 const func = klassCode.getFunctionExpressionAtPosition(position);
                 let { type, symbolContainer } = klassCode.getSymbolTypeFromToken(token, func, mainScope);
                 expect(type).to.exist;
-                expect(isFunctionType(type)).to.be.true;
+                expect(isTypedFunctionType(type)).to.be.true;
                 expect(symbolContainer).to.be.undefined; // getInt() returns integer - no class reference at this point
             });
         });

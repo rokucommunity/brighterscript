@@ -11,11 +11,11 @@ import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import type { OnScopeValidateEvent } from './interfaces';
-import type { FunctionType } from './types/FunctionType';
-import { isFloatType, isUniversalFunctionType } from './astUtils/reflection';
+import type { TypedFunctionType } from './types/TypedFunctionType';
+import { isFloatType, isFunctionType } from './astUtils/reflection';
 import type { SymbolTable } from './SymbolTable';
 import type { Scope } from './Scope';
-import { UniversalFunctionType } from './types/UniversalFunctionType';
+import { FunctionType } from './types/FunctionType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -1264,10 +1264,10 @@ describe('Scope', () => {
             `);
             const sourceSymbols = program.getScopeByName('source').symbolTable;
 
-            expect((sourceSymbols.getSymbolType('funcInt') as FunctionType).returnType.toString()).to.equal('integer');
-            expect((sourceSymbols.getSymbolType('funcStr') as FunctionType).returnType.toString()).to.equal('string');
-            expect((sourceSymbols.getSymbolType('funcBool') as FunctionType).returnType.toString()).to.equal('boolean');
-            expect((sourceSymbols.getSymbolType('funcObject') as FunctionType).returnType.toString()).to.equal('object');
+            expect((sourceSymbols.getSymbolType('funcInt') as TypedFunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('funcStr') as TypedFunctionType).returnType.toString()).to.equal('string');
+            expect((sourceSymbols.getSymbolType('funcBool') as TypedFunctionType).returnType.toString()).to.equal('boolean');
+            expect((sourceSymbols.getSymbolType('funcObject') as TypedFunctionType).returnType.toString()).to.equal('object');
         });
 
         it('adds updates symbol tables on invalidation', () => {
@@ -1283,8 +1283,8 @@ describe('Scope', () => {
 
             let sourceSymbols = program.getScopeByName('source').symbolTable;
 
-            expect((sourceSymbols.getSymbolType('funcInt') as FunctionType).returnType.toString()).to.equal('integer');
-            expect((sourceSymbols.getSymbolType('funcStr') as FunctionType).returnType.toString()).to.equal('string');
+            expect((sourceSymbols.getSymbolType('funcInt') as TypedFunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('funcStr') as TypedFunctionType).returnType.toString()).to.equal('string');
             program.getScopeByName('source').invalidate();
 
             program.setFile('source/file.brs', `
@@ -1296,7 +1296,7 @@ describe('Scope', () => {
 
             expect(sourceSymbols.getSymbolType('funcInt')).to.be.undefined;
             expect(sourceSymbols.getSymbolType('funcStr')).to.be.undefined;
-            expect((sourceSymbols.getSymbolType('funcFloat') as FunctionType).returnType.toString()).to.equal('float');
+            expect((sourceSymbols.getSymbolType('funcFloat') as TypedFunctionType).returnType.toString()).to.equal('float');
         });
 
 
@@ -1320,9 +1320,9 @@ describe('Scope', () => {
             const sourceScope = program.getScopeByName('source');
             const sourceSymbols = sourceScope.symbolTable;
 
-            expect((sourceSymbols.getSymbolType('funcInt') as FunctionType).returnType.toString()).to.equal('integer');
-            expect((sourceSymbols.getSymbolType('Name.Space.nsFunc1') as FunctionType).returnType.toString()).to.equal('integer');
-            expect((sourceSymbols.getSymbolType('Name.Space.nsFunc2') as FunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('funcInt') as TypedFunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('Name.Space.nsFunc1') as TypedFunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('Name.Space.nsFunc2') as TypedFunctionType).returnType.toString()).to.equal('integer');
 
         });
 
@@ -1351,10 +1351,10 @@ describe('Scope', () => {
             const sourceScope = program.getScopeByName('source');
             const mergedNsSymbolTable = sourceScope.namespaceLookup.get('name.space')?.symbolTable;
             expect(mergedNsSymbolTable).not.to.be.undefined;
-            expect((mergedNsSymbolTable.getSymbolType('nsFunc1') as FunctionType).returnType.toString()).to.equal('integer');
-            expect((mergedNsSymbolTable.getSymbolType('nsFunc2') as FunctionType).returnType.toString()).to.equal('integer');
-            expect((mergedNsSymbolTable.getSymbolType('Name.Space.nsFunc2') as FunctionType).returnType.toString()).to.equal('integer');
-            expect((mergedNsSymbolTable.getSymbolType('Name.outerNsFunc') as FunctionType).returnType.toString()).to.equal('string');
+            expect((mergedNsSymbolTable.getSymbolType('nsFunc1') as TypedFunctionType).returnType.toString()).to.equal('integer');
+            expect((mergedNsSymbolTable.getSymbolType('nsFunc2') as TypedFunctionType).returnType.toString()).to.equal('integer');
+            expect((mergedNsSymbolTable.getSymbolType('Name.Space.nsFunc2') as TypedFunctionType).returnType.toString()).to.equal('integer');
+            expect((mergedNsSymbolTable.getSymbolType('Name.outerNsFunc') as TypedFunctionType).returnType.toString()).to.equal('string');
         });
 
         describe('lazytypes and scope', () => {
@@ -1775,7 +1775,7 @@ describe('Scope', () => {
 
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.argumentTypeMismatch('string', (new UniversalFunctionType()).toString()).message
+                DiagnosticMessages.argumentTypeMismatch('string', (new FunctionType()).toString()).message
             ]);
         });
 
@@ -1826,7 +1826,7 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
             const mainSymbolTable = (program.getScopeByName('source')?.getAllFiles()[0] as BrsFile)?.parser.references.functionStatementLookup.get('main')?.func.symbolTable;
             expect(mainSymbolTable).not.to.be.undefined;
-            expect(isUniversalFunctionType(mainSymbolTable.getSymbolType('someFunc'))).to.be.true;
+            expect(isFunctionType(mainSymbolTable.getSymbolType('someFunc'))).to.be.true;
         });
 
     });

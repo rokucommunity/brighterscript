@@ -2,7 +2,7 @@ import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenMo
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { FunctionType } from './types/FunctionType';
+import type { TypedFunctionType } from './types/TypedFunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
@@ -31,7 +31,7 @@ export interface Callable {
      * Is the callable declared as "sub". If falsey, assumed declared as "function"
      */
     isSub: boolean;
-    type: FunctionType;
+    type: TypedFunctionType;
     /**
      * A short description of the callable. Should be a short sentence.
      */

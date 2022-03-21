@@ -15,7 +15,7 @@ import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType, SymbolContainer } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
-import { FunctionType } from '../types/FunctionType';
+import { TypedFunctionType } from '../types/TypedFunctionType';
 import { ObjectType } from '../types/ObjectType';
 import { ArrayType } from '../types/ArrayType';
 
@@ -283,8 +283,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
     }
 
-    getFunctionType(): FunctionType {
-        let functionType = new FunctionType(this.getReturnType());
+    getFunctionType(): TypedFunctionType {
+        let functionType = new TypedFunctionType(this.getReturnType());
         functionType.isSub = this.functionType.text === 'sub';
         for (let param of this.parameters) {
             functionType.addParameter(param.name.text, param.getType(), param.isOptional);

@@ -15,7 +15,7 @@ import { SourceNode } from 'source-map';
 import { BrsFile } from '../files/BrsFile';
 import { Program } from '../Program';
 import { SymbolTable } from '../SymbolTable';
-import { FunctionType } from '../types/FunctionType';
+import { TypedFunctionType } from '../types/TypedFunctionType';
 import { LazyType } from '../types/LazyType';
 import { IntegerType } from '../types/IntegerType';
 import { StringType } from '../types/StringType';
@@ -383,8 +383,8 @@ describe('parser', () => {
                 const namespaceStmt = parser.ast.statements[0] as NamespaceStatement;
                 expect(namespaceStmt.symbolTable).to.be.instanceof(SymbolTable);
                 expect(namespaceStmt.symbolTable.getSymbolType('funcInt').toString()).to.equal('function funcInt() as integer');
-                expect(namespaceStmt.symbolTable.getSymbolType('funcStr')).to.be.instanceof(FunctionType);
-                const strFunctionType = namespaceStmt.symbolTable.getSymbolType('funcStr') as FunctionType;
+                expect(namespaceStmt.symbolTable.getSymbolType('funcStr')).to.be.instanceof(TypedFunctionType);
+                const strFunctionType = namespaceStmt.symbolTable.getSymbolType('funcStr') as TypedFunctionType;
                 expect(strFunctionType.returnType.toString()).to.equal('string');
             });
 
@@ -401,8 +401,8 @@ describe('parser', () => {
                     end namespace
                 `, ParseMode.BrighterScript);
 
-                expect(parser.symbolTable.getSymbolType('Name.Space.funcInt')).to.be.instanceof(FunctionType);
-                expect(parser.symbolTable.getSymbolType('Name.Space.funcStr')).to.be.instanceof(FunctionType);
+                expect(parser.symbolTable.getSymbolType('Name.Space.funcInt')).to.be.instanceof(TypedFunctionType);
+                expect(parser.symbolTable.getSymbolType('Name.Space.funcStr')).to.be.instanceof(TypedFunctionType);
             });
 
         });
@@ -1212,7 +1212,7 @@ describe('parser', () => {
                 end sub
             `);
             const func = (parser.ast.statements[0] as FunctionStatement).func;
-            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
+            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as TypedFunctionType;
             expect(type.returnType).to.be.instanceof(VoidType);
         });
 
@@ -1225,7 +1225,7 @@ describe('parser', () => {
                 end sub
             `);
             const func = (parser.ast.statements[0] as FunctionStatement).func;
-            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
+            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as TypedFunctionType;
             expect(type.returnType).to.be.instanceof(StringType);
         });
 
@@ -1242,7 +1242,7 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(parser.diagnostics);
             const func = (parser.ast.statements[0] as FunctionStatement).func;
-            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
+            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as TypedFunctionType;
             // Return type is LazyType, because "Person" is not fully known yet
             expect(type.returnType).to.be.instanceof(LazyType);
         });
@@ -1257,7 +1257,7 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(parser.diagnostics);
             const func = (parser.ast.statements[0] as FunctionStatement).func;
-            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
+            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as TypedFunctionType;
             expect(type.returnType).to.be.instanceof(ArrayType);
             expect((type.returnType as ArrayType).getDefaultType()).to.be.instanceof(IntegerType);
         });

@@ -1,4 +1,4 @@
-import { isArrayType, isBrsFile, isCallExpression, isFunctionType, isPrimitiveType } from '../astUtils/reflection';
+import { isArrayType, isBrsFile, isCallExpression, isTypedFunctionType, isPrimitiveType } from '../astUtils/reflection';
 import type { CallExpression, DottedGetExpression, FunctionExpression, NewExpression, VariableExpression } from '../parser/Expression';
 import type { BscType, TypeContext } from './BscType';
 import { LazyType } from './LazyType';
@@ -20,7 +20,7 @@ export function getTypeFromCallExpression(call: CallExpression, functionExpressi
     let calleeName = ((call.callee as any).name as Token);
     if (calleeName) {
         const currentKnownType = functionExpression.symbolTable.getSymbolType(calleeName.text.toLowerCase());
-        if (isFunctionType(currentKnownType)) {
+        if (isTypedFunctionType(currentKnownType)) {
             return currentKnownType.returnType;
         }
         if (currentKnownType) {
@@ -36,7 +36,7 @@ export function getTypeFromCallExpression(call: CallExpression, functionExpressi
                 // Give best guess if there is no file context
                 futureType = functionExpression.symbolTable.getSymbolType(calleeName.text);
             }
-            if (isFunctionType(futureType)) {
+            if (isTypedFunctionType(futureType)) {
                 return futureType.returnType;
             }
 
