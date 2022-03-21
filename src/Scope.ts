@@ -17,7 +17,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile, TokenSymbolLookup } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDynamicType, isEnumStatement, isFunctionStatement, isFunctionType, isInvalidType, isUniversalFunctionType, isVariableExpression, isXmlFile, isArrayType } from './astUtils/reflection';
+import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDynamicType, isEnumStatement, isFunctionStatement, isTypedFunctionType, isInvalidType, isFunctionType, isVariableExpression, isXmlFile, isArrayType } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { BscType, TypeContext } from './types/BscType';
 import { getTypeFromContext } from './types/BscType';
@@ -782,7 +782,7 @@ export class Scope {
             for (let expCall of file.functionCalls) {
                 const symbolTypeInfo = file.getSymbolTypeFromToken(expCall.name, expCall.functionExpression, this);
                 let funcType = symbolTypeInfo.type;
-                if (!isFunctionType(funcType) && !isDynamicType(funcType)) {
+                if (!isTypedFunctionType(funcType) && !isDynamicType(funcType)) {
                     // We don't know if this is a function. Try seeing if it is a global
                     const callableContainer = util.getCallableContainerByFunctionCall(callableContainersByLowerName, expCall);
                     if (callableContainer) {
@@ -798,9 +798,9 @@ export class Scope {
                     }
                 }
 
-                if (isUniversalFunctionType(funcType)) {
+                if (isFunctionType(funcType)) {
                     // This is a generic function, and it is callable
-                } else if (isFunctionType(funcType)) {
+                } else if (isTypedFunctionType(funcType)) {
                     // Check for Argument count mismatch.
                     //get min/max parameter count for callable
                     let paramCount = util.getMinMaxParamCount(funcType.params);
@@ -896,7 +896,7 @@ export class Scope {
             for (let symbol of func.symbolTable.getOwnSymbols()) {
                 const symbolNameLower = symbol.name.toLowerCase();
                 //if the var is a function
-                if (isFunctionType(symbol.type)) {
+                if (isTypedFunctionType(symbol.type)) {
                     //local var function with same name as stdlib function
                     if (
                         //has same name as stdlib

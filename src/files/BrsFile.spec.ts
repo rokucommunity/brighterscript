@@ -5,7 +5,7 @@ import type { Callable, CommentFlag } from '../interfaces';
 import { Program } from '../Program';
 import { BooleanType } from '../types/BooleanType';
 import { DynamicType } from '../types/DynamicType';
-import { FunctionType } from '../types/FunctionType';
+import { TypedFunctionType } from '../types/TypedFunctionType';
 import { IntegerType } from '../types/IntegerType';
 import { StringType } from '../types/StringType';
 import { BrsFile } from './BrsFile';
@@ -1530,7 +1530,7 @@ describe('BrsFile', () => {
             `);
 
             expectSymbolTableEquals(file.parser.references.functionExpressions[0].symbolTable, [
-                ['sayHi', new FunctionType(new VoidType(), true), util.createRange(2, 20, 2, 25)]
+                ['sayHi', new TypedFunctionType(new VoidType(), true), util.createRange(2, 20, 2, 25)]
             ]);
 
             expectSymbolTableEquals(file.parser.references.functionExpressions[1].symbolTable, [

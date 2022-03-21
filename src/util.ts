@@ -14,7 +14,7 @@ import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
 import { FloatType } from './types/FloatType';
-import { FunctionType } from './types/FunctionType';
+import { TypedFunctionType } from './types/TypedFunctionType';
 import { IntegerType } from './types/IntegerType';
 import { InvalidType } from './types/InvalidType';
 import { LongIntegerType } from './types/LongIntegerType';
@@ -32,7 +32,7 @@ import { SourceNode } from 'source-map';
 import { SGAttribute } from './parser/SGTypes';
 import { LazyType } from './types/LazyType';
 import type { BscType } from './types/BscType';
-import { UniversalFunctionType } from './types/UniversalFunctionType';
+import { FunctionType } from './types/FunctionType';
 
 export class Util {
     public clearConsole() {
@@ -968,7 +968,7 @@ export class Util {
             case TokenKind.FloatLiteral:
                 return new FloatType();
             case TokenKind.Function:
-                return new UniversalFunctionType();
+                return new FunctionType();
             case TokenKind.Integer:
                 return new IntegerType(token.text);
             case TokenKind.IntegerLiteral:
@@ -1004,7 +1004,7 @@ export class Util {
                         typeClass = new FloatType(token.text);
                         break;
                     case 'function':
-                        typeClass = new FunctionType(new DynamicType(token.text));
+                        typeClass = new TypedFunctionType(new DynamicType(token.text));
                         break;
                     case 'integer':
                         typeClass = new IntegerType(token.text);
