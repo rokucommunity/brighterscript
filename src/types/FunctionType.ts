@@ -1,27 +1,32 @@
-import { isFunctionType } from '../astUtils/reflection';
-import type { CallableParam } from '../interfaces';
+import { isDynamicType, isFunctionType } from '../astUtils/reflection';
 import type { BscType, TypeContext } from './BscType';
-import { DynamicType } from './DynamicType';
-import { TypedFunctionType } from './TypedFunctionType';
 
-export class FunctionType extends TypedFunctionType implements BscType {
+export class FunctionType implements BscType {
 
-    constructor(
-    ) {
-        super(new DynamicType());
-        this.isVariadic = true;
+    isAssignableTo(targetType: BscType, context?: TypeContext): boolean {
+        //since this is a basic function type, we're only assignable to other basic function types
+        if (isFunctionType(targetType)) {
+            return true;
+        } else if (isDynamicType(targetType)) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
-    public setName(name: string) {
-        // noop
-        return this;
+    isConvertibleTo(targetType: BscType, context?: TypeContext): boolean {
+        return this.isAssignableTo(targetType);
     }
-    public addParameter(paramOrName: CallableParam | string, type?: BscType, isOptional?: boolean) {
-        // noop
-        return this;
+
+    toString(context?: TypeContext): string {
+        return 'Function';
+    }
+
+    toTypeString(context?: TypeContext): string {
+        return 'Function';
     }
 
     public equals(targetType: BscType, context?: TypeContext): boolean {
-        return (isFunctionType(targetType));
+        return isFunctionType(targetType);
     }
 }

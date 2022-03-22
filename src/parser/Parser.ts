@@ -3555,6 +3555,7 @@ export function getBscTypeFromExpression(expression: Expression, functionExpress
         }
     } catch (e) {
         //do nothing. Just return dynamic
+        console.log(e);
     }
     //fallback to dynamic
     return new DynamicType();

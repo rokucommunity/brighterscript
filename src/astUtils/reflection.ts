@@ -251,7 +251,7 @@ export function isFunctionType(e: any): e is FunctionType {
     return e?.constructor.name === 'FunctionType';
 }
 export function isTypedFunctionType(e: any): e is TypedFunctionType {
-    return e?.constructor.name === 'TypedFunctionType' || e?.constructor.name === 'FunctionType';
+    return e?.constructor.name === 'TypedFunctionType';
 }
 export function isBooleanType(e: any): e is BooleanType {
     return e?.constructor.name === 'BooleanType';
