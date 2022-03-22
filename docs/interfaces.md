@@ -1,10 +1,10 @@
 # BrighterScript Interfaces
 
-Not to be confused with SceneGraph interfaces (see [<interfaces>](https://developer.roku.com/en-ca/docs/references/scenegraph/xml-elements/interface.md)), BrighterScript introduces the `interface` keyword to describe the public methods and/or fields available on a [class](class.md). This has the benefit of allowing type-checking and validation on different classes as long as they expose the same public functions.
+Not to be confused with SceneGraph interfaces (see [<interfaces>](https://developer.roku.com/en-ca/docs/references/scenegraph/xml-elements/interface.md)), BrighterScript introduces the `interface` keyword to describe the public methods and/or fields available on an object or [class](class.md). This has the benefit of allowing type-checking and validation on different objects as long as they expose the same public functions.
 
 ## Interfaces
 
-Interfaces are declared similarly to classes, with the exception of not needing any implementation fo methods, no access modifiers (i.e. nothing is `private` in an `interface`), and nothing is initialized.
+Interfaces are declared similarly to classes, with the exception of not needing the method body, no access modifiers (i.e. nothing is `private` in an `interface`), and nothing is initialized.
 
 ```vb
 interface Vehicle
@@ -14,7 +14,7 @@ interface Vehicle
 end interface
 ```
 
-Since an `interface` is simply a description of a class, it is not transpiled. Interfaces are only useful at compile-time to do type checking and validation. They will not result in any additional transpiled code.
+Since an `interface` is simply a description of an object's public members, it is not transpiled. Interfaces are only useful at compile-time to do type checking and validation. They will not result in any additional transpiled code.
 
 ## Type Checking
 
