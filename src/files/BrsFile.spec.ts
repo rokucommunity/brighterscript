@@ -3407,7 +3407,7 @@ describe('BrsFile', () => {
         });
     });
 
-    it('defaults to `dynamic` type complex expression', () => {
+    it('defaults to `dynamic` type for a complex expression', () => {
         const file = program.setFile<BrsFile>('source/main.brs', `
             sub main()
                 name = "cat"

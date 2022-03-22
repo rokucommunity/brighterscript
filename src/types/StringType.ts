@@ -1,4 +1,4 @@
-import { isDynamicType, isStringType } from '../astUtils/reflection';
+import { isDynamicType, isObjectType, isStringType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 export class StringType implements BscType {
@@ -9,7 +9,8 @@ export class StringType implements BscType {
     public isAssignableTo(targetType: BscType) {
         return (
             isStringType(targetType) ||
-            isDynamicType(targetType)
+            isDynamicType(targetType) ||
+            isObjectType(targetType)
         );
     }
 

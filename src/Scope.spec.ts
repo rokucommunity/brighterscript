@@ -811,29 +811,48 @@ describe('Scope', () => {
 
         it('correctly validates wrong parameters that are interface members', () => {
             program.setFile('source/main.bs', `
-            interface IPerson
-                height as float
-                name as string
-                function getWeight() as float
-                function getAddress() as object
-            end interface
+                interface IPerson
+                    isAlive as boolean
+                    function getAddress() as string
+                end interface
 
-            sub takesFloat(fl as float)
-            end sub
+                sub takesFloat(fl as float)
+                end sub
 
-            sub someFunc(person as IPerson)
-                takesFloat(person.name)
-                takesFloat(person.getAddress())
-            end sub`);
+                sub someFunc(person as IPerson)
+                    takesFloat(person.isAlive)
+                    takesFloat(person.getAddress())
+                end sub
+            `);
             program.validate();
             //should have 2 errors: person.name is string (not float) and person.getAddress() is object (not float)
-            expect(program.getDiagnostics().length).to.equal(2);
-            expect(program.getDiagnostics()[0].message).to.equal(
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('boolean', 'float').message,
                 DiagnosticMessages.argumentTypeMismatch('string', 'float').message
-            );
-            expect(program.getDiagnostics()[1].message).to.equal(
-                DiagnosticMessages.argumentTypeMismatch('object', 'float').message
-            );
+            ]);
+        });
+
+        it('`as object` param allows all types except uninitialized', () => {
+            program.setFile('source/main.bs', `
+                sub takesObject(obj as Object)
+                end sub
+
+                sub main()
+                    takesObject(true)
+                    takesObject(1)
+                    takesObject(1.2)
+                    takesObject(1.2#)
+                    takesObject("text")
+                    takesObject({})
+                    takesObject([])
+                    takesObject(uninitializedVar)
+                end sub
+            `);
+            program.validate();
+            //should have 2 errors: person.name is string (not float) and person.getAddress() is object (not float)
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('uninitialized', 'Object').message
+            ]);
         });
 
         it('allows conversions for arguments', () => {

@@ -11,11 +11,13 @@ import { Program } from '../Program';
 import type { TypeContext } from './BscType';
 import { Position } from 'vscode-languageserver-protocol';
 import type { BrsFile } from '../files/BrsFile';
+import { ObjectType } from './ObjectType';
 
 describe('ArrayType', () => {
-    it('is equivalent to array types', () => {
+    it('is assignable to correct types', () => {
         expect(new ArrayType().isAssignableTo(new ArrayType())).to.be.true;
         expect(new ArrayType().isAssignableTo(new DynamicType())).to.be.true;
+        expect(new ArrayType().isAssignableTo(new ObjectType())).to.be.true;
     });
 
     it('catches arrays containing different inner types', () => {

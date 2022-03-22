@@ -1,4 +1,4 @@
-import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType } from '../astUtils/reflection';
+import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 export class DoubleType implements BscType {
@@ -9,7 +9,8 @@ export class DoubleType implements BscType {
     public isAssignableTo(targetType: BscType) {
         return (
             isDoubleType(targetType) ||
-            isDynamicType(targetType)
+            isDynamicType(targetType) ||
+            isObjectType(targetType)
         );
     }
 

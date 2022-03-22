@@ -7,10 +7,12 @@ import { IntegerType } from './IntegerType';
 import { StringType } from './StringType';
 import { FunctionType } from './FunctionType';
 import { VoidType } from './VoidType';
+import { ObjectType } from './ObjectType';
 
 describe('FunctionType', () => {
-    it('is equivalent to dynamic type', () => {
+    it('is equivalent to proper type', () => {
         expect(new TypedFunctionType(new VoidType()).isAssignableTo(new DynamicType())).to.be.true;
+        expect(new TypedFunctionType(new VoidType()).isAssignableTo(new ObjectType())).to.be.true;
     });
 
     it('validates using param and return types', () => {

@@ -9,7 +9,8 @@ export class InvalidType implements BscType {
     public isAssignableTo(targetType: BscType) {
         return (
             isInvalidType(targetType) ||
-            isDynamicType(targetType)
+            isDynamicType(targetType) ||
+            isObjectType(targetType)
         );
     }
 
