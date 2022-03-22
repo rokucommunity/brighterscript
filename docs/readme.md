@@ -7,6 +7,7 @@ See the following pages for more information
  - [Callfunc Operator](callfunc-operator.md)
  - [Classes](classes.md)
  - [Enums](enums.md)
+ - [Interfaces](interfaces.md)
  - [Imports](imports.md)
  - [Namespaces](namespaces.md)
  - [Null-coalescing operator](null-coalescing-operator.md)

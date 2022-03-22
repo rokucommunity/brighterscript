@@ -2,7 +2,7 @@ import { expectDiagnostics, expectZeroDiagnostics, getTestGetTypedef } from '../
 import { standardizePath as s } from '../../../util';
 import { Program } from '../../../Program';
 import { expect } from 'chai';
-import { isBooleanType, isFunctionType, isIntegerType, isStringType } from '../../../astUtils/reflection';
+import { isBooleanType, isTypedFunctionType, isIntegerType, isStringType } from '../../../astUtils/reflection';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Lexer } from '../../../lexer/Lexer';
 import { Parser, ParseMode } from '../../Parser';
@@ -241,7 +241,7 @@ describe('InterfaceStatement', () => {
         });
 
 
-        it('adds methods to class statement member symbol table after building', () => {
+        it('adds methods interface statement member symbol table after building', () => {
             let parser = Parser.parse(`
                 interface Animal
                     sub eat()
@@ -251,8 +251,8 @@ describe('InterfaceStatement', () => {
             let ifaceStatement = parser.statements[0] as InterfaceStatement;
             ifaceStatement.buildSymbolTable();
             expect(ifaceStatement.memberTable).to.exist;
-            expect(isFunctionType(ifaceStatement.memberTable.getSymbolType('eat'))).to.be.true;
-            expect(isFunctionType(ifaceStatement.memberTable.getSymbolType('sleep'))).to.be.true;
+            expect(isTypedFunctionType(ifaceStatement.memberTable.getSymbolType('eat'))).to.be.true;
+            expect(isTypedFunctionType(ifaceStatement.memberTable.getSymbolType('sleep'))).to.be.true;
         });
 
         it('adds fields to class statement member symbol table after building', () => {
