@@ -22,7 +22,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isTypedFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isArrayType, isCustomType, isDynamicType, isObjectType, isPrimitiveType, isRegexLiteralExpression } from '../astUtils/reflection';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isTypedFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isArrayType, isCustomType, isDynamicType, isObjectType, isPrimitiveType, isRegexLiteralExpression, isInterfaceType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -604,18 +604,20 @@ export class BrsFile {
             //we aren't in any function scope, so return the keyword completions and namespaces
             if (this.parser.getTokenBefore(currentToken, TokenKind.New)) {
                 // there's a new keyword, so only class types are viable here
-                return [...this.getGlobalClassStatementCompletions(currentToken, this.parseMode)];
+                return [...this.getGlobalClassStatementCompletions(currentToken, this.parseMode, scope)];
             } else {
                 return [
                     ...KeywordCompletions,
-                    ...this.getGlobalClassStatementCompletions(currentToken, this.parseMode),
+                    ...this.getGlobalClassStatementCompletions(currentToken, this.parseMode, scope),
                     ...namespaceCompletions,
-                    ...this.getNonNamespacedEnumStatementCompletions(currentToken, this.parseMode, scope)
+                    ...this.getNonNamespacedEnumStatementCompletions(currentToken, this.parseMode, scope),
+                    ...this.getGlobalInterfaceStatementCompletions(currentToken, this.parseMode, scope)
                 ];
             }
         }
 
-        const classNameCompletions = this.getGlobalClassStatementCompletions(currentToken, this.parseMode);
+        const classNameCompletions = this.getGlobalClassStatementCompletions(currentToken, this.parseMode, scope);
+        const interfaceNameCompletions = this.getGlobalInterfaceStatementCompletions(currentToken, this.parseMode, scope);
         const newToken = this.parser.getTokenBefore(currentToken, TokenKind.New);
         if (newToken) {
             //we are after a new keyword; so we can only be top-level namespaces or classes at this point
@@ -654,6 +656,9 @@ export class BrsFile {
 
             //include class names
             result.push(...classNameCompletions);
+
+            //include interfaces
+            result.push(...interfaceNameCompletions);
 
             //include enums
             result.push(...this.getNonNamespacedEnumStatementCompletions(currentToken, this.parseMode, scope));
@@ -737,7 +742,7 @@ export class BrsFile {
                     if (!results.has(member.name.text.toLowerCase())) {
                         results.set(member.name.text.toLowerCase(), {
                             label: member.name.text,
-                            kind: isClassFieldStatement(member) ? CompletionItemKind.Field : CompletionItemKind.Function
+                            kind: isClassFieldStatement(member) ? CompletionItemKind.Field : CompletionItemKind.Method
                         });
                     }
                 }
@@ -815,12 +820,12 @@ export class BrsFile {
             let expandedText = '';
             let useExpandedTextOnly = false;
             if (containingClass.name === currentToken) {
-                symbolType = containingClass.getCustomType();
+                symbolType = containingClass.getThisBscType();
                 expandedText = `class ${containingClass.getName(ParseMode.BrighterScript)}`;
                 useExpandedTextOnly = true;
                 currentClassRef = containingClass;
             } else if (currentTokenLower === 'm') {
-                symbolType = containingClass.getCustomType();
+                symbolType = containingClass.getThisBscType();
                 expandedText = currentToken.text;
                 currentClassRef = containingClass;
             } else if (currentTokenLower === 'super') {
@@ -942,8 +947,8 @@ export class BrsFile {
             }
 
             if (symbolType?.memberTable) {
-                if (isCustomType(symbolType)) {
-                    // we're currently looking at a customType, that has it's own symbol table
+                if (isCustomType(symbolType) || isInterfaceType(symbolType)) {
+                    // we're currently looking at a customType or interface, that has it's own symbol table
                     // use the name of the custom type
                     // TODO TYPES: get proper parent name for methods/fields defined in super classes
                     tokenText.push(tokenChain.length === 1 ? token.text : symbolType.name);
@@ -1012,7 +1017,7 @@ export class BrsFile {
         return symbolData;
     }
 
-    private getGlobalClassStatementCompletions(currentToken: Token, parseMode: ParseMode): CompletionItem[] {
+    private getGlobalClassStatementCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
         if (parseMode === ParseMode.BrightScript) {
             return [];
         }
@@ -1021,19 +1026,18 @@ export class BrsFile {
         if (completionName?.includes('.')) {
             return [];
         }
-        let scopes = this.program.getScopesForFile(this);
-        for (let scope of scopes) {
-            let classMap = scope.getClassMap();
-            for (const key of [...classMap.keys()]) {
-                let cs = classMap.get(key).item;
-                if (!results.has(cs.name.text)) {
-                    results.set(cs.name.text, {
-                        label: cs.name.text,
-                        kind: CompletionItemKind.Class
-                    });
-                }
+        let classMap = scope.getClassMap();
+        // let viableKeys = [...classMap.keys()].filter((k) => k.startsWith(completionName));
+        for (const key of [...classMap.keys()]) {
+            let cs = classMap.get(key).item;
+            if (!results.has(cs.name.text)) {
+                results.set(cs.name.text, {
+                    label: cs.name.text,
+                    kind: CompletionItemKind.Class
+                });
             }
         }
+
         return [...results.values()];
     }
 
@@ -1084,6 +1088,29 @@ export class BrsFile {
                 });
             }
         }
+        return [...results.values()];
+    }
+
+    private getGlobalInterfaceStatementCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
+        if (parseMode === ParseMode.BrightScript) {
+            return [];
+        }
+        let results = new Map<string, CompletionItem>();
+        let completionName = this.getPartialVariableName(currentToken, [TokenKind.New])?.toLowerCase();
+        if (completionName?.includes('.')) {
+            return [];
+        }
+        let ifaceMap = scope.getInterfaceMap();
+        for (const key of [...ifaceMap.keys()]) {
+            let cs = ifaceMap.get(key).item;
+            if (!results.has(cs.name.text)) {
+                results.set(cs.name.text, {
+                    label: cs.name.text,
+                    kind: CompletionItemKind.Interface
+                });
+            }
+        }
+
         return [...results.values()];
     }
 
@@ -1429,20 +1456,22 @@ export class BrsFile {
         }
 
         const func = this.getFunctionExpressionAtPosition(position);
-        //look through local variables first
-        //find any variable with this name
-        for (const symbol of func.symbolTable.getOwnSymbols()) {
-            //we found a variable declaration with this token text
-            if (symbol.name.toLowerCase() === textToSearchFor) {
-                const uri = util.pathToUri(this.srcPath);
-                results.push(Location.create(uri, symbol.range));
-            }
-        }
-        if (this.parser.tokenFollows(token, TokenKind.Goto)) {
-            for (const label of func.labelStatements) {
-                if (label.tokens.identifier.text.toLocaleLowerCase() === textToSearchFor) {
+        if (func) {
+            //look through local variables first
+            //find any variable with this name
+            for (const symbol of func.symbolTable.getOwnSymbols()) {
+                //we found a variable declaration with this token text
+                if (symbol.name.toLowerCase() === textToSearchFor) {
                     const uri = util.pathToUri(this.srcPath);
-                    results.push(Location.create(uri, label.tokens.identifier.range));
+                    results.push(Location.create(uri, symbol.range));
+                }
+            }
+            if (this.parser.tokenFollows(token, TokenKind.Goto)) {
+                for (const label of func.labelStatements) {
+                    if (label.tokens.identifier.text.toLocaleLowerCase() === textToSearchFor) {
+                        const uri = util.pathToUri(this.srcPath);
+                        results.push(Location.create(uri, label.tokens.identifier.range));
+                    }
                 }
             }
         }
@@ -1710,7 +1739,7 @@ export class BrsFile {
             key += param.name.text;
         }
 
-        const label = util.getTextForRange(lines, util.createRangeFromPositions(func.functionType.range.start, func.body.range.start)).trim();
+        const label = util.getTextForRange(lines, func.functionDeclarationRange).trim();
         const signature = SignatureInformation.create(label, documentation, ...params);
         const index = 1;
         return { key: key, signature: signature, index: index };

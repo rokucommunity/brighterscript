@@ -1,6 +1,8 @@
 import { expect } from 'chai';
 import { assert } from 'sinon';
+import { SymbolTable } from '../SymbolTable';
 import type { BscType } from './BscType';
+import { CustomType } from './CustomType';
 import { DynamicType } from './DynamicType';
 import { IntegerType } from './IntegerType';
 import { InterfaceType } from './InterfaceType';
@@ -10,11 +12,11 @@ import { StringType } from './StringType';
 describe('InterfaceType', () => {
     describe('toString', () => {
         it('returns empty curly braces when no members', () => {
-            expect(iface({}).toString()).to.eql('{}');
+            expect(iface({}).toJsString()).to.eql('{}');
         });
 
         it('includes member types', () => {
-            expect(iface({ name: new StringType() }).toString()).to.eql('{ name: string; }');
+            expect(iface({ name: new StringType() }).toJsString()).to.eql('{ name: string; }');
         });
 
         it('includes nested object types', () => {
@@ -25,7 +27,7 @@ describe('InterfaceType', () => {
                         age: new IntegerType()
                     })
                 }
-                ).toString()
+                ).toJsString()
             ).to.eql('{ name: string; parent: { age: integer; }; }');
         });
     });
@@ -51,6 +53,12 @@ describe('InterfaceType', () => {
             expect(
                 iface({ name: new StringType() }).equals(iface({ name: new IntegerType() }))
             ).to.be.false;
+        });
+
+        it('ignores order', () => {
+            expect(
+                iface({ name: new StringType(), age: new IntegerType(), data: new CustomType('data') }).equals(iface({ age: new IntegerType(), data: new CustomType('data'), name: new StringType() }))
+            ).to.be.true;
         });
     });
 
@@ -90,14 +98,17 @@ describe('InterfaceType', () => {
         });
 
         it('matches properties in mismatched order', () => {
+            const symbolTable1 = makeSymbolTable({
+                name: new StringType(),
+                age: new IntegerType()
+            });
+            const symbolTable2 = makeSymbolTable({
+                age: new IntegerType(),
+                name: new StringType()
+            });
+
             expect(
-                new InterfaceType(new Map([
-                    ['name', new StringType()],
-                    ['age', new IntegerType()]
-                ])).isAssignableTo(new InterfaceType(new Map([
-                    ['age', new IntegerType()],
-                    ['name', new StringType()]
-                ])))
+                new InterfaceType('interfaceOne', symbolTable1).isAssignableTo(new InterfaceType('interfaceTwo', symbolTable2))
             ).to.be.true;
         });
 
@@ -148,7 +159,7 @@ describe('InterfaceType', () => {
             });
         });
 
-        it('accepts with source member having dyanmic prop type', () => {
+        it('accepts with source member having dynamic prop type', () => {
             expectAssignable({
                 parent: iface({
                     name: new StringType(),
@@ -159,7 +170,7 @@ describe('InterfaceType', () => {
             });
         });
 
-        it('accepts with target member having dyanmic prop type', () => {
+        it('accepts with target member having dynamic prop type', () => {
             expectAssignable({
                 parent: new DynamicType()
             }, {
@@ -183,19 +194,28 @@ describe('InterfaceType', () => {
     });
 });
 
-function iface(members: Record<string, BscType>) {
-    return new InterfaceType(
-        new Map(
-            Object.entries(members)
-        )
-    );
+let ifaceCount = 0;
+
+function iface(members: Record<string, BscType>, name?: string) {
+    name = name ?? 'SomeIFace' + ifaceCount;
+    ifaceCount++;
+    return new InterfaceType(name, makeSymbolTable(members));
+}
+
+function makeSymbolTable(members: Record<string, BscType>) {
+    const symbols = new SymbolTable();
+
+    for (const key in members) {
+        symbols.addSymbol(key, null, members[key]);
+    }
+    return symbols;
 }
 
 function expectAssignable(targetMembers: Record<string, BscType>, sourceMembers: Record<string, BscType>) {
     const targetIface = iface(targetMembers);
     const sourceIface = iface(sourceMembers);
     if (!sourceIface.isAssignableTo(targetIface)) {
-        assert.fail(`expected type ${targetIface.toString()} to be assignable to type ${sourceIface.toString()}`);
+        assert.fail(`expected type ${targetIface.toJsString()} to be assignable to type ${sourceIface.toJsString()}`);
     }
 }
 
@@ -203,6 +223,6 @@ function expectNotAssignable(targetMembers: Record<string, BscType>, sourceMembe
     const targetIface = iface(targetMembers);
     const sourceIface = iface(sourceMembers);
     if (sourceIface.isAssignableTo(targetIface)) {
-        assert.fail(`expected type ${targetIface.toString()} to not be assignable to type ${sourceIface.toString()}`);
+        assert.fail(`expected type ${targetIface.toJsString()} to not be assignable to type ${sourceIface.toJsString()}`);
     }
 }

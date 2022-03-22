@@ -1591,7 +1591,7 @@ describe('Program', () => {
             program.setFile('source/main.brs', '');
             let completions = program.getCompletions(`${rootDir}/source/main.brs`, position);
             //get the name of all global completions
-            const globalCompletions = program.globalScope.getAllFiles().flatMap(x => x.getCompletions(position)).map(x => x.label);
+            const globalCompletions = program.globalScope.getAllFiles().flatMap(x => x.getCompletions(position, program.globalScope)).map(x => x.label);
             //filter out completions from global scope
             completions = completions.filter(x => !globalCompletions.includes(x.label));
             expect(completions).to.be.empty;

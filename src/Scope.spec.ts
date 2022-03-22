@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
-import { standardizePath as s } from './util';
+import { standardizePath as s, util } from './util';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
@@ -12,7 +12,7 @@ import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import type { OnScopeValidateEvent } from './interfaces';
 import type { TypedFunctionType } from './types/TypedFunctionType';
-import { isFloatType, isFunctionType } from './astUtils/reflection';
+import { isFloatType, isFunctionType, isInterfaceStatement, isInterfaceType } from './astUtils/reflection';
 import type { SymbolTable } from './SymbolTable';
 import type { Scope } from './Scope';
 import { FunctionType } from './types/FunctionType';
@@ -744,6 +744,9 @@ describe('Scope', () => {
             program.setFile('source/main.bs', `
             class PiHolder
                 pi = 3.14
+                function getPi() as float
+                    return m.pi
+                end function
             end class
 
             sub takesFloat(fl as float)
@@ -752,6 +755,7 @@ describe('Scope', () => {
             sub someFunc()
                 holder = new PiHolder()
                 takesFloat(holder.pi)
+                takesFloat(holder.getPI())
             end sub`);
             program.validate();
             //should have no error
@@ -763,6 +767,9 @@ describe('Scope', () => {
             class PiHolder
                 pi = 3.14
                 name = "hello"
+                function getPi() as float
+                    return m.pi
+                end function
             end class
 
             sub takesFloat(fl as float)
@@ -771,12 +778,61 @@ describe('Scope', () => {
             sub someFunc()
                 holder = new PiHolder()
                 takesFloat(holder.name)
+                takesFloat(Str(holder.getPI()))
             end sub`);
             program.validate();
             //should have error: holder.name is string
-            expect(program.getDiagnostics().length).to.equal(1);
+            expect(program.getDiagnostics().length).to.equal(2);
             expect(program.getDiagnostics().map(x => x.message)).to.include(
                 DiagnosticMessages.argumentTypeMismatch('string', 'float').message
+            );
+        });
+
+        it('correctly validates correct parameters that are interface members', () => {
+            program.setFile('source/main.bs', `
+            interface IPerson
+                height as float
+                name as string
+                function getWeight() as float
+                function getAddress() as string
+            end interface
+
+            sub takesFloat(fl as float)
+            end sub
+
+            sub someFunc(person as IPerson)
+                takesFloat(person.height)
+                takesFloat(person.getWeight())
+            end sub`);
+            program.validate();
+            //should have no error
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+
+        it('correctly validates wrong parameters that are interface members', () => {
+            program.setFile('source/main.bs', `
+            interface IPerson
+                height as float
+                name as string
+                function getWeight() as float
+                function getAddress() as object
+            end interface
+
+            sub takesFloat(fl as float)
+            end sub
+
+            sub someFunc(person as IPerson)
+                takesFloat(person.name)
+                takesFloat(person.getAddress())
+            end sub`);
+            program.validate();
+            //should have 2 errors: person.name is string (not float) and person.getAddress() is object (not float)
+            expect(program.getDiagnostics().length).to.equal(2);
+            expect(program.getDiagnostics()[0].message).to.equal(
+                DiagnosticMessages.argumentTypeMismatch('string', 'float').message
+            );
+            expect(program.getDiagnostics()[1].message).to.equal(
+                DiagnosticMessages.argumentTypeMismatch('object', 'float').message
             );
         });
 
@@ -1182,6 +1238,191 @@ describe('Scope', () => {
 
                 program.validate();
 
+                expectZeroDiagnostics(program);
+            });
+        });
+
+        describe('interface types', () => {
+            it('detects an unknown function return type', () => {
+                program.setFile('source/main.bs', `
+                    interface myIFace
+                        function myMethod() as unknownTypeA 'error
+                    end interface
+
+                    function d(iface as myIFace) as unknownTypeB
+                        return iface.myMethod
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    {
+                        ...DiagnosticMessages.invalidFunctionReturnType('unknownTypeA'),
+                        range: util.createRange(2, 47, 2, 59)
+                    },
+                    {
+                        ...DiagnosticMessages.invalidFunctionReturnType('unknownTypeB'),
+                        range: util.createRange(5, 52, 5, 64)
+                    }
+                ]);
+            });
+
+            it('detects an unknown function parameter type', () => {
+                program.setFile('source/main.bs', `
+                    interface myIFace
+                       function myMethod(unknownParam as unknownType)  'error
+                    end interface
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    {
+                        ...DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType'),
+                        range: util.createRange(2, 57, 2, 68)
+                    }
+                ]);
+            });
+
+            it('detects an unknown field parameter type', () => {
+                program.setFile('source/main.bs', `
+                    interface myIFace
+                        foo as unknownTypeA 'error
+                    end interface
+
+                    interface myIFace2
+                        foo as unknownTypeB 'error
+                        bar as myIFace
+                        buz as myIFace2
+                    end interface
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindType('unknownTypeA').message,
+                    DiagnosticMessages.cannotFindType('unknownTypeB').message
+                ]);
+            });
+
+            it('finds interfaces inside namespaces', () => {
+                program.setFile('source/main.bs', `
+                    namespace MyNamespace
+                        interface MyIFace
+                            name as string
+                        end interface
+
+                        function foo(param as MyIFace) as MyIFace
+                        end function
+
+                        function bar(param as MyNamespace.MyIFace) as MyNamespace.MyIFace
+                        end function
+
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                let scope = program.getScopeByName('source');
+                let ifaceFromScope = scope.getInterface('MyIFace', 'MyNameSpace');
+                expect(isInterfaceStatement(ifaceFromScope)).to.be.true;
+                expect(isInterfaceType(ifaceFromScope.getThisBscType())).to.be.true;
+            });
+
+            it('finds custom types from other namespaces', () => {
+                program.setFile('source/main.bs', `
+                    namespace MyNamespace
+                        interface MyIFace
+                        end interface
+                    end namespace
+
+                    function foo(param as MyNamespace.MyIFace) as MyNamespace.MyIFace
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds interfaces types from other other files', () => {
+                program.setFile('source/main.bs', `
+                    function foo(param as MyIFace) as MyIFace
+                        return param
+                    end function
+                `);
+                program.setFile('source/MyClass.bs', `
+                    interface MyIFace
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds interfaces types from other other files in namespaces', () => {
+                program.setFile('source/main.bs', `
+                    function foo(param as MyNameSpace.MyIFace) as MyNameSpace.MyIFace
+                        return param
+                    end function
+                `);
+                program.setFile('source/MyNameSpace.bs', `
+                    namespace MyNameSpace
+                        interface MyIFace
+                            name as string
+                        end interface
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('scopes types to correct scope', () => {
+                program.setFile('components/foo.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="foo" extends="Scene">
+                        <script uri="foo.bs"/>
+                    </component>
+                `);
+                program.setFile(s`components/foo.bs`, `
+                    interface MyIFace
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                program.setFile('components/bar.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="bar" extends="Scene">
+                        <script uri="bar.bs"/>
+                    </component>
+                `);
+                program.setFile(s`components/bar.bs`, `
+                    function getFoo() as MyIFace
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.invalidFunctionReturnType('MyIFace').message
+                ]);
+            });
+
+            it('can reference types from parent component', () => {
+                program.setFile('components/parent.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="parent" extends="Scene">
+                        <script uri="parent.bs"/>
+                    </component>
+                `);
+                program.setFile(s`components/parent.bs`, `
+                    interface MyIFace
+                        name as string
+                    end interface
+                `);
+                program.setFile('components/child.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="child" extends="parent">
+                        <script uri="child.bs"/>
+                    </component>
+                `);
+                program.setFile(s`components/child.bs`, `
+                    function getFoo() as MyIFace
+                    end function
+                `);
+
+                program.validate();
                 expectZeroDiagnostics(program);
             });
         });
