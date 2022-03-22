@@ -3406,4 +3406,24 @@ describe('BrsFile', () => {
             expectZeroDiagnostics(program);
         });
     });
+
+    it('defaults to `dynamic` type complex expression', () => {
+        const file = program.setFile<BrsFile>('source/main.brs', `
+            sub main()
+                name = "cat"
+                thing = m["key"](true)
+            end sub
+        `);
+        program.validate();
+
+        //sanity check
+        expect(
+            file.parser.references.assignmentStatements[0].containingFunction.symbolTable.getSymbolType('name')
+        ).be.instanceof(StringType);
+
+        //this complex expression should resolve to dynamic type when not known
+        expect(
+            file.parser.references.assignmentStatements[0].containingFunction.symbolTable.getSymbolType('thing')
+        ).be.instanceof(DynamicType);
+    });
 });

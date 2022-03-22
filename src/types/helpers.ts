@@ -6,6 +6,7 @@ import type { Token } from '../lexer/Token';
 import { UninitializedType } from './UninitializedType';
 import { ParseMode } from '../parser/Parser';
 import { CustomType } from './CustomType';
+import { DynamicType } from './DynamicType';
 
 /**
  * Gets the return type of a function, taking into account that the function may not have been declared yet
@@ -42,6 +43,9 @@ export function getTypeFromCallExpression(call: CallExpression, functionExpressi
 
             return futureType;
         });
+    } else {
+        //return dynamic if we can't figure out the type
+        return new DynamicType();
     }
 }
 
