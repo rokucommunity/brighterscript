@@ -383,7 +383,7 @@ export class DottedGetExpression extends Expression {
         } else {
             return [
                 ...this.obj.transpile(state),
-                '.',
+                state.transpileToken(this.dot),
                 state.transpileToken(this.name)
             ];
         }

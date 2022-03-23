@@ -1,14 +1,14 @@
 import { expect, assert } from 'chai';
 import { Lexer } from '../lexer/Lexer';
-import { ReservedWords } from '../lexer/TokenKind';
+import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { Expression } from './Expression';
-import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
+import { IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
 import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils/reflection';
+import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isIndexedGetExpression } from '../astUtils/reflection';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
@@ -136,6 +136,30 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expect(parser.diagnostics[0]?.message).not.to.exist;
             expect((parser as any).statements[0]?.func?.body?.statements[0]?.expression).to.be.instanceof(CallfuncExpression);
+        });
+    });
+
+    describe('null chaining operator', () => {
+        function getExpression<T>(text: string, matcher?) {
+            const parser = parse(text);
+            expectZeroDiagnostics(parser);
+            const expressions = [...parser.references.expressions];
+            if (matcher) {
+                return expressions.find(matcher) as unknown as T;
+            } else {
+                return expressions[0] as unknown as T;
+            }
+        }
+        it('works for ?.', () => {
+            const expression = getExpression<DottedGetExpression>(`value = person?.name`);
+            expect(expression).to.be.instanceOf(DottedGetExpression);
+            expect(expression.dot.kind).to.eql(TokenKind.QuestionDot);
+        });
+
+        it('works for ?[', () => {
+            const expression = getExpression<IndexedGetExpression>(`value = person?["name"]`, isIndexedGetExpression);
+            expect(expression).to.be.instanceOf(IndexedGetExpression);
+            expect(expression.openingSquare.kind).to.eql(TokenKind.QuestionSquare);
         });
     });
 

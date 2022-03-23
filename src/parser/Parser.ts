@@ -2372,29 +2372,26 @@ export class Parser {
                 expr = this.finishCall(this.previous(), expr);
                 //store this call expression in references
                 referenceCallExpression = expr;
-            } else if (this.match(TokenKind.LeftSquareBracket)) {
+                //Indexed get. Also supports worthless leading dot. example: prop.["someKey"]
+            } else if (this.matchAny(TokenKind.LeftSquareBracket, TokenKind.QuestionSquare) || this.matchSequence(TokenKind.Dot, TokenKind.LeftSquareBracket)) {
                 expr = this.indexedGet(expr);
             } else if (this.match(TokenKind.Callfunc)) {
                 expr = this.callfunc(expr);
                 //store this callfunc expression in references
                 referenceCallExpression = expr;
-            } else if (this.match(TokenKind.Dot)) {
-                if (this.match(TokenKind.LeftSquareBracket)) {
-                    expr = this.indexedGet(expr);
-                } else {
-                    let dot = this.previous();
-                    let name = this.consume(
-                        DiagnosticMessages.expectedPropertyNameAfterPeriod(),
-                        TokenKind.Identifier,
-                        ...AllowedProperties
-                    );
+            } else if (this.matchAny(TokenKind.Dot, TokenKind.QuestionDot)) {
+                let dot = this.previous();
+                let name = this.consume(
+                    DiagnosticMessages.expectedPropertyNameAfterPeriod(),
+                    TokenKind.Identifier,
+                    ...AllowedProperties
+                );
 
-                    // force it into an identifier so the AST makes some sense
-                    name.kind = TokenKind.Identifier;
-                    expr = new DottedGetExpression(expr, name as Identifier, dot);
+                // force it into an identifier so the AST makes some sense
+                name.kind = TokenKind.Identifier;
+                expr = new DottedGetExpression(expr, name as Identifier, dot);
 
-                    this.addPropertyHints(name);
-                }
+                this.addPropertyHints(name);
             } else if (this.check(TokenKind.At)) {
                 let dot = this.advance();
                 let name = this.consume(
@@ -2699,6 +2696,21 @@ export class Parser {
             }
         }
         return false;
+    }
+
+    /**
+     * If the next series of tokens matches the given set of tokens, pop them all
+     * @param tokenKinds
+     */
+    private matchSequence(...tokenKinds: TokenKind[]) {
+        const endIndex = this.current + tokenKinds.length;
+        for (let i = 0; i < tokenKinds.length; i++) {
+            if (tokenKinds[i] !== this.tokens[this.current + i]?.kind) {
+                return false;
+            }
+        }
+        this.current = endIndex;
+        return true;
     }
 
     /**
