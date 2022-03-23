@@ -43,4 +43,39 @@ describe('optional chaining', () => {
             end sub
         `);
     });
+
+    it(`transpiles '?.[`, () => {
+        testTranspile(`
+            sub main()
+                print m?["value"]
+            end sub
+        `);
+    });
+
+    it(`transpiles '?(`, () => {
+        testTranspile(`
+            sub main()
+                print m.notExists?()
+            end sub
+        `);
+    });
+
+    it('transpiles various use cases', () => {
+        testTranspile(`
+            print arr?.["0"]
+            print arr?.value
+            print assocArray?.[0]
+            print assocArray?.getName()?.first?.second
+            print createObject("roByteArray")?.value
+            print createObject("roByteArray")?["0"]
+            print createObject("roList")?.value
+            print createObject("roList")?["0"]
+            print createObject("roXmlList")?["0"]
+            print createObject("roDateTime")?.value
+            print createObject("roDateTime")?.GetTimeZoneOffset
+            print createObject("roSGNode", "Node")?[0]
+            print pi?.first?.second
+            print success?.first?.second
+        `);
+    });
 });
