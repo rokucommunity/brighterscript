@@ -425,13 +425,14 @@ export class XmlAttributeGetExpression extends Expression {
 
 export class IndexedGetExpression extends Expression {
     constructor(
-        readonly obj: Expression,
-        readonly index: Expression,
-        readonly openingSquare: Token,
-        readonly closingSquare: Token
+        public obj: Expression,
+        public index: Expression,
+        public openingSquare: Token,
+        public closingSquare: Token,
+        public optionalChainingToken?: Token //  ? or ?.
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.obj.range.start, this.closingSquare.range.end);
+        this.range = util.createBoundingRange(this.obj, this.openingSquare, this.optionalChainingToken, this.openingSquare, this.index, this.closingSquare);
     }
 
     public readonly range: Range;
@@ -439,6 +440,7 @@ export class IndexedGetExpression extends Expression {
     transpile(state: BrsTranspileState) {
         return [
             ...this.obj.transpile(state),
+            this.optionalChainingToken ? state.transpileToken(this.optionalChainingToken) : '',
             state.transpileToken(this.openingSquare),
             ...this.index.transpile(state),
             state.transpileToken(this.closingSquare)

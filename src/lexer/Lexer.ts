@@ -280,9 +280,6 @@ export class Lexer {
             } else if (this.peek() === '.') {
                 this.advance();
                 this.addToken(TokenKind.QuestionDot);
-            } else if (this.peek() === '[') {
-                this.advance();
-                this.addToken(TokenKind.QuestionSquare);
             } else {
                 this.addToken(TokenKind.Question);
             }

@@ -2,7 +2,7 @@ import { expect, assert } from 'chai';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { Expression } from './Expression';
-import { IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
+import { TernaryExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
 import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
@@ -139,7 +139,7 @@ describe('parser', () => {
         });
     });
 
-    describe('null chaining operator', () => {
+    describe('optional chaining operator', () => {
         function getExpression<T>(text: string, matcher?) {
             const parser = parse(text);
             expectZeroDiagnostics(parser);
@@ -159,7 +159,25 @@ describe('parser', () => {
         it('works for ?[', () => {
             const expression = getExpression<IndexedGetExpression>(`value = person?["name"]`, isIndexedGetExpression);
             expect(expression).to.be.instanceOf(IndexedGetExpression);
-            expect(expression.openingSquare.kind).to.eql(TokenKind.QuestionSquare);
+            expect(expression.optionalChainingToken.kind).to.eql(TokenKind.Question);
+        });
+
+        it('works for ?.[', () => {
+            const expression = getExpression<IndexedGetExpression>(`value = person?.["name"]`, isIndexedGetExpression);
+            expect(expression).to.be.instanceOf(IndexedGetExpression);
+            expect(expression.optionalChainingToken?.kind).to.eql(TokenKind.QuestionDot);
+        });
+
+        it('distinguishes between optional chaining and ternary expression', () => {
+            const parser = parse(`
+                sub main()
+                    name = person?["name"]
+                    isTrue = true
+                    key = isTrue ? ["name"] : ["age"]
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(parser.references.assignmentStatements[0].value).is.instanceof(IndexedGetExpression);
+            expect(parser.references.assignmentStatements[2].value).is.instanceof(TernaryExpression);
         });
     });
 

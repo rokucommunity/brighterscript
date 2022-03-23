@@ -36,11 +36,14 @@ describe('lexer', () => {
     });
 
     it('recognizes the question mark operator in various contexts', () => {
-        expectKinds('? ?? ?. ?[', [
+        expectKinds('? ?? ?. ?[ ?.[', [
             TokenKind.Question,
             TokenKind.QuestionQuestion,
             TokenKind.QuestionDot,
-            TokenKind.QuestionSquare
+            TokenKind.Question,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionDot,
+            TokenKind.LeftSquareBracket
         ]);
     });
 
