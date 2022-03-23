@@ -77,6 +77,8 @@ export enum TokenKind {
     Question = 'Question', // ?
     QuestionQuestion = 'QuestionQuestion', // ??
     BackTick = 'BackTick', // `
+    QuestionDot = 'QuestionDot', // ?.
+    QuestionSquare = 'QuestionSquare', // ?[
 
 
     // conditional compilation

@@ -277,6 +277,12 @@ export class Lexer {
             if (this.peek() === '?') {
                 this.advance();
                 this.addToken(TokenKind.QuestionQuestion);
+            } else if (this.peek() === '.') {
+                this.advance();
+                this.addToken(TokenKind.QuestionDot);
+            } else if (this.peek() === '[') {
+                this.advance();
+                this.addToken(TokenKind.QuestionSquare);
             } else {
                 this.addToken(TokenKind.Question);
             }

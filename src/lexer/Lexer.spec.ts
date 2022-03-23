@@ -35,9 +35,13 @@ describe('lexer', () => {
         expect(tokens[0].kind).to.eql(TokenKind.Library);
     });
 
-    it('recognizes the question mark operator', () => {
-        let { tokens } = Lexer.scan('?');
-        expect(tokens[0].kind).to.equal(TokenKind.Question);
+    it('recognizes the question mark operator in various contexts', () => {
+        expectKinds('? ?? ?. ?[', [
+            TokenKind.Question,
+            TokenKind.QuestionQuestion,
+            TokenKind.QuestionDot,
+            TokenKind.QuestionSquare
+        ]);
     });
 
     it('produces an at symbol token', () => {
@@ -1306,3 +1310,10 @@ describe('lexer', () => {
         });
     });
 });
+
+function expectKinds(text: string, tokenKinds: TokenKind[]) {
+    let actual = Lexer.scan(text).tokens.map(x => x.kind);
+    //remove the EOF token
+    actual.pop();
+    expect(actual).to.eql(tokenKinds);
+}
