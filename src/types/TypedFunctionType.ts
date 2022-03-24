@@ -1,4 +1,4 @@
-import { isTypedFunctionType, isDynamicType } from '../astUtils/reflection';
+import { isTypedFunctionType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import type { CallableParam } from '../interfaces';
 import type { BscType, TypeContext } from './BscType';
 import { DynamicType } from './DynamicType';
@@ -40,7 +40,9 @@ export class TypedFunctionType implements BscType {
     }
 
     public isAssignableTo(targetType: BscType, context?: TypeContext) {
-        if (isTypedFunctionType(targetType)) {
+        if (isObjectType(targetType)) {
+            return true;
+        } else if (isTypedFunctionType(targetType)) {
             if (!targetType.isVariadic) {
                 //compare all parameters
                 let len = Math.max(this.params.length, targetType.params.length);

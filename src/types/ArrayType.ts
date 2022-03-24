@@ -9,7 +9,9 @@ export class ArrayType implements BscType {
     public innerTypes: BscType[] = [];
 
     public isAssignableTo(targetType: BscType, context?: TypeContext) {
-        if (isArrayType(targetType)) {
+        if (isObjectType(targetType)) {
+            return true;
+        } else if (isArrayType(targetType)) {
             //this array type is assignable to the target IF
             //1. all of the types in this array are present in the target
             outer: for (let innerType of this.innerTypes) {

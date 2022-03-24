@@ -1,3 +1,4 @@
+import { isObjectType } from '../astUtils/reflection';
 import type { BscType, TypeContext } from './BscType';
 
 /**
@@ -18,6 +19,9 @@ export class LazyType implements BscType {
     }
 
     public isAssignableTo(targetType: BscType, context?: TypeContext) {
+        if (isObjectType(targetType)) {
+            return true;
+        }
         const foundType = this.getTypeFromContext(context);
         return foundType?.isAssignableTo(targetType, context);
     }

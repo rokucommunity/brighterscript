@@ -11,6 +11,9 @@ export class InterfaceType implements BscType, SymbolContainer {
     }
 
     public isAssignableTo(targetType: BscType, context?: TypeContext) {
+        if (isObjectType(targetType)) {
+            return true;
+        }
         const ancestorTypes = context?.scope?.getAncestorTypeListByContext(this, context);
         if (ancestorTypes?.find(ancestorType => targetType.equals(ancestorType, context))) {
             return true;

@@ -1,6 +1,5 @@
-import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType } from '../astUtils/reflection';
+import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
-
 
 export class LongIntegerType implements BscType {
     constructor(
@@ -10,7 +9,8 @@ export class LongIntegerType implements BscType {
     public isAssignableTo(targetType: BscType) {
         return (
             isLongIntegerType(targetType) ||
-            isDynamicType(targetType)
+            isDynamicType(targetType) ||
+            isObjectType(targetType)
         );
     }
 

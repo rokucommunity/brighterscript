@@ -170,6 +170,10 @@ describe('InterfaceType', () => {
             });
         });
 
+        it('accepts with source member having dynamic prop type', () => {
+            expect(iface({ name: new StringType() }).isAssignableTo(new ObjectType())).to.be.true;
+        });
+
         it('accepts with target member having dynamic prop type', () => {
             expectAssignable({
                 parent: new DynamicType()
