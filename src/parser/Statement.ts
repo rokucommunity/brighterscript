@@ -2097,42 +2097,73 @@ export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;
 
 export class TryCatchStatement extends Statement {
     constructor(
-        public tryToken: Token,
+        public tokens: {
+            tryToken: Token;
+            endTryToken?: Token;
+        },
         public tryBranch?: Block,
-        public catchToken?: Token,
-        public exceptionVariable?: Identifier,
-        public catchBranch?: Block,
-        public endTryToken?: Token
+        public catchStatement?: CatchStatement
     ) {
         super();
     }
 
     public get range() {
         return util.createRangeFromPositions(
-            this.tryToken.range.start,
-            (this.endTryToken ?? this.catchBranch ?? this.exceptionVariable ?? this.catchToken ?? this.tryBranch ?? this.tryToken).range.end
+            this.tokens.tryToken.range.start,
+            (this.tokens.endTryToken ?? this.catchStatement ?? this.tryBranch ?? this.tokens.tryToken).range.end
         );
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
-            state.transpileToken(this.tryToken),
+            state.transpileToken(this.tokens.tryToken),
             ...this.tryBranch.transpile(state),
             state.newline,
             state.indent(),
-            state.transpileToken(this.catchToken),
-            ' ',
-            state.transpileToken(this.exceptionVariable),
-            ...this.catchBranch.transpile(state),
+            ...(this.catchStatement?.transpile(state) ?? ['catch']),
             state.newline,
             state.indent(),
-            state.transpileToken(this.endTryToken)
+            state.transpileToken(this.tokens.endTryToken)
         ];
     }
 
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (this.tryBranch && options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'tryBranch', visitor, options);
+            walk(this, 'catchStatement', visitor, options);
+        }
+    }
+}
+
+export class CatchStatement extends Statement {
+    constructor(
+        public tokens: {
+            catchToken: Token;
+        },
+        public exceptionVariable?: Identifier,
+        public catchBranch?: Block
+    ) {
+        super();
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            this.tokens.catchToken.range.start,
+            (this.catchBranch ?? this.exceptionVariable ?? this.tokens.catchToken).range.end
+        );
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [
+            state.transpileToken(this.tokens.catchToken),
+            ' ',
+            this.exceptionVariable?.text ?? 'e',
+            ...(this.catchBranch?.transpile(state) ?? [])
+        ];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.catchBranch && options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'catchBranch', visitor, options);
         }
     }
