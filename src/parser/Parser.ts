@@ -1580,7 +1580,7 @@ export class Parser {
     private tryCatchStatement(): TryCatchStatement {
         const tryToken = this.advance();
         const statement = new TryCatchStatement(
-            { tryToken: tryToken }
+            { try: tryToken }
         );
 
         //ensure statement separator
@@ -1596,11 +1596,11 @@ export class Parser {
             });
             //gracefully handle end-try
             if (peek.kind === TokenKind.EndTry) {
-                statement.tokens.endTryToken = this.advance();
+                statement.tokens.endTry = this.advance();
             }
             return statement;
         }
-        const catchStmt = new CatchStatement({ catchToken: this.advance() });
+        const catchStmt = new CatchStatement({ catch: this.advance() });
         statement.catchStatement = catchStmt;
 
         const exceptionVarToken = this.tryConsume(DiagnosticMessages.missingExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers);
@@ -1621,7 +1621,7 @@ export class Parser {
                 range: this.peek().range
             });
         } else {
-            statement.tokens.endTryToken = this.advance();
+            statement.tokens.endTry = this.advance();
         }
         return statement;
     }

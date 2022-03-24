@@ -16,14 +16,14 @@ describe('parser try/catch', () => {
         expect(parser.diagnostics[0]?.message).not.to.exist;
         const stmt = parser.references.functionExpressions[0].body.statements[0] as TryCatchStatement;
         expect(stmt).to.be.instanceof(TryCatchStatement);
-        expect(stmt.tokens.tryToken?.text).to.eql('try');
+        expect(stmt.tokens.try?.text).to.eql('try');
         expect(stmt.tryBranch).to.exist.and.ownProperty('statements').to.be.lengthOf(1);
         expect(stmt.catchStatement).to.exist;
         const cstmt = stmt.catchStatement;
-        expect(cstmt.tokens.catchToken?.text).to.eql('catch');
+        expect(cstmt.tokens.catch?.text).to.eql('catch');
         expect(cstmt.exceptionVariable.text).to.eql('e');
         expect(cstmt.catchBranch).to.exist.and.ownProperty('statements').to.be.lengthOf(1);
-        expect(stmt.tokens.endTryToken?.text).to.eql('end try');
+        expect(stmt.tokens.endTry?.text).to.eql('end try');
     });
 
     it('supports various configurations of try-catch', () => {

@@ -53,8 +53,8 @@ describe('reflection', () => {
         const namespace = new NamespaceStatement(token, new NamespacedVariableNameExpression(createVariableExpression('a', range)), body, token);
         const cls = new ClassStatement(token, ident, [], token);
         const imports = new ImportStatement(token, token);
-        const catchStmt = new CatchStatement({ catchToken: token }, ident, block);
-        const tryCatch = new TryCatchStatement({ tryToken: token }, block, catchStmt);
+        const catchStmt = new CatchStatement({ catch: token }, ident, block);
+        const tryCatch = new TryCatchStatement({ try: token }, block, catchStmt);
 
         it('isStatement', () => {
             expect(isStatement(library)).to.be.true;
