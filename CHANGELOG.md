@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.46.0](https://github.com/rokucommunity/brighterscript/compare/v0.45.6...v0.46.0) - 2022-03-24
+### Changed
+ - refactored try-catch statement to make the expressions and bodies easier to access via plugins. [#514](https://github.com/rokucommunity/brighterscript/pull/514)
+
+
+
 ## [1.0.0-alpha.17](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.16...v1.0.0-alpha.17) - 2022-03-17
 ### Added
  - `TypeExpression` which will eventually make it easier to parse all types across the project. ([#507](https://github.com/rokucommunity/brighterscript/pull/507)
