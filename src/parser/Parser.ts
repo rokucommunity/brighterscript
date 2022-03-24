@@ -2324,7 +2324,7 @@ export class Parser {
 
     private indexedGet(expr: Expression) {
         let openingSquare = this.previous();
-        let optionalChainingToken = this.getToken(-2, TokenKind.Question, TokenKind.QuestionDot);
+        let optionalChainingToken = this.getMatchingTokenAtOffset(-2, TokenKind.Question, TokenKind.QuestionDot);
         while (this.match(TokenKind.Newline)) { }
 
         let index = this.expression();
@@ -2382,7 +2382,7 @@ export class Parser {
                 expr = this.finishCall(this.previous(), expr);
                 //store this call expression in references
                 referenceCallExpression = expr;
-                //Indexed get. Also supports worthless leading dot. example: prop.["someKey"]
+                //Indexed get. Also supports optional leading dot. example: prop.["someKey"]
             } else if (this.match(TokenKind.LeftSquareBracket) || this.matchSequence(TokenKind.Dot, TokenKind.LeftSquareBracket) || this.matchSequence(TokenKind.QuestionDot, TokenKind.LeftSquareBracket)) {
                 expr = this.indexedGet(expr);
             } else if (this.match(TokenKind.Callfunc)) {
@@ -2857,16 +2857,16 @@ export class Parser {
     }
 
     /**
-     * Get the token that is {diff} indexes away from {this.current}
-     * @param diff the number of steps away from current index to fetch
+     * Get the token that is {offset} indexes away from {this.current}
+     * @param offset the number of index steps away from current index to fetch
      * @param tokenKinds the desired token must match one of these
      * @example
      * getToken(-1); //returns the previous token.
      * getToken(0);  //returns current token.
      * getToken(1);  //returns next token
      */
-    private getToken(diff: number, ...tokenKinds: TokenKind[]): Token {
-        const token = this.tokens[this.current + diff];
+    private getMatchingTokenAtOffset(offset: number, ...tokenKinds: TokenKind[]): Token {
+        const token = this.tokens[this.current + offset];
         if (tokenKinds.includes(token.kind)) {
             return token;
         }
