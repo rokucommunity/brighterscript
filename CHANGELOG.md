@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.18](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.17...v1.0.0-alpha.18) - 2022-03-24
+### Added
+ - Adds Symbol Tables to InterfaceTypes - general refactor of Interfaces ([#496](https://github.com/rokucommunity/brighterscript/pull/496))
+ - all changes from [v0.46.0](#0460---2022-03-24)
+### Changed
+ - Renamed `FunctionType` => `TypedFunctionType` and `UniversalFunctionType` => `FunctionType` ([#542](https://github.com/rokucommunity/brighterscript/pull/542))
+### Fixed
+ - Prevent undefined showing up in type tracking ([#543](https://github.com/rokucommunity/brighterscript/pull/543))
+ - Better handling of object types ([#544](https://github.com/rokucommunity/brighterscript/pull/544))
+
+
+
 ## [0.46.0](https://github.com/rokucommunity/brighterscript/compare/v0.45.6...v0.46.0) - 2022-03-24
 ### Changed
  - refactored try-catch statement to make the expressions and bodies easier to access via plugins. [#514](https://github.com/rokucommunity/brighterscript/pull/514)
