@@ -2097,31 +2097,33 @@ export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;
 
 export class TryCatchStatement extends Statement {
     constructor(
-        public tryToken: Token,
+        public tokens: {
+            tryToken: Token;
+            endTryToken?: Token;
+        },
         public tryBranch?: Block,
-        public catchStatement?: CatchStatement,
-        public endTryToken?: Token
+        public catchStatement?: CatchStatement
     ) {
         super();
     }
 
     public get range() {
         return util.createRangeFromPositions(
-            this.tryToken.range.start,
-            (this.endTryToken ?? this.catchStatement ?? this.tryBranch ?? this.tryToken).range.end
+            this.tokens.tryToken.range.start,
+            (this.tokens.endTryToken ?? this.catchStatement ?? this.tryBranch ?? this.tokens.tryToken).range.end
         );
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
-            state.transpileToken(this.tryToken),
+            state.transpileToken(this.tokens.tryToken),
             ...this.tryBranch.transpile(state),
             state.newline,
             state.indent(),
-            ...(this.catchStatement?.transpile(state) ?? []),
+            ...(this.catchStatement?.transpile(state) ?? ['catch']),
             state.newline,
             state.indent(),
-            state.transpileToken(this.endTryToken)
+            state.transpileToken(this.tokens.endTryToken)
         ];
     }
 
@@ -2135,7 +2137,9 @@ export class TryCatchStatement extends Statement {
 
 export class CatchStatement extends Statement {
     constructor(
-        public catchToken: Token,
+        public tokens: {
+            catchToken: Token;
+        },
         public exceptionVariable?: Identifier,
         public catchBranch?: Block
     ) {
@@ -2144,14 +2148,14 @@ export class CatchStatement extends Statement {
 
     public get range() {
         return util.createRangeFromPositions(
-            this.catchToken.range.start,
-            (this.catchBranch ?? this.exceptionVariable ?? this.catchToken).range.end
+            this.tokens.catchToken.range.start,
+            (this.catchBranch ?? this.exceptionVariable ?? this.tokens.catchToken).range.end
         );
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
-            state.transpileToken(this.catchToken),
+            state.transpileToken(this.tokens.catchToken),
             ' ',
             this.exceptionVariable?.text ?? 'e',
             ...(this.catchBranch?.transpile(state) ?? [])
