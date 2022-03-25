@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.46.0](https://github.com/rokucommunity/brighterscript/compare/v0.45.6...v0.46.0) - 2022-03-24
+### Changed
+ - refactored try-catch statement to make the expressions and bodies easier to access via plugins. [#514](https://github.com/rokucommunity/brighterscript/pull/514)
+
+
+
 ## [0.45.6](https://github.com/rokucommunity/brighterscript/compare/v0.45.5...v0.45.6) - 2022-03-17
 ### Changed
  - upgrade to  [roku-deploy@3.5.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#354---2022-03-17) which fixed significant performance issues during globbing. ([roku-deploy#86](https://github.com/rokucommunity/roku-deploy/pull/86))
