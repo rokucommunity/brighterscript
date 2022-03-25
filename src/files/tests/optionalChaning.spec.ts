@@ -52,14 +52,6 @@ describe('optional chaining', () => {
         `);
     });
 
-    it(`transpiles '?(`, () => {
-        testTranspile(`
-            sub main()
-                print m.notExists?()
-            end sub
-        `);
-    });
-
     it('transpiles various use cases', () => {
         testTranspile(`
             print arr?.["0"]
