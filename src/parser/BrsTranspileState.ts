@@ -18,7 +18,9 @@ export class BrsTranspileState extends TranspileState {
 
     /**
      * the tree of parents, with the first index being direct parent, and the last index being the furthest removed ancestor.
-     * Used to assist blocks in knowing when to add a comment statement to the same line as the first line of the parent
+     * Used to assist blocks in knowing when to add a comment statement to the same line as the first line of the parent.
+     *
+     * This contains the final token or expression before the lineage starts, so don't depend on this for anything other than range
      */
     lineage = [] as Array<{
         range: Range;

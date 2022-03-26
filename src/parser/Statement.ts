@@ -190,16 +190,20 @@ export class Block extends Statement {
         state.blockDepth++;
         let results = [] as TranspileResult;
         for (let i = 0; i < this.statements.length; i++) {
-            let previousStatement = this.statements[i - 1];
+            let previousItem = this.statements[i - 1] ?? state.lineage[0];
             let statement = this.statements[i];
 
-            //if comment is on same line as parent
-            if (isCommentStatement(statement) &&
-                (util.linesTouch(state.lineage[0], statement) || util.linesTouch(previousStatement, statement))
-            ) {
-                results.push(' ');
-
-                //is not a comment
+            //if this item is on the same line as the previous thing (either the end of the parent statement or the end of the previous statement)
+            if (util.linesTouch(previousItem, statement)) {
+                //touch and is comment
+                if (isCommentStatement(statement)) {
+                    results.push(
+                        ' '
+                    );
+                    //touch and is not comment
+                } else {
+                    results.push(' : ');
+                }
             } else {
                 //add a newline and indent
                 results.push(
@@ -209,7 +213,7 @@ export class Block extends Statement {
             }
 
             //push block onto parent list
-            state.lineage.unshift(this);
+            state.lineage.unshift(previousItem);
             results.push(
                 ...statement.transpile(state)
             );
@@ -438,15 +442,20 @@ export class IfStatement extends Statement {
                 state.transpileToken(this.tokens.then)
             );
         }
-        state.lineage.unshift(this);
 
         //if statement body
+        state.lineage.unshift(this.tokens.if);
         let thenNodes = this.thenBranch.transpile(state);
         state.lineage.shift();
+
         if (thenNodes.length > 0) {
             results.push(thenNodes);
         }
-        results.push('\n');
+
+        //there can be no colon between the final `then` block statement and the `else` keyword when `if` and `then` are on the same line
+        results.push(
+            ...state.getSeparator(this.tokens.if, this.tokens.else, ' ')
+        );
 
         //else branch
         if (this.tokens.else) {
@@ -460,7 +469,7 @@ export class IfStatement extends Statement {
         if (this.elseBranch) {
             if (isIfStatement(this.elseBranch)) {
                 //chained elseif
-                state.lineage.unshift(this.elseBranch);
+                state.lineage.unshift(this.elseBranch.condition);
                 let body = this.elseBranch.transpile(state);
                 state.lineage.shift();
 
@@ -477,7 +486,7 @@ export class IfStatement extends Statement {
 
             } else {
                 //else body
-                state.lineage.unshift(this.elseBranch);
+                state.lineage.unshift(this.tokens.else);
                 let body = this.elseBranch.transpile(state);
                 state.lineage.shift();
 
@@ -494,8 +503,6 @@ export class IfStatement extends Statement {
             results.push(
                 state.transpileToken(this.tokens.endIf)
             );
-        } else {
-            results.push('end if');
         }
         return results;
     }
@@ -832,7 +839,7 @@ export class ForStatement extends Statement {
             );
         }
         //loop body
-        state.lineage.unshift(this);
+        state.lineage.unshift(this.forToken);
         result.push(...this.body.transpile(state));
         state.lineage.shift();
 
@@ -900,7 +907,7 @@ export class ForEachStatement extends Statement {
         //target
         result.push(...this.target.transpile(state));
         //body
-        state.lineage.unshift(this);
+        state.lineage.unshift(this.tokens.forEach);
         result.push(...this.body.transpile(state));
         state.lineage.shift();
 
@@ -952,7 +959,7 @@ export class WhileStatement extends Statement {
         result.push(
             ...this.condition.transpile(state)
         );
-        state.lineage.unshift(this);
+        state.lineage.unshift(this.tokens.while);
         //body
         result.push(...this.body.transpile(state));
         state.lineage.shift();

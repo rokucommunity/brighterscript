@@ -221,7 +221,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             );
         }
         if (includeBody) {
-            state.lineage.unshift(this);
+            state.lineage.unshift(this.returnTypeToken ?? this.asToken ?? this.rightParen);
             let body = this.body.transpile(state);
             state.lineage.shift();
             results.push(...body);
@@ -571,12 +571,12 @@ export class ArrayLiteralExpression extends Expression {
         state.blockDepth++;
 
         for (let i = 0; i < this.elements.length; i++) {
-            let previousElement = this.elements[i - 1];
+            let previousItem = this.elements[i - 1] ?? this.open;
             let element = this.elements[i];
 
             if (isCommentStatement(element)) {
                 //if the comment is on the same line as opening square or previous statement, don't add newline
-                if (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element)) {
+                if (util.linesTouch(previousItem, element)) {
                     result.push(' ');
                 } else {
                     result.push(
@@ -584,7 +584,7 @@ export class ArrayLiteralExpression extends Expression {
                         state.indent()
                     );
                 }
-                state.lineage.unshift(this);
+                state.lineage.unshift(previousItem);
                 result.push(element.transpile(state));
                 state.lineage.shift();
             } else {

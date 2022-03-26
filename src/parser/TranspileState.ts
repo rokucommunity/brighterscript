@@ -1,6 +1,8 @@
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import type { BsConfig } from '../BsConfig';
+import type { Locatable } from '../lexer/Token';
+import util from '../util';
 
 /**
  * Holds the state of a transpile operation as it works its way through the transpile process
@@ -35,6 +37,36 @@ export class TranspileState {
     public indent(blockDepthChange = 0) {
         this.blockDepth += blockDepthChange;
         return this.indentText;
+    }
+
+    /**
+     * Get an indent value but don't change the blockDepth permanently
+     */
+    public getIndent(blockDepthChange = 0) {
+        this.blockDepth += blockDepthChange;
+        const result = this.indent();
+        this.blockDepth -= blockDepthChange;
+        return result;
+    }
+
+    /**
+     * If the items were originally on the same line, separate them with the provided separator.
+     * If they were on different lines, add a newline and indent
+     * @param first - the first ast node whose location should be compared to {second}
+     * @param second - the second ast node whose location should be compared to {first}
+     * @param singleLineSeparator if the items are on the same line, they should be separated by this text
+     * @param blockDepthChange if provided, it will change the indentation for multi-line separators by that much
+     * @return either the single line separator, or a newline and an indent
+     */
+    public getSeparator(first: Locatable, second: Locatable, singleLineSeparator: string, blockDepthChange?: number) {
+        if (util.linesTouch(first, second)) {
+            return [singleLineSeparator];
+        } else {
+            return [
+                this.newline,
+                this.getIndent(blockDepthChange)
+            ];
+        }
     }
 
     /**

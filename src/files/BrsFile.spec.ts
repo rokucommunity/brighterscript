@@ -1841,6 +1841,132 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it.only('keeps single-line if statements on single line', () => {
+            //there can be no colon between the final then statement and the else keyword
+            testTranspile(`if true print 1 : print 2 else print 4`);
+            testTranspile(`if true print 1 else print 4`);
+            testTranspile(`if true print 1`);
+            testTranspile(`if true then print 1`);
+            testTranspile(`if true : print 1 : end if`);
+            testTranspile(`if true then : print 1 : else print 4 : end if`);
+            testTranspile(`if true : print 2 : end if`);
+            testTranspile(`if true then : print 3 : else print 4 : end if`);
+        });
+
+        it('keeps if statement line breaks', () => {
+
+            testTranspile(`
+                if b = 1
+                    print "1"
+                else if b = 1
+                    print "1"
+                end if
+            `);
+
+            testTranspile(`
+                if b = 1
+                    print "1"
+                end if
+            `);
+
+            testTranspile(`
+                if b = 1 then
+                    print "1"
+                end if
+            `);
+
+            testTranspile(`
+                if b = 1
+                    print "1"
+                else
+                    print "1"
+                end if
+            `);
+
+            testTranspile(`
+                if b = 1 then
+                    print "1"
+                else
+                    print "1"
+                end if
+            `);
+
+            testTranspile(`
+                if b = 1
+                    print "1"
+                else if b = 1 then
+                    print "1"
+                end if
+            `);
+
+            testTranspile(`
+                if b = 1 then
+                    print "1"
+                else if b = 1
+                    print "1"
+                end if
+            `);
+
+            testTranspile(`
+                if b = 1 then
+                    print "1"
+                else if b = 1 then
+                    print "1"
+                end if
+            `);
+
+            testTranspile(`
+                if b = 1
+                    print "1"
+                else if b = 1
+                    print "1"
+                else
+                    print "1"
+                end if
+            `);
+
+            testTranspile(`
+                if b = 1 then
+                    print "1"
+                else if b = 1
+                    print "1"
+                else
+                    print "1"
+                end if
+            `);
+
+            testTranspile(`
+                if b = 1
+                    print "1"
+                else if b = 1 then
+                    print "1"
+                else
+                    print "1"
+                end if
+            `);
+
+            testTranspile(`
+                if b = 1 then
+                    print "1"
+                else if b = 1 then
+                    print "1"
+                else
+                    print "1"
+                end if
+            `);
+
+            testTranspile(`
+                if true then
+                    return "hls"
+                else if url.instr(".mpd") >= 0
+                    return "dash"
+                else
+                    return "hls"
+                end if
+            `);
+        });
+
+
         it('transpiles if statement keywords as provided', () => {
             const code = `
                 If True Then
@@ -2019,6 +2145,7 @@ describe('BrsFile', () => {
                 `);
             });
         });
+
         it('includes all text to end of line for a non-terminated string', () => {
             testTranspile(
                 'sub main()\n    name = "john \nend sub',
