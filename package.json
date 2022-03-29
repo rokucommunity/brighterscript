@@ -9,7 +9,7 @@
         "prepublishOnly": "npm run build",
         "lint": "eslint \"src/**\"",
         "format": "tsfmt -r",
-        "test": "nyc mocha",
+        "test": "nyc mocha --all",
         "test:nocover": "mocha",
         "test:watch": "mocha --watch",
         "publish-coverage": "nyc report --reporter=text-lcov | coveralls",
@@ -24,6 +24,7 @@
             "ts-node/register"
         ],
         "fullTrace": true,
+        "timeout": 987654321,
         "watchExtensions": [
             "ts"
         ]
