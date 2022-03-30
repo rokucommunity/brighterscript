@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import * as yargs from 'yargs';
+import * as path from 'path';
 import { ProgramBuilder } from './ProgramBuilder';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import util from './util';
@@ -36,23 +37,14 @@ let options = yargs
         if (diagnosticLevel && ['error', 'warn', 'hint', 'info'].includes(diagnosticLevel) === false) {
             throw new Error(`Invalid diagnostic level "${diagnosticLevel}". Value can be "error", "warn", "hint", "info".`);
         }
-        util.resolvePluginPaths(argv as any, `${process.cwd()}/cli.json`);
+        const cwd = path.resolve(process.cwd(), argv.cwd ?? process.cwd());
+        //cli-provided plugin paths should be relative to cwd
+        util.resolvePathsRelativeTo(argv, 'plugins', cwd);
+        //cli-provided require paths should be relative to cwd
+        util.resolvePathsRelativeTo(argv, 'require', cwd);
         return true;
     })
     .argv;
-
-/**
- * load any node modules that the user passed in via CLI. Useful for doing things like ts-node registration
- */
-function handleRequire() {
-    const cwd = options.cwd ?? process.cwd();
-    const modules = (options?.require ?? []) as string[];
-    for (const dep of modules) {
-        util.resolveRequire(cwd, dep);
-    }
-}
-
-handleRequire();
 
 let builder = new ProgramBuilder();
 builder.run(<any>options).then(() => {

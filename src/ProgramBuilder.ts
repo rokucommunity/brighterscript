@@ -100,6 +100,7 @@ export class ProgramBuilder {
             } else {
                 this.logger.log(`No bsconfig.json file found, using default options`);
             }
+            this.loadRequires();
             this.loadPlugins();
         } catch (e: any) {
             if (e?.file && e.message && e.code) {
@@ -142,7 +143,7 @@ export class ProgramBuilder {
         const cwd = this.options.cwd ?? process.cwd();
         const plugins = util.loadPlugins(
             cwd,
-            this.options.plugins,
+            this.options.plugins ?? [],
             (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
         );
         this.logger.log(`Loading ${this.options.plugins?.length ?? 0} plugins for cwd "${cwd}"`);
@@ -151,6 +152,15 @@ export class ProgramBuilder {
         }
 
         this.plugins.emit('beforeProgramCreate', this);
+    }
+
+    /**
+     * `require()` every options.require path
+     */
+    protected loadRequires() {
+        for (const dep of this.options.require ?? []) {
+            util.resolveRequire(this.options.cwd, dep);
+        }
     }
 
     private clearConsole() {
