@@ -189,10 +189,10 @@ export class Util {
             let projectFileCwd = path.dirname(configFilePath);
 
             //`plugins` paths should be relative to the current bsconfig
-            projectConfig.plugins = this.resolvePathsRelativeTo(projectConfig.plugins, projectFileCwd);
+            this.resolvePathsRelativeTo(projectConfig, 'plugins', projectFileCwd);
 
             //`require` paths should be relative to cwd
-            projectConfig.require = util.resolvePathsRelativeTo(projectConfig.require, projectFileCwd);
+            util.resolvePathsRelativeTo(projectConfig, 'require', projectFileCwd);
 
             let result: BsConfig;
             //if the project has a base file, load it
@@ -217,26 +217,28 @@ export class Util {
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
-
             return result;
         }
     }
 
     /**
-     * Convert relative paths to absolute paths, relative to the given directory. Also de-dupes the paths.
+     * Convert relative paths to absolute paths, relative to the given directory. Also de-dupes the paths. Modifies the array in-place
      * @param paths the list of paths to be resolved and deduped
      * @param relativeDir the path to the folder where the paths should be resolved relative to. This should be an absolute path
      */
-    public resolvePathsRelativeTo(paths: string[], relativeDir: string) {
+    public resolvePathsRelativeTo(collection: any, key: string, relativeDir: string) {
+        if (!collection[key]) {
+            return;
+        }
         const result = new Set<string>();
-        for (const p of paths ?? []) {
+        for (const p of collection[key] as string[] ?? []) {
             if (p) {
                 result.add(
                     p?.startsWith('.') ? path.resolve(relativeDir, p) : p
                 );
             }
         }
-        return [...result];
+        collection[key] = [...result];
     }
 
     /**

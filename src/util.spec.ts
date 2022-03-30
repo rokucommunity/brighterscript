@@ -85,7 +85,7 @@ describe('util', () => {
                     'bsplugin'
                 ]
             };
-            config.plugins = util.resolvePathsRelativeTo(config.plugins, s`${rootDir}/config`);
+            util.resolvePathsRelativeTo(config, 'plugins', s`${rootDir}/config`);
             expect(config.plugins.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
                 `${rootDir}/config/plugins.js`,
                 `${rootDir}/config/scripts/plugins.js`,
@@ -104,7 +104,7 @@ describe('util', () => {
                     undefined
                 ]
             };
-            config.plugins = util.resolvePathsRelativeTo(config.plugins, s`${process.cwd()}/config`);
+            util.resolvePathsRelativeTo(config, 'plugins', s`${process.cwd()}/config`);
             expect(config.plugins.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
                 s`${process.cwd()}/config/plugins.js`,
                 'bsplugin'

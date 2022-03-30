@@ -143,7 +143,7 @@ export class ProgramBuilder {
         const cwd = this.options.cwd ?? process.cwd();
         const plugins = util.loadPlugins(
             cwd,
-            this.options.plugins,
+            this.options.plugins ?? [],
             (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
         );
         this.logger.log(`Loading ${this.options.plugins?.length ?? 0} plugins for cwd "${cwd}"`);

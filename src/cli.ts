@@ -39,9 +39,9 @@ let options = yargs
         }
         const cwd = path.resolve(process.cwd(), argv.cwd ?? process.cwd());
         //cli-provided plugin paths should be relative to cwd
-        argv.plugins = util.resolvePathsRelativeTo(argv.plugins as string[], cwd);
+        util.resolvePathsRelativeTo(argv, 'plugins', cwd);
         //cli-provided require paths should be relative to cwd
-        argv.require = util.resolvePathsRelativeTo(argv.require as string[], cwd);
+        util.resolvePathsRelativeTo(argv, 'require', cwd);
         return true;
     })
     .argv;
