@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.19](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.18...v1.0.0-alpha.19) - 2022-03-30
+### Added
+ - all changes from [v0.47.0](#0470---2022-03-30)
+
+
+
 ## [0.47.0](https://github.com/rokucommunity/brighterscript/compare/v0.46.0...v0.47.0) - 2022-03-30
 ### Added
  - `require` flag to allow loading external node modules as part of the build process (useful for things like `ts-node/register`). ([#550](https://github.com/rokucommunity/brighterscript/pull/550), [#551](https://github.com/rokucommunity/brighterscript/pull/551))
