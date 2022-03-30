@@ -243,6 +243,8 @@ These are the options available in the `bsconfig.json` file.
 
  - **plugins**: `Array<string>` - List of node scripts or npm modules to load as plugins to the BrighterScript compiler.
 
+ - **require**: `Array<string>` - List of node scripts or npm modules to load during the startup sequence. Useful for running things like `ts-node/require`
+
 ## Ignore errors and warnings on a per-line basis
 In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:
  - `bs:disable-next-line`
