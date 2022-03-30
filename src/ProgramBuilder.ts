@@ -100,6 +100,7 @@ export class ProgramBuilder {
             } else {
                 this.logger.log(`No bsconfig.json file found, using default options`);
             }
+            this.loadRequires();
             this.loadPlugins();
         } catch (e: any) {
             if (e?.file && e.message && e.code) {
@@ -151,6 +152,15 @@ export class ProgramBuilder {
         }
 
         this.plugins.emit('beforeProgramCreate', this);
+    }
+
+    /**
+     * `require()` every options.require path
+     */
+    protected loadRequires() {
+        for (const dep of this.options.require ?? []) {
+            util.resolveRequire(this.options.cwd, dep);
+        }
     }
 
     private clearConsole() {

@@ -185,9 +185,14 @@ export class Util {
                 } as BsDiagnostic;
                 throw diagnostic; //eslint-disable-line @typescript-eslint/no-throw-literal
             }
-            this.resolvePluginPaths(projectConfig, configFilePath);
 
             let projectFileCwd = path.dirname(configFilePath);
+
+            //`plugins` paths should be relative to the current bsconfig
+            projectConfig.plugins = this.resolvePathsRelativeTo(projectConfig.plugins, projectFileCwd);
+
+            //`require` paths should be relative to cwd
+            projectConfig.require = util.resolvePathsRelativeTo(projectConfig.require, projectFileCwd);
 
             let result: BsConfig;
             //if the project has a base file, load it
@@ -218,25 +223,20 @@ export class Util {
     }
 
     /**
-     * Relative paths to scripts in plugins should be resolved relatively to the bsconfig file
-     * and de-duplicated
-     * @param config Parsed configuration
-     * @param configFilePath Path of the configuration file
+     * Convert relative paths to absolute paths, relative to the given directory. Also de-dupes the paths.
+     * @param paths the list of paths to be resolved and deduped
+     * @param relativeDir the path to the folder where the paths should be resolved relative to. This should be an absolute path
      */
-    public resolvePluginPaths(config: BsConfig, configFilePath: string) {
-        if (config.plugins?.length > 0) {
-            const relPath = path.dirname(configFilePath);
-            const exists: Record<string, boolean> = {};
-            config.plugins = config.plugins.map(p => {
-                return p?.startsWith('.') ? path.resolve(relPath, p) : p;
-            }).filter(p => {
-                if (!p || exists[p]) {
-                    return false;
-                }
-                exists[p] = true;
-                return true;
-            });
+    public resolvePathsRelativeTo(paths: string[], relativeDir: string) {
+        const result = new Set<string>();
+        for (const p of paths ?? []) {
+            if (p) {
+                result.add(
+                    p?.startsWith('.') ? path.resolve(relativeDir, p) : p
+                );
+            }
         }
+        return [...result];
     }
 
     /**
