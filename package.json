@@ -9,7 +9,7 @@
         "prepublishOnly": "npm run build",
         "lint": "eslint \"src/**\"",
         "format": "tsfmt -r",
-        "test": "nyc mocha --all",
+        "test": "nyc mocha",
         "test:nocover": "mocha",
         "test:watch": "mocha --watch",
         "publish-coverage": "nyc report --reporter=text-lcov | coveralls",
