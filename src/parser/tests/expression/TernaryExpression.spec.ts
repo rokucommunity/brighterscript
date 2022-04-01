@@ -274,25 +274,25 @@ describe('ternary expressions', () => {
         });
 
         it('simple consequents', () => {
-            // testTranspile(
-            //     `a = user = invalid ? "no user" : "logged in"`,
-            //     `a = bslib_ternary(user = invalid, "no user", "logged in")`
-            // );
+            testTranspile(
+                `a = user = invalid ? "no user" : "logged in"`,
+                `a = bslib_ternary(user = invalid, "no user", "logged in")`
+            );
 
-            // testTranspile(
-            //     `a = user = invalid ? 1 : "logged in"`,
-            //     `a = bslib_ternary(user = invalid, 1, "logged in")`
-            // );
+            testTranspile(
+                `a = user = invalid ? 1 : "logged in"`,
+                `a = bslib_ternary(user = invalid, 1, "logged in")`
+            );
 
-            // testTranspile(
-            //     `a = user = invalid ? 1.2 : "logged in"`,
-            //     `a = bslib_ternary(user = invalid, 1.2, "logged in")`
-            // );
+            testTranspile(
+                `a = user = invalid ? 1.2 : "logged in"`,
+                `a = bslib_ternary(user = invalid, 1.2, "logged in")`
+            );
 
-            // testTranspile(
-            //     `a = user = invalid ? {} : "logged in"`,
-            //     `a = bslib_ternary(user = invalid, {}, "logged in")`
-            // );
+            testTranspile(
+                `a = user = invalid ? {} : "logged in"`,
+                `a = bslib_ternary(user = invalid, {}, "logged in")`
+            );
 
             testTranspile(
                 `a = user = invalid ? [] : "logged in"`,
