@@ -20,6 +20,41 @@ describe('lexer', () => {
         ]);
     });
 
+    it('recognizes the question mark operator in various contexts', () => {
+        expectKinds('? ?? ?. ?[ ?.[ ?( ?@', [
+            TokenKind.Question,
+            TokenKind.QuestionQuestion,
+            TokenKind.QuestionDot,
+            TokenKind.QuestionLeftSquare,
+            TokenKind.QuestionDot,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionLeftParen,
+            TokenKind.QuestionAt
+        ]);
+    });
+
+    it('handles QuestionDot and Square properly', () => {
+        expectKinds('?.[ ?. [', [
+            TokenKind.QuestionDot,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionDot,
+            TokenKind.LeftSquareBracket
+        ]);
+    });
+
+    it('does not make conditional chaining tokens with space between', () => {
+        expectKinds('? . ? [ ? ( ? @', [
+            TokenKind.Question,
+            TokenKind.Dot,
+            TokenKind.Question,
+            TokenKind.LeftSquareBracket,
+            TokenKind.Question,
+            TokenKind.LeftParen,
+            TokenKind.Question,
+            TokenKind.At
+        ]);
+    });
+
     it('recognizes the callfunc operator', () => {
         let { tokens } = Lexer.scan('@.');
         expect(tokens[0].kind).to.equal(TokenKind.Callfunc);
@@ -33,18 +68,6 @@ describe('lexer', () => {
     it('recognizes library token', () => {
         let { tokens } = Lexer.scan('library');
         expect(tokens[0].kind).to.eql(TokenKind.Library);
-    });
-
-    it('recognizes the question mark operator in various contexts', () => {
-        expectKinds('? ?? ?. ?[ ?.[', [
-            TokenKind.Question,
-            TokenKind.QuestionQuestion,
-            TokenKind.QuestionDot,
-            TokenKind.Question,
-            TokenKind.LeftSquareBracket,
-            TokenKind.QuestionDot,
-            TokenKind.LeftSquareBracket
-        ]);
     });
 
     it('produces an at symbol token', () => {

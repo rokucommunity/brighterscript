@@ -159,13 +159,21 @@ describe('parser', () => {
         it('works for ?[', () => {
             const expression = getExpression<IndexedGetExpression>(`value = person?["name"]`, isIndexedGetExpression);
             expect(expression).to.be.instanceOf(IndexedGetExpression);
-            expect(expression.optionalChainingToken.kind).to.eql(TokenKind.Question);
+            expect(expression.openingSquare.kind).to.eql(TokenKind.QuestionLeftSquare);
+            expect(expression.questionDotToken).not.to.exist;
         });
 
         it('works for ?.[', () => {
             const expression = getExpression<IndexedGetExpression>(`value = person?.["name"]`, isIndexedGetExpression);
             expect(expression).to.be.instanceOf(IndexedGetExpression);
-            expect(expression.optionalChainingToken?.kind).to.eql(TokenKind.QuestionDot);
+            expect(expression.openingSquare.kind).to.eql(TokenKind.LeftSquareBracket);
+            expect(expression.questionDotToken?.kind).to.eql(TokenKind.QuestionDot);
+        });
+
+        it('works for ?@', () => {
+            const expression = getExpression<XmlAttributeGetExpression>(`value = someXml?@someAttr`);
+            expect(expression).to.be.instanceOf(XmlAttributeGetExpression);
+            expect(expression.at.kind).to.eql(TokenKind.QuestionAt);
         });
 
         it('distinguishes between optional chaining and ternary expression', () => {

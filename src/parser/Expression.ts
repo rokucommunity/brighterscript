@@ -69,6 +69,9 @@ export class CallExpression extends Expression {
 
     constructor(
         readonly callee: Expression,
+        /**
+         * Can either be `(`, or `?(` for optional chaining
+         */
         readonly openingParen: Token,
         readonly closingParen: Token,
         readonly args: Expression[],
@@ -368,6 +371,9 @@ export class DottedGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
+        /**
+         * Can either be `.`, or `?.` for optional chaining
+         */
         readonly dot: Token
     ) {
         super();
@@ -400,6 +406,9 @@ export class XmlAttributeGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
+        /**
+         * Can either be `@`, or `?@` for optional chaining
+         */
         readonly at: Token
     ) {
         super();
@@ -427,12 +436,15 @@ export class IndexedGetExpression extends Expression {
     constructor(
         public obj: Expression,
         public index: Expression,
+        /**
+         * Can either be `[` or `?[`. If `?.[` is used, this will be `[` and `optionalChainingToken` will be `?.`
+         */
         public openingSquare: Token,
         public closingSquare: Token,
-        public optionalChainingToken?: Token //  ? or ?.
+        public questionDotToken?: Token //  ? or ?.
     ) {
         super();
-        this.range = util.createBoundingRange(this.obj, this.openingSquare, this.optionalChainingToken, this.openingSquare, this.index, this.closingSquare);
+        this.range = util.createBoundingRange(this.obj, this.openingSquare, this.questionDotToken, this.openingSquare, this.index, this.closingSquare);
     }
 
     public readonly range: Range;
@@ -440,7 +452,7 @@ export class IndexedGetExpression extends Expression {
     transpile(state: BrsTranspileState) {
         return [
             ...this.obj.transpile(state),
-            this.optionalChainingToken ? state.transpileToken(this.optionalChainingToken) : '',
+            this.questionDotToken ? state.transpileToken(this.questionDotToken) : '',
             state.transpileToken(this.openingSquare),
             ...this.index.transpile(state),
             state.transpileToken(this.closingSquare)

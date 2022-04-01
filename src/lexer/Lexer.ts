@@ -280,6 +280,15 @@ export class Lexer {
             } else if (this.peek() === '.') {
                 this.advance();
                 this.addToken(TokenKind.QuestionDot);
+            } else if (this.peek() === '[') {
+                this.advance();
+                this.addToken(TokenKind.QuestionLeftSquare);
+            } else if (this.peek() === '(') {
+                this.advance();
+                this.addToken(TokenKind.QuestionLeftParen);
+            } else if (this.peek() === '@') {
+                this.advance();
+                this.addToken(TokenKind.QuestionAt);
             } else {
                 this.addToken(TokenKind.Question);
             }

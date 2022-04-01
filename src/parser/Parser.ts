@@ -88,7 +88,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAAMemberExpression, isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
@@ -1450,12 +1450,12 @@ export class Parser {
         return annotation;
     }
 
-    private ternaryOrIndexedGet(test?: Expression): TernaryExpression | IndexedGetExpression {
+    private ternaryExpression(test?: Expression): TernaryExpression {
+        this.warnIfNotBrighterScriptMode('ternary operator');
         if (!test) {
             test = this.expression();
         }
         const questionMarkToken = this.advance();
-        const start = this.current;
 
         //consume newlines or comments
         while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
@@ -1472,27 +1472,18 @@ export class Parser {
             this.advance();
         }
 
-        //if there's no colon symbol, assume this is an optional chain indexedGet
-        if (!this.check(TokenKind.Colon) && isArrayLiteralExpression(consequent)) {
-            //step past the opening square brace
-            this.current = start + 1;
-            return this.indexedGet(test);
-        } else {
-            this.warnIfNotBrighterScriptMode('ternary operator');
+        const colonToken = this.tryConsumeToken(TokenKind.Colon);
 
-            const colonToken = this.tryConsumeToken(TokenKind.Colon);
-
-            //consume newlines
-            while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
-                this.advance();
-            }
-            let alternate: Expression;
-            try {
-                alternate = this.expression();
-            } catch { }
-
-            return new TernaryExpression(test, questionMarkToken, consequent, colonToken, alternate);
+        //consume newlines
+        while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
+            this.advance();
         }
+        let alternate: Expression;
+        try {
+            alternate = this.expression();
+        } catch { }
+
+        return new TernaryExpression(test, questionMarkToken, consequent, colonToken, alternate);
     }
 
     private nullCoalescingExpression(test: Expression): NullCoalescingExpression {
@@ -2226,7 +2217,7 @@ export class Parser {
         let expr = this.boolean();
 
         if (this.check(TokenKind.Question)) {
-            return this.ternaryOrIndexedGet(expr);
+            return this.ternaryExpression(expr);
         } else if (this.check(TokenKind.QuestionQuestion)) {
             return this.nullCoalescingExpression(expr);
         } else {
@@ -2325,7 +2316,7 @@ export class Parser {
 
     private indexedGet(expr: Expression) {
         let openingSquare = this.previous();
-        let optionalChainingToken = this.getMatchingTokenAtOffset(-2, TokenKind.Question, TokenKind.QuestionDot);
+        let questionDotToken = this.getMatchingTokenAtOffset(-2, TokenKind.QuestionDot);
         while (this.match(TokenKind.Newline)) { }
 
         let index = this.expression();
@@ -2336,7 +2327,7 @@ export class Parser {
             TokenKind.RightSquareBracket
         );
 
-        return new IndexedGetExpression(expr, index, openingSquare, closingSquare, optionalChainingToken);
+        return new IndexedGetExpression(expr, index, openingSquare, closingSquare, questionDotToken);
     }
 
     private newExpression() {
@@ -2383,27 +2374,30 @@ export class Parser {
                 expr = this.finishCall(this.previous(), expr);
                 //store this call expression in references
                 referenceCallExpression = expr;
-                //Indexed get. Also supports optional leading dot. example: prop.["someKey"]
-            } else if (this.match(TokenKind.LeftSquareBracket) || this.matchSequence(TokenKind.Dot, TokenKind.LeftSquareBracket) || this.matchSequence(TokenKind.QuestionDot, TokenKind.LeftSquareBracket)) {
+            } else if (this.matchAny(TokenKind.LeftSquareBracket, TokenKind.QuestionLeftSquare) || this.matchSequence(TokenKind.QuestionDot, TokenKind.LeftSquareBracket)) {
                 expr = this.indexedGet(expr);
             } else if (this.match(TokenKind.Callfunc)) {
                 expr = this.callfunc(expr);
                 //store this callfunc expression in references
                 referenceCallExpression = expr;
             } else if (this.matchAny(TokenKind.Dot, TokenKind.QuestionDot)) {
-                let dot = this.previous();
-                let name = this.consume(
-                    DiagnosticMessages.expectedPropertyNameAfterPeriod(),
-                    TokenKind.Identifier,
-                    ...AllowedProperties
-                );
+                if (this.match(TokenKind.LeftSquareBracket)) {
+                    expr = this.indexedGet(expr);
+                } else {
+                    let dot = this.previous();
+                    let name = this.consume(
+                        DiagnosticMessages.expectedPropertyNameAfterPeriod(),
+                        TokenKind.Identifier,
+                        ...AllowedProperties
+                    );
 
-                // force it into an identifier so the AST makes some sense
-                name.kind = TokenKind.Identifier;
-                expr = new DottedGetExpression(expr, name as Identifier, dot);
+                    // force it into an identifier so the AST makes some sense
+                    name.kind = TokenKind.Identifier;
+                    expr = new DottedGetExpression(expr, name as Identifier, dot);
 
-                this.addPropertyHints(name);
-            } else if (this.check(TokenKind.At)) {
+                    this.addPropertyHints(name);
+                }
+            } else if (this.checkAny(TokenKind.At, TokenKind.QuestionAt)) {
                 let dot = this.advance();
                 let name = this.consume(
                     DiagnosticMessages.expectedAttributeNameAfterAtSymbol(),
@@ -2527,7 +2521,7 @@ export class Parser {
                 );
                 return new GroupingExpression({ left: left, right: right }, expr);
 
-            case this.match(TokenKind.LeftSquareBracket):
+            case this.matchAny(TokenKind.LeftSquareBracket):
                 return this.arrayLiteral();
 
             case this.match(TokenKind.LeftCurlyBrace):
