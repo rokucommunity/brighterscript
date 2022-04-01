@@ -2,7 +2,7 @@ import { expect, assert } from 'chai';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { Expression } from './Expression';
-import { TernaryExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
+import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
 import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
@@ -140,12 +140,12 @@ describe('parser', () => {
     });
 
     describe('optional chaining operator', () => {
-        function getExpression<T>(text: string, matcher?) {
-            const parser = parse(text);
+        function getExpression<T>(text: string, options?: { matcher?: any; parseMode?: ParseMode }) {
+            const parser = parse(text, options?.parseMode);
             expectZeroDiagnostics(parser);
             const expressions = [...parser.references.expressions];
-            if (matcher) {
-                return expressions.find(matcher) as unknown as T;
+            if (options?.matcher) {
+                return expressions.find(options.matcher) as unknown as T;
             } else {
                 return expressions[0] as unknown as T;
             }
@@ -157,14 +157,14 @@ describe('parser', () => {
         });
 
         it('works for ?[', () => {
-            const expression = getExpression<IndexedGetExpression>(`value = person?["name"]`, isIndexedGetExpression);
+            const expression = getExpression<IndexedGetExpression>(`value = person?["name"]`, { matcher: isIndexedGetExpression });
             expect(expression).to.be.instanceOf(IndexedGetExpression);
             expect(expression.openingSquare.kind).to.eql(TokenKind.QuestionLeftSquare);
             expect(expression.questionDotToken).not.to.exist;
         });
 
         it('works for ?.[', () => {
-            const expression = getExpression<IndexedGetExpression>(`value = person?.["name"]`, isIndexedGetExpression);
+            const expression = getExpression<IndexedGetExpression>(`value = person?.["name"]`, { matcher: isIndexedGetExpression });
             expect(expression).to.be.instanceOf(IndexedGetExpression);
             expect(expression.openingSquare.kind).to.eql(TokenKind.LeftSquareBracket);
             expect(expression.questionDotToken?.kind).to.eql(TokenKind.QuestionDot);
@@ -174,6 +174,25 @@ describe('parser', () => {
             const expression = getExpression<XmlAttributeGetExpression>(`value = someXml?@someAttr`);
             expect(expression).to.be.instanceOf(XmlAttributeGetExpression);
             expect(expression.at.kind).to.eql(TokenKind.QuestionAt);
+        });
+
+        it('works for ?(', () => {
+            const expression = getExpression<CallExpression>(`value = person.getName?()`);
+            expect(expression).to.be.instanceOf(CallExpression);
+            expect(expression.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
+        });
+
+        //TODO enable this once we properly parse IIFEs
+        it.skip('works for ?( in anonymous function', () => {
+            const expression = getExpression<CallExpression>(`thing = (function() : end function)?()`);
+            expect(expression).to.be.instanceOf(CallExpression);
+            expect(expression.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
+        });
+
+        it('works for ?( in new call', () => {
+            const expression = getExpression<NewExpression>(`thing = new Person?()`, { parseMode: ParseMode.BrighterScript });
+            expect(expression).to.be.instanceOf(NewExpression);
+            expect(expression.call.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
         });
 
         it('distinguishes between optional chaining and ternary expression', () => {

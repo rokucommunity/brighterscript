@@ -2337,7 +2337,8 @@ export class Parser {
         let nameExpr = this.getNamespacedVariableNameExpression();
         let leftParen = this.consume(
             DiagnosticMessages.unexpectedToken(this.peek().text),
-            TokenKind.LeftParen
+            TokenKind.LeftParen,
+            TokenKind.QuestionLeftParen
         );
         let call = this.finishCall(leftParen, nameExpr);
         //pop the call from the  callExpressions list because this is technically something else
@@ -2370,16 +2371,19 @@ export class Parser {
         //an expression to keep for _references
         let referenceCallExpression: Expression;
         while (true) {
-            if (this.match(TokenKind.LeftParen)) {
+            if (this.matchAny(TokenKind.LeftParen, TokenKind.QuestionLeftParen)) {
                 expr = this.finishCall(this.previous(), expr);
                 //store this call expression in references
                 referenceCallExpression = expr;
+
             } else if (this.matchAny(TokenKind.LeftSquareBracket, TokenKind.QuestionLeftSquare) || this.matchSequence(TokenKind.QuestionDot, TokenKind.LeftSquareBracket)) {
                 expr = this.indexedGet(expr);
+
             } else if (this.match(TokenKind.Callfunc)) {
                 expr = this.callfunc(expr);
                 //store this callfunc expression in references
                 referenceCallExpression = expr;
+
             } else if (this.matchAny(TokenKind.Dot, TokenKind.QuestionDot)) {
                 if (this.match(TokenKind.LeftSquareBracket)) {
                     expr = this.indexedGet(expr);
@@ -2397,6 +2401,7 @@ export class Parser {
 
                     this.addPropertyHints(name);
                 }
+
             } else if (this.checkAny(TokenKind.At, TokenKind.QuestionAt)) {
                 let dot = this.advance();
                 let name = this.consume(
@@ -2411,6 +2416,7 @@ export class Parser {
                 expr = new XmlAttributeGetExpression(expr, name as Identifier, dot);
                 //only allow a single `@` expression
                 break;
+
             } else {
                 break;
             }
@@ -2424,8 +2430,7 @@ export class Parser {
 
     private finishCall(openingParen: Token, callee: Expression, addToCallExpressionList = true) {
         let args = [] as Expression[];
-        while (this.match(TokenKind.Newline)) {
-        }
+        while (this.match(TokenKind.Newline)) { }
 
         if (!this.check(TokenKind.RightParen)) {
             do {
