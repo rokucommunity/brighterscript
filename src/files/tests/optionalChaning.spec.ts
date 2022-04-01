@@ -52,6 +52,25 @@ describe('optional chaining', () => {
         `);
     });
 
+    it(`transpiles '?@`, () => {
+        testTranspile(`
+            sub main()
+                print xmlThing?@someAttr
+            end sub
+        `);
+    });
+
+    it(`transpiles '?(`, () => {
+        testTranspile(`
+            sub main()
+                localFunc = sub()
+                end sub
+                print localFunc?()
+                print m.someFunc?()
+            end sub
+        `);
+    });
+
     it('transpiles various use cases', () => {
         testTranspile(`
             print arr?.["0"]
@@ -68,6 +87,8 @@ describe('optional chaining', () => {
             print createObject("roSGNode", "Node")?[0]
             print pi?.first?.second
             print success?.first?.second
+            print a.b.xmlThing?@someAttr
+            print a.b.localFunc?()
         `);
     });
 });

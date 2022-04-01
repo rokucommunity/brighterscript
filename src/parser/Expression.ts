@@ -420,7 +420,7 @@ export class XmlAttributeGetExpression extends Expression {
     transpile(state: BrsTranspileState) {
         return [
             ...this.obj.transpile(state),
-            '@',
+            state.transpileToken(this.at),
             state.transpileToken(this.name)
         ];
     }
