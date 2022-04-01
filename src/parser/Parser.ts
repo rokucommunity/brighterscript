@@ -2521,46 +2521,7 @@ export class Parser {
                 return new GroupingExpression({ left: left, right: right }, expr);
 
             case this.match(TokenKind.LeftSquareBracket):
-                let elements: Array<Expression | CommentStatement> = [];
-                let openingSquare = this.previous();
-
-                //add any comment found right after the opening square
-                if (this.check(TokenKind.Comment)) {
-                    elements.push(new CommentStatement([this.advance()]));
-                }
-
-                while (this.match(TokenKind.Newline)) {
-                }
-
-                if (!this.match(TokenKind.RightSquareBracket)) {
-                    elements.push(this.expression());
-
-                    while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Comment)) {
-                        if (this.checkPrevious(TokenKind.Comment) || this.check(TokenKind.Comment)) {
-                            let comment = this.check(TokenKind.Comment) ? this.advance() : this.previous();
-                            elements.push(new CommentStatement([comment]));
-                        }
-                        while (this.match(TokenKind.Newline)) {
-
-                        }
-
-                        if (this.check(TokenKind.RightSquareBracket)) {
-                            break;
-                        }
-
-                        elements.push(this.expression());
-                    }
-
-                    this.consume(
-                        DiagnosticMessages.unmatchedLeftSquareBraceAfterArrayLiteral(),
-                        TokenKind.RightSquareBracket
-                    );
-                }
-
-                let closingSquare = this.previous();
-
-                //this.consume("Expected newline or ':' after array literal", TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
-                return new ArrayLiteralExpression(elements, openingSquare, closingSquare);
+                return this.arrayLiteral();
 
             case this.match(TokenKind.LeftCurlyBrace):
                 let openingBrace = this.previous();
@@ -2687,6 +2648,49 @@ export class Parser {
                     throw this.lastDiagnosticAsError();
                 }
         }
+    }
+
+    private arrayLiteral() {
+        let elements: Array<Expression | CommentStatement> = [];
+        let openingSquare = this.previous();
+
+        //add any comment found right after the opening square
+        if (this.check(TokenKind.Comment)) {
+            elements.push(new CommentStatement([this.advance()]));
+        }
+
+        while (this.match(TokenKind.Newline)) {
+        }
+
+        if (!this.match(TokenKind.RightSquareBracket)) {
+            elements.push(this.expression());
+
+            while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Comment)) {
+                if (this.checkPrevious(TokenKind.Comment) || this.check(TokenKind.Comment)) {
+                    let comment = this.check(TokenKind.Comment) ? this.advance() : this.previous();
+                    elements.push(new CommentStatement([comment]));
+                }
+                while (this.match(TokenKind.Newline)) {
+
+                }
+
+                if (this.check(TokenKind.RightSquareBracket)) {
+                    break;
+                }
+
+                elements.push(this.expression());
+            }
+
+            this.consume(
+                DiagnosticMessages.unmatchedLeftSquareBraceAfterArrayLiteral(),
+                TokenKind.RightSquareBracket
+            );
+        }
+
+        let closingSquare = this.previous();
+
+        //this.consume("Expected newline or ':' after array literal", TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
+        return new ArrayLiteralExpression(elements, openingSquare, closingSquare);
     }
 
     /**
