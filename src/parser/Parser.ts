@@ -2495,17 +2495,22 @@ export class Parser {
                 TokenKind.StringLiteral
             ):
                 return new LiteralExpression(this.previous());
+
             //capture source literals (LINE_NUM if brightscript, or a bunch of them if brighterscript)
             case this.matchAny(TokenKind.LineNumLiteral, ...(this.options.mode === ParseMode.BrightScript ? [] : BrighterScriptSourceLiterals)):
                 return new SourceLiteralExpression(this.previous());
+
             //template string
             case this.check(TokenKind.BackTick):
                 return this.templateString(false);
+
             //tagged template string (currently we do not support spaces between the identifier and the backtick)
             case this.checkAny(TokenKind.Identifier, ...AllowedLocalIdentifiers) && this.checkNext(TokenKind.BackTick):
                 return this.templateString(true);
+
             case this.matchAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers):
                 return new VariableExpression(this.previous() as Identifier, this.currentNamespaceName);
+
             case this.match(TokenKind.LeftParen):
                 let left = this.previous();
                 let expr = this.expression();
@@ -2514,6 +2519,7 @@ export class Parser {
                     TokenKind.RightParen
                 );
                 return new GroupingExpression({ left: left, right: right }, expr);
+
             case this.match(TokenKind.LeftSquareBracket):
                 let elements: Array<Expression | CommentStatement> = [];
                 let openingSquare = this.previous();
@@ -2555,6 +2561,7 @@ export class Parser {
 
                 //this.consume("Expected newline or ':' after array literal", TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
                 return new ArrayLiteralExpression(elements, openingSquare, closingSquare);
+
             case this.match(TokenKind.LeftCurlyBrace):
                 let openingBrace = this.previous();
                 let members: Array<AAMemberExpression | CommentStatement> = [];
@@ -2650,17 +2657,22 @@ export class Parser {
                 const aaExpr = new AALiteralExpression(members, openingBrace, closingBrace);
                 this.addPropertyHints(aaExpr);
                 return aaExpr;
+
             case this.matchAny(TokenKind.Pos, TokenKind.Tab):
                 let token = Object.assign(this.previous(), {
                     kind: TokenKind.Identifier
                 }) as Identifier;
                 return new VariableExpression(token, this.currentNamespaceName);
+
             case this.checkAny(TokenKind.Function, TokenKind.Sub):
                 return this.anonymousFunction();
+
             case this.check(TokenKind.RegexLiteral):
                 return this.regexLiteralExpression();
+
             case this.check(TokenKind.Comment):
                 return new CommentStatement([this.advance()]);
+
             default:
                 //if we found an expected terminator, don't throw a diagnostic...just return undefined
                 if (this.checkAny(...this.peekGlobalTerminators())) {
