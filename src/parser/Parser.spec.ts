@@ -206,6 +206,19 @@ describe('parser', () => {
             expect(parser.references.assignmentStatements[0].value).is.instanceof(IndexedGetExpression);
             expect(parser.references.assignmentStatements[2].value).is.instanceof(TernaryExpression);
         });
+
+        it('distinguishes between optional chaining and ternary expression', () => {
+            const parser = parse(`
+                sub main()
+                    'optional chain. the lack of whitespace between ? and [ matters
+                    key = isTrue ?["name"] : getDefault()
+                    'ternary
+                    key = isTrue ? ["name"] : getDefault()
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(parser.references.assignmentStatements[0].value).is.instanceof(IndexedGetExpression);
+            expect(parser.references.assignmentStatements[1].value).is.instanceof(TernaryExpression);
+        });
     });
 
     describe('diagnostic locations', () => {
