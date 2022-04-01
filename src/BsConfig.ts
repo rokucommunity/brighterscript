@@ -120,6 +120,11 @@ export interface BsConfig {
     plugins?: Array<string>;
 
     /**
+     * A list of scripts or modules to pass to node's `require()` on startup. This is useful for doing things like ts-node registration
+     */
+    require?: Array<string>;
+
+    /**
      * When enabled, every xml component will search for a .bs or .brs file with the same name
      * in the same folder, and add it as a script import if found. Disabled by default"
      */

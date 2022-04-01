@@ -617,6 +617,25 @@ describe('XmlFile', () => {
     });
 
     describe('transpile', () => {
+        it('handles single quotes properly', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="AnimationExample" extends="Scene">
+                    <children>
+                        <Animated frames='["pkg:/images/animation-1.png"]' />
+                    </children>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="AnimationExample" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    <children>
+                        <Animated frames='["pkg:/images/animation-1.png"]' />
+                    </children>
+                </component>
+            `, 'none', 'components/Comp.xml');
+        });
+
         it('supports instantresume <customization> elements', async () => {
             fsExtra.outputFileSync(`${rootDir}/manifest`, '');
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `sub main()\nend sub`);

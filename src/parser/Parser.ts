@@ -2502,17 +2502,22 @@ export class Parser {
                 TokenKind.StringLiteral
             ):
                 return new LiteralExpression(this.previous());
+
             //capture source literals (LINE_NUM if brightscript, or a bunch of them if brighterscript)
             case this.matchAny(TokenKind.LineNumLiteral, ...(this.options.mode === ParseMode.BrightScript ? [] : BrighterScriptSourceLiterals)):
                 return new SourceLiteralExpression(this.previous());
+
             //template string
             case this.check(TokenKind.BackTick):
                 return this.templateString(false);
+
             //tagged template string (currently we do not support spaces between the identifier and the backtick)
             case this.checkAny(TokenKind.Identifier, ...AllowedLocalIdentifiers) && this.checkNext(TokenKind.BackTick):
                 return this.templateString(true);
+
             case this.matchAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers):
                 return new VariableExpression(this.previous() as Identifier, this.currentNamespaceName);
+
             case this.match(TokenKind.LeftParen):
                 let left = this.previous();
                 let expr = this.expression();
@@ -2521,114 +2526,28 @@ export class Parser {
                     TokenKind.RightParen
                 );
                 return new GroupingExpression({ left: left, right: right }, expr);
+
             case this.match(TokenKind.LeftSquareBracket):
                 return this.arrayLiteral();
+
             case this.match(TokenKind.LeftCurlyBrace):
-                let openingBrace = this.previous();
-                let members: Array<AAMemberExpression | CommentStatement> = [];
+                return this.aaLiteral();
 
-                let key = () => {
-                    let result = {
-                        colonToken: null as Token,
-                        keyToken: null as Token,
-                        range: null as Range
-                    };
-                    if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
-                        result.keyToken = this.advance();
-                    } else if (this.check(TokenKind.StringLiteral)) {
-                        result.keyToken = this.advance();
-                    } else {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.unexpectedAAKey(),
-                            range: this.peek().range
-                        });
-                        throw this.lastDiagnosticAsError();
-                    }
-
-                    result.colonToken = this.consume(
-                        DiagnosticMessages.expectedColonBetweenAAKeyAndvalue(),
-                        TokenKind.Colon
-                    );
-                    result.range = util.getRange(result.keyToken, result.colonToken);
-                    return result;
-                };
-
-                while (this.match(TokenKind.Newline)) {
-                }
-
-                if (!this.match(TokenKind.RightCurlyBrace)) {
-                    let lastAAMember: AAMemberExpression;
-                    if (this.check(TokenKind.Comment)) {
-                        lastAAMember = null;
-                        members.push(new CommentStatement([this.advance()]));
-                    } else {
-                        let k = key();
-                        let expr = this.expression();
-                        lastAAMember = new AAMemberExpression(
-                            k.keyToken,
-                            k.colonToken,
-                            expr
-                        );
-                        members.push(lastAAMember);
-                    }
-
-                    while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
-                        // collect comma at end of expression
-                        if (lastAAMember && this.checkPrevious(TokenKind.Comma)) {
-                            lastAAMember.commaToken = this.previous();
-                        }
-
-                        //check for comment at the end of the current line
-                        if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
-                            let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
-                            members.push(new CommentStatement([token]));
-                        } else {
-                            this.consumeStatementSeparators(true);
-
-                            //check for a comment on its own line
-                            if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
-                                let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
-                                lastAAMember = null;
-                                members.push(new CommentStatement([token]));
-                                continue;
-                            }
-
-                            if (this.check(TokenKind.RightCurlyBrace)) {
-                                break;
-                            }
-                            let k = key();
-                            let expr = this.expression();
-                            lastAAMember = new AAMemberExpression(
-                                k.keyToken,
-                                k.colonToken,
-                                expr
-                            );
-                            members.push(lastAAMember);
-                        }
-                    }
-
-                    this.consume(
-                        DiagnosticMessages.unmatchedLeftCurlyAfterAALiteral(),
-                        TokenKind.RightCurlyBrace
-                    );
-                }
-
-                let closingBrace = this.previous();
-
-                const aaExpr = new AALiteralExpression(members, openingBrace, closingBrace);
-                this.addPropertyHints(aaExpr);
-                return aaExpr;
             case this.matchAny(TokenKind.Pos, TokenKind.Tab):
                 let token = Object.assign(this.previous(), {
                     kind: TokenKind.Identifier
                 }) as Identifier;
                 return new VariableExpression(token, this.currentNamespaceName);
+
             case this.checkAny(TokenKind.Function, TokenKind.Sub):
                 return this.anonymousFunction();
+
             case this.check(TokenKind.RegexLiteral):
                 return this.regexLiteralExpression();
+
             case this.check(TokenKind.Comment):
                 return new CommentStatement([this.advance()]);
+
             default:
                 //if we found an expected terminator, don't throw a diagnostic...just return undefined
                 if (this.checkAny(...this.peekGlobalTerminators())) {
@@ -2686,6 +2605,102 @@ export class Parser {
 
         //this.consume("Expected newline or ':' after array literal", TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
         return new ArrayLiteralExpression(elements, openingSquare, closingSquare);
+    }
+
+    private aaLiteral() {
+        let openingBrace = this.previous();
+        let members: Array<AAMemberExpression | CommentStatement> = [];
+
+        let key = () => {
+            let result = {
+                colonToken: null as Token,
+                keyToken: null as Token,
+                range: null as Range
+            };
+            if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
+                result.keyToken = this.advance();
+            } else if (this.check(TokenKind.StringLiteral)) {
+                result.keyToken = this.advance();
+            } else {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unexpectedAAKey(),
+                    range: this.peek().range
+                });
+                throw this.lastDiagnosticAsError();
+            }
+
+            result.colonToken = this.consume(
+                DiagnosticMessages.expectedColonBetweenAAKeyAndvalue(),
+                TokenKind.Colon
+            );
+            result.range = util.getRange(result.keyToken, result.colonToken);
+            return result;
+        };
+
+        while (this.match(TokenKind.Newline)) { }
+
+        if (!this.match(TokenKind.RightCurlyBrace)) {
+            let lastAAMember: AAMemberExpression;
+            if (this.check(TokenKind.Comment)) {
+                lastAAMember = null;
+                members.push(new CommentStatement([this.advance()]));
+            } else {
+                let k = key();
+                let expr = this.expression();
+                lastAAMember = new AAMemberExpression(
+                    k.keyToken,
+                    k.colonToken,
+                    expr
+                );
+                members.push(lastAAMember);
+            }
+
+            while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
+                // collect comma at end of expression
+                if (lastAAMember && this.checkPrevious(TokenKind.Comma)) {
+                    lastAAMember.commaToken = this.previous();
+                }
+
+                //check for comment at the end of the current line
+                if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
+                    let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
+                    members.push(new CommentStatement([token]));
+                } else {
+                    this.consumeStatementSeparators(true);
+
+                    //check for a comment on its own line
+                    if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
+                        let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
+                        lastAAMember = null;
+                        members.push(new CommentStatement([token]));
+                        continue;
+                    }
+
+                    if (this.check(TokenKind.RightCurlyBrace)) {
+                        break;
+                    }
+                    let k = key();
+                    let expr = this.expression();
+                    lastAAMember = new AAMemberExpression(
+                        k.keyToken,
+                        k.colonToken,
+                        expr
+                    );
+                    members.push(lastAAMember);
+                }
+            }
+
+            this.consume(
+                DiagnosticMessages.unmatchedLeftCurlyAfterAALiteral(),
+                TokenKind.RightCurlyBrace
+            );
+        }
+
+        let closingBrace = this.previous();
+
+        const aaExpr = new AALiteralExpression(members, openingBrace, closingBrace);
+        this.addPropertyHints(aaExpr);
+        return aaExpr;
     }
 
     /**

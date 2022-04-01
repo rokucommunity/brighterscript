@@ -1,6 +1,6 @@
 {
     "name": "brighterscript",
-    "version": "0.46.0",
+    "version": "0.47.0",
     "description": "A superset of Roku's BrightScript language.",
     "scripts": {
         "preversion": "npm run build && npm run lint && npm run test",
@@ -24,6 +24,7 @@
             "ts-node/register"
         ],
         "fullTrace": true,
+        "timeout": 987654321,
         "watchExtensions": [
             "ts"
         ]

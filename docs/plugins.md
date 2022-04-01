@@ -23,7 +23,7 @@ Those plugins will be loaded by the VSCode extension and can provide live diagno
 
 ### Usage on the CLI
 ```bash
-npx bsc --plugins "./scripts/myPlugin.js" "@rokucommunity/bslint" 
+npx bsc --plugins "./scripts/myPlugin.js" "@rokucommunity/bslint"
 ```
 
 ### Programmatic configuration
@@ -187,9 +187,30 @@ To walk/modify the AST, a number of helpers are provided in `brighterscript/dist
 
 It is highly recommended to use TypeScript as intellisense helps greatly writing code against new APIs.
 
+### Using ts-node to transpile plugin dynamically
+The ts-node module can transpile typescript on the fly. This is by far the easiest way to develop a brighterscript plugin, as you can elimintate the manual typescript transpile step.
+
 ```bash
 # install modules needed to compile a plugin
-npm install brighterscript typescript @types/node
+npm install brighterscript typescript @types/node ts-node -D
+
+#run the brighterscript cli and use ts-node to dynamically transpile your plugin
+npx bsc --sourceMap --require ts-node/register --plugins myPlugin.ts
+```
+
+The `require` flag can also be set in the `bsconfig.json`, simplifying your bsc command arguments.
+```javascript
+{
+    "require": ["ts-node/register"]
+}
+```
+
+### Transpiling manually
+If you would prefer to transpile your plugin manually, you can follow these steps:
+
+```bash
+# install modules needed to compile a plugin
+npm install brighterscript typescript @types/node -D
 
 # transpile to JS (with source maps for debugging)
 npx tsc myPlugin.ts -m commonjs --sourceMap
@@ -197,6 +218,7 @@ npx tsc myPlugin.ts -m commonjs --sourceMap
 # add --watch for continuous transpilation
 npx tsc myPlugin.ts -m commonjs --sourceMap --watch
 ```
+
 
 ### Example diagnostic plugins
 
