@@ -182,6 +182,15 @@ describe('parser', () => {
             expect(expression.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
         });
 
+        it('works for print statements using question mark', () => {
+            const { statements } = parse(`
+                ?[1]
+                ?(1+1)
+            `);
+            expect(statements[0]).to.be.instanceOf(PrintStatement);
+            expect(statements[1]).to.be.instanceOf(PrintStatement);
+        });
+
         //TODO enable this once we properly parse IIFEs
         it.skip('works for ?( in anonymous function', () => {
             const expression = getExpression<CallExpression>(`thing = (function() : end function)?()`);

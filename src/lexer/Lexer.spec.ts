@@ -33,6 +33,32 @@ describe('lexer', () => {
         ]);
     });
 
+    it('separates optional chain characters and LeftSquare when found at beginning of statement locations', () => {
+        //a statement starting with a question mark is actually a print statement, so we need to keep the ? separate from [
+        expectKinds(`?[ ?[ : ?[ ?[`, [
+            TokenKind.Question,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionLeftSquare,
+            TokenKind.Colon,
+            TokenKind.Question,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionLeftSquare
+        ]);
+    });
+
+    it('separates optional chain characters and LeftParen when found at beginning of statement locations', () => {
+        //a statement starting with a question mark is actually a print statement, so we need to keep the ? separate from [
+        expectKinds(`?( ?( : ?( ?(`, [
+            TokenKind.Question,
+            TokenKind.LeftParen,
+            TokenKind.QuestionLeftParen,
+            TokenKind.Colon,
+            TokenKind.Question,
+            TokenKind.LeftParen,
+            TokenKind.QuestionLeftParen
+        ]);
+    });
+
     it('handles QuestionDot and Square properly', () => {
         expectKinds('?.[ ?. [', [
             TokenKind.QuestionDot,
