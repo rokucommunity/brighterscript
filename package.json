@@ -82,7 +82,7 @@
         "@types/glob": "^7.1.1",
         "@types/marked": "^2.0.4",
         "@types/mocha": "^5.2.5",
-        "@types/node": "^11.9.0",
+        "@types/node": "^17.0.23",
         "@types/sinon": "^9.0.4",
         "@types/turndown": "^5.0.1",
         "@types/yargs": "^15.0.5",

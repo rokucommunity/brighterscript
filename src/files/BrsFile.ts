@@ -483,7 +483,8 @@ export class BrsFile {
                     args.push({
                         range: arg.range,
                         type: inferredType,
-                        text: argText
+                        text: argText,
+                        expression: arg
                     });
                 }
                 let functionCall: FunctionCall = {

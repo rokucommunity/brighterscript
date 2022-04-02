@@ -83,6 +83,7 @@ export interface CallableArg {
     text: string;
     type: BscType;
     range: Range;
+    expression: Expression;
 }
 
 export interface CallableParam {

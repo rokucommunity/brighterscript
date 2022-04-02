@@ -17,7 +17,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile, TokenSymbolLookup } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDynamicType, isEnumStatement, isFunctionStatement, isTypedFunctionType, isInvalidType, isFunctionType, isVariableExpression, isXmlFile, isArrayType, isInterfaceType, isInterfaceStatement } from './astUtils/reflection';
+import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDynamicType, isEnumStatement, isFunctionStatement, isTypedFunctionType, isInvalidType, isFunctionType, isVariableExpression, isXmlFile, isArrayType, isInterfaceType, isInterfaceStatement, isLiteralExpression } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { BscType, TypeContext } from './types/BscType';
 import { getTypeFromContext } from './types/BscType';
@@ -26,7 +26,6 @@ import { ObjectType } from './types/ObjectType';
 import { UninitializedType } from './types/UninitializedType';
 import type { Token } from './lexer/Token';
 import { nodes } from './roku-types';
-import type { Token } from './lexer/Token';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -692,16 +691,20 @@ export class Scope {
      */
     protected validateCreateObjectCalls(file: BrsFile) {
         for (const call of file.functionCalls) {
-            if (call.name?.text?.toLowerCase() === 'createobject') {
+            if (call.name?.text?.toLowerCase() === 'createobject' && isLiteralExpression(call?.args[0]?.expression)) {
                 const firstParamStringValue = (call?.args[0]?.expression as any)?.token?.text?.toLowerCase();
+                const unquotedFirstParam = firstParamStringValue.replace(/"/g, '');
                 //if this is a `createObject('roSGNode'` call, only support known sg node types
-                if (firstParamStringValue === 'rosgnode') {
-                    const componentName: Token = null;
+                if (unquotedFirstParam === 'rosgnode' && isLiteralExpression(call?.args[1]?.expression)) {
+                    const componentName: Token = (call?.args[1]?.expression as any)?.token;
+
+                    const unquotedSecondParam = componentName?.text.replace(/"/g, '');
+
                     //add diagnostic for unknown components
-                    if (!platformNodeNames.has(componentName.text.toLowerCase()) && !this.program.getComponent(componentName.text)) {
+                    if (unquotedSecondParam && !platformNodeNames.has(unquotedSecondParam.toLowerCase()) && !this.program.getComponent(unquotedSecondParam)) {
                         this.diagnostics.push({
                             file: file as BscFile,
-                            ...DiagnosticMessages.unknownRoSGNode(componentName.text),
+                            ...DiagnosticMessages.unknownRoSGNode(unquotedSecondParam),
                             range: componentName.range
                         });
                     }

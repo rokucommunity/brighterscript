@@ -1416,15 +1416,18 @@ describe('BrsFile', () => {
             expect(file.functionCalls[0].args).to.eql([{
                 type: new StringType(),
                 range: util.createRange(2, 32, 2, 38),
-                text: '"name"'
+                text: '"name"',
+                expression: file.functionCalls[0].args[0].expression
             }, {
                 type: new IntegerType(),
                 range: util.createRange(2, 40, 2, 42),
-                text: '12'
+                text: '12',
+                expression: file.functionCalls[0].args[1].expression
             }, {
                 type: new BooleanType(),
                 range: util.createRange(2, 44, 2, 48),
-                text: 'true'
+                text: 'true',
+                expression: file.functionCalls[0].args[2].expression
             }]);
         });
 
