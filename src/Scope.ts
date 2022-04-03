@@ -14,7 +14,7 @@ import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isLiteralExpression } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { nodes } from './roku-types';
@@ -483,16 +483,17 @@ export class Scope {
      */
     protected validateCreateObjectCalls(file: BrsFile) {
         for (const call of file.functionCalls) {
-            if (call.name?.toLowerCase() === 'createobject') {
-                const firstParamStringValue = (call?.args[0]?.expression as any)?.token?.text?.toLowerCase();
+            if (call.name?.toLowerCase() === 'createobject' && isLiteralExpression(call?.args[0]?.expression)) {
+                const firstParamStringValue = (call?.args[0]?.expression as any)?.token?.text?.toLowerCase().replace(/"/g, '');
                 //if this is a `createObject('roSGNode'` call, only support known sg node types
-                if (firstParamStringValue === 'rosgnode') {
-                    const componentName: Token = null;
+                if (firstParamStringValue === 'rosgnode' && isLiteralExpression(call?.args[1]?.expression)) {
+                    const componentName: Token = (call?.args[1]?.expression as any)?.token;
                     //add diagnostic for unknown components
-                    if (!platformNodeNames.has(componentName.text.toLowerCase()) && !this.program.getComponent(componentName.text)) {
+                    const unquotedComponentName = componentName?.text?.replace(/"/g, '');
+                    if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !this.program.getComponent(unquotedComponentName)) {
                         this.diagnostics.push({
                             file: file as BscFile,
-                            ...DiagnosticMessages.unknownRoSGNode(componentName.text),
+                            ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
                             range: componentName.range
                         });
                     }

@@ -158,7 +158,7 @@ describe('Scope', () => {
             it('recognizes various scenegraph nodes', () => {
                 program.addOrReplaceFile(`source/file.brs`, `
                     sub main()
-                        scene = CreateObject("roSGNode", "roSGScreen")
+                        scene = CreateObject("roSGScreen")
                         button = CreateObject("roSGNode", "Button")
                         list = CreateObject("roSGNode", "MarkupList")
                     end sub
@@ -202,6 +202,18 @@ describe('Scope', () => {
                     DiagnosticMessages.unknownRoSGNode('alsoNotReal'),
                     DiagnosticMessages.unknownRoSGNode('definitelyNotReal')
                 ]);
+            });
+
+            it('disregards non-literal args', () => {
+                program.addOrReplaceFile(`source/file.brs`, `
+                    sub main()
+                        sgNodeName =  "roSGNode"
+                        compNameAsVar =  "Button"
+                        button = CreateObject(sgNodeName, compNameAsVar)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
             });
         });
 
