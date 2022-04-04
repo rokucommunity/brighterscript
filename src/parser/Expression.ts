@@ -697,15 +697,6 @@ export class AALiteralExpression extends Expression {
                     ' '
                 );
 
-                //determine if comments are the only members left in the array
-                let onlyCommentsRemaining = true;
-                for (let j = i + 1; j < this.elements.length; j++) {
-                    if (isCommentStatement(this.elements[j]) === false) {
-                        onlyCommentsRemaining = false;
-                        break;
-                    }
-                }
-
                 //value
                 result.push(...element.value.transpile(state));
             }
