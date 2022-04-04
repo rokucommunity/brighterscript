@@ -139,12 +139,12 @@ describe('parser print statements', () => {
                 print ""
             `, `
                 paramArr = [
-                    "This",
-                    "is",
-                    true,
-                    "and",
-                    "this",
-                    "is",
+                    "This"
+                    "is"
+                    true
+                    "and"
+                    "this"
+                    "is"
                     1
                 ]
                 print "This is one line of stuff:";
