@@ -100,6 +100,7 @@ export class ProgramBuilder {
             } else {
                 this.logger.log(`No bsconfig.json file found, using default options`);
             }
+            this.loadRequires();
             this.loadPlugins();
         } catch (e: any) {
             if (e?.file && e.message && e.code) {
@@ -142,7 +143,7 @@ export class ProgramBuilder {
         const cwd = this.options.cwd ?? process.cwd();
         const plugins = util.loadPlugins(
             cwd,
-            this.options.plugins,
+            this.options.plugins ?? [],
             (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
         );
         this.logger.log(`Loading ${this.options.plugins?.length ?? 0} plugins for cwd "${cwd}"`);
@@ -151,6 +152,15 @@ export class ProgramBuilder {
         }
 
         this.plugins.emit('beforeProgramCreate', this);
+    }
+
+    /**
+     * `require()` every options.require path
+     */
+    protected loadRequires() {
+        for (const dep of this.options.require ?? []) {
+            util.resolveRequire(this.options.cwd, dep);
+        }
     }
 
     private clearConsole() {
@@ -205,7 +215,7 @@ export class ProgramBuilder {
                         util.driveLetterToLower(this.rootDir)
                     )
                 };
-                this.program.addOrReplaceFile(
+                this.program.setFile(
                     fileObj,
                     await this.getFileContents(fileObj.src)
                 );
@@ -254,7 +264,7 @@ export class ProgramBuilder {
     }
 
     private printDiagnostics(diagnostics?: BsDiagnostic[]) {
-        if (this.options.showDiagnosticsInConsole === false) {
+        if (this.options?.showDiagnosticsInConsole === false) {
             return;
         }
         if (!diagnostics) {
@@ -438,7 +448,7 @@ export class ProgramBuilder {
     private async loadAllFilesAST() {
         await this.logger.time(LogLevel.log, ['Parsing files'], async () => {
             let errorCount = 0;
-            let files = await this.logger.time(LogLevel.debug, ['getFlePaths'], async () => {
+            let files = await this.logger.time(LogLevel.debug, ['getFilePaths'], async () => {
                 return util.getFilePaths(this.options);
             });
             this.logger.trace('ProgramBuilder.loadAllFilesAST() files:', files);
@@ -458,7 +468,7 @@ export class ProgramBuilder {
             await Promise.all(
                 typedefFiles.map(async (fileObj) => {
                     try {
-                        this.program.addOrReplaceFile(
+                        this.program.setFile(
                             fileObj,
                             await this.getFileContents(fileObj.src)
                         );
@@ -478,7 +488,7 @@ export class ProgramBuilder {
 
                         //only process certain file types
                         if (acceptableExtensions.includes(fileExtension)) {
-                            this.program.addOrReplaceFile(
+                            this.program.setFile(
                                 fileObj,
                                 await this.getFileContents(fileObj.src)
                             );

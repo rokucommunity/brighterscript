@@ -9,8 +9,10 @@ import { Logger, LogLevel } from './Logger';
 import * as diagnosticUtils from './diagnosticUtils';
 import type { BscFile, BsDiagnostic } from '.';
 import { Range } from '.';
-import { DiagnosticSeverity } from './astUtils';
+import { DiagnosticSeverity } from 'vscode-languageserver';
 import { BrsFile } from './files/BrsFile';
+import { expectZeroDiagnostics } from './testHelpers.spec';
+import type { BsConfig } from './BsConfig';
 
 describe('ProgramBuilder', () => {
 
@@ -55,7 +57,7 @@ describe('ProgramBuilder', () => {
                 dest: 'file4.xml'
             }]));
 
-            let stub = sinon.stub(builder.program, 'addOrReplaceFile');
+            let stub = sinon.stub(builder.program, 'setFile');
             sinon.stub(builder, 'getFileContents').returns(Promise.resolve(''));
             await builder['loadAllFilesAST']();
             expect(stub.getCalls()).to.be.lengthOf(3);
@@ -70,7 +72,7 @@ describe('ProgramBuilder', () => {
             fsExtra.outputFileSync(s`${rootDir}/source/main.d.bs`, '');
             fsExtra.outputFileSync(s`${rootDir}/source/lib.d.bs`, '');
             fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
-            const stub = sinon.stub(builder.program, 'addOrReplaceFile');
+            const stub = sinon.stub(builder.program, 'setFile');
             await builder['loadAllFilesAST']();
             const srcPaths = stub.getCalls().map(x => x.args[0].src);
             //the d files should be first
@@ -145,8 +147,7 @@ describe('ProgramBuilder', () => {
                     dest: 'source/lib.brs'
                 }]
             });
-            const diagnostics = builder.getDiagnostics();
-            expect(diagnostics.map(x => x.message)).to.eql([]);
+            expectZeroDiagnostics(builder);
             expect(builder.program.getFileByPathAbsolute(s``));
         });
     });
@@ -279,6 +280,54 @@ describe('ProgramBuilder', () => {
         builder['printDiagnostics']();
 
         expect(printStub.called).to.be.true;
+    });
+
+    describe('require', () => {
+        it('loads relative and absolute items', async () => {
+            const workingDir = s`${tmpPath}/require-test`;
+            const relativeOutputPath = `${tmpPath}/relative.txt`.replace(/\\+/g, '/');
+            const moduleOutputPath = `${tmpPath}/brighterscript-require-test.txt`.replace(/\\+/g, '/');
+
+            //create roku project files
+            fsExtra.outputFileSync(s`${workingDir}/src/manifest`, '');
+
+            //create "modules"
+            fsExtra.outputFileSync(s`${workingDir}/relative.js`, `
+                var fs = require('fs');
+                fs.writeFileSync('${relativeOutputPath}', '');
+            `);
+            fsExtra.outputJsonSync(s`${workingDir}/node_modules/brighterscript-require-test/package.json`, {
+                name: 'brighterscript-require-test',
+                version: '1.0.0',
+                main: 'index.js'
+            });
+            fsExtra.outputFileSync(s`${workingDir}/node_modules/brighterscript-require-test/index.js`, `
+                var fs = require('fs');
+                fs.writeFileSync('${moduleOutputPath}', '');
+            `);
+
+            //create the bsconfig file
+            fsExtra.outputJsonSync(s`${workingDir}/bsconfig.json`, {
+                rootDir: 'src',
+                require: [
+                    //relative script
+                    './relative.js',
+                    //script from node_modules
+                    'brighterscript-require-test'
+                ]
+            } as BsConfig);
+
+            builder = new ProgramBuilder();
+            await builder.run({
+                cwd: workingDir
+            });
+            expect(
+                fsExtra.pathExistsSync(relativeOutputPath)
+            ).to.be.true;
+            expect(
+                fsExtra.pathExistsSync(moduleOutputPath)
+            ).to.be.true;
+        });
     });
 });
 

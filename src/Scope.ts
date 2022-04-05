@@ -4,19 +4,20 @@ import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
-import type { FileLink, Program } from './Program';
+import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink } from './interfaces';
+import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
-import { ParseMode } from './parser';
+import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement } from './parser/Statement';
+import type { NewExpression } from './parser/Expression';
+import { ParseMode } from './parser/Parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isLiteralExpression } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
+import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isLiteralExpression, isXmlFile } from './astUtils/reflection';
 import { nodes } from './roku-types';
 import type { Token } from './lexer/Token';
 
@@ -112,6 +113,26 @@ export class Scope {
                         if (lowerClassName) {
                             map.set(lowerClassName, { item: cls, file: file });
                         }
+                    }
+                }
+            });
+            return map;
+        });
+    }
+
+    /**
+     * A dictionary of all enums in this scope. This includes namespaced enums always with their full name.
+     * The key is stored in lower case
+     */
+    public getEnumMap(): Map<string, FileLink<EnumStatement>> {
+        return this.cache.getOrAdd('enumMap', () => {
+            const map = new Map<string, FileLink<EnumStatement>>();
+            this.enumerateBrsFiles((file) => {
+                for (let enumStmt of file.parser.references.enumStatements) {
+                    const lowerEnumName = enumStmt.fullName.toLowerCase();
+                    //only track enums with a defined name (i.e. exclude nameless malformed enums)
+                    if (lowerEnumName) {
+                        map.set(lowerEnumName, { item: enumStmt, file: file });
                     }
                 }
             });
@@ -344,7 +365,7 @@ export class Scope {
      * Builds a tree of namespace objects
      */
     public buildNamespaceLookup() {
-        let namespaceLookup = {} as Record<string, NamespaceContainer>;
+        let namespaceLookup = new Map<string, NamespaceContainer>();
         this.enumerateBrsFiles((file) => {
             for (let namespace of file.parser.references.namespaceStatements) {
                 //TODO should we handle non-brighterscript?
@@ -357,38 +378,43 @@ export class Scope {
                 for (let part of nameParts) {
                     loopName = loopName === null ? part : `${loopName}.${part}`;
                     let lowerLoopName = loopName.toLowerCase();
-                    namespaceLookup[lowerLoopName] = namespaceLookup[lowerLoopName] ?? {
-                        file: file,
-                        fullName: loopName,
-                        nameRange: namespace.nameExpression.range,
-                        lastPartName: part,
-                        namespaces: {},
-                        classStatements: {},
-                        functionStatements: {},
-                        statements: []
-                    };
+                    if (!namespaceLookup.has(lowerLoopName)) {
+                        namespaceLookup.set(lowerLoopName, {
+                            file: file,
+                            fullName: loopName,
+                            nameRange: namespace.nameExpression.range,
+                            lastPartName: part,
+                            namespaces: new Map<string, NamespaceContainer>(),
+                            classStatements: {},
+                            functionStatements: {},
+                            statements: [],
+                            enumStatements: new Map<string, EnumStatement>()
+                        });
+                    }
                 }
-                let ns = namespaceLookup[name.toLowerCase()];
+                let ns = namespaceLookup.get(name.toLowerCase());
                 ns.statements.push(...namespace.body.statements);
                 for (let statement of namespace.body.statements) {
                     if (isClassStatement(statement) && statement.name) {
                         ns.classStatements[statement.name.text.toLowerCase()] = statement;
                     } else if (isFunctionStatement(statement) && statement.name) {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
+                    } else if (isEnumStatement(statement) && statement.fullName) {
+                        ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
                     }
                 }
             }
 
             //associate child namespaces with their parents
-            for (let key in namespaceLookup) {
-                let ns = namespaceLookup[key];
+            for (let [, ns] of namespaceLookup) {
                 let parts = ns.fullName.split('.');
 
                 if (parts.length > 1) {
                     //remove the last part
                     parts.pop();
                     let parentName = parts.join('.');
-                    namespaceLookup[parentName.toLowerCase()].namespaces[ns.lastPartName.toLowerCase()] = ns;
+                    const parent = namespaceLookup.get(parentName.toLowerCase());
+                    parent.namespaces.set(ns.lastPartName.toLowerCase(), ns);
                 }
             }
         });
@@ -445,6 +471,10 @@ export class Scope {
 
             this.program.plugins.emit('beforeScopeValidate', this, files, callableContainerMap);
 
+            this.program.plugins.emit('onScopeValidate', {
+                program: this.program,
+                scope: this
+            });
             this._validate(callableContainerMap);
 
             this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
@@ -516,7 +546,7 @@ export class Scope {
         for (let func of file.parser.references.functionExpressions) {
             for (let param of func.parameters) {
                 let lowerParamName = param.name.text.toLowerCase();
-                let namespace = this.namespaceLookup[lowerParamName];
+                let namespace = this.namespaceLookup.get(lowerParamName);
                 //see if the param matches any starting namespace part
                 if (namespace) {
                     this.diagnostics.push({
@@ -537,7 +567,7 @@ export class Scope {
 
         for (let assignment of file.parser.references.assignmentStatements) {
             let lowerAssignmentName = assignment.name.text.toLowerCase();
-            let namespace = this.namespaceLookup[lowerAssignmentName];
+            let namespace = this.namespaceLookup.get(lowerAssignmentName);
             //see if the param matches any starting namespace part
             if (namespace) {
                 this.diagnostics.push({
@@ -660,7 +690,7 @@ export class Scope {
                     maxParams++;
                     //optional parameters must come last, so we can assume that minParams won't increase once we hit
                     //the first isOptional
-                    if (param.isOptional === false) {
+                    if (param.isOptional !== true) {
                         minParams++;
                     }
                 }
@@ -1043,7 +1073,8 @@ interface NamespaceContainer {
     statements: Statement[];
     classStatements: Record<string, ClassStatement>;
     functionStatements: Record<string, FunctionStatement>;
-    namespaces: Record<string, NamespaceContainer>;
+    enumStatements: Map<string, EnumStatement>;
+    namespaces: Map<string, NamespaceContainer>;
 }
 
 interface AugmentedNewExpression extends NewExpression {

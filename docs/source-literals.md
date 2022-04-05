@@ -14,7 +14,7 @@ print SOURCE_FILE_PATH
 transpiles to:
 
 ```BrightScript
-print "file" + ":///c:/projects/roku/brighterscript/scripts/rootDir/source/main.bs"
+print "file" + ":///c:/projects/roku/local/brighterscript/scripts/rootDir/source/main.bs"
 ```
 
 _note: the literal is concatenated to keep the roku static analysis tool happy_
@@ -155,7 +155,7 @@ transpiles to:
 
 ```BrightScript
 function main()
-    print "file" + ":///c:/projects/roku/brighterscript/scripts/rootDir/source/main.bs:2"
+    print "file" + ":///c:/projects/roku/local/brighterscript/scripts/rootDir/source/main.bs:2"
 end function
 ```
 

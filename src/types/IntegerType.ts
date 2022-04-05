@@ -5,6 +5,10 @@ import { FloatType } from './FloatType';
 import { LongIntegerType } from './LongIntegerType';
 
 export class IntegerType implements BscType {
+    constructor(
+        public typeText?: string
+    ) { }
+
     public isAssignableTo(targetType: BscType) {
         return (
             targetType instanceof IntegerType ||
@@ -27,7 +31,7 @@ export class IntegerType implements BscType {
     }
 
     public toString() {
-        return 'integer';
+        return this.typeText ?? 'integer';
     }
 
     public toTypeString(): string {

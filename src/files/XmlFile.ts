@@ -47,6 +47,12 @@ export class XmlFile {
     private unsubscribeFromDependencyGraph: () => void;
 
     /**
+     * Indicates whether this file needs to be validated.
+     * Files are only ever validated a single time
+     */
+    public isValidated = false;
+
+    /**
      * The extension for this file
      */
     public extension: string;
@@ -111,7 +117,7 @@ export class XmlFile {
                 .filter(x => util.getExtension(x) !== '.d.bs');
 
             let result = [] as string[];
-            let filesInProgram = this.program.getFilesByPkgPaths(allDependencies);
+            let filesInProgram = this.program.getFiles(allDependencies);
             for (let file of filesInProgram) {
                 result.push(file.pkgPath);
             }
@@ -193,16 +199,19 @@ export class XmlFile {
 
         this.getCommentFlags(this.parser.tokens as any[]);
 
-        if (!this.parser.ast.root) {
+        //needsTranspiled should be true if an import is brighterscript
+        this.needsTranspiled = this.needsTranspiled || this.ast.component?.scripts?.some(
+            script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
+        );
+    }
+
+
+    public validate() {
+        if (this.parser.ast.root) {
+            this.validateComponent(this.parser.ast);
+        } else {
             //skip empty XML
-            return;
         }
-
-        //notify AST ready
-        this.program.plugins.emit('afterFileParse', this);
-
-        //initial validation
-        this.validateComponent(this.parser.ast);
     }
 
     /**
@@ -253,10 +262,6 @@ export class XmlFile {
             });
         }
 
-        //needsTranspiled should be true if an import is brighterscript
-        this.needsTranspiled = this.needsTranspiled || component.scripts.some(
-            script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
-        );
 
         //catch script imports with same path as the auto-imported codebehind file
         const scriptTagImports = this.parser.references.scriptTagImports;
@@ -543,8 +548,7 @@ export class XmlFile {
     }
 
     public dispose() {
-        if (this.unsubscribeFromDependencyGraph) {
-            this.unsubscribeFromDependencyGraph();
-        }
+        //unsubscribe from any DependencyGraph subscriptions
+        this.unsubscribeFromDependencyGraph?.();
     }
 }

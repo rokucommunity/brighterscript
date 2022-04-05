@@ -18,18 +18,18 @@ export class FunctionType implements BscType {
      */
     public isSub = false;
 
-    public params = [] as Array<{ name: string; type: BscType; isRequired: boolean }>;
+    public params = [] as Array<{ name: string; type: BscType; isOptional: boolean }>;
 
     public setName(name: string) {
         this.name = name;
         return this;
     }
 
-    public addParameter(name: string, type: BscType, isRequired: boolean) {
+    public addParameter(name: string, type: BscType, isOptional: boolean) {
         this.params.push({
             name: name,
             type: type,
-            isRequired: isRequired === false ? false : true
+            isOptional: isOptional === true ? true : false
         });
         return this;
     }
@@ -67,7 +67,7 @@ export class FunctionType implements BscType {
     public toString() {
         let paramTexts = [];
         for (let param of this.params) {
-            paramTexts.push(`${param.name}${param.isRequired ? '' : '?'} as ${param.type.toString()}`);
+            paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString()}`);
         }
         return `${this.isSub ? 'sub' : 'function'} ${this.name}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
 

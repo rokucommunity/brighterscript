@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-for-in-array */
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { TokenKind } from '../../../lexer';
+import { TokenKind } from '../../../lexer/TokenKind';
 import { Parser, ParseMode } from '../../Parser';
 import { token, EOF } from '../Parser.spec';
 import type { PrintStatement } from '../../Statement';
@@ -266,7 +266,7 @@ describe('ternary expressions', () => {
         });
 
         it('uses the proper prefix when aliased package is installed', () => {
-            program.addOrReplaceFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
+            program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
             testTranspile(
                 `a = user = invalid ? "no user" : "logged in"`,
                 `a = rokucommunity_bslib_ternary(user = invalid, "no user", "logged in")`

@@ -1,7 +1,7 @@
 /* eslint no-template-curly-in-string: 0 */
 import { expect } from 'chai';
 
-import { TokenKind } from '.';
+import { TokenKind } from './TokenKind';
 import { Lexer } from './Lexer';
 import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
@@ -1138,6 +1138,17 @@ describe('lexer', () => {
             expect(isToken({ kind: TokenKind.And, text: 'and', range: range })).is.true;
             expect(isToken({ text: 'and', range: range })).is.false;
         });
+    });
+
+    it('recognizes enum-related keywords', () => {
+        expect(
+            Lexer.scan('enum end enum endenum').tokens.map(x => x.kind)
+        ).to.eql([
+            TokenKind.Enum,
+            TokenKind.EndEnum,
+            TokenKind.EndEnum,
+            TokenKind.Eof
+        ]);
     });
 
     it('recognizes class-related keywords', () => {

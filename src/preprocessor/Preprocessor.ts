@@ -1,5 +1,5 @@
-import type { Token } from '../lexer';
-import { TokenKind } from '../lexer';
+import type { Token } from '../lexer/Token';
+import { TokenKind } from '../lexer/TokenKind';
 import type * as CC from './Chunk';
 import type { Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';

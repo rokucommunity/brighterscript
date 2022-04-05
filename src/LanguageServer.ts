@@ -846,7 +846,7 @@ export class LanguageServer {
 
             //if we got a dest path, then the program wants this file
             if (destPath) {
-                program.addOrReplaceFile(
+                program.setFile(
                     {
                         src: change.pathAbsolute,
                         dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
@@ -864,7 +864,7 @@ export class LanguageServer {
             //sometimes "changed" events are emitted on files that were actually deleted,
             //so determine file existance and act accordingly
             if (await util.pathExists(change.pathAbsolute)) {
-                program.addOrReplaceFile(
+                program.setFile(
                     {
                         src: change.pathAbsolute,
                         dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
@@ -893,16 +893,6 @@ export class LanguageServer {
 
         //return the first non-falsey hover. TODO is there a way to handle multiple hover results?
         let hover = hovers.filter((x) => !!x)[0];
-
-        //TODO improve this to support more than just .brs files
-        if (hover?.contents) {
-            //create fenced code block to get colorization
-            hover.contents = {
-                //TODO - make the program.getHover call figure out what language this is for
-                language: 'brightscript',
-                value: hover.contents as string
-            };
-        }
         return hover;
     }
 
@@ -940,7 +930,7 @@ export class LanguageServer {
                     if (workspace.builder.program.hasFile(filePath)) {
                         let rootDir = workspace.builder.program.options.rootDir ?? workspace.builder.program.options.cwd;
                         let dest = rokuDeploy.getDestPath(filePath, workspace.builder.program.options.files, rootDir);
-                        workspace.builder.program.addOrReplaceFile({
+                        workspace.builder.program.setFile({
                             src: filePath,
                             dest: dest
                         }, documentText);

@@ -1,23 +1,19 @@
 /**
- * Synchronous cache
+ * A cache that will call the factory to create the item if it doesn't exist
  */
-export class Cache {
-    private cache = {} as Record<string, any>;
+export class Cache<TKey = any, TValue = any> extends Map<TKey, TValue> {
 
     /**
      * Get value from the cache if it exists,
      * otherwise call the factory function to create the value, add it to the cache, and return it.
      */
-    public getOrAdd<T>(key: string, factory: (key: string) => T) {
-        if (this.cache[key] === undefined) {
-            this.cache[key] = factory(key);
+    public getOrAdd(key: TKey, factory: (key: TKey) => TValue): TValue {
+        if (!this.has(key)) {
+            const value = factory(key);
+            this.set(key, value);
+            return value;
+        } else {
+            return this.get(key);
         }
-        return this.cache[key] as T;
-    }
-    /**
-     * Clear the cache
-     */
-    public clear() {
-        this.cache = {};
     }
 }

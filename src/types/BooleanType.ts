@@ -2,6 +2,10 @@ import type { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
 export class BooleanType implements BscType {
+    constructor(
+        public typeText?: string
+    ) { }
+
     public isAssignableTo(targetType: BscType) {
         return (
             targetType instanceof BooleanType ||
@@ -14,7 +18,7 @@ export class BooleanType implements BscType {
     }
 
     public toString() {
-        return 'boolean';
+        return this.typeText ?? 'boolean';
     }
 
     public toTypeString(): string {

@@ -17,6 +17,18 @@
             ]
         },
         {
+            "label": "watch",
+            "type": "npm",
+            "script": "watch",
+            "presentation": {
+                "group": "watch"
+            },
+            "isBackground": true,
+            "problemMatcher": [
+                "$tsc-watch"
+            ]
+        },
+        {
             "type": "npm",
             "script": "lint",
             "problemMatcher": [

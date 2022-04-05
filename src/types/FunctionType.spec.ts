@@ -16,15 +16,15 @@ describe('FunctionType', () => {
 
         //different parameter count
         expect(
-            new FunctionType(new VoidType()).addParameter('a', new IntegerType(), true).isAssignableTo(
+            new FunctionType(new VoidType()).addParameter('a', new IntegerType(), false).isAssignableTo(
                 new FunctionType(new VoidType())
             )
         ).to.be.false;
 
         //different parameter types
         expect(
-            new FunctionType(new VoidType()).addParameter('a', new IntegerType(), true).isAssignableTo(
-                new FunctionType(new VoidType()).addParameter('a', new StringType(), true)
+            new FunctionType(new VoidType()).addParameter('a', new IntegerType(), false).isAssignableTo(
+                new FunctionType(new VoidType()).addParameter('a', new StringType(), false)
             )
         ).to.be.false;
 

@@ -1,30 +1,29 @@
 import type { Range } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isBrsFile, isCustomType } from '../../astUtils/reflection';
+import { isCustomType } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnGetSemanticTokensEvent } from '../../interfaces';
-import { ParseMode } from '../../parser';
+import { ParseMode } from '../../parser/Parser';
 import util from '../../util';
 
-export class SemanticTokensProcessor {
+export class BrsFileSemanticTokensProcessor {
     public constructor(
-        public event: OnGetSemanticTokensEvent
+        public event: OnGetSemanticTokensEvent<BrsFile>
     ) {
 
     }
 
     public process() {
-        if (isBrsFile(this.event.file)) {
-            this.processBrsFile(this.event.file);
-        }
+        this.handleClasses();
+        this.handleEnums();
     }
 
-    private processBrsFile(file: BrsFile) {
+    private handleClasses() {
 
         const classes = [] as Array<{ className: string; namespaceName: string; range: Range }>;
 
         //classes used in function param types
-        for (const func of file.parser.references.functionExpressions) {
+        for (const func of this.event.file.parser.references.functionExpressions) {
             for (const parm of func.parameters) {
                 if (isCustomType(parm.type)) {
                     classes.push({
@@ -36,7 +35,7 @@ export class SemanticTokensProcessor {
             }
         }
         //classes used in `new` expressions
-        for (const expr of file.parser.references.newExpressions) {
+        for (const expr of this.event.file.parser.references.newExpressions) {
             classes.push({
                 className: expr.className.getName(ParseMode.BrighterScript),
                 namespaceName: expr.namespaceName?.getName(ParseMode.BrighterScript),
@@ -66,6 +65,40 @@ export class SemanticTokensProcessor {
                 });
             }
         }
+    }
 
+    private handleEnums() {
+        const enumLookup = this.event.file.program.getFirstScopeForFile(this.event.file)?.getEnumMap();
+        for (const expression of this.event.file.parser.references.expressions) {
+            const parts = util.getAllDottedGetParts(expression)?.map(x => x.toLowerCase());
+            if (parts) {
+                //discard the enum member name
+                const memberName = parts.pop();
+                //get the name of the enum (including leading namespace if applicable)
+                const enumName = parts.join('.');
+                const lowerEnumName = enumName.toLowerCase();
+                const theEnum = enumLookup.get(lowerEnumName)?.item;
+                if (theEnum) {
+                    const tokens = util.splitGetRange('.', lowerEnumName + '.' + memberName, expression.range);
+                    //enum member name
+                    this.event.semanticTokens.push({
+                        range: tokens.pop().range,
+                        tokenType: SemanticTokenTypes.enumMember
+                    });
+                    //enum name
+                    this.event.semanticTokens.push({
+                        range: tokens.pop().range,
+                        tokenType: SemanticTokenTypes.enum
+                    });
+                    //namespace parts
+                    for (const token of tokens) {
+                        this.event.semanticTokens.push({
+                            range: token.range,
+                            tokenType: SemanticTokenTypes.namespace
+                        });
+                    }
+                }
+            }
+        }
     }
 }

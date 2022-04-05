@@ -34,28 +34,31 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
     /**
      * Add a plugin to the beginning of the list of plugins
      */
-    public addFirst(plugin: CompilerPlugin) {
+    public addFirst<T extends CompilerPlugin = CompilerPlugin>(plugin: T) {
         if (!this.has(plugin)) {
             this.plugins.unshift(plugin);
         }
+        return plugin;
     }
 
     /**
      * Add a plugin to the end of the list of plugins
      */
-    public add(plugin: CompilerPlugin) {
+    public add<T extends CompilerPlugin = CompilerPlugin>(plugin: T) {
         if (!this.has(plugin)) {
             this.plugins.push(plugin);
         }
+        return plugin;
     }
 
     public has(plugin: CompilerPlugin) {
         return this.plugins.includes(plugin);
     }
 
-    public remove(plugin: CompilerPlugin) {
+    public remove<T extends CompilerPlugin = CompilerPlugin>(plugin: T) {
         if (this.has(plugin)) {
             this.plugins.splice(this.plugins.indexOf(plugin));
         }
+        return plugin;
     }
 }

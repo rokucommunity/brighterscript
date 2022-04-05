@@ -24,9 +24,10 @@ import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
-import type { Locatable, Token } from './lexer';
-import { TokenKind } from './lexer';
-import { isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
+import type { Locatable, Token } from './lexer/Token';
+import { TokenKind } from './lexer/TokenKind';
+import { isDottedGetExpression, isExpression, isVariableExpression } from './astUtils/reflection';
+import { WalkMode } from './astUtils/visitors';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
@@ -65,6 +66,25 @@ export class Util {
      */
     public isDirectorySync(dirPath: string | undefined) {
         return fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+    }
+
+    /**
+     * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
+     */
+    public sanitizePkgPath(pkgPath: string) {
+        pkgPath = pkgPath.replace(/\\/g, '/');
+        //if there's no protocol, assume it's supposed to start with `pkg:/`
+        if (!this.startsWithProtocol(pkgPath)) {
+            pkgPath = 'pkg:/' + pkgPath;
+        }
+        return pkgPath;
+    }
+
+    /**
+     * Determine if the given path starts with a protocol
+     */
+    public startsWithProtocol(path: string) {
+        return !!/^[-a-z]+:\//i.exec(path);
     }
 
     /**
@@ -165,9 +185,14 @@ export class Util {
                 } as BsDiagnostic;
                 throw diagnostic; //eslint-disable-line @typescript-eslint/no-throw-literal
             }
-            this.resolvePluginPaths(projectConfig, configFilePath);
 
             let projectFileCwd = path.dirname(configFilePath);
+
+            //`plugins` paths should be relative to the current bsconfig
+            this.resolvePathsRelativeTo(projectConfig, 'plugins', projectFileCwd);
+
+            //`require` paths should be relative to cwd
+            util.resolvePathsRelativeTo(projectConfig, 'require', projectFileCwd);
 
             let result: BsConfig;
             //if the project has a base file, load it
@@ -192,31 +217,28 @@ export class Util {
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
-
             return result;
         }
     }
 
     /**
-     * Relative paths to scripts in plugins should be resolved relatively to the bsconfig file
-     * and de-duplicated
-     * @param config Parsed configuration
-     * @param configFilePath Path of the configuration file
+     * Convert relative paths to absolute paths, relative to the given directory. Also de-dupes the paths. Modifies the array in-place
+     * @param paths the list of paths to be resolved and deduped
+     * @param relativeDir the path to the folder where the paths should be resolved relative to. This should be an absolute path
      */
-    public resolvePluginPaths(config: BsConfig, configFilePath: string) {
-        if (config.plugins?.length > 0) {
-            const relPath = path.dirname(configFilePath);
-            const exists: Record<string, boolean> = {};
-            config.plugins = config.plugins.map(p => {
-                return p?.startsWith('.') ? path.resolve(relPath, p) : p;
-            }).filter(p => {
-                if (!p || exists[p]) {
-                    return false;
-                }
-                exists[p] = true;
-                return true;
-            });
+    public resolvePathsRelativeTo(collection: any, key: string, relativeDir: string) {
+        if (!collection[key]) {
+            return;
         }
+        const result = new Set<string>();
+        for (const p of collection[key] as string[] ?? []) {
+            if (p) {
+                result.add(
+                    p?.startsWith('.') ? path.resolve(relativeDir, p) : p
+                );
+            }
+        }
+        collection[key] = [...result];
     }
 
     /**
@@ -901,60 +923,66 @@ export class Util {
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (token.kind) {
             case TokenKind.Boolean:
+                return new BooleanType(token.text);
             case TokenKind.True:
             case TokenKind.False:
                 return new BooleanType();
             case TokenKind.Double:
+                return new DoubleType(token.text);
             case TokenKind.DoubleLiteral:
                 return new DoubleType();
             case TokenKind.Dynamic:
-                return new DynamicType();
+                return new DynamicType(token.text);
             case TokenKind.Float:
+                return new FloatType(token.text);
             case TokenKind.FloatLiteral:
                 return new FloatType();
             case TokenKind.Function:
                 //TODO should there be a more generic function type without a signature that's assignable to all other function types?
-                return new FunctionType(new DynamicType());
+                return new FunctionType(new DynamicType(token.text));
             case TokenKind.Integer:
+                return new IntegerType(token.text);
             case TokenKind.IntegerLiteral:
                 return new IntegerType();
             case TokenKind.Invalid:
-                return new InvalidType();
+                return new InvalidType(token.text);
             case TokenKind.LongInteger:
+                return new LongIntegerType(token.text);
             case TokenKind.LongIntegerLiteral:
                 return new LongIntegerType();
             case TokenKind.Object:
-                return new ObjectType();
+                return new ObjectType(token.text);
             case TokenKind.String:
+                return new StringType(token.text);
             case TokenKind.StringLiteral:
             case TokenKind.TemplateStringExpressionBegin:
             case TokenKind.TemplateStringExpressionEnd:
             case TokenKind.TemplateStringQuasi:
                 return new StringType();
             case TokenKind.Void:
-                return new VoidType();
+                return new VoidType(token.text);
             case TokenKind.Identifier:
                 switch (token.text.toLowerCase()) {
                     case 'boolean':
-                        return new BooleanType();
+                        return new BooleanType(token.text);
                     case 'double':
-                        return new DoubleType();
+                        return new DoubleType(token.text);
                     case 'float':
-                        return new FloatType();
+                        return new FloatType(token.text);
                     case 'function':
-                        return new FunctionType(new DynamicType());
+                        return new FunctionType(new DynamicType(token.text));
                     case 'integer':
-                        return new IntegerType();
+                        return new IntegerType(token.text);
                     case 'invalid':
-                        return new InvalidType();
+                        return new InvalidType(token.text);
                     case 'longinteger':
-                        return new LongIntegerType();
+                        return new LongIntegerType(token.text);
                     case 'object':
-                        return new ObjectType();
+                        return new ObjectType(token.text);
                     case 'string':
-                        return new StringType();
+                        return new StringType(token.text);
                     case 'void':
-                        return new VoidType();
+                        return new VoidType(token.text);
                 }
                 if (allowCustomType) {
                     return new CustomType(token.text);
@@ -1043,9 +1071,7 @@ export class Util {
         const variableExpressions = [] as VariableExpression[];
         const uniqueVarNames = new Set<string>();
 
-        // Collect all expressions. Most of these expressions are fairly small so this should be quick!
-        // This should only be called during transpile time and only when we actually need it.
-        expression?.walk((expression) => {
+        function expressionWalker(expression) {
             if (isExpression(expression)) {
                 expressions.push(expression);
             }
@@ -1053,9 +1079,17 @@ export class Util {
                 variableExpressions.push(expression);
                 uniqueVarNames.add(expression.name.text);
             }
-        }, {
+        }
+
+        // Collect all expressions. Most of these expressions are fairly small so this should be quick!
+        // This should only be called during transpile time and only when we actually need it.
+        expression?.walk(expressionWalker, {
             walkMode: WalkMode.visitExpressions
         });
+
+        //handle the expression itself (for situations when expression is a VariableExpression)
+        expressionWalker(expression);
+
         return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: [...uniqueVarNames] };
     }
 
@@ -1093,6 +1127,15 @@ export class Util {
             },
             range: attr.range
         } as SGAttribute;
+    }
+
+    /**
+     * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
+     */
+    public standardizePath(thePath: string) {
+        return util.driveLetterToLower(
+            rokuDeploy.standardizePath(thePath)
+        );
     }
 
     /**
@@ -1200,6 +1243,48 @@ export class Util {
             offset += chunk.length + separator.length;
         }
         return result;
+    }
+
+    /**
+     * Wrap the given code in a markdown code fence (with the language)
+     */
+    public mdFence(code: string, language = '') {
+        return '```' + language + '\n' + code + '\n```';
+    }
+
+    /**
+     * Gets each part of the dotted get.
+     * @param expression
+     * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
+     */
+    public getAllDottedGetParts(expression: Expression): string[] | undefined {
+        const parts: string[] = [];
+        let nextPart = expression;
+        while (nextPart) {
+            if (isDottedGetExpression(nextPart)) {
+                parts.push(nextPart?.name?.text);
+                nextPart = nextPart.obj;
+            } else if (isVariableExpression(nextPart)) {
+                parts.push(nextPart?.name?.text);
+                break;
+            } else {
+                //we found a non-DottedGet expression, so return because this whole operation is invalid.
+                return undefined;
+            }
+        }
+        return parts.reverse();
+    }
+
+    /**
+     * Returns an integer if valid, or undefined. Eliminates checking for NaN
+     */
+    public parseInt(value: any) {
+        const result = parseInt(value);
+        if (!isNaN(result)) {
+            return result;
+        } else {
+            return undefined;
+        }
     }
 }
 

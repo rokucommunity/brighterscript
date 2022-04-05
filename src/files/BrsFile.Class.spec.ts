@@ -4,10 +4,9 @@ import { Program } from '../Program';
 import type { BrsFile } from './BrsFile';
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import type { Diagnostic } from 'vscode-languageserver';
-import { Range, DiagnosticSeverity } from 'vscode-languageserver';
+import { Range } from 'vscode-languageserver';
 import { ParseMode } from '../parser/Parser';
-import { expectZeroDiagnostics, getTestTranspile } from '../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile } from '../testHelpers.spec';
 import { standardizePath as s } from '../util';
 import * as fsExtra from 'fs-extra';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
@@ -35,11 +34,11 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     function addFile(relativePath: string, text: string) {
-        return program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/${relativePath}`, dest: relativePath }, text);
+        return program.setFile<BrsFile>({ src: `${rootDir}/${relativePath}`, dest: relativePath }, text);
     }
 
     it('detects all classes after parse', () => {
-        let file = program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
             class Animal
             end class
             class Duck
@@ -51,7 +50,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('does not cause errors with incomplete class statement', () => {
-        program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile<BrsFile>({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class
         `);
         program.validate();
@@ -59,7 +58,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('catches child class missing super call in constructor', () => {
-        program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile<BrsFile>({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Person
                 sub new()
                 end sub
@@ -70,15 +69,13 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
-        expect(
-            program.getDiagnostics()[0]?.message
-        ).to.equal(
-            DiagnosticMessages.classConstructorMissingSuperCall().message
-        );
+        expectDiagnostics(program, [
+            DiagnosticMessages.classConstructorMissingSuperCall()
+        ]);
     });
 
     it('access modifier is option for override', () => {
-        let file = program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
                 sub move()
                 end sub
@@ -90,14 +87,14 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        expectZeroDiagnostics(program);
         let duckClass = file.parser.references.classStatements.find(x => x.name.text.toLowerCase() === 'duck');
         expect(duckClass).to.exist;
         expect(duckClass.memberMap['move']).to.exist;
     });
 
     it('supports various namespace configurations', () => {
-        program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile<BrsFile>({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
                 sub new()
                     bigBird = new Birds.Bird()
@@ -117,11 +114,11 @@ describe('BrsFile BrighterScript classes', () => {
             end namespace
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        expectZeroDiagnostics(program);
     });
     describe('super', () => {
         it('always requires super call in child constructor', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 class Bird
                 end class
                 class Duck extends Bird
@@ -130,11 +127,13 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).to.eql(DiagnosticMessages.classConstructorMissingSuperCall().message);
+            expectDiagnostics(program, [
+                DiagnosticMessages.classConstructorMissingSuperCall()
+            ]);
         });
 
         it('requires super call in child when parent has own `new` method', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 class Bird
                     sub new()
                     end sub
@@ -145,11 +144,13 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).to.eql(DiagnosticMessages.classConstructorMissingSuperCall().message);
+            expectDiagnostics(program, [
+                DiagnosticMessages.classConstructorMissingSuperCall()
+            ]);
         });
 
         it('allows non-`m` expressions and statements before the super call', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 class Bird
                     sub new(name)
                     end sub
@@ -164,11 +165,11 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).to.be.undefined;
+            expectZeroDiagnostics(program);
         });
 
         it('allows non-`m` expressions and statements before the super call', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 class Bird
                     sub new(name)
                     end sub
@@ -181,13 +182,11 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             `);
             program.validate();
-            expect(
-                program.getDiagnostics().map(x => ({ message: x.message, range: x.range }))
-            ).to.eql([{
-                message: DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall().message,
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
                 range: Range.create(7, 24, 7, 25)
             }, {
-                message: DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall().message,
+                ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
                 range: Range.create(7, 33, 7, 34)
             }]);
         });
@@ -458,7 +457,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.super0_sayHello = instance.sayHello
                     instance.sayHello = function(text)
                         text = "The duck says " + text
-                        if text <> invalid then
+                        if text <> invalid
                             m.super0_sayHello(text)
                         end if
                     end function
@@ -690,7 +689,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('detects using `new` keyword on non-classes', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
             sub quack()
             end sub
             sub main()
@@ -698,15 +697,13 @@ describe('BrsFile BrighterScript classes', () => {
             end sub
         `);
         program.validate();
-        expect(
-            program.getDiagnostics()[0]?.message
-        ).to.equal(
-            DiagnosticMessages.expressionIsNotConstructable('sub').message
-        );
+        expectDiagnostics(program, [
+            DiagnosticMessages.expressionIsNotConstructable('sub')
+        ]);
     });
 
     it('detects missing call to super', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
             class Animal
                 sub new()
                 end sub
@@ -717,15 +714,13 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
-        expect(
-            program.getDiagnostics()[0]?.message
-        ).to.equal(
-            DiagnosticMessages.classConstructorMissingSuperCall().message
-        );
+        expectDiagnostics(program, [
+            DiagnosticMessages.classConstructorMissingSuperCall()
+        ]);
     });
 
     it.skip('detects calls to unknown m methods', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
             class Animal
                 sub new()
                     m.methodThatDoesNotExist()
@@ -733,15 +728,13 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
-        expect(
-            program.getDiagnostics()[0]?.message
-        ).to.equal(
+        expectDiagnostics(program, [
             DiagnosticMessages.methodDoesNotExistOnType('methodThatDoesNotExist', 'Animal')
-        );
+        ]);
     });
 
     it('detects duplicate member names', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
                 public name
                 public name
@@ -755,15 +748,7 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
-        let diagnostics = program.getDiagnostics().map(x => {
-            return {
-                code: x.code,
-                message: x.message,
-                range: x.range,
-                severity: DiagnosticSeverity.Error
-            };
-        });
-        expect(diagnostics).to.eql(<Partial<Diagnostic>[]>[{
+        expectDiagnostics(program, [{
             ...DiagnosticMessages.duplicateIdentifier('name'),
             range: Range.create(3, 23, 3, 27)
         }, {
@@ -779,26 +764,24 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('detects mismatched member type in child class', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
                 public name
             end class
             class Duck extends Animal
-                public function name()
+                public override function name()
                     return "Donald"
                 end function
             end class
         `);
         program.validate();
-        expect(
-            program.getDiagnostics().map(x => x.message).sort()[0]
-        ).to.eql(
-            DiagnosticMessages.classChildMemberDifferentMemberTypeThanAncestor('method', 'field', 'Animal').message
-        );
+        expectDiagnostics(program, [
+            DiagnosticMessages.classChildMemberDifferentMemberTypeThanAncestor('method', 'field', 'Animal')
+        ]);
     });
 
     it('allows untyped overridden field in child class', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
                 public name
             end class
@@ -811,7 +794,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('allows overridden property name in child class', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             class Bird
                 public name = "bird"
             end class
@@ -824,7 +807,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('flags incompatible child field type changes', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             class Bird
                 public age = 12
                 public name = "bird"
@@ -837,16 +820,16 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
-        expect(program.getDiagnostics().map(x => x.message).sort()).to.eql([
-            DiagnosticMessages.cannotFindType('Person').message,
-            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'age', 'float', 'integer').message,
-            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'name', 'integer', 'string').message,
-            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'owner', 'string', 'Person').message
+        expectDiagnostics(program, [
+            DiagnosticMessages.cannotFindType('Person'),
+            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'age', 'float', 'integer'),
+            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'name', 'integer', 'string'),
+            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'owner', 'string', 'Person')
         ]);
     });
 
     it('detects overridden methods without override keyword', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
             class Animal
                 sub speak()
                 end sub
@@ -857,13 +840,13 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]).to.exist.and.to.include({
-            ...DiagnosticMessages.missingOverrideKeyword('Animal')
-        });
+        expectDiagnostics(program, [
+            DiagnosticMessages.missingOverrideKeyword('Animal')
+        ]);
     });
 
     it('detects overridden methods with different visibility', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
                 sub speakInPublic()
                 end sub
@@ -882,18 +865,15 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]).to.exist.and.to.include({
-            ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakInPublic', 'private', 'public', 'Animal')
-        });
-        expect(program.getDiagnostics()[1]).to.exist.and.to.include({
-            ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakWithFriends', 'public', 'protected', 'Animal')
-        });
-        expect(program.getDiagnostics()[2]).to.exist.and.to.include({
-            ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakWithFamily', 'public', 'private', 'Animal')
-        });
+        expectDiagnostics(program, [
+            DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakInPublic', 'private', 'public', 'Animal'),
+            DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakWithFriends', 'public', 'protected', 'Animal'),
+            DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakWithFamily', 'public', 'private', 'Animal')
+        ]);
     });
+
     it('allows overridden methods with matching visibility', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
                 sub speakInPublic()
                 end sub
@@ -912,25 +892,105 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
-        expect(program.getDiagnostics()).to.be.empty;
+        expectZeroDiagnostics(program);
     });
 
-    it('detects extending unknown parent class', () => {
-        program.addOrReplaceFile('source/main.brs', `
-            class Duck extends Animal
-                sub speak()
-                end sub
-            end class
-        `);
-        program.validate();
-        expect(program.getDiagnostics()[0]).to.exist.and.to.deep.include({
-            ...DiagnosticMessages.classCouldNotBeFound('Animal', 'source'),
-            range: Range.create(1, 31, 1, 37)
+    describe('detects unknown parent class', () => {
+        it('non-namespaced parent from outside namespace', () => {
+            program.setFile('source/main.bs', `
+                class Duck extends Animal
+                    sub speak()
+                    end sub
+                end class
+
+                namespace Vertibrates
+                    class Animal
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.classCouldNotBeFound('Animal', 'source'),
+                range: Range.create(1, 35, 1, 41)
+            }]);
+        });
+
+        it('non-namespaced parent from within namespace', () => {
+            program.setFile('source/main.bs', `
+                namespace Vertibrates
+                    class Duck extends Animal
+                        sub speak()
+                        end sub
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.classCouldNotBeFound('Animal', 'source')
+            ]);
+        });
+
+        it('non-namespaced name from outside namespace alongside existing namespace', () => {
+            program.setFile('source/main.bs', `
+                namespace Vertibrates
+                    class Animal
+                    end class
+                end namespace
+
+                class Duck extends Animal
+                    sub speak()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.classCouldNotBeFound('Animal', 'source')
+            ]);
+        });
+
+        it('namespaced parent class from outside namespace', () => {
+            program.setFile('source/vertibrates.bs', `
+                namespace Vertibrates
+                    class Bird
+                    end class
+                end namespace
+            `);
+            program.setFile('source/Duck.bs', `
+                class Duck extends Vertibrates.GroundedBird
+                    sub speak()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.classCouldNotBeFound('Vertibrates.GroundedBird', 'source')
+            ]);
+        });
+
+        it('namespaced parent class from inside namespace', () => {
+            program.setFile('source/vertibrates.bs', `
+                namespace Vertibrates
+                    class Bird
+                    end class
+                end namespace
+            `);
+            program.setFile('source/Duck.bs', `
+                namespace Birdies
+                    class Duck extends Vertibrates.GroundedBird
+                        sub speak()
+                        end sub
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.classCouldNotBeFound('Vertibrates.GroundedBird', 'source')
+            ]);
         });
     });
 
     it('catches newable class without namespace name', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             namespace NameA.NameB
                 class Duck
                 end class
@@ -941,13 +1001,13 @@ describe('BrsFile BrighterScript classes', () => {
             end sub
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).to.equal(
-            DiagnosticMessages.classCouldNotBeFound('Duck', 'source').message
-        );
+        expectDiagnostics(program, [
+            DiagnosticMessages.classCouldNotBeFound('Duck', 'source')
+        ]);
     });
 
     it('supports newable class namespace inference', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             namespace NameA.NameB
                 class Duck
                 end class
@@ -957,11 +1017,11 @@ describe('BrsFile BrighterScript classes', () => {
             end namespace
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        expectZeroDiagnostics(program);
     });
 
     it('catches extending unknown namespaced class', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             namespace NameA.NameB
                 class Animal
                 end class
@@ -970,13 +1030,13 @@ describe('BrsFile BrighterScript classes', () => {
             end namespace
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).to.equal(
-            DiagnosticMessages.classCouldNotBeFound('NameA.NameB.Animal1', 'source').message
-        );
+        expectDiagnostics(program, [
+            DiagnosticMessages.classCouldNotBeFound('NameA.NameB.Animal1', 'source')
+        ]);
     });
 
     it('supports omitting namespace prefix for items in same namespace', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             namespace NameA.NameB
                 class Animal
                 end class
@@ -985,37 +1045,39 @@ describe('BrsFile BrighterScript classes', () => {
             end namespace
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        expectZeroDiagnostics(program);
     });
 
     it('catches duplicate root-level class declarations', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
             end class
             class Animal
+            end class
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).to.equal(
-            DiagnosticMessages.duplicateClassDeclaration('source', 'Animal').message
-        );
+        expectDiagnostics(program, [
+            DiagnosticMessages.duplicateClassDeclaration('source', 'Animal')
+        ]);
     });
 
     it('catches duplicate namespace-level class declarations', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             namespace NameA.NameB
                 class Animal
                 end class
                 class Animal
+                end class
             end namespace
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).to.equal(
-            DiagnosticMessages.duplicateClassDeclaration('source', 'NameA.NameB.Animal').message
-        );
+        expectDiagnostics(program, [
+            DiagnosticMessages.duplicateClassDeclaration('source', 'NameA.NameB.Animal')
+        ]);
     });
 
     it('catches namespaced class name which is the same as a global class', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             namespace NameA.NameB
                 class Animal
                 end class
@@ -1024,39 +1086,39 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).to.equal(
+        expectDiagnostics(program, [
             DiagnosticMessages.namespacedClassCannotShareNamewithNonNamespacedClass('Animal').message
-        );
+        ]);
     });
 
     it('catches class with same name as function', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             class Animal
             end class
             sub Animal()
             end sub
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).to.equal(
+        expectDiagnostics(program, [
             DiagnosticMessages.functionCannotHaveSameNameAsClass('Animal').message
-        );
+        ]);
     });
 
     it('catches class with same name (but different case) as function', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             class ANIMAL
             end class
             sub animal()
             end sub
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).to.equal(
+        expectDiagnostics(program, [
             DiagnosticMessages.functionCannotHaveSameNameAsClass('animal').message
-        );
+        ]);
     });
 
     it('catches variable with same name as class', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             class Animal
             end class
             sub main()
@@ -1064,13 +1126,13 @@ describe('BrsFile BrighterScript classes', () => {
             end sub
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).to.equal(
+        expectDiagnostics(program, [
             DiagnosticMessages.localVarSameNameAsClass('Animal').message
-        );
+        ]);
     });
 
     it('allows extending classes with more than one dot in the filename', () => {
-        program.addOrReplaceFile('source/testclass.bs', `
+        program.setFile('source/testclass.bs', `
             class Foo
             end class
 
@@ -1081,7 +1143,7 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
 
-        program.addOrReplaceFile('source/testclass_no_testdot.bs', `
+        program.setFile('source/testclass_no_testdot.bs', `
             class BarNoDot extends Foo
                 sub new()
                     super()
@@ -1089,7 +1151,7 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
 
-        program.addOrReplaceFile('source/testclass.dot.bs', `
+        program.setFile('source/testclass.dot.bs', `
             class BarDot extends Foo
                 sub new()
                 super()
@@ -1102,7 +1164,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('computes correct super index for grandchild class', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             sub Main()
                 c = new App.ClassC()
             end sub
@@ -1142,7 +1204,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('computes correct super index for namespaced child class and global parent class', () => {
-        program.addOrReplaceFile('source/ClassA.bs', `
+        program.setFile('source/ClassA.bs', `
             class ClassA
             end class
         `);
@@ -1170,7 +1232,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('does not crash when parent class is missing', () => {
-        const file = program.addOrReplaceFile<BrsFile>('source/ClassB.bs', `
+        const file = program.setFile<BrsFile>('source/ClassB.bs', `
             class ClassB extends ClassA
             end class
         `);
@@ -1180,7 +1242,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('does not crash when child has field with same name as sub in parent', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             class Parent
                 public function helloWorld()
                 end function
@@ -1193,7 +1255,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('does not crash when child has method with same name as field in parent', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             class Parent
                 public helloWorld as string
             end class
@@ -1203,5 +1265,31 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
+    });
+
+    it.skip('detects calling class constructors with too many parameters', () => {
+        program.setFile('source/main.bs', `
+            class Parameterless
+                sub new()
+                end sub
+            end class
+
+            class OneParam
+                sub new(param1)
+                end sub
+            end class
+
+            sub main()
+                c1 = new Parameterless(1)
+                c2 = new OneParam(1, 2)
+                c2 = new OneParam()
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            DiagnosticMessages.mismatchArgumentCount(0, 1),
+            DiagnosticMessages.mismatchArgumentCount(1, 2),
+            DiagnosticMessages.mismatchArgumentCount(1, 0)
+        ]);
     });
 });

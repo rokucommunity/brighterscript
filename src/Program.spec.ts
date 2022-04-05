@@ -1,23 +1,25 @@
 import { assert, expect } from 'chai';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
-import { CompletionItemKind, Position, Range, DiagnosticSeverity, Location } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range, Location } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import type { FunctionStatement } from './parser/Statement';
+import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { Logger } from './Logger';
-import { createToken } from './astUtils';
-import { TokenKind } from './lexer';
+import { createToken } from './astUtils/creators';
+import { createVisitor, WalkMode } from './astUtils/visitors';
+import { isBrsFile } from './astUtils/reflection';
+import { TokenKind } from './lexer/TokenKind';
+import type { LiteralExpression } from './parser/Expression';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -53,18 +55,18 @@ describe('Program', () => {
 
     describe('addFile', () => {
         it('adds various files to `pkgMap`', () => {
-            program.addOrReplaceFile('source/main.brs', '');
+            program.setFile('source/main.brs', '');
             expect(program['pkgMap']).to.have.property(s`source/main.brs`);
 
-            program.addOrReplaceFile('source/main.bs', '');
+            program.setFile('source/main.bs', '');
             expect(program['pkgMap']).to.have.property(s`source/main.bs`);
 
-            program.addOrReplaceFile('components/comp1.xml', '');
+            program.setFile('components/comp1.xml', '');
             expect(program['pkgMap']).to.have.property(s`components/comp1.xml`);
         });
 
         it('does not crash when given a totally bogus file', () => {
-            program.addOrReplaceFile({
+            program.setFile({
                 src: `${rootDir}/source/main.brs`,
                 dest: 'source/main.brs'
             }, `class Animalpublic name as stringpublic function walk()end functionend class`);
@@ -74,19 +76,19 @@ describe('Program', () => {
         it('only parses xml files as components when file is found within the "components" folder', () => {
             expect(Object.keys(program.files).length).to.equal(0);
 
-            program.addOrReplaceFile({
+            program.setFile({
                 src: s`${rootDir}/components/comp1.xml`,
                 dest: util.pathSepNormalize(`components/comp1.xml`)
             }, '');
             expect(Object.keys(program.files).length).to.equal(1);
 
-            program.addOrReplaceFile({
+            program.setFile({
                 src: s`${rootDir}/notComponents/comp1.xml`,
                 dest: util.pathSepNormalize(`notComponents/comp1.xml`)
             }, '');
             expect(Object.keys(program.files).length).to.equal(1);
 
-            program.addOrReplaceFile({
+            program.setFile({
                 src: s`${rootDir}/componentsExtra/comp1.xml`,
                 dest: util.pathSepNormalize(`componentsExtra/comp1.xml`)
             }, '');
@@ -94,7 +96,7 @@ describe('Program', () => {
         });
 
         it('supports empty statements for transpile', async () => {
-            const file = program.addOrReplaceFile<BrsFile>('source/main.bs', `
+            const file = program.setFile<BrsFile>('source/main.bs', `
                 sub main()
                     m.logError()
                     'some comment
@@ -108,7 +110,7 @@ describe('Program', () => {
             let projectDir = s`${tmpPath}/project2`;
             fsExtra.ensureDirSync(projectDir);
             program = new Program({ cwd: projectDir });
-            program.addOrReplaceFile({ src: 'source/lib.brs', dest: 'source/lib.brs' }, 'function main()\n    print "hello world"\nend function');
+            program.setFile({ src: 'source/lib.brs', dest: 'source/lib.brs' }, 'function main()\n    print "hello world"\nend function');
             // await program.reloadFile('source/lib.brs', `'this is a comment`);
             //if we made it to here, nothing exploded, so the test passes
         });
@@ -120,12 +122,12 @@ describe('Program', () => {
 
             let mainPath = s`${rootDir}/source/main.brs`;
             //add a new source file
-            program.addOrReplaceFile({ src: mainPath, dest: 'source/main.brs' }, '');
+            program.setFile({ src: mainPath, dest: 'source/main.brs' }, '');
             //file should be in source scope now
             expect(program.getScopeByName('source').getFile(mainPath)).to.exist;
 
             //add an unreferenced file from the components folder
-            program.addOrReplaceFile({ src: `${rootDir}/components/component1/component1.brs`, dest: 'components/component1/component1.brs' }, '');
+            program.setFile({ src: `${rootDir}/components/component1/component1.brs`, dest: 'components/component1/component1.brs' }, '');
 
             //source scope should have the same number of files
             expect(program.getScopeByName('source').getFile(mainPath)).to.exist;
@@ -134,7 +136,7 @@ describe('Program', () => {
 
         it('normalizes file paths', () => {
             let filePath = `${rootDir}/source\\main.brs`;
-            program.addOrReplaceFile({ src: filePath, dest: 'source/main.brs' }, '');
+            program.setFile({ src: filePath, dest: 'source/main.brs' }, '');
 
             expect(program.getScopeByName('source').getFile(filePath)).to.exist;
 
@@ -175,9 +177,9 @@ describe('Program', () => {
 
             let mainPath = s`${rootDir}/source/main.brs`;
             //add a new source file
-            program.addOrReplaceFile({ src: mainPath, dest: 'source/main.brs' }, '');
+            program.setFile({ src: mainPath, dest: 'source/main.brs' }, '');
             //add a component file
-            program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, trim`
+            program.setFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/lib.brs" />
@@ -200,24 +202,31 @@ describe('Program', () => {
     });
 
     describe('validate', () => {
+        it('retains expressions after validate', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub test()
+                    print a.b.c
+                end sub
+            `);
+            //disable the plugins
+            expect(file.parser.references.expressions).to.be.lengthOf(1);
+            program.validate();
+            expect(file.parser.references.expressions).to.be.lengthOf(1);
+        });
         it('catches duplicate XML component names', () => {
             //add 2 components which both reference the same errored file
-            program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, trim`
+            program.setFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                 </component>
             `);
-            program.addOrReplaceFile({ src: `${rootDir}/components/component2.xml`, dest: 'components/component2.xml' }, trim`
+            program.setFile({ src: `${rootDir}/components/component2.xml`, dest: 'components/component2.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                 </component>
             `);
             program.validate();
-            expect(program.getDiagnostics()).to.be.lengthOf(2);
-            expect(program.getDiagnostics().map(x => {
-                delete x.file;
-                return x;
-            })).to.eql([{
+            expectDiagnostics(program, [{
                 ...DiagnosticMessages.duplicateComponentName('Component1'),
                 range: Range.create(1, 17, 1, 27),
                 relatedInformation: [{
@@ -253,7 +262,7 @@ describe('Program', () => {
 
         it('does not produce duplicate parse errors for different component scopes', () => {
             //add a file with a parse error
-            program.addOrReplaceFile({ src: `${rootDir}/components/lib.brs`, dest: 'components/lib.brs' }, `
+            program.setFile({ src: `${rootDir}/components/lib.brs`, dest: 'components/lib.brs' }, `
                 sub DoSomething()
                     'random out-of-place open paren, definitely causes parse error
                     (
@@ -261,13 +270,13 @@ describe('Program', () => {
             `);
 
             //add 2 components which both reference the same errored file
-            program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, trim`
+            program.setFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/lib.brs" />
                 </component>
             `);
-            program.addOrReplaceFile({ src: `${rootDir}/components/component2.xml`, dest: 'components/component2.xml' }, trim`
+            program.setFile({ src: `${rootDir}/components/component2.xml`, dest: 'components/component2.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component2" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/lib.brs" />
@@ -275,119 +284,114 @@ describe('Program', () => {
             `);
 
             program.validate();
-
-            let diagnostics = program.getDiagnostics();
-            expect(diagnostics).to.be.lengthOf(1);
+            expectHasDiagnostics(program, 1);
         });
 
         it('detects scripts not loaded by any file', () => {
             //add a main file for sanity check
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
             program.validate();
-            expect(program.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(program);
 
             //add the orphaned file
-            program.addOrReplaceFile({ src: `${rootDir}/components/lib.brs`, dest: 'components/lib.brs' }, '');
+            program.setFile({ src: `${rootDir}/components/lib.brs`, dest: 'components/lib.brs' }, '');
             program.validate();
-            let diagnostics = program.getDiagnostics();
-            expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(DiagnosticMessages.fileNotReferencedByAnyOtherFile().code);
+            expectDiagnostics(program, [
+                DiagnosticMessages.fileNotReferencedByAnyOtherFile()
+            ]);
         });
         it('does not throw errors on shadowed init functions in components', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/lib.brs`, dest: 'lib.brs' }, `
+            program.setFile({ src: `${rootDir}/lib.brs`, dest: 'lib.brs' }, `
                 function DoSomething()
                     return true
                 end function
             `);
 
-            program.addOrReplaceFile({ src: `${rootDir}/components/Parent.xml`, dest: 'components/Parent.xml' }, trim`
+            program.setFile({ src: `${rootDir}/components/Parent.xml`, dest: 'components/Parent.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Parent" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/lib.brs" />
                 </component>
             `);
 
-            program.addOrReplaceFile({ src: `${rootDir}/components/Child.xml`, dest: 'components/Child.xml' }, trim`
+            program.setFile({ src: `${rootDir}/components/Child.xml`, dest: 'components/Child.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Child" extends="Parent">
                 </component>
             `);
 
             program.validate();
-            expect(program.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(program);
         });
 
         it('recognizes global function calls', () => {
-            expect(program.getDiagnostics().length).to.equal(0);
-            program.addOrReplaceFile({ src: `${rootDir}/source/file.brs`, dest: 'source/file.brs' }, `
+            expectZeroDiagnostics(program);
+            program.setFile({ src: `${rootDir}/source/file.brs`, dest: 'source/file.brs' }, `
                 function DoB()
                     sleep(100)
                 end function
             `);
             //validate the scope
             program.validate();
-            let diagnostics = program.getDiagnostics();
-            //shouldn't have any errors
-            expect(diagnostics).to.be.lengthOf(0);
+            expectZeroDiagnostics(program);
         });
 
         it('shows warning when a child component imports the same script as its parent', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
+            program.setFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/lib.brs" />
                 </component>
             `);
 
-            program.addOrReplaceFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
+            program.setFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                     <script type="text/brightscript" uri="pkg:/lib.brs" />
                 </component>
             `);
 
-            program.addOrReplaceFile({ src: `${rootDir}/lib.brs`, dest: 'lib.brs' }, `'comment`);
+            program.setFile({ src: `${rootDir}/lib.brs`, dest: 'lib.brs' }, `'comment`);
             program.validate();
-            let diagnostics = program.getDiagnostics();
-            expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(DiagnosticMessages.unnecessaryScriptImportInChildFromParent('').code);
-            expect(diagnostics[0].severity).to.equal(DiagnosticSeverity.Warning);
+            expectDiagnostics(program, [
+                DiagnosticMessages.unnecessaryScriptImportInChildFromParent('ParentScene')
+            ]);
         });
 
         it('adds info diag when child component method shadows parent component method', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
+            program.setFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/parent.brs" />
                 </component>
             `);
 
-            program.addOrReplaceFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
+            program.setFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                     <script type="text/brightscript" uri="pkg:/child.brs" />
                 </component>
             `);
 
-            program.addOrReplaceFile({ src: `${rootDir}/parent.brs`, dest: 'parent.brs' }, `sub DoSomething()\nend sub`);
-            program.addOrReplaceFile({ src: `${rootDir}/child.brs`, dest: 'child.brs' }, `sub DoSomething()\nend sub`);
+            program.setFile({ src: `${rootDir}/parent.brs`, dest: 'parent.brs' }, `sub DoSomething()\nend sub`);
+            program.setFile({ src: `${rootDir}/child.brs`, dest: 'child.brs' }, `sub DoSomething()\nend sub`);
             program.validate();
-            let diagnostics = program.getDiagnostics();
-            expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(DiagnosticMessages.overridesAncestorFunction('', '', '', '').code);
+            expectDiagnostics(program, [
+                DiagnosticMessages.overridesAncestorFunction('', '', '', '').code
+            ]);
         });
 
         it('does not add info diagnostic on shadowed "init" functions', () => {
-            program.addOrReplaceFile('components/parent.xml', trim`
+            program.setFile('components/parent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                     <script type="text/brightscript" uri="parent.brs" />
                 </component>
                 `);
-            program.addOrReplaceFile(`components/parent.brs`, `sub Init()\nend sub`);
-            program.addOrReplaceFile(`components/child.brs`, `sub Init()\nend sub`);
+            program.setFile(`components/parent.brs`, `sub Init()\nend sub`);
+            program.setFile(`components/child.brs`, `sub Init()\nend sub`);
 
-            program.addOrReplaceFile('components/child.xml', trim`
+            program.setFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                     <script type="text/brightscript" uri="child.brs" />
@@ -395,39 +399,42 @@ describe('Program', () => {
             `);
             //run this validate separately so we can have an easier time debugging just the child component
             program.validate();
-            let diagnostics = program.getDiagnostics();
-            expect(diagnostics.map(x => x.message)).to.eql([]);
+            expectZeroDiagnostics(program);
         });
 
         it('catches duplicate methods in single file', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
                 end sub
                 sub DoSomething()
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(2);
-            expect(program.getDiagnostics()[0].message.indexOf('Duplicate sub declaration'));
+            expectDiagnostics(program, [
+                DiagnosticMessages.duplicateFunctionImplementation('DoSomething', 'source'),
+                DiagnosticMessages.duplicateFunctionImplementation('DoSomething', 'source')
+            ]);
         });
 
         it('catches duplicate methods across multiple files', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
                 end sub
             `);
-            program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+            program.setFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub DoSomething()
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(2);
-            expect(program.getDiagnostics()[0].message.indexOf('Duplicate sub declaration'));
+            expectDiagnostics(program, [
+                DiagnosticMessages.duplicateFunctionImplementation('DoSomething', 'source'),
+                DiagnosticMessages.duplicateFunctionImplementation('DoSomething', 'source')
+            ]);
         });
 
         it('maintains correct callables list', () => {
             let initialCallableCount = program.getScopeByName('source').getAllCallables().length;
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub DoSomething()
                 end sub
                 sub DoSomething()
@@ -435,7 +442,7 @@ describe('Program', () => {
             `);
             expect(program.getScopeByName('source').getAllCallables().length).equals(initialCallableCount + 2);
             //set the file contents again (resetting the wasProcessed flag)
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
                 end sub
                 sub DoSomething()
@@ -447,36 +454,36 @@ describe('Program', () => {
         });
 
         it('resets errors on revalidate', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
                 end sub
                 sub DoSomething()
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(2);
+            expectHasDiagnostics(program, 2);
             //set the file contents again (resetting the wasProcessed flag)
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
                 end sub
                 sub DoSomething()
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(2);
+            expectHasDiagnostics(program, 2);
 
             //load in a valid file, the errors should go to zero
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(0);
+            expectZeroDiagnostics(program);
         });
 
         it('identifies invocation of unknown function', () => {
             //call a function that doesn't exist
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     name = "Hello"
                     DoSomething(name)
@@ -484,44 +491,45 @@ describe('Program', () => {
             `);
 
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(1);
-            expect(program.getDiagnostics()[0].code).to.equal(DiagnosticMessages.callToUnknownFunction('', '').code);
+            expectDiagnostics(program, [
+                DiagnosticMessages.callToUnknownFunction('DoSomething', 'source')
+            ]);
         });
 
         it('detects methods from another file in a subdirectory', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     DoSomething()
                 end sub
             `);
-            program.addOrReplaceFile({ src: `${rootDir}/source/ui/lib.brs`, dest: 'source/ui/lib.brs' }, `
+            program.setFile({ src: `${rootDir}/source/ui/lib.brs`, dest: 'source/ui/lib.brs' }, `
                 function DoSomething()
                     print "hello world"
                 end function
             `);
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(0);
+            expectZeroDiagnostics(program);
         });
     });
 
     describe('hasFile', () => {
         it('recognizes when it has a file loaded', () => {
             expect(program.hasFile('file1.brs')).to.be.false;
-            program.addOrReplaceFile({ src: 'file1.brs', dest: 'file1.brs' }, `'comment`);
+            program.setFile('file1.brs', `'comment`);
             expect(program.hasFile('file1.brs')).to.be.true;
         });
     });
 
-    describe('addOrReplaceFile', () => {
+    describe('setFile', () => {
         it('links xml scopes based on xml parent-child relationships', () => {
-            program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
+            program.setFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                 </component>
             `);
 
             //create child component
-            program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, trim`
+            program.setFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                 </component>
@@ -530,7 +538,7 @@ describe('Program', () => {
             expect(program.getScopeByName('components/ChildScene.xml').getParentScope().name).to.equal(s`components/ParentScene.xml`);
 
             //change the parent's name.
-            program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
+            program.setFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="NotParentScene" extends="Scene">
                 </component>
@@ -542,25 +550,25 @@ describe('Program', () => {
 
         it('creates a new scope for every added component xml', () => {
             //we have global callables, so get that initial number
-            program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, '');
+            program.setFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, '');
             expect(program.getScopeByName(`components/component1.xml`)).to.exist;
 
-            program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, '');
-            program.addOrReplaceFile({ src: `${rootDir}/components/component2.xml`, dest: 'components/component2.xml' }, '');
+            program.setFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, '');
+            program.setFile({ src: `${rootDir}/components/component2.xml`, dest: 'components/component2.xml' }, '');
             expect(program.getScopeByName(`components/component1.xml`)).to.exist;
             expect(program.getScopeByName(`components/component2.xml`)).to.exist;
         });
 
         it('includes referenced files in xml scopes', () => {
             let xmlPath = s`${rootDir}/components/component1.xml`;
-            program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
+            program.setFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
                 </component>
             `);
             let brsPath = s`${rootDir}/components/component1.brs`;
-            program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
+            program.setFile({ src: brsPath, dest: 'components/component1.brs' }, '');
 
             let scope = program.getScopeByName(`components/component1.xml`);
             expect(scope.getFile(xmlPath).pkgPath).to.equal(s`components/component1.xml`);
@@ -569,42 +577,38 @@ describe('Program', () => {
 
         it('adds xml file to files map', () => {
             let xmlPath = `${rootDir}/components/component1.xml`;
-            program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, '');
+            program.setFile({ src: xmlPath, dest: 'components/component1.xml' }, '');
             expect(program.getFileByPathAbsolute(xmlPath)).to.exist;
         });
 
         it('detects missing script reference', () => {
             let xmlPath = `${rootDir}/components/component1.xml`;
-            program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
+            program.setFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
                 </component>
             `);
             program.validate();
-            let diagnostics = program.getDiagnostics();
-            expect(diagnostics.length).to.equal(1);
-            expect(diagnostics[0]).to.deep.include(<BsDiagnostic>{
+            expectDiagnostics(program, [{
                 ...DiagnosticMessages.referencedFileDoesNotExist(),
-                file: program.getFileByPathAbsolute(xmlPath),
                 range: Range.create(2, 42, 2, 72)
-            });
+            }]);
         });
 
         it('adds warning instead of error on mismatched upper/lower case script import', () => {
-            program.addOrReplaceFile('components/component1.xml', trim`
+            program.setFile('components/component1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="component1.brs" />
                 </component>
             `);
-            program.addOrReplaceFile('components/COMPONENT1.brs', '');
+            program.setFile('components/COMPONENT1.brs', '');
 
             //validate
             program.validate();
-            let diagnostics = program.getDiagnostics();
-            expect(diagnostics.map(x => x.message)).to.eql([
-                DiagnosticMessages.scriptImportCaseMismatch(s`components\\COMPONENT1.brs`).message
+            expectDiagnostics(program, [
+                DiagnosticMessages.scriptImportCaseMismatch(s`components\\COMPONENT1.brs`)
             ]);
         });
     });
@@ -613,70 +617,70 @@ describe('Program', () => {
         it('picks up new files in a scope when an xml file is loaded', () => {
             program.options.ignoreErrorCodes.push(1013);
             let xmlPath = s`${rootDir}/components/component1.xml`;
-            program.addOrReplaceFile({ src: xmlPath, dest: 'components/comonent1.xml' }, trim`
+            program.setFile({ src: xmlPath, dest: 'components/comonent1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
                 </component>
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]).to.deep.include(<BsDiagnostic>{
-                message: DiagnosticMessages.referencedFileDoesNotExist().message
-            });
+            expectDiagnostics(program, [
+                DiagnosticMessages.referencedFileDoesNotExist()
+            ]);
 
             //add the file, the error should go away
             let brsPath = s`${rootDir}/components/component1.brs`;
-            program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
+            program.setFile({ src: brsPath, dest: 'components/component1.brs' }, '');
             program.validate();
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
 
             //add the xml file back in, but change the component brs file name. Should have an error again
-            program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
+            program.setFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/component2.brs" />
                 </component>
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]).to.deep.include(<BsDiagnostic>{
-                message: DiagnosticMessages.referencedFileDoesNotExist().message
-            });
+            expectDiagnostics(program, [
+                DiagnosticMessages.referencedFileDoesNotExist()
+            ]);
         });
 
         it('handles when the brs file is added before the component', () => {
             let brsPath = s`${rootDir}/components/component1.brs`;
-            program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
+            program.setFile({ src: brsPath, dest: 'components/component1.brs' }, '');
 
             let xmlPath = s`${rootDir}/components/component1.xml`;
-            let xmlFile = program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
+            let xmlFile = program.setFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
                 </component>
             `);
             program.validate();
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(program.getScopeByName(xmlFile.pkgPath).getFile(brsPath)).to.exist;
         });
 
         it('reloads referenced fles when xml file changes', () => {
             program.options.ignoreErrorCodes.push(1013);
             let brsPath = s`${rootDir}/components/component1.brs`;
-            program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
+            program.setFile({ src: brsPath, dest: 'components/component1.brs' }, '');
 
             let xmlPath = s`${rootDir}/components/component1.xml`;
-            let xmlFile = program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
+            let xmlFile = program.setFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
 
                 </component>
             `);
             program.validate();
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(program.getScopeByName(xmlFile.pkgPath).getFile(brsPath)).not.to.exist;
 
             //reload the xml file contents, adding a new script reference.
-            xmlFile = program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
+            xmlFile = program.setFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
@@ -698,7 +702,7 @@ describe('Program', () => {
 
     describe('getCompletions', () => {
         it('includes `for each` variable', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     items = [1, 2, 3]
                     for each thing in items
@@ -713,7 +717,7 @@ describe('Program', () => {
         });
 
         it('includes `for` variable', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     for i = 0 to 10
                         t =
@@ -726,25 +730,36 @@ describe('Program', () => {
         });
 
         it('should include first-level namespace names for brighterscript files', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 namespace NameA.NameB.NameC
                     sub DoSomething()
                     end sub
                 end namespace
                 sub main()
-
+                    print
                 end sub
             `);
-            let completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 23)).map(x => x.label);
-            expect(completions).to.include('NameA');
-            expect(completions).not.to.include('NameB');
-            expect(completions).not.to.include('NameA.NameB');
-            expect(completions).not.to.include('NameA.NameB.NameC');
-            expect(completions).not.to.include('NameA.NameB.NameC.DoSomething');
+            expectCompletionsIncludes(program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 25)), [{
+                label: 'NameA',
+                kind: CompletionItemKind.Module
+            }]);
+            expectCompletionsExcludes(program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 25)), [{
+                label: 'NameB',
+                kind: CompletionItemKind.Module
+            }, {
+                label: 'NameA.NameB',
+                kind: CompletionItemKind.Module
+            }, {
+                label: 'NameA.NameB.NameC',
+                kind: CompletionItemKind.Module
+            }, {
+                label: 'NameA.NameB.NameC.DoSomething',
+                kind: CompletionItemKind.Module
+            }]);
         });
 
         it('resolves completions for namespaces with next namespace part for brighterscript file', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
                 namespace NameA.NameB.NameC
                     sub DoSomething()
                     end sub
@@ -762,7 +777,7 @@ describe('Program', () => {
         });
 
         it('finds namespace members for brighterscript file', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
                 sub main()
                     NameA.
                     NameA.NameB.
@@ -799,7 +814,7 @@ describe('Program', () => {
         });
 
         it('finds namespace members for classes', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
                 sub main()
                     NameA.
                     NameA.NameB.
@@ -840,7 +855,7 @@ describe('Program', () => {
         });
 
         it('finds only namespaces that have classes, when new keyword is used', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 sub main()
                     a = new NameA.
                     b = new NameA.NameB.
@@ -889,13 +904,13 @@ describe('Program', () => {
 
         //Bron.. pain to get this working.. do we realy need this? seems moot with ropm..
         it.skip('should include translated namespace function names for brightscript files', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
                 namespace NameA.NameB.NameC
                     sub DoSomething()
                     end sub
                 end namespace
             `);
-            program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+            program.setFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub test()
 
                 end sub
@@ -905,7 +920,7 @@ describe('Program', () => {
         });
 
         it('inlcudes global completions for file with no scope', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'main.brs' }, `
                 function Main()
                     age = 1
                 end function
@@ -915,7 +930,7 @@ describe('Program', () => {
         });
 
         it('filters out text results for top-level function statements', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 function Main()
                     age = 1
                 end function
@@ -925,7 +940,7 @@ describe('Program', () => {
         });
 
         it('does not filter text results for object properties used in conditional statements', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     p.
                 end sub
@@ -941,7 +956,7 @@ describe('Program', () => {
         });
 
         it('does not filter text results for object properties used in assignments', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     p.
                 end sub
@@ -955,7 +970,7 @@ describe('Program', () => {
         });
 
         it('does not filter text results for object properties', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     p.
                 end sub
@@ -969,7 +984,7 @@ describe('Program', () => {
         });
 
         it('filters out text results for local vars used in conditional statements', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -985,7 +1000,7 @@ describe('Program', () => {
         });
 
         it('filters out text results for local variable assignments', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -998,7 +1013,7 @@ describe('Program', () => {
         });
 
         it('filters out text results for local variables used in assignments', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -1012,7 +1027,7 @@ describe('Program', () => {
         });
 
         it('does not suggest local variables when initiated to the right of a period', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 function Main()
                     helloMessage = "jack"
                     person.hello
@@ -1024,14 +1039,14 @@ describe('Program', () => {
 
         it('finds all file paths when initiated on xml uri', () => {
             let xmlPath = s`${rootDir}/components/component1.xml`;
-            program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
+            program.setFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="" />
                 </component>
             `);
             let brsPath = s`${rootDir}/components/component1.brs`;
-            program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
+            program.setFile({ src: brsPath, dest: 'components/component1.brs' }, '');
             let completions = program.getCompletions(xmlPath, Position.create(2, 42));
             expect(completions[0]).to.include({
                 kind: CompletionItemKind.File,
@@ -1046,7 +1061,7 @@ describe('Program', () => {
         });
 
         it('get all functions and properties in scope when doing any dotted get on non m ', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
                 sub main()
                     thing.anonPropA = "foo"
                     thing.anonPropB = "bar"
@@ -1090,7 +1105,7 @@ describe('Program', () => {
         });
 
         it('get all functions and properties relevant for m ', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
                 class MyClassA
                     function new()
                         m.
@@ -1138,7 +1153,7 @@ describe('Program', () => {
     });
 
     it('include non-namespaced classes in the list of general output', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
                 function regularFunc()
                     MyClass
                 end function
@@ -1157,7 +1172,7 @@ describe('Program', () => {
     });
 
     it('only include classes when using new keyword', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+        program.setFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
                 class MyClassA
                 end class
                 class MyClassB
@@ -1176,16 +1191,16 @@ describe('Program', () => {
     });
 
     it('gets completions when using callfunc inovation', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             function main()
                 myNode@.sayHello(arg1)
             end function
         `);
-        program.addOrReplaceFile('components/MyNode.bs', `
+        program.setFile('components/MyNode.bs', `
             function sayHello(text, text2)
             end function
         `);
-        program.addOrReplaceFile<XmlFile>('components/MyNode.xml',
+        program.setFile<XmlFile>('components/MyNode.xml',
             trim`<?xml version="1.0" encoding="utf-8" ?>
             <component name="Component1" extends="Scene">
                 <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
@@ -1201,18 +1216,18 @@ describe('Program', () => {
     });
 
     it('gets completions for callfunc invocation with multiple nodes', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             function main()
                 myNode@.sayHello(arg1)
             end function
         `);
-        program.addOrReplaceFile('components/MyNode.bs', `
+        program.setFile('components/MyNode.bs', `
             function sayHello(text, text2)
             end function
             function sayHello2(text, text2)
             end function
         `);
-        program.addOrReplaceFile<XmlFile>('components/MyNode.xml',
+        program.setFile<XmlFile>('components/MyNode.xml',
             trim`<?xml version="1.0" encoding="utf-8" ?>
             <component name="Component1" extends="Scene">
                 <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
@@ -1221,13 +1236,13 @@ describe('Program', () => {
                     <function name="sayHello2"/>
                 </interface>
             </component>`);
-        program.addOrReplaceFile('components/MyNode2.bs', `
+        program.setFile('components/MyNode2.bs', `
             function sayHello3(text, text2)
             end function
             function sayHello4(text, text2)
             end function
         `);
-        program.addOrReplaceFile<XmlFile>('components/MyNode2.xml',
+        program.setFile<XmlFile>('components/MyNode2.xml',
             trim`<?xml version="1.0" encoding="utf-8" ?>
             <component name="Component2" extends="Scene">
                 <script type="text/brightscript" uri="pkg:/components/MyNode2.bs" />
@@ -1244,18 +1259,18 @@ describe('Program', () => {
     });
 
     it('gets completions for extended nodes with callfunc invocation - ensure overridden methods included', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             function main()
                 myNode@.sayHello(arg1)
             end function
         `);
-        program.addOrReplaceFile('components/MyNode.bs', `
+        program.setFile('components/MyNode.bs', `
             function sayHello(text, text2)
             end function
             function sayHello2(text, text2)
             end function
         `);
-        program.addOrReplaceFile<XmlFile>('components/MyNode.xml',
+        program.setFile<XmlFile>('components/MyNode.xml',
             trim`<?xml version="1.0" encoding="utf-8" ?>
             <component name="Component1" extends="Scene">
                 <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
@@ -1264,7 +1279,7 @@ describe('Program', () => {
                     <function name="sayHello2"/>
                 </interface>
             </component>`);
-        program.addOrReplaceFile('components/MyNode2.bs', `
+        program.setFile('components/MyNode2.bs', `
             function sayHello3(text, text2)
             end function
             function sayHello2(text, text2)
@@ -1272,7 +1287,7 @@ describe('Program', () => {
             function sayHello4(text, text2)
             end function
         `);
-        program.addOrReplaceFile<XmlFile>('components/MyNode2.xml',
+        program.setFile<XmlFile>('components/MyNode2.xml',
             trim`<?xml version="1.0" encoding="utf-8" ?>
             <component name="Component2" extends="Component1">
                 <script type="text/brightscript" uri="pkg:/components/MyNode2.bs" />
@@ -1291,14 +1306,14 @@ describe('Program', () => {
     describe('xml inheritance', () => {
         it('handles parent-child attach and detach', () => {
             //create parent component
-            let parentFile = program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
+            let parentFile = program.setFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                 </component>
             `);
 
             //create child component
-            let childFile = program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, trim`
+            let childFile = program.setFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                 </component>
@@ -1308,7 +1323,7 @@ describe('Program', () => {
             expect((childFile as XmlFile).parentComponent).to.equal(parentFile);
 
             //change the name of the parent
-            parentFile = program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
+            parentFile = program.setFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="NotParentScene" extends="Scene">
                 </component>
@@ -1320,20 +1335,20 @@ describe('Program', () => {
 
         it('provides child components with parent functions', () => {
             //create parent component
-            program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
+            program.setFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                 </component>
             `);
 
             //create child component
-            program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, trim`
+            program.setFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                     <script type="text/brightscript" uri="ChildScene.brs" />
                 </component>
             `);
-            program.addOrReplaceFile({ src: `${rootDir}/components/ChildScene.brs`, dest: 'components/ChildScene.brs' }, `
+            program.setFile({ src: `${rootDir}/components/ChildScene.brs`, dest: 'components/ChildScene.brs' }, `
                 sub Init()
                     DoParentThing()
                 end sub
@@ -1342,20 +1357,19 @@ describe('Program', () => {
             program.validate();
 
             //there should be an error when calling DoParentThing, since it doesn't exist on child or parent
-            expect(program.getDiagnostics()).to.be.lengthOf(1);
-            expect(program.getDiagnostics()[0]).to.deep.include(<BsDiagnostic>{
-                code: DiagnosticMessages.callToUnknownFunction('DoParentThing', '').code
-            });
+            expectDiagnostics(program, [
+                DiagnosticMessages.callToUnknownFunction('DoParentThing', '').code
+            ]);
 
             //add the script into the parent
-            program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
+            program.setFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                     <script type="text/brightscript" uri="ParentScene.brs" />
                 </component>
             `);
 
-            program.addOrReplaceFile({ src: `${rootDir}/components/ParentScene.brs`, dest: 'components/ParentScene.brs' }, `
+            program.setFile({ src: `${rootDir}/components/ParentScene.brs`, dest: 'components/ParentScene.brs' }, `
                 sub DoParentThing()
 
                 end sub
@@ -1363,19 +1377,19 @@ describe('Program', () => {
 
             program.validate();
             //the error should be gone because the child now has access to the parent script
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
         });
     });
 
     describe('xml scope', () => {
         it('does not fail on base components with many children', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+            program.setFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub DoSomething()
                 end sub
             `);
 
             //add a brs file with invalid syntax
-            program.addOrReplaceFile({ src: `${rootDir}/components/base.xml`, dest: 'components/base.xml' }, trim`
+            program.setFile({ src: `${rootDir}/components/base.xml`, dest: 'components/base.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="BaseScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
@@ -1384,7 +1398,7 @@ describe('Program', () => {
             let childCount = 20;
             //add many children, we should never encounter an error
             for (let i = 0; i < childCount; i++) {
-                program.addOrReplaceFile({ src: `${rootDir}/components/child${i}.xml`, dest: `components/child${i}.xml` }, trim`
+                program.setFile({ src: `${rootDir}/components/child${i}.xml`, dest: `components/child${i}.xml` }, trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="Child${i}" extends="BaseScene">
                         <script type="text/brightscript" uri="pkg:/source/lib.brs" />
@@ -1392,20 +1406,21 @@ describe('Program', () => {
                 `);
             }
             program.validate();
-            let diagnostics = program.getDiagnostics();
 
             //the children shouldn't have diagnostics about shadowing their parent lib.brs file.
-            let shadowedDiagnositcs = diagnostics.filter((x) => x.code === DiagnosticMessages.overridesAncestorFunction('', '', '', '').code);
-            expect(shadowedDiagnositcs).to.be.lengthOf(0);
+            expectZeroDiagnostics(
+                program.getDiagnostics().filter((x) => x.code === DiagnosticMessages.overridesAncestorFunction('', '', '', '').code)
+            );
 
             //the children all include a redundant import of lib.brs file which is imported by the parent.
-            let importDiagnositcs = diagnostics.filter((x) => x.code === DiagnosticMessages.unnecessaryScriptImportInChildFromParent('').code);
-            expect(importDiagnositcs).to.be.lengthOf(childCount);
+            expect(
+                program.getDiagnostics().filter((x) => x.code === DiagnosticMessages.unnecessaryScriptImportInChildFromParent('').code)
+            ).to.be.lengthOf(childCount);
         });
 
         it('detects script import changes', () => {
             //create the xml file without script imports
-            let xmlFile = program.addOrReplaceFile({ src: `${rootDir}/components/component.xml`, dest: 'components/component.xml' }, trim`
+            let xmlFile = program.setFile({ src: `${rootDir}/components/component.xml`, dest: 'components/component.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="MyScene" extends="Scene">
                 </component>
@@ -1415,10 +1430,10 @@ describe('Program', () => {
             expect(program.getScopeByName(xmlFile.pkgPath).getOwnFiles().length).to.equal(1);
 
             //create the lib file
-            let libFile = program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `'comment`);
+            let libFile = program.setFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `'comment`);
 
             //change the xml file to have a script import
-            xmlFile = program.addOrReplaceFile({ src: `${rootDir}/components/component.xml`, dest: 'components/component.xml' }, trim`
+            xmlFile = program.setFile({ src: `${rootDir}/components/component.xml`, dest: 'components/component.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="MyScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
@@ -1431,7 +1446,7 @@ describe('Program', () => {
             expect(ctx.getFile(libFile.pathAbsolute)).to.exist;
 
             //reload the xml file again, removing the script import.
-            xmlFile = program.addOrReplaceFile({ src: `${rootDir}/components/component.xml`, dest: 'components/component.xml' }, trim`
+            xmlFile = program.setFile({ src: `${rootDir}/components/component.xml`, dest: 'components/component.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="MyScene" extends="Scene">
                 </component>
@@ -1447,8 +1462,8 @@ describe('Program', () => {
         it('finds file in source folder', () => {
             expect(program.getFileByPkgPath(s`source/main.brs`)).not.to.exist;
             expect(program.getFileByPkgPath(s`source/main2.brs`)).not.to.exist;
-            program.addOrReplaceFile({ src: `${rootDir}/source/main2.brs`, dest: 'source/main2.brs' }, '');
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
+            program.setFile({ src: `${rootDir}/source/main2.brs`, dest: 'source/main2.brs' }, '');
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
             expect(program.getFileByPkgPath(s`source/main.brs`)).to.exist;
             expect(program.getFileByPkgPath(s`source/main2.brs`)).to.exist;
         });
@@ -1456,7 +1471,7 @@ describe('Program', () => {
 
     describe('removeFiles', () => {
         it('removes files by absolute paths', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
             expect(program.getFileByPkgPath(s`source/main.brs`)).to.exist;
             program.removeFiles([`${rootDir}/source/main.brs`]);
             expect(program.getFileByPkgPath(s`source/main.brs`)).not.to.exist;
@@ -1466,7 +1481,7 @@ describe('Program', () => {
     describe('getDiagnostics', () => {
         it('includes diagnostics from files not included in any scope', () => {
             let pathAbsolute = s`${rootDir}/components/a/b/c/main.brs`;
-            program.addOrReplaceFile({ src: pathAbsolute, dest: 'components/a/b/c/main.brs' }, `
+            program.setFile({ src: pathAbsolute, dest: 'components/a/b/c/main.brs' }, `
                 sub A()
                     "this string is not terminated
                 end sub
@@ -1474,14 +1489,14 @@ describe('Program', () => {
             //the file should be included in the program
             expect(program.getFileByPathAbsolute(pathAbsolute)).to.exist;
             let diagnostics = program.getDiagnostics();
-            expect(diagnostics.length).to.be.greaterThan(0);
+            expectHasDiagnostics(diagnostics);
             let parseError = diagnostics.filter(x => x.message === 'Unterminated string at end of line')[0];
             expect(parseError).to.exist;
         });
 
         it('it excludes specified error codes', () => {
             //declare file with two different syntax errors
-            program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub A()
                     'call with wrong param count
                     B(1,2,3)
@@ -1495,20 +1510,21 @@ describe('Program', () => {
             `);
 
             program.validate();
-            expect(program.getDiagnostics()).to.be.lengthOf(2);
+            expectHasDiagnostics(program, 2);
 
             program.options.diagnosticFilters = [
                 DiagnosticMessages.mismatchArgumentCount(0, 0).code
             ];
 
-            expect(program.getDiagnostics()).to.be.lengthOf(1);
-            expect(program.getDiagnostics()[0].code).to.equal(DiagnosticMessages.callToUnknownFunction('', '').code);
+            expectDiagnostics(program, [
+                DiagnosticMessages.callToUnknownFunction('C', 'source')
+            ]);
         });
     });
 
     describe('getCompletions', () => {
         it('returns all functions in scope', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -1516,7 +1532,7 @@ describe('Program', () => {
                 sub ActionA()
                 end sub
             `);
-            program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+            program.setFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub ActionB()
                 end sub
             `);
@@ -1535,7 +1551,7 @@ describe('Program', () => {
         });
 
         it('returns all variables in scope', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     name = "bob"
                     age = 20
@@ -1544,7 +1560,7 @@ describe('Program', () => {
                 sub ActionA()
                 end sub
             `);
-            program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+            program.setFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub ActionB()
                 end sub
             `);
@@ -1564,7 +1580,7 @@ describe('Program', () => {
 
         it('returns empty set when out of range', () => {
             const position = util.createPosition(99, 99);
-            program.addOrReplaceFile('source/main.brs', '');
+            program.setFile('source/main.brs', '');
             let completions = program.getCompletions(`${rootDir}/source/main.brs`, position);
             //get the name of all global completions
             const globalCompletions = program.globalScope.getAllFiles().flatMap(x => x.getCompletions(position)).map(x => x.label);
@@ -1574,7 +1590,7 @@ describe('Program', () => {
         });
 
         it('finds parameters', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(count = 1)
                     firstName = "bob"
                     age = 21
@@ -1590,7 +1606,7 @@ describe('Program', () => {
 
     it('does not create map by default', async () => {
         fsExtra.ensureDirSync(program.options.stagingFolderPath);
-        program.addOrReplaceFile('source/main.brs', `
+        program.setFile('source/main.brs', `
             sub main()
             end sub
         `);
@@ -1602,11 +1618,11 @@ describe('Program', () => {
 
     it('creates sourcemap for brs and xml files', async () => {
         fsExtra.ensureDirSync(program.options.stagingFolderPath);
-        program.addOrReplaceFile('source/main.brs', `
+        program.setFile('source/main.brs', `
             sub main()
             end sub
         `);
-        program.addOrReplaceFile('components/comp1.xml', trim`
+        program.setFile('components/comp1.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="SimpleScene" extends="Scene">
             </component>
@@ -1639,21 +1655,142 @@ describe('Program', () => {
         expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/bslib.brs`)).is.true;
     });
 
+    describe('getTranspiledFileContents', () => {
+        it('fires plugin events', () => {
+            const file = program.setFile('source/main.brs', trim`
+                sub main()
+                    print "hello world"
+                end sub
+            `);
+            const plugin = program.plugins.add({
+                name: 'TestPlugin',
+                beforeFileTranspile: (event) => {
+                    const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
+                    event.editor.setProperty((stmt.expressions[0] as LiteralExpression).token, 'text', '"hello there"');
+                },
+                afterFileTranspile: sinon.spy()
+            });
+            expect(
+                program.getTranspiledFileContents(file.pathAbsolute).code
+            ).to.eql(trim`
+                sub main()
+                    print "hello there"
+                end sub`
+            );
+            expect(plugin.afterFileTranspile.callCount).to.be.greaterThan(0);
+        });
+
+        it('allows events to modify the file contents', async () => {
+            program.options.emitDefinitions = true;
+            program.plugins.add({
+                name: 'TestPlugin',
+                afterFileTranspile: (event) => {
+                    event.code = `'code comment\n${event.code}`;
+                    event.typedef = `'typedef comment\n${event.typedef}`;
+                }
+            });
+            program.setFile('source/lib.bs', `
+                sub log(message)
+                    print message
+                end sub
+            `);
+            await program.transpile([], stagingFolderPath);
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/lib.brs`).toString()
+            ).to.eql(trim`
+                'code comment
+                sub log(message)
+                    print message
+                end sub`
+            );
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/lib.d.bs`).toString()
+            ).to.eql(trim`
+                'typedef comment
+                sub log(message)
+                end sub
+            `);
+        });
+    });
+
     describe('transpile', () => {
+
+        it('sets needsTranspiled=true when there is at least one edit', async () => {
+            program.setFile('source/main.brs', trim`
+                sub main()
+                    print "hello world"
+                end sub
+            `);
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeFileTranspile: (event) => {
+                    const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
+                    event.editor.setProperty((stmt.expressions[0] as LiteralExpression).token, 'text', '"hello there"');
+                }
+            });
+            await program.transpile([], stagingFolderPath);
+            //our changes should be there
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/main.brs`).toString()
+            ).to.eql(trim`
+                sub main()
+                    print "hello there"
+                end sub`
+            );
+        });
+
+        it('handles AstEditor flow properly', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print "hello world"
+                end sub
+            `);
+            let literalExpression: LiteralExpression;
+            //replace all strings with "goodbye world"
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeFileTranspile: (event) => {
+                    if (isBrsFile(event.file)) {
+                        event.file.ast.walk(createVisitor({
+                            LiteralExpression: (literal) => {
+                                literalExpression = literal;
+                                event.editor.setProperty(literal.token, 'text', '"goodbye world"');
+                            }
+                        }), {
+                            walkMode: WalkMode.visitExpressionsRecursive
+                        });
+                    }
+                }
+            });
+            //transpile the file
+            await program.transpile([], stagingFolderPath);
+            //our changes should be there
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/main.brs`).toString()
+            ).to.eql(trim`
+                sub main()
+                    print "goodbye world"
+                end sub`
+            );
+
+            //our literalExpression should have been restored to its original value
+            expect(literalExpression.token.text).to.eql('"hello world"');
+        });
+
         it('copies bslib.brs when no ropm version was found', async () => {
             await program.transpile([], stagingFolderPath);
             expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/bslib.brs`)).to.be.true;
         });
 
         it('does not copy bslib.brs when found in roku_modules', async () => {
-            program.addOrReplaceFile('source/roku_modules/bslib/bslib.brs', '');
+            program.setFile('source/roku_modules/bslib/bslib.brs', '');
             await program.transpile([], stagingFolderPath);
             expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/bslib.brs`)).to.be.false;
             expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/roku_modules/bslib/bslib.brs`)).to.be.true;
         });
 
         it('transpiles in-memory-only files', async () => {
-            program.addOrReplaceFile('source/logger.bs', trim`
+            program.setFile('source/logger.bs', trim`
                 sub logInfo()
                     print SOURCE_LINE_NUM
                 end sub
@@ -1669,7 +1806,7 @@ describe('Program', () => {
         });
 
         it('copies in-memory-only .brs files to stagingDir', async () => {
-            program.addOrReplaceFile('source/logger.brs', trim`
+            program.setFile('source/logger.brs', trim`
                 sub logInfo()
                     print "logInfo"
                 end sub
@@ -1685,7 +1822,7 @@ describe('Program', () => {
         });
 
         it('copies in-memory .xml file', async () => {
-            program.addOrReplaceFile('components/Component1.xml', trim`
+            program.setFile('components/Component1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                 </component>
@@ -1709,7 +1846,7 @@ describe('Program', () => {
                 sourceRoot: sourceRoot,
                 sourceMap: true
             });
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                 end sub
             `);
@@ -1735,7 +1872,7 @@ describe('Program', () => {
                 sourceRoot: sourceRoot,
                 sourceMap: true
             });
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 sub main()
                 end sub
             `);
@@ -1757,7 +1894,7 @@ describe('Program', () => {
     describe('typedef', () => {
         describe('emitDefinitions', () => {
             it('generates typedef for .bs files', async () => {
-                program.addOrReplaceFile<BrsFile>('source/Duck.bs', `
+                program.setFile<BrsFile>('source/Duck.bs', `
                     class Duck
                     end class
                 `);
@@ -1771,7 +1908,7 @@ describe('Program', () => {
             });
 
             it('does not generate typedef for typedef file', async () => {
-                program.addOrReplaceFile<BrsFile>('source/Duck.d.bs', `
+                program.setFile<BrsFile>('source/Duck.d.bs', `
                     class Duck
                     end class
                 `);
@@ -1785,7 +1922,7 @@ describe('Program', () => {
         });
 
         it('ignores bs1018 for d.bs files', () => {
-            program.addOrReplaceFile<BrsFile>('source/main.d.bs', `
+            program.setFile<BrsFile>('source/main.d.bs', `
                 class Duck
                     sub new(name as string)
                     end sub
@@ -1799,13 +1936,13 @@ describe('Program', () => {
                 end class
             `);
             program.validate();
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
         });
     });
 
     describe('getSignatureHelp', () => {
         it('does not crash when second previousToken is undefined', () => {
-            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ` `);
+            const file = program.setFile<BrsFile>('source/main.brs', ` `);
             sinon.stub(file, 'getPreviousToken').returns(undefined);
             //should not crash
             expect(
@@ -1814,7 +1951,7 @@ describe('Program', () => {
         });
 
         it('works with no leading whitespace when the cursor is after the open paren', () => {
-            program.addOrReplaceFile('source/main.brs', `sub main()\nsayHello()\nend sub\nsub sayHello(name)\nend sub`);
+            program.setFile('source/main.brs', `sub main()\nsayHello()\nend sub\nsub sayHello(name)\nend sub`);
             let signatureHelp = program.getSignatureHelp(
                 `${rootDir}/source/main.brs`,
                 //sayHello(|)
@@ -1825,26 +1962,26 @@ describe('Program', () => {
         });
 
         it('ignores comments and invalid ranges', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     ' new func(((
                 end function
             `);
             for (let col = 0; col < 40; col++) {
                 let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
-                expect(program.getDiagnostics()).to.be.empty;
+                expectZeroDiagnostics(program);
                 expect(signatureHelp[0]?.signature).to.not.exist;
             }
         });
 
         it('does not crash on callfunc operator', () => {
             //there needs to be at least one xml component WITHOUT an interface
-            program.addOrReplaceFile<XmlFile>('components/MyNode.xml', trim`<?xml version="1.0" encoding="utf-8" ?>
+            program.setFile<XmlFile>('components/MyNode.xml', trim`<?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
                 </component>
             `);
-            const file = program.addOrReplaceFile('source/main.bs', `
+            const file = program.setFile('source/main.bs', `
                 sub main()
                     someFunc()@.
                 end sub
@@ -1853,7 +1990,7 @@ describe('Program', () => {
         });
 
         it('gets signature help for constructor with no args', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     p = new Person()
                 end function
@@ -1867,12 +2004,12 @@ describe('Program', () => {
                 end class
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 31)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('Person()');
         });
 
         it('gets signature help for class function on dotted get with params', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     p.sayHello("there")
                 end function
@@ -1886,24 +2023,24 @@ describe('Program', () => {
                 end class
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 32)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
 
             signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
 
             signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 27)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
 
             signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 23)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
         });
 
         it('gets signature help for namespaced class function', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     person.sayHello("there")
                 end function
@@ -1918,16 +2055,16 @@ describe('Program', () => {
                 end namespace
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 40)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
 
             signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 30)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
         });
 
         it('gets signature help for namespace function', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     person.sayHello("hey", "you")
                 end function
@@ -1938,12 +2075,12 @@ describe('Program', () => {
                 end namespace
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
         });
 
         it('gets signature help for nested namespace function', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     person.roger.sayHello("hi", "there")
                 end function
@@ -1959,21 +2096,21 @@ describe('Program', () => {
                 end namespace
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 41)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
         });
 
         it('gets signature help for callfunc method', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     myNode@.sayHello(arg1)
                 end function
             `);
-            program.addOrReplaceFile('components/MyNode.bs', `
+            program.setFile('components/MyNode.bs', `
                 function sayHello(text, text2)
                 end function
             `);
-            program.addOrReplaceFile<XmlFile>('components/MyNode.xml',
+            program.setFile<XmlFile>('components/MyNode.xml',
                 trim`<?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
@@ -1984,21 +2121,21 @@ describe('Program', () => {
             program.validate();
 
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
         });
 
         it('does not get signature help for callfunc method, referenced by dot', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     myNode.sayHello(arg1)
                 end function
             `);
-            program.addOrReplaceFile('components/MyNode.bs', `
+            program.setFile('components/MyNode.bs', `
                 function sayHello(text, text2)
                 end function
             `);
-            program.addOrReplaceFile<XmlFile>('components/MyNode.xml',
+            program.setFile<XmlFile>('components/MyNode.xml',
                 trim`<?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
@@ -2009,13 +2146,13 @@ describe('Program', () => {
             program.validate();
 
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             //note - callfunc completions and signatures are not yet correctly identifying methods that are exposed in an interace - waiting on the new xml branch for that
             expect(signatureHelp).to.be.empty;
         });
 
         it('gets signature help for constructor with args', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     p = new Person(arg1, arg2)
                 end function
@@ -2026,12 +2163,12 @@ describe('Program', () => {
                 end class
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('Person(arg1, arg2)');
         });
 
         it('gets signature help for constructor with args, defined in super class', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     p = new Roger(arg1, arg2)
                 end function
@@ -2044,12 +2181,12 @@ describe('Program', () => {
                 end class
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('Roger(arg1, arg2)');
         });
 
         it('identifies arg index', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     p = new Person(arg1, arg2)
                 end function
@@ -2060,16 +2197,16 @@ describe('Program', () => {
                 end class
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].index).to.equal(0);
 
             signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 40)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].index).to.equal(1);
         });
 
         it('gets signature help for namespaced constructor with args', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     p = new people.coders.Person(arg1, arg2)
                 end function
@@ -2081,13 +2218,13 @@ describe('Program', () => {
                 end namespace
                     `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 47)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('people.coders.Person(arg1, arg2)');
             expect(signatureHelp[0].index).to.equal(0);
         });
 
         it('gets signature help for regular method call', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     test(arg1, a2)
                 end function
@@ -2095,17 +2232,17 @@ describe('Program', () => {
                 end function
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 27)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function test(arg1, arg2)');
             expect(signatureHelp[0].index).to.equal(0);
             signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 32)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function test(arg1, arg2)');
             expect(signatureHelp[0].index).to.equal(1);
         });
 
         it('gets signature help for dotted method call, with method in in-scope class', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     p.test(arg1)
                 end function
@@ -2117,12 +2254,12 @@ describe('Program', () => {
                 end class
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 25)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
         });
 
         it('gets signature help for namespaced method call', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     Person.test(arg1)
                 end function
@@ -2132,12 +2269,12 @@ describe('Program', () => {
                 end namespace
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 31)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
         });
 
         it('gets signature help for namespaced method call', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     Person.roger.test(arg1)
                 end function
@@ -2147,12 +2284,12 @@ describe('Program', () => {
                 end namespace
             `);
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 38)));
-            expect(program.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
         });
 
         it('gets signature help for regular method call on various index points', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     test(a1, a2, a3)
                 end function
@@ -2177,17 +2314,17 @@ describe('Program', () => {
         });
 
         it('gets signature help for callfunc method call on various index points', () => {
-            program.addOrReplaceFile('components/MyNode.bs', `
+            program.setFile('components/MyNode.bs', `
                 function test(arg1, arg2, arg3)
                 end function
             `);
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     thing@.test(a1, a2, a3)
                 end function
             `);
 
-            program.addOrReplaceFile<XmlFile>('components/MyNode.xml',
+            program.setFile<XmlFile>('components/MyNode.xml',
                 trim`<?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
@@ -2215,7 +2352,7 @@ describe('Program', () => {
         });
 
         it('gets signature help for constructor method call on various index points', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     a = new Person(a1, a2, a3)
                 end function
@@ -2242,18 +2379,18 @@ describe('Program', () => {
         });
 
         it('gets signature help for partially typed line', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
                 function main()
                     thing@.test(a1, a2,
                 end function
                 function test(arg1, arg2, arg3)
                 end function
                 `);
-            program.addOrReplaceFile('components/MyNode.bs', `
+            program.setFile('components/MyNode.bs', `
                 function test(arg1, arg2, arg3)
                 end function
                 `);
-            program.addOrReplaceFile<XmlFile>('components/MyNode.xml',
+            program.setFile<XmlFile>('components/MyNode.xml',
                 trim`<?xml version="1.0" encoding="utf-8" ?>
             <component name="Component1" extends="Scene">
                 <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
@@ -2278,6 +2415,38 @@ describe('Program', () => {
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
             }
+        });
+    });
+
+    describe('plugins', () => {
+        it('emits file validation events', () => {
+            const plugin = {
+                name: 'test',
+                beforeFileValidate: sinon.spy(),
+                onFileValidate: sinon.spy(),
+                afterFileValidate: sinon.spy()
+            };
+            program.plugins.add(plugin);
+            program.setFile('source/main.brs', '');
+            program.validate();
+            expect(plugin.beforeFileValidate.callCount).to.equal(1);
+            expect(plugin.onFileValidate.callCount).to.equal(1);
+            expect(plugin.afterFileValidate.callCount).to.equal(1);
+        });
+
+        it('emits file validation events', () => {
+            const plugin = {
+                name: 'test',
+                beforeFileValidate: sinon.spy(),
+                onFileValidate: sinon.spy(),
+                afterFileValidate: sinon.spy()
+            };
+            program.plugins.add(plugin);
+            program.setFile('components/main.xml', '');
+            program.validate();
+            expect(plugin.beforeFileValidate.callCount).to.equal(1);
+            expect(plugin.onFileValidate.callCount).to.equal(1);
+            expect(plugin.afterFileValidate.callCount).to.equal(1);
         });
     });
 });

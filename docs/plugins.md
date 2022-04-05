@@ -21,6 +21,11 @@ Those plugins will be loaded by the VSCode extension and can provide live diagno
 }
 ```
 
+### Usage on the CLI
+```bash
+npx bsc --plugins "./scripts/myPlugin.js" "@rokucommunity/bslint"
+```
+
 ### Programmatic configuration
 
 When using the compiler API directly, plugins can directly reference your code:
@@ -45,10 +50,14 @@ Full compiler lifecycle:
         - `beforeFileParse`
         - `afterFileParse`
         - `afterScopeCreate` (component scope)
-        - `afterFileValidate`
     - `beforeProgramValidate`
+    - For each file:
+        - `beforeFileValidate`
+        - `onFileValidate`
+        - `afterFileValidate`
     - For each scope:
         - `beforeScopeValidate`
+        - `onScopeValidate`
         - `afterScopeValidate`
     - `afterProgramValidate`
 - `beforePrepublish`
@@ -178,9 +187,30 @@ To walk/modify the AST, a number of helpers are provided in `brighterscript/dist
 
 It is highly recommended to use TypeScript as intellisense helps greatly writing code against new APIs.
 
+### Using ts-node to transpile plugin dynamically
+The ts-node module can transpile typescript on the fly. This is by far the easiest way to develop a brighterscript plugin, as you can elimintate the manual typescript transpile step.
+
 ```bash
 # install modules needed to compile a plugin
-npm install brighterscript typescript @types/node
+npm install brighterscript typescript @types/node ts-node -D
+
+#run the brighterscript cli and use ts-node to dynamically transpile your plugin
+npx bsc --sourceMap --require ts-node/register --plugins myPlugin.ts
+```
+
+The `require` flag can also be set in the `bsconfig.json`, simplifying your bsc command arguments.
+```javascript
+{
+    "require": ["ts-node/register"]
+}
+```
+
+### Transpiling manually
+If you would prefer to transpile your plugin manually, you can follow these steps:
+
+```bash
+# install modules needed to compile a plugin
+npm install brighterscript typescript @types/node -D
 
 # transpile to JS (with source maps for debugging)
 npx tsc myPlugin.ts -m commonjs --sourceMap
@@ -188,6 +218,7 @@ npx tsc myPlugin.ts -m commonjs --sourceMap
 # add --watch for continuous transpilation
 npx tsc myPlugin.ts -m commonjs --sourceMap --watch
 ```
+
 
 ### Example diagnostic plugins
 
@@ -214,10 +245,10 @@ export default function () {
             }
             // visit function statements and validate their name
             file.parser.functionStatements.forEach((fun) => {
-                if (fun.name.text.toLowerCase() === 'main') {
+                if (fun.name.text.includes('_')) {
                     file.addDiagnostics([{
                         code: 9000,
-                        message: 'Use RunUserInterface as entry point',
+                        message: 'Do not use underscores in function names',
                         range: fun.name.range,
                         file
                     }]);
@@ -228,32 +259,74 @@ export default function () {
 };
 ```
 
-### Example AST modifier plugin
+## Modifying code
+Sometimes plugins will want to modify code before the project is transpiled. While you can technically edit the AST directly at any point in the file's lifecycle, this is not recommended as those changes will remain changed as long as that file exists in memory and could cause issues with file validation if the plugin is used in a language-server context (i.e. inside vscode).
 
-AST modification can be done after parsing (`afterFileParsed`), but it is recommended to modify the AST only before transpilation (`beforeFileTranspile`), otherwise it could cause problems if the plugin is used in a language-server context.
+Instead, we provide an instace of an `AstEditor` class in the `beforeFileTranspile` event that allows you to modify AST before the file is transpiled, and then those modifications are undone `afterFileTranspile`.
+
+For example, consider the following brightscript code:
+```brightscript
+sub main()
+    print "hello <FIRST_NAME>"
+end sub
+```
+
+Here's the plugin:
 
 ```typescript
-// removePrint.ts
-import { CompilerPlugin, Program, TranspileObj } from 'brighterscript';
-import { EmptyStatement } from 'brighterscript/dist/parser';
-import { isBrsFile, createStatementEditor, editStatements } from 'brighterscript/dist/parser/ASTUtils';
+import { CompilerPlugin, BeforeFileTranspileEvent, isBrsFile, WalkMode, createVisitor, TokenKind } from 'brighterscript';
 
 // plugin factory
 export default function () {
     return {
-        name: 'removePrint',
+        name: 'replacePlaceholders',
         // transform AST before transpilation
-        beforeFileTranspile: (entry: TranspileObj) => {
-            if (isBrsFile(entry.file)) {
-                // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
-                entry.file.parser.functionExpressions.forEach((fun) => {
-                    const visitor = createStatementEditor({
-                        PrintStatement: (statement) => new EmptyStatement()
-                    });
-                    editStatements(fun.body, visitor);
+        beforeFileTranspile: (event: BeforeFileTranspileEvent) => {
+            if (isBrsFile(event.file)) {
+                event.file.ast.walk(createVisitor({
+                    LiteralExpression: (literal) => {
+                        //replace every occurance of <FIRST_NAME> in strings with "world"
+                        if (literal.token.kind === TokenKind.StringLiteral && literal.token.text.includes('<FIRST_NAME>')) {
+                            event.editor.setProperty(literal.token, 'text', literal.token.text.replace('<FIRST_NAME>', 'world'));
+                        }
+                    }
+                }), {
+                    walkMode: WalkMode.visitExpressionsRecursive
                 });
             }
         }
     } as CompilerPlugin;
 };
+```
+
+This plugin will search through every LiteralExpression in the entire project, and every time we find a string literal, we will replace `<FIRST_NAME>` with `world`. This is done with the `event.editor` object. `editor` allows you to apply edits to the AST, and then the brighterscript compiler will `undo` those edits once the file has been transpiled.
+
+## Remove Comment and Print Statements
+
+Another common use case is to remove print statements and comments. Here's a plugin to do that:
+```typescript
+import { isBrsFile, createVisitor, WalkMode, BeforeFileTranspileEvent, CompilerPlugin } from 'brighterscript';
+
+export default function plugin() {
+    return {
+        name: 'removeCommentAndPrintStatements',
+        beforeFileTranspile: (event: BeforeFileTranspileEvent) => {
+            if (isBrsFile(event.file)) {
+                // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
+                for (const func of event.file.parser.references.functionExpressions) {
+                    func.body.walk(createVisitor({
+                        PrintStatement: (statement) => {
+                            event.editor.overrideTranspileResult(statement, '');
+                        },
+                        CommentStatement: (statement) => {
+                            event.editor.overrideTranspileResult(statement, '');
+                        }
+                    }), {
+                        walkMode: WalkMode.visitStatements
+                    });
+                }
+            }
+        }
+    } as CompilerPlugin;
+}
 ```
