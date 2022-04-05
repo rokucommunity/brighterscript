@@ -2,7 +2,7 @@
     "compilerOptions": {
         "noImplicitAny": false,
         "target": "ES2017",
-        "module": "commonjs",
+        "module": "CommonJS",
         "sourceMap": true,
         "rootDir": "src",
         "outDir": "dist",

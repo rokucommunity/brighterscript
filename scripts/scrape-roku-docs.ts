@@ -441,7 +441,7 @@ class ComponentListBuilder {
     private getTableByHeaders(document: Document, searchHeaders: string[], exclusive = false) {
         //find the attributes table
         return [...document.getElementsByTagName('table')].find(x => {
-            const headerNames = [...x.getElementsByTagName('tr')?.[0].getElementsByTagName('th')].map(x => x.innerHTML.toLowerCase());
+            const headerNames = [...x.getElementsByTagName('tr')?.[0].getElementsByTagName('th') ?? []].map(x => x.innerHTML.toLowerCase());
 
             //match all of the headers provided
             for (const searchHeader of searchHeaders) {
