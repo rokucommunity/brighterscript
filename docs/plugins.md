@@ -231,8 +231,7 @@ Note: in a language-server context, Scope validation happens every time a file c
 
 ```typescript
 // bsc-plugin-no-underscores.ts
-import { CompilerPlugin, BscFile } from 'brighterscript';
-import { isBrsFile } from 'brighterscript';
+import { CompilerPlugin, BscFile, isBrsFile } from 'brighterscript';
 
 // plugin factory
 export default function () {
