@@ -919,6 +919,25 @@ describe('EnumStatement', () => {
                 end sub
             `);
         });
+
+        it('replaces enum values in for loops', () => {
+            testTranspile(`
+                sub main()
+                    for i = Loop.start to Loop.end step Loop.step
+                    end for
+                end sub
+                enum Loop
+                    start = 0
+                    end = 10
+                    step = 1
+                end enum
+            `, `
+                sub main()
+                    for i = 0 to 10 step 1
+                    end for
+                end sub
+            `);
+        });
     });
 
 });
