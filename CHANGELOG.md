@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.47.1](https://github.com/rokucommunity/brighterscript/compare/v0.47.0...v0.47.1) - 2022-04-05
+### Changed
+ - disable strict cli args to empower plugins ([#557](https://github.com/rokucommunity/brighterscript/pull/557))
+ - don't add trailing commas in transpiled output for array and aa literals ([#556](https://github.com/rokucommunity/brighterscript/pull/556))
+ - retain quote char when transpiling xml attributes ([#552](https://github.com/rokucommunity/brighterscript/pull/552))
+
+
+
 ## [0.47.0](https://github.com/rokucommunity/brighterscript/compare/v0.46.0...v0.47.0) - 2022-03-30
 ### Added
  - `require` flag to allow loading external node modules as part of the build process (useful for things like `ts-node/register`). ([#550](https://github.com/rokucommunity/brighterscript/pull/550), [#551](https://github.com/rokucommunity/brighterscript/pull/551))

@@ -608,15 +608,6 @@ export class ArrayLiteralExpression extends Expression {
                     state.indent(),
                     ...element.transpile(state)
                 );
-                //add a comma if we know there will be another non-comment statement after this
-                for (let j = i + 1; j < this.elements.length; j++) {
-                    let el = this.elements[j];
-                    //add a comma if there will be another element after this
-                    if (isCommentStatement(el) === false) {
-                        result.push(',');
-                        break;
-                    }
-                }
             }
         }
         state.blockDepth--;
@@ -720,21 +711,8 @@ export class AALiteralExpression extends Expression {
                     ' '
                 );
 
-                //determine if comments are the only members left in the array
-                let onlyCommentsRemaining = true;
-                for (let j = i + 1; j < this.elements.length; j++) {
-                    if (isCommentStatement(this.elements[j]) === false) {
-                        onlyCommentsRemaining = false;
-                        break;
-                    }
-                }
-
                 //value
                 result.push(...element.value.transpile(state));
-                //add trailing comma if not final element (excluding comments)
-                if (i !== this.elements.length - 1 && onlyCommentsRemaining === false) {
-                    result.push(',');
-                }
             }
 
 

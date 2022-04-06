@@ -154,11 +154,11 @@ describe('TemplateStringExpression', () => {
                 ]
             `, `
                 a = [
-                    "one",
-                    "two",
+                    "one"
+                    "two"
                     "I am a complex example" + bslib_toString(a.isRunning([
-                        "a",
-                        "b",
+                        "a"
+                        "b"
                         "c"
                     ]))
                 ]
@@ -179,12 +179,12 @@ describe('TemplateStringExpression', () => {
                 ]
             `, `
                 a = [
-                    "one",
-                    "two",
+                    "one"
+                    "two"
                     "I am a complex example " + bslib_toString(a.isRunning([
-                        "a",
-                        "b",
-                        "c",
+                        "a"
+                        "b"
+                        "c"
                         "d_open " + bslib_toString("inside" + m.items[i]) + " d_close"
                     ]))
                 ]
