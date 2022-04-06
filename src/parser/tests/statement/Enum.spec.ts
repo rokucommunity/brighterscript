@@ -868,6 +868,57 @@ describe('EnumStatement', () => {
                 kind: CompletionItemKind.Enum
             }]);
         });
+
+        it('handles both sides of a logical expression', () => {
+            testTranspile(`
+                sub main()
+                    dir = m.direction = Direction.up
+                    dir = Direction.up = m.direction
+                end sub
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `, `
+                sub main()
+                    dir = m.direction = "up"
+                    dir = "up" = m.direction
+                end sub
+            `);
+        });
+
+        it('replaces enum values in if statements', () => {
+            testTranspile(`
+                sub main()
+                    if m.direction = Direction.up
+                        print Direction.up
+                    end if
+                end sub
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `, `
+                sub main()
+                    if m.direction = "up"
+                        print "up"
+                    end if
+                end sub
+            `);
+        });
+
+        it('replaces enum values in function default parameter value expressions', () => {
+            testTranspile(`
+                sub speak(dir = Direction.up)
+                end sub
+                enum Direction
+                    up = "up"
+                end enum
+            `, `
+                sub speak(dir = "up")
+                end sub
+            `);
+        });
     });
 
 });
