@@ -19,6 +19,7 @@ import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isLiteralExpression, isXmlFile } from './astUtils/reflection';
 import { nodes, components } from './roku-types';
+import type { BRSComponentData } from './roku-types';
 import type { Token } from './lexer/Token';
 
 /**
@@ -528,6 +529,13 @@ export class Scope {
                             ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
                             range: componentName.range
                         });
+                    } else if (call?.args.length !== 2) {
+                        // roSgNode should only ever have 2 args in `createObject`
+                        this.diagnostics.push({
+                            file: file as BscFile,
+                            ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, [2], call?.args.length),
+                            range: call.range
+                        });
                     }
                 } else if (!platformComponentNames.has(firstParamStringValue.toLowerCase())) {
                     this.diagnostics.push({
@@ -537,10 +545,22 @@ export class Scope {
                     });
                 } else {
                     // This is valid brightscript component
-                    // TODO: validate additional arguments in createObject() to match one the constructors
-                    //const brightScriptComponent = components[firstParamStringValue.toLowerCase()];
-                    //const restOfArgs = call?.args.slice(1);
-
+                    // Test for invalid arg counts
+                    const brightScriptComponent: BRSComponentData = components[firstParamStringValue.toLowerCase()];
+                    // Valid arg counts for createObject are 1+ number of args for constructor
+                    let validArgCounts = brightScriptComponent.constructors.map(cnstr => cnstr.params.length + 1);
+                    if (validArgCounts.length === 0) {
+                        // no constructors for this component, so createObject only takes 1 arg
+                        validArgCounts = [1];
+                    }
+                    if (!validArgCounts.includes(call?.args.length)) {
+                        // Incorrect number of arguments included in `createObject()`
+                        this.diagnostics.push({
+                            file: file as BscFile,
+                            ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, validArgCounts, call?.args.length),
+                            range: call.range
+                        });
+                    }
                 }
             }
         }

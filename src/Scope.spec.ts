@@ -160,7 +160,7 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
-        describe('createObject', () => {
+        describe.only('createObject', () => {
             it('recognizes various scenegraph nodes', () => {
                 program.setFile(`source/file.brs`, `
                     sub main()
