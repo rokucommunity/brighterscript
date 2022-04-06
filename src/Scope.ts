@@ -18,13 +18,14 @@ import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isLiteralExpression, isXmlFile } from './astUtils/reflection';
-import { nodes } from './roku-types';
+import { nodes, components } from './roku-types';
 import type { Token } from './lexer/Token';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
  */
 const platformNodeNames = new Set(Object.values(nodes).map(x => x.name.toLowerCase()));
+const platformComponentNames = new Set(Object.values(components).map(x => x.name.toLowerCase()));
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -514,9 +515,10 @@ export class Scope {
     protected validateCreateObjectCalls(file: BrsFile) {
         for (const call of file.functionCalls) {
             if (call.name?.toLowerCase() === 'createobject' && isLiteralExpression(call?.args[0]?.expression)) {
-                const firstParamStringValue = (call?.args[0]?.expression as any)?.token?.text?.toLowerCase().replace(/"/g, '');
+                const firstParamToken = (call?.args[0]?.expression as any)?.token;
+                const firstParamStringValue = firstParamToken?.text?.replace(/"/g, '');
                 //if this is a `createObject('roSGNode'` call, only support known sg node types
-                if (firstParamStringValue === 'rosgnode' && isLiteralExpression(call?.args[1]?.expression)) {
+                if (firstParamStringValue?.toLowerCase() === 'rosgnode' && isLiteralExpression(call?.args[1]?.expression)) {
                     const componentName: Token = (call?.args[1]?.expression as any)?.token;
                     //add diagnostic for unknown components
                     const unquotedComponentName = componentName?.text?.replace(/"/g, '');
@@ -527,6 +529,18 @@ export class Scope {
                             range: componentName.range
                         });
                     }
+                } else if (!platformComponentNames.has(firstParamStringValue.toLowerCase())) {
+                    this.diagnostics.push({
+                        file: file as BscFile,
+                        ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
+                        range: firstParamToken.range
+                    });
+                } else {
+                    // This is valid brightscript component
+                    // TODO: validate additional arguments in createObject() to match one the constructors
+                    //const brightScriptComponent = components[firstParamStringValue.toLowerCase()];
+                    //const restOfArgs = call?.args.slice(1);
+
                 }
             }
         }

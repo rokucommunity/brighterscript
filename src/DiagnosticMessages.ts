@@ -660,6 +660,11 @@ export let DiagnosticMessages = {
         message: `Unknown roSGNode '${nodeName}'`,
         code: 1128,
         severity: DiagnosticSeverity.Error
+    }),
+    unknownBrightScriptComponent: (componentName: string) => ({
+        message: `Unknown BrightScript component '${componentName}'`,
+        code: 1129,
+        severity: DiagnosticSeverity.Error
     })
 };
 

@@ -162,7 +162,7 @@ describe('Scope', () => {
     describe('validate', () => {
         describe('createObject', () => {
             it('recognizes various scenegraph nodes', () => {
-                program.addOrReplaceFile(`source/file.brs`, `
+                program.setFile(`source/file.brs`, `
                     sub main()
                         scene = CreateObject("roSGScreen")
                         button = CreateObject("roSGNode", "Button")
@@ -174,17 +174,17 @@ describe('Scope', () => {
             });
 
             it('recognizes valid custom components', () => {
-                program.addOrReplaceFile('components/comp1.xml', trim`
+                program.setFile('components/comp1.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="Comp1" extends="Scene">
                     </component>
                 `);
-                program.addOrReplaceFile('components/comp2.xml', trim`
+                program.setFile('components/comp2.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="Comp2" extends="Scene">
                     </component>
                 `);
-                program.addOrReplaceFile(`source/file.brs`, `
+                program.setFile(`source/file.brs`, `
                     sub main()
                         comp1 = CreateObject("roSGNode", "Comp1")
                         comp2 = CreateObject("roSGNode", "Comp2")
@@ -195,7 +195,7 @@ describe('Scope', () => {
             });
 
             it('catches unknown roSGNodes', () => {
-                program.addOrReplaceFile(`source/file.brs`, `
+                program.setFile(`source/file.brs`, `
                     sub main()
                         scene = CreateObject("roSGNode", "notReal")
                         button = CreateObject("roSGNode", "alsoNotReal")
@@ -211,7 +211,7 @@ describe('Scope', () => {
             });
 
             it('disregards non-literal args', () => {
-                program.addOrReplaceFile(`source/file.brs`, `
+                program.setFile(`source/file.brs`, `
                     sub main()
                         sgNodeName =  "roSGNode"
                         compNameAsVar =  "Button"
@@ -220,6 +220,37 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
+            });
+
+            it('recognizes valid BrightScript components', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        timeSpan = CreateObject("roTimespan")
+                        bitmap = CreateObject("roBitmap", {width:10, height:10, AlphaEnable:false, name:"MyBitmapName"})
+                        path = CreateObject("roPath", "ext1:/vid")
+                        region = CreateObject("roRegion", bitmap, 20, 30, 100, 200)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('catches valid BrightScript components', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        timeSpan = CreateObject("Thing")
+                        bitmap = CreateObject("OtherThing", {width:10, height:10, AlphaEnable:false, name:"MyBitmapName"})
+                        path = CreateObject("SomethingElse", "ext1:/vid")
+                        region = CreateObject("Button", bitmap, 20, 30, 100, 200)
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.unknownBrightScriptComponent('Thing'),
+                    DiagnosticMessages.unknownBrightScriptComponent('OtherThing'),
+                    DiagnosticMessages.unknownBrightScriptComponent('SomethingElse'),
+                    DiagnosticMessages.unknownBrightScriptComponent('Button')
+                ]);
             });
         });
 
