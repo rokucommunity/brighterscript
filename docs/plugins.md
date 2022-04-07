@@ -230,30 +230,28 @@ Diagnostics must run every time it is relevant:
 Note: in a language-server context, Scope validation happens every time a file changes.
 
 ```typescript
-// myDiagnosticPlugin.ts
-import { CompilerPlugin, BrsFile, XmlFile } from 'brighterscript';
-import { isBrsFile } from 'brighterscript/dist/parser/ASTUtils';
+// bsc-plugin-no-underscores.ts
+import { CompilerPlugin, BscFile, isBrsFile } from 'brighterscript';
 
 // plugin factory
 export default function () {
     return {
-        name: 'myDiagnosticPlugin',
+        name: 'no-underscores',
         // post-parsing validation
         afterFileValidate: (file: BscFile) => {
-            if (!isBrsFile(file)) {
-                return;
+            if (isBrsFile(file)) {
+                // visit function statements and validate their name
+                file.parser.references.functionStatements.forEach((fun) => {
+                    if (fun.name.text.includes('_')) {
+                        file.addDiagnostics([{
+                            code: 9000,
+                            message: 'Do not use underscores in function names',
+                            range: fun.name.range,
+                            file
+                        }]);
+                    }
+                });
             }
-            // visit function statements and validate their name
-            file.parser.functionStatements.forEach((fun) => {
-                if (fun.name.text.includes('_')) {
-                    file.addDiagnostics([{
-                        code: 9000,
-                        message: 'Do not use underscores in function names',
-                        range: fun.name.range,
-                        file
-                    }]);
-                }
-            });
         }
     } as CompilerPlugin;
 };
