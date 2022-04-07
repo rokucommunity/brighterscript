@@ -7,3 +7,68 @@ export const nodes = data.nodes;
 export const components = data.components;
 export const interfaces = data.interfaces;
 export const events = data.events;
+
+interface BrightScriptDocLookup {
+    name: string;
+    url?: string;
+    description?: string;
+}
+
+export interface BRSBaseMethodData {
+    params: {
+        name: string;
+        isRequired: boolean;
+        type: string;
+    }[];
+    returnType: string;
+}
+export interface BRSEventMethodData extends BRSBaseMethodData {
+    name: string;
+}
+
+export interface BRSInterfaceMethodData extends BRSEventMethodData {
+    description: string;
+    returnDescription: string;
+}
+
+export interface BRSPropertyData {
+    name: string;
+    description: string;
+    default: string;
+    type: string;
+}
+
+export interface BRSFieldData {
+    name: string;
+    type: string;
+    default: string;
+    accessPermission: string;
+    description: string;
+}
+
+
+export interface SGNodeData extends BrightScriptDocLookup {
+    description: string;
+    fields: BRSFieldData[];
+    events: BrightScriptDocLookup[];
+    interfaces: BrightScriptDocLookup[];
+}
+
+export interface BRSComponentData extends BrightScriptDocLookup {
+    interfaces: BrightScriptDocLookup[];
+    events: BrightScriptDocLookup[];
+    constructors: BRSBaseMethodData[];
+    description: string;
+}
+
+export interface BRSInterfaceData extends BrightScriptDocLookup {
+    properties: BRSPropertyData[];
+    implementers: BrightScriptDocLookup[];
+    methods: BRSInterfaceMethodData[];
+}
+
+export interface BRSEventData extends BrightScriptDocLookup {
+    properties: BRSPropertyData[];
+    implementers: BrightScriptDocLookup[];
+    methods: BRSEventMethodData[];
+}

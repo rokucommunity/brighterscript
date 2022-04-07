@@ -11,9 +11,12 @@ import type { CallExpression, LiteralExpression } from '../src/parser/Expression
 import type { ExpressionStatement, FunctionStatement } from '../src/parser/Statement';
 import TurndownService = require('turndown');
 import { gfm } from '@guyplusplus/turndown-plugin-gfm';
-import type { TokensList, Tokens, Token } from 'marked';
-import { lexer as markedLexer } from 'marked';
+import { marked } from 'marked';
 import * as he from 'he';
+
+type Token = marked.Token;
+
+const potentialTypes = ['object', 'integer', 'float', 'boolean', 'string', 'dynamic', 'function', 'longinteger', 'double'];
 
 const turndownService = new TurndownService({
     headingStyle: 'atx',
@@ -159,14 +162,13 @@ class ComponentListBuilder {
                     returnType: name,
                     returnDescription: undefined
                 });
-                //scan the text for the constructor signatures
             } else {
 
                 //find all createObject calls
-                const regexp = /CreateObject\(.*?\)/g;
+                const regexp = /CreateObject\((.*?)\)/g;
                 let match;
                 while (match = regexp.exec(manager.markdown)) {
-                    const { statements } = Parser.parse(match[0]);
+                    const { statements, diagnostics } = Parser.parse(match[0]);
                     if (statements.length > 0) {
                         const signature = {
                             params: [],
@@ -185,6 +187,52 @@ class ComponentListBuilder {
                                     type: (arg as any).type?.toString() ?? 'dynamic',
                                     description: undefined
                                 });
+                            }
+                            component.constructors.push(signature);
+                        }
+                    } else if (match[1]) {
+                        // Docs for some components do not have valid brightscript in the createObject example:
+                        // it looks like C code
+                        // Eg: CreateObject("roRegion", Object bitmap, Integer x, Integer y,Integer width, Integer height)
+                        //  or, they forget the "as"
+                        // Eg: CreateObject("roArray",  size As Integer, resizeAs Boolean)
+
+                        //split args by comma, remove quotes
+                        const foundParamTexts = match[1].split(',').map(x => x.replace(/['"]+/g, '').trim());
+
+                        if (foundParamTexts[0].toLowerCase() === component.name.toLowerCase()) {
+                            const signature = {
+                                params: [],
+                                returnType: name
+                            } as Signature;
+
+                            for (let i = 1; i < foundParamTexts.length; i++) {
+                                const foundParam = foundParamTexts[i];
+                                // make an array of at the words in each group, removing "as" if it exists
+                                const words = foundParam.split(' ').filter(word => word.length > 0 && word.toLowerCase() !== 'as');
+                                // find the index of the word that looks like a type
+                                const paramTypeIndex = words.findIndex(word => potentialTypes.includes(word.toLowerCase()));
+                                let paramType = 'dynamic';
+                                let paramName = `param${i}`;
+                                if (paramTypeIndex >= 0) {
+                                    // if we found a word that looks like a type, use it for the type, and remove it from the array
+                                    paramType = words[paramTypeIndex];
+                                    words.splice(paramTypeIndex, 1);
+                                    // use the first "left over" word as the param name
+                                    paramName = words[0];
+                                } else if (words.length > 0) {
+                                    // if we couldn't find a type
+                                    paramName = words[0];
+                                }
+
+                                signature.params.push({
+                                    name: paramName,
+                                    default: undefined,
+                                    isRequired: true,
+                                    type: paramType ?? 'dynamic',
+                                    description: undefined
+                                });
+
                             }
                             component.constructors.push(signature);
                         }
@@ -343,7 +391,7 @@ class ComponentListBuilder {
         const rows = manager.tableToObjects(table);
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
-            let description = table.tokens.cells[i][4].map(x => x.raw).join('');
+            let description = table.rows[i][4].text;
             //the turndown plugin doesn't convert inner html tables, so turn that into markdown too
             description = turndownService.turndown(description);
             result.push({
@@ -377,13 +425,13 @@ class ComponentListBuilder {
         //some docs have the "implemented by" table in the "Description heading instead"
         if (!table) { }
         if (table?.type === 'table') {
-            for (const row of table?.tokens?.cells ?? []) {
-                const firstTokenInRow = row?.[0]?.[0];
+            for (const row of table?.rows ?? []) {
+                const firstTokenInRow = row?.[0]?.tokens[0];
                 //find the link, or default to the cell itself (assume it's a text node?)
                 const token = deepSearch(firstTokenInRow, 'type', (key, value) => value === 'link') ?? firstTokenInRow;
                 result.push({
                     name: token.text,
-                    description: he.decode((row?.[1]?.[0] as Tokens.Text).text ?? '') || undefined,
+                    description: he.decode(row?.[1].text ?? '') || undefined,
                     //if this is not a link, we'll just get back `undefined`, and we will repair this link at the end of the script
                     url: getDocUrl(token?.href)
                 });
@@ -464,17 +512,17 @@ class ComponentListBuilder {
     private buildInterfaceMethods(manager: TokenManager) {
         const result = [] as Func[];
         //find every h3
-        const methodHeaders = manager.getByType<Tokens.Heading>('heading').filter(x => x.depth === 3);
+        const methodHeaders = manager.getByType<marked.Tokens.Heading>('heading').filter(x => x.depth === 3);
         for (let i = 0; i < methodHeaders.length; i++) {
             const methodHeader = methodHeaders[i];
             const nextMethodHeader = methodHeaders[i + 1];
             const method = this.getMethod(methodHeader.text);
             if (method) {
-                method.description = manager.getNextToken<Tokens.Paragraph>(
+                method.description = manager.getNextToken<marked.Tokens.Paragraph>(
                     manager.find(x => !!/description/i.exec(x?.text), methodHeader, nextMethodHeader)
                 )?.text;
 
-                method.returnDescription = manager.getNextToken<Tokens.Paragraph>(
+                method.returnDescription = manager.getNextToken<marked.Tokens.Paragraph>(
                     manager.find(x => !!/return\s*value/i.exec(x?.text), methodHeader, nextMethodHeader)
                 )?.text;
 
@@ -601,12 +649,12 @@ function repairMarkdownLinks(text: string) {
 class TokenManager {
     public html: string;
     public markdown: string;
-    public tokens: TokensList;
+    public tokens: marked.TokensList;
 
     public async process(url: string) {
         this.html = (await getJson(url)).content;
         this.markdown = turndownService.turndown(this.html);
-        this.tokens = markedLexer(this.markdown);
+        this.tokens = marked.lexer(this.markdown);
         return this;
     }
 
@@ -635,7 +683,7 @@ class TokenManager {
         for (let i = startIndex + 1; i < this.tokens.length; i++) {
             const token = this.tokens[i];
             if (token?.type === 'table') {
-                const headers = token?.header?.map(x => x.toLowerCase());
+                const headers = token?.header?.map(x => x.text.toLowerCase());
                 if (
                     headers.every(x => searchHeaders.includes(x)) &&
                     searchHeaders.every(x => headers.includes(x))
@@ -652,13 +700,13 @@ class TokenManager {
     /**
      * Convert a markdown table token into an array of objects with the headers as keys, and the cell values as values
      */
-    public tableToObjects(table: Tokens.Table) {
+    public tableToObjects(table: marked.Tokens.Table) {
         const result = [] as Record<string, string>[];
-        const headers = table?.header?.map(x => x.toLowerCase());
-        for (const row of table?.cells ?? []) {
+        const headers = table?.header?.map(x => x.text.toLowerCase());
+        for (const row of table?.rows ?? []) {
             const data = {};
             for (let i = 0; i < headers.length; i++) {
-                data[headers[i]] = row[i];
+                data[headers[i]] = row[i].text;
             }
             result.push(data);
         }
@@ -793,10 +841,10 @@ class TokenManager {
 
 type EndTokenMatcher = (t: Token) => boolean | undefined;
 
-interface TableEnhanced extends Tokens.Table {
+interface TableEnhanced extends marked.Tokens.Table {
     tokens: {
-        header: Array<Array<TokensList>>;
-        cells: Array<Array<TokensList>>;
+        header: Array<Array<marked.TokensList>>;
+        rows: Array<Array<marked.TokensList>>;
     };
 }
 

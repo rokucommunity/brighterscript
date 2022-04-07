@@ -235,7 +235,7 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
-            it('catches valid BrightScript components', () => {
+            it('catches invalid BrightScript components', () => {
                 program.setFile(`source/file.brs`, `
                     sub main()
                         timeSpan = CreateObject("Thing")
@@ -250,6 +250,24 @@ describe('Scope', () => {
                     DiagnosticMessages.unknownBrightScriptComponent('OtherThing'),
                     DiagnosticMessages.unknownBrightScriptComponent('SomethingElse'),
                     DiagnosticMessages.unknownBrightScriptComponent('Button')
+                ]);
+            });
+
+            it('catches wrong number of arguments', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        button = CreateObject("roSGNode", "Button", "extraArg")
+                        bitmap = CreateObject("roBitmap") ' no 2nd arg
+                        timeSpan = CreateObject("roTimespan", 1, 2, 3)
+                        region = CreateObject("roRegion", bitmap, 20, 30, 100) ' missing last arg
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.mismatchCreateObjectArgumentCount('roSGNode', [2], 3),
+                    DiagnosticMessages.mismatchCreateObjectArgumentCount('roBitmap', [2], 1),
+                    DiagnosticMessages.mismatchCreateObjectArgumentCount('roTimespan', [1], 4),
+                    DiagnosticMessages.mismatchCreateObjectArgumentCount('roRegion', [6], 5)
                 ]);
             });
         });
