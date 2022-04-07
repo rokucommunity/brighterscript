@@ -391,7 +391,7 @@ class ComponentListBuilder {
         const rows = manager.tableToObjects(table);
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
-            let description = table.rows[i][4].text;// tokens.map(x => x.raw).join('');
+            let description = table.rows[i][4].text;
             //the turndown plugin doesn't convert inner html tables, so turn that into markdown too
             description = turndownService.turndown(description);
             result.push({
