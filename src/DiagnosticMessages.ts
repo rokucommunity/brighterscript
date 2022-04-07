@@ -666,11 +666,14 @@ export let DiagnosticMessages = {
         code: 1129,
         severity: DiagnosticSeverity.Error
     }),
-    mismatchCreateObjectArgumentCount: (componentName: string, allowedArgCounts: number[], actualCount: number) => ({
-        message: `For ${componentName}, expected ${(allowedArgCounts || [1]).map(c => c.toString()).join(' or ')} total arguments, but got ${actualCount}.`,
-        code: 1130,
-        severity: DiagnosticSeverity.Error
-    })
+    mismatchCreateObjectArgumentCount: (componentName: string, allowedArgCounts: number[], actualCount: number) => {
+        const argCountArray = (allowedArgCounts || [1]).sort().filter((value, index, self) => self.indexOf(value) === index);
+        return {
+            message: `For ${componentName}, expected ${argCountArray.map(c => c.toString()).join(' or ')} total arguments, but got ${actualCount}.`,
+            code: 1130,
+            severity: DiagnosticSeverity.Error
+        };
+    }
 };
 
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;

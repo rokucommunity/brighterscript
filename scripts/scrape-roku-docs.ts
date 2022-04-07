@@ -159,14 +159,13 @@ class ComponentListBuilder {
                     returnType: name,
                     returnDescription: undefined
                 });
-                //scan the text for the constructor signatures
             } else {
 
                 //find all createObject calls
-                const regexp = /CreateObject\(.*?\)/g;
+                const regexp = /CreateObject\((.*?)\)/g;
                 let match;
                 while (match = regexp.exec(manager.markdown)) {
-                    const { statements } = Parser.parse(match[0]);
+                    const { statements, diagnostics } = Parser.parse(match[0]);
                     if (statements.length > 0) {
                         const signature = {
                             params: [],
@@ -187,6 +186,41 @@ class ComponentListBuilder {
                                 });
                             }
                             component.constructors.push(signature);
+                        }
+                    } else if (match[1]) {
+                        // Docs for some components do not have valid brightscript in the createObject example:
+                        // it looks like C code
+                        // Eg: CreateObject("roRegion", Object bitmap, Integer x, Integer y,Integer width, Integer height)
+                        //  or, they forget the "as"
+                        // Eg: CreateObject("roArray",  size As Integer, resizeAs Boolean)
+                        const foundParamTexts = match[1].split(',').map(x => x.replace(/['"]+/g, '').trim());
+                        if (foundParamTexts[0].toLowerCase() === component.name.toLowerCase()) {
+                            const signature = {
+                                params: [],
+                                returnType: name
+                            } as Signature;
+
+                            const potentialTypes = ['object', 'integer', 'float', 'boolean', 'string'];
+                            for (let i = 1; i < foundParamTexts.length; i++) {
+                                const foundParam = foundParamTexts[i];
+                                const words = foundParam.split(' ').filter(word => word.length > 0 && word.toLowerCase() !== 'as');
+                                const paramIndex = words.findIndex(word => potentialTypes.includes(word.toLowerCase()));
+                                const paramType = words[paramIndex];
+                                let paramName = `param${i}`;
+                                if (paramIndex >= 0) {
+                                    words.splice(paramIndex, 1);
+                                    paramName = words[0];
+                                }
+
+                                signature.params.push({
+                                    name: paramName,
+                                    default: undefined,
+                                    isRequired: true,
+                                    type: paramType ?? 'dynamic',
+                                    description: undefined
+                                });
+                                component.constructors.push(signature);
+                            }
                         }
                     }
                 }
@@ -343,7 +377,7 @@ class ComponentListBuilder {
         const rows = manager.tableToObjects(table);
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
-            let description = table.tokens.cells[i][4].map(x => x.raw).join('');
+            let description = table.rows[i][4].text;// tokens.map(x => x.raw).join('');
             //the turndown plugin doesn't convert inner html tables, so turn that into markdown too
             description = turndownService.turndown(description);
             result.push({
@@ -377,13 +411,13 @@ class ComponentListBuilder {
         //some docs have the "implemented by" table in the "Description heading instead"
         if (!table) { }
         if (table?.type === 'table') {
-            for (const row of table?.tokens?.cells ?? []) {
-                const firstTokenInRow = row?.[0]?.[0];
+            for (const row of table?.rows ?? []) {
+                const firstTokenInRow = row?.[0]?.tokens[0];
                 //find the link, or default to the cell itself (assume it's a text node?)
                 const token = deepSearch(firstTokenInRow, 'type', (key, value) => value === 'link') ?? firstTokenInRow;
                 result.push({
                     name: token.text,
-                    description: he.decode((row?.[1]?.[0] as Tokens.Text).text ?? '') || undefined,
+                    description: he.decode(row?.[1].text ?? '') || undefined,
                     //if this is not a link, we'll just get back `undefined`, and we will repair this link at the end of the script
                     url: getDocUrl(token?.href)
                 });
@@ -635,7 +669,7 @@ class TokenManager {
         for (let i = startIndex + 1; i < this.tokens.length; i++) {
             const token = this.tokens[i];
             if (token?.type === 'table') {
-                const headers = token?.header?.map(x => x.toLowerCase());
+                const headers = token?.header?.map(x => x.text.toLowerCase());
                 if (
                     headers.every(x => searchHeaders.includes(x)) &&
                     searchHeaders.every(x => headers.includes(x))
@@ -654,11 +688,11 @@ class TokenManager {
      */
     public tableToObjects(table: Tokens.Table) {
         const result = [] as Record<string, string>[];
-        const headers = table?.header?.map(x => x.toLowerCase());
-        for (const row of table?.cells ?? []) {
+        const headers = table?.header?.map(x => x.text.toLowerCase());
+        for (const row of table?.rows ?? []) {
             const data = {};
             for (let i = 0; i < headers.length; i++) {
-                data[headers[i]] = row[i];
+                data[headers[i]] = row[i].text;
             }
             result.push(data);
         }

@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2021-07-23T17:15:42.313Z",
+    "generatedDate": "2022-04-07T01:57:08.868Z",
     "nodes": {
         "node": {
             "name": "Node",
@@ -5591,7 +5591,23 @@
                 }
             ],
             "events": [],
-            "constructors": [],
+            "constructors": [
+                {
+                    "params": [
+                        {
+                            "name": "size",
+                            "isRequired": true,
+                            "type": "Integer"
+                        },
+                        {
+                            "name": "resizeAs",
+                            "isRequired": true,
+                            "type": "Boolean"
+                        }
+                    ],
+                    "returnType": "roArray"
+                }
+            ],
             "description": "An array stores an indexed collection of BrightScript objects. Each entry of an array can be a different type, or they may all of the same type.\n\nAn roArray is created with two parameters:\n\n**CreateObject(\"roArray\", size As Integer, resizeAs Boolean)**\n\nSize is the initial number of elements allocated for the array. If resize is true, the array will be resized if needed to accommodate more elements. If the array is large, this might be slow. The \"dim\" statement may be used instead of CreateObject to allocate a new array. Dim has the advantage in that it automatically creates arrays of arrays for multi-dimensional arrays."
         },
         "roassociativearray": {
@@ -5727,6 +5743,26 @@
             ],
             "events": [],
             "constructors": [
+                {
+                    "params": [
+                        {
+                            "name": "bitmapProps",
+                            "isRequired": true,
+                            "type": "Object"
+                        }
+                    ],
+                    "returnType": "roBitmap"
+                },
+                {
+                    "params": [
+                        {
+                            "name": "filename",
+                            "isRequired": true,
+                            "type": "String"
+                        }
+                    ],
+                    "returnType": "roBitmap"
+                },
                 {
                     "params": [
                         {
@@ -6125,6 +6161,16 @@
             ],
             "events": [],
             "constructors": [
+                {
+                    "params": [
+                        {
+                            "name": "font",
+                            "isRequired": true,
+                            "type": "String"
+                        }
+                    ],
+                    "returnType": "roFontMetrics"
+                },
                 {
                     "params": [
                         {
@@ -6772,7 +6818,38 @@
                 }
             ],
             "events": [],
-            "constructors": [],
+            "constructors": [
+                {
+                    "params": [
+                        {
+                            "name": "bitmap",
+                            "isRequired": true,
+                            "type": "Object"
+                        },
+                        {
+                            "name": "x",
+                            "isRequired": true,
+                            "type": "Integer"
+                        },
+                        {
+                            "name": "y",
+                            "isRequired": true,
+                            "type": "Integer"
+                        },
+                        {
+                            "name": "width",
+                            "isRequired": true,
+                            "type": "Integer"
+                        },
+                        {
+                            "name": "height",
+                            "isRequired": true,
+                            "type": "Integer"
+                        }
+                    ],
+                    "returnType": "roRegion"
+                }
+            ],
             "description": "The roRegion component is used to represent a subsection of a bitmap.\n\nThe region is specified with an x,y, width, and height as well as a time field for use with animated sprites and a wrap field which causes the region to wrap during scrolling. The roRegion is a common parameter used by the drawing functions of [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\"). Wrap and Time are used by [roCompositor](https://developer.roku.com/docs/references/brightscript/components/roCompositor.md\"roCompositor\"). roRegion is also used to specify a pretranslation (x,y) for the draw, rotate, and scale operation. The pretranslation is normally used to specify the center of the region. The scaling operation is controlled by the scalemode specified in the region.\n\nThis object is created with parameters to initialize the x,y coordinates, width, height. If time and wrap are desired, use the SetTime() and SetWrap().\n\n`CreateObject(\"roRegion\", Object bitmap, Integer x, Integer y,Integer width, Integer height)`"
         },
         "roregistry": {
@@ -6804,6 +6881,16 @@
             ],
             "events": [],
             "constructors": [
+                {
+                    "params": [
+                        {
+                            "name": "section",
+                            "isRequired": true,
+                            "type": "String"
+                        }
+                    ],
+                    "returnType": "roRegistrySection"
+                },
                 {
                     "params": [
                         {
@@ -17658,7 +17745,7 @@
             "implementers": [
                 {
                     "name": "roChannelStoreEvent",
-                    "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get",
+                    "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get\\* methods in ifChannelStore",
                     "url": "https://developer.roku.com/docs/references/brightscript/events/rochannelstoreevent.md"
                 },
                 {
@@ -18393,7 +18480,7 @@
             "implementers": [
                 {
                     "name": "roChannelStoreEvent",
-                    "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get",
+                    "description": "The roChannelStore sends an roChannelStoreEvent in response to a call to any of several Get\\* methods in ifChannelStore",
                     "url": "https://developer.roku.com/docs/references/brightscript/events/rochannelstoreevent.md"
                 },
                 {
