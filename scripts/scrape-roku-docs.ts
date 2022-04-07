@@ -219,8 +219,9 @@ class ComponentListBuilder {
                                     type: paramType ?? 'dynamic',
                                     description: undefined
                                 });
-                                component.constructors.push(signature);
+
                             }
+                            component.constructors.push(signature);
                         }
                     }
                 }
