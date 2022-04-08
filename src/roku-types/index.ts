@@ -14,7 +14,12 @@ interface BrightScriptDocLookup {
     description?: string;
 }
 
-export interface BRSBaseMethodData {
+interface PossiblyDeprecated {
+    isDeprecated?: boolean;
+    deprecatedDescription?: string;
+}
+
+export interface BRSBaseMethodData extends PossiblyDeprecated {
     params: {
         name: string;
         isRequired: boolean;
@@ -54,20 +59,20 @@ export interface SGNodeData extends BrightScriptDocLookup {
     interfaces: BrightScriptDocLookup[];
 }
 
-export interface BRSComponentData extends BrightScriptDocLookup {
+export interface BRSComponentData extends BrightScriptDocLookup, PossiblyDeprecated {
     interfaces: BrightScriptDocLookup[];
     events: BrightScriptDocLookup[];
     constructors: BRSBaseMethodData[];
     description: string;
 }
 
-export interface BRSInterfaceData extends BrightScriptDocLookup {
+export interface BRSInterfaceData extends BrightScriptDocLookup, PossiblyDeprecated {
     properties: BRSPropertyData[];
     implementers: BrightScriptDocLookup[];
     methods: BRSInterfaceMethodData[];
 }
 
-export interface BRSEventData extends BrightScriptDocLookup {
+export interface BRSEventData extends BrightScriptDocLookup, PossiblyDeprecated {
     properties: BRSPropertyData[];
     implementers: BrightScriptDocLookup[];
     methods: BRSEventMethodData[];

@@ -270,6 +270,21 @@ describe('Scope', () => {
                     DiagnosticMessages.mismatchCreateObjectArgumentCount('roRegion', [6], 5)
                 ]);
             });
+
+            it('catches deprecated components', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        fontMetrics = CreateObject("roFontMetrics", "someFontName")
+                    end sub
+                `);
+                program.validate();
+                // only care about code and `roFontMetrics` match
+                const diagnostics = program.getDiagnostics();
+                const expectedDiag = DiagnosticMessages.deprecatedBrightScriptComponent('roFontMetrics')
+                expect(diagnostics.length).to.eql(1);
+                expect(diagnostics[0].code).to.eql(expectedDiag.code);
+                expect(diagnostics[0].message).to.contain(expectedDiag.message);
+            });
         });
 
         it('marks the scope as validated after validation has occurred', () => {

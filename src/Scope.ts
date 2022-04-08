@@ -561,6 +561,15 @@ export class Scope {
                             range: call.range
                         });
                     }
+
+                    // Test for deprecation
+                    if (brightScriptComponent.isDeprecated) {
+                        this.diagnostics.push({
+                            file: file as BscFile,
+                            ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),
+                            range: call.range
+                        });
+                    }
                 }
             }
         }

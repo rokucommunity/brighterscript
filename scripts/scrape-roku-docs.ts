@@ -160,6 +160,8 @@ class Runner {
                 availableSince: manager.getAvailableSince(manager.getHeading(1), x => x.type === 'heading')
             } as BrightScriptComponent;
 
+            manager.setDeprecatedData(component, manager.getHeading(1), manager.getHeading(2));
+
             if (/this object is created with no parameters/.exec(manager.html)) {
                 component.constructors.push({
                     params: [],
@@ -277,6 +279,8 @@ class Runner {
                     availableSince: manager.getAvailableSince(manager.getHeading(1), x => x.type === 'heading')
                 } as RokuInterface;
 
+                manager.setDeprecatedData(iface, manager.getHeading(1), manager.getHeading(2));
+
                 //if there is a custom handler for this doc, call it
                 if (this[name]) {
                     console.log(`calling custom handler for ${name}`);
@@ -310,6 +314,8 @@ class Runner {
                     description: manager.getMarkdown(manager.getHeading(1), x => x.type === 'heading'),
                     availableSince: manager.getAvailableSince(manager.getHeading(1), x => x.type === 'heading')
                 } as RokuEvent;
+
+                manager.setDeprecatedData(evt, manager.getHeading(1), manager.getHeading(2));
 
                 //if there is a custom handler for this doc, call it
                 if (this[name]) {
@@ -528,6 +534,8 @@ class Runner {
             const nextMethodHeader = methodHeaders[i + 1];
             const method = this.getMethod(methodHeader.text);
             if (method) {
+                manager.setDeprecatedData(method, methodHeader, nextMethodHeader);
+
                 method.description = manager.getNextToken<marked.Tokens.Paragraph>(
                     manager.find(x => !!/description/i.exec(x?.text), methodHeader, nextMethodHeader)
                 )?.text;
@@ -839,6 +847,24 @@ class TokenManager {
     }
 
     /**
+    * Find any `is deprecated` text between the specified items
+    */
+    public getDeprecatedDescription(startToken: Token, endToken: Token) {
+        const deprecatedDescription = this.find<marked.Tokens.Text>(x => !!/is\s*deprecated/i.exec(x?.text), startToken, endToken)?.text;
+        return deprecatedDescription;
+    }
+
+    /**
+    * Sets `deprecatedDescription` and `isDeprecated` on passed in entity if `deprecated` is mentioned between the two tokens
+    */
+    public setDeprecatedData(entity: PossiblyDeprecated, startToken: Token, endToken: Token) {
+        entity.deprecatedDescription = this.getDeprecatedDescription(startToken, endToken);
+        if (entity.deprecatedDescription) {
+            entity.isDeprecated = true;
+        }
+    }
+
+    /**
      * Search for `Extends [SomeComponentName](some_url)` in the top-level description
      */
     public getExtendsRef() {
@@ -868,7 +894,12 @@ interface TableEnhanced extends marked.Tokens.Table {
     };
 }
 
-interface BrightScriptComponent {
+interface PossiblyDeprecated {
+    isDeprecated?: boolean;
+    deprecatedDescription?: string;
+}
+
+interface BrightScriptComponent extends PossiblyDeprecated {
     name: string;
     url: string;
     availableSince: string;
@@ -890,7 +921,7 @@ interface Implementer extends Reference {
     description: string;
 }
 
-interface RokuInterface {
+interface RokuInterface extends PossiblyDeprecated {
     availableSince: string;
     name: string;
     url: string;
@@ -903,7 +934,7 @@ interface RokuInterface {
     implementers: Implementer[];
 }
 
-interface RokuEvent {
+interface RokuEvent extends PossiblyDeprecated {
     availableSince: string;
     name: string;
     url: string;
@@ -942,7 +973,7 @@ interface SceneGraphNodeField {
     description: string;
 }
 
-interface Func extends Signature {
+interface Func extends Signature, PossiblyDeprecated {
     name: string;
     description: string;
 }
