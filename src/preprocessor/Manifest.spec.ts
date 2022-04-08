@@ -36,8 +36,8 @@ describe('manifest support', () => {
 
         it('retains whitespace for keys and values', () => {
             expect(
-                Object.fromEntries(
-                    parseManifest(' leading interum and trailing key spaces = value ').entries()
+                mapToObject(
+                    parseManifest(' leading interum and trailing key spaces = value ')
                 )
             ).to.eql({
                 ' leading interum and trailing key spaces ': ' value '
