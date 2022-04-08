@@ -2,7 +2,7 @@ import * as fsExtra from 'fs';
 import { expect } from 'chai';
 import { getManifest, getBsConst, parseManifest } from './Manifest';
 import { createSandbox } from 'sinon';
-import { expectThrows, trim } from '../testHelpers.spec';
+import { expectThrows, mapToObject, objectToMap, trim } from '../testHelpers.spec';
 const sinon = createSandbox();
 
 describe('manifest support', () => {
@@ -46,13 +46,13 @@ describe('manifest support', () => {
 
         it('does not convert values to primitives', () => {
             expect(
-                Object.fromEntries(
+                mapToObject(
                     parseManifest(trim`
                         name=bob
                         age=12
                         enabled=true
                         height=1.5
-                    `).entries()
+                    `)
                 )
             ).to.eql({
                 name: 'bob',
@@ -70,9 +70,7 @@ describe('manifest support', () => {
                     parseManifest(manifest)
                 )
             ).to.eql(
-                new Map(
-                    Object.entries(expected)
-                )
+                objectToMap(expected)
             );
         }
 
