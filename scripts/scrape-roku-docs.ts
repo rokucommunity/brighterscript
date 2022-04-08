@@ -345,6 +345,12 @@ class Runner {
 
     private async buildNodes() {
         const docs = this.flatten(this.references.SceneGraph);
+        docs.push({
+            categoryName: '',
+            path: '/docs/references/scenegraph/dynamic-voice-keyboard-nodes/rsg-palette.md',
+            name: 'RSGPalette'
+        });
+
         for (let i = 0; i < docs.length; i++) {
             const doc = docs[i];
             //skip non-component pages
