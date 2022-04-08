@@ -13,6 +13,7 @@ import TurndownService = require('turndown');
 import { gfm } from '@guyplusplus/turndown-plugin-gfm';
 import { marked } from 'marked';
 import * as he from 'he';
+import * as deepmerge from 'deepmerge';
 
 type Token = marked.Token;
 
@@ -24,7 +25,7 @@ const turndownService = new TurndownService({
 });
 turndownService.use(gfm);
 
-class ComponentListBuilder {
+class Runner {
     private references: any;
 
     private result = {
@@ -47,6 +48,9 @@ class ComponentListBuilder {
         await this.buildInterfaces();
         await this.buildEvents();
         await this.buildNodes();
+
+        //include hand-written overrides that were missing from roku docs, or were wrong from roku docs.
+        this.mergeOverrides();
 
         //certain references are missing hyperlinks. this attempts to repair them
         this.repairReferences();
@@ -570,6 +574,19 @@ class ComponentListBuilder {
         const response = await getJson('https://developer.roku.com/api/v1/get-dev-cms-doc?filePath=left-nav%2Freferences.json&locale=en-us');
         this.references = JSON.parse(response.content);
     }
+
+    /**
+     * Merge hand-written overrides to the Roku docs. This is for missing items or fixing incorrect info
+     */
+    private mergeOverrides() {
+        this.result = deepmerge(this.result, {
+            nodes: {
+            },
+            components: {},
+            events: {},
+            interfaces: {}
+        });
+    }
 }
 
 let cache: Record<string, string>;
@@ -603,10 +620,7 @@ function getDocUrl(docRelativePath: string) {
     }
 }
 
-//run the builder
-new ComponentListBuilder().run().catch((e) => console.error(e));
-
-function deepSearch(object, key, predicate) {
+function deepSearch<T = any>(object, key, predicate): T {
     if (object.hasOwnProperty(key) && predicate(key, object[key]) === true) {
         return object;
     }
@@ -704,7 +718,7 @@ class TokenManager {
         const result = [] as Record<string, string>[];
         const headers = table?.header?.map(x => x.text.toLowerCase());
         for (const row of table?.rows ?? []) {
-            const data = {};
+            const data = {} as Record<string, string>;
             for (let i = 0; i < headers.length; i++) {
                 data[headers[i]] = row[i].text;
             }
@@ -950,3 +964,6 @@ interface ElementFilter {
     type?: string;
     class?: string;
 }
+
+//run the builder
+new Runner().run().catch((e) => console.error(e));
