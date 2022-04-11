@@ -56,8 +56,11 @@ class Runner {
         this.repairReferences();
         this.linkMissingImplementers();
 
+        //sort arrays internal to the data
+        this.sortInternalData();
+
         //store the output
-        fsExtra.outputFileSync(outPath, JSON.stringify(this.result, null, 4));
+        fsExtra.outputFileSync(outPath, JSON.stringify(this.result, objectKeySorter, 4));
     }
 
     /**
@@ -133,6 +136,36 @@ class Runner {
                     });
                 }
             }
+        }
+    }
+
+    /**
+     * Sorts internal arrays of the data in results, eg. implementers, properties, methods, etc.
+     */
+    public sortInternalData() {
+        const nameComparer = (a: { name: string }, b: { name: string }) => (a.name.localeCompare(b.name));
+        for (let component of Object.values(this.result.components)) {
+            component.constructors.sort((a, b) => b.params.length - a.params.length);
+            component.events.sort(nameComparer);
+            component.interfaces.sort(nameComparer);
+        }
+
+        for (let evt of Object.values(this.result.events)) {
+            evt.implementers.sort(nameComparer);
+            evt.properties.sort(nameComparer);
+            evt.methods.sort(nameComparer);
+        }
+
+        for (let iface of Object.values(this.result.interfaces)) {
+            iface.implementers.sort(nameComparer);
+            iface.properties.sort(nameComparer);
+            iface.methods.sort(nameComparer);
+        }
+
+        for (let node of Object.values(this.result.nodes)) {
+            node.events.sort(nameComparer);
+            node.fields.sort(nameComparer);
+            node.interfaces.sort(nameComparer);
         }
     }
 
@@ -670,6 +703,21 @@ function repairMarkdownLinks(text: string) {
     return text;
 }
 
+/**
+ * Replacer function for JSON.Stringify to sort keys in objects
+ * Note - this ignores the top level properties
+ * from: https://gist.github.com/davidfurlong/463a83a33b70a3b6618e97ec9679e490
+ */
+function objectKeySorter(key, value) {
+    return (value instanceof Object && !(value instanceof Array)) && !!key
+        ? Object.keys(value)
+            .sort()
+            .reduce((sorted, key) => {
+                sorted[key] = value[key];
+                return sorted;
+            }, {})
+        : value;
+}
 
 /**
  * A class to help manage the parsed markdown tokens
