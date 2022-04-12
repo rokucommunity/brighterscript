@@ -56,8 +56,52 @@ class Runner {
         this.repairReferences();
         this.linkMissingImplementers();
 
+        //this.writeTypeDefinitions();
+
         //store the output
         fsExtra.outputFileSync(outPath, JSON.stringify(this.result, null, 4));
+    }
+
+    /**
+     * Write a type definition file (.d.bs)
+     */
+    private writeTypeDefinitions() {
+        let data = [] as string[];
+        for (const iface of Object.values(this.result.interfaces)) {
+            //add a single space between interface declarations
+            data.push('');
+            if (iface.availableSince) {
+                //doc block
+                data.push(
+                    ``,
+                    `'`,
+                    `'@since ${iface.availableSince}`,
+                    `'`
+                );
+            }
+            data.push(`interface ${iface.name}`);
+
+            for (const prop of iface.properties) {
+                data.push(`\t${prop.name} as ${prop.type}`);
+            }
+            for (const method of iface.methods) {
+                //method doc block
+                if (method.returnDescription || method.description) {
+                    data.push(
+                        `\t'`,
+                        method.description ? `\t'${method.description}` : undefined,
+                        method.returnDescription ? `\t'@return ${method.returnDescription}` : undefined,
+                        `\t'`
+                    );
+                }
+                const params = method.params.map(p => `${p.name} as ${p.type}`).join(', ');
+
+                data.push(`\tfunction ${method.name}(${params}) as ${method.returnType}`);
+            }
+            data.push(`end interface`);
+        }
+        const result = data.filter(x => x !== undefined).join('\n');
+        fsExtra.outputFileSync(__dirname + '/../lib/global.d.bs', result);
     }
 
     /**
