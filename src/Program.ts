@@ -16,7 +16,6 @@ import { DependencyGraph } from './DependencyGraph';
 import { Logger, LogLevel } from './Logger';
 import chalk from 'chalk';
 import { globalFile } from './globalCallables';
-import type { ManifestValue } from './preprocessor/Manifest';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
@@ -1434,7 +1433,7 @@ export class Program {
         }
         return this._manifest;
     }
-    private _manifest: Map<string, ManifestValue>;
+    private _manifest: Map<string, string>;
 
     public dispose() {
         for (let filePath in this.files) {

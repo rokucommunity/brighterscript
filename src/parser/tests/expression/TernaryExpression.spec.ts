@@ -290,13 +290,13 @@ describe('ternary expressions', () => {
             );
 
             testTranspile(
-                `a = user = invalid ? [] : "logged in"`,
-                `a = bslib_ternary(user = invalid, [], "logged in")`
+                `a = user = invalid ? {} : "logged in"`,
+                `a = bslib_ternary(user = invalid, {}, "logged in")`
             );
 
             testTranspile(
-                `a = user = invalid ? {} : "logged in"`,
-                `a = bslib_ternary(user = invalid, {}, "logged in")`
+                `a = user = invalid ? [] : "logged in"`,
+                `a = bslib_ternary(user = invalid, [], "logged in")`
             );
         });
 
