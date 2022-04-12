@@ -894,6 +894,43 @@ export class Util {
     }
 
     /**
+     * Given a list of ranges, create a range that starts with the first non-null lefthand range, and ends with the first non-null
+     * righthand range. Returns undefined if none of the items have a range.
+     */
+    public createBoundingRange(...locatables: Array<{ range?: Range }>) {
+        let leftmostRange: Range;
+        let rightmostRange: Range;
+
+        for (let i = 0; i < locatables.length; i++) {
+            //set the leftmost non-null-range item
+            const left = locatables[i];
+            //the range might be a getter, so access it exactly once
+            const leftRange = left?.range;
+            if (!leftmostRange && leftRange) {
+                leftmostRange = leftRange;
+            }
+
+            //set the rightmost non-null-range item
+            const right = locatables[locatables.length - 1 - i];
+            //the range might be a getter, so access it exactly once
+            const rightRange = right?.range;
+            if (!rightmostRange && rightRange) {
+                rightmostRange = rightRange;
+            }
+
+            //if we have both sides, quit
+            if (leftmostRange && rightmostRange) {
+                break;
+            }
+        }
+        if (leftmostRange) {
+            return this.createRangeFromPositions(leftmostRange.start, rightmostRange.end);
+        } else {
+            return undefined;
+        }
+    }
+
+    /**
      * Create a `Position` object. Prefer this over `Position.create` for performance reasons
      */
     public createPosition(line: number, character: number) {

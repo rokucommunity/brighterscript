@@ -56,10 +56,13 @@ class Runner {
         this.repairReferences();
         this.linkMissingImplementers();
 
+        //sort arrays internal to the data
+        this.sortInternalData();
+
         //this.writeTypeDefinitions();
 
         //store the output
-        fsExtra.outputFileSync(outPath, JSON.stringify(this.result, null, 4));
+        fsExtra.outputFileSync(outPath, JSON.stringify(this.result, objectKeySorter, 4));
     }
 
     /**
@@ -180,6 +183,36 @@ class Runner {
         }
     }
 
+    /**
+     * Sorts internal arrays of the data in results, eg. implementers, properties, methods, etc.
+     */
+    public sortInternalData() {
+        const nameComparer = (a: { name: string }, b: { name: string }) => (a.name.localeCompare(b.name));
+        for (let component of Object.values(this.result.components)) {
+            component.constructors.sort((a, b) => b.params.length - a.params.length);
+            component.events.sort(nameComparer);
+            component.interfaces.sort(nameComparer);
+        }
+
+        for (let evt of Object.values(this.result.events)) {
+            evt.implementers.sort(nameComparer);
+            evt.properties.sort(nameComparer);
+            evt.methods.sort(nameComparer);
+        }
+
+        for (let iface of Object.values(this.result.interfaces)) {
+            iface.implementers.sort(nameComparer);
+            iface.properties.sort(nameComparer);
+            iface.methods.sort(nameComparer);
+        }
+
+        for (let node of Object.values(this.result.nodes)) {
+            node.events.sort(nameComparer);
+            node.fields.sort(nameComparer);
+            node.interfaces.sort(nameComparer);
+        }
+    }
+
     public buildRoSGNodeList() {
         // const asdf = this.httpGet('https://devtools.web.roku.com/schema/RokuSceneGraph.xsd');
     }
@@ -203,6 +236,8 @@ class Runner {
                 description: manager.getMarkdown(manager.getHeading(1), x => x.type === 'heading'),
                 availableSince: manager.getAvailableSince(manager.getHeading(1), x => x.type === 'heading')
             } as BrightScriptComponent;
+
+            manager.setDeprecatedData(component, manager.getHeading(1), manager.getHeading(2));
 
             if (/this object is created with no parameters/.exec(manager.html)) {
                 component.constructors.push({
@@ -321,6 +356,8 @@ class Runner {
                     availableSince: manager.getAvailableSince(manager.getHeading(1), x => x.type === 'heading')
                 } as RokuInterface;
 
+                manager.setDeprecatedData(iface, manager.getHeading(1), manager.getHeading(2));
+
                 //if there is a custom handler for this doc, call it
                 if (this[name]) {
                     console.log(`calling custom handler for ${name}`);
@@ -354,6 +391,8 @@ class Runner {
                     description: manager.getMarkdown(manager.getHeading(1), x => x.type === 'heading'),
                     availableSince: manager.getAvailableSince(manager.getHeading(1), x => x.type === 'heading')
                 } as RokuEvent;
+
+                manager.setDeprecatedData(evt, manager.getHeading(1), manager.getHeading(2));
 
                 //if there is a custom handler for this doc, call it
                 if (this[name]) {
@@ -572,6 +611,8 @@ class Runner {
             const nextMethodHeader = methodHeaders[i + 1];
             const method = this.getMethod(methodHeader.text);
             if (method) {
+                manager.setDeprecatedData(method, methodHeader, nextMethodHeader);
+
                 method.description = manager.getNextToken<marked.Tokens.Paragraph>(
                     manager.find(x => !!/description/i.exec(x?.text), methodHeader, nextMethodHeader)
                 )?.text;
@@ -706,6 +747,21 @@ function repairMarkdownLinks(text: string) {
     return text;
 }
 
+/**
+ * Replacer function for JSON.Stringify to sort keys in objects
+ * Note - this ignores the top level properties
+ * from: https://gist.github.com/davidfurlong/463a83a33b70a3b6618e97ec9679e490
+ */
+function objectKeySorter(key, value) {
+    return (value instanceof Object && !(value instanceof Array)) && !!key
+        ? Object.keys(value)
+            .sort()
+            .reduce((sorted, key) => {
+                sorted[key] = value[key];
+                return sorted;
+            }, {})
+        : value;
+}
 
 /**
  * A class to help manage the parsed markdown tokens
@@ -883,6 +939,24 @@ class TokenManager {
     }
 
     /**
+    * Find any `is deprecated` text between the specified items
+    */
+    public getDeprecatedDescription(startToken: Token, endToken: Token) {
+        const deprecatedDescription = this.find<marked.Tokens.Text>(x => !!/is\s*deprecated/i.exec(x?.text), startToken, endToken)?.text;
+        return deprecatedDescription;
+    }
+
+    /**
+    * Sets `deprecatedDescription` and `isDeprecated` on passed in entity if `deprecated` is mentioned between the two tokens
+    */
+    public setDeprecatedData(entity: PossiblyDeprecated, startToken: Token, endToken: Token) {
+        entity.deprecatedDescription = this.getDeprecatedDescription(startToken, endToken);
+        if (entity.deprecatedDescription) {
+            entity.isDeprecated = true;
+        }
+    }
+
+    /**
      * Search for `Extends [SomeComponentName](some_url)` in the top-level description
      */
     public getExtendsRef() {
@@ -912,7 +986,12 @@ interface TableEnhanced extends marked.Tokens.Table {
     };
 }
 
-interface BrightScriptComponent {
+interface PossiblyDeprecated {
+    isDeprecated?: boolean;
+    deprecatedDescription?: string;
+}
+
+interface BrightScriptComponent extends PossiblyDeprecated {
     name: string;
     url: string;
     availableSince: string;
@@ -934,7 +1013,7 @@ interface Implementer extends Reference {
     description: string;
 }
 
-interface RokuInterface {
+interface RokuInterface extends PossiblyDeprecated {
     availableSince: string;
     name: string;
     url: string;
@@ -947,7 +1026,7 @@ interface RokuInterface {
     implementers: Implementer[];
 }
 
-interface RokuEvent {
+interface RokuEvent extends PossiblyDeprecated {
     availableSince: string;
     name: string;
     url: string;
@@ -986,7 +1065,7 @@ interface SceneGraphNodeField {
     description: string;
 }
 
-interface Func extends Signature {
+interface Func extends Signature, PossiblyDeprecated {
     name: string;
     description: string;
 }

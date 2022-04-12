@@ -309,3 +309,34 @@ export function expectCompletionsExcludes(completions: CompletionItem[], expecte
         }
     }
 }
+
+export function expectThrows(callback: () => any, expectedMessage = undefined, failedTestMessage = 'Expected to throw but did not') {
+    let wasExceptionThrown = false;
+    try {
+        callback();
+    } catch (e) {
+        wasExceptionThrown = true;
+        if (expectedMessage) {
+            expect((e as any).message).to.eql(expectedMessage);
+        }
+    }
+    if (wasExceptionThrown === false) {
+        throw new Error(failedTestMessage);
+    }
+}
+
+export function objectToMap<T>(obj: Record<string, T>) {
+    const result = new Map<string, T>();
+    for (let key in obj) {
+        result.set(key, obj[key]);
+    }
+    return result;
+}
+
+export function mapToObject<T>(map: Map<any, T>) {
+    const result = {} as Record<string, T>;
+    for (let [key, value] of map) {
+        result[key] = value;
+    }
+    return result;
+}

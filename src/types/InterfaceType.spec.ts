@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { assert } from 'sinon';
+import { objectToMap } from '../testHelpers.spec';
 import type { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 import { IntegerType } from './IntegerType';
@@ -185,9 +186,7 @@ describe('InterfaceType', () => {
 
 function iface(members: Record<string, BscType>) {
     return new InterfaceType(
-        new Map(
-            Object.entries(members)
-        )
+        objectToMap(members)
     );
 }
 
