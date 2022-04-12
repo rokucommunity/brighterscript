@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.47.3](https://github.com/rokucommunity/brighterscript/compare/v0.47.2...v0.47.3) - 2022-04-08
+### Fixed
+ - accuracy issues when parsing the manifest ([#565](https://github.com/rokucommunity/brighterscript/pull/565))
+
+
+
+## [0.47.2](https://github.com/rokucommunity/brighterscript/compare/v0.47.1...v0.47.2) - 2022-04-07
+### Fixed
+ - enum transpile bug for binary expressions ([#559](https://github.com/rokucommunity/brighterscript/pull/559))
+ - add missing `require` entry to `bsconfig.schema.json` ([#560](https://github.com/rokucommunity/brighterscript/pull/560))
+
+
+
 ## [0.47.1](https://github.com/rokucommunity/brighterscript/compare/v0.47.0...v0.47.1) - 2022-04-05
 ### Changed
  - disable strict cli args to empower plugins ([#557](https://github.com/rokucommunity/brighterscript/pull/557))
