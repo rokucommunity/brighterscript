@@ -160,6 +160,133 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
+        describe('createObject', () => {
+            it('recognizes various scenegraph nodes', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        scene = CreateObject("roSGScreen")
+                        button = CreateObject("roSGNode", "Button")
+                        list = CreateObject("roSGNode", "MarkupList")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('recognizes valid custom components', () => {
+                program.setFile('components/comp1.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp1" extends="Scene">
+                    </component>
+                `);
+                program.setFile('components/comp2.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp2" extends="Scene">
+                    </component>
+                `);
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        comp1 = CreateObject("roSGNode", "Comp1")
+                        comp2 = CreateObject("roSGNode", "Comp2")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('catches unknown roSGNodes', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        scene = CreateObject("roSGNode", "notReal")
+                        button = CreateObject("roSGNode", "alsoNotReal")
+                        list = CreateObject("roSGNode", "definitelyNotReal")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.unknownRoSGNode('notReal'),
+                    DiagnosticMessages.unknownRoSGNode('alsoNotReal'),
+                    DiagnosticMessages.unknownRoSGNode('definitelyNotReal')
+                ]);
+            });
+
+            it('disregards non-literal args', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        sgNodeName =  "roSGNode"
+                        compNameAsVar =  "Button"
+                        button = CreateObject(sgNodeName, compNameAsVar)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('recognizes valid BrightScript components', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        timeSpan = CreateObject("roTimespan")
+                        bitmap = CreateObject("roBitmap", {width:10, height:10, AlphaEnable:false, name:"MyBitmapName"})
+                        path = CreateObject("roPath", "ext1:/vid")
+                        region = CreateObject("roRegion", bitmap, 20, 30, 100, 200)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('catches invalid BrightScript components', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        timeSpan = CreateObject("Thing")
+                        bitmap = CreateObject("OtherThing", {width:10, height:10, AlphaEnable:false, name:"MyBitmapName"})
+                        path = CreateObject("SomethingElse", "ext1:/vid")
+                        region = CreateObject("Button", bitmap, 20, 30, 100, 200)
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.unknownBrightScriptComponent('Thing'),
+                    DiagnosticMessages.unknownBrightScriptComponent('OtherThing'),
+                    DiagnosticMessages.unknownBrightScriptComponent('SomethingElse'),
+                    DiagnosticMessages.unknownBrightScriptComponent('Button')
+                ]);
+            });
+
+            it('catches wrong number of arguments', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        button = CreateObject("roSGNode", "Button", "extraArg")
+                        bitmap = CreateObject("roBitmap") ' no 2nd arg
+                        timeSpan = CreateObject("roTimespan", 1, 2, 3)
+                        region = CreateObject("roRegion", bitmap, 20, 30, 100) ' missing last arg
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.mismatchCreateObjectArgumentCount('roSGNode', [2], 3),
+                    DiagnosticMessages.mismatchCreateObjectArgumentCount('roBitmap', [2], 1),
+                    DiagnosticMessages.mismatchCreateObjectArgumentCount('roTimespan', [1], 4),
+                    DiagnosticMessages.mismatchCreateObjectArgumentCount('roRegion', [6], 5)
+                ]);
+            });
+
+            it('catches deprecated components', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        fontMetrics = CreateObject("roFontMetrics", "someFontName")
+                    end sub
+                `);
+                program.validate();
+                // only care about code and `roFontMetrics` match
+                const diagnostics = program.getDiagnostics();
+                const expectedDiag = DiagnosticMessages.deprecatedBrightScriptComponent('roFontMetrics');
+                expect(diagnostics.length).to.eql(1);
+                expect(diagnostics[0].code).to.eql(expectedDiag.code);
+                expect(diagnostics[0].message).to.contain(expectedDiag.message);
+            });
+        });
+
         it('marks the scope as validated after validation has occurred', () => {
             program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                sub main()

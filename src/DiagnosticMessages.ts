@@ -655,6 +655,29 @@ export let DiagnosticMessages = {
         message: `Scope '${scopeName}' already contains an enum with name '${enumName}'`,
         code: 1127,
         severity: DiagnosticSeverity.Error
+    }),
+    unknownRoSGNode: (nodeName: string) => ({
+        message: `Unknown roSGNode '${nodeName}'`,
+        code: 1128,
+        severity: DiagnosticSeverity.Error
+    }),
+    unknownBrightScriptComponent: (componentName: string) => ({
+        message: `Unknown BrightScript component '${componentName}'`,
+        code: 1129,
+        severity: DiagnosticSeverity.Error
+    }),
+    mismatchCreateObjectArgumentCount: (componentName: string, allowedArgCounts: number[], actualCount: number) => {
+        const argCountArray = (allowedArgCounts || [1]).sort().filter((value, index, self) => self.indexOf(value) === index);
+        return {
+            message: `For ${componentName}, expected ${argCountArray.map(c => c.toString()).join(' or ')} total arguments, but got ${actualCount}.`,
+            code: 1130,
+            severity: DiagnosticSeverity.Error
+        };
+    },
+    deprecatedBrightScriptComponent: (componentName: string, deprecatedDescription?: string) => ({
+        message: `${componentName} has been deprecated${deprecatedDescription ? ': ' + deprecatedDescription : ''}`,
+        code: 1131,
+        severity: DiagnosticSeverity.Error
     })
 };
 

@@ -1377,7 +1377,11 @@ describe('BrsFile', () => {
             `);
             expect(file.functionCalls.length).to.equal(1);
 
-            expect(file.functionCalls[0].args).to.eql([{
+            const argsMap = file.functionCalls[0].args.map(arg => {
+                // disregard arg.expression, etc.
+                return { type: arg.type, range: arg.range, text: arg.text };
+            });
+            expect(argsMap).to.eql([{
                 type: new StringType(),
                 range: util.createRange(2, 32, 2, 38),
                 text: '"name"'
