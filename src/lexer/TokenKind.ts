@@ -77,7 +77,10 @@ export enum TokenKind {
     Question = 'Question', // ?
     QuestionQuestion = 'QuestionQuestion', // ??
     BackTick = 'BackTick', // `
-
+    QuestionDot = 'QuestionDot', // ?.
+    QuestionLeftSquare = 'QuestionLeftSquare', // ?[
+    QuestionLeftParen = 'QuestionLeftParen', // ?(
+    QuestionAt = 'QuestionAt', // ?@
 
     // conditional compilation
     HashIf = 'HashIf', // #if
@@ -147,6 +150,8 @@ export enum TokenKind {
     EndClass = 'EndClass',
     Namespace = 'Namespace',
     EndNamespace = 'EndNamespace',
+    Enum = 'Enum',
+    EndEnum = 'EndEnum',
     Public = 'Public',
     Protected = 'Protected',
     Private = 'Private',
@@ -285,6 +290,9 @@ export const Keywords: Record<string, TokenKind> = {
     class: TokenKind.Class,
     endclass: TokenKind.EndClass,
     'end class': TokenKind.EndClass,
+    enum: TokenKind.Enum,
+    endenum: TokenKind.EndEnum,
+    'end enum': TokenKind.EndEnum,
     public: TokenKind.Public,
     protected: TokenKind.Protected,
     private: TokenKind.Private,

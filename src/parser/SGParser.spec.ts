@@ -23,7 +23,7 @@ describe('SGParser', () => {
     });
 
     it('Parses well formed SG component', () => {
-        const file = program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+        const file = program.setFile<XmlFile>('components/file.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ParentScene" extends="GrandparentScene">
                 <interface>

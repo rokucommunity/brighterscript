@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { Parser } from '../../Parser';
-import { TokenKind } from '../../../lexer';
+import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { Program } from '../../../Program';
@@ -139,12 +139,12 @@ describe('parser print statements', () => {
                 print ""
             `, `
                 paramArr = [
-                    "This",
-                    "is",
-                    true,
-                    "and",
-                    "this",
-                    "is",
+                    "This"
+                    "is"
+                    true
+                    "and"
+                    "this"
+                    "is"
                     1
                 ]
                 print "This is one line of stuff:";

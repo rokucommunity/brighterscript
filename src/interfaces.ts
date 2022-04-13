@@ -7,11 +7,13 @@ import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program, SourceObj, TranspileObj } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { Expression, FunctionStatement } from './parser';
+import type { FunctionStatement } from './parser/Statement';
+import type { Expression } from './parser/Expression';
 import type { TranspileState } from './parser/TranspileState';
-import type { SourceNode } from 'source-map';
+import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
+import type { Token } from './lexer/Token';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -78,7 +80,9 @@ export interface FunctionCall {
 export interface CallableArg {
     text: string;
     type: BscType;
+    typeToken: Token;
     range: Range;
+    expression: Expression;
 }
 
 export interface CallableParam {
@@ -203,10 +207,22 @@ export interface CompilerPlugin {
     beforeScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
+    onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
     afterScopeValidate?: ValidateHandler;
     //file events
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: BscFile) => void;
+    /**
+     * Called before each file is validated
+     */
+    beforeFileValidate?: PluginHandler<BeforeFileValidateEvent>;
+    /**
+     * Called during the file validation process. If your plugin contributes file validations, this is a good place to contribute them.
+     */
+    onFileValidate?: PluginHandler<OnFileValidateEvent>;
+    /**
+     * Called after each file is validated
+     */
     afterFileValidate?: (file: BscFile) => void;
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
@@ -224,17 +240,32 @@ export interface OnGetCodeActionsEvent<TFile extends BscFile = BscFile> {
     codeActions: CodeAction[];
 }
 
-export interface OnGetSemanticTokensEvent {
+export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
     program: Program;
-    file: BscFile;
+    file: T;
     scopes: Scope[];
     semanticTokens: SemanticToken[];
 }
 
-export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty'>;
+export interface BeforeFileValidateEvent<T extends BscFile = BscFile> {
+    program: Program;
+    file: T;
+}
 
-export interface BeforeFileTranspileEvent {
-    file: BscFile;
+export interface OnFileValidateEvent<T extends BscFile = BscFile> {
+    program: Program;
+    file: T;
+}
+
+export interface OnScopeValidateEvent {
+    program: Program;
+    scope: Scope;
+}
+
+export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty' | 'overrideTranspileResult'>;
+
+export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
+    file: TFile;
     outputPath: string;
     /**
      * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
@@ -244,9 +275,21 @@ export interface BeforeFileTranspileEvent {
     editor: Editor;
 }
 
-export interface AfterFileTranspileEvent {
-    file: BscFile;
+export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
+    file: TFile;
     outputPath: string;
+    /**
+     * The resulting transpiled file contents
+     */
+    code: string;
+    /**
+     * The sourceMaps for the generated code (if emitting source maps is enabled)
+     */
+    map?: SourceMapGenerator;
+    /**
+     * The generated type definition file contents (if emitting type definitions are enabled)
+     */
+    typedef?: string;
     /**
      * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
      * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
@@ -279,3 +322,8 @@ export interface ExpressionInfo {
 }
 
 export type DiagnosticCode = number | string;
+
+export interface FileLink<T> {
+    item: T;
+    file: BrsFile;
+}

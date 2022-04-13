@@ -305,9 +305,27 @@ function mapAttributes(attributes: AttributeCstNode[]): SGAttribute[] {
     return attributes?.map(({ children }) => {
         const key = children.Name[0];
         const value = children.STRING?.[0];
+
+        let openQuote: SGToken;
+        let closeQuote: SGToken;
+        //capture the leading and trailing quote tokens
+        const match = /^(["']).*?(["'])$/.exec(value?.image);
+        if (match) {
+            const range = rangeFromTokenValue(value);
+            openQuote = {
+                text: match[1],
+                range: util.createRange(range.start.line, range.start.character, range.start.line, range.start.character + 1)
+            };
+            closeQuote = {
+                text: match[1],
+                range: util.createRange(range.end.line, range.end.character - 1, range.end.line, range.end.character)
+            };
+        }
         return {
             key: mapToken(key),
+            openQuote: openQuote,
             value: mapToken(value, true),
+            closeQuote: closeQuote,
             range: rangeFromTokens(key, value)
         };
     }) || [];

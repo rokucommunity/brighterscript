@@ -1,7 +1,8 @@
-import { standardizePath as s } from './util';
+import util, { standardizePath as s } from './util';
 import { Program } from './Program';
 import { expectDiagnostics, expectZeroDiagnostics } from './testHelpers.spec';
 import { DiagnosticMessages } from './DiagnosticMessages';
+import { expect } from 'chai';
 
 let tmpPath = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tmpPath}/rootDir`;
@@ -21,7 +22,7 @@ describe('globalCallables', () => {
 
     describe('Roku_ads', () => {
         it('exists', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     adIface = Roku_Ads()
                 end sub
@@ -32,7 +33,7 @@ describe('globalCallables', () => {
     });
 
     it('isOptional defaults to false', () => {
-        program.addOrReplaceFile('source/main.brs', `
+        program.setFile('source/main.brs', `
             sub main()
                 thing = createObject()
             end sub
@@ -43,9 +44,36 @@ describe('globalCallables', () => {
         ]);
     });
 
+    it('handles optional params properly', () => {
+        program.setFile('source/main.brs', `
+            sub main()
+                print Mid("value1", 1) 'third param is optional
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('hover shows correct for optional params', async () => {
+        const file = program.setFile('source/main.brs', `
+            sub main()
+                print Mid("value1", 1)
+            end sub
+        `);
+        program.validate();
+        const hover = await program.getHover(file.pathAbsolute, util.createPosition(2, 25));
+        expect(
+            hover.contents.toString().replace('\r\n', '\n')
+        ).to.eql([
+            '```brightscript',
+            'function Mid(s as string, p as integer, n? as integer) as string',
+            '```'
+        ].join('\n'));
+    });
+
     describe('bslCore', () => {
         it('exists', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 Library "v30/bslCore.brs"
 
                 sub main()
@@ -61,7 +89,7 @@ describe('globalCallables', () => {
 
     describe('val', () => {
         it('allows single parameter', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print val("1001")
                 end sub
@@ -71,7 +99,7 @@ describe('globalCallables', () => {
         });
 
         it('allows both parameters', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print val("1001", 10)
                 end sub
@@ -83,7 +111,7 @@ describe('globalCallables', () => {
 
     describe('StrI', () => {
         it('allows single parameter', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print StrI(2)
                 end sub
@@ -93,7 +121,7 @@ describe('globalCallables', () => {
         });
 
         it('allows both parameters', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print StrI(2, 10)
                 end sub
@@ -105,7 +133,7 @@ describe('globalCallables', () => {
 
     describe('parseJson', () => {
         it('allows single parameter', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print ParseJson("{}")
                 end sub
@@ -115,7 +143,7 @@ describe('globalCallables', () => {
         });
 
         it('allows 2 parameters', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                 print ParseJson("{}", "i")
                 end sub

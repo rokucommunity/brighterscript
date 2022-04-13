@@ -4,19 +4,29 @@ import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
-import type { FileLink, Program } from './Program';
+import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink } from './interfaces';
+import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
-import { ParseMode } from './parser';
+import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement } from './parser/Statement';
+import type { NewExpression } from './parser/Expression';
+import { ParseMode } from './parser/Parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
+import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isLiteralExpression, isXmlFile } from './astUtils/reflection';
+import { nodes, components } from './roku-types';
+import type { BRSComponentData } from './roku-types';
+import type { Token } from './lexer/Token';
+
+/**
+ * The lower-case names of all platform-included scenegraph nodes
+ */
+const platformNodeNames = new Set(Object.values(nodes).map(x => x.name.toLowerCase()));
+const platformComponentNames = new Set(Object.values(components).map(x => x.name.toLowerCase()));
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -105,6 +115,26 @@ export class Scope {
                         if (lowerClassName) {
                             map.set(lowerClassName, { item: cls, file: file });
                         }
+                    }
+                }
+            });
+            return map;
+        });
+    }
+
+    /**
+     * A dictionary of all enums in this scope. This includes namespaced enums always with their full name.
+     * The key is stored in lower case
+     */
+    public getEnumMap(): Map<string, FileLink<EnumStatement>> {
+        return this.cache.getOrAdd('enumMap', () => {
+            const map = new Map<string, FileLink<EnumStatement>>();
+            this.enumerateBrsFiles((file) => {
+                for (let enumStmt of file.parser.references.enumStatements) {
+                    const lowerEnumName = enumStmt.fullName.toLowerCase();
+                    //only track enums with a defined name (i.e. exclude nameless malformed enums)
+                    if (lowerEnumName) {
+                        map.set(lowerEnumName, { item: enumStmt, file: file });
                     }
                 }
             });
@@ -359,7 +389,8 @@ export class Scope {
                             namespaces: new Map<string, NamespaceContainer>(),
                             classStatements: {},
                             functionStatements: {},
-                            statements: []
+                            statements: [],
+                            enumStatements: new Map<string, EnumStatement>()
                         });
                     }
                 }
@@ -370,6 +401,8 @@ export class Scope {
                         ns.classStatements[statement.name.text.toLowerCase()] = statement;
                     } else if (isFunctionStatement(statement) && statement.name) {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
+                    } else if (isEnumStatement(statement) && statement.fullName) {
+                        ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
                     }
                 }
             }
@@ -440,6 +473,10 @@ export class Scope {
 
             this.program.plugins.emit('beforeScopeValidate', this, files, callableContainerMap);
 
+            this.program.plugins.emit('onScopeValidate', {
+                program: this.program,
+                scope: this
+            });
             this._validate(callableContainerMap);
 
             this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
@@ -466,7 +503,76 @@ export class Scope {
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.diagnosticDetectInvalidFunctionExpressionTypes(file);
+            this.validateCreateObjectCalls(file);
         });
+    }
+
+    /**
+     * Validate every function call to `CreateObject`.
+     * Ideally we would create better type checking/handling for this, but in the mean time, we know exactly
+     * what these calls are supposed to look like, and this is a very common thing for brs devs to do, so just
+     * do this manually for now.
+     */
+    protected validateCreateObjectCalls(file: BrsFile) {
+        for (const call of file.functionCalls) {
+            if (call.name?.toLowerCase() === 'createobject' && isLiteralExpression(call?.args[0]?.expression)) {
+                const firstParamToken = (call?.args[0]?.expression as any)?.token;
+                const firstParamStringValue = firstParamToken?.text?.replace(/"/g, '');
+                //if this is a `createObject('roSGNode'` call, only support known sg node types
+                if (firstParamStringValue?.toLowerCase() === 'rosgnode' && isLiteralExpression(call?.args[1]?.expression)) {
+                    const componentName: Token = (call?.args[1]?.expression as any)?.token;
+                    //add diagnostic for unknown components
+                    const unquotedComponentName = componentName?.text?.replace(/"/g, '');
+                    if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !this.program.getComponent(unquotedComponentName)) {
+                        this.diagnostics.push({
+                            file: file as BscFile,
+                            ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
+                            range: componentName.range
+                        });
+                    } else if (call?.args.length !== 2) {
+                        // roSgNode should only ever have 2 args in `createObject`
+                        this.diagnostics.push({
+                            file: file as BscFile,
+                            ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, [2], call?.args.length),
+                            range: call.range
+                        });
+                    }
+                } else if (!platformComponentNames.has(firstParamStringValue.toLowerCase())) {
+                    this.diagnostics.push({
+                        file: file as BscFile,
+                        ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
+                        range: firstParamToken.range
+                    });
+                } else {
+                    // This is valid brightscript component
+                    // Test for invalid arg counts
+                    const brightScriptComponent: BRSComponentData = components[firstParamStringValue.toLowerCase()];
+                    // Valid arg counts for createObject are 1+ number of args for constructor
+                    let validArgCounts = brightScriptComponent.constructors.map(cnstr => cnstr.params.length + 1);
+                    if (validArgCounts.length === 0) {
+                        // no constructors for this component, so createObject only takes 1 arg
+                        validArgCounts = [1];
+                    }
+                    if (!validArgCounts.includes(call?.args.length)) {
+                        // Incorrect number of arguments included in `createObject()`
+                        this.diagnostics.push({
+                            file: file as BscFile,
+                            ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, validArgCounts, call?.args.length),
+                            range: call.range
+                        });
+                    }
+
+                    // Test for deprecation
+                    if (brightScriptComponent.isDeprecated) {
+                        this.diagnostics.push({
+                            file: file as BscFile,
+                            ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),
+                            range: call.range
+                        });
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -1010,6 +1116,7 @@ interface NamespaceContainer {
     statements: Statement[];
     classStatements: Record<string, ClassStatement>;
     functionStatements: Record<string, FunctionStatement>;
+    enumStatements: Map<string, EnumStatement>;
     namespaces: Map<string, NamespaceContainer>;
 }
 

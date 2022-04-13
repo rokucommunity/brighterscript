@@ -99,9 +99,9 @@ export function getDiagnosticLine(diagnostic: BsDiagnostic, diagnosticLine: stri
 
     //only print the line information if we have some
     if (diagnostic.range && diagnosticLine) {
-        let lineNumberText = chalk.bgWhite(' ' + chalk.black((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
-        let blankLineNumberText = chalk.bgWhite(' ' + chalk.white('_') + ' ') + ' ';
-        let squigglyText = getDiagnosticSquigglyText(diagnostic, diagnosticLine);
+        const lineNumberText = chalk.bgWhite(' ' + chalk.black((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
+        const blankLineNumberText = chalk.bgWhite(' ' + chalk.white('_'.repeat((diagnostic.range.start.line + 1).toString().length)) + ' ') + ' ';
+        const squigglyText = getDiagnosticSquigglyText(diagnostic, diagnosticLine);
         result +=
             lineNumberText + diagnosticLine + '\n' +
             blankLineNumberText + colorFunction(squigglyText);

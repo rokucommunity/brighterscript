@@ -114,18 +114,16 @@ describe('LanguageServer', () => {
             ${additionalXmlContents}
             <script type="text/brightscript" uri="${name}.brs" />
         </component>`;
-        program.addOrReplaceFile(filePath, contents);
+        program.setFile(filePath, contents);
     }
 
     function addScriptFile(name: string, contents: string, extension = 'brs') {
         const filePath = s`components/${name}.${extension}`;
-        program.addOrReplaceFile(filePath, contents);
-        for (const key in program.files) {
-            if (key.includes(filePath)) {
-                const document = TextDocument.create(util.pathToUri(key), 'brightscript', 1, contents);
-                svr.documents._documents[document.uri] = document;
-                return document;
-            }
+        const file = program.setFile(filePath, contents);
+        if (file) {
+            const document = TextDocument.create(util.pathToUri(file.pathAbsolute), 'brightscript', 1, contents);
+            svr.documents._documents[document.uri] = document;
+            return document;
         }
     }
 
@@ -273,7 +271,7 @@ describe('LanguageServer', () => {
 
     describe('handleFileChanges', () => {
         it('only adds files that match the files array', async () => {
-            let addOrReplaceFileStub = sinon.stub().returns(Promise.resolve());
+            let setFileStub = sinon.stub().returns(Promise.resolve());
             const workspace = {
                 builder: {
                     options: {
@@ -284,7 +282,7 @@ describe('LanguageServer', () => {
                     getFileContents: sinon.stub().callsFake(() => Promise.resolve('')) as any,
                     rootDir: rootDir,
                     program: {
-                        addOrReplaceFile: <any>addOrReplaceFileStub
+                        setFile: <any>setFileStub
                     }
                 }
             } as Workspace;
@@ -297,20 +295,20 @@ describe('LanguageServer', () => {
                 pathAbsolute: mainPath
             }]);
 
-            expect(addOrReplaceFileStub.getCalls()[0]?.args[0]).to.eql({
+            expect(setFileStub.getCalls()[0]?.args[0]).to.eql({
                 src: mainPath,
                 dest: s`source/main.brs`
             });
 
             let libPath = s`${rootDir}/components/lib.brs`;
 
-            expect(addOrReplaceFileStub.callCount).to.equal(1);
+            expect(setFileStub.callCount).to.equal(1);
             await server.handleFileChanges(workspace, [{
                 type: FileChangeType.Created,
                 pathAbsolute: libPath
             }]);
             //the function should have ignored the lib file, so no additional files were added
-            expect(addOrReplaceFileStub.callCount).to.equal(1);
+            expect(setFileStub.callCount).to.equal(1);
         });
     });
 
