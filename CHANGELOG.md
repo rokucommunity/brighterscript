@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.48.1](https://github.com/rokucommunity/brighterscript/compare/v0.48.0...v0.48.1) - 2022-04-14
+### Fixed
+ - prevent duplicate `CreateObject` validations showing one for each affected scope ([#568](https://github.com/rokucommunity/brighterscript/pull/568))
+ - prevent `CreateObject` diagnostics for component library components ([#568](https://github.com/rokucommunity/brighterscript/pull/568))
+
+
+
 ## [0.48.0](https://github.com/rokucommunity/brighterscript/compare/v0.47.3...v0.48.0) - 2022-04-13
 ### Added
  - language support for native BrightScript optional chaining ([#546](https://github.com/rokucommunity/brighterscript/pull/546))
