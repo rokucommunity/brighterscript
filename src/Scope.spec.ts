@@ -210,6 +210,44 @@ describe('Scope', () => {
                 ]);
             });
 
+            it('only adds a single diagnostic when the file is used in multiple scopes', () => {
+                program.setFile('components/Comp1.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp1" extends="Scene">
+                        <script type="text/brightscript" uri="lib.brs" />
+                    </component>
+                `);
+                program.setFile('components/Comp2.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp2" extends="Scene">
+                        <script type="text/brightscript" uri="lib.brs" />
+                    </component>
+                `);
+                program.setFile('components/lib.brs', `
+                    sub init()
+
+                        'unknown BrightScript component
+                        createObject("roDateTime_FAKE")
+
+                        'Wrong number of params
+                        createObject("roDateTime", "this param should not be here")
+
+                        'unknown roSGNode
+                        createObject("roSGNode", "Rectangle_FAKE")
+
+                        'deprecated
+                        fontMetrics = CreateObject("roFontMetrics", "someFontName")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.unknownBrightScriptComponent('roDateTime_FAKE'),
+                    DiagnosticMessages.mismatchCreateObjectArgumentCount('roDateTime', [1, 1], 2),
+                    DiagnosticMessages.unknownRoSGNode('Rectangle_FAKE'),
+                    DiagnosticMessages.deprecatedBrightScriptComponent('roFontMetrics').code
+                ]);
+            });
+
             it('disregards non-literal args', () => {
                 program.setFile(`source/file.brs`, `
                     sub main()

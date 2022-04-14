@@ -1,6 +1,7 @@
+import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
-import { isBrsFile, isLiteralExpression } from '../../astUtils/reflection';
+import { isBrsFile, isLiteralExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -18,34 +19,57 @@ import type { Token } from '../../lexer/Token';
 const platformNodeNames = new Set(Object.values(nodes).map(x => x.name.toLowerCase()));
 const platformComponentNames = new Set(Object.values(components).map(x => x.name.toLowerCase()));
 
+/**
+ * A validator that handles all scope validations for a program validation cycle.
+ * You should create ONE of these to handle all scope events between beforeProgramValidate and afterProgramValidate,
+ * and call reset() before using it again in the next cycle
+ */
 export class ScopeValidator {
-    constructor(
-        private event: OnScopeValidateEvent
-    ) {
+
+    private events: OnScopeValidateEvent[] = [];
+
+    public processEvent(event: OnScopeValidateEvent) {
+        this.events.push(event);
+        this.validateEnumUsage(event);
+        this.detectDuplicateEnums(event);
+        this.validateCreateObjectCalls(event);
     }
 
-    public process() {
-        this.validateEnumUsage();
-        this.detectDuplicateEnums();
-        this.validateCreateObjectCalls();
+    public reset() {
+        this.cache.clear();
+        this.events = [];
     }
+
+    /**
+     * Adds a diagnostic to the first scope for this key. Prevents duplicate diagnostics
+     * for diagnostics where scope isn't important. (i.e. CreateObject validations)
+     */
+    private addDiagnosticOnce(event: OnScopeValidateEvent, diagnostic: BsDiagnostic) {
+        const key = `${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`;
+        if (!this.cache.has(key)) {
+            this.cache.set(key, true);
+            event.scope.addDiagnostics([diagnostic]);
+        }
+    }
+
+    private cache = new Map<string, boolean>();
 
     /**
      * Find all expressions and validate the ones that look like enums
      */
-    public validateEnumUsage() {
+    public validateEnumUsage(event: OnScopeValidateEvent) {
         const diagnostics = [] as BsDiagnostic[];
 
         const membersByEnum = new Cache<string, Map<string, string>>();
         //if there are any enums defined in this scope
-        const enumLookup = this.event.scope.getEnumMap();
+        const enumLookup = event.scope.getEnumMap();
 
         //skip enum validation if there are no enums defined in this scope
         if (enumLookup.size === 0) {
             return;
         }
 
-        this.event.scope.enumerateOwnFiles((file) => {
+        event.scope.enumerateOwnFiles((file) => {
             //skip non-brs files
             if (!isBrsFile(file)) {
                 return;
@@ -83,13 +107,13 @@ export class ScopeValidator {
                 }
             }
         });
-        this.event.scope.addDiagnostics(diagnostics);
+        event.scope.addDiagnostics(diagnostics);
     }
 
-    private detectDuplicateEnums() {
+    private detectDuplicateEnums(event: OnScopeValidateEvent) {
         const diagnostics: BsDiagnostic[] = [];
         const enumLocationsByName = new Cache<string, Array<{ file: BrsFile; statement: EnumStatement }>>();
-        this.event.scope.enumerateBrsFiles((file) => {
+        event.scope.enumerateBrsFiles((file) => {
             for (const enumStatement of file.parser.references.enumStatements) {
                 const fullName = enumStatement.fullName;
                 const nameLower = fullName?.toLowerCase();
@@ -110,7 +134,7 @@ export class ScopeValidator {
             const fullName = primaryEnum.statement.fullName;
             for (const duplicateEnumInfo of enumLocations) {
                 diagnostics.push({
-                    ...DiagnosticMessages.duplicateEnumDeclaration(this.event.scope.name, fullName),
+                    ...DiagnosticMessages.duplicateEnumDeclaration(event.scope.name, fullName),
                     file: duplicateEnumInfo.file,
                     range: duplicateEnumInfo.statement.tokens.name.range,
                     relatedInformation: [{
@@ -123,7 +147,7 @@ export class ScopeValidator {
                 });
             }
         }
-        this.event.scope.addDiagnostics(diagnostics);
+        event.scope.addDiagnostics(diagnostics);
     }
 
     /**
@@ -132,9 +156,10 @@ export class ScopeValidator {
      * what these calls are supposed to look like, and this is a very common thing for brs devs to do, so just
      * do this manually for now.
      */
-    protected validateCreateObjectCalls() {
-        const diagnostics = [];
-        this.event.scope.enumerateBrsFiles((file) => {
+    protected validateCreateObjectCalls(event: OnScopeValidateEvent) {
+        const diagnostics: BsDiagnostic[] = [];
+
+        event.scope.enumerateBrsFiles((file) => {
             for (const call of file.functionCalls) {
                 //skip non CreateObject function calls
                 if (call.name?.toLowerCase() !== 'createobject' || !isLiteralExpression(call?.args[0]?.expression)) {
@@ -147,22 +172,22 @@ export class ScopeValidator {
                     const componentName: Token = (call?.args[1]?.expression as any)?.token;
                     //add diagnostic for unknown components
                     const unquotedComponentName = componentName?.text?.replace(/"/g, '');
-                    if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !this.event.program.getComponent(unquotedComponentName)) {
-                        diagnostics.push({
+                    if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !event.program.getComponent(unquotedComponentName)) {
+                        this.addDiagnosticOnce(event, {
                             file: file as BscFile,
                             ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
                             range: componentName.range
                         });
                     } else if (call?.args.length !== 2) {
                         // roSgNode should only ever have 2 args in `createObject`
-                        diagnostics.push({
+                        this.addDiagnosticOnce(event, {
                             file: file as BscFile,
                             ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, [2], call?.args.length),
                             range: call.range
                         });
                     }
                 } else if (!platformComponentNames.has(firstParamStringValue.toLowerCase())) {
-                    diagnostics.push({
+                    this.addDiagnosticOnce(event, {
                         file: file as BscFile,
                         ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
                         range: firstParamToken.range
@@ -179,7 +204,7 @@ export class ScopeValidator {
                     }
                     if (!validArgCounts.includes(call?.args.length)) {
                         // Incorrect number of arguments included in `createObject()`
-                        diagnostics.push({
+                        this.addDiagnosticOnce(event, {
                             file: file as BscFile,
                             ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, validArgCounts, call?.args.length),
                             range: call.range
@@ -188,7 +213,7 @@ export class ScopeValidator {
 
                     // Test for deprecation
                     if (brightScriptComponent.isDeprecated) {
-                        diagnostics.push({
+                        this.addDiagnosticOnce(event, {
                             file: file as BscFile,
                             ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),
                             range: call.range
@@ -197,6 +222,6 @@ export class ScopeValidator {
                 }
             }
         });
-        this.event.scope.addDiagnostics(diagnostics);
+        event.scope.addDiagnostics(diagnostics);
     }
 }
