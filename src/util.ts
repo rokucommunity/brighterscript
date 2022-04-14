@@ -1323,6 +1323,13 @@ export class Util {
             return undefined;
         }
     }
+
+    /**
+     * Converts a range to a string in the format 1:2-3:4
+     */
+    public rangeToString(range: Range) {
+        return `${range?.start?.line}:${range?.start?.character}-${range?.end?.line}:${range?.end?.character}`;
+    }
 }
 
 /**
