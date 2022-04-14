@@ -1,7 +1,7 @@
 import { isBrsFile } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
 import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent } from '../interfaces';
-import { Program } from '../Program';
+import type { Program } from '../Program';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
 import { BrsFilePreTranspileProcessor } from './transpile/BrsFilePreTranspileProcessor';

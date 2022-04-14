@@ -1,7 +1,6 @@
-import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
-import { isBrsFile, isLiteralExpression, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isLiteralExpression } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
