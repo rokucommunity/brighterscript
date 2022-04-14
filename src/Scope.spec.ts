@@ -248,6 +248,18 @@ describe('Scope', () => {
                 ]);
             });
 
+            it('disregards component library components', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        scene = CreateObject("roSGNode", "Complib1:MainScene")
+                        button = CreateObject("roSGNode", "buttonlib:Button")
+                        list = CreateObject("roSGNode", "listlib:List")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
             it('disregards non-literal args', () => {
                 program.setFile(`source/file.brs`, `
                     sub main()

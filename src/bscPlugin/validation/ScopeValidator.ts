@@ -170,6 +170,10 @@ export class ScopeValidator {
                 //if this is a `createObject('roSGNode'` call, only support known sg node types
                 if (firstParamStringValue?.toLowerCase() === 'rosgnode' && isLiteralExpression(call?.args[1]?.expression)) {
                     const componentName: Token = (call?.args[1]?.expression as any)?.token;
+                    //don't validate any components with a colon in their name (probably component libraries, but regular components can have them too).
+                    if (componentName?.text?.includes(':')) {
+                        continue;
+                    }
                     //add diagnostic for unknown components
                     const unquotedComponentName = componentName?.text?.replace(/"/g, '');
                     if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !event.program.getComponent(unquotedComponentName)) {
