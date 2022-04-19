@@ -5,9 +5,10 @@ import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
-import type { BscFile, OnGetCodeActionsEvent } from '../../interfaces';
+import type { BscFile, BsDiagnostic, OnGetCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
+import type { XmlScope } from '../../XmlScope';
 
 export class CodeActionsProcessor {
     public constructor(
@@ -19,9 +20,9 @@ export class CodeActionsProcessor {
     public process() {
         for (const diagnostic of this.event.diagnostics) {
             if (diagnostic.code === DiagnosticCodeMap.callToUnknownFunction) {
-                this.suggestFunctionImports(diagnostic as any);
+                this.handleCallToUnknownFunction(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
-                this.suggestClassImports(diagnostic as any);
+                this.handleClassCouldNotBeFound(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
                 this.addMissingExtends(diagnostic as any);
             }
@@ -44,7 +45,7 @@ export class CodeActionsProcessor {
         //find the position of the first import statement, or the top of the file if there is none
         const insertPosition = importStatements[importStatements.length - 1]?.importToken.range?.start ?? util.createPosition(0, 0);
 
-        //find all files that reference this function
+        //suggest importing each file that references this item
         for (const file of files) {
             const pkgPath = util.getRokuPkgPath(file.pkgPath);
             this.event.codeActions.push(
@@ -64,30 +65,71 @@ export class CodeActionsProcessor {
         }
     }
 
-    private suggestFunctionImports(diagnostic: DiagnosticMessageType<'callToUnknownFunction'>) {
-        //skip if not a BrighterScript file
-        if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
+    /**
+     * Suggest a `<script>` reference for each of the specified files, for each of the scopes referencing the diagnostic's file.
+     * @param diagnostic
+     * @param key
+     * @param suggestedFiles a list of files suggested for import
+     */
+    private suggestXmlScript(diagnostic: BsDiagnostic, key: string, suggestedFiles: BscFile[]) {
+        //skip if we already have this suggestion
+        if (this.suggestedImports.has(key)) {
             return;
         }
-        const lowerFunctionName = diagnostic.data.functionName.toLowerCase();
-        this.suggestImports(
-            diagnostic,
-            lowerFunctionName,
-            this.event.file.program.findFilesForFunction(lowerFunctionName)
-        );
+        this.suggestedImports.add(key);
+
+        //find all of the scopes that reference this diagnostic's file
+        for (const scope of this.event.scopes as XmlScope[]) {
+            //skip the global scope
+            if (scope.name === 'global') {
+                continue;
+            }
+            for (const file of suggestedFiles) {
+                const pkgPath = util.getRokuPkgPath(file.pkgPath);
+                const slashOpenToken = scope.xmlFile.parser.ast.component?.ast.SLASH_OPEN?.[0];
+                this.event.codeActions.push(
+                    codeActionUtil.createCodeAction({
+                        title: `Add xml script import "${pkgPath}" into component "${scope.xmlFile.componentName.text ?? scope.name}"`,
+                        // diagnostics: [diagnostic]
+                        changes: [{
+                            filePath: scope.xmlFile.pathAbsolute,
+                            newText: `  <script type="text/brightscript" uri="${pkgPath}" />\n`,
+                            type: 'insert',
+                            position: util.createPosition(slashOpenToken.startLine - 1, slashOpenToken.startColumn - 1)
+                        }]
+                    })
+                );
+            }
+        }
     }
 
-    private suggestClassImports(diagnostic: DiagnosticMessageType<'classCouldNotBeFound'>) {
-        //skip if not a BrighterScript file
-        if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
-            return;
+
+    private handleCallToUnknownFunction(diagnostic: DiagnosticMessageType<'callToUnknownFunction'>) {
+
+        const lowerFunctionName = diagnostic.data.functionName.toLowerCase();
+        const filesForFunction = this.event.file.program.findFilesForFunction(lowerFunctionName);
+
+        //suggest .bs `import` statements for brighterscript file
+        if ((diagnostic.file as BrsFile).parseMode === ParseMode.BrighterScript) {
+            this.suggestImports(diagnostic, lowerFunctionName, filesForFunction);
         }
+
+        //suggest xml script tag imports
+        this.suggestXmlScript(diagnostic, lowerFunctionName, filesForFunction);
+    }
+
+    private handleClassCouldNotBeFound(diagnostic: DiagnosticMessageType<'classCouldNotBeFound'>) {
         const lowerClassName = diagnostic.data.className.toLowerCase();
-        this.suggestImports(
-            diagnostic,
-            lowerClassName,
-            this.event.file.program.findFilesForClass(lowerClassName)
-        );
+
+        const filesForClass = this.event.file.program.findFilesForClass(lowerClassName);
+
+        //suggest .bs `import` statements for brighterscript file
+        if ((diagnostic.file as BrsFile).parseMode === ParseMode.BrighterScript) {
+            this.suggestImports(diagnostic, lowerClassName, filesForClass);
+        }
+
+        //suggest xml script tag imports
+        this.suggestXmlScript(diagnostic, lowerClassName, filesForClass);
     }
 
     private addMissingExtends(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {

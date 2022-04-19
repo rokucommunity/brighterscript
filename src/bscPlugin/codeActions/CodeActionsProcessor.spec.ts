@@ -152,13 +152,16 @@ describe('CodeActionsProcessor', () => {
 
             program.validate();
 
-            //there should be no code actions since this is a brs file
-            const codeActions = program.getCodeActions(
-                file.pathAbsolute,
-                // DoSometh|ing()
-                util.createRange(2, 28, 2, 28)
-            );
-            expect(codeActions).to.be.empty;
+            //the ImportStatement code action should be missing since this is a brs file
+            expect(
+                program.getCodeActions(
+                    file.pathAbsolute,
+                    // DoSometh|ing()
+                    util.createRange(2, 28, 2, 28)
+                ).map(x => x.title).sort()
+            ).to.eql([
+                `Add xml script import "pkg:/source/lib.brs" into component "ChildScene"`
+            ]);
         });
 
         it('suggests class imports', () => {
@@ -226,6 +229,104 @@ describe('CodeActionsProcessor', () => {
                 `import "pkg:/source/Animals.bs"`
             ]);
         });
-    });
 
+        it('sugests import script tag for function from not-imported file', () => {
+            program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="child">
+                    <script uri="comp1.brs" />
+                </component>
+            `);
+            const codebehind = program.setFile('components/comp1.brs', `
+                sub init()
+                    doSomething()
+                end sub
+            `);
+            program.setFile('source/common.brs', `
+                sub doSomething()
+                end sub
+            `);
+            program.validate();
+
+            expectCodeActions(() => {
+                program.getCodeActions(
+                    codebehind.pathAbsolute,
+                    // doSo|mething()
+                    util.createRange(2, 24, 2, 24)
+                );
+            }, [{
+                title: `Add xml script import "pkg:/source/common.brs" into component "child"`,
+                changes: [{
+                    filePath: s`${rootDir}/components/comp1.xml`,
+                    newText: '  <script type="text/brightscript" uri="pkg:/source/common.brs" />\n',
+                    type: 'insert',
+                    position: util.createPosition(3, 0)
+                }]
+            }]);
+        });
+
+        it('suggests `extends=Group`', () => {
+            const file = program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1">
+                </component>
+            `);
+            expectCodeActions(() => {
+                program.getCodeActions(
+                    file.pathAbsolute,
+                    //<comp|onent name="comp1">
+                    util.createRange(1, 5, 1, 5)
+                );
+            }, [{
+                title: `Extend "Group"`,
+                isPreferred: true,
+                kind: 'quickfix',
+                changes: [{
+                    filePath: s`${rootDir}/components/comp1.xml`,
+                    newText: ' extends="Group"',
+                    type: 'insert',
+                    //<component name="comp1"|>
+                    position: util.createPosition(1, 23)
+                }]
+            }, {
+                title: `Extend "Task"`,
+                kind: 'quickfix',
+                changes: [{
+                    filePath: s`${rootDir}/components/comp1.xml`,
+                    newText: ' extends="Task"',
+                    type: 'insert',
+                    //<component name="comp1"|>
+                    position: util.createPosition(1, 23)
+                }]
+            }, {
+                title: `Extend "ContentNode"`,
+                kind: 'quickfix',
+                changes: [{
+                    filePath: s`${rootDir}/components/comp1.xml`,
+                    newText: ' extends="ContentNode"',
+                    type: 'insert',
+                    //<component name="comp1"|>
+                    position: util.createPosition(1, 23)
+                }]
+            }]);
+        });
+
+        it('adds attribute at end of component with multiple attributes`', () => {
+            const file = program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" attr2="attr3" attr3="attr3">
+                </component>
+            `);
+            const codeActions = program.getCodeActions(
+                file.pathAbsolute,
+                //<comp|onent name="comp1">
+                util.createRange(1, 5, 1, 5)
+            );
+            expect(
+                codeActions[0].edit.changes[URI.file(s`${rootDir}/components/comp1.xml`).toString()][0].range
+            ).to.eql(
+                util.createRange(1, 51, 1, 51)
+            );
+        });
+    });
 });

@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -231,9 +231,9 @@ export interface CompilerPlugin {
 }
 export type PluginHandler<T> = (event: T) => void;
 
-export interface OnGetCodeActionsEvent {
+export interface OnGetCodeActionsEvent<TFile extends BscFile = BscFile> {
     program: Program;
-    file: BscFile;
+    file: TFile;
     range: Range;
     scopes: Scope[];
     diagnostics: BsDiagnostic[];

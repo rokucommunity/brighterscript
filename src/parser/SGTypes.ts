@@ -1,3 +1,4 @@
+import type { ElementCtx } from '@xml-tools/parser';
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import { createSGAttribute } from '../astUtils/creators';
@@ -353,6 +354,7 @@ export class SGInterface extends SGTag {
 
 export class SGComponent extends SGTag {
     constructor(
+        public ast: ElementCtx,
         tag: SGToken = { text: 'component' },
         attributes?: SGAttribute[],
         content?: SGTag[],
