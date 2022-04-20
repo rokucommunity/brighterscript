@@ -4,13 +4,14 @@ import { isBrsFile, isLiteralExpression } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
-import type { DottedGetExpression } from '../../parser/Expression';
+import type { BscFile, BsDiagnostic, OnScopeValidateEvent, FunctionCall } from '../../interfaces';
+import type { DottedGetExpression, Expression } from '../../parser/Expression';
 import type { EnumStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
+import { ParseMode } from '../../parser/Parser';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -32,6 +33,7 @@ export class ScopeValidator {
         this.validateEnumUsage(event);
         this.detectDuplicateEnums(event);
         this.validateCreateObjectCalls(event);
+        this.validateNewCreateObjectExpressions(event);
     }
 
     public reset() {
@@ -161,70 +163,94 @@ export class ScopeValidator {
         event.scope.enumerateBrsFiles((file) => {
             for (const call of file.functionCalls) {
                 //skip non CreateObject function calls
-                if (call.name?.toLowerCase() !== 'createobject' || !isLiteralExpression(call?.args[0]?.expression)) {
+                if (call.name?.toLowerCase() !== 'createobject' || !isLiteralExpression(call?.args[0]?.expression) || call?.args?.length < 1) {
                     continue;
                 }
                 const firstParamToken = (call?.args[0]?.expression as any)?.token;
                 const firstParamStringValue = firstParamToken?.text?.replace(/"/g, '');
-                //if this is a `createObject('roSGNode'` call, only support known sg node types
-                if (firstParamStringValue?.toLowerCase() === 'rosgnode' && isLiteralExpression(call?.args[1]?.expression)) {
-                    const componentName: Token = (call?.args[1]?.expression as any)?.token;
-                    //don't validate any components with a colon in their name (probably component libraries, but regular components can have them too).
-                    if (componentName?.text?.includes(':')) {
-                        continue;
-                    }
-                    //add diagnostic for unknown components
-                    const unquotedComponentName = componentName?.text?.replace(/"/g, '');
-                    if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !event.program.getComponent(unquotedComponentName)) {
-                        this.addDiagnosticOnce(event, {
-                            file: file as BscFile,
-                            ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
-                            range: componentName.range
-                        });
-                    } else if (call?.args.length !== 2) {
-                        // roSgNode should only ever have 2 args in `createObject`
-                        this.addDiagnosticOnce(event, {
-                            file: file as BscFile,
-                            ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, [2], call?.args.length),
-                            range: call.range
-                        });
-                    }
-                } else if (!platformComponentNames.has(firstParamStringValue.toLowerCase())) {
-                    this.addDiagnosticOnce(event, {
-                        file: file as BscFile,
-                        ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
-                        range: firstParamToken.range
-                    });
-                } else {
-                    // This is valid brightscript component
-                    // Test for invalid arg counts
-                    const brightScriptComponent: BRSComponentData = components[firstParamStringValue.toLowerCase()];
-                    // Valid arg counts for createObject are 1+ number of args for constructor
-                    let validArgCounts = brightScriptComponent.constructors.map(cnstr => cnstr.params.length + 1);
-                    if (validArgCounts.length === 0) {
-                        // no constructors for this component, so createObject only takes 1 arg
-                        validArgCounts = [1];
-                    }
-                    if (!validArgCounts.includes(call?.args.length)) {
-                        // Incorrect number of arguments included in `createObject()`
-                        this.addDiagnosticOnce(event, {
-                            file: file as BscFile,
-                            ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, validArgCounts, call?.args.length),
-                            range: call.range
-                        });
-                    }
+                const args = call?.args?.map(arg => arg.expression);
 
-                    // Test for deprecation
-                    if (brightScriptComponent.isDeprecated) {
-                        this.addDiagnosticOnce(event, {
-                            file: file as BscFile,
-                            ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),
-                            range: call.range
-                        });
-                    }
-                }
+                this.validateCreateObjectArgs(event, file, call, firstParamStringValue, args, 1);
             }
         });
         event.scope.addDiagnostics(diagnostics);
+    }
+
+    /**
+    * Validate every new <Component>() syntax
+    */
+    protected validateNewCreateObjectExpressions(event: OnScopeValidateEvent) {
+        const diagnostics: BsDiagnostic[] = [];
+
+        event.scope.enumerateBrsFiles((file) => {
+            for (const newCreateObjectExp of file.parser.references.newCreateObjectExpressions) {
+
+                const componentName = newCreateObjectExp.componentName.getName(ParseMode.BrightScript);
+                this.validateCreateObjectArgs(event, file, newCreateObjectExp, componentName, newCreateObjectExp.call.args, 0);
+
+            }
+        });
+        event.scope.addDiagnostics(diagnostics);
+    }
+
+
+    private validateCreateObjectArgs(event: OnScopeValidateEvent, file: BscFile, call: FunctionCall | Expression, componentName: string, args: (Expression)[], argsToIgnoreAtBeginning: number) {
+        const additionalArgs = args.slice(argsToIgnoreAtBeginning);
+        //if this is a `createObject('roSGNode'` call, only support known sg node types
+        if (componentName?.toLowerCase() === 'rosgnode' && isLiteralExpression(additionalArgs[0])) {
+            const nodeName: Token = (additionalArgs[0] as any)?.token;
+            //don't validate any components with a colon in their name (probably component libraries, but regular components can have them too).
+            if (nodeName?.text?.includes(':')) {
+                return;
+            }
+            //add diagnostic for unknown components
+            const unquotedComponentName = nodeName?.text?.replace(/"/g, '');
+            if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !event.program.getComponent(unquotedComponentName)) {
+                this.addDiagnosticOnce(event, {
+                    file: file,
+                    ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
+                    range: nodeName.range
+                });
+            } else if (additionalArgs.length !== 1) {
+                // roSgNode should only ever have 2 args in `createObject`
+                this.addDiagnosticOnce(event, {
+                    file: file,
+                    ...DiagnosticMessages.mismatchCreateObjectArgumentCount(componentName, [1 + argsToIgnoreAtBeginning], args.length),
+                    range: call.range
+                });
+            }
+        } else if (!platformComponentNames.has(componentName.toLowerCase())) {
+            this.addDiagnosticOnce(event, {
+                file: file,
+                ...DiagnosticMessages.unknownBrightScriptComponent(componentName),
+                range: call.range
+            });
+        } else {
+            // This is valid brightscript component
+            // Test for invalid arg counts
+            const brightScriptComponent: BRSComponentData = components[componentName.toLowerCase()];
+            let validArgCounts = brightScriptComponent.constructors.map(cnstr => cnstr.params.length + argsToIgnoreAtBeginning);
+            if (validArgCounts.length === 0) {
+                // no constructors for this component
+                validArgCounts = [argsToIgnoreAtBeginning];
+            }
+            if (!validArgCounts.includes(args.length)) {
+                // Incorrect number of arguments included in `createObject()`
+                this.addDiagnosticOnce(event, {
+                    file: file,
+                    ...DiagnosticMessages.mismatchCreateObjectArgumentCount(componentName, validArgCounts, args.length),
+                    range: call.range
+                });
+            }
+
+            // Test for deprecation
+            if (brightScriptComponent.isDeprecated) {
+                this.addDiagnosticOnce(event, {
+                    file: file,
+                    ...DiagnosticMessages.deprecatedBrightScriptComponent(componentName, brightScriptComponent.deprecatedDescription),
+                    range: call.range
+                });
+            }
+        }
     }
 }

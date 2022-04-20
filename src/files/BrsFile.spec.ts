@@ -2594,6 +2594,65 @@ describe('BrsFile', () => {
         });
     });
 
+    describe('new CreateObject operator', () => {
+        describe('transpile', () => {
+            it('does not produce diagnostics', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        poster = new roSGNode("Poster")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('includes original arguments', () => {
+                testTranspile(`
+                    sub main()
+                        poster = new roSGNode("Poster")
+                    end sub
+                `, `
+                    sub main()
+                        poster = CreateObject("roSGNode", "Poster")
+                    end sub
+                `);
+            });
+
+            it('works for zero args', () => {
+                testTranspile(`
+                    sub main()
+                        screen = new roScreen()
+                    end sub
+                `, `
+                    sub main()
+                        screen = CreateObject("roScreen")
+                    end sub
+                `);
+            });
+
+            it('works for many args', () => {
+                testTranspile(`
+                    sub main()
+                        bitmap1 = new roBitmap("someFileName.png")
+                        bitmap2 = new roBitmap({width:200, height:300, AlphaEnable:false, name:"MyBitmapName"})
+                        region = new roRegion(bitmap2, 10, 10, 10, 100)
+                    end sub
+                `, `
+                    sub main()
+                        bitmap1 = CreateObject("roBitmap", "someFileName.png")
+                        bitmap2 = CreateObject("roBitmap", {
+                            width: 200
+                            height: 300
+                            AlphaEnable: false
+                            name: "MyBitmapName"
+                        })
+                        region = CreateObject("roRegion", bitmap2, 10, 10, 10, 100)
+                    end sub
+                `);
+            });
+        });
+    });
+
     describe('transform callback', () => {
         function parseFileWithCallback(ext: string, onParsed: () => void) {
             const rootDir = process.cwd();

@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { CancellationToken } from 'vscode-languageserver';
 import type { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement, EnumStatement, EnumMemberStatement, DimStatement, TryCatchStatement, CatchStatement, ThrowStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement } from '../parser/Statement';
-import type { AALiteralExpression, AAMemberExpression, AnnotationExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, Expression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NamespacedVariableNameExpression, NewExpression, NullCoalescingExpression, RegexLiteralExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
+import type { AALiteralExpression, AAMemberExpression, AnnotationExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, Expression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NamespacedVariableNameExpression, NewExpression, NullCoalescingExpression, RegexLiteralExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression, NewCreateObjectExpression } from '../parser/Expression';
 import { isExpression, isStatement } from './reflection';
 
 
@@ -125,6 +125,7 @@ export function createVisitor(
         VariableExpression?: (expression: VariableExpression, parent?: Statement | Expression) => Expression | void;
         SourceLiteralExpression?: (expression: SourceLiteralExpression, parent?: Statement | Expression) => Expression | void;
         NewExpression?: (expression: NewExpression, parent?: Statement | Expression) => Expression | void;
+        NewCreateObjectExpression?: (expression: NewCreateObjectExpression, parent?: Statement | Expression) => Expression | void;
         CallfuncExpression?: (expression: CallfuncExpression, parent?: Statement | Expression) => Expression | void;
         TemplateStringQuasiExpression?: (expression: TemplateStringQuasiExpression, parent?: Statement | Expression) => Expression | void;
         TemplateStringExpression?: (expression: TemplateStringExpression, parent?: Statement | Expression) => Expression | void;

@@ -161,6 +161,16 @@ describe('Scope', () => {
 
     describe('validate', () => {
         describe('createObject', () => {
+            it('catches no arguments', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        thing = CreateObject()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [DiagnosticMessages.mismatchArgumentCount('1-6', 0)]);
+            });
+
             it('recognizes various scenegraph nodes', () => {
                 program.setFile(`source/file.brs`, `
                     sub main()
@@ -334,6 +344,41 @@ describe('Scope', () => {
                 expect(diagnostics.length).to.eql(1);
                 expect(diagnostics[0].code).to.eql(expectedDiag.code);
                 expect(diagnostics[0].message).to.contain(expectedDiag.message);
+            });
+
+            describe('"new" createObject syntax for Brighterscript', () => {
+
+                it('recognizes "new" syntax', () => {
+                    program.setFile(`source/file.bs`, `
+                        sub main()
+                            poster = new roSGNode("Poster")
+                            timeSpan = new roTimespan()
+                            bitmap = new roBitmap({width:10, height:10, AlphaEnable:false, name:"MyBitmapName"})
+                            region = new roRegion(bitmap, 20, 30, 100, 200)
+                        end sub
+                    `);
+                    program.validate();
+                    expectZeroDiagnostics(program);
+                });
+
+                it('catches wrong number of args', () => {
+                    program.setFile(`source/file.bs`, `
+                        sub main()
+                            poster = new roSGNode("Poster", 123)
+                            timeSpan = new roTimespan("89")
+                            bitmap = new roBitmap()
+                            region = new roRegion(bitmap, 20, 30)
+                        end sub
+                    `);
+                    program.validate();
+                    expectDiagnostics(program, [
+                        DiagnosticMessages.mismatchCreateObjectArgumentCount('roSGNode', [1], 2),
+                        DiagnosticMessages.mismatchCreateObjectArgumentCount('roTimespan', [0], 1),
+                        DiagnosticMessages.mismatchCreateObjectArgumentCount('roBitmap', [1], 0),
+                        DiagnosticMessages.mismatchCreateObjectArgumentCount('roRegion', [5], 3)
+                    ]);
+                });
+
             });
         });
 

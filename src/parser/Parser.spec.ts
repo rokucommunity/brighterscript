@@ -2,7 +2,7 @@ import { expect, assert } from 'chai';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { Expression } from './Expression';
-import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
+import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, NewCreateObjectExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
 import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
@@ -136,6 +136,31 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expect(parser.diagnostics[0]?.message).not.to.exist;
             expect((parser as any).statements[0]?.func?.body?.statements[0]?.expression).to.be.instanceof(CallfuncExpression);
+        });
+    });
+
+    describe('new operator for CreateObject', () => {
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main()
+                    poster = new roSGNode("Poster")
+                end sub
+            `, ParseMode.BrightScript);
+            expect(
+                parser.diagnostics[0]?.message
+            ).to.equal(
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles(`using 'new' keyword to construct a class`).message
+            );
+        });
+
+        it('does not cause parse errors', () => {
+            let parser = parse(`
+                sub main()
+                    myPoster = new roSGNode("Poster")
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser);
+            expect((parser as any).statements[0]?.func?.body?.statements[0]?.value).to.be.instanceof(NewCreateObjectExpression);
         });
     });
 

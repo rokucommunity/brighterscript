@@ -939,6 +939,56 @@ export class NewExpression extends Expression {
     }
 }
 
+/**
+ * This expression changes a call expression into a createObject call,
+ * eg `new roSGNode("Poster")` transpiles to `CreateObject("roSGNode", "Poster")`
+ */
+export class NewCreateObjectExpression extends Expression {
+    constructor(
+        readonly newKeyword: Token,
+        readonly call: CallExpression
+    ) {
+        super();
+        this.range = util.createRangeFromPositions(this.newKeyword.range.start, this.call.range.end);
+    }
+
+    /**
+     * The name of the component to initialize (with optional namespace prefixed)
+     */
+    public get componentName() {
+        //the parser guarantees the callee of a new statement's call object will be
+        //a NamespacedVariableNameExpression
+        return (this.call.callee as NamespacedVariableNameExpression);
+    }
+    public readonly range: Range;
+
+    public transpile(state: BrsTranspileState) {
+        let result = [];
+        result.push(
+            'CreateObject',
+            state.transpileToken(this.call.openingParen),
+            state.sourceNode(this.call.callee, ['"', this.componentName.getName(ParseMode.BrightScript), '"'])
+        );
+        //transpile args
+        for (let i = 0; i < this.call.args.length; i++) {
+            //add comma between args
+            result.push(', ');
+            let arg = this.call.args[i];
+            result.push(...arg.transpile(state));
+        }
+        result.push(
+            state.transpileToken(this.call.closingParen)
+        );
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'call', visitor, options);
+        }
+    }
+}
+
 export class CallfuncExpression extends Expression {
     constructor(
         readonly callee: Expression,

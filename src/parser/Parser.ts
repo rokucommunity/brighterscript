@@ -72,6 +72,7 @@ import {
     LiteralExpression,
     NamespacedVariableNameExpression,
     NewExpression,
+    NewCreateObjectExpression,
     RegexLiteralExpression,
     UnaryExpression,
     VariableExpression,
@@ -92,6 +93,9 @@ import { isAAMemberExpression, isAnnotationExpression, isCallExpression, isCallf
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
+import { components } from '../roku-types';
+
+const platformComponentNames = new Set(Object.values(components).map(x => x.name.toLowerCase()));
 
 export class Parser {
     /**
@@ -2343,8 +2347,17 @@ export class Parser {
         let call = this.finishCall(leftParen, nameExpr);
         //pop the call from the  callExpressions list because this is technically something else
         this.callExpressions.pop();
-        let result = new NewExpression(newToken, call);
-        this._references.newExpressions.push(result);
+        let result: NewExpression | NewCreateObjectExpression;
+        if (platformComponentNames.has(nameExpr.getName(ParseMode.BrightScript).toLowerCase())) {
+            // The Name of the call is a known BrightScript component
+            // Use CreateObject() to construct the component
+            result = new NewCreateObjectExpression(newToken, call);
+            this._references.newCreateObjectExpressions.push(result);
+        } else {
+            // This is a Brighterscript class
+            result = new NewExpression(newToken, call);
+            this._references.newExpressions.push(result);
+        }
         return result;
     }
 
@@ -2997,6 +3010,12 @@ export class Parser {
                     this._references.expressions.add(p);
                 }
             },
+            NewCreateObjectExpression: e => {
+                this._references.newCreateObjectExpressions.push(e);
+                for (const p of e.call.args) {
+                    this._references.expressions.add(p);
+                }
+            },
             ExpressionStatement: s => {
                 this._references.expressions.add(s.expression);
             },
@@ -3136,6 +3155,8 @@ export class References {
     public libraryStatements = [] as LibraryStatement[];
     public namespaceStatements = [] as NamespaceStatement[];
     public newExpressions = [] as NewExpression[];
+
+    public newCreateObjectExpressions = [] as NewCreateObjectExpression[];
     public propertyHints = {} as Record<string, string>;
 }
 
