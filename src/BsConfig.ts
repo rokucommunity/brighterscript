@@ -154,8 +154,8 @@ export interface BsConfig {
     sourceMap?: boolean;
 
     /**
-     * Force BRS file to be compiled using BrigtherScript
+     * Force BRS file to be transpiled
      * @default false
      */
-    forceBrighterScript?: boolean;
+     transpileBrs?: boolean;
 }

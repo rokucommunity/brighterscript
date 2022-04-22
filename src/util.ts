@@ -323,7 +323,7 @@ export class Util {
         config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
         config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
         config.cwd = config.cwd ?? process.cwd();
-        config.forceBrighterScript = config.forceBrighterScript === true ? true : false;
+        config.transpileBrs = config.transpileBrs === true ? true : false;
         config.emitDefinitions = config.emitDefinitions === true ? true : false;
         if (typeof config.logLevel === 'string') {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
