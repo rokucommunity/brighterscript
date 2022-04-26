@@ -13,54 +13,10 @@ import { standardizePath as s } from './util';
 import type { CodeWithSourceMap } from 'source-map';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
+import undent from 'undent';
 
-/**
- * Trim leading whitespace for every line (to make test writing cleaner
- */
-function trimLeading(text: string) {
-    if (!text) {
-        return text;
-    }
-    const lines = text.split(/\r?\n/);
-    let minIndent = Number.MAX_SAFE_INTEGER;
+export const trim = undent;
 
-    //skip leading empty lines
-    while (lines[0]?.trim().length === 0) {
-        lines.splice(0, 1);
-    }
-
-    for (const line of lines) {
-        const trimmedLine = line.trimLeft();
-        //skip empty lines
-        if (trimmedLine.length === 0) {
-            continue;
-        }
-        const leadingSpaceCount = line.length - trimmedLine.length;
-        if (leadingSpaceCount < minIndent) {
-            minIndent = leadingSpaceCount;
-        }
-    }
-
-    //apply the trim to each line
-    for (let i = 0; i < lines.length; i++) {
-        lines[i] = lines[i].substring(minIndent);
-    }
-    return lines.join('\n');
-}
-
-/**
- * Remove leading white space and remove excess indentation
- */
-export function trim(strings: TemplateStringsArray, ...args) {
-    let text = '';
-    for (let i = 0; i < strings.length; i++) {
-        text += strings[i];
-        if (args[i]) {
-            text += args[i];
-        }
-    }
-    return trimLeading(text);
-}
 type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[];
 
 function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
@@ -163,7 +119,7 @@ export function expectHasDiagnostics(arg: DiagnosticCollection, length: number =
  * Remove sourcemap information at the end of the source
  */
 export function trimMap(source: string) {
-    return source.replace(/('|<!--)\/\/# sourceMappingURL=.*$/m, '');
+    return source.replace(/('|<!--)\/\/# sourceMappingURL=.*$/m, '').trimEnd();
 }
 
 export function expectCodeActions(test: () => any, expected: CodeActionShorthand[]) {
@@ -223,32 +179,13 @@ function getTestFileAction(
         let codeWithMap = action(file);
 
         let sources = [trimMap(codeWithMap.code), expected];
+
         for (let i = 0; i < sources.length; i++) {
             if (formatType === 'trim') {
-                let lines = sources[i].split('\n');
-                //throw out leading newlines
-                while (lines[0].length === 0) {
-                    lines.splice(0, 1);
-                }
-                let trimStartIndex = null;
-                for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                    //if we don't have a starting trim count, compute it
-                    if (!trimStartIndex) {
-                        trimStartIndex = lines[lineIndex].length - lines[lineIndex].trim().length;
-                    }
-                    //only trim the expected file (since that's what we passed in from the test)
-                    if (lines[lineIndex].length > 0 && i === 1) {
-                        lines[lineIndex] = lines[lineIndex].substring(trimStartIndex);
-                    }
-                }
-                //trim trailing newlines
-                while (lines[lines.length - 1]?.length === 0) {
-                    lines.splice(lines.length - 1);
-                }
-                sources[i] = lines.join('\n');
-
+                sources[i] = trim(sources[i]);
             }
         }
+
         expect(sources[0]).to.equal(sources[1]);
         return {
             file: file,

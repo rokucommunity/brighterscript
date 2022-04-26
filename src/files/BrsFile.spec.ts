@@ -1794,7 +1794,9 @@ describe('BrsFile', () => {
 
             //hover over sub ma|in()
             expect(
-                (await program.getHover(file.pathAbsolute, Position.create(4, 22))).contents
+                trim(
+                    (await program.getHover(file.pathAbsolute, Position.create(4, 22))).contents.toString()
+                )
             ).to.equal(trim`
                 \`\`\`brightscript
                 sub main() as void
@@ -2737,7 +2739,7 @@ describe('BrsFile', () => {
     describe('getTypedef', () => {
         function testTypedef(original: string, expected: string) {
             let file = program.setFile<BrsFile>('source/main.brs', original);
-            expect(file.getTypedef()).to.eql(expected);
+            expect(file.getTypedef().trimEnd()).to.eql(expected);
         }
 
         it('includes namespace on extend class names', () => {

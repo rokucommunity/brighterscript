@@ -657,7 +657,9 @@ describe('XmlFile', () => {
                 logLevel: LogLevel.off
             });
             expect(
-                fsExtra.readFileSync(`${stagingDir}/components/MainScene.xml`).toString()
+                trim(
+                    fsExtra.readFileSync(`${stagingDir}/components/MainScene.xml`).toString()
+                )
             ).to.eql(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="MainScene" extends="Scene">
@@ -768,12 +770,20 @@ describe('XmlFile', () => {
             `;
 
             await program.transpile([], stagingDir);
-            expect(fsExtra.readFileSync(`${stagingDir}/components/SimpleScene.xml`).toString()).to.eql(expected);
+            expect(
+                trim(
+                    fsExtra.readFileSync(`${stagingDir}/components/SimpleScene.xml`).toString()
+                )
+            ).to.eql(expected);
 
             //clear the output folder
             fsExtra.emptyDirSync(stagingDir);
             await program.transpile([], stagingDir);
-            expect(fsExtra.readFileSync(`${stagingDir}/components/SimpleScene.xml`).toString()).to.eql(expected);
+            expect(
+                trim(
+                    fsExtra.readFileSync(`${stagingDir}/components/SimpleScene.xml`).toString()
+                )
+            ).to.eql(expected);
         });
 
         it('keeps all content of the XML', () => {
