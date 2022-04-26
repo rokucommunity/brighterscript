@@ -1696,7 +1696,7 @@ describe('Program', () => {
             `);
             await program.transpile([], stagingFolderPath);
             expect(
-                fsExtra.readFileSync(`${stagingFolderPath}/source/lib.brs`).toString()
+                fsExtra.readFileSync(`${stagingFolderPath}/source/lib.brs`).toString().trimEnd()
             ).to.eql(trim`
                 'code comment
                 sub log(message)
@@ -1704,7 +1704,7 @@ describe('Program', () => {
                 end sub`
             );
             expect(
-                fsExtra.readFileSync(`${stagingFolderPath}/source/lib.d.bs`).toString()
+                fsExtra.readFileSync(`${stagingFolderPath}/source/lib.d.bs`).toString().trimEnd()
             ).to.eql(trim`
                 'typedef comment
                 sub log(message)
@@ -1798,7 +1798,7 @@ describe('Program', () => {
             await program.transpile([], program.options.stagingFolderPath);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingFolderPath}/source/logger.brs`).toString()
-            ) + '\n').to.eql(trim`
+            )).to.eql(trim`
                 sub logInfo()
                     print 2
                 end sub
