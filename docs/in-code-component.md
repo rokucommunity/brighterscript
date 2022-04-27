@@ -117,6 +117,54 @@ end sub
 ```
 
 </details>
+<br/>
+
+## Including functions defined elsewhere
+You can also attach an external function to the component. This allows you to keep functionality in separate files if desired.
+```vb
+import "UserInteraction.bs"
+component MoviePoster extends roSGNode.Poster
+    public sub play()
+    end sub
+
+    'this name must match an in-scope function
+    public sub markAsFavorite
+end component
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+`components/MoviePoster.xml`
+```xml
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="MoviePoster" extends="Poster">
+    <interface>
+        <function name="play" />
+        <function name="seek" />
+    </interface>
+    <script uri="MoviePoster.brs" />
+    <script uri="UserInteraction.brs" />
+</component>
+```
+
+`components/MoviePoster.brs`
+
+```vb
+sub play()
+    print "Play movie " + m.top.title
+    m.isPlaying = true
+end sub
+```
+
+`components/UserInteraction.brs`
+```vb
+sub markAsFavorite()
+    print "Poster marked as favorite"
+end sub
+```
+</details>
+<br/>
 
 ## Interface field shorthand
 The Roku SceneGraph design is a bit unique in that `m` and `m.top` are both sort of `this` style objects. To simplify the concept, we have added a new flag that will expose all of the `m.top` fields and methods onto `m`. You can enable that with the `enableComponentInterfaceShortand` bsconfig property.
