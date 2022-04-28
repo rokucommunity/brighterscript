@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.20](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.19...v1.0.0-alpha.20) - 2022-04-28
+ - all changes from [v0.48.1](#0481---2022-04-14)
+ - all changes from [v0.48.0](#0480---2022-04-13)
+ - all changes from [v0.47.3](#0473---2022-04-08)
+ - all changes from [v0.47.2](#0472---2022-04-07)
+ - all changes from [v0.47.1](#0471---2022-04-05)
+
+
+
 ## [0.48.1](https://github.com/rokucommunity/brighterscript/compare/v0.48.0...v0.48.1) - 2022-04-14
 ### Fixed
  - prevent duplicate `CreateObject` validations showing one for each affected scope ([#568](https://github.com/rokucommunity/brighterscript/pull/568))
