@@ -1336,7 +1336,9 @@ export class Program {
             };
         });
 
-        this.plugins.emit('beforeProgramTranspile', this, entries);
+        const astEditor = new AstEditor();
+
+        this.plugins.emit('beforeProgramTranspile', this, entries, astEditor);
 
         const promises = entries.map(async (entry) => {
             //skip transpiling typedef files
@@ -1372,7 +1374,8 @@ export class Program {
         }
         await Promise.all(promises);
 
-        this.plugins.emit('afterProgramTranspile', this, entries);
+        this.plugins.emit('afterProgramTranspile', this, entries, astEditor);
+        astEditor.undoAll();
     }
 
     /**

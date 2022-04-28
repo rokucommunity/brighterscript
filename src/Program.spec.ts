@@ -6,6 +6,7 @@ import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
+import type { TranspileObj } from './Program';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { URI } from 'vscode-uri';
@@ -20,6 +21,7 @@ import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
 import { TokenKind } from './lexer/TokenKind';
 import type { LiteralExpression } from './parser/Expression';
+import type { AstEditor } from './astUtils/AstEditor';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -1760,6 +1762,42 @@ describe('Program', () => {
                             walkMode: WalkMode.visitExpressionsRecursive
                         });
                     }
+                }
+            });
+            //transpile the file
+            await program.transpile([], stagingFolderPath);
+            //our changes should be there
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/main.brs`).toString()
+            ).to.eql(trim`
+                sub main()
+                    print "goodbye world"
+                end sub`
+            );
+
+            //our literalExpression should have been restored to its original value
+            expect(literalExpression.token.text).to.eql('"hello world"');
+        });
+
+        it('handles AstEditor for beforeProgramTranspile', async () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    print "hello world"
+                end sub
+            `);
+            let literalExpression: LiteralExpression;
+            //replace all strings with "goodbye world"
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeProgramTranspile: (program: Program, entries: TranspileObj[], editor: AstEditor) => {
+                    file.ast.walk(createVisitor({
+                        LiteralExpression: (literal) => {
+                            literalExpression = literal;
+                            editor.setProperty(literal.token, 'text', '"goodbye world"');
+                        }
+                    }), {
+                        walkMode: WalkMode.visitExpressionsRecursive
+                    });
                 }
             });
             //transpile the file
