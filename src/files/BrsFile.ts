@@ -129,7 +129,7 @@ export class BrsFile {
             }
             return result;
         }) ?? [];
-        return result as FileReference[];
+        return result;
     }
 
     /**
