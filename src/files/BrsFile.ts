@@ -633,7 +633,9 @@ export class BrsFile {
                         args.push({
                             range: arg.range,
                             type: arg.type,
-                            text: arg.token.text
+                            text: arg.token.text,
+                            expression: arg,
+                            typeToken: undefined
                         });
 
                         //is variable being passed into argument
@@ -642,7 +644,9 @@ export class BrsFile {
                             range: arg.range,
                             //TODO - look up the data type of the actual variable
                             type: new DynamicType(),
-                            text: arg.name.text
+                            text: arg.name.text,
+                            expression: arg,
+                            typeToken: undefined
                         });
 
                     } else if (arg.value) {
@@ -655,7 +659,9 @@ export class BrsFile {
                             range: arg.range,
                             //TODO not sure what to do here
                             type: new DynamicType(), // util.valueKindToBrsType(arg.value.kind),
-                            text: text
+                            text: text,
+                            expression: arg,
+                            typeToken: undefined
                         };
                         //wrap the value in quotes because that's how it appears in the code
                         if (isStringType(callableArg.type)) {
@@ -668,7 +674,9 @@ export class BrsFile {
                             range: arg.range,
                             type: new DynamicType(),
                             //TODO get text from other types of args
-                            text: ''
+                            text: '',
+                            expression: arg,
+                            typeToken: undefined
                         });
                     }
                 }

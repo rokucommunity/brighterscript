@@ -1377,7 +1377,11 @@ describe('BrsFile', () => {
             `);
             expect(file.functionCalls.length).to.equal(1);
 
-            expect(file.functionCalls[0].args).to.eql([{
+            const argsMap = file.functionCalls[0].args.map(arg => {
+                // disregard arg.expression, etc.
+                return { type: arg.type, range: arg.range, text: arg.text };
+            });
+            expect(argsMap).to.eql([{
                 type: new StringType(),
                 range: util.createRange(2, 32, 2, 38),
                 text: '"name"'
@@ -1790,7 +1794,9 @@ describe('BrsFile', () => {
 
             //hover over sub ma|in()
             expect(
-                (await program.getHover(file.pathAbsolute, Position.create(4, 22))).contents
+                trim(
+                    (await program.getHover(file.pathAbsolute, Position.create(4, 22))).contents.toString()
+                )
             ).to.equal(trim`
                 \`\`\`brightscript
                 sub main() as void
@@ -2733,7 +2739,7 @@ describe('BrsFile', () => {
     describe('getTypedef', () => {
         function testTypedef(original: string, expected: string) {
             let file = program.setFile<BrsFile>('source/main.brs', original);
-            expect(file.getTypedef()).to.eql(expected);
+            expect(file.getTypedef().trimEnd()).to.eql(expected);
         }
 
         it('includes namespace on extend class names', () => {

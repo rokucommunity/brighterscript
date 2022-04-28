@@ -231,7 +231,7 @@ export class Scope {
      * Get the list of files referenced by this scope that are actually loaded in the program.
      * Includes files from this scope and all ancestor scopes
      */
-    public getAllFiles() {
+    public getAllFiles(): BscFile[] {
         return this.cache.getOrAdd('getAllFiles', () => {
             let result = [] as BscFile[];
             let dependencies = this.dependencyGraph.getAllDependencies(this.dependencyGraphKey);

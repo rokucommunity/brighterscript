@@ -2,24 +2,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch Program",
-            "program": "${workspaceFolder}/benchmarks/index.js",
-            "request": "launch",
-            "args": [
-                "--versions",
-                "current",
-                "--targets",
-                "lexer",
-                "--noprepare",
-                "--project",
-                "C:/projects/roku/brighterscript-template"
-            ],
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
-            "type": "pwa-node"
-        },
-        {
             "name": "Debug Tests (Current file)",
             "type": "node",
             "request": "launch",
@@ -63,6 +45,44 @@
                 "${workspaceFolder}/**",
                 "!**/node_modules/typescript/**",
                 "!**/node_modules/vscode-languageserver/**"
+            ]
+        },
+        {
+            "name": "Debug Benchmarks",
+            "program": "${workspaceFolder}/benchmarks/index.js",
+            "request": "launch",
+            "args": [
+                "--versions",
+                "current",
+                "--targets",
+                "lexer",
+                "--noprepare",
+                "--project",
+                "C:/projects/roku/brighterscript-template"
+            ],
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "pwa-node"
+        },
+        {
+            "name": "Debug Roku Docs Scraper",
+            "type": "node",
+            "request": "launch",
+            "runtimeExecutable": "node",
+            "runtimeArgs": [
+                "--nolazy",
+                "-r",
+                "ts-node/register/transpile-only"
+            ],
+            "args": [
+                "scripts/scrape-roku-docs.ts"
+            ],
+            "cwd": "${workspaceRoot}",
+            "internalConsoleOptions": "openOnSessionStart",
+            "skipFiles": [
+                "<node_internals>/**",
+                "node_modules/**"
             ]
         }
     ]

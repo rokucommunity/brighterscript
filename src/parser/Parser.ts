@@ -2316,6 +2316,7 @@ export class Parser {
 
     private indexedGet(expr: Expression) {
         let openingSquare = this.previous();
+        let questionDotToken = this.getMatchingTokenAtOffset(-2, TokenKind.QuestionDot);
         while (this.match(TokenKind.Newline)) { }
 
         let index = this.expression();
@@ -2326,7 +2327,7 @@ export class Parser {
             TokenKind.RightSquareBracket
         );
 
-        return new IndexedGetExpression(expr, index, openingSquare, closingSquare);
+        return new IndexedGetExpression(expr, index, openingSquare, closingSquare, questionDotToken);
     }
 
     private newExpression() {
@@ -2336,7 +2337,8 @@ export class Parser {
         let nameExpr = this.getNamespacedVariableNameExpression();
         let leftParen = this.consume(
             DiagnosticMessages.unexpectedToken(this.peek().text),
-            TokenKind.LeftParen
+            TokenKind.LeftParen,
+            TokenKind.QuestionLeftParen
         );
         let call = this.finishCall(leftParen, nameExpr);
         //pop the call from the  callExpressions list because this is technically something else
@@ -2369,17 +2371,20 @@ export class Parser {
         //an expression to keep for _references
         let referenceCallExpression: Expression;
         while (true) {
-            if (this.match(TokenKind.LeftParen)) {
+            if (this.matchAny(TokenKind.LeftParen, TokenKind.QuestionLeftParen)) {
                 expr = this.finishCall(this.previous(), expr);
                 //store this call expression in references
                 referenceCallExpression = expr;
-            } else if (this.match(TokenKind.LeftSquareBracket)) {
+
+            } else if (this.matchAny(TokenKind.LeftSquareBracket, TokenKind.QuestionLeftSquare) || this.matchSequence(TokenKind.QuestionDot, TokenKind.LeftSquareBracket)) {
                 expr = this.indexedGet(expr);
+
             } else if (this.match(TokenKind.Callfunc)) {
                 expr = this.callfunc(expr);
                 //store this callfunc expression in references
                 referenceCallExpression = expr;
-            } else if (this.match(TokenKind.Dot)) {
+
+            } else if (this.matchAny(TokenKind.Dot, TokenKind.QuestionDot)) {
                 if (this.match(TokenKind.LeftSquareBracket)) {
                     expr = this.indexedGet(expr);
                 } else {
@@ -2396,7 +2401,8 @@ export class Parser {
 
                     this.addPropertyHints(name);
                 }
-            } else if (this.check(TokenKind.At)) {
+
+            } else if (this.checkAny(TokenKind.At, TokenKind.QuestionAt)) {
                 let dot = this.advance();
                 let name = this.consume(
                     DiagnosticMessages.expectedAttributeNameAfterAtSymbol(),
@@ -2410,6 +2416,7 @@ export class Parser {
                 expr = new XmlAttributeGetExpression(expr, name as Identifier, dot);
                 //only allow a single `@` expression
                 break;
+
             } else {
                 break;
             }
@@ -2423,8 +2430,7 @@ export class Parser {
 
     private finishCall(openingParen: Token, callee: Expression, addToCallExpressionList = true) {
         let args = [] as Expression[];
-        while (this.match(TokenKind.Newline)) {
-        }
+        while (this.match(TokenKind.Newline)) { }
 
         if (!this.check(TokenKind.RightParen)) {
             do {
@@ -2520,7 +2526,7 @@ export class Parser {
                 );
                 return new GroupingExpression({ left: left, right: right }, expr);
 
-            case this.match(TokenKind.LeftSquareBracket):
+            case this.matchAny(TokenKind.LeftSquareBracket):
                 return this.arrayLiteral();
 
             case this.match(TokenKind.LeftCurlyBrace):
@@ -2722,6 +2728,21 @@ export class Parser {
     }
 
     /**
+     * If the next series of tokens matches the given set of tokens, pop them all
+     * @param tokenKinds
+     */
+    private matchSequence(...tokenKinds: TokenKind[]) {
+        const endIndex = this.current + tokenKinds.length;
+        for (let i = 0; i < tokenKinds.length; i++) {
+            if (tokenKinds[i] !== this.tokens[this.current + i]?.kind) {
+                return false;
+            }
+        }
+        this.current = endIndex;
+        return true;
+    }
+
+    /**
      * Get next token matching a specified list, or fail with an error
      */
     private consume(diagnosticInfo: DiagnosticInfo, ...tokenKinds: TokenKind[]): Token {
@@ -2848,6 +2869,22 @@ export class Parser {
 
     private previous(): Token {
         return this.tokens[this.current - 1];
+    }
+
+    /**
+     * Get the token that is {offset} indexes away from {this.current}
+     * @param offset the number of index steps away from current index to fetch
+     * @param tokenKinds the desired token must match one of these
+     * @example
+     * getToken(-1); //returns the previous token.
+     * getToken(0);  //returns current token.
+     * getToken(1);  //returns next token
+     */
+    private getMatchingTokenAtOffset(offset: number, ...tokenKinds: TokenKind[]): Token {
+        const token = this.tokens[this.current + offset];
+        if (tokenKinds.includes(token.kind)) {
+            return token;
+        }
     }
 
     private synchronize() {

@@ -13,6 +13,7 @@ import type { TranspileState } from './parser/TranspileState';
 import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
+import type { Token } from './lexer/Token';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -79,7 +80,9 @@ export interface FunctionCall {
 export interface CallableArg {
     text: string;
     type: BscType;
+    typeToken: Token;
     range: Range;
+    expression: Expression;
 }
 
 export interface CallableParam {
@@ -195,8 +198,8 @@ export interface CompilerPlugin {
     afterProgramCreate?: (program: Program) => void;
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
-    beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
-    afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events

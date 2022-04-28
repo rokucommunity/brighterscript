@@ -20,6 +20,67 @@ describe('lexer', () => {
         ]);
     });
 
+    it('recognizes the question mark operator in various contexts', () => {
+        expectKinds('? ?? ?. ?[ ?.[ ?( ?@', [
+            TokenKind.Question,
+            TokenKind.QuestionQuestion,
+            TokenKind.QuestionDot,
+            TokenKind.QuestionLeftSquare,
+            TokenKind.QuestionDot,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionLeftParen,
+            TokenKind.QuestionAt
+        ]);
+    });
+
+    it('separates optional chain characters and LeftSquare when found at beginning of statement locations', () => {
+        //a statement starting with a question mark is actually a print statement, so we need to keep the ? separate from [
+        expectKinds(`?[ ?[ : ?[ ?[`, [
+            TokenKind.Question,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionLeftSquare,
+            TokenKind.Colon,
+            TokenKind.Question,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionLeftSquare
+        ]);
+    });
+
+    it('separates optional chain characters and LeftParen when found at beginning of statement locations', () => {
+        //a statement starting with a question mark is actually a print statement, so we need to keep the ? separate from [
+        expectKinds(`?( ?( : ?( ?(`, [
+            TokenKind.Question,
+            TokenKind.LeftParen,
+            TokenKind.QuestionLeftParen,
+            TokenKind.Colon,
+            TokenKind.Question,
+            TokenKind.LeftParen,
+            TokenKind.QuestionLeftParen
+        ]);
+    });
+
+    it('handles QuestionDot and Square properly', () => {
+        expectKinds('?.[ ?. [', [
+            TokenKind.QuestionDot,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionDot,
+            TokenKind.LeftSquareBracket
+        ]);
+    });
+
+    it('does not make conditional chaining tokens with space between', () => {
+        expectKinds('? . ? [ ? ( ? @', [
+            TokenKind.Question,
+            TokenKind.Dot,
+            TokenKind.Question,
+            TokenKind.LeftSquareBracket,
+            TokenKind.Question,
+            TokenKind.LeftParen,
+            TokenKind.Question,
+            TokenKind.At
+        ]);
+    });
+
     it('recognizes the callfunc operator', () => {
         let { tokens } = Lexer.scan('@.');
         expect(tokens[0].kind).to.equal(TokenKind.Callfunc);
@@ -33,11 +94,6 @@ describe('lexer', () => {
     it('recognizes library token', () => {
         let { tokens } = Lexer.scan('library');
         expect(tokens[0].kind).to.eql(TokenKind.Library);
-    });
-
-    it('recognizes the question mark operator', () => {
-        let { tokens } = Lexer.scan('?');
-        expect(tokens[0].kind).to.equal(TokenKind.Question);
     });
 
     it('produces an at symbol token', () => {
@@ -1306,3 +1362,10 @@ describe('lexer', () => {
         });
     });
 });
+
+function expectKinds(text: string, tokenKinds: TokenKind[]) {
+    let actual = Lexer.scan(text).tokens.map(x => x.kind);
+    //remove the EOF token
+    actual.pop();
+    expect(actual).to.eql(tokenKinds);
+}

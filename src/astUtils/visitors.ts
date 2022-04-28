@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { CancellationToken } from 'vscode-languageserver';
-import type { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement, EnumStatement, EnumMemberStatement } from '../parser/Statement';
-import type { AALiteralExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, Expression, FunctionExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NamespacedVariableNameExpression, NewExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
+import type { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement, EnumStatement, EnumMemberStatement, DimStatement, TryCatchStatement, CatchStatement, ThrowStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement } from '../parser/Statement';
+import type { AALiteralExpression, AAMemberExpression, AnnotationExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, Expression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NamespacedVariableNameExpression, NewExpression, NullCoalescingExpression, RegexLiteralExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
 import { isExpression, isStatement } from './reflection';
 
 
@@ -55,7 +55,7 @@ export function walk<T>(keyParent: T, key: keyof T, visitor: WalkVisitor, option
     }
 
     if (!element.walk) {
-        throw new Error(`${keyParent.constructor.name}["${key}"]${parent ? ` for ${parent.constructor.name}` : ''} does not contain a "walk" method`);
+        throw new Error(`${keyParent.constructor.name}["${String(key)}"]${parent ? ` for ${parent.constructor.name}` : ''} does not contain a "walk" method`);
     }
     //walk the child expressions
     element.walk(visitor, options);
@@ -81,6 +81,7 @@ export function createVisitor(
         IfStatement?: (statement: IfStatement, parent?: Statement) => Statement | void;
         IncrementStatement?: (statement: IncrementStatement, parent?: Statement) => Statement | void;
         PrintStatement?: (statement: PrintStatement, parent?: Statement) => Statement | void;
+        DimStatement?: (statement: DimStatement, parent?: Statement) => Statement | void;
         GotoStatement?: (statement: GotoStatement, parent?: Statement) => Statement | void;
         LabelStatement?: (statement: LabelStatement, parent?: Statement) => Statement | void;
         ReturnStatement?: (statement: ReturnStatement, parent?: Statement) => Statement | void;
@@ -94,15 +95,22 @@ export function createVisitor(
         LibraryStatement?: (statement: LibraryStatement, parent?: Statement) => Statement | void;
         NamespaceStatement?: (statement: NamespaceStatement, parent?: Statement) => Statement | void;
         ImportStatement?: (statement: ImportStatement, parent?: Statement) => Statement | void;
+        InterfaceStatement?: (statement: InterfaceStatement, parent?: Statement) => Statement | void;
+        InterfaceFieldStatement?: (statement: InterfaceFieldStatement, parent?: Statement) => Statement | void;
+        InterfaceMethodStatement?: (statement: InterfaceMethodStatement, parent?: Statement) => Statement | void;
         ClassStatement?: (statement: ClassStatement, parent?: Statement) => Statement | void;
         ClassMethodStatement?: (statement: ClassMethodStatement, parent?: Statement) => Statement | void;
         ClassFieldStatement?: (statement: ClassFieldStatement, parent?: Statement) => Statement | void;
+        TryCatchStatement?: (statement: TryCatchStatement, parent?: Statement) => Statement | void;
+        CatchStatement?: (statement: CatchStatement, parent?: Statement) => Statement | void;
+        ThrowStatement?: (statement: ThrowStatement, parent?: Statement) => Statement | void;
         EnumStatement?: (statement: EnumStatement, parent?: Statement) => Statement | void;
         EnumMemberStatement?: (statement: EnumMemberStatement, parent?: Statement) => Statement | void;
         //expressions
         BinaryExpression?: (expression: BinaryExpression, parent?: Statement | Expression) => Expression | void;
         CallExpression?: (expression: CallExpression, parent?: Statement | Expression) => Expression | void;
         FunctionExpression?: (expression: FunctionExpression, parent?: Statement | Expression) => Expression | void;
+        FunctionParameterExpression?: (expression: FunctionParameterExpression, parent?: Statement | Expression) => Expression | void;
         NamespacedVariableNameExpression?: (expression: NamespacedVariableNameExpression, parent?: Statement | Expression) => Expression | void;
         DottedGetExpression?: (expression: DottedGetExpression, parent?: Statement | Expression) => Expression | void;
         XmlAttributeGetExpression?: (expression: XmlAttributeGetExpression, parent?: Statement | Expression) => Expression | void;
@@ -111,6 +119,7 @@ export function createVisitor(
         LiteralExpression?: (expression: LiteralExpression, parent?: Statement | Expression) => Expression | void;
         EscapedCharCodeLiteralExpression?: (expression: EscapedCharCodeLiteralExpression, parent?: Statement | Expression) => Expression | void;
         ArrayLiteralExpression?: (expression: ArrayLiteralExpression, parent?: Statement | Expression) => Expression | void;
+        AAMemberExpression?: (expression: AAMemberExpression, parent?: Statement | Expression) => Expression | void;
         AALiteralExpression?: (expression: AALiteralExpression, parent?: Statement | Expression) => Expression | void;
         UnaryExpression?: (expression: UnaryExpression, parent?: Statement | Expression) => Expression | void;
         VariableExpression?: (expression: VariableExpression, parent?: Statement | Expression) => Expression | void;
@@ -120,6 +129,10 @@ export function createVisitor(
         TemplateStringQuasiExpression?: (expression: TemplateStringQuasiExpression, parent?: Statement | Expression) => Expression | void;
         TemplateStringExpression?: (expression: TemplateStringExpression, parent?: Statement | Expression) => Expression | void;
         TaggedTemplateStringExpression?: (expression: TaggedTemplateStringExpression, parent?: Statement | Expression) => Expression | void;
+        AnnotationExpression?: (expression: AnnotationExpression, parent?: Statement | Expression) => Expression | void;
+        TernaryExpression?: (expression: TernaryExpression, parent?: Statement | Expression) => Expression | void;
+        NullCoalescingExpression?: (expression: NullCoalescingExpression, parent?: Statement | Expression) => Expression | void;
+        RegexLiteralExpression?: (expression: RegexLiteralExpression, parent?: Statement | Expression) => Expression | void;
     }
 ) {
     return <WalkVisitor>((statement: Statement, parent?: Statement): Statement | void => {
