@@ -16,7 +16,6 @@ import { DependencyGraph } from './DependencyGraph';
 import { Logger, LogLevel } from './Logger';
 import chalk from 'chalk';
 import { globalFile } from './globalCallables';
-import type { ManifestValue } from './preprocessor/Manifest';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
@@ -1403,10 +1402,12 @@ export class Program {
                 editor: new AstEditor()
             });
         }
+        const astEditor = new AstEditor();
 
         this.plugins.emit('beforeProgramTranspile', {
             program: this,
-            entries: entries
+            entries: entries,
+            editor: astEditor
         });
 
         const promises = entries.map(async (entry) => {
@@ -1445,8 +1446,10 @@ export class Program {
 
         this.plugins.emit('afterProgramTranspile', {
             program: this,
-            entries: entries
+            entries: entries,
+            editor: astEditor
         });
+        astEditor.undoAll();
     }
 
     /**
@@ -1507,7 +1510,7 @@ export class Program {
         }
         return this._manifest;
     }
-    private _manifest: Map<string, ManifestValue>;
+    private _manifest: Map<string, string>;
 
     public dispose() {
         for (const key in this.files) {

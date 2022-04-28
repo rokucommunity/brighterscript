@@ -656,24 +656,47 @@ export let DiagnosticMessages = {
         code: 1127,
         severity: DiagnosticSeverity.Error
     }),
+    unknownRoSGNode: (nodeName: string) => ({
+        message: `Unknown roSGNode '${nodeName}'`,
+        code: 1128,
+        severity: DiagnosticSeverity.Error
+    }),
+    unknownBrightScriptComponent: (componentName: string) => ({
+        message: `Unknown BrightScript component '${componentName}'`,
+        code: 1129,
+        severity: DiagnosticSeverity.Error
+    }),
+    mismatchCreateObjectArgumentCount: (componentName: string, allowedArgCounts: number[], actualCount: number) => {
+        const argCountArray = (allowedArgCounts || [1]).sort().filter((value, index, self) => self.indexOf(value) === index);
+        return {
+            message: `For ${componentName}, expected ${argCountArray.map(c => c.toString()).join(' or ')} total arguments, but got ${actualCount}.`,
+            code: 1130,
+            severity: DiagnosticSeverity.Error
+        };
+    },
+    deprecatedBrightScriptComponent: (componentName: string, deprecatedDescription?: string) => ({
+        message: `${componentName} has been deprecated${deprecatedDescription ? ': ' + deprecatedDescription : ''}`,
+        code: 1131,
+        severity: DiagnosticSeverity.Error
+    }),
     argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string) => ({
         message: `Argument of type '${actualTypeString}' is not assignable to parameter of type '${expectedTypeString}'`,
-        code: 1128,
+        code: 1132,
         severity: DiagnosticSeverity.Error
     }),
     duplicateInterfaceDeclaration: (scopeName: string, ifaceName: string) => ({
         message: `Scope '${scopeName}' already contains an interface with name '${ifaceName}'`,
-        code: 1129,
+        code: 1133,
         severity: DiagnosticSeverity.Error
     }),
     namespacedInterfaceCannotShareNameWithNonNamespacedInterface: (nonNamespacedInterfaceName: string) => ({
         message: `Namespaced interface cannot have the same name as a non-namespaced interface '${nonNamespacedInterfaceName}'`,
-        code: 1130,
+        code: 1134,
         severity: DiagnosticSeverity.Error
     }),
     classCannotShareNamewithInterface: (className: string) => ({
         message: `Class cannot have the same name as interface '${className}'`,
-        code: 1131,
+        code: 1135,
         severity: DiagnosticSeverity.Error
     })
 };

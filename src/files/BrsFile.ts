@@ -475,7 +475,6 @@ export class BrsFile {
                                 argText = arg.value.value.toString();
                             }
                         }
-
                         //wrap the value in quotes because that's how it appears in the code
                         if (argText && isStringType(inferredType)) {
                             argText = '"' + argText + '"';
@@ -484,7 +483,9 @@ export class BrsFile {
                     args.push({
                         range: arg.range,
                         type: inferredType,
-                        text: argText
+                        text: argText,
+                        expression: arg,
+                        typeToken: undefined
                     });
                 }
                 let functionCall: FunctionCall = {

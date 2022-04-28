@@ -345,6 +345,7 @@ export default class SGParser {
                 token.endLine - 1,
                 token.startColumn - 1 + (startOffset + length)
             )
+
         };
     }
 

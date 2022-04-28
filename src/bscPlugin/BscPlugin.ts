@@ -1,6 +1,6 @@
 import { isBrsFile } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
-import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent } from '../interfaces';
+import type { AfterProgramValidateEvent, BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
 import { BrsFilePreTranspileProcessor } from './transpile/BrsFilePreTranspileProcessor';
@@ -26,8 +26,15 @@ export class BscPlugin implements CompilerPlugin {
         }
     }
 
+    private scopeValidator = new ScopeValidator();
+
     public onScopeValidate(event: OnScopeValidateEvent) {
-        return new ScopeValidator(event).process();
+        this.scopeValidator.processEvent(event);
+    }
+
+    public afterProgramValidate(event: AfterProgramValidateEvent) {
+        //release memory once the validation cycle has finished
+        this.scopeValidator.reset();
     }
 
     public beforeFileTranspile(event: BeforeFileTranspileEvent) {

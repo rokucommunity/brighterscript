@@ -82,7 +82,9 @@ export interface FunctionCall {
 export interface CallableArg {
     text: string;
     type: BscType;
+    typeToken: Token;
     range: Range;
+    expression: Expression;
 }
 
 export interface CallableParam {
@@ -257,10 +259,12 @@ export interface AfterProgramValidateEvent {
 export interface BeforeProgramTranspileEvent {
     program: Program;
     entries: TranspileEntry[];
+    editor: AstEditor;
 }
 export interface AfterProgramTranspileEvent {
     program: Program;
     entries: TranspileEntry[];
+    editor: AstEditor;
 }
 export interface OnGetCodeActionsEvent {
     program: Program;

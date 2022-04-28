@@ -1413,7 +1413,11 @@ describe('BrsFile', () => {
             `);
             expect(file.functionCalls.length).to.equal(1);
 
-            expect(file.functionCalls[0].args).to.eql([{
+            const argsMap = file.functionCalls[0].args.map(arg => {
+                // disregard arg.expression, etc.
+                return { type: arg.type, range: arg.range, text: arg.text };
+            });
+            expect(argsMap).to.eql([{
                 type: new StringType(),
                 range: util.createRange(2, 32, 2, 38),
                 text: '"name"'
@@ -1797,7 +1801,9 @@ describe('BrsFile', () => {
 
             //hover over sub ma|in()
             expect(
-                (await program.getHover(file.srcPath, Position.create(4, 22))).contents
+                trim(
+                    (await program.getHover(file.srcPath, Position.create(4, 22))).contents.toString()
+                )
             ).to.equal(trim`
                 \`\`\`brightscript
                 sub main() as void
@@ -1951,6 +1957,36 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('excludes trailing commas in array literals', () => {
+            testTranspile(`
+                sub main()
+                    arr = [
+                        1,
+                        2,
+                        3
+                    ]
+                    obj = {
+                        one: 1,
+                        two: 2,
+                        three: 3
+                    }
+                end sub
+            `, `
+                sub main()
+                    arr = [
+                        1
+                        2
+                        3
+                    ]
+                    obj = {
+                        one: 1
+                        two: 2
+                        three: 3
+                    }
+                end sub
+            `);
+        });
+
         it('transpiles if statement keywords as provided', () => {
             const code = `
                 If True Then
@@ -2208,7 +2244,7 @@ describe('BrsFile', () => {
             `, `
                 function Vertibrates_Birds_GetAllBirds()
                     return [
-                        Vertibrates_Birds_GetDuck(),
+                        Vertibrates_Birds_GetDuck()
                         Vertibrates_Birds_GetGoose()
                     ]
                 end function
@@ -2474,20 +2510,20 @@ describe('BrsFile', () => {
             testTranspile(`
                 sub doSomething()
                     person = {
-                        age: 12, 'comment
+                        age: 12 'comment
                         name: "child"
                     }
                     person = {
-                        age: 12, 'comment
+                        age: 12 'comment
                         name: "child" 'comment
                     }
                     person = {
-                        age: 12, 'comment
+                        age: 12 'comment
                         name: "child"
                         'comment
                     }
                     person = {
-                        age: 12, 'comment
+                        age: 12 'comment
                         name: "child" 'comment
                         'comment
                     }
@@ -2503,8 +2539,8 @@ describe('BrsFile', () => {
                 'a function that does something
                 function doSomething(age as integer, name = "bob") 'comment
                     person = { 'comment
-                        name: "parent", 'comment
-                        "age": 12,
+                        name: "parent" 'comment
+                        "age": 12
                         'comment as whole line
                         child: { 'comment
                             name: "child" 'comment
@@ -2540,8 +2576,8 @@ describe('BrsFile', () => {
                     stop 'comment
                     indexes = [ 'comment
                         'comment on its own line
-                        1, 'comment
-                        2, 'comment
+                        1 'comment
+                        2 'comment
                         3 'comment
                     ] 'comment
                     firstIndex = indexes[0] 'comment
@@ -2811,7 +2847,7 @@ describe('BrsFile', () => {
     describe('getTypedef', () => {
         function testTypedef(original: string, expected: string) {
             let file = program.setFile<BrsFile>('source/main.brs', original);
-            expect(file.getTypedef()).to.eql(expected);
+            expect(file.getTypedef().trimEnd()).to.eql(expected);
         }
 
         it('includes namespace on extend class names', () => {

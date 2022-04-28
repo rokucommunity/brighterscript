@@ -1704,7 +1704,7 @@ describe('Program', () => {
             `);
             await program.transpile([], stagingFolderPath);
             expect(
-                fsExtra.readFileSync(`${stagingFolderPath}/source/lib.brs`).toString()
+                fsExtra.readFileSync(`${stagingFolderPath}/source/lib.brs`).toString().trimEnd()
             ).to.eql(trim`
                 'code comment
                 sub log(message)
@@ -1712,7 +1712,7 @@ describe('Program', () => {
                 end sub`
             );
             expect(
-                fsExtra.readFileSync(`${stagingFolderPath}/source/lib.d.bs`).toString()
+                fsExtra.readFileSync(`${stagingFolderPath}/source/lib.d.bs`).toString().trimEnd()
             ).to.eql(trim`
                 'typedef comment
                 sub log(message)
@@ -1785,6 +1785,42 @@ describe('Program', () => {
             expect(literalExpression.token.text).to.eql('"hello world"');
         });
 
+        it('handles AstEditor for beforeProgramTranspile', async () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    print "hello world"
+                end sub
+            `);
+            let literalExpression: LiteralExpression;
+            //replace all strings with "goodbye world"
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeProgramTranspile: (event) => {
+                    file.ast.walk(createVisitor({
+                        LiteralExpression: (literal) => {
+                            literalExpression = literal;
+                            event.editor.setProperty(literal.token, 'text', '"goodbye world"');
+                        }
+                    }), {
+                        walkMode: WalkMode.visitExpressionsRecursive
+                    });
+                }
+            });
+            //transpile the file
+            await program.transpile([], stagingFolderPath);
+            //our changes should be there
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/main.brs`).toString()
+            ).to.eql(trim`
+                sub main()
+                    print "goodbye world"
+                end sub`
+            );
+
+            //our literalExpression should have been restored to its original value
+            expect(literalExpression.token.text).to.eql('"hello world"');
+        });
+
         it('copies bslib.brs when no ropm version was found', async () => {
             await program.transpile([], stagingFolderPath);
             expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/bslib.brs`)).to.be.true;
@@ -1806,7 +1842,7 @@ describe('Program', () => {
             await program.transpile([], program.options.stagingFolderPath);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingFolderPath}/source/logger.brs`).toString()
-            ) + '\n').to.eql(trim`
+            )).to.eql(trim`
                 sub logInfo()
                     print 2
                 end sub

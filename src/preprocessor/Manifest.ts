@@ -1,11 +1,10 @@
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 
-/** The set of possible value types in a `manifest` file's `key=value` pair. */
-export type ManifestValue = number | string | boolean;
-
-/** A map containing the data from a `manifest` file. */
-export type Manifest = Map<string, ManifestValue>;
+/**
+ * A map containing the data from a `manifest` file.
+ */
+export type Manifest = Map<string, string>;
 
 /**
  * Attempts to read a `manifest` file, parsing its contents into a map of string to JavaScript
@@ -34,49 +33,26 @@ export async function getManifest(rootDir: string): Promise<Manifest> {
  *          representing the manifest file's contents
  */
 export function parseManifest(contents: string) {
-    let keyValuePairs = contents
-        // for each line
-        .split('\n')
-        // remove leading/trailing whitespace
-        .map(line => line.trim())
-        // separate keys and values
-        .map((line, index) => {
-            // skip empty lines and comments
-            if (line === '' || line.startsWith('#')) {
-                return ['', ''];
-            }
+    const lines = contents.split(/\r?\n/g);
+    const result = new Map<string, string>();
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // skip empty lines and comments
+        if (line.trim() === '' || line.trim().startsWith('#')) {
+            continue;
+        }
 
-            let equals = line.indexOf('=');
-            if (equals === -1) {
-                throw new Error(
-                    `[manifest:${index +
-                    1}] No '=' detected.  Manifest attributes must be of the form 'key=value'.`
-                );
-            }
-            return [line.slice(0, equals), line.slice(equals + 1)];
-        })
-        // keep only non-empty keys and values
-        .filter(([key, value]) => key && value)
-        // remove leading/trailing whitespace from keys and values
-        .map(([key, value]) => [key.trim(), value.trim()])
-        // convert value to boolean, integer, or leave as string
-        .map(([key, value]): [string, ManifestValue] => {
-            if (value.toLowerCase() === 'true') {
-                return [key, true];
-            }
-            if (value.toLowerCase() === 'false') {
-                return [key, false];
-            }
-
-            let maybeNumber = Number.parseInt(value);
-            // if it's not a number, it's just a string
-            if (Number.isNaN(maybeNumber)) {
-                return [key, value];
-            }
-            return [key, maybeNumber];
-        });
-
-    return new Map<string, ManifestValue>(keyValuePairs);
+        let equalIndex = line.indexOf('=');
+        if (equalIndex === -1) {
+            throw new Error(
+                `[manifest:${i + 1}] No '=' detected.  Manifest attributes must be of the form 'key=value'.`
+            );
+        }
+        const key = line.slice(0, equalIndex);
+        const value = line.slice(equalIndex + 1);
+        result.set(key, value);
+    }
+    return result;
 }
 
 /**

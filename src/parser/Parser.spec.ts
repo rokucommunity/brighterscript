@@ -1,14 +1,14 @@
 import { expect, assert } from 'chai';
 import { Lexer } from '../lexer/Lexer';
-import { ReservedWords } from '../lexer/TokenKind';
+import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { Expression } from './Expression';
-import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
+import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode, getBscTypeFromExpression, TokenUsage } from './Parser';
 import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isArrayType, isBlock, isCommentStatement, isDynamicType, isFloatType, isFunctionStatement, isIfStatement, isIntegerType, isLazyType, isStringType, isUninitializedType } from '../astUtils/reflection';
+import { isArrayType, isBlock, isCommentStatement, isDynamicType, isFloatType, isFunctionStatement, isIfStatement, isIndexedGetExpression, isIntegerType, isLazyType, isStringType, isUninitializedType } from '../astUtils/reflection';
 import { expectSymbolTableEquals, expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
@@ -209,6 +209,97 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expect(parser.diagnostics[0]?.message).not.to.exist;
             expect((parser as any).statements[0]?.func?.body?.statements[0]?.expression).to.be.instanceof(CallfuncExpression);
+        });
+    });
+
+    describe('optional chaining operator', () => {
+        function getExpression<T>(text: string, options?: { matcher?: any; parseMode?: ParseMode }) {
+            const parser = parse(text, options?.parseMode);
+            expectZeroDiagnostics(parser);
+            const expressions = [...parser.references.expressions];
+            if (options?.matcher) {
+                return expressions.find(options.matcher) as unknown as T;
+            } else {
+                return expressions[0] as unknown as T;
+            }
+        }
+        it('works for ?.', () => {
+            const expression = getExpression<DottedGetExpression>(`value = person?.name`);
+            expect(expression).to.be.instanceOf(DottedGetExpression);
+            expect(expression.dot.kind).to.eql(TokenKind.QuestionDot);
+        });
+
+        it('works for ?[', () => {
+            const expression = getExpression<IndexedGetExpression>(`value = person?["name"]`, { matcher: isIndexedGetExpression });
+            expect(expression).to.be.instanceOf(IndexedGetExpression);
+            expect(expression.openingSquare.kind).to.eql(TokenKind.QuestionLeftSquare);
+            expect(expression.questionDotToken).not.to.exist;
+        });
+
+        it('works for ?.[', () => {
+            const expression = getExpression<IndexedGetExpression>(`value = person?.["name"]`, { matcher: isIndexedGetExpression });
+            expect(expression).to.be.instanceOf(IndexedGetExpression);
+            expect(expression.openingSquare.kind).to.eql(TokenKind.LeftSquareBracket);
+            expect(expression.questionDotToken?.kind).to.eql(TokenKind.QuestionDot);
+        });
+
+        it('works for ?@', () => {
+            const expression = getExpression<XmlAttributeGetExpression>(`value = someXml?@someAttr`);
+            expect(expression).to.be.instanceOf(XmlAttributeGetExpression);
+            expect(expression.at.kind).to.eql(TokenKind.QuestionAt);
+        });
+
+        it('works for ?(', () => {
+            const expression = getExpression<CallExpression>(`value = person.getName?()`);
+            expect(expression).to.be.instanceOf(CallExpression);
+            expect(expression.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
+        });
+
+        it('works for print statements using question mark', () => {
+            const { statements } = parse(`
+                ?[1]
+                ?(1+1)
+            `);
+            expect(statements[0]).to.be.instanceOf(PrintStatement);
+            expect(statements[1]).to.be.instanceOf(PrintStatement);
+        });
+
+        //TODO enable this once we properly parse IIFEs
+        it.skip('works for ?( in anonymous function', () => {
+            const expression = getExpression<CallExpression>(`thing = (function() : end function)?()`);
+            expect(expression).to.be.instanceOf(CallExpression);
+            expect(expression.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
+        });
+
+        it('works for ?( in new call', () => {
+            const expression = getExpression<NewExpression>(`thing = new Person?()`, { parseMode: ParseMode.BrighterScript });
+            expect(expression).to.be.instanceOf(NewExpression);
+            expect(expression.call.openingParen.kind).to.eql(TokenKind.QuestionLeftParen);
+        });
+
+        it('distinguishes between optional chaining and ternary expression', () => {
+            const parser = parse(`
+                sub main()
+                    name = person?["name"]
+                    isTrue = true
+                    key = isTrue ? ["name"] : ["age"]
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(parser.references.assignmentStatements[0].value).is.instanceof(IndexedGetExpression);
+            expect(parser.references.assignmentStatements[2].value).is.instanceof(TernaryExpression);
+        });
+
+        it('distinguishes between optional chaining and ternary expression', () => {
+            const parser = parse(`
+                sub main()
+                    'optional chain. the lack of whitespace between ? and [ matters
+                    key = isTrue ?["name"] : getDefault()
+                    'ternary
+                    key = isTrue ? ["name"] : getDefault()
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(parser.references.assignmentStatements[0].value).is.instanceof(IndexedGetExpression);
+            expect(parser.references.assignmentStatements[1].value).is.instanceof(TernaryExpression);
         });
     });
 

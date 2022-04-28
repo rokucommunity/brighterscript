@@ -56,7 +56,9 @@ describe('SGParser', () => {
         expectZeroDiagnostics(file);
 
         const output = file.transpile();
-        expect(output.code).to.equal(trim`
+        expect(
+            output.code.trimEnd()
+        ).to.equal(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ParentScene" extends="GrandparentScene">
                 <interface>
