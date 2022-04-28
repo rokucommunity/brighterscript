@@ -463,6 +463,12 @@ end function
 
 ## Inheritance
 Components also support overloaded methods. This works by copying and renaming parent overridden functions into child components. We will only copy functions that are explicitly called by the child.
+
+A few key points:
+ - parent functions must be marked `protected` in order for child components to override them.
+ - child components may not have private "shadowed" functions with the same name as parents.
+
+
 ```vb
 component MoviePoster extends roSGNode.Poster
     protected function play()
@@ -471,7 +477,7 @@ component MoviePoster extends roSGNode.Poster
 end component
 
 component TinyMoviePoster extends MoviePoster
-    private override function play()
+    protected override function play()
         super.play()
         print "TinyMoviePoster play()"
     end function
@@ -499,7 +505,7 @@ end function
 `components/TinyMoviePoster.xml`
 ```xml
 <?xml version="1.0" encoding="utf-8" ?>
-<component name="TinyMoviePoster" extends="Poster">
+<component name="TinyMoviePoster" extends="MoviePoster">
     <script uri="TinyMoviePoster.brs" />
 </component>
 ```
