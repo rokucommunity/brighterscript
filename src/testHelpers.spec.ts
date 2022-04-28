@@ -6,8 +6,7 @@ import { createSandbox } from 'sinon';
 import { expect } from 'chai';
 import type { CodeActionShorthand } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
-// eslint-disable-next-line @typescript-eslint/consistent-type-imports
-import { BrsFile } from './files/BrsFile';
+import type { BrsFile } from './files/BrsFile';
 import type { Program } from './Program';
 import { standardizePath as s } from './util';
 import type { CodeWithSourceMap } from 'source-map';
