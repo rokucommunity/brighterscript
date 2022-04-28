@@ -13,7 +13,14 @@ export class Cache<TKey = any, TValue = any> extends Map<TKey, TValue> {
             this.set(key, value);
             return value;
         } else {
-            return this.get(key) as R;
+            return this.get(key);
         }
+    }
+
+    /**
+     * Get the item with the specified key.
+     */
+    public get<R extends TValue = TValue>(key: TKey) {
+        return super.get(key) as R;
     }
 }
