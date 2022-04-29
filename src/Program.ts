@@ -1318,7 +1318,7 @@ export class Program {
             return collection;
         }, {});
 
-        function getOutputPath(file: BscFile) {
+        const getOutputPath = (file: BscFile) => {
             let filePathObj = mappedFileEntries[s`${file.pathAbsolute}`];
             if (!filePathObj) {
                 //this file has been added in-memory, from a plugin, for example
@@ -1333,18 +1333,7 @@ export class Program {
             //prepend the staging folder path
             outputPath = s`${stagingFolderPath}/${outputPath}`;
             return outputPath;
-        }
-
-        const entries = Object.values(this.files).map(file => {
-            return {
-                file: file,
-                outputPath: getOutputPath(file)
-            };
-        });
-
-        const astEditor = new AstEditor();
-
-        this.plugins.emit('beforeProgramTranspile', this, entries, astEditor);
+        };
 
         const processedFiles = new Set<File>();
 
@@ -1375,14 +1364,25 @@ export class Program {
                 const typedefPath = outputPath.replace(/\.brs$/i, '.d.bs');
                 await fsExtra.writeFile(typedefPath, fileTranspileResult.typedef);
             }
-        }
+        };
+
+        const entries = Object.values(this.files).map(file => {
+            return {
+                file: file,
+                outputPath: getOutputPath(file)
+            };
+        });
+
+        const astEditor = new AstEditor();
+
+        this.plugins.emit('beforeProgramTranspile', this, entries, astEditor);
 
         let promises = entries.map(async (entry) => {
             return transpileFile(entry.file, entry.outputPath);
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
-        if (!this.getFileByPkgPath(bslibAliasedRokuModulesPkgPath) && !this.getFileByPkgPath(s`source/bslib.brs`)) {
+        if (!this.getFile(bslibAliasedRokuModulesPkgPath) && !this.getFile(s`source/bslib.brs`)) {
             promises.push(util.copyBslibToStaging(stagingFolderPath));
         }
         await Promise.all(promises);
