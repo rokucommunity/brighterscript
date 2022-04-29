@@ -1267,6 +1267,7 @@ export class Program {
         const editor = new AstEditor();
 
         this.plugins.emit('beforeFileTranspile', {
+            program: this,
             file: file,
             outputPath: outputPath,
             editor: editor
@@ -1288,6 +1289,7 @@ export class Program {
         }
 
         const event: AfterFileTranspileEvent = {
+            program: this,
             file: file,
             outputPath: outputPath,
             editor: editor,
@@ -1316,7 +1318,7 @@ export class Program {
             return collection;
         }, {});
 
-        const entries = Object.values(this.files).map(file => {
+        function getOutputPath(file: BscFile) {
             let filePathObj = mappedFileEntries[s`${file.pathAbsolute}`];
             if (!filePathObj) {
                 //this file has been added in-memory, from a plugin, for example
@@ -1330,9 +1332,13 @@ export class Program {
             let outputPath = filePathObj.dest.replace(/\.bs$/gi, '.brs');
             //prepend the staging folder path
             outputPath = s`${stagingFolderPath}/${outputPath}`;
+            return outputPath;
+        }
+
+        const entries = Object.values(this.files).map(file => {
             return {
                 file: file,
-                outputPath: outputPath
+                outputPath: getOutputPath(file)
             };
         });
 
@@ -1340,13 +1346,16 @@ export class Program {
 
         this.plugins.emit('beforeProgramTranspile', this, entries, astEditor);
 
-        const promises = entries.map(async (entry) => {
+        const processedFiles = new Set<File>();
+
+        const transpileFile = async (file: BscFile, outputPath?: string) => {
+            //mark this file as processed so we don't do it again
+            processedFiles.add(file);
+
             //skip transpiling typedef files
-            if (isBrsFile(entry.file) && entry.file.isTypedef) {
+            if (isBrsFile(file) && file.isTypedef) {
                 return;
             }
-
-            const { file, outputPath } = entry;
 
             const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
 
@@ -1366,6 +1375,10 @@ export class Program {
                 const typedefPath = outputPath.replace(/\.brs$/i, '.d.bs');
                 await fsExtra.writeFile(typedefPath, fileTranspileResult.typedef);
             }
+        }
+
+        let promises = entries.map(async (entry) => {
+            return transpileFile(entry.file, entry.outputPath);
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
@@ -1373,6 +1386,25 @@ export class Program {
             promises.push(util.copyBslibToStaging(stagingFolderPath));
         }
         await Promise.all(promises);
+
+        //transpile any new files that plugins added since the start of this transpile process
+        do {
+            promises = [];
+            for (const key in this.files) {
+                const file = this.files[key];
+                //this is a new file
+                if (!processedFiles.has(file)) {
+                    promises.push(
+                        transpileFile(file, getOutputPath(file))
+                    );
+                }
+            }
+            if (promises.length > 0) {
+                this.logger.info(`Transpiling ${promises.length} new files`);
+                await Promise.all(promises);
+            }
+        }
+        while (promises.length > 0);
 
         this.plugins.emit('afterProgramTranspile', this, entries, astEditor);
         astEditor.undoAll();
