@@ -24,6 +24,7 @@ import type { ArrayType } from '../types/ArrayType';
 import type { LazyType } from '../types/LazyType';
 import type { SGInterfaceField, SGInterfaceFunction, SGNode } from '../parser/SGTypes';
 import type { FunctionType } from '../types/FunctionType';
+import type { EnumMemberType, EnumType } from '../types/EnumType';
 
 // File reflection
 
@@ -303,6 +304,12 @@ export function isDynamicType(e: any): e is DynamicType {
 }
 export function isLazyType(e: any): e is LazyType {
     return e?.constructor.name === 'LazyType';
+}
+export function isEnumType(e: any): e is EnumType {
+    return e?.constructor.name === 'EnumType';
+}
+export function isEnumMemberType(e: any): e is EnumMemberType {
+    return e?.constructor.name === 'EnumMemberType';
 }
 
 const numberConstructorNames = [

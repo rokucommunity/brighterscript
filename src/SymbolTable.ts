@@ -118,6 +118,22 @@ export class SymbolTable {
                     const existingType = getTypeFromContext(symbol.type, context);
                     // if the type is not known yet, imply that the first assignment is the type
                     inferredType = inferredType ?? existingType;
+
+                    // TODO TYPES ... maybe this should look as 'convertibility' to infer a type
+                    // EG.:
+                    // value = 1
+                    // value = 3.4
+                    // print value ' hover here would say "dynamic", but it's been treated like a float
+                    //
+                    // This also impacts Enums, for example, as literal members are different types than a value that is generically a value of the type of the Enum:
+                    //
+                    // function getDataType(defaultValue as DataEnum) as DataEnum
+                    //    returnVal = defaultValue
+                    //    if someCondition
+                    //       returnVal = DataEnum.Other
+                    //    end if
+                    //    return returnVal ' hover here would say dynamic, but returnVal was always some kind of "DataEnum"
+                    // end function
                     sameInferredType = (inferredType?.equals(existingType, context));
                 }
                 if (!sameInferredType) {

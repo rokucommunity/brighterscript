@@ -18,6 +18,7 @@ import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
 import { CustomType } from '../types/CustomType';
 import { InterfaceType } from '../types/InterfaceType';
+import { EnumMemberType, EnumType } from '../types/EnumType';
 /**
  * A BrightScript statement
  */
@@ -2293,6 +2294,7 @@ export class ThrowStatement extends Statement {
 }
 
 export class EnumStatement extends Statement implements TypedefProvider {
+    readonly symbolTable: SymbolTable = new SymbolTable();
 
     constructor(
         public tokens: {
@@ -2361,6 +2363,14 @@ export class EnumStatement extends Statement implements TypedefProvider {
         return this.getMemberValueMap().get(name.toLowerCase());
     }
 
+    public buildSymbolTable() {
+        this.symbolTable.clear();
+
+        for (const member of this.getMembers()) {
+            this.symbolTable.addSymbol(member?.name, member?.range, new EnumMemberType(this.fullName, member?.name));
+        }
+    }
+
     /**
      * The name of the enum (without the namespace prefix)
      */
@@ -2384,6 +2394,10 @@ export class EnumStatement extends Statement implements TypedefProvider {
             //return undefined which will allow outside callers to know that this doesn't have a name
             return undefined;
         }
+    }
+
+    public getThisBscType(): EnumType {
+        return new EnumType(this.fullName, this.symbolTable);
     }
 
     transpile(state: BrsTranspileState) {

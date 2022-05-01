@@ -1944,6 +1944,77 @@ describe('BrsFile', () => {
                 '```'
             ].join('\n'));
         });
+
+        it('display literal enum members', () => {
+            let file = program.setFile('source/main.bs', `
+                enum MyEnum
+                    foo
+                    bar
+                end enum
+
+                sub main()
+                    value = MyEnum.foo
+                    print value
+                end sub
+            `);
+
+            let hover = file.getHover(Position.create(7, 38)); // 'myEnum.foo' in value assignnmnt
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'MyEnum.foo as MyEnum',
+                '```'
+            ].join('\n'));
+        });
+
+
+        it('finds enum values from assignments', () => {
+            let file = program.setFile('source/main.bs', `
+                enum MyEnum
+                    foo
+                    bar
+                end enum
+
+                sub main()
+                    value = MyEnum.foo
+                    print value
+                end sub
+            `);
+
+            let hover = file.getHover(Position.create(8, 30)); // 'value' in print statement
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'value as MyEnum',
+                '```'
+            ].join('\n'));
+        });
+
+
+        it('finds enum values as parameters', () => {
+            let file = program.setFile('source/main.bs', `
+                enum MyEnum
+                    foo
+                    bar
+                end enum
+
+                sub printEnum(enumParamVal as MyEnum)
+                    print enumParamVal
+                end sub
+
+                sub main()
+                    printEnum(MyEnum.foo)
+                end sub
+            `);
+
+            let hover = file.getHover(Position.create(7, 30)); // 'enumParamVal' in print statement
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'enumParamVal as MyEnum',
+                '```'
+            ].join('\n'));
+        });
     });
 
     it('does not throw when encountering incomplete import statement', () => {

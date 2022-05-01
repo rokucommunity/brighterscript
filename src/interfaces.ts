@@ -6,7 +6,7 @@ import type { TypedFunctionType } from './types/TypedFunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { FunctionStatement, ClassStatement, InterfaceStatement } from './parser/Statement';
+import type { FunctionStatement, ClassStatement, InterfaceStatement, EnumStatement } from './parser/Statement';
 import type { Expression, FunctionExpression } from './parser/Expression';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceMapGenerator, SourceNode } from 'source-map';
@@ -447,6 +447,9 @@ export interface MemberSymbolTableProvider extends SymbolContainer {
 export type InheritableStatement = ClassStatement | InterfaceStatement;
 
 export type InheritableType = CustomType | InterfaceType;
+
+export type NamedTypeStatement = InheritableStatement | EnumStatement;
+
 
 /**
  * Options for the parser functionDeclaration() method

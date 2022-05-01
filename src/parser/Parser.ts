@@ -589,6 +589,10 @@ export class Parser {
 
         const result = new EnumStatement(tokens, body, this.currentNamespaceName);
 
+        if (tokens.name) {
+            this.currentSymbolTable.addSymbol(tokens.name.text, tokens.name.range, result.getThisBscType());
+        }
+
         this._references.enumStatements.push(result);
         this.exitAnnotationBlock(parentAnnotations);
         return result;
