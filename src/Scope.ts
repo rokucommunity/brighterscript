@@ -3,7 +3,7 @@ import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink, FunctionCall, InheritableStatement, InheritableType } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink, FunctionCall, InheritableStatement, InheritableType, NamedTypeStatement } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, InterfaceStatement, EnumStatement } from './parser/Statement';
@@ -85,8 +85,8 @@ export class Scope {
      * @param name - The name, including the namespace of the interface if possible
      * @param containingNamespace - The namespace used to resolve relative names. (i.e. the namespace around the current statement trying to find the interface or class)
      */
-    public getNamedTypeStatement(name: string, containingNamespace?: string): InheritableStatement {
-        return this.getFileLink(name, containingNamespace)?.item;
+    public getNamedTypeStatement(name: string, containingNamespace?: string): NamedTypeStatement {
+        return this.getNamedTypeFileLink(name, containingNamespace)?.item;
     }
 
     /**
@@ -137,11 +137,39 @@ export class Scope {
     }
 
     /**
-   * Get a InheritableStatement and its containing file by the name of the interface or class
-   * @param name - The name of the interface or class, including the namespace of the class if possible
+     * Get an Enum and its containing file by the Enum name
+     * @param enumName - The Enum name, including the namespace of the enum if possible
+     * @param containingNamespace - The namespace used to resolve relative enum names. (i.e. the namespace around the current statement trying to find a enum)
+     */
+    public getEnumFileLink(enumName: string, containingNamespace?: string): FileLink<EnumStatement> {
+        const lowerName = enumName?.toLowerCase();
+        const enumMap = this.getEnumMap();
+
+        let enumeration = enumMap.get(
+            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
+        );
+        //if we couldn't find the iface by its full namespaced name, look for a global class with that name
+        if (!enumeration) {
+            enumeration = enumMap.get(lowerName);
+        }
+        return enumeration;
+    }
+
+    /**
+   * Get a Named Type (e.g. Class, Interface, Enum) and its containing file by the name
+   * @param name - The name of the type, including the namespace of the class/interface/enum, etc. if possible
    * @param containingNamespace - The namespace used to resolve relative names. (i.e. the namespace around the current statement trying to find a class)
    */
-    public getFileLink(name: string, containingNamespace?: string): FileLink<InheritableStatement> {
+    public getNamedTypeFileLink(name: string, containingNamespace?: string): FileLink<NamedTypeStatement> {
+        return this.getInheritableFileLink(name, containingNamespace) || this.getEnumFileLink(name, containingNamespace);
+    }
+
+    /**
+     * Get a InheritableStatement and its containing file by the name of the interface or class
+     * @param name - The name of the interface or class, including the namespace of the class if possible
+     * @param containingNamespace - The namespace used to resolve relative names. (i.e. the namespace around the current statement trying to find a class)
+     */
+    public getInheritableFileLink(name: string, containingNamespace?: string): FileLink<InheritableStatement> {
         return this.getClassFileLink(name, containingNamespace) || this.getInterfaceFileLink(name, containingNamespace);
     }
 
@@ -204,7 +232,7 @@ export class Scope {
     * @param namespaceName - the current namespace name
     */
     public hasInterface(ifaceName: string, namespaceName?: string): boolean {
-        return !!this.hasInterface(ifaceName, namespaceName);
+        return !!this.getInterface(ifaceName, namespaceName);
     }
 
     /**
@@ -271,7 +299,7 @@ export class Scope {
     public getAncestorTypeList(className: string, functionExpression?: FunctionExpression): InheritableType[] {
         const lowerNamespaceName = functionExpression.namespaceName?.getName().toLowerCase();
         const ancestors: InheritableType[] = [];
-        let currentClassOrIFace = this.getFileLink(className, lowerNamespaceName)?.item;
+        let currentClassOrIFace = this.getInheritableFileLink(className, lowerNamespaceName)?.item;
         if (currentClassOrIFace) {
             ancestors.push(currentClassOrIFace?.getThisBscType());
         }
@@ -761,6 +789,13 @@ export class Scope {
         for (const pair of ifaceMap) {
             const ifaceStmt = pair[1]?.item;
             ifaceStmt?.buildSymbolTable(this.getParentInterface(ifaceStmt));
+        }
+
+        //also link enums
+        const enumMap = this.getEnumMap();
+        for (const pair of enumMap) {
+            const enumStmt = pair[1]?.item;
+            enumStmt?.buildSymbolTable();
         }
     }
 

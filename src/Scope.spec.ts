@@ -2266,6 +2266,74 @@ describe('Scope', () => {
             expect(isFunctionType(mainSymbolTable.getSymbolType('someFunc'))).to.be.true;
         });
 
+        it('allows enums as argument types', () => {
+            program.setFile('source/main.bs', `
+                enum myEnum
+                    bar1
+                    bar2
+                end enum
+
+                sub printEnumValue(value as myEnum)
+                    print value
+                end sub
+
+                sub main()
+                    enumValue = myEnum.bar1
+                    printEnumValue(enumValue)
+                    printEnumValue(myEnum.bar2)
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows enums as return types', () => {
+            program.setFile('source/main.bs', `
+                enum myEnum
+                    bar1
+                    bar2
+                end enum
+
+                function getEnumVal() as myEnum
+                    return myEnum.bar1
+                end function
+
+                sub printEnumValue(value as myEnum)
+                    print value
+                end sub
+
+                sub main()
+                    varVal = getEnumVal()
+                    printEnumValue(varVal)
+                    printEnumValue(getEnumVal())
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not allow enum values as parameter types', () => {
+            program.setFile('source/main.bs', `
+                enum myEnum
+                    bar1
+                    bar2
+                end enum
+
+                sub printEnumValue(value as myEnum.bar1)
+                    print value
+                end sub
+
+                sub main()
+                    printEnumValue(myEnum.bar1)
+                end sub
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [DiagnosticMessages.functionParameterTypeIsInvalid('value', 'myEnum.bar1')]);
+        });
+
     });
     describe('buildNamespaceLookup', () => {
         it('does not crash when class statement is missing `name` prop', () => {
