@@ -1276,6 +1276,19 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         return this.tokens.name?.text;
     }
 
+    /**
+     * Get the name of this expression based on the parse mode
+     */
+    public getName(parseMode: ParseMode) {
+        if (this.namespaceName) {
+            let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
+            let namespaceName = this.namespaceName.getName(parseMode);
+            return namespaceName + delimiter + this.name;
+        } else {
+            return this.name;
+        }
+    }
+
     public transpile(state: BrsTranspileState): TranspileResult {
         //interfaces should completely disappear at runtime
         return [];
