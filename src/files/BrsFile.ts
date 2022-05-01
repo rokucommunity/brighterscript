@@ -949,7 +949,7 @@ export class BrsFile {
 
             if (symbolType?.memberTable) {
                 if (isCustomType(symbolType) || isInterfaceType(symbolType) || isEnumType(symbolType)) {
-                    // we're currently looking at a customType or interface, that has it's own symbol table
+                    // we're currently looking at a type that has its own symbol table
                     // use the name of the custom type
                     // TODO TYPES: get proper parent name for methods/fields defined in super classes
                     tokenText.push(tokenChain.length === 1 ? token.text : symbolType.name);

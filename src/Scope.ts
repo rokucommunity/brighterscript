@@ -148,7 +148,7 @@ export class Scope {
         let enumeration = enumMap.get(
             util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
         );
-        //if we couldn't find the iface by its full namespaced name, look for a global class with that name
+        //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
         if (!enumeration) {
             enumeration = enumMap.get(lowerName);
         }

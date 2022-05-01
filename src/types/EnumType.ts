@@ -34,7 +34,8 @@ export class EnumType implements BscType, SymbolContainer {
 
 export class EnumMemberType implements BscType {
     constructor(
-        public enumName: string, public memberName: string
+        public enumName: string,
+        public memberName: string
     ) { }
 
     public isAssignableTo(targetType: BscType) {
