@@ -1295,24 +1295,6 @@ export class InterfaceStatement extends Statement implements TypedefProvider, Me
     public methods = [] as InterfaceMethodStatement[];
     public fields = [] as InterfaceFieldStatement[];
 
-    /**
-     * The name of the interface WITH its leading namespace (if applicable)
-     */
-    public getName(parseMode: ParseMode) {
-        const name = this.tokens.name?.text;
-        if (name) {
-            if (this.namespaceName) {
-                let namespaceName = this.namespaceName.getName(ParseMode.BrighterScript);
-                return `${namespaceName}.${name}`;
-            } else {
-                return name;
-            }
-        } else {
-            //return undefined which will allow outside callers to know that this interface doesn't have a name
-            return undefined;
-        }
-    }
-
     public buildSymbolTable(parentIface?: InheritableStatement) {
         this.memberTable.clear();
         if (parentIface) {
@@ -1360,6 +1342,24 @@ export class InterfaceStatement extends Statement implements TypedefProvider, Me
 
     public getThisBscType(): InterfaceType {
         return new InterfaceType(this.getName(ParseMode.BrighterScript), this.memberTable);
+    }
+
+    /**
+     * The name of the interface WITH its leading namespace (if applicable)
+     */
+    public getName(parseMode: ParseMode) {
+        const name = this.tokens.name?.text;
+        if (name) {
+            if (this.namespaceName) {
+                let namespaceName = this.namespaceName.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this interface doesn't have a name
+            return undefined;
+        }
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {

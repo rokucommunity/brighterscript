@@ -585,6 +585,46 @@ describe('BrsFile', () => {
     });
 
     describe('parse', () => {
+        it('allows class as parameter type', () => {
+            program.setFile(`source/main.bs`, `
+                class Person
+                    name as string
+                end class
+
+                sub PrintPerson(p as Person)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows interface as parameter type', () => {
+            program.setFile(`source/main.bs`, `
+                interface Person
+                    name as string
+                end interface
+
+                sub PrintPerson(p as Person)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows enum as parameter type', () => {
+            program.setFile(`source/main.bs`, `
+                enum Direction
+                    up
+                    down
+                end enum
+
+                sub PrintDirection(d as Direction)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('supports iife in assignment', () => {
             program.setFile('source/main.brs', `
                 sub main()

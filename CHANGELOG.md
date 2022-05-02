@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.49.0](https://github.com/rokucommunity/brighterscript/compare/v0.48.1...v0.49.0) - 2022-05-02
+### Added
+ - allow interfaces and enums as function param types ([#580](https://github.com/rokucommunity/brighterscript/pull/580))
+ - Transpile files added by plugins after start of transpile cycle ([#578](https://github.com/rokucommunity/brighterscript/pull/578))
+ - add AstEditor to `beforeProgramTranspile` and `afterProgramTranspile` plugin events ([#576](https://github.com/rokucommunity/brighterscript/pull/576))
+
+
+
 ## [1.0.0-alpha.20](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.19...v1.0.0-alpha.20) - 2022-04-28
  - all changes from [v0.48.1](#0481---2022-04-14)
  - all changes from [v0.48.0](#0480---2022-04-13)

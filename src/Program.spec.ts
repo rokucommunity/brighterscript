@@ -1723,6 +1723,51 @@ describe('Program', () => {
 
     describe('transpile', () => {
 
+        it('detects and transpiles files added between beforeProgramTranspile and afterProgramTranspile', async () => {
+            program.setFile('source/main.bs', trim`
+                sub main()
+                    print "hello world"
+                end sub
+            `);
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeFileTranspile: (event) => {
+                    if (isBrsFile(event.file)) {
+                        //add lib1
+                        if (event.outputPath.endsWith('main.brs')) {
+                            event.program.setFile('source/lib1.bs', `
+                                sub lib1()
+                                end sub
+                            `);
+                        }
+                        //add lib2 (this should happen during the next cycle of "catch missing files" cycle
+                        if (event.outputPath.endsWith('main.brs')) {
+                            //add another file
+                            event.program.setFile('source/lib2.bs', `
+                                sub lib2()
+                                end sub
+                            `);
+                        }
+                    }
+                }
+            });
+            await program.transpile([], stagingFolderPath);
+            //our new files should exist
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/lib1.brs`).toString()
+            ).to.eql(trim`
+                sub lib1()
+                end sub
+            `);
+            //our changes should be there
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/lib2.brs`).toString()
+            ).to.eql(trim`
+                sub lib2()
+                end sub
+            `);
+        });
+
         it('sets needsTranspiled=true when there is at least one edit', async () => {
             program.setFile('source/main.brs', trim`
                 sub main()

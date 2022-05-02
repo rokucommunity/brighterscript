@@ -346,6 +346,9 @@ export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
 }
 
 export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
+    /**
+     * The program this event was triggered for
+     */
     program: Program;
     file: TFile;
     outputPath: string;
