@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.21](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha20...v1.0.0-alpha.21) - 2022-05-02
+### Added
+ - allow enym types as function parameters ([#579](https://github.com/rokucommunity/brighterscript/pull/579))
+### Changed
+ - all changes from [v0.49.0](#0481---2022-05-02)
+
+
+
 ## [0.49.0](https://github.com/rokucommunity/brighterscript/compare/v0.48.1...v0.49.0) - 2022-05-02
 ### Added
  - allow interfaces and enums as function param types ([#580](https://github.com/rokucommunity/brighterscript/pull/580))
@@ -15,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [1.0.0-alpha.20](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.19...v1.0.0-alpha.20) - 2022-04-28
+### Changed
  - all changes from [v0.48.1](#0481---2022-04-14)
  - all changes from [v0.48.0](#0480---2022-04-13)
  - all changes from [v0.47.3](#0473---2022-04-08)
