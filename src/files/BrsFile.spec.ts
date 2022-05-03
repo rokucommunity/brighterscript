@@ -124,7 +124,7 @@ describe('BrsFile', () => {
                 end sub
             `);
             expect(() => {
-                program.getCompletions(file.pathAbsolute, util.createPosition(2, 34));
+                program.getCompletions(file.srcPath, util.createPosition(2, 34));
             }).not.to.throw;
         });
 
@@ -1680,7 +1680,7 @@ describe('BrsFile', () => {
             `);
 
             expect(
-                (await program.getHover(file.pathAbsolute, Position.create(2, 30))).contents
+                (await program.getHover(file.srcPath, Position.create(2, 30))).contents
             ).to.equal([
                 '```brightscript',
                 'function UCase(s as string) as string',
@@ -1696,7 +1696,7 @@ describe('BrsFile', () => {
             `);
 
             expect(
-                (await program.getHover(file.pathAbsolute, Position.create(2, 35))).contents
+                (await program.getHover(file.srcPath, Position.create(2, 35))).contents
             ).to.equal([
                 '```brightscript',
                 //TODO this really shouldn't be returning the global function, but it does...so make sure it doesn't crash right now.
@@ -1780,7 +1780,7 @@ describe('BrsFile', () => {
 
             //hover over log("hello")
             expect(
-                (await program.getHover(file.pathAbsolute, Position.create(5, 22))).contents
+                (await program.getHover(file.srcPath, Position.create(5, 22))).contents
             ).to.equal([
                 '```brightscript',
                 'sub log(message as string) as void',
@@ -1795,7 +1795,7 @@ describe('BrsFile', () => {
             //hover over sub ma|in()
             expect(
                 trim(
-                    (await program.getHover(file.pathAbsolute, Position.create(4, 22))).contents.toString()
+                    (await program.getHover(file.srcPath, Position.create(4, 22))).contents.toString()
                 )
             ).to.equal(trim`
                 \`\`\`brightscript
@@ -2731,7 +2731,7 @@ describe('BrsFile', () => {
         it('removes typedef link when typedef is removed', () => {
             const typedef = program.setFile<BrsFile>('source/main.d.bs', ``);
             const file = program.setFile<BrsFile>('source/main.brs', ``);
-            program.removeFile(typedef.pathAbsolute);
+            program.removeFile(typedef.srcPath);
             expect(file.typedefFile).to.be.undefined;
         });
     });

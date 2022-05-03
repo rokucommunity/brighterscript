@@ -97,7 +97,7 @@ export class ScopeValidator {
                             relatedInformation: [{
                                 message: 'Enum declared here',
                                 location: Location.create(
-                                    URI.file(file.pathAbsolute).toString(),
+                                    URI.file(file.srcPath).toString(),
                                     theEnum.tokens.name.range
                                 )
                             }]
@@ -128,7 +128,7 @@ export class ScopeValidator {
         //now that we've collected all enum declarations, flag duplicates
         for (const enumLocations of enumLocationsByName.values()) {
             //sort by srcPath to keep the primary enum location consistent
-            enumLocations.sort((a, b) => a.file?.pathAbsolute?.localeCompare(b.file?.pathAbsolute));
+            enumLocations.sort((a, b) => a.file?.srcPath?.localeCompare(b.file?.srcPath));
             const primaryEnum = enumLocations.shift();
             const fullName = primaryEnum.statement.fullName;
             for (const duplicateEnumInfo of enumLocations) {
@@ -139,7 +139,7 @@ export class ScopeValidator {
                     relatedInformation: [{
                         message: 'Enum declared here',
                         location: Location.create(
-                            URI.file(primaryEnum.file.pathAbsolute).toString(),
+                            URI.file(primaryEnum.file.srcPath).toString(),
                             primaryEnum.statement.tokens.name.range
                         )
                     }]

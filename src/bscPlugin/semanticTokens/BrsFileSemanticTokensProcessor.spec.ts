@@ -33,7 +33,7 @@ describe('BrsFileSemanticTokensProcessor', () => {
         program.validate();
         expectZeroDiagnostics(program);
         expect(
-            program.getSemanticTokens(file.pathAbsolute)
+            program.getSemanticTokens(file.srcPath)
         ).to.eql([{
             range: util.createRange(7, 34, 7, 44),
             tokenType: SemanticTokenTypes.namespace
@@ -61,7 +61,7 @@ describe('BrsFileSemanticTokensProcessor', () => {
         program.validate();
         expectZeroDiagnostics(program);
         expect(
-            util.sortByRange(program.getSemanticTokens(file.pathAbsolute))
+            util.sortByRange(program.getSemanticTokens(file.srcPath))
         ).to.eql([{
             range: util.createRange(2, 22, 2, 32),
             tokenType: SemanticTokenTypes.namespace

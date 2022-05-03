@@ -7,7 +7,7 @@ export class BrsTranspileState extends TranspileState {
     public constructor(
         public file: BrsFile
     ) {
-        super(file.pathAbsolute, file.program.options);
+        super(file.srcPath, file.program.options);
         this.bslibPrefix = this.file.program.bslibPrefix;
     }
 

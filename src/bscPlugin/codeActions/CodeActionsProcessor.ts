@@ -55,7 +55,7 @@ export class CodeActionsProcessor {
                     kind: CodeActionKind.QuickFix,
                     changes: [{
                         type: 'insert',
-                        filePath: this.event.file.pathAbsolute,
+                        filePath: this.event.file.srcPath,
                         position: insertPosition,
                         newText: `import "${pkgPath}"\n`
                     }]
@@ -91,7 +91,7 @@ export class CodeActionsProcessor {
     }
 
     private addMissingExtends(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {
-        const srcPath = this.event.file.pathAbsolute;
+        const srcPath = this.event.file.srcPath;
         const { component } = (this.event.file as XmlFile).parser.ast;
         //inject new attribute after the final attribute, or after the `<component` if there are no attributes
         const pos = (component.attributes[component.attributes.length - 1] ?? component.tag).range.end;
