@@ -69,7 +69,7 @@ export class ProgramBuilder {
         if (!file) {
             file = {
                 pkgPath: this.program.getPkgPath(srcPath),
-                srcPath: srcPath, //keep this for back-compat TODO remove in v1
+                pathAbsolute: srcPath, //keep this for backwards-compatibility. TODO remove in v1
                 srcPath: srcPath,
                 getDiagnostics: () => {
                     return [<any>diagnostic];
@@ -506,7 +506,7 @@ export class ProgramBuilder {
 
     /**
      * Remove all files from the program that are in the specified folder path
-     * @param srcPath the path to the folder
+     * @param srcPath the path to the
      */
     public removeFilesInFolder(srcPath: string) {
         for (let filePath in this.program.files) {

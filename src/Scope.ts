@@ -7,7 +7,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement } from './parser/Statement';
+import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement } from './parser/Statement';
 import type { NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { standardizePath as s, util } from './util';
@@ -64,6 +64,24 @@ export class Scope {
     }
 
     /**
+     * Get the interface with the specified name.
+     * @param ifaceName - The interface name, including the namespace of the interface if possible
+     * @param containingNamespace - The namespace used to resolve relative interface names. (i.e. the namespace around the current statement trying to find a interface)
+     */
+    public getInterface(ifaceName: string, containingNamespace?: string): InterfaceStatement {
+        return this.getInterfaceFileLink(ifaceName, containingNamespace)?.item;
+    }
+
+    /**
+     * Get the enum with the specified name.
+     * @param enumName - The enum name, including the namespace if possible
+     * @param containingNamespace - The namespace used to resolve relative enum names. (i.e. the namespace around the current statement trying to find an enum)
+     */
+    public getEnum(enumName: string, containingNamespace?: string): EnumStatement {
+        return this.getEnumFileLink(enumName, containingNamespace)?.item;
+    }
+
+    /**
      * Get a class and its containing file by the class name
      * @param className - The class name, including the namespace of the class if possible
      * @param containingNamespace - The namespace used to resolve relative class names. (i.e. the namespace around the current statement trying to find a class)
@@ -82,6 +100,45 @@ export class Scope {
         return cls;
     }
 
+
+    /**
+   * Get an interface and its containing file by the interface name
+   * @param ifaceName - The interface name, including the namespace of the interface if possible
+   * @param containingNamespace - The namespace used to resolve relative interface names. (i.e. the namespace around the current statement trying to find a interface)
+   */
+    public getInterfaceFileLink(ifaceName: string, containingNamespace?: string): FileLink<InterfaceStatement> {
+        const lowerName = ifaceName?.toLowerCase();
+        const ifaceMap = this.getInterfaceMap();
+
+        let iface = ifaceMap.get(
+            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
+        );
+        //if we couldn't find the iface by its full namespaced name, look for a global class with that name
+        if (!iface) {
+            iface = ifaceMap.get(lowerName);
+        }
+        return iface;
+    }
+
+    /**
+     * Get an Enum and its containing file by the Enum name
+     * @param enumName - The Enum name, including the namespace of the enum if possible
+     * @param containingNamespace - The namespace used to resolve relative enum names. (i.e. the namespace around the current statement trying to find a enum)
+     */
+    public getEnumFileLink(enumName: string, containingNamespace?: string): FileLink<EnumStatement> {
+        const lowerName = enumName?.toLowerCase();
+        const enumMap = this.getEnumMap();
+
+        let enumeration = enumMap.get(
+            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
+        );
+        //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
+        if (!enumeration) {
+            enumeration = enumMap.get(lowerName);
+        }
+        return enumeration;
+    }
+
     /**
     * Tests if a class exists with the specified name
     * @param className - the all-lower-case namespace-included class name
@@ -89,6 +146,24 @@ export class Scope {
     */
     public hasClass(className: string, namespaceName?: string): boolean {
         return !!this.getClass(className, namespaceName);
+    }
+
+    /**
+    * Tests if an interface exists with the specified name
+    * @param ifaceName - the all-lower-case namespace-included interface name
+    * @param namespaceName - the current namespace name
+    */
+    public hasInterface(ifaceName: string, namespaceName?: string): boolean {
+        return !!this.getInterface(ifaceName, namespaceName);
+    }
+
+    /**
+    * Tests if an enum exists with the specified name
+    * @param enumName - the all-lower-case namespace-included enum name
+    * @param namespaceName - the current namespace name
+    */
+    public hasEnum(enumName: string, namespaceName?: string): boolean {
+        return !!this.getEnum(enumName, namespaceName);
     }
 
     /**
@@ -105,6 +180,28 @@ export class Scope {
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (lowerClassName) {
                             map.set(lowerClassName, { item: cls, file: file });
+                        }
+                    }
+                }
+            });
+            return map;
+        });
+    }
+
+    /**
+    * A dictionary of all Interfaces in this scope. This includes namespaced Interfaces always with their full name.
+    * The key is stored in lower case
+    */
+    public getInterfaceMap(): Map<string, FileLink<InterfaceStatement>> {
+        return this.cache.getOrAdd('interfaceMap', () => {
+            const map = new Map<string, FileLink<InterfaceStatement>>();
+            this.enumerateBrsFiles((file) => {
+                if (isBrsFile(file)) {
+                    for (let iface of file.parser.references.interfaceStatements) {
+                        const lowerIfaceName = iface.getName(ParseMode.BrighterScript)?.toLowerCase();
+                        //only track classes with a defined name (i.e. exclude nameless malformed classes)
+                        if (lowerIfaceName) {
+                            map.set(lowerIfaceName, { item: iface, file: file });
                         }
                     }
                 }
@@ -603,7 +700,7 @@ export class Scope {
                 if (isCustomType(param.type) && param.typeToken) {
                     const paramTypeName = param.type.name;
                     const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
-                    if (!this.hasClass(paramTypeName, currentNamespaceName)) {
+                    if (!this.hasClass(paramTypeName, currentNamespaceName) && !this.hasInterface(paramTypeName) && !this.hasEnum(paramTypeName)) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.functionParameterTypeIsInvalid(param.name.text, paramTypeName),
                             range: param.typeToken.range,

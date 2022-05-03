@@ -179,8 +179,7 @@ export class Util {
                 let diagnostic = {
                     ...DiagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
                     file: {
-                        srcPath: configFilePath,
-                        srcPath: configFilePath //keep this for back-compat TODO remove in v1
+                        srcPath: configFilePath
                     },
                     range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
                 } as BsDiagnostic;

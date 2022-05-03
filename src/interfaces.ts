@@ -265,6 +265,7 @@ export interface OnScopeValidateEvent {
 export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty' | 'overrideTranspileResult'>;
 
 export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
+    program: Program;
     file: TFile;
     outputPath: string;
     /**
@@ -276,6 +277,10 @@ export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
 }
 
 export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
+    /**
+     * The program this event was triggered for
+     */
+    program: Program;
     file: TFile;
     outputPath: string;
     /**
