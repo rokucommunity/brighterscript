@@ -198,8 +198,8 @@ export interface CompilerPlugin {
     afterProgramCreate?: (program: Program) => void;
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
-    beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
-    afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
@@ -265,6 +265,7 @@ export interface OnScopeValidateEvent {
 export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty' | 'overrideTranspileResult'>;
 
 export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
+    program: Program;
     file: TFile;
     outputPath: string;
     /**
@@ -276,6 +277,10 @@ export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
 }
 
 export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
+    /**
+     * The program this event was triggered for
+     */
+    program: Program;
     file: TFile;
     outputPath: string;
     /**
