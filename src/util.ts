@@ -179,7 +179,7 @@ export class Util {
                 let diagnostic = {
                     ...DiagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
                     file: {
-                        pathAbsolute: configFilePath
+                        srcPath: configFilePath
                     },
                     range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
                 } as BsDiagnostic;
@@ -436,16 +436,16 @@ export class Util {
 
     /**
      * Compute the relative path from the source file to the target file
-     * @param pkgSourcePathAbsolute  - the absolute path to the source relative to the package location
-     * @param pkgTargetPathAbsolute  - the absolute path ro the target relative to the package location
+     * @param pkgSrcPath  - the absolute path to the source, where cwd is the package location
+     * @param pkgTargetPath  - the absolute path to the target, where cwd is the package location
      */
-    public getRelativePath(pkgSourcePathAbsolute: string, pkgTargetPathAbsolute: string) {
-        pkgSourcePathAbsolute = path.normalize(pkgSourcePathAbsolute);
-        pkgTargetPathAbsolute = path.normalize(pkgTargetPathAbsolute);
+    public getRelativePath(pkgSrcPath: string, pkgTargetPath: string) {
+        pkgSrcPath = path.normalize(pkgSrcPath);
+        pkgTargetPath = path.normalize(pkgTargetPath);
 
         //break by path separator
-        let sourceParts = pkgSourcePathAbsolute.split(path.sep);
-        let targetParts = pkgTargetPathAbsolute.split(path.sep);
+        let sourceParts = pkgSrcPath.split(path.sep);
+        let targetParts = pkgTargetPath.split(path.sep);
 
         let commonParts = [] as string[];
         //find their common root
@@ -615,8 +615,8 @@ export class Util {
     /**
      * Given a file path, convert it to a URI string
      */
-    public pathToUri(pathAbsolute: string) {
-        return URI.file(pathAbsolute).toString();
+    public pathToUri(filePath: string) {
+        return URI.file(filePath).toString();
     }
 
     /**

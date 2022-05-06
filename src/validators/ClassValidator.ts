@@ -2,7 +2,7 @@ import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import type { ClassMethodStatement, ClassStatement } from '../parser/Statement';
+import type { ClassStatement, MethodStatement } from '../parser/Statement';
 import { CancellationTokenSource, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
@@ -99,7 +99,7 @@ export class BsClassValidator {
                     range: classStatement.name.range,
                     relatedInformation: [{
                         location: Location.create(
-                            URI.file(nonNamespaceClass.file.pathAbsolute).toString(),
+                            URI.file(nonNamespaceClass.file.srcPath).toString(),
                             nonNamespaceClass.name.range
                         ),
                         message: 'Original class declared here'
@@ -111,7 +111,7 @@ export class BsClassValidator {
 
     private verifyChildConstructor() {
         for (const [, classStatement] of this.classes) {
-            const newMethod = classStatement.memberMap.new as ClassMethodStatement;
+            const newMethod = classStatement.memberMap.new as MethodStatement;
 
             if (
                 //this class has a "new method"
@@ -349,7 +349,7 @@ export class BsClassValidator {
                         range: classStatement.name.range,
                         relatedInformation: [{
                             location: Location.create(
-                                URI.file(alreadyDefinedClass.file.pathAbsolute).toString(),
+                                URI.file(alreadyDefinedClass.file.srcPath).toString(),
                                 this.classes.get(lowerName).range
                             ),
                             message: ''

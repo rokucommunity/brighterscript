@@ -31,7 +31,11 @@ const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bs
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
 
 export interface SourceObj {
+    /**
+     * @deprecated use `srcPath` instead
+     */
     pathAbsolute: string;
+    srcPath: string;
     source: string;
     definitions?: string;
 }
@@ -336,7 +340,7 @@ export class Program {
      * Update internal maps with this file reference
      */
     private assignFile<T extends BscFile = BscFile>(file: T) {
-        this.files[file.pathAbsolute.toLowerCase()] = file;
+        this.files[file.srcPath.toLowerCase()] = file;
         this.pkgMap[file.pkgPath.toLowerCase()] = file;
         return file;
     }
@@ -345,7 +349,7 @@ export class Program {
      * Remove this file from internal maps
      */
     private unassignFile<T extends BscFile = BscFile>(file: T) {
-        delete this.files[file.pathAbsolute.toLowerCase()];
+        delete this.files[file.srcPath.toLowerCase()];
         delete this.pkgMap[file.pkgPath.toLowerCase()];
         return file;
     }
@@ -418,7 +422,9 @@ export class Program {
                 }
 
                 let sourceObj: SourceObj = {
+                    //TODO remove `pathAbsolute` in v1
                     pathAbsolute: srcPath,
+                    srcPath: srcPath,
                     source: fileContents
                 };
                 this.plugins.emit('beforeFileParse', sourceObj);
@@ -446,7 +452,9 @@ export class Program {
                 );
 
                 let sourceObj: SourceObj = {
+                    //TODO remove `pathAbsolute` in v1
                     pathAbsolute: srcPath,
+                    srcPath: srcPath,
                     source: fileContents
                 };
                 this.plugins.emit('beforeFileParse', sourceObj);
@@ -469,8 +477,8 @@ export class Program {
 
             } else {
                 //TODO do we actually need to implement this? Figure out how to handle img paths
-                // let genericFile = this.files[pathAbsolute] = <any>{
-                //     pathAbsolute: pathAbsolute,
+                // let genericFile = this.files[srcPath] = <any>{
+                //     srcPath: srcPath,
                 //     pkgPath: pkgPath,
                 //     wasProcessed: true
                 // } as File;
@@ -497,13 +505,13 @@ export class Program {
      * Find the file by its absolute path. This is case INSENSITIVE, since
      * Roku is a case insensitive file system. It is an error to have multiple files
      * with the same path with only case being different.
-     * @param pathAbsolute
+     * @param srcPath
      * @deprecated use `getFile` instead, which auto-detects the path type
      */
-    public getFileByPathAbsolute<T extends BrsFile | XmlFile>(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
+    public getFileByPathAbsolute<T extends BrsFile | XmlFile>(srcPath: string) {
+        srcPath = s`${srcPath}`;
         for (let filePath in this.files) {
-            if (filePath.toLowerCase() === pathAbsolute.toLowerCase()) {
+            if (filePath.toLowerCase() === srcPath.toLowerCase()) {
                 return this.files[filePath] as T;
             }
         }
@@ -669,7 +677,7 @@ export class Program {
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
                                 location: Location.create(
-                                    URI.file(xmlFile.pathAbsolute).toString(),
+                                    URI.file(xmlFile.srcPath ?? xmlFile.srcPath).toString(),
                                     x.componentName.range
                                 ),
                                 message: 'Also defined here'
@@ -879,8 +887,8 @@ export class Program {
      * Given a position in a file, if the position is sitting on some type of identifier,
      * go to the definition of that identifier (where this thing was first defined)
      */
-    public getDefinition(pathAbsolute: string, position: Position) {
-        let file = this.getFile(pathAbsolute);
+    public getDefinition(srcPath: string, position: Position) {
+        let file = this.getFile(srcPath);
         if (!file) {
             return [];
         }
@@ -897,9 +905,9 @@ export class Program {
         }
     }
 
-    public getHover(pathAbsolute: string, position: Position) {
+    public getHover(srcPath: string, position: Position) {
         //find the file
-        let file = this.getFile(pathAbsolute);
+        let file = this.getFile(srcPath);
         if (!file) {
             return null;
         }
@@ -911,9 +919,9 @@ export class Program {
     /**
      * Compute code actions for the given file and range
      */
-    public getCodeActions(pathAbsolute: string, range: Range) {
+    public getCodeActions(srcPath: string, range: Range) {
         const codeActions = [] as CodeAction[];
-        const file = this.getFile(pathAbsolute);
+        const file = this.getFile(srcPath);
         if (file) {
             const diagnostics = this
                 //get all current diagnostics (filtered by diagnostic filters)
@@ -1180,9 +1188,9 @@ export class Program {
 
     }
 
-    public getReferences(pathAbsolute: string, position: Position) {
+    public getReferences(srcPath: string, position: Position) {
         //find the file
-        let file = this.getFile(pathAbsolute);
+        let file = this.getFile(srcPath);
         if (!file) {
             return null;
         }
@@ -1223,7 +1231,7 @@ export class Program {
 
                     result.push({
                         label: relativePath,
-                        detail: file.pathAbsolute,
+                        detail: file.srcPath,
                         kind: CompletionItemKind.File,
                         textEdit: {
                             newText: relativePath,
@@ -1234,7 +1242,7 @@ export class Program {
                     //add the absolute path
                     result.push({
                         label: filePkgPath,
-                        detail: file.pathAbsolute,
+                        detail: file.srcPath,
                         kind: CompletionItemKind.File,
                         textEdit: {
                             newText: filePkgPath,
@@ -1303,7 +1311,7 @@ export class Program {
         editor.undoAll();
 
         return {
-            pathAbsolute: file.pathAbsolute,
+            srcPath: file.srcPath,
             pkgPath: file.pkgPath,
             code: event.code,
             map: event.map,
@@ -1319,7 +1327,7 @@ export class Program {
         }, {});
 
         const getOutputPath = (file: BscFile) => {
-            let filePathObj = mappedFileEntries[s`${file.pathAbsolute}`];
+            let filePathObj = mappedFileEntries[s`${file.srcPath}`];
             if (!filePathObj) {
                 //this file has been added in-memory, from a plugin, for example
                 filePathObj = {
@@ -1352,7 +1360,7 @@ export class Program {
             await fsExtra.ensureDir(path.dirname(outputPath));
 
             if (await fsExtra.pathExists(outputPath)) {
-                throw new Error(`Error while transpiling "${file.pathAbsolute}". A file already exists at "${outputPath}" and will not be overwritten.`);
+                throw new Error(`Error while transpiling "${file.srcPath}". A file already exists at "${outputPath}" and will not be overwritten.`);
             }
             const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, fileTranspileResult.map.toString()) : null;
             await Promise.all([
@@ -1483,7 +1491,7 @@ export class Program {
 }
 
 export interface FileTranspileResult {
-    pathAbsolute: string;
+    srcPath: string;
     pkgPath: string;
     code: string;
     map: SourceMapGenerator;
