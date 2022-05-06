@@ -2,7 +2,7 @@ import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import type { ClassMethodStatement, ClassStatement } from '../parser/Statement';
+import type { ClassStatement, MethodStatement } from '../parser/Statement';
 import { CancellationTokenSource, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
@@ -111,7 +111,7 @@ export class BsClassValidator {
 
     private verifyChildConstructor() {
         for (const [, classStatement] of this.classes) {
-            const newMethod = classStatement.memberMap.new as ClassMethodStatement;
+            const newMethod = classStatement.memberMap.new as MethodStatement;
 
             if (
                 //this class has a "new method"

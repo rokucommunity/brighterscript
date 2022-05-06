@@ -4,38 +4,35 @@ import type { BlockTerminator } from '../lexer/TokenKind';
 import { Lexer } from '../lexer/Lexer';
 import {
     AllowedLocalIdentifiers,
-    AssignmentOperators,
-    DisallowedLocalIdentifiersText,
-    DisallowedFunctionIdentifiersText,
     AllowedProperties,
+    AssignmentOperators,
     BrighterScriptSourceLiterals,
-    DeclarableTypes, TokenKind
+    DeclarableTypes,
+    DisallowedFunctionIdentifiersText,
+    DisallowedLocalIdentifiersText,
+    TokenKind
 } from '../lexer/TokenKind';
 import type {
-    Statement,
+    PrintSeparatorSpace,
     PrintSeparatorTab,
-    PrintSeparatorSpace
+    Statement
 } from './Statement';
 import {
-    InterfaceStatement,
-    InterfaceMethodStatement,
-    InterfaceFieldStatement,
     AssignmentStatement,
     Block,
     Body,
     CatchStatement,
-    ClassFieldStatement,
-    ClassMethodStatement,
     ClassStatement,
     CommentStatement,
     DimStatement,
     DottedSetStatement,
     EndStatement,
-    EnumStatement,
     EnumMemberStatement,
+    EnumStatement,
     ExitForStatement,
     ExitWhileStatement,
     ExpressionStatement,
+    FieldStatement,
     ForEachStatement,
     ForStatement,
     FunctionStatement,
@@ -44,8 +41,12 @@ import {
     ImportStatement,
     IncrementStatement,
     IndexedSetStatement,
+    InterfaceFieldStatement,
+    InterfaceMethodStatement,
+    InterfaceStatement,
     LabelStatement,
     LibraryStatement,
+    MethodStatement,
     NamespaceStatement,
     PrintStatement,
     ReturnStatement,
@@ -61,30 +62,30 @@ import type { Expression } from './Expression';
 import {
     AALiteralExpression,
     AAMemberExpression,
+    AnnotationExpression,
     ArrayLiteralExpression,
     BinaryExpression,
     CallExpression,
     CallfuncExpression,
     DottedGetExpression,
+    EscapedCharCodeLiteralExpression,
     FunctionExpression,
+    FunctionParameterExpression,
     GroupingExpression,
     IndexedGetExpression,
     LiteralExpression,
     NamespacedVariableNameExpression,
     NewExpression,
+    NullCoalescingExpression,
     RegexLiteralExpression,
+    SourceLiteralExpression,
+    TaggedTemplateStringExpression,
+    TemplateStringExpression,
+    TemplateStringQuasiExpression,
+    TernaryExpression,
     UnaryExpression,
     VariableExpression,
-    XmlAttributeGetExpression,
-    TemplateStringExpression,
-    EscapedCharCodeLiteralExpression,
-    TemplateStringQuasiExpression,
-    TaggedTemplateStringExpression,
-    SourceLiteralExpression,
-    AnnotationExpression,
-    FunctionParameterExpression,
-    TernaryExpression,
-    NullCoalescingExpression
+    XmlAttributeGetExpression
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
@@ -647,7 +648,7 @@ export class Parser {
                         });
                     }
 
-                    decl = new ClassMethodStatement(
+                    decl = new MethodStatement(
                         accessModifier,
                         funcDeclaration.name,
                         funcDeclaration.func,
@@ -655,12 +656,12 @@ export class Parser {
                     );
 
                     //refer to this statement as parent of the expression
-                    functionStatement.func.functionStatement = decl as ClassMethodStatement;
+                    functionStatement.func.functionStatement = decl as MethodStatement;
 
                     //fields
                 } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
 
-                    decl = this.classFieldDeclaration(accessModifier);
+                    decl = this.fieldDeclaration(accessModifier);
 
                     //class fields cannot be overridden
                     if (overrideKeyword) {
@@ -711,7 +712,7 @@ export class Parser {
         return result;
     }
 
-    private classFieldDeclaration(accessModifier: Token | null) {
+    private fieldDeclaration(accessModifier: Token | null) {
         let name = this.consume(
             DiagnosticMessages.expectedClassFieldIdentifier(),
             TokenKind.Identifier,
@@ -741,7 +742,7 @@ export class Parser {
             initialValue = this.expression();
         }
 
-        return new ClassFieldStatement(
+        return new FieldStatement(
             accessModifier,
             name,
             asToken,
