@@ -20,6 +20,17 @@ describe('lexer', () => {
         ]);
     });
 
+    it('recognizes component keywords', () => {
+        let { tokens } = Lexer.scan('component end component endcomponent end   component');
+        expect(tokens.map(x => x.kind)).to.eql([
+            TokenKind.Component,
+            TokenKind.EndComponent,
+            TokenKind.EndComponent,
+            TokenKind.EndComponent,
+            TokenKind.Eof
+        ]);
+    });
+
     it('recognizes the question mark operator in various contexts', () => {
         expectKinds('? ?? ?. ?[ ?.[ ?( ?@', [
             TokenKind.Question,

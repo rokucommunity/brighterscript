@@ -150,6 +150,8 @@ export enum TokenKind {
     EndClass = 'EndClass',
     Namespace = 'Namespace',
     EndNamespace = 'EndNamespace',
+    Component = 'Component',
+    EndComponent = 'EndComponent',
     Enum = 'Enum',
     EndEnum = 'EndEnum',
     Public = 'Public',
@@ -301,6 +303,9 @@ export const Keywords: Record<string, TokenKind> = {
     namespace: TokenKind.Namespace,
     endnamespace: TokenKind.EndNamespace,
     'end namespace': TokenKind.EndNamespace,
+    component: TokenKind.Component,
+    endcomponent: TokenKind.EndComponent,
+    'end component': TokenKind.EndComponent,
     import: TokenKind.Import,
     'line_num': TokenKind.LineNumLiteral,
     'source_file_path': TokenKind.SourceFilePathLiteral,
@@ -331,6 +336,7 @@ export type BlockTerminator =
     | TokenKind.EndSub
     | TokenKind.EndFunction
     | TokenKind.EndNamespace
+    | TokenKind.EndComponent
     | TokenKind.EndInterface
     | TokenKind.Catch
     | TokenKind.EndTry;
@@ -424,6 +430,8 @@ export const AllowedProperties = [
     TokenKind.Override,
     TokenKind.Namespace,
     TokenKind.EndNamespace,
+    TokenKind.Component,
+    TokenKind.EndComponent,
     TokenKind.Import,
     TokenKind.LineNumLiteral,
     TokenKind.SourceFilePathLiteral,
@@ -466,6 +474,8 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Override,
     TokenKind.Namespace,
     TokenKind.EndNamespace,
+    TokenKind.Component,
+    TokenKind.EndComponent,
     TokenKind.Import,
     TokenKind.Try,
     TokenKind.Catch,
