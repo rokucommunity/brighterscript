@@ -10,7 +10,6 @@ component MoviePoster extends roSGNode.Poster
 end component
 ```
 
-
 <details>
   <summary>View the transpiled BrightScript code</summary>
 
@@ -33,6 +32,51 @@ end sub
 </details>
 
 <br/>
+
+
+## Component Naming
+### Non-identifier characters
+Component names can include non-identifier characters by defining the name as a string:
+```vb
+component "movie-poster" extends roSGNode.Poster
+end component
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+`components/movie-poster.xml`
+```xml
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="movie-poster" extends="Poster">
+</component>
+```
+</details>
+
+<br/>
+
+### Namespaces
+Defining the component inside a namespace will prepend the namespace parts, separated by underscores.
+```vb
+namespace Acme.components
+    component MoviePoster extends roSGNode.Poster
+    end component
+end namespace
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+`components/acme_components_MoviePoster.xml`
+```xml
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="acme_components_MoviePoster" extends="Poster">
+</component>
+```
+</details>
+
+<br/>
+
 
 ## Private properties and functions
 Private properties are written to `m`. Private functions are transpiled to scope-level functions (i.e. not written to m) and we will remove the `m.` when calling those functions.
