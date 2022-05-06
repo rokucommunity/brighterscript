@@ -90,8 +90,8 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
         for (const diagnostic of diagnostics) {
             //escape any newlines
             diagnostic.message = diagnostic.message.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
-            message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file?.pathAbsolute ?? ''}#(${diagnostic.range.start.line}:${diagnostic.range.start.character})-(${diagnostic.range.end.line}:${diagnostic.range.end.character})`;
-            //print the line containing the error (if we can find it)
+            message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file?.srcPath ?? ''}#(${diagnostic.range.start.line}:${diagnostic.range.start.character})-(${diagnostic.range.end.line}:${diagnostic.range.end.character})`;
+            //print the line containing the error (if we can find it)srcPath
             const line = diagnostic.file?.fileContents?.split(/\r?\n/g)?.[diagnostic.range.start.line];
             if (line) {
                 message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);

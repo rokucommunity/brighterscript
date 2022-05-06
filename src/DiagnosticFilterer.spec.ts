@@ -170,10 +170,10 @@ describe('DiagnosticFilterer', () => {
 
 });
 
-function getDiagnostic(code: number | string, pathAbsolute: string) {
+function getDiagnostic(code: number | string, srcPath: string) {
     return {
         file: {
-            pathAbsolute: s`${pathAbsolute}`
+            srcPath: s`${srcPath}`
         },
         code: code
     } as BsDiagnostic;
