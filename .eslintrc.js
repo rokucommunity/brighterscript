@@ -219,7 +219,6 @@ module.exports = {
             '@typescript-eslint/semi': 'off'
         }
     }, {
-        //these files are getting deleted soon, so ingore the eslint warnings for now
         files: ['scripts/**/*.ts'],
         rules: {
             '@typescript-eslint/no-var-requires': 'off',
