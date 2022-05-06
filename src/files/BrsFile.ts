@@ -13,7 +13,7 @@ import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
-import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
+import type { ClassStatement, FunctionStatement, NamespaceStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program, SignatureInfoObj } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
@@ -1497,12 +1497,12 @@ export class BrsFile {
     public getClassMemberDefinitions(textToSearchFor: string, file: BrsFile): Location[] {
         let results: Location[] = [];
         //get class fields and members
-        const statementHandler = (statement: ClassMethodStatement) => {
+        const statementHandler = (statement: MethodStatement) => {
             if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
                 results.push(Location.create(util.pathToUri(file.srcPath), statement.range));
             }
         };
-        const fieldStatementHandler = (statement: ClassFieldStatement) => {
+        const fieldStatementHandler = (statement: FieldStatement) => {
             if (statement.name.text.toLowerCase() === textToSearchFor) {
                 results.push(Location.create(util.pathToUri(file.srcPath), statement.range));
             }
@@ -1698,7 +1698,7 @@ export class BrsFile {
         return { key: key, signature: signature, index: index };
     }
 
-    private getClassMethod(classStatement: ClassStatement, name: string, walkParents = true): ClassMethodStatement | undefined {
+    private getClassMethod(classStatement: ClassStatement, name: string, walkParents = true): MethodStatement | undefined {
         //TODO - would like to write this with getClassHieararchy; but got stuck on working out the scopes to use... :(
         let statement;
         const statementHandler = (e) => {
@@ -1708,7 +1708,7 @@ export class BrsFile {
         };
         while (classStatement) {
             classStatement.walk(createVisitor({
-                ClassMethodStatement: statementHandler
+                MethodStatement: statementHandler
             }), {
                 walkMode: WalkMode.visitStatements
             });
