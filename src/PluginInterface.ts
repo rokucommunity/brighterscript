@@ -61,4 +61,11 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
         }
         return plugin;
     }
+
+    /**
+     * Remove all plugins
+     */
+    public clear() {
+        this.plugins = [];
+    }
 }
