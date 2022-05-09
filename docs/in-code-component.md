@@ -3,7 +3,7 @@ You can define a component in code, similar to how you would define a class.
 
 ## Basic usage
 ```vb
-component MoviePoster extends roSGNode.Poster
+component MoviePoster extends "Poster"
     sub init()
         print "MoviePoster init()"
     end sub
@@ -38,7 +38,7 @@ end sub
 ### Non-identifier characters
 Component names can include non-identifier characters by defining the name as a string:
 ```vb
-component "movie-poster" extends roSGNode.Poster
+component "movie-poster" extends "Poster"
 end component
 ```
 
@@ -59,7 +59,7 @@ end component
 Defining the component inside a namespace will prepend the namespace parts, separated by underscores.
 ```vb
 namespace Acme.components
-    component MoviePoster extends roSGNode.Poster
+    component MoviePoster extends "Poster"
     end component
 end namespace
 ```
@@ -81,7 +81,7 @@ end namespace
 ## Private properties and functions
 Private properties are written to `m`. Private functions are transpiled to scope-level functions (i.e. not written to m) and we will remove the `m.` when calling those functions.
 ```vb
-component MoviePoster extends roSGNode.Poster
+component MoviePoster extends "Poster"
     sub init()
         m.toggleSubtitles()
     end sub
@@ -123,7 +123,7 @@ You can define interface fields and functions by declaring them as `public`.
 
 **NOTE:** unlike private properties, these public fields must be accessed through `m.top` which aligns with Roku's SceneGraph design.
 ```vb
-component MoviePoster extends roSGNode.Poster
+component MoviePoster extends "Poster"
     'this is an interface field
     public title as string
     private isPlaying as boolean
@@ -167,7 +167,7 @@ end sub
 You can also attach an external function to the component. This allows you to keep functionality in separate files if desired.
 ```vb
 import "UserInteraction.bs"
-component MoviePoster extends roSGNode.Poster
+component MoviePoster extends "Poster"
     public sub play()
     end sub
 
@@ -227,7 +227,7 @@ Consider the following example. We print `m.title`, but it gets transpiled to `m
 
 `components/MoviePoster.bs`
 ```vb
-component MoviePoster extends roSGNode.Poster
+component MoviePoster extends "Poster"
     sub init()
         print "Play movie " + m.title
         m.isPlaying = true
@@ -274,7 +274,7 @@ You can define an xml template inline using the `@Template` annotation.
         </children>
     </component>
 `)
-component MoviePoster extends roSGNode.Poster
+component MoviePoster extends "Poster"
 end component
 ```
 
@@ -300,7 +300,7 @@ The `<component>` and `<children>` tags can be omitted if you don't need to cust
 @Template(`
     <Rectangle id="bottomBar"/>
 `)
-component MoviePoster extends roSGNode.Poster
+component MoviePoster extends "Poster"
 end component
 ```
 
@@ -326,7 +326,7 @@ XML component templates can also be loaded from another file by using the `@Temp
 `components/MoviePoster.bs`
 ```vb
 @TemplateUrl("./MoviePoster.xml")
-component MoviePoster extends roSGNode.Poster
+component MoviePoster extends "Poster"
     sub init()
         print "MoviePoster"
     end sub
@@ -374,7 +374,7 @@ To set `initialFocus`, you can add that to the template's `<component` tag
         </children>
     </component>
 `)
-component MoviePoster extends roSGNode.Poster
+component MoviePoster extends "Poster"
 end component
 ```
 
@@ -399,7 +399,7 @@ You could also do this as an annotation
     <Rectangle id="bottomBar"/>
 `)
 @InitialFocus("bottomBar")
-component MoviePoster extends roSGNode.Poster
+component MoviePoster extends "Poster"
 end component
 ```
 
@@ -428,7 +428,7 @@ You can preceed a field with annotations that describe additional features of th
     <Label id="title" />
     <Label id="titleCopy" />
 `)
-component MoviePoster extends roSGNode.Poster
+component MoviePoster extends "Poster"
     'you can use the any of these patterns, or a combination of them together
     @Alias("title.text")
     @Alias("titleCopy.text")
@@ -460,7 +460,7 @@ end component
 @Template(`
     <Label id="title" />
 `)
-component MoviePoster extends roSGNode.Poster
+component MoviePoster extends "Poster"
     @Onchange(m.onMinutesChange)
     public minutes as string
     @Onchange(externalFunction)
@@ -514,7 +514,7 @@ A few key points:
 
 
 ```vb
-component MoviePoster extends roSGNode.Poster
+component MoviePoster extends "Poster"
     protected function play()
         print "MoviePoster play()"
     end function
