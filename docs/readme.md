@@ -15,4 +15,4 @@ See the following pages for more information
  - [Source Literals](source-literals.md)
  - [Template Strings (Template Literals)](template-strings.md)
  - [Ternary (Conditional) Operator](ternary-operator.md)
- - [In-code Component](in-code-component.md)
+ - [Component Statement](component-statement.md)
