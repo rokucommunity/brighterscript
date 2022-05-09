@@ -585,34 +585,54 @@ export class Parser {
         return result;
     }
 
+    private classDeclaration(): ClassStatement {
+        this.warnIfNotBrighterScriptMode('class declarations');
+        const info = this.classLikeDeclaration({
+            openingKeyword: TokenKind.Class,
+            closingKeyword: TokenKind.EndClass
+        });
+        const result = new ClassStatement(
+            info.openingKeyword,
+            info.name,
+            info.body,
+            info.closingKeyword,
+            info.extendsKeyword,
+            info.parentName,
+            this.currentNamespaceName
+        );
+        this._references.classStatements.push(result);
+        return result;
+    }
+
     /**
      * A BrighterScript class declaration
      */
-    private classDeclaration(): ClassStatement {
-        this.warnIfNotBrighterScriptMode('class declarations');
-
+    private classLikeDeclaration<T>(options: { openingKeyword: TokenKind; closingKeyword: TokenKind }) {
         const parentAnnotations = this.enterAnnotationBlock();
 
-        let classKeyword = this.consume(
-            DiagnosticMessages.expectedKeyword(TokenKind.Class),
-            TokenKind.Class
+        let openingKeyword = this.consume(
+            DiagnosticMessages.expectedKeyword(options.openingKeyword),
+            options.openingKeyword
         );
         let extendsKeyword: Token;
-        let parentClassName: NamespacedVariableNameExpression;
+        let parentName: NamespacedVariableNameExpression;
 
-        //get the class name
-        let className = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('class'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
+        //get its name
+        let name = this.tryConsume(
+            DiagnosticMessages.expectedIdentifierAfterKeyword(options.openingKeyword.toLowerCase()),
+            TokenKind.Identifier, TokenKind.StringLiteral, ...this.allowedLocalIdentifiers
+        ) as Identifier;
 
-        //see if the class inherits from parent
+        //see if it inherits from a parent
         if (this.peek().text.toLowerCase() === 'extends') {
             extendsKeyword = this.advance();
-            parentClassName = this.getNamespacedVariableNameExpression();
+            parentName = this.getNamespacedVariableNameExpression();
         }
 
         //ensure statement separator
         this.consumeStatementSeparators();
 
-        //gather up all class members (Fields, Methods)
+        //gather up all members (Fields, Methods)
         let body = [] as Statement[];
         while (this.checkAny(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
             try {
@@ -689,25 +709,22 @@ export class Parser {
             this.consumeStatementSeparators();
         }
 
-        let endingKeyword = this.advance();
-        if (endingKeyword.kind !== TokenKind.EndClass) {
+        let closingKeyword = this.advance();
+        if (closingKeyword.kind !== TokenKind.EndClass) {
             this.diagnostics.push({
                 ...DiagnosticMessages.couldNotFindMatchingEndKeyword('class'),
-                range: endingKeyword.range
+                range: closingKeyword.range
             });
         }
 
-        const result = new ClassStatement(
-            classKeyword,
-            className,
-            body,
-            endingKeyword,
-            extendsKeyword,
-            parentClassName,
-            this.currentNamespaceName
-        );
-
-        this._references.classStatements.push(result);
+        const result = {
+            openingKeyword: openingKeyword,
+            name: name,
+            body: body,
+            closingKeyword: closingKeyword,
+            extendsKeyword: extendsKeyword,
+            parentName: parentName
+        };
         this.exitAnnotationBlock(parentAnnotations);
         return result;
     }
