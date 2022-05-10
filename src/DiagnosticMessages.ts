@@ -264,7 +264,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     couldNotFindMatchingEndKeyword: (keyword: string) => ({
-        message: `Could not find matching 'end ${keyword}'`,
+        message: `Could not find matching 'end ${keyword?.toLowerCase()}'`,
         code: 1049,
         severity: DiagnosticSeverity.Error
     }),

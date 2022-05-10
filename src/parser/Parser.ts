@@ -24,6 +24,7 @@ import {
     CatchStatement,
     ClassStatement,
     CommentStatement,
+    ComponentStatement,
     DimStatement,
     DottedSetStatement,
     EndStatement,
@@ -89,7 +90,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAAMemberExpression, isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAAMemberExpression, isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isLiteralExpression, isNamespacedVariableNameExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
@@ -586,21 +587,56 @@ export class Parser {
     }
 
     private classDeclaration(): ClassStatement {
-        this.warnIfNotBrighterScriptMode('class declarations');
+        this.warnIfNotBrighterScriptMode('classes');
         const info = this.classLikeDeclaration({
             openingKeyword: TokenKind.Class,
             closingKeyword: TokenKind.EndClass
         });
+        if (info.parentName && !isNamespacedVariableNameExpression(info.parentName)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedIdentifierAfterKeyword('extends'),
+                range: info.parentName.range
+            });
+        }
         const result = new ClassStatement(
             info.openingKeyword,
             info.name,
             info.body,
             info.closingKeyword,
             info.extendsKeyword,
-            info.parentName,
+            info.parentName as NamespacedVariableNameExpression,
             this.currentNamespaceName
         );
         this._references.classStatements.push(result);
+        return result;
+    }
+
+    private componentDeclaration(): ComponentStatement {
+        this.warnIfNotBrighterScriptMode('component statements');
+        const info = this.classLikeDeclaration({
+            openingKeyword: TokenKind.Component,
+            closingKeyword: TokenKind.EndComponent
+        });
+
+        //parentName is optional for components (they extend "group" by default).
+        //for now, only support string literals for parent names. TODO add support for `Component<"string">`
+        if (info.parentName && (!isLiteralExpression(info.parentName) || info.parentName.token.kind !== TokenKind.StringLiteral)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedToken(TokenKind.StringLiteral),
+                range: info.parentName.range
+            });
+        }
+
+        const result = new ComponentStatement(
+            info.openingKeyword,
+            info.name,
+            info.body,
+            info.closingKeyword,
+            info.extendsKeyword,
+            info.parentName as any,
+            this.currentNamespaceName
+        );
+        this._references.componentStatements.push(result);
         return result;
     }
 
@@ -615,18 +651,25 @@ export class Parser {
             options.openingKeyword
         );
         let extendsKeyword: Token;
-        let parentName: NamespacedVariableNameExpression;
 
         //get its name
         let name = this.tryConsume(
             DiagnosticMessages.expectedIdentifierAfterKeyword(options.openingKeyword.toLowerCase()),
-            TokenKind.Identifier, TokenKind.StringLiteral, ...this.allowedLocalIdentifiers
+            TokenKind.Identifier,
+            TokenKind.StringLiteral,
+            ...this.allowedLocalIdentifiers
         ) as Identifier;
 
+        let parentName: Expression;
         //see if it inherits from a parent
         if (this.peek().text.toLowerCase() === 'extends') {
             extendsKeyword = this.advance();
-            parentName = this.getNamespacedVariableNameExpression();
+            //currently we support string literals, or namespaced variable name expressions. In the future, this will expand to more things (like generics, interfaces, etc)
+            if (this.check(TokenKind.StringLiteral)) {
+                parentName = new LiteralExpression(this.advance());
+            } else {
+                parentName = this.getNamespacedVariableNameExpression();
+            }
         }
 
         //ensure statement separator
@@ -710,9 +753,9 @@ export class Parser {
         }
 
         let closingKeyword = this.advance();
-        if (closingKeyword.kind !== TokenKind.EndClass) {
+        if (closingKeyword.kind !== options.closingKeyword) {
             this.diagnostics.push({
-                ...DiagnosticMessages.couldNotFindMatchingEndKeyword('class'),
+                ...DiagnosticMessages.couldNotFindMatchingEndKeyword(options.openingKeyword),
                 range: closingKeyword.range
             });
         }
@@ -1142,6 +1185,10 @@ export class Parser {
 
         if (this.check(TokenKind.Class)) {
             return this.classDeclaration();
+        }
+
+        if (this.check(TokenKind.Component)) {
+            return this.componentDeclaration();
         }
 
         if (this.check(TokenKind.Namespace)) {
@@ -3084,6 +3131,19 @@ export interface ParseOptions {
 export class References {
     private cache = new Cache();
     public assignmentStatements = [] as AssignmentStatement[];
+
+    public componentStatements = [] as ComponentStatement[];
+    public get componentStatementLookup() {
+        if (!this._componentStatementLookup) {
+            this._componentStatementLookup = new Map();
+            for (const stmt of this.componentStatements) {
+                this._componentStatementLookup.set(stmt.name.toLowerCase(), stmt);
+            }
+        }
+        return this._componentStatementLookup;
+    }
+    private _componentStatementLookup: Map<string, ComponentStatement>;
+
     public classStatements = [] as ClassStatement[];
 
     public get classStatementLookup() {

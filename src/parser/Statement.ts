@@ -10,7 +10,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isTypedefProvider, isVoidType } from '../astUtils/reflection';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isTypedefProvider, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
@@ -1526,10 +1526,10 @@ export class ClassStatement extends Statement implements TypedefProvider {
         super();
         this.body = this.body ?? [];
         for (let statement of this.body) {
-            if (isClassMethodStatement(statement)) {
+            if (isMethodStatement(statement)) {
                 this.methods.push(statement);
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
-            } else if (isClassFieldStatement(statement)) {
+            } else if (isFieldStatement(statement)) {
                 this.fields.push(statement);
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
             }
@@ -2442,5 +2442,48 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         if (this.value && options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'value', visitor, options);
         }
+    }
+}
+
+export class ComponentStatement extends Statement implements TypedefProvider {
+    constructor(
+        public component: Token,
+        /**
+         * The name of the component (without any preceeding namespace)
+         */
+        public nameToken: Token,
+        public body: Statement[],
+        public end: Token,
+        public extendsKeyword?: Token,
+        public parentName?: LiteralExpression | NamespacedVariableNameExpression,
+        public namespaceName?: NamespacedVariableNameExpression
+    ) {
+        super();
+        this.range = util.createBoundingRange(
+            this.component,
+            this.nameToken,
+            this.extendsKeyword,
+            this.parentName,
+            ...this.body ?? [],
+            this.end
+        );
+    }
+
+    /**
+     * The name of this component
+     */
+    public get name() {
+        return this.nameToken.text;
+    }
+
+    public range: Range;
+    public transpile(state: BrsTranspileState): TranspileResult {
+        throw new Error('Method not implemented.');
+    }
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        throw new Error('Method not implemented.');
+    }
+    getTypedef(state: TranspileState): (string | SourceNode)[] {
+        throw new Error('Method not implemented.');
     }
 }

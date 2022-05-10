@@ -431,7 +431,6 @@ export const AllowedProperties = [
     TokenKind.Namespace,
     TokenKind.EndNamespace,
     TokenKind.Component,
-    TokenKind.EndComponent,
     TokenKind.Import,
     TokenKind.LineNumLiteral,
     TokenKind.SourceFilePathLiteral,
