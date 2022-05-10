@@ -628,11 +628,13 @@ export class Parser {
         }
 
         const result = new ComponentStatement(
-            info.openingKeyword,
-            info.name,
+            {
+                component: info.openingKeyword,
+                name: info.name,
+                endComponent: info.closingKeyword,
+                extends: info.extendsKeyword
+            },
             info.body,
-            info.closingKeyword,
-            info.extendsKeyword,
             info.parentName as any,
             this.currentNamespaceName
         );

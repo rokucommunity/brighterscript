@@ -678,6 +678,11 @@ export let DiagnosticMessages = {
         message: `${componentName} has been deprecated${deprecatedDescription ? ': ' + deprecatedDescription : ''}`,
         code: 1131,
         severity: DiagnosticSeverity.Error
+    }),
+    accessModifierIsRequired: () => ({
+        message: `Access modifier is required`,
+        code: 1132,
+        severity: DiagnosticSeverity.Error
     })
 };
 

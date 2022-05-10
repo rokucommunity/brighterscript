@@ -2447,25 +2447,27 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
 
 export class ComponentStatement extends Statement implements TypedefProvider {
     constructor(
-        public component: Token,
+        public tokens: {
+            component: Token;
+            name: Token;
+            endComponent: Token;
+            extends?: Token;
+        },
         /**
          * The name of the component (without any preceeding namespace)
          */
-        public nameToken: Token,
         public body: Statement[],
-        public end: Token,
-        public extendsKeyword?: Token,
         public parentName?: LiteralExpression | NamespacedVariableNameExpression,
         public namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
         this.range = util.createBoundingRange(
-            this.component,
-            this.nameToken,
-            this.extendsKeyword,
+            this.tokens.component,
+            this.tokens.name,
+            this.tokens.extends,
             this.parentName,
             ...this.body ?? [],
-            this.end
+            this.tokens.endComponent
         );
     }
 
@@ -2473,7 +2475,18 @@ export class ComponentStatement extends Statement implements TypedefProvider {
      * The name of this component
      */
     public get name() {
-        return this.nameToken.text;
+        return this.tokens.name.text;
+    }
+
+    public getMembers() {
+        const result: Array<MethodStatement | FieldStatement> = [];
+
+        for (const statement of this.body) {
+            if (isMethodStatement(statement) || isFieldStatement(statement)) {
+                result.push(statement);
+            }
+        }
+        return result;
     }
 
     public range: Range;
