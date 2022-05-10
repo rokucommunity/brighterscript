@@ -130,7 +130,7 @@ export interface File {
      * The absolute path to the file, relative to the pkg
      */
     pkgPath: string;
-    pathAbsolute: string;
+    srcPath: string;
     getDiagnostics(): BsDiagnostic[];
 }
 
@@ -265,6 +265,7 @@ export interface OnScopeValidateEvent {
 export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty' | 'overrideTranspileResult'>;
 
 export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
+    program: Program;
     file: TFile;
     outputPath: string;
     /**
@@ -276,6 +277,10 @@ export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
 }
 
 export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
+    /**
+     * The program this event was triggered for
+     */
+    program: Program;
     file: TFile;
     outputPath: string;
     /**
@@ -313,7 +318,7 @@ export interface TypedefProvider {
 
 export type TranspileResult = Array<(string | SourceNode)>;
 
-export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined> | void;
+export type FileResolver = (srcPath: string) => string | undefined | Thenable<string | undefined> | void;
 
 export interface ExpressionInfo {
     expressions: Expression[];

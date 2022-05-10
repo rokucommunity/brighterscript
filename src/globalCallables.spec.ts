@@ -61,7 +61,7 @@ describe('globalCallables', () => {
             end sub
         `);
         program.validate();
-        const hover = await program.getHover(file.pathAbsolute, util.createPosition(2, 25));
+        const hover = await program.getHover(file.srcPath, util.createPosition(2, 25));
         expect(
             hover.contents.toString().replace('\r\n', '\n')
         ).to.eql([

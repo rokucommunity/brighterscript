@@ -844,10 +844,10 @@ describe('astUtils visitors', () => {
                 end class
             `, [
                 'ClassStatement',
-                'ClassFieldStatement',
-                'ClassFieldStatement',
+                'FieldStatement',
+                'FieldStatement',
                 'LiteralExpression',
-                'ClassMethodStatement',
+                'MethodStatement',
                 'FunctionExpression',
                 'Block',
                 'ReturnStatement',

@@ -105,7 +105,7 @@ describe('Program', () => {
                 end sub
             `);
             (file.parser.ast.statements[0] as FunctionStatement).func.body.statements[0] = new EmptyStatement();
-            await program.transpile([{ src: file.pathAbsolute, dest: file.pkgPath }], tmpPath);
+            await program.transpile([{ src: file.srcPath, dest: file.pkgPath }], tmpPath);
         });
 
         it('works with different cwd', () => {
@@ -578,9 +578,9 @@ describe('Program', () => {
         });
 
         it('adds xml file to files map', () => {
-            let xmlPath = `${rootDir}/components/component1.xml`;
-            program.setFile({ src: xmlPath, dest: 'components/component1.xml' }, '');
-            expect(program.getFileByPathAbsolute(xmlPath)).to.exist;
+            let srcPath = `${rootDir}/components/component1.xml`;
+            program.setFile({ src: srcPath, dest: 'components/component1.xml' }, '');
+            expect(program.getFile(srcPath)).to.exist;
         });
 
         it('detects missing script reference', () => {
@@ -1444,8 +1444,8 @@ describe('Program', () => {
             let ctx = program.getScopeByName(xmlFile.pkgPath);
             //the component scope should have the xml file AND the lib file
             expect(ctx.getOwnFiles().length).to.equal(2);
-            expect(ctx.getFile(xmlFile.pathAbsolute)).to.exist;
-            expect(ctx.getFile(libFile.pathAbsolute)).to.exist;
+            expect(ctx.getFile(xmlFile.srcPath)).to.exist;
+            expect(ctx.getFile(libFile.srcPath)).to.exist;
 
             //reload the xml file again, removing the script import.
             xmlFile = program.setFile({ src: `${rootDir}/components/component.xml`, dest: 'components/component.xml' }, trim`
@@ -1482,14 +1482,14 @@ describe('Program', () => {
 
     describe('getDiagnostics', () => {
         it('includes diagnostics from files not included in any scope', () => {
-            let pathAbsolute = s`${rootDir}/components/a/b/c/main.brs`;
-            program.setFile({ src: pathAbsolute, dest: 'components/a/b/c/main.brs' }, `
+            let srcPath = s`${rootDir}/components/a/b/c/main.brs`;
+            program.setFile({ src: srcPath, dest: 'components/a/b/c/main.brs' }, `
                 sub A()
                     "this string is not terminated
                 end sub
             `);
             //the file should be included in the program
-            expect(program.getFileByPathAbsolute(pathAbsolute)).to.exist;
+            expect(program.getFile(srcPath)).to.exist;
             let diagnostics = program.getDiagnostics();
             expectHasDiagnostics(diagnostics);
             let parseError = diagnostics.filter(x => x.message === 'Unterminated string at end of line')[0];
@@ -1673,7 +1673,7 @@ describe('Program', () => {
                 afterFileTranspile: sinon.spy()
             });
             expect(
-                program.getTranspiledFileContents(file.pathAbsolute).code
+                program.getTranspiledFileContents(file.srcPath).code
             ).to.eql(trim`
                 sub main()
                     print "hello there"
@@ -1716,6 +1716,51 @@ describe('Program', () => {
     });
 
     describe('transpile', () => {
+
+        it('detects and transpiles files added between beforeProgramTranspile and afterProgramTranspile', async () => {
+            program.setFile('source/main.bs', trim`
+                sub main()
+                    print "hello world"
+                end sub
+            `);
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeFileTranspile: (event) => {
+                    if (isBrsFile(event.file)) {
+                        //add lib1
+                        if (event.outputPath.endsWith('main.brs')) {
+                            event.program.setFile('source/lib1.bs', `
+                                sub lib1()
+                                end sub
+                            `);
+                        }
+                        //add lib2 (this should happen during the next cycle of "catch missing files" cycle
+                        if (event.outputPath.endsWith('main.brs')) {
+                            //add another file
+                            event.program.setFile('source/lib2.bs', `
+                                sub lib2()
+                                end sub
+                            `);
+                        }
+                    }
+                }
+            });
+            await program.transpile([], stagingFolderPath);
+            //our new files should exist
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/lib1.brs`).toString()
+            ).to.eql(trim`
+                sub lib1()
+                end sub
+            `);
+            //our changes should be there
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/source/lib2.brs`).toString()
+            ).to.eql(trim`
+                sub lib2()
+                end sub
+            `);
+        });
 
         it('sets needsTranspiled=true when there is at least one edit', async () => {
             program.setFile('source/main.brs', trim`
@@ -2024,7 +2069,7 @@ describe('Program', () => {
                     someFunc()@.
                 end sub
             `);
-            program.getCompletions(file.pathAbsolute, util.createPosition(2, 32));
+            program.getCompletions(file.srcPath, util.createPosition(2, 32));
         });
 
         it('gets signature help for constructor with no args', () => {

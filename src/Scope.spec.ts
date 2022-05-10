@@ -116,7 +116,7 @@ describe('Scope', () => {
 
             program.validate();
 
-            expect(sourceScope.getOwnFiles().map(x => x.pathAbsolute).sort()).eql([
+            expect(sourceScope.getOwnFiles().map(x => x.srcPath).sort()).eql([
                 s`${rootDir}/source/lib.brs`,
                 s`${rootDir}/source/main.brs`
             ]);
@@ -154,7 +154,7 @@ describe('Scope', () => {
             let initCallableCount = program.getScopeByName('source').getAllCallables().length;
 
             //remove the file
-            program.removeFile(file.pathAbsolute);
+            program.removeFile(file.srcPath);
             expect(program.getScopeByName('source').getAllCallables().length).to.equal(initCallableCount - 1);
         });
     });

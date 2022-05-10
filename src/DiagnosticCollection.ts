@@ -34,15 +34,15 @@ export class DiagnosticCollection {
         const keys = {};
         //build the full current set of diagnostics by file
         for (let diagnostic of diagnostics) {
-            const filePath = diagnostic.file.pathAbsolute;
+            const srcPath = diagnostic.file.srcPath ?? diagnostic.file.srcPath;
             //ensure the file entry exists
-            if (!result[filePath]) {
-                result[filePath] = [];
+            if (!result[srcPath]) {
+                result[srcPath] = [];
             }
-            const diagnosticMap = result[filePath];
+            const diagnosticMap = result[srcPath];
 
             diagnostic.key =
-                diagnostic.file.pathAbsolute.toLowerCase() + '-' +
+                srcPath.toLowerCase() + '-' +
                 diagnostic.code + '-' +
                 diagnostic.range.start.line + '-' +
                 diagnostic.range.start.character + '-' +

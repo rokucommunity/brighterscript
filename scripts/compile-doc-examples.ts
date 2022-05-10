@@ -186,7 +186,7 @@ class DocCompiler {
         });
         const file = program.setFile({ src: `${__dirname}/rootDir/source/main.bs`, dest: 'source/main.bs' }, code);
         program.validate();
-        const tranpileResult = program.getTranspiledFileContents(file.pathAbsolute).code;
+        const tranpileResult = program.getTranspiledFileContents(file.srcPath).code;
         return tranpileResult.trim();
     }
 }

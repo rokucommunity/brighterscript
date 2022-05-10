@@ -1,6 +1,6 @@
 /* eslint-disable no-bitwise */
 import type { CancellationToken } from 'vscode-languageserver';
-import type { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement, EnumStatement, EnumMemberStatement, DimStatement, TryCatchStatement, CatchStatement, ThrowStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement } from '../parser/Statement';
+import type { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement, EnumStatement, EnumMemberStatement, DimStatement, TryCatchStatement, CatchStatement, ThrowStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement, FieldStatement, MethodStatement } from '../parser/Statement';
 import type { AALiteralExpression, AAMemberExpression, AnnotationExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, Expression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NamespacedVariableNameExpression, NewExpression, NullCoalescingExpression, RegexLiteralExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
 import { isExpression, isStatement } from './reflection';
 
@@ -99,8 +99,16 @@ export function createVisitor(
         InterfaceFieldStatement?: (statement: InterfaceFieldStatement, parent?: Statement) => Statement | void;
         InterfaceMethodStatement?: (statement: InterfaceMethodStatement, parent?: Statement) => Statement | void;
         ClassStatement?: (statement: ClassStatement, parent?: Statement) => Statement | void;
+        /**
+         * @deprecated use `MethodStatement`
+         */
         ClassMethodStatement?: (statement: ClassMethodStatement, parent?: Statement) => Statement | void;
+        /**
+         * @deprecated use `FieldStatement`
+         */
         ClassFieldStatement?: (statement: ClassFieldStatement, parent?: Statement) => Statement | void;
+        MethodStatement?: (statement: MethodStatement, parent?: Statement) => Statement | void;
+        FieldStatement?: (statement: FieldStatement, parent?: Statement) => Statement | void;
         TryCatchStatement?: (statement: TryCatchStatement, parent?: Statement) => Statement | void;
         CatchStatement?: (statement: CatchStatement, parent?: Statement) => Statement | void;
         ThrowStatement?: (statement: ThrowStatement, parent?: Statement) => Statement | void;
@@ -135,6 +143,13 @@ export function createVisitor(
         RegexLiteralExpression?: (expression: RegexLiteralExpression, parent?: Statement | Expression) => Expression | void;
     }
 ) {
+    //remap some deprecated visitor names TODO remove this in v1
+    if (visitor.ClassFieldStatement) {
+        visitor.FieldStatement = visitor.ClassFieldStatement;
+    }
+    if (visitor.ClassMethodStatement) {
+        visitor.MethodStatement = visitor.ClassMethodStatement;
+    }
     return <WalkVisitor>((statement: Statement, parent?: Statement): Statement | void => {
         return visitor[statement.constructor.name]?.(statement, parent);
     });

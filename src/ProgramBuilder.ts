@@ -47,16 +47,16 @@ export class ProgramBuilder {
      * This walks backwards through the file resolvers until we get a value.
      * This allow the language server to provide file contents directly from memory.
      */
-    public async getFileContents(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
+    public async getFileContents(srcPath: string) {
+        srcPath = s`${srcPath}`;
         let reversedResolvers = [...this.fileResolvers].reverse();
         for (let fileResolver of reversedResolvers) {
-            let result = await fileResolver(pathAbsolute);
+            let result = await fileResolver(srcPath);
             if (typeof result === 'string') {
                 return result;
             }
         }
-        throw new Error(`Could not load file "${pathAbsolute}"`);
+        throw new Error(`Could not load file "${srcPath}"`);
     }
 
     /**
@@ -64,12 +64,13 @@ export class ProgramBuilder {
      */
     private staticDiagnostics = [] as BsDiagnostic[];
 
-    public addDiagnostic(filePathAbsolute: string, diagnostic: Partial<BsDiagnostic>) {
-        let file: BscFile = this.program.getFileByPathAbsolute(filePathAbsolute);
+    public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
+        let file: BscFile = this.program.getFile(srcPath);
         if (!file) {
             file = {
-                pkgPath: this.program.getPkgPath(filePathAbsolute),
-                pathAbsolute: filePathAbsolute,
+                pkgPath: this.program.getPkgPath(srcPath),
+                pathAbsolute: srcPath, //keep this for backwards-compatibility. TODO remove in v1
+                srcPath: srcPath,
                 getDiagnostics: () => {
                     return [<any>diagnostic];
                 }
@@ -274,19 +275,19 @@ export class ProgramBuilder {
         //group the diagnostics by file
         let diagnosticsByFile = {} as Record<string, BsDiagnostic[]>;
         for (let diagnostic of diagnostics) {
-            if (!diagnosticsByFile[diagnostic.file.pathAbsolute]) {
-                diagnosticsByFile[diagnostic.file.pathAbsolute] = [];
+            if (!diagnosticsByFile[diagnostic.file.srcPath]) {
+                diagnosticsByFile[diagnostic.file.srcPath] = [];
             }
-            diagnosticsByFile[diagnostic.file.pathAbsolute].push(diagnostic);
+            diagnosticsByFile[diagnostic.file.srcPath].push(diagnostic);
         }
 
         //get printing options
         const options = diagnosticUtils.getPrintDiagnosticOptions(this.options);
         const { cwd, emitFullPaths } = options;
 
-        let pathsAbsolute = Object.keys(diagnosticsByFile).sort();
-        for (let pathAbsolute of pathsAbsolute) {
-            let diagnosticsForFile = diagnosticsByFile[pathAbsolute];
+        let srcPaths = Object.keys(diagnosticsByFile).sort();
+        for (let srcPath of srcPaths) {
+            let diagnosticsForFile = diagnosticsByFile[srcPath];
             //sort the diagnostics in line and column order
             let sortedDiagnostics = diagnosticsForFile.sort((a, b) => {
                 return (
@@ -295,12 +296,12 @@ export class ProgramBuilder {
                 );
             });
 
-            let filePath = pathAbsolute;
+            let filePath = srcPath;
             if (!emitFullPaths) {
                 filePath = path.relative(cwd, filePath);
             }
             //load the file text
-            const file = this.program.getFileByPathAbsolute(pathAbsolute);
+            const file = this.program.getFile(srcPath);
             //get the file's in-memory contents if available
             const lines = file?.fileContents?.split(/\r?\n/g) ?? [];
 
@@ -505,12 +506,12 @@ export class ProgramBuilder {
 
     /**
      * Remove all files from the program that are in the specified folder path
-     * @param folderPathAbsolute
+     * @param srcPath the path to the
      */
-    public removeFilesInFolder(folderPathAbsolute: string) {
+    public removeFilesInFolder(srcPath: string) {
         for (let filePath in this.program.files) {
             //if the file path starts with the parent path and the file path does not exactly match the folder path
-            if (filePath.startsWith(folderPathAbsolute) && filePath !== folderPathAbsolute) {
+            if (filePath.startsWith(srcPath) && filePath !== srcPath) {
                 this.program.removeFile(filePath);
             }
         }

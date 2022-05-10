@@ -12,7 +12,7 @@ import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isTypedefProvider, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
-import { createClassMethodStatement, createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
+import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { SourceNode } from 'source-map';
@@ -1276,6 +1276,19 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         return this.tokens.name?.text;
     }
 
+    /**
+     * Get the name of this expression based on the parse mode
+     */
+    public getName(parseMode: ParseMode) {
+        if (this.namespaceName) {
+            let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
+            let namespaceName = this.namespaceName.getName(parseMode);
+            return namespaceName + delimiter + this.name;
+        } else {
+            return this.name;
+        }
+    }
+
     public transpile(state: BrsTranspileState): TranspileResult {
         //interfaces should completely disappear at runtime
         return [];
@@ -1541,10 +1554,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }
     }
 
-    public memberMap = {} as Record<string, ClassMemberStatement>;
-    public methods = [] as ClassMethodStatement[];
-    public fields = [] as ClassFieldStatement[];
-
+    public memberMap = {} as Record<string, MemberStatement>;
+    public methods = [] as MethodStatement[];
+    public fields = [] as FieldStatement[];
 
     public readonly range: Range;
 
@@ -1666,13 +1678,13 @@ export class ClassStatement extends Statement implements TypedefProvider {
         for (let key in this.memberMap) {
             let member = this.memberMap[key];
             if (member.name?.text?.toLowerCase() === 'new') {
-                return member as ClassMethodStatement;
+                return member as MethodStatement;
             }
         }
     }
 
     private getEmptyNewFunction() {
-        return createClassMethodStatement('new', TokenKind.Sub);
+        return createMethodStatement('new', TokenKind.Sub);
     }
 
     /**
@@ -1858,18 +1870,36 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 }
 
-export class ClassMethodStatement extends FunctionStatement {
+const accessModifiers = [
+    TokenKind.Public,
+    TokenKind.Protected,
+    TokenKind.Private
+];
+export class MethodStatement extends FunctionStatement {
     constructor(
-        public accessModifier: Token,
+        modifiers: Token | Token[],
         name: Identifier,
         func: FunctionExpression,
         public override: Token
     ) {
         super(name, func, undefined);
+        if (modifiers) {
+            if (Array.isArray(modifiers)) {
+                this.modifiers.push(...modifiers);
+            } else {
+                this.modifiers.push(modifiers);
+            }
+        }
         this.range = util.createRangeFromPositions(
             (this.accessModifier ?? this.func).range.start,
             this.func.range.end
         );
+    }
+
+    public modifiers: Token[] = [];
+
+    public get accessModifier() {
+        return this.modifiers.find(x => accessModifiers.includes(x.kind));
     }
 
     public readonly range: Range;
@@ -2022,8 +2052,12 @@ export class ClassMethodStatement extends FunctionStatement {
         }
     }
 }
+/**
+ * @deprecated use `MethodStatement`
+ */
+export class ClassMethodStatement extends MethodStatement { }
 
-export class ClassFieldStatement extends Statement implements TypedefProvider {
+export class FieldStatement extends Statement implements TypedefProvider {
 
     constructor(
         readonly accessModifier?: Token,
@@ -2093,7 +2127,17 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
         }
     }
 }
-export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;
+/**
+ * @deprecated use `FieldStatement`
+ */
+export class ClassFieldStatement extends FieldStatement { }
+
+export type MemberStatement = FieldStatement | MethodStatement;
+
+/**
+ * @deprecated use `MemeberStatement`
+ */
+export type ClassMemberStatement = MemberStatement;
 
 export class TryCatchStatement extends Statement {
     constructor(

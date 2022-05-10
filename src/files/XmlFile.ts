@@ -19,19 +19,30 @@ import { TranspileState } from '../parser/TranspileState';
 
 export class XmlFile {
     constructor(
-        public pathAbsolute: string,
+        public srcPath: string,
         /**
          * The absolute path to the file, relative to the pkg
          */
         public pkgPath: string,
         public program: Program
     ) {
-        this.extension = path.extname(pathAbsolute).toLowerCase();
+        this.extension = path.extname(this.srcPath).toLowerCase();
 
         this.possibleCodebehindPkgPaths = [
             this.pkgPath.replace('.xml', '.bs'),
             this.pkgPath.replace('.xml', '.brs')
         ];
+    }
+
+    /**
+     * The absolute path to the source location for this file
+     * @deprecated use `srcPath` instead
+     */
+    public get pathAbsolute() {
+        return this.srcPath;
+    }
+    public set pathAbsolute(value) {
+        this.srcPath = value;
     }
 
     private cache = new Cache();
@@ -408,9 +419,10 @@ export class XmlFile {
      * Get the parent component (the component this component extends)
      */
     public get parentComponent() {
-        return this.cache.getOrAdd('parent', () => {
-            return this.program.getComponent(this.parentComponentName?.text)?.file ?? null;
+        const result = this.cache.getOrAdd('parent', () => {
+            return this.program.getComponent(this.parentComponentName?.text)?.file;
         });
+        return result;
     }
 
     public getHover(position: Position): Hover { //eslint-disable-line
@@ -501,7 +513,7 @@ export class XmlFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        const state = new TranspileState(this.pathAbsolute, this.program.options);
+        const state = new TranspileState(this.srcPath, this.program.options);
 
         const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
             const script = new SGScript();
