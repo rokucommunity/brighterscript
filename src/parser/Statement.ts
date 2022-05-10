@@ -2493,9 +2493,15 @@ export class ComponentStatement extends Statement implements TypedefProvider {
     public transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('Method not implemented.');
     }
-    public walk(visitor: WalkVisitor, options: WalkOptions) {
-        throw new Error('Method not implemented.');
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            for (let i = 0; i < this.body.length; i++) {
+                walk(this.body, i, visitor, options, this);
+            }
+        }
     }
+
     getTypedef(state: TranspileState): (string | SourceNode)[] {
         throw new Error('Method not implemented.');
     }

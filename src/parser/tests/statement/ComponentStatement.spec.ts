@@ -4,6 +4,8 @@ import { expectDiagnostics, expectZeroDiagnostics } from '../../../testHelpers.s
 import { expect } from 'chai';
 import type { BrsFile } from '../../../files/BrsFile';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
+import { createVisitor, WalkMode } from '../../../astUtils/visitors';
+import * as sinon from 'sinon';
 
 describe('ComponentStatement', () => {
     const rootDir = s`${process.cwd()}/.tmp/rootDir`;
@@ -90,5 +92,40 @@ describe('ComponentStatement', () => {
                 range: util.createRange(3, 25, 3, 32)
             }
         ]);
+    });
+
+    it('is walkable', () => {
+        const file = program.setFile<BrsFile>(`source/MyButton.bs`, `
+            component MyButton extends "Button"
+                name as string
+                function getName()
+                end function
+            end component
+        `);
+        const componentSpy = sinon.spy();
+        const fieldSpy = sinon.spy();
+        const methodSpy = sinon.spy();
+        file.ast.walk(createVisitor({
+            ComponentStatement: componentSpy,
+            FieldStatement: fieldSpy,
+            MethodStatement: methodSpy
+        }), {
+            walkMode: WalkMode.visitAllRecursive
+        });
+        expect(
+            componentSpy.getCalls()[0].args[0]
+        ).to.equal(
+            file.parser.references.componentStatements[0]
+        );
+        expect(
+            fieldSpy.getCalls()[0].args[0]
+        ).to.equal(
+            file.parser.references.componentStatements[0].body[0]
+        );
+        expect(
+            methodSpy.getCalls()[0].args[0]
+        ).to.equal(
+            file.parser.references.componentStatements[0].body[1]
+        );
     });
 });
