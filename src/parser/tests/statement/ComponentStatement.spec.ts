@@ -6,6 +6,8 @@ import type { BrsFile } from '../../../files/BrsFile';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { createVisitor, WalkMode } from '../../../astUtils/visitors';
 import * as sinon from 'sinon';
+import { NamespacedVariableNameExpression, VariableExpression } from '../../Expression';
+import { ParseMode } from '../../Parser';
 
 describe('ComponentStatement', () => {
     const rootDir = s`${process.cwd()}/.tmp/rootDir`;
@@ -31,6 +33,34 @@ describe('ComponentStatement', () => {
             end component
         `);
         expectZeroDiagnostics(program);
+    });
+
+    it('supports identifier-style parent name', () => {
+        const file = program.setFile<BrsFile>(`source/MyButton.bs`, `
+            component CustomButton
+            end component
+            component "my-button" extends CustomButton
+            end component
+        `);
+        expectZeroDiagnostics(program);
+        const parentName = file.parser.references.componentStatements[1].parentName as NamespacedVariableNameExpression;
+        expect(parentName).to.be.instanceof(NamespacedVariableNameExpression);
+        expect(parentName.getName(ParseMode.BrightScript)).to.eql('CustomButton');
+    });
+
+    it('supports namespaced parent name', () => {
+        const file = program.setFile<BrsFile>(`source/MyButton.bs`, `
+            namespace Buttons
+                component CustomButton
+                end component
+            end namespace
+            component "my-button" extends Buttons.CustomButton
+            end component
+        `);
+        expectZeroDiagnostics(program);
+        const parentName = file.parser.references.componentStatements[1].parentName as NamespacedVariableNameExpression;
+        expect(parentName).to.be.instanceof(NamespacedVariableNameExpression);
+        expect(parentName.getName(ParseMode.BrighterScript)).to.eql('Buttons.CustomButton');
     });
 
     it('supports string parent name', () => {

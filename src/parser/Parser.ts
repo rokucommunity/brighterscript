@@ -620,11 +620,21 @@ export class Parser {
 
         //parentName is optional for components (they extend "group" by default).
         //for now, only support string literals for parent names. TODO add support for `Component<"string">`
-        if (info.parentName && (!isLiteralExpression(info.parentName) || info.parentName.token.kind !== TokenKind.StringLiteral)) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.expectedToken(TokenKind.StringLiteral),
-                range: info.parentName.range
-            });
+        if (info.parentName) {
+            //string literals are fine
+            if (
+                (isLiteralExpression(info.parentName) && info.parentName.token.kind === TokenKind.StringLiteral) ||
+                isNamespacedVariableNameExpression(info.parentName)
+            ) {
+                //it's a valid expression
+
+                //it's NOT a valid parent name expression
+            } else {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedToken(TokenKind.StringLiteral),
+                    range: info.parentName.range
+                });
+            }
         }
 
         const result = new ComponentStatement(
