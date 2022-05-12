@@ -17,7 +17,11 @@ import * as deepmerge from 'deepmerge';
 
 type Token = marked.Token;
 
-const potentialTypes = ['object', 'integer', 'float', 'boolean', 'string', 'dynamic', 'function', 'longinteger', 'double'];
+const potentialTypes = ['object', 'integer', 'float', 'boolean', 'string', 'dynamic', 'function', 'longinteger', 'double', 'roassociativearray', 'object (string array)'];
+
+const foundTypesTranslation = {
+    'object (string array)': 'object'
+};
 
 const turndownService = new TurndownService({
     headingStyle: 'atx',
@@ -71,6 +75,8 @@ class Runner {
     private writeTypeDefinitions() {
         let data = [] as string[];
         for (const iface of Object.values(this.result.interfaces)) {
+            //TODO: Ideally this would use the getTypeDef() method of InterfaceStatement, but that does not include comments
+
             //add a single space between interface declarations
             data.push('');
             if (iface.availableSince) {
@@ -89,14 +95,35 @@ class Runner {
             }
             for (const method of iface.methods) {
                 //method doc block
-                if (method.returnDescription || method.description) {
+                data.push(`\t'`);
+
+                if (method.description) {
                     data.push(
-                        `\t'`,
-                        method.description ? `\t'${method.description}` : undefined,
+                        `\t'${method.description}`,
+                        `\t'`
+                    );
+                }
+                for (const param of method.params) {
+                    let paramName = param.name;
+                    if (param.default) {
+                        paramName += `=${param.default}`;
+                    }
+                    if (!param.isRequired) {
+                        paramName = `[${paramName}]`;
+                    }
+                    let paramComment = `\t'@param {${param.type}} ${paramName}`;
+                    if (param.description) {
+                        paramComment += ` ${param.description}`;
+                    }
+                    data.push(paramComment);
+                }
+                if (method.returnDescription) {
+                    data.push(
                         method.returnDescription ? `\t'@return ${method.returnDescription}` : undefined,
                         `\t'`
                     );
                 }
+
                 const params = method.params.map(p => `${p.name} as ${p.type}`).join(', ');
 
                 data.push(`\tfunction ${method.name}(${params}) as ${method.returnType}`);
@@ -274,13 +301,6 @@ class Runner {
                             component.constructors.push(signature);
                         }
                     } else if (match[1]) {
-                        // Docs for some components do not have valid brightscript in the createObject example:
-                        // it looks like C code
-                        // Eg: CreateObject("roRegion", Object bitmap, Integer x, Integer y,Integer width, Integer height)
-                        //  or, they forget the "as"
-                        // Eg: CreateObject("roArray",  size As Integer, resizeAs Boolean)
-
-                        //split args by comma, remove quotes
                         const foundParamTexts = match[1].split(',').map(x => x.replace(/['"]+/g, '').trim());
 
                         if (foundParamTexts[0].toLowerCase() === component.name.toLowerCase()) {
@@ -291,31 +311,7 @@ class Runner {
 
                             for (let i = 1; i < foundParamTexts.length; i++) {
                                 const foundParam = foundParamTexts[i];
-                                // make an array of at the words in each group, removing "as" if it exists
-                                const words = foundParam.split(' ').filter(word => word.length > 0 && word.toLowerCase() !== 'as');
-                                // find the index of the word that looks like a type
-                                const paramTypeIndex = words.findIndex(word => potentialTypes.includes(word.toLowerCase()));
-                                let paramType = 'dynamic';
-                                let paramName = `param${i}`;
-                                if (paramTypeIndex >= 0) {
-                                    // if we found a word that looks like a type, use it for the type, and remove it from the array
-                                    paramType = words[paramTypeIndex];
-                                    words.splice(paramTypeIndex, 1);
-                                    // use the first "left over" word as the param name
-                                    paramName = words[0];
-                                } else if (words.length > 0) {
-                                    // if we couldn't find a type
-                                    paramName = words[0];
-                                }
-
-                                signature.params.push({
-                                    name: paramName,
-                                    default: undefined,
-                                    isRequired: true,
-                                    type: paramType ?? 'dynamic',
-                                    description: undefined
-                                });
-
+                                signature.params.push(this.getParamFromMarkdown(foundParam, `param${i}`));
                             }
                             component.constructors.push(signature);
                         }
@@ -332,6 +328,48 @@ class Runner {
 
             this.result.components[name?.toLowerCase()] = component;
         }
+    }
+
+
+    /* Gets a param based on text in the docs
+     * Docs for some components do not have valid brightscript in the createObject example:
+     *  - it looks like C code
+     *   Eg: CreateObject("roRegion", Object bitmap, Integer x, Integer y,Integer width, Integer height)
+     *  - or, they forget the "as"
+     *   Eg: CreateObject("roArray",  size As Integer, resizeAs Boolean)
+     * */
+    private getParamFromMarkdown(foundParam: string, defaultParamName: string) {
+        // make an array of at the words in each group, removing "as" if it exists
+        const words = foundParam.split(' ').filter(word => word.length > 0 && word.toLowerCase() !== 'as');
+        // find the index of the word that looks like a type
+        const paramTypeIndex = words.findIndex(word => potentialTypes.includes(this.sanitizeMarkdownSymbol(word.toLowerCase())));
+        let paramType = 'dynamic';
+        let paramName = defaultParamName;
+
+        const isOptional = foundParam.endsWith(']');
+
+        if (paramTypeIndex >= 0) {
+            // if we found a word that looks like a type, use it for the type, and remove it from the array
+            paramType = this.sanitizeMarkdownSymbol(words[paramTypeIndex]);
+
+            // translate to an actual BRS type if needed
+            paramType = foundTypesTranslation[paramType.toLowerCase()] || paramType;
+
+            words.splice(paramTypeIndex, 1);
+            // use the first "left over" word as the param name
+            paramName = words[0];
+        } else if (words.length > 0) {
+            // if we couldn't find a type
+            paramName = words[0];
+        }
+
+        return {
+            name: this.sanitizeMarkdownSymbol(paramName),
+            default: null,
+            isRequired: !isOptional,
+            type: paramType ?? 'dynamic',
+            description: undefined
+        } as Param;
     }
 
     private async buildInterfaces() {
@@ -488,10 +526,10 @@ class Runner {
             //the turndown plugin doesn't convert inner html tables, so turn that into markdown too
             description = turndownService.turndown(description);
             result.push({
-                name: row.field,
-                type: row.type,
-                default: row.default,
-                accessPermission: row['access permission'],
+                name: this.sanitizeMarkdownSymbol(row.field),
+                type: this.sanitizeMarkdownSymbol(row.type),
+                default: this.sanitizeMarkdownSymbol(row.default, true),
+                accessPermission: this.sanitizeMarkdownSymbol(row['access permission']),
                 //grab all the markdown from the 4th column (description)
                 description: description
             });
@@ -570,7 +608,7 @@ class Runner {
         );
         for (const row of manager.tableToObjects(table)) {
             iface.properties.push({
-                name: row.attribute,
+                name: this.sanitizeMarkdownSymbol(row.attribute),
                 description: `${row.values}. Screen types: ${row['screen types']}. Example: ${row.example}`,
                 default: 'invalid',
                 type: 'string'
@@ -626,9 +664,12 @@ class Runner {
                     manager.getTableByHeaders(['name', 'type', 'description'], methodHeader, x => x === nextMethodHeader)
                 );
                 for (const row of parameterObjects ?? []) {
-                    const methodParam = method.params.find(p => p?.name && p.name?.toLowerCase() === row.name?.toLowerCase());
+                    // Some docs have invalid param names
+                    const rowNameSanitized = this.sanitizeMarkdownSymbol(row.name).toLowerCase();
+
+                    const methodParam = method.params.find(p => p?.name && p.name?.toLowerCase() === rowNameSanitized);
                     if (methodParam) {
-                        methodParam.type = row.type ?? methodParam.type;
+                        methodParam.type = methodParam.type ?? row.type;
                         methodParam.description = row.description ?? methodParam.description;
                     }
                 }
@@ -639,22 +680,37 @@ class Runner {
         return result;
     }
 
+    private sanitizeMarkdownSymbol(symbolName: string, allowSquareBrackets = false) {
+        if (allowSquareBrackets) {
+            return symbolName?.replaceAll(/[\\]/g, '');
+        }
+        return symbolName?.replaceAll(/[\[\]\\]/g, '');
+    }
+
     private getMethod(text: string) {
         // var state = new TranspileState(new BrsFile('', '', new Program({}));
-        const { statements } = Parser.parse(`function ${text}\nend function`);
+        const { statements } = Parser.parse(`function ${this.sanitizeMarkdownSymbol(text)}\nend function`);
         if (statements.length > 0) {
             const func = statements[0] as FunctionStatement;
-            return {
+            const signature = {
                 name: func.name?.text,
-                params: func.func.parameters.map(x => ({
-                    name: x.name?.text,
-                    isRequired: !x.defaultValue,
-                    default: null, //x.defaultValue.transpile(state)
-                    type: x.typeToken?.text
-                })),
-                returnType: func.func.returnTypeToken?.text
+                params: [],
+                returnType: func.func.returnTypeToken?.text ?? 'Void'
             } as Func;
+
+
+            const paramsRegex = /\((.*?)\)/g;
+            let match = paramsRegex.exec(text);
+            if (match[1]) {
+                const foundParamTexts = match[1].split(',').map(x => x.replace(/['"]+/g, '').trim());
+                for (let i = 0; i < foundParamTexts.length; i++) {
+                    const foundParam = foundParamTexts[i];
+                    signature.params.push(this.getParamFromMarkdown(foundParam, `param${i}`));
+                }
+            }
+            return signature;
         }
+
     }
 
     private getDocApiUrl(docRelativePath: string) {
