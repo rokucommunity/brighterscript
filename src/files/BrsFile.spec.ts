@@ -1848,6 +1848,47 @@ describe('BrsFile', () => {
             );
         });
 
+        // TODO: Unskip when implemented
+        it.skip('includes markdown comments for overriden functions in hover', async () => {
+            program.setFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ParentScene" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/parent.brs" />
+                </component>
+            `);
+
+            program.setFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <script type="text/brightscript" uri="pkg:/child.brs" />
+                </component>
+            `);
+
+            program.setFile({ src: `${rootDir}/parent.brs`, dest: 'parent.brs' }, `
+                ' Does something
+                sub DoSomething()
+                end sub
+            `);
+
+            const file = program.setFile({ src: `${rootDir}/child.brs`, dest: 'child.brs' }, `
+                sub DoSomething()
+                end sub
+            `);
+
+            //hover over Do|Something() in the child component
+            expect(
+                (await program.getHover(file.srcPath, Position.create(1, 23))).contents
+            ).to.equal([
+                '```brightscript',
+                'sub DoSomething() as void',
+                '```',
+                '***',
+                '',
+                ' Does something',
+                ''
+            ].join('\n'));
+        });
+
         it('handles mixed case `then` partions of conditionals', () => {
             let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()

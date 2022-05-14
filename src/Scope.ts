@@ -933,6 +933,63 @@ export class Scope {
                             range: container.callable.nameRange,
                             file: container.callable.file
                         });
+
+                        // Raise diagnostic error if the own callable and the shadowed callable
+                        // are of different types, e.g: sub vs. function.
+                        if (container.callable.isSub !== shadowedCallable.callable.isSub) {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.mismatchAncestorCallableType(
+                                    container.callable.name,
+                                    shadowedCallable.callable.isSub ? 'sub' : 'function'
+                                ),
+                                range: container.callable.nameRange,
+                                file: container.callable.file
+                            });
+                        }
+
+                        // Raise a diagnostic error if the own callable return type is different
+                        // than the shadowed callable.
+                        if (container.callable.type.returnType.toTypeString() !== shadowedCallable.callable.type.returnType.toTypeString()) {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.mismatchAncestorCallableReturnType(
+                                    container.callable.name,
+                                    shadowedCallable.callable.type.returnType.toTypeString()
+                                ),
+                                range: container.callable.nameRange,
+                                file: container.callable.file
+                            });
+                        }
+
+                        // Raise diagnostic error if the own callable number of params is different
+                        // than the shadowed callable number of params.
+                        if (container.callable.params.length !== shadowedCallable.callable.params.length) {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.mismatchAncestorCallableParamCount(
+                                    container.callable.name,
+                                    shadowedCallable.callable.params.length,
+                                    container.callable.params.length
+                                ),
+                                range: container.callable.nameRange,
+                                file: container.callable.file
+                            });
+                        }
+
+                        // Raise a diagnostic error if the own callable parameter types
+                        // are different than the shadowed callable.
+                        for (const [i, param] of container.callable.params.entries()) {
+                            if (shadowedCallable.callable.params[i] && param.type.toTypeString() !== shadowedCallable.callable.params[i].type.toTypeString()) {
+                                this.diagnostics.push({
+                                    ...DiagnosticMessages.mismatchAncestorCallableParamType(
+                                        container.callable.name,
+                                        param.name,
+                                        shadowedCallable.callable.params[i].type.toTypeString(),
+                                        param.type.toTypeString()
+                                    ),
+                                    range: container.callable.nameRange,
+                                    file: container.callable.file
+                                });
+                            }
+                        }
                     }
                 }
             }

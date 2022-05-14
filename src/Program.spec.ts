@@ -404,6 +404,107 @@ describe('Program', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('raises diagnostic error when own callable and shadowed callables are of different types (sub vs. function)', () => {
+            program.setFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ParentScene" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/parent.brs" />
+                </component>
+            `);
+
+            program.setFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <script type="text/brightscript" uri="pkg:/child.brs" />
+                </component>
+            `);
+
+            program.setFile({ src: `${rootDir}/parent.brs`, dest: 'parent.brs' }, `sub DoSomething()\nend sub`);
+            // TODO: Here I'm specifying the type of the function as void to prevent a return type mismatch.
+            // Should I consider a sub to be equal as a function as void and not raise the `mismatchAncestorCallableType` error?
+            program.setFile({ src: `${rootDir}/child.brs`, dest: 'child.brs' }, `function DoSomething() as void\nend function`);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.overridesAncestorFunction('', '', '', '').code,
+                DiagnosticMessages.mismatchAncestorCallableType('', '').code
+            ]);
+        });
+
+        it('raises diagnostic error when own callable and shadowed callables have different return types', () => {
+            program.setFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ParentScene" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/parent.brs" />
+                </component>
+            `);
+
+            program.setFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <script type="text/brightscript" uri="pkg:/child.brs" />
+                </component>
+            `);
+
+            program.setFile({ src: `${rootDir}/parent.brs`, dest: 'parent.brs' }, `function DoSomething() as boolean\nreturn true\nend function`);
+            program.setFile({ src: `${rootDir}/child.brs`, dest: 'child.brs' }, `function DoSomething() as string\nreturn "true"\nend function`);
+            program.validate();
+
+            expectDiagnostics(program, [
+                DiagnosticMessages.overridesAncestorFunction('', '', '', '').code,
+                DiagnosticMessages.mismatchAncestorCallableReturnType('', '').code
+            ]);
+        });
+
+        it('raises diagnostic error when own callable and shadowed callables have different number of params', () => {
+            program.setFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ParentScene" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/parent.brs" />
+                </component>
+            `);
+
+            program.setFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <script type="text/brightscript" uri="pkg:/child.brs" />
+                </component>
+            `);
+
+            program.setFile({ src: `${rootDir}/parent.brs`, dest: 'parent.brs' }, `sub DoSomething(arg1, arg2)\nend sub`);
+            program.setFile({ src: `${rootDir}/child.brs`, dest: 'child.brs' }, `sub DoSomething(arg1)\nend sub`);
+            program.validate();
+
+            expectDiagnostics(program, [
+                DiagnosticMessages.overridesAncestorFunction('', '', '', '').code,
+                DiagnosticMessages.mismatchAncestorCallableParamCount('', 0, 0).code
+            ]);
+        });
+
+        it('raises diagnostic error when own callable and shadowed callables have different param types', () => {
+            program.setFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ParentScene" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/parent.brs" />
+                </component>
+            `);
+
+            program.setFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <script type="text/brightscript" uri="pkg:/child.brs" />
+                </component>
+            `);
+
+            program.setFile({ src: `${rootDir}/parent.brs`, dest: 'parent.brs' }, `sub DoSomething(arg1 as string, arg2 as object)\nend sub`);
+            program.setFile({ src: `${rootDir}/child.brs`, dest: 'child.brs' }, `sub DoSomething(arg1 as string, arg2 as boolean)\nend sub`);
+            program.validate();
+
+            expectDiagnostics(program, [
+                DiagnosticMessages.overridesAncestorFunction('', '', '', '').code,
+                DiagnosticMessages.mismatchAncestorCallableParamType('', '', '', '').code
+            ]);
+        });
+
         it('catches duplicate methods in single file', () => {
             program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
