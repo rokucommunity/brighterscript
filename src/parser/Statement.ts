@@ -1574,8 +1574,6 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     getTypedef(state: BrsTranspileState) {
-        this.ensureConstructorFunctionExists();
-
         const result = [] as TranspileResult;
         for (let annotation of this.annotations ?? []) {
             result.push(
@@ -1599,7 +1597,17 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }
         result.push(state.newline);
         state.blockDepth++;
-        for (const member of this.body) {
+
+        let body = this.body;
+        //inject an empty "new" method if missing
+        if (!this.getConstructorFunction()) {
+            body = [
+                createMethodStatement('new', TokenKind.Sub),
+                ...this.body
+            ];
+        }
+
+        for (const member of body) {
             if (isTypedefProvider(member)) {
                 result.push(
                     state.indent(),
@@ -1675,26 +1683,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * Get the constructor function for this class (if exists), or undefined if not exist
      */
     private getConstructorFunction() {
-        for (let key in this.memberMap) {
-            let member = this.memberMap[key];
-            if (member.name?.text?.toLowerCase() === 'new') {
-                return member as MethodStatement;
-            }
-        }
-    }
-
-    private getEmptyNewFunction() {
-        return createMethodStatement('new', TokenKind.Sub);
-    }
-
-    /**
-     * Create an empty `new` function if class is missing it (simplifies transpile logic)
-     */
-    private ensureConstructorFunctionExists() {
-        if (!this.getConstructorFunction()) {
-            this.memberMap.new = this.getEmptyNewFunction();
-            this.body = [this.memberMap.new, ...this.body];
-        }
+        return this.body.find((stmt) => {
+            return (stmt as MethodStatement)?.name?.text?.toLowerCase() === 'new';
+        }) as MethodStatement;
     }
 
     /**
@@ -1716,8 +1707,6 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * without instantiating the parent constructor at that point in time.
      */
     private getTranspiledBuilder(state: BrsTranspileState) {
-        this.ensureConstructorFunctionExists();
-
         let result = [];
         result.push(`function ${this.getBuilderName(this.getName(ParseMode.BrightScript))}()\n`);
         state.blockDepth++;
@@ -1748,7 +1737,16 @@ export class ClassStatement extends Statement implements TypedefProvider {
         );
         let parentClassIndex = this.getParentClassIndex(state);
 
-        for (let statement of this.body) {
+        let body = this.body;
+        //inject an empty "new" method if missing
+        if (!this.getConstructorFunction()) {
+            body = [
+                createMethodStatement('new', TokenKind.Sub),
+                ...this.body
+            ];
+        }
+
+        for (let statement of body) {
             //is field statement
             if (isClassFieldStatement(statement)) {
                 //do nothing with class fields in this situation, they are handled elsewhere
