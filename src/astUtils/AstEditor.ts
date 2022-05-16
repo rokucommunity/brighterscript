@@ -50,6 +50,19 @@ export class AstEditor {
     }
 
     /**
+     * Removes elements from an array and, if necessary, inserts new elements in their place, returning the deleted elements.
+     * @param startIndex The zero-based location in the array from which to start removing elements.
+     * @param deleteCount The number of elements to remove.
+     * @param items Elements to insert into the array in place of the deleted elements.
+     * @returns An array containing the elements that were deleted.
+     */
+    public arraySplice<T, TItems extends T = T>(array: T[], startIndex: number, deleteCount: number, ...items: TItems[]) {
+        const change = new ArraySpliceChange(array, startIndex, deleteCount, items);
+        this.changes.push(change);
+        change.apply();
+    }
+
+    /**
      * Push one or more values to the end of an array
      */
     public arrayPush<T, TItems extends T = T>(array: T[], ...newValues: TItems[]) {
@@ -210,6 +223,26 @@ class ArrayPushChange<T extends any[], TItems extends T = T> implements Change {
 
     public undo() {
         this.array.splice(this.array.length - this.newValues.length, this.newValues.length);
+    }
+}
+
+class ArraySpliceChange<T = any, TItems extends T = T> implements Change {
+    constructor(
+        private array: Array<T>,
+        private startIndex: number,
+        private deleteCount: number,
+        private newValues: Array<TItems>
+    ) { }
+
+    private deletedItems: Array<TItems>;
+
+    public apply() {
+        this.deletedItems = this.array.splice(this.startIndex, this.deleteCount, ...this.newValues) as Array<TItems>;
+        return [...this.deletedItems];
+    }
+
+    public undo() {
+        this.array.splice(this.startIndex, this.newValues.length, ...this.deletedItems);
     }
 }
 
