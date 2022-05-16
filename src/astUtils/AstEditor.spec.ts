@@ -247,7 +247,7 @@ describe('AstEditor', () => {
         expect(obj).haveOwnProperty('name');
     });
 
-    it('removeProperty removes existing property', () => {
+    it('removeProperty leaves non-present property as non-present after undo', () => {
         const obj = {};
         editor.removeProperty(obj as any, 'name');
         expect(obj).not.haveOwnProperty('name');
