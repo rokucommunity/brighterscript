@@ -10,11 +10,11 @@ import { LiteralExpression } from '../parser/Expression';
 import { SourceNode } from 'source-map';
 
 describe('AstEditor', () => {
-    let changer: AstEditor;
+    let editor: AstEditor;
     let obj: ReturnType<typeof getTestObject>;
 
     beforeEach(() => {
-        changer = new AstEditor();
+        editor = new AstEditor();
         obj = getTestObject();
     });
 
@@ -45,101 +45,101 @@ describe('AstEditor', () => {
     it('applies single property change', () => {
         expect(obj.name).to.eql('parent');
 
-        changer.setProperty(obj, 'name', 'jack');
+        editor.setProperty(obj, 'name', 'jack');
         expect(obj.name).to.eql('jack');
 
-        changer.undoAll();
+        editor.undoAll();
         expect(obj.name).to.eql('parent');
     });
 
     it('inserts at beginning of array', () => {
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
 
-        changer.addToArray(obj.hobbies, 0, 'climbing');
+        editor.addToArray(obj.hobbies, 0, 'climbing');
         expect(obj.hobbies).to.eql(['climbing', 'gaming', 'reading', 'cycling']);
 
-        changer.undoAll();
+        editor.undoAll();
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
     });
 
     it('inserts at middle of array', () => {
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
 
-        changer.addToArray(obj.hobbies, 1, 'climbing');
+        editor.addToArray(obj.hobbies, 1, 'climbing');
         expect(obj.hobbies).to.eql(['gaming', 'climbing', 'reading', 'cycling']);
 
-        changer.undoAll();
+        editor.undoAll();
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
     });
 
     it('changes the value at an array index', () => {
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
 
-        changer.setArrayValue(obj.hobbies, 1, 'sleeping');
+        editor.setArrayValue(obj.hobbies, 1, 'sleeping');
         expect(obj.hobbies).to.eql(['gaming', 'sleeping', 'cycling']);
 
-        changer.undoAll();
+        editor.undoAll();
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
     });
 
     it('inserts at end of array', () => {
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
 
-        changer.addToArray(obj.hobbies, 3, 'climbing');
+        editor.addToArray(obj.hobbies, 3, 'climbing');
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling', 'climbing']);
 
-        changer.undoAll();
+        editor.undoAll();
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
     });
 
     it('removes at beginning of array', () => {
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
 
-        changer.removeFromArray(obj.hobbies, 0);
+        editor.removeFromArray(obj.hobbies, 0);
         expect(obj.hobbies).to.eql(['reading', 'cycling']);
 
-        changer.undoAll();
+        editor.undoAll();
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
     });
 
     it('removes at middle of array', () => {
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
 
-        changer.removeFromArray(obj.hobbies, 1);
+        editor.removeFromArray(obj.hobbies, 1);
         expect(obj.hobbies).to.eql(['gaming', 'cycling']);
 
-        changer.undoAll();
+        editor.undoAll();
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
     });
 
     it('removes at middle of array', () => {
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
 
-        changer.removeFromArray(obj.hobbies, 2);
+        editor.removeFromArray(obj.hobbies, 2);
         expect(obj.hobbies).to.eql(['gaming', 'reading']);
 
-        changer.undoAll();
+        editor.undoAll();
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
     });
 
     it('restores array after being removed', () => {
-        changer.removeFromArray(obj.hobbies, 0);
-        changer.setProperty(obj, 'hobbies', undefined);
+        editor.removeFromArray(obj.hobbies, 0);
+        editor.setProperty(obj, 'hobbies', undefined);
         expect(obj.hobbies).to.be.undefined;
-        changer.undoAll();
+        editor.undoAll();
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
     });
 
     it('works for many changes', () => {
         expect(obj).to.eql(getTestObject());
-        changer.setProperty(obj, 'name', 'bob');
-        changer.setProperty(obj.children[0], 'name', 'jimmy');
-        changer.addToArray(obj.children, obj.children.length, { name: 'sally', age: 1 });
-        changer.removeFromArray(obj.jobs, 1);
-        changer.removeFromArray(obj.hobbies, 0);
-        changer.removeFromArray(obj.hobbies, 0);
-        changer.removeFromArray(obj.hobbies, 0);
-        changer.setProperty(obj, 'hobbies', undefined);
+        editor.setProperty(obj, 'name', 'bob');
+        editor.setProperty(obj.children[0], 'name', 'jimmy');
+        editor.addToArray(obj.children, obj.children.length, { name: 'sally', age: 1 });
+        editor.removeFromArray(obj.jobs, 1);
+        editor.removeFromArray(obj.hobbies, 0);
+        editor.removeFromArray(obj.hobbies, 0);
+        editor.removeFromArray(obj.hobbies, 0);
+        editor.setProperty(obj, 'hobbies', undefined);
 
         expect(obj).to.eql({
             name: 'bob',
@@ -163,7 +163,7 @@ describe('AstEditor', () => {
             }]
         });
 
-        changer.undoAll();
+        editor.undoAll();
         expect(obj).to.eql(getTestObject());
     });
 
@@ -182,10 +182,10 @@ describe('AstEditor', () => {
 
             expect(transpileToString(expression)).to.eql('original');
 
-            changer.overrideTranspileResult(expression, 'replaced');
+            editor.overrideTranspileResult(expression, 'replaced');
             expect(transpileToString(expression)).to.eql('replaced');
 
-            changer.undoAll();
+            editor.undoAll();
             expect(transpileToString(expression)).to.eql('original');
         });
 
@@ -194,10 +194,64 @@ describe('AstEditor', () => {
                 range: util.createRange(1, 2, 3, 4)
             } as any;
             expect(expression.transpile).not.to.exist;
-            changer.overrideTranspileResult(expression, 'replaced');
+            editor.overrideTranspileResult(expression, 'replaced');
             expect(transpileToString(expression)).to.eql('replaced');
-            changer.undoAll();
+            editor.undoAll();
             expect(expression.transpile).not.to.exist;
         });
+    });
+
+    it('arrayPush works', () => {
+        const array = [1, 2, 3];
+        editor.arrayPush(array, 4);
+        expect(array).to.eql([1, 2, 3, 4]);
+        editor.undoAll();
+        expect(array).to.eql([1, 2, 3]);
+    });
+
+    it('arrayPop works', () => {
+        const array = [1, 2, 3];
+        expect(
+            editor.arrayPop(array)
+        ).to.eql(3);
+        expect(array).to.eql([1, 2]);
+        editor.undoAll();
+        expect(array).to.eql([1, 2, 3]);
+    });
+
+    it('arrayShift works', () => {
+        const array = [1, 2, 3];
+        expect(
+            editor.arrayShift(array)
+        ).to.eql(1);
+        expect(array).to.eql([2, 3]);
+        editor.undoAll();
+        expect(array).to.eql([1, 2, 3]);
+    });
+
+    it('arrayUnshift works at beginning', () => {
+        const array = [1, 2, 3];
+        editor.arrayUnshift(array, -1, 0);
+        expect(array).to.eql([-1, 0, 1, 2, 3]);
+        editor.undoAll();
+        expect(array).to.eql([1, 2, 3]);
+    });
+
+    it('removeProperty removes existing property', () => {
+        const obj = {
+            name: 'bob'
+        };
+        editor.removeProperty(obj, 'name');
+        expect(obj).not.haveOwnProperty('name');
+        editor.undoAll();
+        expect(obj).haveOwnProperty('name');
+    });
+
+    it('removeProperty removes existing property', () => {
+        const obj = {};
+        editor.removeProperty(obj as any, 'name');
+        expect(obj).not.haveOwnProperty('name');
+        editor.undoAll();
+        expect(obj).not.haveOwnProperty('name');
     });
 });
