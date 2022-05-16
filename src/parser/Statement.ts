@@ -1985,38 +1985,37 @@ export class MethodStatement extends FunctionStatement {
         }
 
         //this is a child class, and the first statement isn't a call to super. Inject one
-        this.func.body.statements.unshift(
-            new ExpressionStatement(
-                new CallExpression(
-                    new VariableExpression(
-                        {
-                            kind: TokenKind.Identifier,
-                            text: 'super',
-                            isReserved: false,
-                            range: state.classStatement.name.range,
-                            leadingWhitespace: ''
-                        },
-                        null
-                    ),
+        const superCall = new ExpressionStatement(
+            new CallExpression(
+                new VariableExpression(
                     {
-                        kind: TokenKind.LeftParen,
-                        text: '(',
+                        kind: TokenKind.Identifier,
+                        text: 'super',
                         isReserved: false,
                         range: state.classStatement.name.range,
                         leadingWhitespace: ''
                     },
-                    {
-                        kind: TokenKind.RightParen,
-                        text: ')',
-                        isReserved: false,
-                        range: state.classStatement.name.range,
-                        leadingWhitespace: ''
-                    },
-                    [],
                     null
-                )
+                ),
+                {
+                    kind: TokenKind.LeftParen,
+                    text: '(',
+                    isReserved: false,
+                    range: state.classStatement.name.range,
+                    leadingWhitespace: ''
+                },
+                {
+                    kind: TokenKind.RightParen,
+                    text: ')',
+                    isReserved: false,
+                    range: state.classStatement.name.range,
+                    leadingWhitespace: ''
+                },
+                [],
+                null
             )
         );
+        state.editor.arrayUnshift(this.func.body.statements, superCall);
     }
 
     /**
@@ -2046,7 +2045,7 @@ export class MethodStatement extends FunctionStatement {
                 );
             }
         }
-        this.func.body.statements.splice(startingIndex, 0, ...newStatements);
+        state.editor.arraySplice(this.func.body.statements, startingIndex, 0, ...newStatements);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
