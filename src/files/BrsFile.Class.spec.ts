@@ -17,6 +17,7 @@ let sinon = sinonImport.createSandbox();
 describe('BrsFile BrighterScript classes', () => {
     let tmpPath = s`${process.cwd()}/.tmp`;
     let rootDir = s`${tmpPath}/rootDir`;
+    const stagingDir = s`${tmpPath}/staging`;
 
     let program: Program;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
@@ -24,7 +25,7 @@ describe('BrsFile BrighterScript classes', () => {
     beforeEach(() => {
         fsExtra.ensureDirSync(rootDir);
         fsExtra.emptyDirSync(tmpPath);
-        program = new Program({ rootDir: rootDir });
+        program = new Program({ rootDir: rootDir, stagingFolderPath: stagingDir });
     });
     afterEach(() => {
         sinon.restore();
@@ -190,10 +191,29 @@ describe('BrsFile BrighterScript classes', () => {
                 range: Range.create(7, 33, 7, 34)
             }]);
         });
-
     });
 
     describe('transpile', () => {
+        it('does not mess with AST when injecting `super()` call', async () => {
+            const file = program.setFile('source/classes.bs', `
+                class Parent
+                end class
+
+                class Child extends parent
+                    sub new()
+                        super()
+                    end sub
+                end class
+            `);
+            expect(
+                (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.name.text
+            ).to.eql('super');
+            await program.transpile([], stagingDir);
+            expect(
+                (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.name.text
+            ).to.eql('super');
+        });
+
         it('follows correct sequence for property initializers', () => {
             testTranspile(`
                 class Animal
@@ -1237,7 +1257,7 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         doesNotThrow(() => {
-            file.parser.references.classStatements[0].getParentClassIndex(new BrsTranspileState(file));
+            file.parser.references.classStatements[0]['getParentClassIndex'](new BrsTranspileState(file));
         });
     });
 

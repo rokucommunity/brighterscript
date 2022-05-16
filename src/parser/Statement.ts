@@ -1644,7 +1644,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 break;
             }
         }
-        return myIndex - 1;
+        const result = myIndex - 1;
+        if (result >= 0) {
+            return result;
+        } else {
+            return null;
+        }
     }
 
     public hasParentClass() {
@@ -1914,7 +1919,7 @@ export class MethodStatement extends FunctionStatement {
         const visitor = createVisitor({
             VariableExpression: e => {
                 if (e.name.text.toLocaleLowerCase() === 'super') {
-                    e.name.text = `m.super${parentClassIndex}_new`;
+                    state.editor.setProperty(e.name, 'text', `m.super${parentClassIndex}_new`);
                 }
             },
             DottedGetExpression: e => {
@@ -1922,7 +1927,7 @@ export class MethodStatement extends FunctionStatement {
                 const lowerName = beginningVariable?.getName(ParseMode.BrighterScript).toLowerCase();
                 if (lowerName === 'super') {
                     beginningVariable.name.text = 'm';
-                    e.name.text = `super${parentClassIndex}_${e.name.text}`;
+                    state.editor.setProperty(e.name, 'text', `super${parentClassIndex}_${e.name.text}`);
                 }
             }
         });
