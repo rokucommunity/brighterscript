@@ -1,4 +1,5 @@
 import type { Range } from 'vscode-languageserver';
+import { AstEditor } from '../astUtils/AstEditor';
 import type { BrsFile } from '../files/BrsFile';
 import type { ClassStatement } from './Statement';
 import { TranspileState } from './TranspileState';
@@ -28,4 +29,9 @@ export class BrsTranspileState extends TranspileState {
      * Used by ClassMethodStatements to determine information about their enclosing class
      */
     public classStatement?: ClassStatement;
+
+    /**
+     * An AST editor that can be used by the AST nodes to do various transformations to the AST which will be reverted at the end of the transpile cycle
+     */
+    public editor = new AstEditor();
 }

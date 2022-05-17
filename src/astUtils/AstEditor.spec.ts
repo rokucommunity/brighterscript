@@ -254,4 +254,28 @@ describe('AstEditor', () => {
         editor.undoAll();
         expect(obj).not.haveOwnProperty('name');
     });
+
+    it('arraySplice works properly at beginning', () => {
+        const arr = [1, 2, 3];
+        editor.arraySplice(arr, 0, 2, -1, 0);
+        expect(arr).to.eql([-1, 0, 3]);
+        editor.undoAll();
+        expect(arr).to.eql([1, 2, 3]);
+    });
+
+    it('arraySplice works properly at the middle', () => {
+        const arr = [1, 2, 3];
+        editor.arraySplice(arr, 1, 2, 4, 5);
+        expect(arr).to.eql([1, 4, 5]);
+        editor.undoAll();
+        expect(arr).to.eql([1, 2, 3]);
+    });
+
+    it('arraySplice works properly at the end', () => {
+        const arr = [1, 2, 3];
+        editor.arraySplice(arr, 3, 2, 4, 5);
+        expect(arr).to.eql([1, 2, 3, 4, 5]);
+        editor.undoAll();
+        expect(arr).to.eql([1, 2, 3]);
+    });
 });
