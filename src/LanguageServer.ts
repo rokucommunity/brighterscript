@@ -82,7 +82,7 @@ export class LanguageServer {
         return createConnection(ProposedFeatures.all);
     }
 
-    private loggerSubscription;
+    private loggerSubscription: () => void;
 
     private keyedThrottler = new KeyedThrottler(this.debounceTimeout);
 
