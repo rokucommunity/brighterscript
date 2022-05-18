@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.50.1](https://github.com/rokucommunity/brighterscript/compare/v0.50.0...v0.50.1) - 2022-05-18
+### Fixed
+ - Expose all the AstEditor methods to plugin events ([#593](https://github.com/rokucommunity/brighterscript/pull/593))
+ - Fix language server cwd issue with multi-root workspaces ([#592](https://github.com/rokucommunity/brighterscript/pull/592))
+
+
+
 ## [0.50.0](https://github.com/rokucommunity/brighterscript/compare/v0.49.0...v0.50.0) - 2022-05-17
 ### Added
  - `srcPath` property on `XmlFile` and `BrsFile` to line up with the v1 branch ([#581](https://github.com/rokucommunity/brighterscript/pull/581))
