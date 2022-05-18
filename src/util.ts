@@ -304,11 +304,12 @@ export class Util {
      */
     public normalizeConfig(config: BsConfig) {
         config = config || {} as BsConfig;
+        config.cwd = config.cwd ?? process.cwd();
         config.deploy = config.deploy === true ? true : false;
-        //use default options from rokuDeploy
-        config.files = config.files ?? rokuDeploy.getOptions().files;
+        //use default files array from rokuDeploy
+        config.files = config.files ?? [...rokuDeploy.DefaultFiles];
         config.createPackage = config.createPackage === false ? false : true;
-        let rootFolderName = path.basename(process.cwd());
+        let rootFolderName = path.basename(config.cwd);
         config.outFile = config.outFile ?? `./out/${rootFolderName}.zip`;
         config.sourceMap = config.sourceMap === true;
         config.username = config.username ?? 'rokudev';
@@ -322,7 +323,6 @@ export class Util {
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
         config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
         config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
-        config.cwd = config.cwd ?? process.cwd();
         config.emitDefinitions = config.emitDefinitions === true ? true : false;
         if (typeof config.logLevel === 'string') {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
