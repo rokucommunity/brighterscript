@@ -157,5 +157,5 @@ export interface BsConfig {
      * Force BRS file to be transpiled
      * @default false
      */
-    transpileBrs?: boolean;
+    allowBrighterScriptInBrightScript?: boolean;
 }
