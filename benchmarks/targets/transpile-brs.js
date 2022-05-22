@@ -20,7 +20,7 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
     }
 
     if (files.length === 0) {
-        console.log('[allow-brighterscript-in-brightscript] No brs|bs|d.bs files found in program');
+        console.log('[transpile-brs] No brs|bs|d.bs files found in program');
         return;
     }
     suite.add(name, () => {
