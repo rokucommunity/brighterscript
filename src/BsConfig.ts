@@ -154,7 +154,7 @@ export interface BsConfig {
     sourceMap?: boolean;
 
     /**
-     * Force BRS file to be transpiled
+     * Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
      * @default false
      */
     allowBrighterScriptInBrightScript?: boolean;
