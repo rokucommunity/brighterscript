@@ -1,7 +1,7 @@
 import 'array-flat-polyfill';
 import * as glob from 'glob';
 import * as path from 'path';
-import * as rokuDeploy from 'roku-deploy';
+import { rokuDeploy, util as rokuDeployUtil } from 'roku-deploy';
 import type {
     CompletionItem,
     Connection,
@@ -771,7 +771,7 @@ export class LanguageServer {
                 //get the files for each folder recursively
                 .flatMap(dirPath => {
                     //create a glob pattern to match all files
-                    let pattern = rokuDeploy.util.toForwardSlashes(`${dirPath}/**/*`);
+                    let pattern = rokuDeployUtil.toForwardSlashes(`${dirPath}/**/*`);
                     let files = glob.sync(pattern, {
                         absolute: true
                     });

@@ -3,7 +3,7 @@ import * as fsExtra from 'fs-extra';
 import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
-import * as rokuDeploy from 'roku-deploy';
+import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
 import type { Diagnostic, Position, Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
@@ -307,7 +307,7 @@ export class Util {
         config.cwd = config.cwd ?? process.cwd();
         config.deploy = config.deploy === true ? true : false;
         //use default files array from rokuDeploy
-        config.files = config.files ?? [...rokuDeploy.DefaultFiles];
+        config.files = config.files ?? [...DefaultFiles];
         config.createPackage = config.createPackage === false ? false : true;
         let rootFolderName = path.basename(config.cwd);
         config.outFile = config.outFile ?? `./out/${rootFolderName}.zip`;
@@ -1172,7 +1172,7 @@ export class Util {
      */
     public standardizePath(thePath: string) {
         return util.driveLetterToLower(
-            rokuDeploy.standardizePath(thePath)
+            rokuDeployStandardizePath(thePath)
         );
     }
 
@@ -1343,7 +1343,7 @@ export function standardizePath(stringParts, ...expressions: any[]) {
         result.push(stringParts[i], expressions[i]);
     }
     return util.driveLetterToLower(
-        rokuDeploy.standardizePath(
+        rokuDeployStandardizePath(
             result.join('')
         )
     );
