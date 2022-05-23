@@ -1783,6 +1783,8 @@ export class BrsFile {
             //simple SourceNode wrapping the entire file to simplify the logic below
             transpileResult = new SourceNode(null, null, state.srcPath, this.fileContents);
         }
+        //undo any AST edits that the transpile cycle has made
+        state.editor.undoAll();
 
         if (this.program.options.sourceMap) {
             return new SourceNode(null, null, null, [

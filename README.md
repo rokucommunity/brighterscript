@@ -72,9 +72,9 @@ BrighterScript adds several new features to the BrightScript language such as Na
     <a href="https://www.nba.com/">
         <img src="https://user-images.githubusercontent.com/2544493/157430017-a27b62d0-63de-4e87-a6df-8448007bd24d.png">
     </a>&nbsp;&nbsp;&nbsp;
-    <a href="https://github.com/georgejecook/rooibos/blob/master/docs/index.md">
-        <img src="https://user-images.githubusercontent.com/2544493/157430331-20913e84-f3f4-447a-b093-8780cd1241e6.png">
-    </a>
+    <a href="https://channelstore.roku.com/details/222212/phototv">
+        <img height="34" src="https://user-images.githubusercontent.com/2544493/169118062-81d94da5-2323-4e31-b19d-7db3f9c88dff.png">
+    </a>&nbsp;&nbsp;&nbsp;
 </p>
 <br/>
 
