@@ -44,6 +44,29 @@ describe('BrsFile', () => {
         program.dispose();
     });
 
+    describe('allowBrighterScriptInBrightScript', () => {
+        it('is false by default', () => {
+            program.setFile('source/main.brs', `
+                namespace CustomApp
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('namespace')
+            }]);
+        });
+
+        it('allows bs features in brs', () => {
+            program.options.allowBrighterScriptInBrightScript = true;
+            program.setFile('source/main.brs', `
+                namespace CustomApp
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
     it('supports the third parameter in CreateObject', () => {
         program.setFile('source/main.brs', `
             sub main()
