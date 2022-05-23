@@ -48,7 +48,7 @@ export class BrsFile {
         this.extension = util.getExtension(this.srcPath);
 
         //all BrighterScript files need to be transpiled
-        if (this.extension?.endsWith('.bs')) {
+        if (this.extension?.endsWith('.bs') || program?.options?.allowBrighterScriptInBrightScript) {
             this.needsTranspiled = true;
             this.parseMode = ParseMode.BrighterScript;
         }
