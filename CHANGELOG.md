@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.51.0](https://github.com/rokucommunity/brighterscript/compare/v0.50.2...v0.51.0) - 2022-05-24
+### Added
+ - Add function-based` AstEditor.edit` method ([#598](https://github.com/rokucommunity/brighterscript/pull/598))
+ - Allow multiple keys for `DependencyGraph.getAllDependencies()` ([#596](https://github.com/rokucommunity/brighterscript/pull/596))
+
+
+
 ## [0.50.2](https://github.com/rokucommunity/brighterscript/compare/v0.50.1...v0.50.2) - 2022-05-23
 ### Added
  - `allowBrighterScriptInBrightScript` config option to allow brighterscript features to be included in BrightScript files, and force those files to be transpiled ([#573](https://github.com/rokucommunity/brighterscript/pull/573))
