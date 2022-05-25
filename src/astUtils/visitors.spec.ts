@@ -14,6 +14,7 @@ import { isPrintStatement } from './reflection';
 import { createToken } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
 import { AstEditor } from './AstEditor';
+import { Parser } from '../parser/Parser';
 
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
@@ -923,6 +924,25 @@ describe('astUtils visitors', () => {
                 'LiteralExpression',
                 'LiteralExpression'
             ], WalkMode.visitExpressionsRecursive);
+        });
+
+        it('provides owningObject and key', () => {
+            const items = [];
+            const { ast } = Parser.parse(`
+                sub main()
+                    log = sub(message)
+                        print "hello " + message
+                    end sub
+                    log("hello" + " world")
+                end sub
+            `);
+            ast.walk((astNode, parent, owningObject, key) => {
+                items.push(astNode);
+                expect(owningObject[key]).to.equal(astNode);
+            }, {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            expect(items).to.be.length(17);
         });
     });
 });
