@@ -66,6 +66,21 @@ export function walk<T>(owningObject: T, key: keyof T, visitor: WalkVisitor, opt
 }
 
 /**
+ * Helper for AST elements to walk arrays when visitors might change the array size (to delete/insert items).
+ * @param filter a function used to filter items from the array. return true if that item should be walked
+ */
+export function walkArray<T>(array: Array<T>, visitor: WalkVisitor, options: WalkOptions, parent?: Expression | Statement, filter?: <T>(element: T) => boolean) {
+    for (let i = 0; i < array.length; i++) {
+        if (!filter || filter(array[i])) {
+            const startLength = array.length;
+            walk(array, i, visitor, options, parent);
+            //compensate for deleted or added items.
+            i += array.length - startLength;
+        }
+    }
+}
+
+/**
  * Creates an optimized visitor function.
  * Conventional visitors will need to inspect each incoming Statement/Expression, leading to many if statements.
  * This function will compare the constructor of the Statement/Expression, and perform a SINGLE logical check
@@ -154,8 +169,8 @@ export function createVisitor(
     if (visitor.ClassMethodStatement) {
         visitor.MethodStatement = visitor.ClassMethodStatement;
     }
-    return <WalkVisitor>((statement: Statement, parent?: Statement): Statement | void => {
-        return visitor[statement.constructor.name]?.(statement, parent);
+    return <WalkVisitor>((statement: Statement, parent?: Statement, owningObject?: any, key?: any): Statement | void => {
+        return visitor[statement.constructor.name]?.(statement, parent, owningObject, key);
     });
 }
 
