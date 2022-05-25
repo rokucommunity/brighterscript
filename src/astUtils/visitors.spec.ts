@@ -13,6 +13,7 @@ import { createVisitor, WalkMode, walkStatements } from './visitors';
 import { isPrintStatement } from './reflection';
 import { createToken } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
+import { AstEditor } from './AstEditor';
 
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
@@ -239,6 +240,33 @@ describe('astUtils visitors', () => {
             });
             walkStatements(block, visitor);
             expect(block.statements[0]).to.equal(printStatement2);
+        });
+
+        it('uses the AstEditor for replacement when provided', () => {
+            const editor = new AstEditor();
+
+            const printStatement1 = new PrintStatement({
+                print: createToken(TokenKind.Print)
+            }, []);
+
+            const printStatement2 = new PrintStatement({
+                print: createToken(TokenKind.Print)
+            }, []);
+
+            const block = new Block([
+                printStatement1
+            ], Range.create(0, 0, 0, 0));
+
+
+            block.walk(createVisitor({
+                PrintStatement: () => printStatement2
+            }), {
+                walkMode: WalkMode.visitAll,
+                editor: editor
+            });
+            expect(block.statements[0]).to.equal(printStatement2);
+            editor.undoAll();
+            expect(block.statements[0]).to.equal(printStatement1);
         });
     });
 

@@ -3,6 +3,7 @@ import type { CancellationToken } from 'vscode-languageserver';
 import type { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement, EnumStatement, EnumMemberStatement, DimStatement, TryCatchStatement, CatchStatement, ThrowStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement, FieldStatement, MethodStatement } from '../parser/Statement';
 import type { AALiteralExpression, AAMemberExpression, AnnotationExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, Expression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NamespacedVariableNameExpression, NewExpression, NullCoalescingExpression, RegexLiteralExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
 import { isExpression, isStatement } from './reflection';
+import type { AstEditor } from './AstEditor';
 
 
 /**
@@ -43,9 +44,13 @@ export function walk<T>(keyParent: T, key: keyof T, visitor: WalkVisitor, option
 
         //replace the value on the parent if the visitor returned a Statement or Expression (this is how visitors can edit AST)
         if (result && (isExpression(result) || isStatement(result))) {
-            (keyParent as any)[key] = result;
-            //don't walk the new element
-            return;
+            if (options.editor) {
+                options.editor.setProperty(keyParent, key, result as any);
+            } else {
+                (keyParent as any)[key] = result;
+                //don't walk the new element
+                return;
+            }
         }
     }
 
@@ -165,6 +170,10 @@ export interface WalkOptions {
      * A token that can be used to cancel the walk operation
      */
     cancel?: CancellationToken;
+    /**
+     * If provided, any AST replacements will be done using this AstEditor instead of directly against the AST itself
+     */
+    editor?: AstEditor;
 }
 
 /**
