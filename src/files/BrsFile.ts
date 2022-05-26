@@ -1,6 +1,6 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Position } from 'vscode-languageserver';
+import { CancellationTokenSource, CompletionItem, Hover, Position } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
@@ -12,7 +12,7 @@ import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
-import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
+import { FunctionExpression, VariableExpression, Expression, CallExpression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program, SignatureInfoObj } from '../Program';
 import { DynamicType } from '../types/DynamicType';
@@ -725,6 +725,26 @@ export class BrsFile {
                 }
             }
         }
+    }
+
+    public findExpressionsAtPosition(position: Position) {
+        let expressionChain: Array<Expression | Statement> = [];
+        let cancellationToken = new CancellationTokenSource();
+        this.ast.walk((expression) => {
+            if (util.rangeContains(expression.range, position)) {
+                expressionChain.push(expression);
+            } else {
+                if (expressionChain) {
+                    cancellationToken.cancel();
+                }
+            }
+        }, { walkMode: WalkMode.visitAllRecursive, cancel: cancellationToken.token });
+
+        return expressionChain;
+    }
+
+    public getClosestAstNode<T>(position: Position, matcher: (item: Expression | Statement) => boolean = () => true) {
+        return this.findExpressionsAtPosition(position).reverse().find(matcher) as unknown as T;
     }
 
     /**
