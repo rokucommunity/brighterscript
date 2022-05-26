@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.51.2](https://github.com/rokucommunity/brighterscript/compare/v0.51.1...v0.51.2) - 2022-05-26
+### Fixed
+ - allow enums and interfaces as class field types ([#602](https://github.com/rokucommunity/brighterscript/pull/602))
+
+
+
 ## [0.51.1](https://github.com/rokucommunity/brighterscript/compare/v0.51.0...v0.51.1) - 2022-05-26
 ### Fixed
  - allow enums and interfaces as function return types ([#601](https://github.com/rokucommunity/brighterscript/pull/601))
