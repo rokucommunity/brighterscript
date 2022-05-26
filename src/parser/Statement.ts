@@ -9,7 +9,7 @@ import { Position } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
-import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
+import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isTypedefProvider, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
@@ -128,9 +128,7 @@ export class Body extends Statement implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            for (let i = 0; i < this.statements.length; i++) {
-                walk(this.statements, i, visitor, options, this);
-            }
+            walkArray(this.statements, visitor, options, this);
         }
     }
 }
@@ -221,9 +219,7 @@ export class Block extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            for (let i = 0; i < this.statements.length; i++) {
-                walk(this.statements, i, visitor, options, this);
-            }
+            walkArray(this.statements, visitor, options, this);
         }
     }
 }
@@ -598,12 +594,8 @@ export class PrintStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            for (let i = 0; i < this.expressions.length; i++) {
-                //sometimes we have semicolon `Token`s in the expressions list (should probably fix that...), so only emit the actual expressions
-                if (isExpression(this.expressions[i] as any)) {
-                    walk(this.expressions, i, visitor, options, this);
-                }
-            }
+            //sometimes we have semicolon Tokens in the expressions list (should probably fix that...), so only walk the actual expressions
+            walkArray(this.expressions, visitor, options, this, (item) => isExpression(item as any));
         }
     }
 }
@@ -645,9 +637,8 @@ export class DimStatement extends Statement {
 
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (this.dimensions?.length > 0 && options.walkMode & InternalWalkMode.walkExpressions) {
-            for (let i = 0; i < this.dimensions.length; i++) {
-                walk(this.dimensions, i, visitor, options, this);
-            }
+            walkArray(this.dimensions, visitor, options, this);
+
         }
     }
 }
@@ -1348,9 +1339,8 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            for (let i = 0; i < this.body.length; i++) {
-                walk(this.body, i, visitor, options, this);
-            }
+            walkArray(this.body, visitor, options, this);
+
         }
     }
 }
@@ -1866,9 +1856,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            for (let i = 0; i < this.body.length; i++) {
-                walk(this.body, i, visitor, options, this);
-            }
+            walkArray(this.body, visitor, options, this);
         }
     }
 }
@@ -2388,9 +2376,8 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            for (let i = 0; i < this.body.length; i++) {
-                walk(this.body, i, visitor, options, this);
-            }
+            walkArray(this.body, visitor, options, this);
+
         }
     }
 }
