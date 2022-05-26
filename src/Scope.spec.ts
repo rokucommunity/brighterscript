@@ -789,6 +789,25 @@ describe('Scope', () => {
                 ]);
             });
 
+            it('supports enums and interfaces as types', () => {
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+
+                    interface MyInterface
+                        title as string
+                    end interface
+                    enum myEnum
+                        title = "t"
+                    end enum
+
+                    class myClass
+                        foo as myInterface
+                        foo2 as myEnum
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
             it('finds interface types', () => {
                 program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     namespace MyNamespace
