@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.51.1](https://github.com/rokucommunity/brighterscript/compare/v0.51.0...v0.51.1) - 2022-05-26
+### Fixed
+ - allow enums and interfaces as function return types ([#601](https://github.com/rokucommunity/brighterscript/pull/601))
+ - support AstEditor in visitor editing pattern ([#599](https://github.com/rokucommunity/brighterscript/pull/599))
+
+
+
 ## [0.51.0](https://github.com/rokucommunity/brighterscript/compare/v0.50.2...v0.51.0) - 2022-05-24
 ### Added
  - Add function-based` AstEditor.edit` method ([#598](https://github.com/rokucommunity/brighterscript/pull/598))
