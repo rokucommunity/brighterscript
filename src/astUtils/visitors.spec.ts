@@ -926,7 +926,7 @@ describe('astUtils visitors', () => {
             ], WalkMode.visitExpressionsRecursive);
         });
 
-        it('provides owningObject and key', () => {
+        it('provides owner and key', () => {
             const items = [];
             const { ast } = Parser.parse(`
                 sub main()
@@ -936,9 +936,9 @@ describe('astUtils visitors', () => {
                     log("hello" + " world")
                 end sub
             `);
-            ast.walk((astNode, parent, owningObject, key) => {
+            ast.walk((astNode, parent, owner, key) => {
                 items.push(astNode);
-                expect(owningObject[key]).to.equal(astNode);
+                expect(owner[key]).to.equal(astNode);
             }, {
                 walkMode: WalkMode.visitAllRecursive
             });
@@ -954,11 +954,11 @@ describe('astUtils visitors', () => {
                 end sub
             `);
             let callCount = 0;
-            ast.walk((astNode, parent, owningObject: Statement[], key) => {
+            ast.walk((astNode, parent, owner: Statement[], key) => {
                 if (isPrintStatement(astNode)) {
                     callCount++;
-                    //delete the print statement (we know owningObject is an array based on this specific test)
-                    owningObject.splice(key, 1);
+                    //delete the print statement (we know owner is an array based on this specific test)
+                    owner.splice(key, 1);
                 }
             }, {
                 walkMode: WalkMode.visitAllRecursive
@@ -982,7 +982,7 @@ describe('astUtils visitors', () => {
             let callExpressionCount = 0;
             const calls = [];
             ast.walk(createVisitor({
-                PrintStatement: (astNode, parent, owningObject: Statement[], key) => {
+                PrintStatement: (astNode, parent, owner: Statement[], key) => {
                     printStatementCount++;
                     //add another expression to the list every time. This should result in 1 the first time, 2 the second, 3 the third.
                     calls.push(new ExpressionStatement(
@@ -990,7 +990,7 @@ describe('astUtils visitors', () => {
                             createVariableExpression('doSomethingBeforePrint')
                         )
                     ));
-                    owningObject.splice(key, 0, ...calls);
+                    owner.splice(key, 0, ...calls);
                 },
                 CallExpression: () => {
                     callExpressionCount++;
