@@ -131,7 +131,7 @@
         "debounce-promise": "^3.1.0",
         "eventemitter3": "^4.0.0",
         "file-url": "^3.0.0",
-        "fs-extra": "^7.0.1",
+        "fs-extra": "^8.0.0",
         "glob": "^7.1.6",
         "jsonc-parser": "^2.3.0",
         "long": "^3.2.0",
