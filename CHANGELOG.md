@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.51.3](https://github.com/rokucommunity/brighterscript/compare/v0.51.2...v0.51.3) - 2022-05-31
+### Fixed
+ - hover for namespace functions ([#606](https://github.com/rokucommunity/brighterscript/pull/606))
+### Changed
+ - add `owner` and `key` to the visitor callbacks ([#600](https://github.com/rokucommunity/brighterscript/pull/600))
+
+
+
 ## [0.51.2](https://github.com/rokucommunity/brighterscript/compare/v0.51.1...v0.51.2) - 2022-05-26
 ### Fixed
  - allow enums and interfaces as class field types ([#602](https://github.com/rokucommunity/brighterscript/pull/602))
