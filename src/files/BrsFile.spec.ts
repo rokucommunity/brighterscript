@@ -1715,6 +1715,28 @@ describe('BrsFile', () => {
             ].join('\n'));
         });
 
+        it('finds declared namespace function', () => {
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            namespace mySpace
+                function Main(count = 1)
+                    firstName = "bob"
+                    age = 21
+                    shoeSize = 10
+                end function
+            end namespace
+            `);
+
+            let hover = file.getHover(Position.create(2, 28));
+            expect(hover).to.exist;
+
+            expect(hover.range).to.eql(Range.create(2, 25, 2, 29));
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'function Main(count? as dynamic) as dynamic',
+                '```'
+            ].join('\n'));
+        });
+
         it('finds variable function hover in same scope', () => {
             let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
@@ -1789,6 +1811,29 @@ describe('BrsFile', () => {
             ].join('\n'));
         });
 
+        it('finds namespace function hover in file scope', () => {
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                namespace mySpace
+                sub Main()
+                    sayMyName()
+                end sub
+
+                sub sayMyName()
+
+                end sub
+                end namespace
+            `);
+
+            let hover = file.getHover(Position.create(3, 25));
+
+            expect(hover.range).to.eql(Range.create(3, 20, 3, 29));
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName() as void',
+                '```'
+            ].join('\n'));
+        });
+
         it('finds function hover in scope', () => {
             let rootDir = process.cwd();
             program = new Program({
@@ -1811,6 +1856,36 @@ describe('BrsFile', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName(name as string) as void',
+                '```'
+            ].join('\n'));
+        });
+
+        it('finds namespace function hover in scope', () => {
+            let rootDir = process.cwd();
+            program = new Program({
+                rootDir: rootDir
+            });
+
+            let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main()
+                    mySpace.sayMyName()
+                end sub
+            `);
+
+            program.setFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+                namespace mySpace
+                    sub sayMyName(name as string)
+                    end sub
+                end namespace
+            `);
+
+            let hover = mainFile.getHover(Position.create(2, 34));
+            expect(hover).to.exist;
+
+            expect(hover.range).to.eql(Range.create(2, 28, 2, 37));
             expect(hover.contents).to.equal([
                 '```brightscript',
                 'sub sayMyName(name as string) as void',
