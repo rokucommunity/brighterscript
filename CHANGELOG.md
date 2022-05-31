@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.51.4](https://github.com/rokucommunity/brighterscript/compare/v0.51.3...v0.51.4) - 2022-05-31
+### Fixed
+ - Add allowBrighterScriptInBrightScript to bsconfig.schema.json ([#610](https://github.com/rokucommunity/brighterscript/pull/610))
+
+
+
 ## [0.51.3](https://github.com/rokucommunity/brighterscript/compare/v0.51.2...v0.51.3) - 2022-05-31
 ### Fixed
  - hover for namespace functions ([#606](https://github.com/rokucommunity/brighterscript/pull/606))
