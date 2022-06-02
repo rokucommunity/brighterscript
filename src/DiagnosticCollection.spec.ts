@@ -1,6 +1,6 @@
 import type { BsDiagnostic } from '.';
 import { DiagnosticCollection } from './DiagnosticCollection';
-import type { Workspace } from './LanguageServer';
+import type { Project } from './LanguageServer';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { BscFile } from './interfaces';
 import util from './util';
@@ -9,7 +9,7 @@ import { expect } from 'chai';
 describe('DiagnosticCollection', () => {
     let collection: DiagnosticCollection;
     let diagnostics: BsDiagnostic[];
-    let workspaces: Workspace[];
+    let workspaces: Project[];
     beforeEach(() => {
         collection = new DiagnosticCollection();
         diagnostics = [];
@@ -19,7 +19,7 @@ describe('DiagnosticCollection', () => {
             builder: {
                 getDiagnostics: () => diagnostics
             } as ProgramBuilder
-        }] as Workspace[];
+        }] as Project[];
     });
 
     async function testPatch(expected: Record<string, string[]>) {

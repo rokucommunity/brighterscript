@@ -5,7 +5,7 @@ const { spawnSync, execSync } = require('child_process');
 const yargs = require('yargs');
 const readline = require('readline');
 const rimraf = require('rimraf');
-const glob = require('glob');
+const fastGlob = require('fast-glob');
 let nodeParams = ['--max-old-space-size=8192'];
 const tempDir = path.join(__dirname, '.tmp');
 
@@ -153,7 +153,7 @@ class Runner {
                 const alias = `brighterscript${versionIndex + 1}`;
 
                 //get the list of current profiler logs
-                const beforeLogs = glob.sync('isolate-*.log', {
+                const beforeLogs = fastGlob.sync('isolate-*.log', {
                     cwd: __dirname
                 });
 
@@ -162,7 +162,7 @@ class Runner {
                     stdio: 'inherit'
                 });
                 if (this.profile) {
-                    const logFile = glob.sync('isolate-*.log', {
+                    const logFile = fastGlob.sync('isolate-*.log', {
                         cwd: __dirname
                     }).filter(x => !beforeLogs.includes(x))[0];
 
