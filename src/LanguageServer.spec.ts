@@ -177,7 +177,7 @@ describe('LanguageServer', () => {
 
             //this call should wait for the builder to finish
             let p = server['sendDiagnostics']();
-            // await s.createProjects(
+
             await util.sleep(50);
             //simulate the program being created
             workspace.builder.program = {

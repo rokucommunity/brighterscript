@@ -2,14 +2,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug Tests (Current file)",
-            "type": "node",
+            "name": "Debug Tests",
+            "type": "pwa-node",
             "request": "launch",
             "smartStep": true,
             "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
             "sourceMaps": true,
             "args": [
-                "${relativeFile}",
                 "--timeout",
                 "987654"
             ],
@@ -18,7 +17,6 @@
                 "<node_internals>/**/*.js"
             ],
             "cwd": "${workspaceRoot}",
-            "protocol": "inspector",
             "internalConsoleOptions": "openOnSessionStart",
             "resolveSourceMapLocations": [
                 "${workspaceFolder}/**",
@@ -40,7 +38,6 @@
             ],
             "sourceMaps": true,
             "cwd": "${workspaceRoot}",
-            "protocol": "inspector",
             "resolveSourceMapLocations": [
                 "${workspaceFolder}/**",
                 "!**/node_modules/typescript/**",
@@ -67,7 +64,7 @@
         },
         {
             "name": "Debug Roku Docs Scraper",
-            "type": "node",
+            "type": "pwa-node",
             "request": "launch",
             "runtimeExecutable": "node",
             "runtimeArgs": [
