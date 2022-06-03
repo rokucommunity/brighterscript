@@ -241,7 +241,22 @@ export class LanguageServer {
         }) as {
             exclude: Record<string, boolean>;
         };
-        return Object.keys(config?.exclude ?? {}).filter(x => config[x]);
+        return Object
+            .keys(config?.exclude ?? {})
+            .filter(x => config?.exclude?.[x])
+            //vscode files.exclude patterns support ignoring folders without needing to add `**/*`. So for our purposes, we need to
+            //append **/* to everything without a file extension or magic at the end
+            .map(x => {
+                if (path.extname(x) || x.endsWith('*')) {
+                    return x;
+                } else {
+                    return `${x}/**/*`;
+                }
+            })
+            .concat([
+                //always ignore projects from node_modules
+                '**/node_modules/**/*'
+            ]);
     }
 
     /**
@@ -249,21 +264,17 @@ export class LanguageServer {
      * If none are found, then the workspaceFolder itself is treated as a project
      */
     private async getProjectPaths(workspaceFolder: string) {
-        const configs = await fastGlob([
+        const excludes = (await this.getWorkspaceExcludeGlobs(workspaceFolder)).map(x => s`!${x}`);
+        const files = await rokuDeploy.getFilePaths([
             '**/bsconfig.json',
             //exclude all files found in `files.exclude`
-            ...(await this.getWorkspaceExcludeGlobs(workspaceFolder)).map(x => s`!${x}`)
-        ], {
-            cwd: workspaceFolder,
-            absolute: true,
-            followSymbolicLinks: true,
-            onlyFiles: true
-        });
+            ...excludes
+        ], workspaceFolder);
         //if we found at least one bsconfig.json, then ALL projects must have a bsconfig.json.
-        if (configs.length > 0) {
-            return configs.map(x => path.dirname(x));
+        if (files.length > 0) {
+            return files.map(file => s`${path.dirname(file.src)}`);
         } else {
-            //treat the workspace as a brightscript project itself
+            //treat the workspace folder as a brightscript project itself
             return [workspaceFolder];
         }
     }
@@ -412,7 +423,7 @@ export class LanguageServer {
             if (await util.pathExists(configFilePath)) {
                 return configFilePath;
             } else {
-                this.sendCriticalFailure(`Cannot find config file specified in user/workspace settings at '${configFilePath}'`);
+                this.sendCriticalFailure(`Cannot find config file specified in user / workspace settings at '${configFilePath}'`);
             }
         }
 
@@ -1005,7 +1016,7 @@ export class LanguageServer {
             // validate all projects
             await this.validateAllThrottled();
         } catch (e: any) {
-            this.sendCriticalFailure(`Critical error parsing/ validating ${filePath}: ${e.message}`);
+            this.sendCriticalFailure(`Critical error parsing / validating ${filePath}: ${e.message}`);
         }
     }
 

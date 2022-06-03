@@ -310,6 +310,80 @@ describe('LanguageServer', () => {
         });
     });
 
+    describe('syncProjects', () => {
+        it('loads workspace as project', async () => {
+            server.run();
+
+            expect(server.projects).to.be.lengthOf(0);
+
+            fsExtra.ensureDirSync(workspacePath);
+
+            await server['syncProjects']();
+
+            //no child bsconfig.json files, use the workspacePath
+            expect(
+                server.projects.map(x => x.projectPath)
+            ).to.eql([
+                workspacePath
+            ]);
+
+            fsExtra.outputJsonSync(s`${workspacePath}/project1/bsconfig.json`, {});
+            fsExtra.outputJsonSync(s`${workspacePath}/project2/bsconfig.json`, {});
+
+            await server['syncProjects']();
+
+            //2 child bsconfig.json files. Use those folders as projects, and don't use workspacePath
+            expect(
+                server.projects.map(x => x.projectPath).sort()
+            ).to.eql([
+                s`${workspacePath}/project1`,
+                s`${workspacePath}/project2`
+            ]);
+
+            fsExtra.removeSync(s`${workspacePath}/project2/bsconfig.json`);
+            await server['syncProjects']();
+
+            //1 child bsconfig.json file. Still don't use workspacePath
+            expect(
+                server.projects.map(x => x.projectPath)
+            ).to.eql([
+                s`${workspacePath}/project1`
+            ]);
+
+            fsExtra.removeSync(s`${workspacePath}/project1/bsconfig.json`);
+            await server['syncProjects']();
+
+            //back to no child bsconfig.json files. use workspacePath again
+            expect(
+                server.projects.map(x => x.projectPath)
+            ).to.eql([
+                workspacePath
+            ]);
+        });
+
+        it('ignores bsconfig.json files from vscode ignored paths', async () => {
+            server.run();
+            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({
+                exclude: {
+                    '**/vendor': true
+                }
+            }) as any);
+
+            fsExtra.outputJsonSync(s`${workspacePath}/vendor/someProject/bsconfig.json`, {});
+            //it always ignores node_modules
+            fsExtra.outputJsonSync(s`${workspacePath}/node_modules/someProject/bsconfig.json`, {});
+
+            await server['syncProjects']();
+
+            //no child bsconfig.json files, use the workspacePath
+            expect(
+                server.projects.map(x => x.projectPath)
+            ).to.eql([
+                workspacePath
+            ]);
+        });
+    });
+
     describe('onDidChangeWatchedFiles', () => {
         it('converts folder paths into an array of file paths', async () => {
             server.run();
