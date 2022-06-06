@@ -141,16 +141,16 @@ describe('LanguageServer', () => {
         it('never returns undefined', async () => {
             let filePath = `${rootDir}/.tmp/main.brs`;
             writeToFs(filePath, `sub main(): return: end sub`);
-            let firstWorkspace = await server['createStandaloneFileProject'](filePath);
-            let secondWorkspace = await server['createStandaloneFileProject'](filePath);
-            expect(firstWorkspace).to.equal(secondWorkspace);
+            let firstProject = await server['createStandaloneFileProject'](filePath);
+            let secondProject = await server['createStandaloneFileProject'](filePath);
+            expect(firstProject).to.equal(secondProject);
         });
 
         it('filters out certain diagnostics', async () => {
             let filePath = `${rootDir}/.tmp/main.brs`;
             writeToFs(filePath, `sub main(): return: end sub`);
-            let firstWorkspace: Project = await server['createStandaloneFileProject'](filePath);
-            expectZeroDiagnostics(firstWorkspace.builder.program);
+            let firstProject: Project = await server['createStandaloneFileProject'](filePath);
+            expectZeroDiagnostics(firstProject.builder.program);
         });
     });
 
@@ -166,21 +166,21 @@ describe('LanguageServer', () => {
             expect(server['clientHasWorkspaceFolderCapability']).to.be.true;
             server.run();
             let deferred = new Deferred();
-            let workspace: any = {
+            let project: any = {
                 builder: {
                     getDiagnostics: () => []
                 },
                 firstRunPromise: deferred.promise
             };
-            //make a new not-completed workspace
-            server.projects.push(workspace);
+            //make a new not-completed project
+            server.projects.push(project);
 
             //this call should wait for the builder to finish
             let p = server['sendDiagnostics']();
 
             await util.sleep(50);
             //simulate the program being created
-            workspace.builder.program = {
+            project.builder.program = {
                 files: {}
             };
             deferred.resolve();
@@ -270,7 +270,7 @@ describe('LanguageServer', () => {
     describe('handleFileChanges', () => {
         it('only adds files that match the files array', async () => {
             let setFileStub = sinon.stub().returns(Promise.resolve());
-            const workspace = {
+            const project = {
                 builder: {
                     options: {
                         files: [
@@ -288,7 +288,7 @@ describe('LanguageServer', () => {
             let mainPath = s`${rootDir}/source/main.brs`;
             // setVfsFile(mainPath, 'sub main()\nend sub');
 
-            await server.handleFileChanges(workspace, [{
+            await server.handleFileChanges(project, [{
                 type: FileChangeType.Created,
                 srcPath: mainPath
             }]);
@@ -301,7 +301,7 @@ describe('LanguageServer', () => {
             let libPath = s`${rootDir}/components/lib.brs`;
 
             expect(setFileStub.callCount).to.equal(1);
-            await server.handleFileChanges(workspace, [{
+            await server.handleFileChanges(project, [{
                 type: FileChangeType.Created,
                 srcPath: libPath
             }]);
