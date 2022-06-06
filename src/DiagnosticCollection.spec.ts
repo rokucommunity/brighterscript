@@ -9,12 +9,12 @@ import { expect } from 'chai';
 describe('DiagnosticCollection', () => {
     let collection: DiagnosticCollection;
     let diagnostics: BsDiagnostic[];
-    let workspaces: Project[];
+    let projects: Project[];
     beforeEach(() => {
         collection = new DiagnosticCollection();
         diagnostics = [];
         //make simple mock of workspace to pass tests
-        workspaces = [{
+        projects = [{
             firstRunPromise: Promise.resolve(),
             builder: {
                 getDiagnostics: () => diagnostics
@@ -23,7 +23,7 @@ describe('DiagnosticCollection', () => {
     });
 
     async function testPatch(expected: Record<string, string[]>) {
-        const patch = await collection.getPatch(workspaces);
+        const patch = await collection.getPatch(projects);
         //convert the patch into our test structure
         const actual = {};
         for (const filePath in patch) {
