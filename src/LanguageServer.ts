@@ -10,7 +10,6 @@ import type {
     InitializeParams,
     ServerCapabilities,
     TextDocumentPositionParams,
-    Position,
     ExecuteCommandParams,
     WorkspaceSymbolParams,
     SymbolInformation,
@@ -21,7 +20,8 @@ import type {
     CodeActionParams,
     SemanticTokensOptions,
     SemanticTokens,
-    SemanticTokensParams
+    SemanticTokensParams,
+    TextDocumentChangeEvent
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -116,19 +116,13 @@ export class LanguageServer {
         // when the text document is first opened, when its content has changed,
         // or when document is closed without saving (original contents are sent as a change)
         //
-        this.documents.onDidChangeContent(async (change) => {
-            await this.validateTextDocument(change.document);
-        });
+        this.documents.onDidChangeContent(this.validateTextDocument.bind(this));
 
         //whenever a document gets closed
-        this.documents.onDidClose(async (change) => {
-            await this.onDocumentClose(change.document);
-        });
+        this.documents.onDidClose(this.onDocumentClose.bind(this));
 
         // This handler provides the initial list of the completion items.
-        this.connection.onCompletion(async (params: TextDocumentPositionParams) => {
-            return this.onCompletion(params.textDocument.uri, params.position);
-        });
+        this.connection.onCompletion(this.onCompletion.bind(this));
 
         // This handler resolves additional information for the item selected in
         // the completion list.
@@ -246,13 +240,13 @@ export class LanguageServer {
             .filter(x => config?.exclude?.[x])
             //vscode files.exclude patterns support ignoring folders without needing to add `**/*`. So for our purposes, we need to
             //append **/* to everything without a file extension or magic at the end
-            .map(x => {
-                if (path.extname(x) || x.endsWith('*')) {
-                    return x;
-                } else {
-                    return `${x}/**/*`;
-                }
-            })
+            .map(pattern => [
+                //send the pattern as-is (this handles weird cases and exact file matches)
+                pattern,
+                //treat the pattern as a directory (no harm in doing this because if it's a file, the pattern will just never match anything)
+                `${pattern}/**/*`
+            ])
+            .flat(1)
             .concat([
                 //always ignore projects from node_modules
                 '**/node_modules/**/*'
@@ -597,18 +591,18 @@ export class LanguageServer {
      * @param textDocumentPosition
      */
     @AddStackToErrorMessage
-    private async onCompletion(uri: string, position: Position) {
+    private async onCompletion(params: TextDocumentPositionParams) {
         //ensure programs are initialized
         await this.waitAllProjectFirstRuns();
 
-        let filePath = util.uriToPath(uri);
+        let filePath = util.uriToPath(params.textDocument.uri);
 
         //wait until the file has settled
         await this.keyedThrottler.onIdleOnce(filePath, true);
 
         let completions = this
             .getProjects()
-            .flatMap(workspace => workspace.builder.program.getCompletions(filePath, position));
+            .flatMap(workspace => workspace.builder.program.getCompletions(filePath, params.position));
 
         for (let completion of completions) {
             completion.commitCharacters = ['.'];
@@ -973,8 +967,9 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
-    private async onDocumentClose(textDocument: TextDocument): Promise<void> {
-        let filePath = URI.parse(textDocument.uri).fsPath;
+    private async onDocumentClose(event: TextDocumentChangeEvent<TextDocument>): Promise<void> {
+        const { document } = event;
+        let filePath = URI.parse(document.uri).fsPath;
         let standaloneFileProject = this.standaloneFileProjects[filePath];
         //if this was a temp file, close it
         if (standaloneFileProject) {
@@ -986,11 +981,12 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
-    private async validateTextDocument(textDocument: TextDocument): Promise<void> {
+    private async validateTextDocument(event: TextDocumentChangeEvent<TextDocument>): Promise<void> {
+        const { document } = event;
         //ensure programs are initialized
         await this.waitAllProjectFirstRuns();
 
-        let filePath = URI.parse(textDocument.uri).fsPath;
+        let filePath = URI.parse(document.uri).fsPath;
 
         try {
 
@@ -999,7 +995,7 @@ export class LanguageServer {
 
                 this.connection.sendNotification('build-status', 'building');
 
-                let documentText = textDocument.getText();
+                let documentText = document.getText();
                 for (const project of this.getProjects()) {
                     //only add or replace existing files. All of the files in the project should
                     //have already been loaded by other means
