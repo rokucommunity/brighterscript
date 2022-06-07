@@ -173,7 +173,11 @@ export class Util {
             //load the project file
             let projectFileContents = fsExtra.readFileSync(configFilePath).toString();
             let parseErrors = [] as ParseError[];
-            let projectConfig = parseJsonc(projectFileContents, parseErrors) as BsConfig;
+            let projectConfig = parseJsonc(projectFileContents, parseErrors, {
+                allowEmptyContent: true,
+                allowTrailingComma: true,
+                disallowComments: false
+            }) as BsConfig;
             if (parseErrors.length > 0) {
                 let err = parseErrors[0];
                 let diagnostic = {
