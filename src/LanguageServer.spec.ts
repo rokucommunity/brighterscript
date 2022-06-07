@@ -404,6 +404,26 @@ describe('LanguageServer', () => {
                 workspacePath
             ]);
         });
+
+        it('does not produce duplicate projects when subdir and parent dir are opened as workspace folders', async () => {
+            fsExtra.outputJsonSync(s`${tempDir}/root/bsconfig.json`, {});
+            fsExtra.outputJsonSync(s`${tempDir}/root/subdir/bsconfig.json`, {});
+
+            workspaceFolders = [
+                s`${tempDir}/root`,
+                s`${tempDir}/root/subdir`
+            ];
+
+            server.run();
+            await server['syncProjects']();
+
+            expect(
+                server.projects.map(x => x.projectPath)
+            ).to.eql([
+                s`${tempDir}/root`,
+                s`${tempDir}/root/subdir`
+            ]);
+        });
     });
 
     describe('onDidChangeWatchedFiles', () => {

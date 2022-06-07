@@ -281,7 +281,7 @@ export class LanguageServer {
      */
     private async syncProjects() {
         const workspacePaths = await this.getWorkspacePaths();
-        const projectPaths = (await Promise.all(
+        let projectPaths = (await Promise.all(
             workspacePaths.map(async workspacePath => {
                 const projectPaths = await this.getProjectPaths(workspacePath);
                 return projectPaths.map(projectPath => ({
@@ -298,7 +298,21 @@ export class LanguageServer {
             }
         }
 
-        //create missing projects (existing projects will remain intact)
+        //exclude paths to projects we already have
+        projectPaths = projectPaths.filter(x => {
+            //only keep this project path if there's not a project with that path
+            return !this.projects.find(project => project.projectPath === x.projectPath);
+        });
+
+        //dedupe by project path
+        projectPaths = [
+            ...projectPaths.reduce(
+                (acc, x) => acc.set(x.projectPath, x),
+                new Map<string, typeof projectPaths[0]>()
+            ).values()
+        ];
+
+        //create missing projects
         await Promise.all(
             projectPaths.map(x => this.createProject(x.projectPath, x.workspacePath))
         );
