@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { Lexer } from '../../../lexer';
+import { Lexer } from '../../../lexer/Lexer';
 import { AssignmentStatement, FunctionStatement as BrsFunction } from '../../Statement';
 
 describe('parser library statements', () => {

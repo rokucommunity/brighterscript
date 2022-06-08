@@ -1,20 +1,23 @@
 import type { CompletionItem, Position, Range } from 'vscode-languageserver';
+import * as path from 'path';
 import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
-import type { FileLink, Program } from './Program';
+import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink } from './interfaces';
+import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
-import { ParseMode } from './parser';
+import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement } from './parser/Statement';
+import type { NewExpression } from './parser/Expression';
+import { ParseMode } from './parser/Parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
+import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
+import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -22,17 +25,12 @@ import type { BrsFile } from './files/BrsFile';
 export class Scope {
     constructor(
         public name: string,
-        public dependencyGraphKey: string,
-        public program: Program
+        public program: Program,
+        private _dependencyGraphKey?: string
     ) {
         this.isValidated = false;
         //used for improved logging performance
         this._debugLogComponentName = `Scope '${chalk.redBright(this.name)}'`;
-
-        //anytime a dependency for this scope changes, we need to be revalidated
-        this.programHandles.push(
-            this.program.dependencyGraph.onchange(this.dependencyGraphKey, this.onDependenciesChanged.bind(this), true)
-        );
     }
 
     /**
@@ -41,9 +39,11 @@ export class Scope {
      */
     public readonly isValidated: boolean;
 
-    protected programHandles = [] as Array<() => void>;
-
     protected cache = new Cache();
+
+    public get dependencyGraphKey() {
+        return this._dependencyGraphKey;
+    }
 
     /**
      * A dictionary of namespaces, indexed by the lower case full name of each namespace.
@@ -61,6 +61,24 @@ export class Scope {
      */
     public getClass(className: string, containingNamespace?: string): ClassStatement {
         return this.getClassFileLink(className, containingNamespace)?.item;
+    }
+
+    /**
+     * Get the interface with the specified name.
+     * @param ifaceName - The interface name, including the namespace of the interface if possible
+     * @param containingNamespace - The namespace used to resolve relative interface names. (i.e. the namespace around the current statement trying to find a interface)
+     */
+    public getInterface(ifaceName: string, containingNamespace?: string): InterfaceStatement {
+        return this.getInterfaceFileLink(ifaceName, containingNamespace)?.item;
+    }
+
+    /**
+     * Get the enum with the specified name.
+     * @param enumName - The enum name, including the namespace if possible
+     * @param containingNamespace - The namespace used to resolve relative enum names. (i.e. the namespace around the current statement trying to find an enum)
+     */
+    public getEnum(enumName: string, containingNamespace?: string): EnumStatement {
+        return this.getEnumFileLink(enumName, containingNamespace)?.item;
     }
 
     /**
@@ -82,13 +100,70 @@ export class Scope {
         return cls;
     }
 
+
+    /**
+   * Get an interface and its containing file by the interface name
+   * @param ifaceName - The interface name, including the namespace of the interface if possible
+   * @param containingNamespace - The namespace used to resolve relative interface names. (i.e. the namespace around the current statement trying to find a interface)
+   */
+    public getInterfaceFileLink(ifaceName: string, containingNamespace?: string): FileLink<InterfaceStatement> {
+        const lowerName = ifaceName?.toLowerCase();
+        const ifaceMap = this.getInterfaceMap();
+
+        let iface = ifaceMap.get(
+            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
+        );
+        //if we couldn't find the iface by its full namespaced name, look for a global class with that name
+        if (!iface) {
+            iface = ifaceMap.get(lowerName);
+        }
+        return iface;
+    }
+
+    /**
+     * Get an Enum and its containing file by the Enum name
+     * @param enumName - The Enum name, including the namespace of the enum if possible
+     * @param containingNamespace - The namespace used to resolve relative enum names. (i.e. the namespace around the current statement trying to find a enum)
+     */
+    public getEnumFileLink(enumName: string, containingNamespace?: string): FileLink<EnumStatement> {
+        const lowerName = enumName?.toLowerCase();
+        const enumMap = this.getEnumMap();
+
+        let enumeration = enumMap.get(
+            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
+        );
+        //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
+        if (!enumeration) {
+            enumeration = enumMap.get(lowerName);
+        }
+        return enumeration;
+    }
+
     /**
     * Tests if a class exists with the specified name
     * @param className - the all-lower-case namespace-included class name
-    * @param namespaceName - teh current namespace name
+    * @param containingNamespace - The namespace used to resolve relative class names. (i.e. the namespace around the current statement trying to find a class)
     */
     public hasClass(className: string, namespaceName?: string): boolean {
         return !!this.getClass(className, namespaceName);
+    }
+
+    /**
+    * Tests if an interface exists with the specified name
+    * @param ifaceName - the all-lower-case namespace-included interface name
+    * @param namespaceName - the current namespace name
+    */
+    public hasInterface(ifaceName: string, namespaceName?: string): boolean {
+        return !!this.getInterface(ifaceName, namespaceName);
+    }
+
+    /**
+    * Tests if an enum exists with the specified name
+    * @param enumName - the all-lower-case namespace-included enum name
+    * @param namespaceName - the current namespace name
+    */
+    public hasEnum(enumName: string, namespaceName?: string): boolean {
+        return !!this.getEnum(enumName, namespaceName);
     }
 
     /**
@@ -114,12 +189,54 @@ export class Scope {
     }
 
     /**
+    * A dictionary of all Interfaces in this scope. This includes namespaced Interfaces always with their full name.
+    * The key is stored in lower case
+    */
+    public getInterfaceMap(): Map<string, FileLink<InterfaceStatement>> {
+        return this.cache.getOrAdd('interfaceMap', () => {
+            const map = new Map<string, FileLink<InterfaceStatement>>();
+            this.enumerateBrsFiles((file) => {
+                if (isBrsFile(file)) {
+                    for (let iface of file.parser.references.interfaceStatements) {
+                        const lowerIfaceName = iface.getName(ParseMode.BrighterScript)?.toLowerCase();
+                        //only track classes with a defined name (i.e. exclude nameless malformed classes)
+                        if (lowerIfaceName) {
+                            map.set(lowerIfaceName, { item: iface, file: file });
+                        }
+                    }
+                }
+            });
+            return map;
+        });
+    }
+
+    /**
+     * A dictionary of all enums in this scope. This includes namespaced enums always with their full name.
+     * The key is stored in lower case
+     */
+    public getEnumMap(): Map<string, FileLink<EnumStatement>> {
+        return this.cache.getOrAdd('enumMap', () => {
+            const map = new Map<string, FileLink<EnumStatement>>();
+            this.enumerateBrsFiles((file) => {
+                for (let enumStmt of file.parser.references.enumStatements) {
+                    const lowerEnumName = enumStmt.fullName.toLowerCase();
+                    //only track enums with a defined name (i.e. exclude nameless malformed enums)
+                    if (lowerEnumName) {
+                        map.set(lowerEnumName, { item: enumStmt, file: file });
+                    }
+                }
+            });
+            return map;
+        });
+    }
+
+    /**
      * The list of diagnostics found specifically for this scope. Individual file diagnostics are stored on the files themselves.
      */
     protected diagnostics = [] as BsDiagnostic[];
 
-    protected onDependenciesChanged(key: string) {
-        this.logDebug('invalidated because dependency graph said [', key, '] changed');
+    protected onDependenciesChanged(event: DependencyChangedEvent) {
+        this.logDebug('invalidated because dependency graph said [', event.sourceKey, '] changed');
         this.invalidate();
     }
 
@@ -127,9 +244,7 @@ export class Scope {
      * Clean up all event handles
      */
     public dispose() {
-        for (let disconnect of this.programHandles) {
-            disconnect();
-        }
+        this.unsubscribeFromDependencyGraph?.();
     }
 
     /**
@@ -168,14 +283,33 @@ export class Scope {
         }
     }
 
+    private dependencyGraph: DependencyGraph;
+    /**
+     * An unsubscribe function for the dependencyGraph subscription
+     */
+    private unsubscribeFromDependencyGraph: () => void;
+
+    public attachDependencyGraph(dependencyGraph: DependencyGraph) {
+        this.dependencyGraph = dependencyGraph;
+        if (this.unsubscribeFromDependencyGraph) {
+            this.unsubscribeFromDependencyGraph();
+        }
+
+        //anytime a dependency for this scope changes, we need to be revalidated
+        this.unsubscribeFromDependencyGraph = this.dependencyGraph.onchange(this.dependencyGraphKey, this.onDependenciesChanged.bind(this));
+
+        //invalidate immediately since this is a new scope
+        this.invalidate();
+    }
+
     /**
      * Get the file with the specified pkgPath
      */
-    public getFile(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
+    public getFile(getFile: string) {
+        getFile = s`${getFile}`;
         let files = this.getAllFiles();
         for (let file of files) {
-            if (file.pathAbsolute === pathAbsolute) {
+            if (file.srcPath === getFile) {
                 return file;
             }
         }
@@ -194,10 +328,10 @@ export class Scope {
      * Get the list of files referenced by this scope that are actually loaded in the program.
      * Includes files from this scope and all ancestor scopes
      */
-    public getAllFiles() {
+    public getAllFiles(): BscFile[] {
         return this.cache.getOrAdd('getAllFiles', () => {
             let result = [] as BscFile[];
-            let dependencies = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
+            let dependencies = this.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
             for (let dependency of dependencies) {
                 //load components by their name
                 if (dependency.startsWith('component:')) {
@@ -265,7 +399,9 @@ export class Scope {
         let lowerName = name.toLowerCase();
         let callables = this.getAllCallables();
         for (let callable of callables) {
-            if (callable.callable.getName(ParseMode.BrighterScript).toLowerCase() === lowerName) {
+            const callableName = callable.callable.getName(ParseMode.BrighterScript);
+            // Split by `.` and check the last term to consider namespaces.
+            if (callableName.toLowerCase() === lowerName || callableName.split('.').pop()?.toLowerCase() === lowerName) {
                 return callable.callable;
             }
         }
@@ -321,7 +457,7 @@ export class Scope {
      * Builds a tree of namespace objects
      */
     public buildNamespaceLookup() {
-        let namespaceLookup = {} as Record<string, NamespaceContainer>;
+        let namespaceLookup = new Map<string, NamespaceContainer>();
         this.enumerateBrsFiles((file) => {
             for (let namespace of file.parser.references.namespaceStatements) {
                 //TODO should we handle non-brighterscript?
@@ -334,38 +470,43 @@ export class Scope {
                 for (let part of nameParts) {
                     loopName = loopName === null ? part : `${loopName}.${part}`;
                     let lowerLoopName = loopName.toLowerCase();
-                    namespaceLookup[lowerLoopName] = namespaceLookup[lowerLoopName] ?? {
-                        file: file,
-                        fullName: loopName,
-                        nameRange: namespace.nameExpression.range,
-                        lastPartName: part,
-                        namespaces: {},
-                        classStatements: {},
-                        functionStatements: {},
-                        statements: []
-                    };
+                    if (!namespaceLookup.has(lowerLoopName)) {
+                        namespaceLookup.set(lowerLoopName, {
+                            file: file,
+                            fullName: loopName,
+                            nameRange: namespace.nameExpression.range,
+                            lastPartName: part,
+                            namespaces: new Map<string, NamespaceContainer>(),
+                            classStatements: {},
+                            functionStatements: {},
+                            statements: [],
+                            enumStatements: new Map<string, EnumStatement>()
+                        });
+                    }
                 }
-                let ns = namespaceLookup[name.toLowerCase()];
+                let ns = namespaceLookup.get(name.toLowerCase());
                 ns.statements.push(...namespace.body.statements);
                 for (let statement of namespace.body.statements) {
-                    if (isClassStatement(statement)) {
+                    if (isClassStatement(statement) && statement.name) {
                         ns.classStatements[statement.name.text.toLowerCase()] = statement;
-                    } else if (isFunctionStatement(statement)) {
+                    } else if (isFunctionStatement(statement) && statement.name) {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
+                    } else if (isEnumStatement(statement) && statement.fullName) {
+                        ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
                     }
                 }
             }
 
             //associate child namespaces with their parents
-            for (let key in namespaceLookup) {
-                let ns = namespaceLookup[key];
+            for (let [, ns] of namespaceLookup) {
                 let parts = ns.fullName.split('.');
 
                 if (parts.length > 1) {
                     //remove the last part
                     parts.pop();
                     let parentName = parts.join('.');
-                    namespaceLookup[parentName.toLowerCase()].namespaces[ns.lastPartName.toLowerCase()] = ns;
+                    const parent = namespaceLookup.get(parentName.toLowerCase());
+                    parent.namespaces.set(ns.lastPartName.toLowerCase(), ns);
                 }
             }
         });
@@ -392,7 +533,7 @@ export class Scope {
             return;
         }
 
-        this.program.logger.time(LogLevel.info, [this._debugLogComponentName, 'validate()'], () => {
+        this.program.logger.time(LogLevel.debug, [this._debugLogComponentName, 'validate()'], () => {
 
             let parentScope = this.getParentScope();
 
@@ -410,7 +551,7 @@ export class Scope {
             callables = callables.sort((a, b) => {
                 return (
                     //sort by path
-                    a.callable.file.pathAbsolute.localeCompare(b.callable.file.pathAbsolute) ||
+                    a.callable.file.srcPath.localeCompare(b.callable.file.srcPath) ||
                     //then sort by method name
                     a.callable.name.localeCompare(b.callable.name)
                 );
@@ -422,6 +563,10 @@ export class Scope {
 
             this.program.plugins.emit('beforeScopeValidate', this, files, callableContainerMap);
 
+            this.program.plugins.emit('onScopeValidate', {
+                program: this.program,
+                scope: this
+            });
             this._validate(callableContainerMap);
 
             this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
@@ -465,7 +610,7 @@ export class Scope {
         for (let func of file.parser.references.functionExpressions) {
             for (let param of func.parameters) {
                 let lowerParamName = param.name.text.toLowerCase();
-                let namespace = this.namespaceLookup[lowerParamName];
+                let namespace = this.namespaceLookup.get(lowerParamName);
                 //see if the param matches any starting namespace part
                 if (namespace) {
                     this.diagnostics.push({
@@ -475,7 +620,7 @@ export class Scope {
                         relatedInformation: [{
                             message: 'Namespace declared here',
                             location: Location.create(
-                                URI.file(namespace.file.pathAbsolute).toString(),
+                                URI.file(namespace.file.srcPath).toString(),
                                 namespace.nameRange
                             )
                         }]
@@ -486,7 +631,7 @@ export class Scope {
 
         for (let assignment of file.parser.references.assignmentStatements) {
             let lowerAssignmentName = assignment.name.text.toLowerCase();
-            let namespace = this.namespaceLookup[lowerAssignmentName];
+            let namespace = this.namespaceLookup.get(lowerAssignmentName);
             //see if the param matches any starting namespace part
             if (namespace) {
                 this.diagnostics.push({
@@ -496,7 +641,7 @@ export class Scope {
                     relatedInformation: [{
                         message: 'Namespace declared here',
                         location: Location.create(
-                            URI.file(namespace.file.pathAbsolute).toString(),
+                            URI.file(namespace.file.srcPath).toString(),
                             namespace.nameRange
                         )
                     }]
@@ -544,7 +689,7 @@ export class Scope {
                 // check if this custom type is in our class map
                 const returnTypeName = func.returnType.name;
                 const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
-                if (!this.hasClass(returnTypeName, currentNamespaceName)) {
+                if (!this.hasClass(returnTypeName, currentNamespaceName) && !this.hasInterface(returnTypeName) && !this.hasEnum(returnTypeName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.invalidFunctionReturnType(returnTypeName),
                         range: func.returnTypeToken.range,
@@ -557,7 +702,7 @@ export class Scope {
                 if (isCustomType(param.type) && param.typeToken) {
                     const paramTypeName = param.type.name;
                     const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
-                    if (!this.hasClass(paramTypeName, currentNamespaceName)) {
+                    if (!this.hasClass(paramTypeName, currentNamespaceName) && !this.hasInterface(paramTypeName) && !this.hasEnum(paramTypeName)) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.functionParameterTypeIsInvalid(param.name.text, paramTypeName),
                             range: param.typeToken.range,
@@ -609,7 +754,7 @@ export class Scope {
                     maxParams++;
                     //optional parameters must come last, so we can assume that minParams won't increase once we hit
                     //the first isOptional
-                    if (param.isOptional === false) {
+                    if (param.isOptional !== true) {
                         minParams++;
                     }
                 }
@@ -713,7 +858,17 @@ export class Scope {
 
             //if we don't already have a variable with this name.
             if (!scope?.getVariableByName(lowerName)) {
-                let callablesWithThisName = callablesByLowerName.get(lowerName);
+                let callablesWithThisName: CallableContainer[];
+
+                if (expCall.functionScope.func.namespaceName) {
+                    // prefer namespaced function
+                    const potentialNamespacedCallable = expCall.functionScope.func.namespaceName.getName(ParseMode.BrightScript).toLowerCase() + '_' + lowerName;
+                    callablesWithThisName = callablesByLowerName.get(potentialNamespacedCallable.toLowerCase());
+                }
+                if (!callablesWithThisName) {
+                    // just try it as is
+                    callablesWithThisName = callablesByLowerName.get(lowerName);
+                }
 
                 //use the first item from callablesByLowerName, because if there are more, that's a separate error
                 let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
@@ -830,6 +985,10 @@ export class Scope {
             let referencedFile = this.getFileByRelativePath(scriptImport.pkgPath);
             //if we can't find the file
             if (!referencedFile) {
+                //skip the default bslib file, it will exist at transpile time but should not show up in the program during validation cycle
+                if (scriptImport.pkgPath === `source${path.sep}bslib.brs`) {
+                    continue;
+                }
                 let dInfo: DiagnosticInfo;
                 if (scriptImport.text.trim().length === 0) {
                     dInfo = DiagnosticMessages.scriptSrcCannotBeEmpty();
@@ -858,6 +1017,9 @@ export class Scope {
      * @param relativePath
      */
     protected getFileByRelativePath(relativePath: string) {
+        if (!relativePath) {
+            return;
+        }
         let files = this.getAllFiles();
         for (let file of files) {
             if (file.pkgPath.toLowerCase() === relativePath.toLowerCase()) {
@@ -975,7 +1137,8 @@ interface NamespaceContainer {
     statements: Statement[];
     classStatements: Record<string, ClassStatement>;
     functionStatements: Record<string, FunctionStatement>;
-    namespaces: Record<string, NamespaceContainer>;
+    enumStatements: Map<string, EnumStatement>;
+    namespaces: Map<string, NamespaceContainer>;
 }
 
 interface AugmentedNewExpression extends NewExpression {

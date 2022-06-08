@@ -91,7 +91,7 @@ export interface BsConfig {
     /**
      * A list of error codes the compiler should NOT emit, even if encountered.
      */
-    ignoreErrorCodes?: (number|string)[];
+    ignoreErrorCodes?: (number | string)[];
 
     /**
      * Emit full paths to files when printing diagnostics to the console. Defaults to false
@@ -107,7 +107,7 @@ export interface BsConfig {
     /**
      * A list of filters used to exclude diagnostics from the output
      */
-    diagnosticFilters?: Array<number | string | { src: string; codes: (number|string)[] } | { src: string } | { codes: (number|string)[] }>;
+    diagnosticFilters?: Array<number | string | { src: string; codes: (number | string)[] } | { src: string } | { codes: (number | string)[] }>;
 
     /**
      * Specify what diagnostic types should be printed to the console. Defaults to 'warn'
@@ -118,6 +118,11 @@ export interface BsConfig {
      * A list of scripts or modules to add extra diagnostics or transform the AST
      */
     plugins?: Array<string>;
+
+    /**
+     * A list of scripts or modules to pass to node's `require()` on startup. This is useful for doing things like ts-node registration
+     */
+    require?: Array<string>;
 
     /**
      * When enabled, every xml component will search for a .bs or .brs file with the same name
@@ -147,4 +152,10 @@ export interface BsConfig {
      * @default true
      */
     sourceMap?: boolean;
+
+    /**
+     * Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
+     * @default false
+     */
+    allowBrighterScriptInBrightScript?: boolean;
 }

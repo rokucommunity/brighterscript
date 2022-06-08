@@ -1,29 +1,29 @@
 import type { BsDiagnostic } from '.';
 import { DiagnosticCollection } from './DiagnosticCollection';
-import type { Workspace } from './LanguageServer';
+import type { Project } from './LanguageServer';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { File } from './interfaces';
+import type { BscFile } from './interfaces';
 import util from './util';
 import { expect } from 'chai';
 
 describe('DiagnosticCollection', () => {
     let collection: DiagnosticCollection;
     let diagnostics: BsDiagnostic[];
-    let workspaces: Workspace[];
+    let projects: Project[];
     beforeEach(() => {
         collection = new DiagnosticCollection();
         diagnostics = [];
         //make simple mock of workspace to pass tests
-        workspaces = [{
+        projects = [{
             firstRunPromise: Promise.resolve(),
             builder: {
                 getDiagnostics: () => diagnostics
             } as ProgramBuilder
-        }] as Workspace[];
+        }] as Project[];
     });
 
     async function testPatch(expected: Record<string, string[]>) {
-        const patch = await collection.getPatch(workspaces);
+        const patch = await collection.getPatch(projects);
         //convert the patch into our test structure
         const actual = {};
         for (const filePath in patch) {
@@ -84,23 +84,23 @@ describe('DiagnosticCollection', () => {
         });
     });
 
-    function removeDiagnostic(filePath: string, message: string) {
+    function removeDiagnostic(srcPath: string, message: string) {
         for (let i = 0; i < diagnostics.length; i++) {
             const diagnostic = diagnostics[i];
-            if (diagnostic.file.pathAbsolute === filePath && diagnostic.message === message) {
+            if (diagnostic.file.srcPath === srcPath && diagnostic.message === message) {
                 diagnostics.splice(i, 1);
                 return;
             }
         }
-        throw new Error(`Cannot find diagnostic ${filePath}:${message}`);
+        throw new Error(`Cannot find diagnostic ${srcPath}:${message}`);
     }
 
-    function addDiagnostics(filePath: string, messages: string[]) {
+    function addDiagnostics(srcPath: string, messages: string[]) {
         for (const message of messages) {
             diagnostics.push({
                 file: {
-                    pathAbsolute: filePath
-                } as File,
+                    srcPath: srcPath
+                } as BscFile,
                 range: util.createRange(0, 0, 0, 0),
                 //the code doesn't matter as long as the messages are different, so just enforce unique messages for this test files
                 code: 123,

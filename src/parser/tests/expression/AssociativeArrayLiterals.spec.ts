@@ -1,9 +1,12 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { TokenKind } from '../../../lexer';
+import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import type { AssignmentStatement } from '../../Statement';
+import type { AALiteralExpression } from '../../Expression';
+import { isCommentStatement } from '../../../astUtils/reflection';
 
 describe('parser associative array literals', () => {
     describe('empty associative arrays', () => {
@@ -176,6 +179,30 @@ describe('parser associative array literals', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
+    });
+
+    it('captures commas', () => {
+        let { statements } = Parser.parse(`
+            _ = {
+                p1: 1,
+                p2: 2, 'comment
+                p3: 3
+                p4: 4
+                'comment
+                p5: 5,
+            }
+        `);
+        const commas = ((statements[0] as AssignmentStatement).value as AALiteralExpression).elements
+            .map(s => !isCommentStatement(s) && !!s.commaToken);
+        expect(commas).to.deep.equal([
+            true, // p1
+            true, // p2
+            false, // comment
+            false, // p3
+            false, // p4
+            false, // comment
+            true // p5
+        ]);
     });
 
     it('location tracking', () => {

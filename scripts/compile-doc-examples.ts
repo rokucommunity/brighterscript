@@ -1,5 +1,5 @@
 import * as fsExtra from 'fs-extra';
-import * as glob from 'glob';
+import * as fastGlob from 'fast-glob';
 import * as path from 'path';
 import { Program } from '../src/Program';
 import type { BsConfig } from '../src';
@@ -16,6 +16,7 @@ class DocCompiler {
     ) {
 
     }
+
     private lines: string[];
     private index: number;
     private bsconfig: BsConfig;
@@ -133,11 +134,11 @@ class DocCompiler {
         //get the nex code block, which _should_ be the target transpile block
         const transpiledCodeBlock = this.consumeCodeBlock();
         if (!transpiledCodeBlock || transpiledCodeBlock.language !== 'brightscript') {
-            throw new Error(`Could not find a transpiled code block for source code: ${this.docPath}:${sourceCodeBlock.startIndex}`);
+            throw new Error(`Could not find a transpiled code block for source code: ${this.docPath}:${sourceCodeBlock.startIndex + 1}`);
         }
 
         //now that we have the range for the transpiled code, we need to transpile the source code
-        console.log(`Transpiling ${sourceCodeBlock.language} block at lines ${sourceCodeBlock.startIndex}-${sourceCodeBlock.endIndex}`);
+        console.log(`Transpiling ${sourceCodeBlock.language} block at lines ${sourceCodeBlock.startIndex}-${sourceCodeBlock.endIndex + 1}`);
         const transpiledCode = this.transpile(sourceCodeBlock.code);
         let transpiledLines = transpiledCode.split(/\r?\n/g);
 
@@ -184,10 +185,10 @@ class DocCompiler {
             //use the current bsconfig
             ...(this.bsconfig ?? {})
         });
-        const file = program.addOrReplaceFile({ src: `${__dirname}/rootDir/source/main.bs`, dest: 'source/main.bs' }, code);
+        const file = program.setFile({ src: `${__dirname}/rootDir/source/main.bs`, dest: 'source/main.bs' }, code);
         program.validate();
-        let tranpileResult = file.transpile();
-        return tranpileResult.code;
+        const tranpileResult = program.getTranspiledFileContents(file.srcPath).code;
+        return tranpileResult.trim();
     }
 }
 
@@ -195,7 +196,7 @@ class DocCompiler {
     const docsFolder = path.resolve(
         path.join(__dirname, '..', 'docs')
     );
-    const docs = glob.sync('**/*.md', {
+    const docs = fastGlob.sync('**/*.md', {
         cwd: docsFolder,
         absolute: true
     });

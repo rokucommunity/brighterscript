@@ -2,8 +2,8 @@ import { expect } from 'chai';
 import type { NamespaceStatement } from './Statement';
 import { Body, ClassStatement, CommentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
-import { CancellationTokenSource, WalkMode } from '../astUtils';
-import { Range } from 'vscode-languageserver';
+import { WalkMode } from '../astUtils/visitors';
+import { CancellationTokenSource, Range } from 'vscode-languageserver';
 import { NamespacedVariableNameExpression, VariableExpression } from './Expression';
 import { Program } from '../Program';
 import * as path from 'path';
@@ -93,7 +93,7 @@ describe('Statement', () => {
     describe('ImportStatement', () => {
         describe('getTypedef', () => {
             it('changes .bs file extensions to .brs', () => {
-                const file = program.addOrReplaceFile<BrsFile>('source/main.bs', `
+                const file = program.setFile<BrsFile>('source/main.bs', `
                     import "lib1.bs"
                     import "pkg:/source/lib2.bs"
                 `);

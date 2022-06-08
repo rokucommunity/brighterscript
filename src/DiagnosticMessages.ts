@@ -1,7 +1,6 @@
-/* eslint-disable camelcase */
-
 import type { Position } from 'vscode-languageserver';
 import { DiagnosticSeverity } from 'vscode-languageserver';
+import type { BsDiagnostic } from './interfaces';
 import type { TokenKind } from './lexer/TokenKind';
 
 /**
@@ -17,6 +16,9 @@ export let DiagnosticMessages = {
     callToUnknownFunction: (name: string, scopeName: string) => ({
         message: `Cannot find function with name '${name}' when this file is included in scope '${scopeName}'`,
         code: 1001,
+        data: {
+            functionName: name
+        },
         severity: DiagnosticSeverity.Error
     }),
     mismatchArgumentCount: (expectedCount: number | string, actualCount: number) => ({
@@ -158,7 +160,10 @@ export let DiagnosticMessages = {
     classCouldNotBeFound: (className: string, scopeName: string) => ({
         message: `Class '${className}' could not be found when this file is included in scope '${scopeName}'`,
         code: 1029,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        data: {
+            className: className
+        }
     }),
     expectedClassFieldIdentifier: () => ({
         message: `Expected identifier in class body`,
@@ -170,8 +175,8 @@ export let DiagnosticMessages = {
         code: 1031,
         severity: DiagnosticSeverity.Error
     }),
-    expectedClassKeyword: () => ({
-        message: `Expected 'class' keyword`,
+    expectedKeyword: (kind: TokenKind) => ({
+        message: `Expected '${kind}' keyword`,
         code: 1032,
         severity: DiagnosticSeverity.Error
     }),
@@ -418,8 +423,8 @@ export let DiagnosticMessages = {
         code: 1080,
         severity: DiagnosticSeverity.Error
     }),
-    foundUnexpectedToken: (text: string) => ({
-        message: `Found unexpected token '${text}'`,
+    unexpectedToken: (text: string) => ({
+        message: `Unexpected token '${text}'`,
         code: 1081,
         severity: DiagnosticSeverity.Error
     }),
@@ -506,8 +511,8 @@ export let DiagnosticMessages = {
         code: 1097,
         severity: DiagnosticSeverity.Error
     }),
-    memberAlreadyExistsInParentClass: (memberType: string, parentClassName: string) => ({
-        message: `A ${memberType} with this name already exists in inherited class '${parentClassName}'`,
+    childFieldTypeNotAssignableToBaseProperty: (childTypeName: string, baseTypeName: string, fieldName: string, childFieldType: string, parentFieldType: string) => ({
+        message: `Field '${fieldName}' in class '${childTypeName}' is not assignable to the same field in base class '${baseTypeName}'. Type '${childFieldType}' is not assignable to type '${parentFieldType}'.`,
         code: 1098,
         severity: DiagnosticSeverity.Error
     }),
@@ -561,8 +566,8 @@ export let DiagnosticMessages = {
         code: 1108,
         severity: DiagnosticSeverity.Error
     }),
-    expectedTokenAButFoundTokenB: (tokenA: string, tokenB: string) => ({
-        message: `Expected '${tokenA}' but instead found ${tokenB}`,
+    expectedToken: (tokenKind: string) => ({
+        message: `Expected '${tokenKind}'`,
         code: 1109,
         severity: DiagnosticSeverity.Error
     }),
@@ -621,22 +626,85 @@ export let DiagnosticMessages = {
         code: 1121,
         severity: DiagnosticSeverity.Error
     }),
+    mismatchedOverriddenMemberVisibility: (childClassName: string, memberName: string, childAccessModifier: string, ancestorAccessModifier: string, ancestorClassName: string) => ({
+        message: `Access modifier mismatch: '${memberName}' is ${childAccessModifier} in type '${childClassName}' but is ${ancestorAccessModifier} in base type '${ancestorClassName}'.`,
+        code: 1122,
+        severity: DiagnosticSeverity.Error
+    }),
+    cannotFindType: (typeName: string) => ({
+        message: `Cannot find type with name '${typeName}'`,
+        code: 1123,
+        severity: DiagnosticSeverity.Error
+    }),
+    enumValueMustBeType: (expectedType: string) => ({
+        message: `Enum value must be type '${expectedType}'`,
+        code: 1124,
+        severity: DiagnosticSeverity.Error
+    }),
+    enumValueIsRequired: (expectedType: string) => ({
+        message: `Value is required for ${expectedType} enum`,
+        code: 1125,
+        severity: DiagnosticSeverity.Error
+    }),
+    unknownEnumValue: (name: string, enumName: string) => ({
+        message: `Property '${name}' does not exist on enum '${enumName}'`,
+        code: 1126,
+        severity: DiagnosticSeverity.Error
+    }),
+    duplicateEnumDeclaration: (scopeName: string, enumName: string) => ({
+        message: `Scope '${scopeName}' already contains an enum with name '${enumName}'`,
+        code: 1127,
+        severity: DiagnosticSeverity.Error
+    }),
+    unknownRoSGNode: (nodeName: string) => ({
+        message: `Unknown roSGNode '${nodeName}'`,
+        code: 1128,
+        severity: DiagnosticSeverity.Error
+    }),
+    unknownBrightScriptComponent: (componentName: string) => ({
+        message: `Unknown BrightScript component '${componentName}'`,
+        code: 1129,
+        severity: DiagnosticSeverity.Error
+    }),
+    mismatchCreateObjectArgumentCount: (componentName: string, allowedArgCounts: number[], actualCount: number) => {
+        const argCountArray = (allowedArgCounts || [1]).sort().filter((value, index, self) => self.indexOf(value) === index);
+        return {
+            message: `For ${componentName}, expected ${argCountArray.map(c => c.toString()).join(' or ')} total arguments, but got ${actualCount}.`,
+            code: 1130,
+            severity: DiagnosticSeverity.Error
+        };
+    },
+    deprecatedBrightScriptComponent: (componentName: string, deprecatedDescription?: string) => ({
+        message: `${componentName} has been deprecated${deprecatedDescription ? ': ' + deprecatedDescription : ''}`,
+        code: 1131,
+        severity: DiagnosticSeverity.Error
+    }),
     circularReferenceDetected: (items: string[], scopeName: string) => ({
         message: `Circular reference detected between ${Array.isArray(items) ? items.join(' -> ') : ''} in scope '${scopeName}'`,
-        code: 1122,
+        code: 1132,
         severity: DiagnosticSeverity.Error
     })
 };
 
-let allCodes = [] as number[];
+export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
+export let diagnosticCodes = [] as number[];
 for (let key in DiagnosticMessages) {
-    allCodes.push(DiagnosticMessages[key]().code);
+    diagnosticCodes.push(DiagnosticMessages[key]().code);
+    DiagnosticCodeMap[key] = DiagnosticMessages[key]().code;
 }
-
-export let diagnosticCodes = allCodes;
 
 export interface DiagnosticInfo {
     message: string;
     code: number;
     severity: DiagnosticSeverity;
 }
+
+/**
+ * Provides easy type support for the return value of any DiagnosticMessage function.
+ * The second type parameter is optional, but allows plugins to pass in their own
+ * DiagnosticMessages-like object in order to get the same type support
+ */
+export type DiagnosticMessageType<K extends keyof D, D extends Record<string, (...args: any) => any> = typeof DiagnosticMessages> =
+    ReturnType<D[K]> &
+    //include the missing properties from BsDiagnostic
+    Pick<BsDiagnostic, 'range' | 'file' | 'relatedInformation' | 'tags'>;

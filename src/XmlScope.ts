@@ -14,7 +14,11 @@ export class XmlScope extends Scope {
         public xmlFile: XmlFile,
         public program: Program
     ) {
-        super(xmlFile.pkgPath, xmlFile.dependencyGraphKey, program);
+        super(xmlFile.pkgPath, program);
+    }
+
+    public get dependencyGraphKey() {
+        return this.xmlFile.dependencyGraphKey;
     }
 
     /**
@@ -167,7 +171,7 @@ export class XmlScope extends Scope {
         ) {
             results.push({
                 range: util.createRange(0, 0, 0, 0),
-                uri: util.pathToUri(file.parentComponent.pathAbsolute)
+                uri: util.pathToUri(file.parentComponent.srcPath)
             });
         }
         return results;

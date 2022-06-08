@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-for-in-array */
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { TokenKind } from '../../../lexer';
+import { TokenKind } from '../../../lexer/TokenKind';
 import { Parser, ParseMode } from '../../Parser';
 import { token, EOF } from '../Parser.spec';
 import type { PrintStatement } from '../../Statement';
@@ -17,8 +17,7 @@ import {
     LiteralExpression
 } from '../../Expression';
 import { Program } from '../../../Program';
-import { getTestTranspile } from '../../../files/BrsFile.spec';
-import { expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 
 describe('ternary expressions', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -266,6 +265,14 @@ describe('ternary expressions', () => {
             program.dispose();
         });
 
+        it('uses the proper prefix when aliased package is installed', () => {
+            program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
+            testTranspile(
+                `a = user = invalid ? "no user" : "logged in"`,
+                `a = rokucommunity_bslib_ternary(user = invalid, "no user", "logged in")`
+            );
+        });
+
         it('simple consequents', () => {
             testTranspile(
                 `a = user = invalid ? "no user" : "logged in"`,
@@ -283,13 +290,13 @@ describe('ternary expressions', () => {
             );
 
             testTranspile(
-                `a = user = invalid ? [] : "logged in"`,
-                `a = bslib_ternary(user = invalid, [], "logged in")`
+                `a = user = invalid ? {} : "logged in"`,
+                `a = bslib_ternary(user = invalid, {}, "logged in")`
             );
 
             testTranspile(
-                `a = user = invalid ? {} : "logged in"`,
-                `a = bslib_ternary(user = invalid, {}, "logged in")`
+                `a = user = invalid ? [] : "logged in"`,
+                `a = bslib_ternary(user = invalid, [], "logged in")`
             );
         });
 

@@ -6,7 +6,11 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
-import { trim } from './testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, trim } from './testHelpers.spec';
+import { Logger } from './Logger';
+import type { BrsFile } from './files/BrsFile';
+import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { OnScopeValidateEvent } from './interfaces';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -24,7 +28,7 @@ describe('Scope', () => {
     });
 
     it('does not mark namespace functions as collisions with stdlib', () => {
-        program.addOrReplaceFile({
+        program.setFile({
             src: `${rootDir}/source/main.bs`,
             dest: `source/main.bs`
         }, `
@@ -35,26 +39,34 @@ describe('Scope', () => {
         `);
 
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        expectZeroDiagnostics(program);
+    });
+
+    it('handles variables with javascript prototype names', () => {
+        program.setFile('source/main.brs', `
+            sub main()
+                constructor = true
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
     });
 
     it('flags parameter with same name as namespace', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             namespace NameA.NameB
             end namespace
             sub main(nameA)
             end sub
         `);
         program.validate();
-        expect(
-            program.getDiagnostics()[0]?.message
-        ).to.eql(
-            DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace('nameA').message
-        );
+        expectDiagnostics(program, [
+            DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace('nameA')
+        ]);
     });
 
     it('flags assignments with same name as namespace', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             namespace NameA.NameB
             end namespace
             sub main()
@@ -63,11 +75,9 @@ describe('Scope', () => {
             end sub
         `);
         program.validate();
-        expect(
-            program.getDiagnostics().map(x => x.message)
-        ).to.eql([
-            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea').message,
-            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA').message
+        expectDiagnostics(program, [
+            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea'),
+            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA')
         ]);
     });
 
@@ -79,8 +89,7 @@ describe('Scope', () => {
             range: undefined
         }];
         source.addDiagnostics(expected);
-        const actual = source.getDiagnostics();
-        expect(actual).to.deep.equal(expected);
+        expectDiagnostics(source, expected);
     });
 
     it('allows getting all scopes', () => {
@@ -92,7 +101,7 @@ describe('Scope', () => {
         it('detects callables from all loaded files', () => {
             const sourceScope = program.getScopeByName('source');
 
-            program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+            program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                 sub Main()
 
                 end sub
@@ -100,36 +109,36 @@ describe('Scope', () => {
                 sub ActionA()
                 end sub
             `);
-            program.addOrReplaceFile({ src: s`${rootDir}/source/lib.brs`, dest: s`source/lib.brs` }, `
+            program.setFile({ src: s`${rootDir}/source/lib.brs`, dest: s`source/lib.brs` }, `
                 sub ActionB()
                 end sub
             `);
 
             program.validate();
 
-            expect(sourceScope.getOwnFiles().map(x => x.pathAbsolute).sort()).eql([
+            expect(sourceScope.getOwnFiles().map(x => x.srcPath).sort()).eql([
                 s`${rootDir}/source/lib.brs`,
                 s`${rootDir}/source/main.brs`
             ]);
-            expect(program.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(program);
             expect(sourceScope.getOwnCallables()).is.lengthOf(3);
             expect(sourceScope.getAllCallables()).is.length.greaterThan(3);
         });
 
         it('picks up new callables', () => {
-            program.addOrReplaceFile('source/file.brs', '');
+            program.setFile('source/file.brs', '');
             //we have global callables, so get that initial number
             let originalLength = program.getScopeByName('source').getAllCallables().length;
 
-            program.addOrReplaceFile('source/file.brs', `
-            function DoA()
-                print "A"
-            end function
+            program.setFile('source/file.brs', `
+                function DoA()
+                    print "A"
+                end function
 
-             function DoA()
-                 print "A"
-             end function
-        `);
+                function DoA()
+                    print "A"
+                end function
+            `);
             expect(program.getScopeByName('source').getAllCallables().length).to.equal(originalLength + 2);
         });
     });
@@ -137,7 +146,7 @@ describe('Scope', () => {
     describe('removeFile', () => {
         it('removes callables from list', () => {
             //add the file
-            let file = program.addOrReplaceFile(`source/file.brs`, `
+            let file = program.setFile(`source/file.brs`, `
                 function DoA()
                     print "A"
                 end function
@@ -145,25 +154,202 @@ describe('Scope', () => {
             let initCallableCount = program.getScopeByName('source').getAllCallables().length;
 
             //remove the file
-            program.removeFile(file.pathAbsolute);
+            program.removeFile(file.srcPath);
             expect(program.getScopeByName('source').getAllCallables().length).to.equal(initCallableCount - 1);
         });
     });
 
     describe('validate', () => {
+        describe('createObject', () => {
+            it('recognizes various scenegraph nodes', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        scene = CreateObject("roSGScreen")
+                        button = CreateObject("roSGNode", "Button")
+                        list = CreateObject("roSGNode", "MarkupList")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('recognizes valid custom components', () => {
+                program.setFile('components/comp1.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp1" extends="Scene">
+                    </component>
+                `);
+                program.setFile('components/comp2.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp2" extends="Scene">
+                    </component>
+                `);
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        comp1 = CreateObject("roSGNode", "Comp1")
+                        comp2 = CreateObject("roSGNode", "Comp2")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('catches unknown roSGNodes', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        scene = CreateObject("roSGNode", "notReal")
+                        button = CreateObject("roSGNode", "alsoNotReal")
+                        list = CreateObject("roSGNode", "definitelyNotReal")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.unknownRoSGNode('notReal'),
+                    DiagnosticMessages.unknownRoSGNode('alsoNotReal'),
+                    DiagnosticMessages.unknownRoSGNode('definitelyNotReal')
+                ]);
+            });
+
+            it('only adds a single diagnostic when the file is used in multiple scopes', () => {
+                program.setFile('components/Comp1.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp1" extends="Scene">
+                        <script type="text/brightscript" uri="lib.brs" />
+                    </component>
+                `);
+                program.setFile('components/Comp2.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp2" extends="Scene">
+                        <script type="text/brightscript" uri="lib.brs" />
+                    </component>
+                `);
+                program.setFile('components/lib.brs', `
+                    sub init()
+
+                        'unknown BrightScript component
+                        createObject("roDateTime_FAKE")
+
+                        'Wrong number of params
+                        createObject("roDateTime", "this param should not be here")
+
+                        'unknown roSGNode
+                        createObject("roSGNode", "Rectangle_FAKE")
+
+                        'deprecated
+                        fontMetrics = CreateObject("roFontMetrics", "someFontName")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.unknownBrightScriptComponent('roDateTime_FAKE'),
+                    DiagnosticMessages.mismatchCreateObjectArgumentCount('roDateTime', [1, 1], 2),
+                    DiagnosticMessages.unknownRoSGNode('Rectangle_FAKE'),
+                    DiagnosticMessages.deprecatedBrightScriptComponent('roFontMetrics').code
+                ]);
+            });
+
+            it('disregards component library components', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        scene = CreateObject("roSGNode", "Complib1:MainScene")
+                        button = CreateObject("roSGNode", "buttonlib:Button")
+                        list = CreateObject("roSGNode", "listlib:List")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('disregards non-literal args', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        sgNodeName =  "roSGNode"
+                        compNameAsVar =  "Button"
+                        button = CreateObject(sgNodeName, compNameAsVar)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('recognizes valid BrightScript components', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        timeSpan = CreateObject("roTimespan")
+                        bitmap = CreateObject("roBitmap", {width:10, height:10, AlphaEnable:false, name:"MyBitmapName"})
+                        path = CreateObject("roPath", "ext1:/vid")
+                        region = CreateObject("roRegion", bitmap, 20, 30, 100, 200)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('catches invalid BrightScript components', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        timeSpan = CreateObject("Thing")
+                        bitmap = CreateObject("OtherThing", {width:10, height:10, AlphaEnable:false, name:"MyBitmapName"})
+                        path = CreateObject("SomethingElse", "ext1:/vid")
+                        region = CreateObject("Button", bitmap, 20, 30, 100, 200)
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.unknownBrightScriptComponent('Thing'),
+                    DiagnosticMessages.unknownBrightScriptComponent('OtherThing'),
+                    DiagnosticMessages.unknownBrightScriptComponent('SomethingElse'),
+                    DiagnosticMessages.unknownBrightScriptComponent('Button')
+                ]);
+            });
+
+            it('catches wrong number of arguments', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        button = CreateObject("roSGNode", "Button", "extraArg")
+                        bitmap = CreateObject("roBitmap") ' no 2nd arg
+                        timeSpan = CreateObject("roTimespan", 1, 2, 3)
+                        region = CreateObject("roRegion", bitmap, 20, 30, 100) ' missing last arg
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.mismatchCreateObjectArgumentCount('roSGNode', [2], 3),
+                    DiagnosticMessages.mismatchCreateObjectArgumentCount('roBitmap', [2], 1),
+                    DiagnosticMessages.mismatchCreateObjectArgumentCount('roTimespan', [1], 4),
+                    DiagnosticMessages.mismatchCreateObjectArgumentCount('roRegion', [6], 5)
+                ]);
+            });
+
+            it('catches deprecated components', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        fontMetrics = CreateObject("roFontMetrics", "someFontName")
+                    end sub
+                `);
+                program.validate();
+                // only care about code and `roFontMetrics` match
+                const diagnostics = program.getDiagnostics();
+                const expectedDiag = DiagnosticMessages.deprecatedBrightScriptComponent('roFontMetrics');
+                expect(diagnostics.length).to.eql(1);
+                expect(diagnostics[0].code).to.eql(expectedDiag.code);
+                expect(diagnostics[0].message).to.contain(expectedDiag.message);
+            });
+        });
+
         it('marks the scope as validated after validation has occurred', () => {
-            program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+            program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                sub main()
                end sub
             `);
-            let lib = program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: s`source/lib.bs` }, `
+            let lib = program.setFile({ src: s`${rootDir}/source/lib.bs`, dest: s`source/lib.bs` }, `
                sub libFunc()
                end sub
             `);
             expect(program.getScopesForFile(lib)[0].isValidated).to.be.false;
             program.validate();
             expect(program.getScopesForFile(lib)[0].isValidated).to.be.true;
-            lib = program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: s`source/lib.bs` }, `
+            lib = program.setFile({ src: s`${rootDir}/source/lib.bs`, dest: s`source/lib.bs` }, `
                 sub libFunc()
                 end sub
             `);
@@ -174,7 +360,7 @@ describe('Scope', () => {
         });
 
         it('does not mark same-named-functions in different namespaces as an error', () => {
-            program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+            program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                 namespace NameA
                     sub alert()
                     end sub
@@ -185,11 +371,10 @@ describe('Scope', () => {
                 end namespace
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
-            expect(program.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(program);
         });
         it('resolves local-variable function calls', () => {
-            program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+            program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                 sub DoSomething()
                     sayMyName = function(name as string)
                     end function
@@ -198,13 +383,12 @@ describe('Scope', () => {
                 end sub`
             );
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
-            expect(program.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(program);
         });
 
         describe('function shadowing', () => {
             it('warns when local var function has same name as stdlib function', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         str = function(p)
                             return "override"
@@ -213,44 +397,36 @@ describe('Scope', () => {
                     end sub
                 `);
                 program.validate();
-                let diagnostics = program.getDiagnostics().map(x => {
-                    return {
-                        message: x.message,
-                        range: x.range
-                    };
-                });
-                expect(diagnostics[0]).to.exist.and.to.eql({
-                    message: DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib').message,
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
                     range: Range.create(2, 24, 2, 27)
-                });
+                }]);
             });
 
             it('warns when local var has same name as built-in function', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         str = 12345
                         print str ' prints "12345" (i.e. our local variable is allowed to shadow the built-in function name)
                     end sub
                 `);
                 program.validate();
-                let diagnostics = program.getDiagnostics();
-                expect(diagnostics[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('warns when local var has same name as built-in function', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         str = 6789
                         print str(12345) ' prints "12345" (i.e. our local variable did not override the callable global function)
                     end sub
                 `);
                 program.validate();
-                let diagnostics = program.getDiagnostics();
-                expect(diagnostics[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('detects local function with same name as scope function', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         getHello = function()
                             return "override"
@@ -263,20 +439,14 @@ describe('Scope', () => {
                     end function
                 `);
                 program.validate();
-                let diagnostics = program.getDiagnostics().map(x => {
-                    return {
-                        message: x.message,
-                        range: x.range
-                    };
-                });
-                expect(diagnostics[0]).to.exist.and.to.eql({
+                expectDiagnostics(program, [{
                     message: DiagnosticMessages.localVarFunctionShadowsParentFunction('scope').message,
                     range: Range.create(2, 24, 2, 32)
-                });
+                }]);
             });
 
             it('detects local function with same name as scope function', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         getHello = "override"
                         print getHello ' prints <Function: gethello> (i.e. local variable override does NOT work for same-scope-defined methods)
@@ -286,20 +456,14 @@ describe('Scope', () => {
                     end function
                 `);
                 program.validate();
-                let diagnostics = program.getDiagnostics().map(x => {
-                    return {
-                        message: x.message,
-                        range: x.range
-                    };
-                });
-                expect(diagnostics[0]).to.exist.and.to.eql({
+                expectDiagnostics(program, [{
                     message: DiagnosticMessages.localVarShadowedByScopedFunction().message,
                     range: Range.create(2, 24, 2, 32)
-                });
+                }]);
             });
 
             it('flags scope function with same name (but different case) as built-in function', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         print str(12345) ' prints 12345 (i.e. our str() function below is ignored)
                     end sub
@@ -308,21 +472,15 @@ describe('Scope', () => {
                     end function
                 `);
                 program.validate();
-                let diagnostics = program.getDiagnostics().map(x => {
-                    return {
-                        message: x.message,
-                        range: x.range
-                    };
-                });
-                expect(diagnostics[0]).to.exist.and.to.eql({
+                expectDiagnostics(program, [{
                     message: DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction().message,
                     range: Range.create(4, 29, 4, 32)
-                });
+                }]);
             });
         });
 
         it('detects duplicate callables', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 function DoA()
                     print "A"
                 end function
@@ -331,34 +489,32 @@ describe('Scope', () => {
                      print "A"
                  end function
             `);
-            expect(
-                program.getDiagnostics().length
-            ).to.equal(0);
+            expectZeroDiagnostics(program);
             //validate the scope
             program.validate();
             //we should have the "DoA declared more than once" error twice (one for each function named "DoA")
-            expect(program.getDiagnostics().map(x => x.message).sort()).to.eql([
-                DiagnosticMessages.duplicateFunctionImplementation('DoA', 'source').message,
-                DiagnosticMessages.duplicateFunctionImplementation('DoA', 'source').message
+            expectDiagnostics(program, [
+                DiagnosticMessages.duplicateFunctionImplementation('DoA', 'source'),
+                DiagnosticMessages.duplicateFunctionImplementation('DoA', 'source')
             ]);
         });
 
         it('detects calls to unknown callables', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 function DoA()
                     DoB()
                 end function
             `);
-            expect(program.getDiagnostics().length).to.equal(0);
+            expectZeroDiagnostics(program);
             //validate the scope
             program.validate();
-            expect(program.getDiagnostics()[0]).to.deep.include({
-                code: DiagnosticMessages.callToUnknownFunction('DoB', '').code
-            });
+            expectDiagnostics(program, [
+                DiagnosticMessages.callToUnknownFunction('DoB', 'source')
+            ]);
         });
 
         it('recognizes known callables', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 function DoA()
                     DoB()
                 end function
@@ -368,15 +524,32 @@ describe('Scope', () => {
             `);
             //validate the scope
             program.validate();
-            expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                DiagnosticMessages.callToUnknownFunction('DoC', 'source').message
+            expectDiagnostics(program, [
+                DiagnosticMessages.callToUnknownFunction('DoC', 'source')
             ]);
+        });
+
+        it('does not error with calls to callables in same namespace', () => {
+            program.setFile('source/file.bs', `
+                namespace Name.Space
+                    sub a(param as string)
+                        print param
+                    end sub
+
+                    sub b()
+                        a("hello")
+                    end sub
+                end namespace
+            `);
+            //validate the scope
+            program.validate();
+            expectZeroDiagnostics(program);
         });
 
         //We don't currently support someObj.callSomething() format, so don't throw errors on those
         it('does not fail on object callables', () => {
-            expect(program.getDiagnostics().length).to.equal(0);
-            program.addOrReplaceFile('source/file.brs', `
+            expectZeroDiagnostics(program);
+            program.setFile('source/file.brs', `
                function DoB()
                     m.doSomething()
                 end function
@@ -384,11 +557,11 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             //shouldn't have any errors
-            expect(program.getDiagnostics().map(x => x.message)).to.eql([]);
+            expectZeroDiagnostics(program);
         });
 
         it('detects calling functions with too many parameters', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub a()
                 end sub
                 sub b()
@@ -396,13 +569,35 @@ describe('Scope', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().map(x => x.message)).includes(
+            expectDiagnostics(program, [
                 DiagnosticMessages.mismatchArgumentCount(0, 1).message
-            );
+            ]);
+        });
+
+        it('detects calling class constructors with too many parameters', () => {
+            program.setFile('source/main.bs', `
+                function noop0()
+                end function
+
+                function noop1(p1)
+                end function
+
+                sub main()
+                   noop0(1)
+                   noop1(1,2)
+                   noop1()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(0, 1),
+                DiagnosticMessages.mismatchArgumentCount(1, 2),
+                DiagnosticMessages.mismatchArgumentCount(1, 0)
+            ]);
         });
 
         it('detects calling functions with too many parameters', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub a(name)
                 end sub
                 sub b()
@@ -410,13 +605,13 @@ describe('Scope', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().map(x => x.message)).to.includes(
-                DiagnosticMessages.mismatchArgumentCount(1, 0).message
-            );
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(1, 0)
+            ]);
         });
 
         it('allows skipping optional parameter', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub a(name="Bob")
                 end sub
                 sub b()
@@ -425,11 +620,11 @@ describe('Scope', () => {
             `);
             program.validate();
             //should have an error
-            expect(program.getDiagnostics().length).to.equal(0);
+            expectZeroDiagnostics(program);
         });
 
         it('shows expected parameter range in error message', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub a(age, name="Bob")
                 end sub
                 sub b()
@@ -438,13 +633,13 @@ describe('Scope', () => {
             `);
             program.validate();
             //should have an error
-            expect(program.getDiagnostics().map(x => x.message)).includes(
-                DiagnosticMessages.mismatchArgumentCount('1-2', 0).message
-            );
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount('1-2', 0)
+            ]);
         });
 
         it('handles expressions as arguments to a function', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub a(age, name="Bob")
                 end sub
                 sub b()
@@ -452,11 +647,11 @@ describe('Scope', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(0);
+            expectZeroDiagnostics(program);
         });
 
         it('Catches extra arguments for expressions as arguments to a function', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub a(age)
                 end sub
                 sub b()
@@ -465,13 +660,13 @@ describe('Scope', () => {
             `);
             program.validate();
             //should have an error
-            expect(program.getDiagnostics().map(x => x.message)).to.include(
-                DiagnosticMessages.mismatchArgumentCount(1, 2).message
-            );
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(1, 2)
+            ]);
         });
 
         it('handles JavaScript reserved names', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub constructor()
                 end sub
                 sub toString()
@@ -482,39 +677,47 @@ describe('Scope', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(program);
         });
 
         it('Emits validation events', () => {
-            const validateStartScope = sinon.spy();
-            const validateEndScope = sinon.spy();
-            program.addOrReplaceFile('source/file.brs', ``);
-            program.addOrReplaceFile('components/comp.xml', trim`
+            program.setFile('source/file.brs', ``);
+            program.setFile('components/comp.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="comp" extends="Scene">
                     <script uri="comp.brs"/>
                 </component>
             `);
-            program.addOrReplaceFile(s`components/comp.brs`, ``);
+            program.setFile(s`components/comp.brs`, ``);
             const sourceScope = program.getScopeByName('source');
             const compScope = program.getScopeByName('components/comp.xml');
-            program.plugins = new PluginInterface([{
+            program.plugins = new PluginInterface([], new Logger());
+            const plugin = program.plugins.add({
                 name: 'Emits validation events',
-                beforeScopeValidate: validateStartScope,
-                afterScopeValidate: validateEndScope
-            }], undefined);
+                beforeScopeValidate: sinon.spy(),
+                onScopeValidate: sinon.spy(),
+                afterScopeValidate: sinon.spy()
+            });
             program.validate();
-            expect(validateStartScope.callCount).to.equal(2);
-            expect(validateStartScope.calledWith(sourceScope)).to.be.true;
-            expect(validateStartScope.calledWith(compScope)).to.be.true;
-            expect(validateEndScope.callCount).to.equal(2);
-            expect(validateEndScope.calledWith(sourceScope)).to.be.true;
-            expect(validateEndScope.calledWith(compScope)).to.be.true;
+            const scopeNames = program.getScopes().map(x => x.name).filter(x => x !== 'global').sort();
+
+            expect(plugin.beforeScopeValidate.callCount).to.equal(2);
+            expect(plugin.beforeScopeValidate.calledWith(sourceScope)).to.be.true;
+            expect(plugin.beforeScopeValidate.calledWith(compScope)).to.be.true;
+
+            expect(plugin.onScopeValidate.callCount).to.equal(2);
+            expect(plugin.onScopeValidate.getCalls().map(
+                x => (x.args[0] as OnScopeValidateEvent).scope.name
+            ).sort()).to.eql(scopeNames);
+
+            expect(plugin.afterScopeValidate.callCount).to.equal(2);
+            expect(plugin.afterScopeValidate.calledWith(sourceScope)).to.be.true;
+            expect(plugin.afterScopeValidate.calledWith(compScope)).to.be.true;
         });
 
         describe('custom types', () => {
             it('detects an unknown function return type', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     function a()
                         return invalid
                     end function
@@ -538,14 +741,14 @@ describe('Scope', () => {
                     end function
                 `);
                 program.validate();
-                expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                expectDiagnostics(program, [
                     DiagnosticMessages.invalidFunctionReturnType('unknownType').message,
                     DiagnosticMessages.invalidFunctionReturnType('unknownType').message
                 ]);
             });
 
             it('detects an unknown function parameter type', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     sub a(num as integer)
                     end sub
 
@@ -561,14 +764,14 @@ describe('Scope', () => {
                     end sub
                 `);
                 program.validate();
-                expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                expectDiagnostics(program, [
                     DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message,
                     DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message
                 ]);
             });
 
             it('detects an unknown field parameter type', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     class myClass
                         foo as unknownType 'error
                     end class
@@ -580,14 +783,105 @@ describe('Scope', () => {
                     end class
                 `);
                 program.validate();
-                expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                    DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message,
-                    DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindType('unknownType').message,
+                    DiagnosticMessages.cannotFindType('unknownType').message
                 ]);
             });
 
+            it('supports enums and interfaces as types', () => {
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+
+                    interface MyInterface
+                        title as string
+                    end interface
+                    enum myEnum
+                        title = "t"
+                    end enum
+
+                    class myClass
+                        foo as myInterface
+                        foo2 as myEnum
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds interface types', () => {
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    namespace MyNamespace
+                        interface MyInterface
+                          title as string
+                        end interface
+
+                        function bar(param as MyNamespace.MyInterface) as MyNamespace.MyInterface
+                        end function
+
+                    end namespace
+
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds non-namespaced interface types', () => {
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    interface MyInterface
+                        title as string
+                    end interface
+
+                    namespace MyNamespace
+                        function bar(param as MyInterface) as MyInterface
+                        end function
+
+                    end namespace
+
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds enum types', () => {
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    namespace MyNamespace
+                        enum MyEnum
+                          title = "t"
+                        end enum
+
+                        function bar(param as MyNamespace.MyEnum) as MyNamespace.MyEnum
+                        end function
+
+                    end namespace
+
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds non-namespaced enum types', () => {
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    enum MyEnum
+                        title = "t"
+                    end enum
+
+                    namespace MyNamespace
+                        function bar(param as MyEnum) as MyEnum
+                        end function
+
+                    end namespace
+
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
             it('finds custom types inside namespaces', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -603,11 +897,11 @@ describe('Scope', () => {
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('finds custom types from other namespaces', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -618,11 +912,11 @@ describe('Scope', () => {
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('detects missing custom types from current namespaces', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -633,31 +927,31 @@ describe('Scope', () => {
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                expectDiagnostics(program, [
                     DiagnosticMessages.invalidFunctionReturnType('UnknownType').message
                 ]);
             });
 
             it('finds custom types from other other files', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     function foo(param as MyClass) as MyClass
                     end function
                 `);
-                program.addOrReplaceFile({ src: s`${rootDir}/source/MyClass.bs`, dest: s`source/MyClass.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/MyClass.bs`, dest: s`source/MyClass.bs` }, `
                     class MyClass
                     end class
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('finds custom types from other other files', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     function foo(param as MyNameSpace.MyClass) as MyNameSpace.MyClass
                     end function
                 `);
-                program.addOrReplaceFile({ src: s`${rootDir}/source/MyNameSpace.bs`, dest: s`source/MyNameSpace.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/MyNameSpace.bs`, dest: s`source/MyNameSpace.bs` }, `
                     namespace MyNameSpace
                       class MyClass
                       end class
@@ -665,11 +959,11 @@ describe('Scope', () => {
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('detects missing custom types from another namespaces', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -680,41 +974,41 @@ describe('Scope', () => {
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                    DiagnosticMessages.invalidFunctionReturnType('MyNamespace.UnknownType').message
+                expectDiagnostics(program, [
+                    DiagnosticMessages.invalidFunctionReturnType('MyNamespace.UnknownType')
                 ]);
             });
 
             it('scopes types to correct scope', () => {
                 program = new Program({ rootDir: rootDir });
 
-                program.addOrReplaceFile('components/foo.xml', trim`
+                program.setFile('components/foo.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="foo" extends="Scene">
                         <script uri="foo.bs"/>
                     </component>
                 `);
-                program.addOrReplaceFile(s`components/foo.bs`, `
+                program.setFile(s`components/foo.bs`, `
                     class MyClass
                     end class
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
 
-                program.addOrReplaceFile('components/bar.xml', trim`
+                program.setFile('components/bar.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="bar" extends="Scene">
                         <script uri="bar.bs"/>
                     </component>
                 `);
-                program.addOrReplaceFile(s`components/bar.bs`, `
+                program.setFile(s`components/bar.bs`, `
                     function getFoo() as MyClass
                     end function
                 `);
                 program.validate();
 
-                expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                expectDiagnostics(program, [
                     DiagnosticMessages.invalidFunctionReturnType('MyClass').message
                 ]);
             });
@@ -722,30 +1016,30 @@ describe('Scope', () => {
             it('can reference types from parent component', () => {
                 program = new Program({ rootDir: rootDir });
 
-                program.addOrReplaceFile('components/parent.xml', trim`
+                program.setFile('components/parent.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="parent" extends="Scene">
                         <script uri="parent.bs"/>
                     </component>
                 `);
-                program.addOrReplaceFile(s`components/parent.bs`, `
+                program.setFile(s`components/parent.bs`, `
                     class MyClass
                     end class
                 `);
-                program.addOrReplaceFile('components/child.xml', trim`
+                program.setFile('components/child.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="child" extends="parent">
                         <script uri="child.bs"/>
                     </component>
                 `);
-                program.addOrReplaceFile(s`components/child.bs`, `
+                program.setFile(s`components/child.bs`, `
                     function getFoo() as MyClass
                     end function
                 `);
 
                 program.validate();
 
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
 
             });
         });
@@ -755,24 +1049,24 @@ describe('Scope', () => {
         it('inherits callables from parent', () => {
             program = new Program({ rootDir: rootDir });
 
-            program.addOrReplaceFile('components/child.xml', trim`
+            program.setFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="child" extends="parent">
                     <script uri="child.brs"/>
                 </component>
             `);
-            program.addOrReplaceFile(s`components/child.brs`, ``);
+            program.setFile(s`components/child.brs`, ``);
             program.validate();
             let childScope = program.getComponentScope('child');
             expect(childScope.getAllCallables().map(x => x.callable.name)).not.to.include('parentSub');
 
-            program.addOrReplaceFile('components/parent.xml', trim`
+            program.setFile('components/parent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="parent" extends="Scene">
                     <script uri="parent.brs"/>
                 </component>
             `);
-            program.addOrReplaceFile(s`components/parent.brs`, `
+            program.setFile(s`components/parent.brs`, `
                 sub parentSub()
                 end sub
             `);
@@ -790,7 +1084,7 @@ describe('Scope', () => {
 
     describe('getDefinition', () => {
         it('returns empty list when there are no files', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
             let scope = program.getScopeByName('source');
             expect(scope.getDefinition(file, Position.create(0, 0))).to.be.lengthOf(0);
         });
@@ -803,6 +1097,69 @@ describe('Scope', () => {
             expect(completions).to.be.length.greaterThan(0);
             //it should find documentation for completions
             expect(completions.filter(x => !!x.documentation)).to.have.length.greaterThan(0);
+        });
+    });
+
+    describe('buildNamespaceLookup', () => {
+        it('does not crash when class statement is missing `name` prop', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                namespace NameA
+                    class
+                    end class
+                end namespace
+            `);
+            program['scopes']['source'].buildNamespaceLookup();
+        });
+
+        it('does not crash when function statement is missing `name` prop', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                namespace NameA
+                    function doSomething()
+                    end function
+                end namespace
+            `);
+            delete ((file.ast.statements[0] as NamespaceStatement).body.statements[0] as FunctionStatement).name;
+            program['scopes']['source'].buildNamespaceLookup();
+        });
+    });
+
+    describe('buildEnumLookup', () => {
+        it('builds enum lookup', () => {
+            const sourceScope = program.getScopeByName('source');
+            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+            program.setFile('source/main.bs', `
+                enum foo
+                    bar1
+                    bar2
+                end enum
+
+                namespace test
+                    function fooFace2()
+                    end function
+
+                    class fooClass2
+                    end class
+
+                    enum foo2
+                        bar2_1
+                        bar2_2
+                    end enum
+                end namespace
+
+                enum foo3
+                    bar3_1
+                    bar3_2
+                end enum
+            `);
+            // program.validate();
+
+            expect(
+                [...sourceScope.getEnumMap().keys()]
+            ).to.eql([
+                'foo',
+                'test.foo2',
+                'foo3'
+            ]);
         });
     });
 });

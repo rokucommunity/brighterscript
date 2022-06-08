@@ -1,8 +1,8 @@
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
-import * as rokuDeploy from 'roku-deploy';
+import { rokuDeploy } from 'roku-deploy';
 import type { BsConfig } from './BsConfig';
-import type { BsDiagnostic, File, FileObj, FileResolver } from './interfaces';
+import type { BscFile, BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
@@ -47,16 +47,16 @@ export class ProgramBuilder {
      * This walks backwards through the file resolvers until we get a value.
      * This allow the language server to provide file contents directly from memory.
      */
-    public async getFileContents(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
+    public async getFileContents(srcPath: string) {
+        srcPath = s`${srcPath}`;
         let reversedResolvers = [...this.fileResolvers].reverse();
         for (let fileResolver of reversedResolvers) {
-            let result = await fileResolver(pathAbsolute);
+            let result = await fileResolver(srcPath);
             if (typeof result === 'string') {
                 return result;
             }
         }
-        throw new Error(`Could not load file "${pathAbsolute}"`);
+        throw new Error(`Could not load file "${srcPath}"`);
     }
 
     /**
@@ -64,16 +64,17 @@ export class ProgramBuilder {
      */
     private staticDiagnostics = [] as BsDiagnostic[];
 
-    public addDiagnostic(filePathAbsolute: string, diagnostic: Partial<BsDiagnostic>) {
-        let file: File = this.program.getFileByPathAbsolute(filePathAbsolute);
+    public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
+        let file: BscFile = this.program.getFile(srcPath);
         if (!file) {
             file = {
-                pkgPath: this.program.getPkgPath(filePathAbsolute),
-                pathAbsolute: filePathAbsolute,
+                pkgPath: this.program.getPkgPath(srcPath),
+                pathAbsolute: srcPath, //keep this for backwards-compatibility. TODO remove in v1
+                srcPath: srcPath,
                 getDiagnostics: () => {
                     return [<any>diagnostic];
                 }
-            };
+            } as BscFile;
         }
         diagnostic.file = file;
         this.staticDiagnostics.push(<any>diagnostic);
@@ -82,7 +83,7 @@ export class ProgramBuilder {
     public getDiagnostics() {
         return [
             ...this.staticDiagnostics,
-            ...this.program ? this.program.getDiagnostics() : []
+            ...(this.program?.getDiagnostics() ?? [])
         ];
     }
 
@@ -95,8 +96,14 @@ export class ProgramBuilder {
         this.isRunning = true;
         try {
             this.options = util.normalizeAndResolveConfig(options);
+            if (this.options.project) {
+                this.logger.log(`Using config file: "${this.options.project}"`);
+            } else {
+                this.logger.log(`No bsconfig.json file found, using default options`);
+            }
+            this.loadRequires();
             this.loadPlugins();
-        } catch (e) {
+        } catch (e: any) {
             if (e?.file && e.message && e.code) {
                 let err = e as BsDiagnostic;
                 this.staticDiagnostics.push(err);
@@ -115,7 +122,6 @@ export class ProgramBuilder {
         this.program = this.createProgram();
 
         //parse every file in the entire project
-        this.logger.log('Parsing files');
         await this.loadAllFilesAST();
 
         if (this.options.watch) {
@@ -138,7 +144,7 @@ export class ProgramBuilder {
         const cwd = this.options.cwd ?? process.cwd();
         const plugins = util.loadPlugins(
             cwd,
-            this.options.plugins,
+            this.options.plugins ?? [],
             (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
         );
         this.logger.log(`Loading ${this.options.plugins?.length ?? 0} plugins for cwd "${cwd}"`);
@@ -147,6 +153,15 @@ export class ProgramBuilder {
         }
 
         this.plugins.emit('beforeProgramCreate', this);
+    }
+
+    /**
+     * `require()` every options.require path
+     */
+    protected loadRequires() {
+        for (const dep of this.options.require ?? []) {
+            util.resolveRequire(this.options.cwd, dep);
+        }
     }
 
     private clearConsole() {
@@ -201,7 +216,7 @@ export class ProgramBuilder {
                         util.driveLetterToLower(this.rootDir)
                     )
                 };
-                this.program.addOrReplaceFile(
+                this.program.setFile(
                     fileObj,
                     await this.getFileContents(fileObj.src)
                 );
@@ -249,28 +264,30 @@ export class ProgramBuilder {
         return runPromise;
     }
 
-    private printDiagnostics() {
-        if (this.options.showDiagnosticsInConsole === false) {
+    private printDiagnostics(diagnostics?: BsDiagnostic[]) {
+        if (this.options?.showDiagnosticsInConsole === false) {
             return;
         }
-        let diagnostics = this.getDiagnostics();
+        if (!diagnostics) {
+            diagnostics = this.getDiagnostics();
+        }
 
         //group the diagnostics by file
         let diagnosticsByFile = {} as Record<string, BsDiagnostic[]>;
         for (let diagnostic of diagnostics) {
-            if (!diagnosticsByFile[diagnostic.file.pathAbsolute]) {
-                diagnosticsByFile[diagnostic.file.pathAbsolute] = [];
+            if (!diagnosticsByFile[diagnostic.file.srcPath]) {
+                diagnosticsByFile[diagnostic.file.srcPath] = [];
             }
-            diagnosticsByFile[diagnostic.file.pathAbsolute].push(diagnostic);
+            diagnosticsByFile[diagnostic.file.srcPath].push(diagnostic);
         }
 
         //get printing options
         const options = diagnosticUtils.getPrintDiagnosticOptions(this.options);
         const { cwd, emitFullPaths } = options;
 
-        let pathsAbsolute = Object.keys(diagnosticsByFile).sort();
-        for (let pathAbsolute of pathsAbsolute) {
-            let diagnosticsForFile = diagnosticsByFile[pathAbsolute];
+        let srcPaths = Object.keys(diagnosticsByFile).sort();
+        for (let srcPath of srcPaths) {
+            let diagnosticsForFile = diagnosticsByFile[srcPath];
             //sort the diagnostics in line and column order
             let sortedDiagnostics = diagnosticsForFile.sort((a, b) => {
                 return (
@@ -279,12 +296,12 @@ export class ProgramBuilder {
                 );
             });
 
-            let filePath = pathAbsolute;
+            let filePath = srcPath;
             if (!emitFullPaths) {
                 filePath = path.relative(cwd, filePath);
             }
             //load the file text
-            const file = this.program.getFileByPathAbsolute(pathAbsolute);
+            const file = this.program?.getFile(srcPath);
             //get the file's in-memory contents if available
             const lines = file?.fileContents?.split(/\r?\n/g) ?? [];
 
@@ -309,7 +326,6 @@ export class ProgramBuilder {
             if (cancellationToken.isCanceled === true) {
                 return -1;
             }
-            this.logger.log('Validating project');
             //validate program
             this.validateProject();
 
@@ -318,9 +334,10 @@ export class ProgramBuilder {
                 return -1;
             }
 
-            this.printDiagnostics();
+            const diagnostics = this.getDiagnostics();
+            this.printDiagnostics(diagnostics);
             wereDiagnosticsPrinted = true;
-            let errorCount = this.getDiagnostics().filter(x => x.severity === DiagnosticSeverity.Error).length;
+            let errorCount = diagnostics.filter(x => x.severity === DiagnosticSeverity.Error).length;
 
             if (errorCount > 0) {
                 this.logger.log(`Found ${errorCount} ${errorCount === 1 ? 'error' : 'errors'}`);
@@ -358,6 +375,7 @@ export class ProgramBuilder {
                 await this.logger.time(LogLevel.log, [`Creating package at ${this.options.outFile}`], async () => {
                     await rokuDeploy.zipPackage({
                         ...this.options,
+                        logLevel: this.options.logLevel as LogLevel,
                         outDir: util.getOutDir(this.options),
                         outFile: path.basename(this.options.outFile)
                     });
@@ -373,6 +391,7 @@ export class ProgramBuilder {
         let options = util.cwdWork(this.options.cwd, () => {
             return rokuDeploy.getOptions({
                 ...this.options,
+                logLevel: this.options.logLevel as LogLevel,
                 outDir: util.getOutDir(this.options),
                 outFile: path.basename(this.options.outFile)
             });
@@ -416,6 +435,7 @@ export class ProgramBuilder {
             await this.logger.time(LogLevel.log, ['Deploying package to', this.options.host], async () => {
                 await rokuDeploy.publish({
                     ...this.options,
+                    logLevel: this.options.logLevel as LogLevel,
                     outDir: util.getOutDir(this.options),
                     outFile: path.basename(this.options.outFile)
                 });
@@ -427,69 +447,71 @@ export class ProgramBuilder {
      * Parse and load the AST for every file in the project
      */
     private async loadAllFilesAST() {
-        let errorCount = 0;
-        let files = await this.logger.time(LogLevel.debug, ['ProgramBuilder.loadAllFilesAST()'], async () => {
-            return util.getFilePaths(this.options);
-        });
-        this.logger.debug('ProgramBuilder.loadAllFilesAST() files:', files);
+        await this.logger.time(LogLevel.log, ['Parsing files'], async () => {
+            let errorCount = 0;
+            let files = await this.logger.time(LogLevel.debug, ['getFilePaths'], async () => {
+                return util.getFilePaths(this.options);
+            });
+            this.logger.trace('ProgramBuilder.loadAllFilesAST() files:', files);
 
-        const typedefFiles = [] as FileObj[];
-        const nonTypedefFiles = [] as FileObj[];
-        for (const file of files) {
-            const srcLower = file.src.toLowerCase();
-            if (srcLower.endsWith('.d.bs')) {
-                typedefFiles.push(file);
-            } else {
-                nonTypedefFiles.push(file);
-            }
-        }
-
-        //preload every type definition file first, which eliminates duplicate file loading
-        await Promise.all(
-            typedefFiles.map(async (fileObj) => {
-                try {
-                    this.program.addOrReplaceFile(
-                        fileObj,
-                        await this.getFileContents(fileObj.src)
-                    );
-                } catch (e) {
-                    //log the error, but don't fail this process because the file might be fixable later
-                    this.logger.log(e);
+            const typedefFiles = [] as FileObj[];
+            const nonTypedefFiles = [] as FileObj[];
+            for (const file of files) {
+                const srcLower = file.src.toLowerCase();
+                if (srcLower.endsWith('.d.bs')) {
+                    typedefFiles.push(file);
+                } else {
+                    nonTypedefFiles.push(file);
                 }
-            })
-        );
+            }
 
-        const acceptableExtensions = ['.bs', '.brs', '.xml'];
-        //parse every file other than the type definitions
-        await Promise.all(
-            nonTypedefFiles.map(async (fileObj) => {
-                try {
-                    let fileExtension = path.extname(fileObj.src).toLowerCase();
-
-                    //only process certain file types
-                    if (acceptableExtensions.includes(fileExtension)) {
-                        this.program.addOrReplaceFile(
+            //preload every type definition file first, which eliminates duplicate file loading
+            await Promise.all(
+                typedefFiles.map(async (fileObj) => {
+                    try {
+                        this.program.setFile(
                             fileObj,
                             await this.getFileContents(fileObj.src)
                         );
+                    } catch (e) {
+                        //log the error, but don't fail this process because the file might be fixable later
+                        this.logger.log(e);
                     }
-                } catch (e) {
-                    //log the error, but don't fail this process because the file might be fixable later
-                    this.logger.log(e);
-                }
-            })
-        );
-        return errorCount;
+                })
+            );
+
+            const acceptableExtensions = ['.bs', '.brs', '.xml'];
+            //parse every file other than the type definitions
+            await Promise.all(
+                nonTypedefFiles.map(async (fileObj) => {
+                    try {
+                        let fileExtension = path.extname(fileObj.src).toLowerCase();
+
+                        //only process certain file types
+                        if (acceptableExtensions.includes(fileExtension)) {
+                            this.program.setFile(
+                                fileObj,
+                                await this.getFileContents(fileObj.src)
+                            );
+                        }
+                    } catch (e) {
+                        //log the error, but don't fail this process because the file might be fixable later
+                        this.logger.log(e);
+                    }
+                })
+            );
+            return errorCount;
+        });
     }
 
     /**
      * Remove all files from the program that are in the specified folder path
-     * @param folderPathAbsolute
+     * @param srcPath the path to the
      */
-    public removeFilesInFolder(folderPathAbsolute: string) {
+    public removeFilesInFolder(srcPath: string) {
         for (let filePath in this.program.files) {
             //if the file path starts with the parent path and the file path does not exactly match the folder path
-            if (filePath.startsWith(folderPathAbsolute) && filePath !== folderPathAbsolute) {
+            if (filePath.startsWith(srcPath) && filePath !== srcPath) {
                 this.program.removeFile(filePath);
             }
         }

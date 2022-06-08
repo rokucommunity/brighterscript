@@ -23,7 +23,7 @@ describe('SGParser', () => {
     });
 
     it('Parses well formed SG component', () => {
-        const file = program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+        const file = program.setFile<XmlFile>('components/file.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ParentScene" extends="GrandparentScene">
                 <interface>
@@ -54,7 +54,9 @@ describe('SGParser', () => {
         expectZeroDiagnostics(file);
 
         const output = file.transpile();
-        expect(output.code).to.equal(trim`
+        expect(
+            output.code.trimEnd()
+        ).to.equal(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ParentScene" extends="GrandparentScene">
                 <interface>

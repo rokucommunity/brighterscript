@@ -6,8 +6,7 @@ import { Program } from '../../Program';
 import { standardizePath as s } from '../../util';
 import type { XmlFile } from '../XmlFile';
 import type { BrsFile } from '../BrsFile';
-import { getTestTranspile } from '../BrsFile.spec';
-import { trim, trimMap } from '../../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../../testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -34,14 +33,14 @@ describe('import statements', () => {
     });
 
     it('still transpiles import statements if found at bottom of file', async () => {
-        program.addOrReplaceFile('components/ChildScene.xml', trim`
+        program.setFile('components/ChildScene.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="Scene">
                 <script type="text/brighterscript" uri="pkg:/source/lib.bs" />
             </component>
         `);
 
-        program.addOrReplaceFile('source/lib.bs', `
+        program.setFile('source/lib.bs', `
             function toLower(strVal as string)
                 return StringToLower(strVal)
             end function
@@ -49,14 +48,14 @@ describe('import statements', () => {
             import "stringOps.bs"
         `);
 
-        program.addOrReplaceFile('source/stringOps.bs', `
+        program.setFile('source/stringOps.bs', `
             function StringToLower(strVal as string)
                 return true
             end function
         `);
-        let files = Object.keys(program.files).map(x => program.getFileByPathAbsolute(x)).filter(x => !!x).map(x => {
+        let files = Object.keys(program.files).map(x => program.getFile(x)).filter(x => !!x).map(x => {
             return {
-                src: x.pathAbsolute,
+                src: x.srcPath,
                 dest: x.pkgPath
             };
         });
@@ -75,31 +74,31 @@ describe('import statements', () => {
 
     it('finds function loaded in by import multiple levels deep', () => {
         //create child component
-        let component = program.addOrReplaceFile('components/ChildScene.xml', trim`
+        let component = program.setFile('components/ChildScene.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brighterscript" uri="pkg:/source/lib.bs" />
             </component>
         `);
-        program.addOrReplaceFile('source/lib.bs', `
+        program.setFile('source/lib.bs', `
             import "stringOps.bs"
             function toLower(strVal as string)
                 return StringToLower(strVal)
             end function
         `);
-        program.addOrReplaceFile('source/stringOps.bs', `
+        program.setFile('source/stringOps.bs', `
             import "intOps.bs"
             function StringToLower(strVal as string)
                 return isInt(strVal)
             end function
         `);
-        program.addOrReplaceFile('source/intOps.bs', `
+        program.setFile('source/intOps.bs', `
             function isInt(strVal as dynamic)
                 return true
             end function
         `);
         program.validate();
-        expect(program.getDiagnostics().map(x => x.message)[0]).to.not.exist;
+        expectZeroDiagnostics(program);
         expect(
             (component as XmlFile).getAvailableScriptImports().sort()
         ).to.eql([
@@ -111,25 +110,25 @@ describe('import statements', () => {
 
     it('supports importing brs files', () => {
         //create child component
-        let component = program.addOrReplaceFile('components/ChildScene.xml', trim`
+        let component = program.setFile('components/ChildScene.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brighterscript" uri="pkg:/source/lib.bs" />
             </component>
         `);
-        program.addOrReplaceFile('source/lib.bs', `
+        program.setFile('source/lib.bs', `
             import "stringOps.brs"
             function toLower(strVal as string)
                 return StringToLower(strVal)
             end function
         `);
-        program.addOrReplaceFile('source/stringOps.brs', `
+        program.setFile('source/stringOps.brs', `
             function StringToLower(strVal as string)
                 return lcase(strVal)
             end function
         `);
         program.validate();
-        expect(program.getDiagnostics().map(x => x.message)[0]).to.not.exist;
+        expectZeroDiagnostics(program);
         expect(
             (component as XmlFile).getAvailableScriptImports()
         ).to.eql([
@@ -140,30 +139,30 @@ describe('import statements', () => {
 
     it('detects when dependency contents have changed', () => {
         //create child component
-        program.addOrReplaceFile('components/ChildScene.xml', trim`
+        program.setFile('components/ChildScene.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brighterscript" uri="lib.bs" />
             </component>
         `);
-        program.addOrReplaceFile('components/lib.bs', `
+        program.setFile('components/lib.bs', `
             import "animalActions.bs"
             function init1(strVal as string)
                 Waddle()
             end function
         `);
         //add the empty dependency
-        program.addOrReplaceFile('components/animalActions.bs', ``);
+        program.setFile('components/animalActions.bs', ``);
 
         //there should be an error because that function doesn't exist
         program.validate();
 
-        expect(program.getDiagnostics().map(x => x.message)).to.eql([
+        expectDiagnostics(program, [
             DiagnosticMessages.callToUnknownFunction('Waddle', s`components/ChildScene.xml`).message
         ]);
 
-        //change the dependency to now contain the file. the scope should re-validate
-        program.addOrReplaceFile('components/animalActions.bs', `
+        //add the missing function
+        program.setFile('components/animalActions.bs', `
             sub Waddle()
                 print "Waddling"
             end sub
@@ -173,25 +172,24 @@ describe('import statements', () => {
         program.validate();
 
         //the error should be gone
-        expect(program.getDiagnostics()).to.be.empty;
-
+        expectZeroDiagnostics(program);
     });
 
     it('adds brs imports to xml file during transpile', () => {
         //create child component
-        let component = program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, trim`
+        let component = program.setFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brightscript" uri="pkg:/source/lib.bs" />
             </component>
         `);
-        program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: 'source/lib.bs' }, `
+        program.setFile({ src: s`${rootDir}/source/lib.bs`, dest: 'source/lib.bs' }, `
             import "stringOps.brs"
             function toLower(strVal as string)
                 return StringToLower(strVal)
             end function
         `);
-        program.addOrReplaceFile({ src: s`${rootDir}/source/stringOps.brs`, dest: 'source/stringOps.brs' }, `
+        program.setFile({ src: s`${rootDir}/source/stringOps.brs`, dest: 'source/stringOps.brs' }, `
             function StringToLower(strVal as string)
                 return isInt(strVal)
             end function
@@ -209,31 +207,33 @@ describe('import statements', () => {
 
     it('shows diagnostic for missing file in import', () => {
         //create child component
-        program.addOrReplaceFile('components/ChildScene.xml', trim`
+        program.setFile('components/ChildScene.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brighterscript" uri="ChildScene.bs" />
             </component>
         `);
-        program.addOrReplaceFile('components/ChildScene.bs', `
+        program.setFile('components/ChildScene.bs', `
             import "stringOps.bs"
             sub init()
             end sub
         `);
         program.validate();
-        expect(program.getDiagnostics().map(x => x.message)[0]).to.eql(DiagnosticMessages.referencedFileDoesNotExist().message);
+        expectDiagnostics(program, [
+            DiagnosticMessages.referencedFileDoesNotExist()
+        ]);
     });
 
     it('complicated import graph adds correct script tags', () => {
-        program.addOrReplaceFile('source/maestro/ioc/IOCMixin.bs', `
+        program.setFile('source/maestro/ioc/IOCMixin.bs', `
             sub DoIocThings()
             end sub
         `);
-        program.addOrReplaceFile('source/BaseClass.bs', `
+        program.setFile('source/BaseClass.bs', `
             import "pkg:/source/maestro/ioc/IOCMixin.bs"
         `);
 
-        program.addOrReplaceFile('components/AuthManager.bs', `
+        program.setFile('components/AuthManager.bs', `
             import "pkg:/source/BaseClass.bs"
         `);
         testTranspile(trim`
@@ -254,7 +254,7 @@ describe('import statements', () => {
 
     it('handles malformed imports', () => {
         //shouldn't crash
-        const brsFile = program.addOrReplaceFile<BrsFile>('source/SomeFile.bs', `
+        const brsFile = program.setFile<BrsFile>('source/SomeFile.bs', `
             import ""
             import ":"
             import ":/"

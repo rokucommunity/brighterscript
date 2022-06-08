@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { TokenKind } from '../../../lexer';
+import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import type { FunctionStatement } from '../../Statement';
 import { Range } from 'vscode-languageserver';
@@ -51,7 +51,7 @@ describe('parser return statements', () => {
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.Return, 'return'),
             identifier('RebootSystem'),
-            { kind: TokenKind.LeftParen, text: '(', line: 2 },
+            { kind: TokenKind.LeftParen, text: '(', range: null },
             token(TokenKind.RightParen, ')'),
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.EndFunction, 'end function'),

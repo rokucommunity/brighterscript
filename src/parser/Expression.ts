@@ -1,20 +1,20 @@
 /* eslint-disable no-bitwise */
-import type { Token, Identifier } from '../lexer';
-import { TokenKind } from '../lexer';
+import type { Token, Identifier } from '../lexer/Token';
+import { TokenKind } from '../lexer/TokenKind';
 import type { Block, CommentStatement, FunctionStatement } from './Statement';
-import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import util from '../util';
-import type { TranspileState } from './TranspileState';
+import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
-import { walk, InternalWalkMode } from '../astUtils/visitors';
+import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
 import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
+import { FunctionType } from '../types/FunctionType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -25,7 +25,7 @@ export abstract class Expression {
      */
     public abstract range: Range;
 
-    public abstract transpile(state: TranspileState): TranspileResult;
+    public abstract transpile(state: BrsTranspileState): TranspileResult;
     /**
      * When being considered by the walk visitor, this describes what type of element the current class is.
      */
@@ -46,13 +46,13 @@ export class BinaryExpression extends Expression {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         return [
-            new SourceNode(this.left.range.start.line + 1, this.left.range.start.character, state.pathAbsolute, this.left.transpile(state)),
+            state.sourceNode(this.left, this.left.transpile(state)),
             ' ',
-            new SourceNode(this.operator.range.start.line + 1, this.operator.range.start.character, state.pathAbsolute, this.operator.text),
+            state.transpileToken(this.operator),
             ' ',
-            new SourceNode(this.right.range.start.line + 1, this.right.range.start.character, state.pathAbsolute, this.right.transpile(state))
+            state.sourceNode(this.right, this.right.transpile(state))
         ];
     }
 
@@ -69,6 +69,9 @@ export class CallExpression extends Expression {
 
     constructor(
         readonly callee: Expression,
+        /**
+         * Can either be `(`, or `?(` for optional chaining
+         */
         readonly openingParen: Token,
         readonly closingParen: Token,
         readonly args: Expression[],
@@ -83,7 +86,7 @@ export class CallExpression extends Expression {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState, nameOverride?: string) {
+    transpile(state: BrsTranspileState, nameOverride?: string) {
         let result = [];
 
         //transpile the name
@@ -94,7 +97,7 @@ export class CallExpression extends Expression {
         }
 
         result.push(
-            new SourceNode(this.openingParen.range.start.line + 1, this.openingParen.range.start.character, state.pathAbsolute, '(')
+            state.transpileToken(this.openingParen)
         );
         for (let i = 0; i < this.args.length; i++) {
             //add comma between args
@@ -105,7 +108,7 @@ export class CallExpression extends Expression {
             result.push(...arg.transpile(state));
         }
         result.push(
-            new SourceNode(this.closingParen.range.start.line + 1, this.closingParen.range.start.character, state.pathAbsolute, ')')
+            state.transpileToken(this.closingParen)
         );
         return result;
     }
@@ -113,9 +116,7 @@ export class CallExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'callee', visitor, options);
-            for (let i = 0; i < this.args.length; i++) {
-                walk(this.args, i, visitor, options, this);
-            }
+            walkArray(this.args, visitor, options, this);
         }
     }
 }
@@ -178,22 +179,22 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         );
     }
 
-    transpile(state: TranspileState, name?: Identifier, includeBody = true) {
+    transpile(state: BrsTranspileState, name?: Identifier, includeBody = true) {
         let results = [];
         //'function'|'sub'
         results.push(
-            new SourceNode(this.functionType.range.start.line + 1, this.functionType.range.start.character, state.pathAbsolute, this.functionType.text.toLowerCase())
+            state.transpileToken(this.functionType)
         );
         //functionName?
         if (name) {
             results.push(
                 ' ',
-                new SourceNode(name.range.start.line + 1, name.range.start.character, state.pathAbsolute, name.text)
+                state.transpileToken(name)
             );
         }
         //leftParen
         results.push(
-            new SourceNode(this.leftParen.range.start.line + 1, this.leftParen.range.start.character, state.pathAbsolute, '(')
+            state.transpileToken(this.leftParen)
         );
         //parameters
         for (let i = 0; i < this.parameters.length; i++) {
@@ -207,22 +208,17 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         //right paren
         results.push(
-            new SourceNode(this.rightParen.range.start.line + 1, this.rightParen.range.start.character, state.pathAbsolute, ')')
+            state.transpileToken(this.rightParen)
         );
         //as [Type]
         if (this.asToken) {
             results.push(
                 ' ',
                 //as
-                new SourceNode(this.asToken.range.start.line + 1, this.asToken.range.start.character, state.pathAbsolute, 'as'),
+                state.transpileToken(this.asToken),
                 ' ',
                 //return type
-                new SourceNode(
-                    this.returnTypeToken.range.start.line + 1,
-                    this.returnTypeToken.range.start.character,
-                    state.pathAbsolute,
-                    this.returnType.toTypeString()
-                )
+                state.sourceNode(this.returnTypeToken, this.returnType.toTypeString())
             );
         }
         if (includeBody) {
@@ -235,26 +231,33 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         //'end sub'|'end function'
         results.push(
             state.indent(),
-            new SourceNode(this.end.range.start.line + 1, this.end.range.start.character, state.pathAbsolute, this.end.text)
+            state.transpileToken(this.end)
         );
         return results;
     }
 
-    getTypedef(state: TranspileState, name?: Identifier) {
+    getTypedef(state: BrsTranspileState, name?: Identifier) {
         return this.transpile(state, name, false);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            for (let i = 0; i < this.parameters.length; i++) {
-                walk(this.parameters, i, visitor, options, this);
-            }
+            walkArray(this.parameters, visitor, options, this);
 
             //This is the core of full-program walking...it allows us to step into sub functions
             if (options.walkMode & InternalWalkMode.recurseChildFunctions) {
                 walk(this, 'body', visitor, options);
             }
         }
+    }
+
+    getFunctionType(): FunctionType {
+        let functionType = new FunctionType(this.returnType);
+        functionType.isSub = this.functionType.text === 'sub';
+        for (let param of this.parameters) {
+            functionType.addParameter(param.name.text, param.type, !!param.typeToken);
+        }
+        return functionType;
     }
 }
 
@@ -283,10 +286,10 @@ export class FunctionParameterExpression extends Expression {
         };
     }
 
-    public transpile(state: TranspileState) {
+    public transpile(state: BrsTranspileState) {
         let result = [
             //name
-            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
+            state.transpileToken(this.name)
         ] as any[];
         //default value
         if (this.defaultValue) {
@@ -296,14 +299,9 @@ export class FunctionParameterExpression extends Expression {
         //type declaration
         if (this.asToken) {
             result.push(' ');
-            result.push(new SourceNode(this.asToken.range.start.line + 1, this.asToken.range.start.character, state.pathAbsolute, 'as'));
+            result.push(state.transpileToken(this.asToken));
             result.push(' ');
-            result.push(new SourceNode(
-                this.typeToken.range.start.line + 1,
-                this.typeToken.range.start.character,
-                state.pathAbsolute,
-                this.type.toTypeString()
-            ));
+            result.push(state.sourceNode(this.typeToken, this.type.toTypeString()));
         }
 
         return result;
@@ -327,14 +325,9 @@ export class NamespacedVariableNameExpression extends Expression {
     }
     range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         return [
-            new SourceNode(
-                this.range.start.line + 1,
-                this.range.start.character,
-                state.pathAbsolute,
-                this.getName(ParseMode.BrightScript)
-            )
+            state.sourceNode(this, this.getName(ParseMode.BrightScript))
         ];
     }
 
@@ -374,6 +367,9 @@ export class DottedGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
+        /**
+         * Can either be `.`, or `?.` for optional chaining
+         */
         readonly dot: Token
     ) {
         super();
@@ -382,15 +378,15 @@ export class DottedGetExpression extends Expression {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         //if the callee starts with a namespace name, transpile the name
         if (state.file.calleeStartsWithNamespace(this)) {
             return new NamespacedVariableNameExpression(this as DottedGetExpression | VariableExpression).transpile(state);
         } else {
             return [
                 ...this.obj.transpile(state),
-                '.',
-                new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
+                state.transpileToken(this.dot),
+                state.transpileToken(this.name)
             ];
         }
     }
@@ -406,6 +402,9 @@ export class XmlAttributeGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
+        /**
+         * Can either be `@`, or `?@` for optional chaining
+         */
         readonly at: Token
     ) {
         super();
@@ -414,11 +413,11 @@ export class XmlAttributeGetExpression extends Expression {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         return [
             ...this.obj.transpile(state),
-            '@',
-            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
+            state.transpileToken(this.at),
+            state.transpileToken(this.name)
         ];
     }
 
@@ -431,23 +430,28 @@ export class XmlAttributeGetExpression extends Expression {
 
 export class IndexedGetExpression extends Expression {
     constructor(
-        readonly obj: Expression,
-        readonly index: Expression,
-        readonly openingSquare: Token,
-        readonly closingSquare: Token
+        public obj: Expression,
+        public index: Expression,
+        /**
+         * Can either be `[` or `?[`. If `?.[` is used, this will be `[` and `optionalChainingToken` will be `?.`
+         */
+        public openingSquare: Token,
+        public closingSquare: Token,
+        public questionDotToken?: Token //  ? or ?.
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.obj.range.start, this.closingSquare.range.end);
+        this.range = util.createBoundingRange(this.obj, this.openingSquare, this.questionDotToken, this.openingSquare, this.index, this.closingSquare);
     }
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         return [
             ...this.obj.transpile(state),
-            new SourceNode(this.openingSquare.range.start.line + 1, this.openingSquare.range.start.character, state.pathAbsolute, '['),
+            this.questionDotToken ? state.transpileToken(this.questionDotToken) : '',
+            state.transpileToken(this.openingSquare),
             ...this.index.transpile(state),
-            new SourceNode(this.closingSquare.range.start.line + 1, this.closingSquare.range.start.character, state.pathAbsolute, ']')
+            state.transpileToken(this.closingSquare)
         ];
     }
 
@@ -473,11 +477,11 @@ export class GroupingExpression extends Expression {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         return [
-            new SourceNode(this.tokens.left.range.start.line + 1, this.tokens.left.range.start.character, state.pathAbsolute, '('),
+            state.transpileToken(this.tokens.left),
             ...this.expression.transpile(state),
-            new SourceNode(this.tokens.right.range.start.line + 1, this.tokens.right.range.start.character, state.pathAbsolute, ')')
+            state.transpileToken(this.tokens.right)
         ];
     }
 
@@ -505,7 +509,7 @@ export class LiteralExpression extends Expression {
      */
     public type: BscType;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         let text: string;
         if (this.token.kind === TokenKind.TemplateStringQuasi) {
             //wrap quasis with quotes (and escape inner quotemarks)
@@ -522,12 +526,7 @@ export class LiteralExpression extends Expression {
         }
 
         return [
-            new SourceNode(
-                this.range.start.line + 1,
-                this.range.start.character,
-                state.pathAbsolute,
-                text
-            )
+            state.sourceNode(this, text)
         ];
     }
 
@@ -549,14 +548,9 @@ export class EscapedCharCodeLiteralExpression extends Expression {
     }
     readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         return [
-            new SourceNode(
-                this.range.start.line + 1,
-                this.range.start.character,
-                state.pathAbsolute,
-                `chr(${this.token.charCode})`
-            )
+            state.sourceNode(this, `chr(${this.token.charCode})`)
         ];
     }
 
@@ -569,7 +563,8 @@ export class ArrayLiteralExpression extends Expression {
     constructor(
         readonly elements: Array<Expression | CommentStatement>,
         readonly open: Token,
-        readonly close: Token
+        readonly close: Token,
+        readonly hasSpread = false
     ) {
         super();
         this.range = util.createRangeFromPositions(this.open.range.start, this.close.range.end);
@@ -577,10 +572,10 @@ export class ArrayLiteralExpression extends Expression {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
-            new SourceNode(this.open.range.start.line + 1, this.open.range.start.character, state.pathAbsolute, '[')
+            state.transpileToken(this.open)
         );
         let hasChildren = this.elements.length > 0;
         state.blockDepth++;
@@ -609,15 +604,6 @@ export class ArrayLiteralExpression extends Expression {
                     state.indent(),
                     ...element.transpile(state)
                 );
-                //add a comma if we know there will be another non-comment statement after this
-                for (let j = i + 1; j < this.elements.length; j++) {
-                    let el = this.elements[j];
-                    //add a comma if there will be another element after this
-                    if (isCommentStatement(el) === false) {
-                        result.push(',');
-                        break;
-                    }
-                }
             }
         }
         state.blockDepth--;
@@ -628,16 +614,14 @@ export class ArrayLiteralExpression extends Expression {
         }
 
         result.push(
-            new SourceNode(this.close.range.start.line + 1, this.close.range.start.character, state.pathAbsolute, ']')
+            state.transpileToken(this.close)
         );
         return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            for (let i = 0; i < this.elements.length; i++) {
-                walk(this.elements, i, visitor, options, this);
-            }
+            walkArray(this.elements, visitor, options, this);
         }
     }
 }
@@ -654,8 +638,9 @@ export class AAMemberExpression extends Expression {
     }
 
     public range: Range;
+    public commaToken?: Token;
 
-    transpile(state: TranspileState): Array<SourceNode | string> {
+    transpile(state: BrsTranspileState) {
         //TODO move the logic from AALiteralExpression loop into this function
         return [];
     }
@@ -678,11 +663,11 @@ export class AALiteralExpression extends Expression {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState): Array<SourceNode | string> {
+    transpile(state: BrsTranspileState) {
         let result = [];
         //open curly
         result.push(
-            new SourceNode(this.open.range.start.line + 1, this.open.range.start.character, state.pathAbsolute, this.open.text)
+            state.transpileToken(this.open)
         );
         let hasChildren = this.elements.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
@@ -712,29 +697,16 @@ export class AALiteralExpression extends Expression {
             } else {
                 //key
                 result.push(
-                    new SourceNode(element.keyToken.range.start.line + 1, element.keyToken.range.start.character, state.pathAbsolute, element.keyToken.text)
+                    state.transpileToken(element.keyToken)
                 );
                 //colon
                 result.push(
-                    new SourceNode(element.colonToken.range.start.line + 1, element.colonToken.range.start.character, state.pathAbsolute, ':'),
+                    state.transpileToken(element.colonToken),
                     ' '
                 );
 
-                //determine if comments are the only members left in the array
-                let onlyCommentsRemaining = true;
-                for (let j = i + 1; j < this.elements.length; j++) {
-                    if (isCommentStatement(this.elements[j]) === false) {
-                        onlyCommentsRemaining = false;
-                        break;
-                    }
-                }
-
                 //value
                 result.push(...element.value.transpile(state));
-                //add trailing comma if not final element (excluding comments)
-                if (i !== this.elements.length - 1 && onlyCommentsRemaining === false) {
-                    result.push(',');
-                }
             }
 
 
@@ -754,20 +726,14 @@ export class AALiteralExpression extends Expression {
         }
         //close curly
         result.push(
-            new SourceNode(this.close.range.start.line + 1, this.close.range.start.character, state.pathAbsolute, this.close.text)
+            state.transpileToken(this.close)
         );
         return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            for (let i = 0; i < this.elements.length; i++) {
-                if (isCommentStatement(this.elements[i])) {
-                    walk(this.elements, i, visitor, options, this);
-                } else {
-                    walk(this.elements, i, visitor, options, this);
-                }
-            }
+            walkArray(this.elements, visitor, options, this);
         }
     }
 }
@@ -783,9 +749,9 @@ export class UnaryExpression extends Expression {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         return [
-            new SourceNode(this.operator.range.start.line + 1, this.operator.range.start.character, state.pathAbsolute, this.operator.text),
+            state.transpileToken(this.operator),
             ' ',
             ...this.right.transpile(state)
         ];
@@ -808,29 +774,27 @@ export class VariableExpression extends Expression {
     }
 
     public readonly range: Range;
-    public isCalled: boolean;
 
     public getName(parseMode: ParseMode) {
         return parseMode === ParseMode.BrightScript ? this.name.text : this.name.text;
     }
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         let result = [];
         //if the callee is the name of a known namespace function
         if (state.file.calleeIsKnownNamespaceFunction(this, this.namespaceName?.getName(ParseMode.BrighterScript))) {
             result.push(
-                new SourceNode(
-                    this.range.start.line + 1,
-                    this.range.start.character,
-                    state.pathAbsolute,
-                    `${this.namespaceName.getName(ParseMode.BrightScript)}_${this.getName(ParseMode.BrightScript)}`
-                )
+                state.sourceNode(this, [
+                    this.namespaceName.getName(ParseMode.BrightScript),
+                    '_',
+                    this.getName(ParseMode.BrightScript)
+                ])
             );
 
             //transpile  normally
         } else {
             result.push(
-                new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
+                state.transpileToken(this.name)
             );
         }
         return result;
@@ -851,7 +815,7 @@ export class SourceLiteralExpression extends Expression {
 
     public readonly range: Range;
 
-    private getFunctionName(state: TranspileState, parseMode: ParseMode) {
+    private getFunctionName(state: BrsTranspileState, parseMode: ParseMode) {
         let func = state.file.getFunctionScopeAtPosition(this.token.range.start).func;
         let nameParts = [];
         while (func.parentFunction) {
@@ -866,11 +830,12 @@ export class SourceLiteralExpression extends Expression {
         return nameParts.join('$');
     }
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         let text: string;
         switch (this.token.kind) {
             case TokenKind.SourceFilePathLiteral:
-                text = `"${fileUrl(state.pathAbsolute)}"`;
+                const pathUrl = fileUrl(state.srcPath);
+                text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}"`;
                 break;
             case TokenKind.SourceLineNumLiteral:
                 text = `${this.token.range.start.line + 1}`;
@@ -882,7 +847,8 @@ export class SourceLiteralExpression extends Expression {
                 text = `"${this.getFunctionName(state, ParseMode.BrighterScript)}"`;
                 break;
             case TokenKind.SourceLocationLiteral:
-                text = `"${fileUrl(state.pathAbsolute)}:${this.token.range.start.line + 1}"`;
+                const locationUrl = fileUrl(state.srcPath);
+                text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.token.range.start.line + 1}"`;
                 break;
             case TokenKind.PkgPathLiteral:
                 let pkgPath1 = `pkg:/${state.file.pkgPath}`
@@ -906,12 +872,7 @@ export class SourceLiteralExpression extends Expression {
 
         }
         return [
-            new SourceNode(
-                this.range.start.line + 1,
-                this.range.start.character,
-                state.pathAbsolute,
-                text
-            )
+            state.sourceNode(this, text)
         ];
     }
 
@@ -949,7 +910,7 @@ export class NewExpression extends Expression {
 
     public readonly range: Range;
 
-    public transpile(state: TranspileState) {
+    public transpile(state: BrsTranspileState) {
         const cls = state.file.getClassFileLink(
             this.className.getName(ParseMode.BrighterScript),
             this.namespaceName?.getName(ParseMode.BrighterScript)
@@ -984,19 +945,14 @@ export class CallfuncExpression extends Expression {
 
     public readonly range: Range;
 
-    public transpile(state: TranspileState) {
+    public transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
             ...this.callee.transpile(state),
-            new SourceNode(this.operator.range.start.line + 1, this.operator.range.start.character, state.pathAbsolute, '.callfunc'),
-            new SourceNode(this.openingParen.range.start.line + 1, this.openingParen.range.start.character, state.pathAbsolute, '('),
+            state.sourceNode(this.operator, '.callfunc'),
+            state.transpileToken(this.openingParen),
             //the name of the function
-            new SourceNode(
-                this.methodName.range.start.line + 1,
-                this.methodName.range.start.character,
-                state.pathAbsolute,
-                `"${this.methodName.text}"`
-            ),
+            state.sourceNode(this.methodName, ['"', this.methodName.text, '"']),
             ', '
         );
         //transpile args
@@ -1014,7 +970,7 @@ export class CallfuncExpression extends Expression {
             }
         }
         result.push(
-            new SourceNode(this.closingParen.range.start.line + 1, this.closingParen.range.start.character, state.pathAbsolute, ')')
+            state.transpileToken(this.closingParen)
         );
         return result;
     }
@@ -1022,9 +978,7 @@ export class CallfuncExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'callee', visitor, options);
-            for (let i = 0; i < this.args.length; i++) {
-                walk(this.args, i, visitor, options, this);
-            }
+            walkArray(this.args, visitor, options, this);
         }
     }
 }
@@ -1045,7 +999,7 @@ export class TemplateStringQuasiExpression extends Expression {
     }
     readonly range: Range;
 
-    transpile(state: TranspileState, skipEmptyStrings = true) {
+    transpile(state: BrsTranspileState, skipEmptyStrings = true) {
         let result = [];
         let plus = '';
         for (let expression of this.expressions) {
@@ -1065,9 +1019,7 @@ export class TemplateStringQuasiExpression extends Expression {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            for (let i = 0; i < this.expressions.length; i++) {
-                walk(this.expressions, i, visitor, options, this);
-            }
+            walkArray(this.expressions, visitor, options, this);
         }
     }
 }
@@ -1088,20 +1040,11 @@ export class TemplateStringExpression extends Expression {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         if (this.quasis.length === 1 && this.expressions.length === 0) {
             return this.quasis[0].transpile(state);
         }
         let result = [];
-        //wrap the expression in parens to readability
-        // result.push(
-        //     new SourceNode(
-        //         this.openingBacktick.range.start.line + 1,
-        //         this.openingBacktick.range.start.character,
-        //         state.pathAbsolute,
-        //         '('
-        //     )
-        // );
         let plus = '';
         //helper function to figure out when to include the plus
         function add(...items) {
@@ -1111,7 +1054,10 @@ export class TemplateStringExpression extends Expression {
                     ...items
                 );
             }
-            plus = ' + ';
+            //set the plus after the first occurance of a nonzero length set of items
+            if (plus === '' && items.length > 0) {
+                plus = ' + ';
+            }
         }
 
         for (let i = 0; i < this.quasis.length; i++) {
@@ -1134,7 +1080,7 @@ export class TemplateStringExpression extends Expression {
                     //wrap all other expressions with a bslib_toString call to prevent runtime type mismatch errors
                 } else {
                     add(
-                        'bslib_toString(',
+                        state.bslibPrefix + '_toString(',
                         ...expression.transpile(state),
                         ')'
                     );
@@ -1142,15 +1088,6 @@ export class TemplateStringExpression extends Expression {
             }
         }
 
-        //wrap the expression in parens to readability
-        // result.push(
-        //     new SourceNode(
-        //         this.openingBacktick.range.end.line + 1,
-        //         this.openingBacktick.range.end.character,
-        //         state.pathAbsolute,
-        //         ')'
-        //     )
-        // );
         return result;
     }
 
@@ -1186,15 +1123,10 @@ export class TaggedTemplateStringExpression extends Expression {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
-            new SourceNode(
-                this.tagName.range.start.line + 1,
-                this.tagName.range.start.character,
-                state.pathAbsolute,
-                this.tagName.text
-            ),
+            state.transpileToken(this.tagName),
             '(['
         );
 
@@ -1228,12 +1160,7 @@ export class TaggedTemplateStringExpression extends Expression {
             );
         }
         result.push(
-            new SourceNode(
-                this.closingBacktick.range.end.line + 1,
-                this.closingBacktick.range.end.character,
-                state.pathAbsolute,
-                '])'
-            )
+            state.sourceNode(this.closingBacktick, '])')
         );
         return result;
     }
@@ -1281,12 +1208,19 @@ export class AnnotationExpression extends Expression {
         return this.call.args.map(e => expressionToValue(e, strict));
     }
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         return [];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+    getTypedef(state: BrsTranspileState) {
+        return [
+            '@',
+            this.name,
+            ...(this.call?.transpile(state) ?? [])
+        ];
     }
 }
 
@@ -1307,7 +1241,7 @@ export class TernaryExpression extends Expression {
 
     public range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         let result = [];
         let consequentInfo = util.getExpressionInfo(this.consequent);
         let alternateInfo = util.getExpressionInfo(this.alternate);
@@ -1327,25 +1261,25 @@ export class TernaryExpression extends Expression {
                     //TODO handle when there are more than 31 parameters
                     `(function(__bsCondition, ${allUniqueVarNames.join(', ')})`
                 ),
-                state.newline(),
+                state.newline,
                 //double indent so our `end function` line is still indented one at the end
                 state.indent(2),
                 state.sourceNode(this.test, `if __bsCondition then`),
-                state.newline(),
+                state.newline,
                 state.indent(1),
                 state.sourceNode(this.consequent ?? this.questionMarkToken, 'return '),
                 ...this.consequent?.transpile(state) ?? [state.sourceNode(this.questionMarkToken, 'invalid')],
-                state.newline(),
+                state.newline,
                 state.indent(-1),
                 state.sourceNode(this.consequent ?? this.questionMarkToken, 'else'),
-                state.newline(),
+                state.newline,
                 state.indent(1),
                 state.sourceNode(this.consequent ?? this.questionMarkToken, 'return '),
                 ...this.alternate?.transpile(state) ?? [state.sourceNode(this.consequent ?? this.questionMarkToken, 'invalid')],
-                state.newline(),
+                state.newline,
                 state.indent(-1),
                 state.sourceNode(this.questionMarkToken, 'end if'),
-                state.newline(),
+                state.newline,
                 state.indent(-1),
                 state.sourceNode(this.questionMarkToken, 'end function)('),
                 ...this.test.transpile(state),
@@ -1354,7 +1288,7 @@ export class TernaryExpression extends Expression {
             state.blockDepth--;
         } else {
             result.push(
-                state.sourceNode(this.test, `bslib_ternary(`),
+                state.sourceNode(this.test, state.bslibPrefix + `_ternary(`),
                 ...this.test.transpile(state),
                 state.sourceNode(this.test, `, `),
                 ...this.consequent?.transpile(state) ?? ['invalid'],
@@ -1389,7 +1323,7 @@ export class NullCoalescingExpression extends Expression {
     }
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: BrsTranspileState) {
         let result = [];
         let consequentInfo = util.getExpressionInfo(this.consequent);
         let alternateInfo = util.getExpressionInfo(this.alternate);
@@ -1408,29 +1342,29 @@ export class NullCoalescingExpression extends Expression {
                 //TODO handle when there are more than 31 parameters
                 allUniqueVarNames.join(', '),
                 ')',
-                state.newline(),
+                state.newline,
                 //double indent so our `end function` line is still indented one at the end
                 state.indent(2),
                 //evaluate the consequent exactly once, and then use it in the following condition
                 `__bsConsequent = `,
                 ...this.consequent.transpile(state),
-                state.newline(),
+                state.newline,
                 state.indent(),
                 `if __bsConsequent <> invalid then`,
-                state.newline(),
+                state.newline,
                 state.indent(1),
                 'return __bsConsequent',
-                state.newline(),
+                state.newline,
                 state.indent(-1),
                 'else',
-                state.newline(),
+                state.newline,
                 state.indent(1),
                 'return ',
                 ...this.alternate.transpile(state),
-                state.newline(),
+                state.newline,
                 state.indent(-1),
                 'end if',
-                state.newline(),
+                state.newline,
                 state.indent(-1),
                 'end function)(',
                 allUniqueVarNames.join(', '),
@@ -1439,7 +1373,7 @@ export class NullCoalescingExpression extends Expression {
             state.blockDepth--;
         } else {
             result.push(
-                `bslib_coalesce(`,
+                state.bslibPrefix + `_coalesce(`,
                 ...this.consequent.transpile(state),
                 ', ',
                 ...this.alternate.transpile(state),
@@ -1454,6 +1388,49 @@ export class NullCoalescingExpression extends Expression {
             walk(this, 'consequent', visitor, options);
             walk(this, 'alternate', visitor, options);
         }
+    }
+}
+
+export class RegexLiteralExpression extends Expression {
+    public constructor(
+        public tokens: {
+            regexLiteral: Token;
+        }
+    ) {
+        super();
+    }
+
+    public get range() {
+        return this.tokens.regexLiteral.range;
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        let text = this.tokens.regexLiteral?.text ?? '';
+        let flags = '';
+        //get any flags from the end
+        const flagMatch = /\/([a-z]+)$/i.exec(text);
+        if (flagMatch) {
+            text = text.substring(0, flagMatch.index + 1);
+            flags = flagMatch[1];
+        }
+        let pattern = text
+            //remove leading and trailing slashes
+            .substring(1, text.length - 1)
+            //escape quotemarks
+            .split('"').join('" + chr(34) + "');
+
+        return [
+            state.sourceNode(this.tokens.regexLiteral, [
+                'CreateObject("roRegex", ',
+                `"${pattern}", `,
+                `"${flags}"`,
+                ')'
+            ])
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
     }
 }
 

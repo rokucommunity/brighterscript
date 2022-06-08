@@ -26,11 +26,13 @@ module.exports = {
         '@typescript-eslint/explicit-member-accessibility': 'off',
         '@typescript-eslint/explicit-module-boundary-types': 'off',
         '@typescript-eslint/init-declarations': 'off',
+        '@typescript-eslint/parameter-properties': 'off',
         '@typescript-eslint/lines-between-class-members': 'off',
         '@typescript-eslint/member-ordering': 'off',
         '@typescript-eslint/method-signature-style': 'off',
         '@typescript-eslint/naming-convention': 'off',
         '@typescript-eslint/no-base-to-string': 'off',
+        '@typescript-eslint/no-confusing-void-expression': 'off',
         '@typescript-eslint/no-dynamic-delete': 'off',
         '@typescript-eslint/no-empty-function': 'off',
         '@typescript-eslint/no-explicit-any': 'off',
@@ -40,6 +42,15 @@ module.exports = {
         '@typescript-eslint/no-invalid-this': 'off',
         '@typescript-eslint/no-magic-numbers': 'off',
         '@typescript-eslint/no-parameter-properties': 'off',
+        //had to add this rule to prevent eslint from crashing
+        '@typescript-eslint/no-restricted-imports': ['off', {}],
+        //mitigating this sometimes results in undesirably verbose code. Should investigate enabling again in the future.
+        '@typescript-eslint/no-unsafe-argument': 'off',
+        'object-curly-spacing': 'off',
+        '@typescript-eslint/object-curly-spacing': [
+            'error',
+            'always'
+        ],
         '@typescript-eslint/no-shadow': 'off',
         '@typescript-eslint/no-this-alias': 'off',
         //possibly disable this once we have converted all throw statements to actual errors
@@ -70,7 +81,9 @@ module.exports = {
         '@typescript-eslint/require-array-sort-compare': 'off',
         '@typescript-eslint/restrict-plus-operands': 'off',
         '@typescript-eslint/restrict-template-expressions': 'off',
+        '@typescript-eslint/sort-type-union-intersection-members': 'off',
         '@typescript-eslint/space-before-function-paren': 'off',
+        '@typescript-eslint/space-infix-ops': 'off',
         '@typescript-eslint/strict-boolean-expressions': 'off',
         '@typescript-eslint/typedef': 'off',
         '@typescript-eslint/unbound-method': 'off',
@@ -140,10 +153,6 @@ module.exports = {
         'no-unneeded-ternary': 'off',
         'no-useless-escape': 'off',
         'no-warning-comments': 'off',
-        'object-curly-spacing': [
-            'error',
-            'always'
-        ],
         'object-property-newline': 'off',
         'object-shorthand': [
             'error',
@@ -165,6 +174,7 @@ module.exports = {
         'sort-imports': 'off',
         'sort-keys': 'off',
         'spaced-comment': 'off',
+        'space-infix-ops': 'off',
         'vars-on-top': 'off',
         'wrap-regex': 'off'
     },
@@ -190,6 +200,7 @@ module.exports = {
             '@typescript-eslint/no-unused-vars': 'off',
             '@typescript-eslint/no-unused-vars-experimental': 'off',
             '@typescript-eslint/dot-notation': 'off',
+            '@typescript-eslint/no-unsafe-argument': 'off',
             'github/array-foreach': 'off',
             'new-cap': 'off',
             'no-shadow': 'off',
@@ -200,6 +211,22 @@ module.exports = {
         rules: {
             '@typescript-eslint/no-require-imports': 'off',
             '@typescript-eslint/no-var-requires': 'off'
+        }
+    }, {
+        files: ['src/roku-types/data.json'],
+        rules: {
+            '@typescript-eslint/no-unused-expressions': 'off',
+            '@typescript-eslint/quotes': 'off',
+            'no-template-curly-in-string': 'off',
+            'eol-last': 'off',
+            '@typescript-eslint/semi': 'off'
+        }
+    }, {
+        files: ['scripts/**/*.ts'],
+        rules: {
+            '@typescript-eslint/no-var-requires': 'off',
+            '@typescript-eslint/no-require-imports': 'off',
+            'camelcase': 'off'
         }
     }]
 };

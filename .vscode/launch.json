@@ -2,7 +2,50 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch Program",
+            "name": "Debug Tests",
+            "type": "pwa-node",
+            "request": "launch",
+            "smartStep": true,
+            "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
+            "sourceMaps": true,
+            "args": [
+                "--timeout",
+                "987654"
+            ],
+            "skipFiles": [
+                "${workspaceFolder}/node_modules/**/*.js",
+                "<node_internals>/**/*.js"
+            ],
+            "cwd": "${workspaceRoot}",
+            "internalConsoleOptions": "openOnSessionStart",
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/**",
+                "!**/node_modules/typescript/**",
+                "!**/node_modules/vscode-languageserver*/**"
+            ]
+        },
+        {
+            "name": "Debug Doc Generator",
+            "type": "pwa-node",
+            "request": "launch",
+            "args": [
+                "scripts/compile-doc-examples.ts"
+            ],
+            "runtimeArgs": [
+                "--nolazy",
+                "-r",
+                "ts-node/register"
+            ],
+            "sourceMaps": true,
+            "cwd": "${workspaceRoot}",
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/**",
+                "!**/node_modules/typescript/**",
+                "!**/node_modules/vscode-languageserver/**"
+            ]
+        },
+        {
+            "name": "Debug Benchmarks",
             "program": "${workspaceFolder}/benchmarks/index.js",
             "request": "launch",
             "args": [
@@ -20,33 +63,8 @@
             "type": "pwa-node"
         },
         {
-            "name": "Debug Tests (Current file)",
-            "type": "node",
-            "request": "launch",
-            "smartStep": true,
-            "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
-            "sourceMaps": true,
-            "args": [
-                "${relativeFile}",
-                "--timeout",
-                "987654"
-            ],
-            "skipFiles": [
-                "${workspaceFolder}/node_modules/**/*.js",
-                "<node_internals>/**/*.js"
-            ],
-            "cwd": "${workspaceRoot}",
-            "protocol": "inspector",
-            "internalConsoleOptions": "openOnSessionStart",
-            "resolveSourceMapLocations": [
-                "${workspaceFolder}/**",
-                "!**/node_modules/typescript/**",
-                "!**/node_modules/vscode-languageserver/**"
-            ]
-        },
-        {
-            "name": "Debug Doc Generator",
-            "type": "node",
+            "name": "Debug Roku Docs Scraper",
+            "type": "pwa-node",
             "request": "launch",
             "runtimeExecutable": "node",
             "runtimeArgs": [
@@ -55,7 +73,7 @@
                 "ts-node/register/transpile-only"
             ],
             "args": [
-                "scripts/compile-doc-examples.ts"
+                "scripts/scrape-roku-docs.ts"
             ],
             "cwd": "${workspaceRoot}",
             "internalConsoleOptions": "openOnSessionStart",
