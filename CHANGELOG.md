@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.22](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha21...v1.0.0-alpha.22) - 2022-06-08
+### Changed
+ - all changes from [v0.52.0](#0520---2022-06-08)
+ - all changes from [v0.51.4](#0514---2022-05-31)
+ - all changes from [v0.51.3](#0513---2022-05-31)
+ - all changes from [v0.51.2](#0512---2022-05-26)
+ - all changes from [v0.51.1](#0511---2022-05-26)
+ - all changes from [v0.51.0](#0510---2022-05-24)
+ - all changes from [v0.50.2](#0502---2022-05-23)
+ - all changes from [v0.50.1](#0501---2022-05-18)
+ - all changes from [v0.50.0](#0500---2022-05-17)
+
+
+
 ## [0.52.0](https://github.com/rokucommunity/brighterscript/compare/v0.51.4...v0.52.0) - 2022-06-08
 ### Added
  - LanguageServer: Load projects based on bsconfig.json presence ([#613](https://github.com/rokucommunity/brighterscript/pull/613))
