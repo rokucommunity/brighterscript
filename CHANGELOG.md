@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.52.0](https://github.com/rokucommunity/brighterscript/compare/v0.51.4...v0.52.0) - 2022-06-08
+### Added
+ - LanguageServer: Load projects based on bsconfig.json presence ([#613](https://github.com/rokucommunity/brighterscript/pull/613))
+### Changed
+ - upgrade to [roku-deploy@3.7.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#371---2022-06-08)
+
+
+
 ## [0.51.4](https://github.com/rokucommunity/brighterscript/compare/v0.51.3...v0.51.4) - 2022-05-31
 ### Fixed
  - Add allowBrighterScriptInBrightScript to bsconfig.schema.json ([#610](https://github.com/rokucommunity/brighterscript/pull/610))
