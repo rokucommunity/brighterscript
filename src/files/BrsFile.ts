@@ -1609,6 +1609,16 @@ export class BrsFile {
         let result = util.mdFence(callable.type.toString(), 'brightscript');
         if (comments.length > 0) {
             result += '\n***\n' + comments.reverse().map(x => x.text.replace(/^('|rem)/i, '')).join('\n');
+        } else {
+            // Look for comments in the latest ancestor callable
+            // TODO: How do I get the correct ancestor callable from here?
+            // I want to do something like this:
+            /*
+            const ancestorCallable = callable.getAncestorCallable();
+            if (ancestorCallable) {
+                result = this.getCallableDocumentation(ancestorCallable);
+            }
+            */
         }
         return result;
     }

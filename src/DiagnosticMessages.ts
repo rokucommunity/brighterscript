@@ -678,6 +678,26 @@ export let DiagnosticMessages = {
         message: `${componentName} has been deprecated${deprecatedDescription ? ': ' + deprecatedDescription : ''}`,
         code: 1131,
         severity: DiagnosticSeverity.Error
+    }),
+    mismatchAncestorCallableType: (callableName: string, correctCallableType: string) => ({
+        message: `Callable '${callableName}' must be of the same callable type as overriden function ('${correctCallableType}').`,
+        code: 1132,
+        severity: DiagnosticSeverity.Error
+    }),
+    mismatchAncestorCallableReturnType: (callableName: string, correctCallableReturnType: string) => ({
+        message: `Callable '${callableName}' must return the same type as overriden function ('${correctCallableReturnType}').`,
+        code: 1133,
+        severity: DiagnosticSeverity.Error
+    }),
+    mismatchAncestorCallableParamCount: (callableName: string, correctCallableParamCount: number, actualCallableParamCount: number) => ({
+        message: `Expected ${correctCallableParamCount} arguments for overriding callable '${callableName}', but got ${actualCallableParamCount}.`,
+        code: 1134,
+        severity: DiagnosticSeverity.Error
+    }),
+    mismatchAncestorCallableParamType: (callableName: string, paramName: string, correctCallableParamType: string, actualCallableParamType: string) => ({
+        message: `Expected argument '${paramName}' to be of type '${correctCallableParamType}' for overriding callable '${callableName}', but got '${actualCallableParamType}'.`,
+        code: 1135,
+        severity: DiagnosticSeverity.Error
     })
 };
 
