@@ -678,6 +678,11 @@ export let DiagnosticMessages = {
         message: `${componentName} has been deprecated${deprecatedDescription ? ': ' + deprecatedDescription : ''}`,
         code: 1131,
         severity: DiagnosticSeverity.Error
+    }),
+    circularReferenceDetected: (items: string[], scopeName: string) => ({
+        message: `Circular reference detected between ${Array.isArray(items) ? items.join(' -> ') : ''} in scope '${scopeName}'`,
+        code: 1132,
+        severity: DiagnosticSeverity.Error
     })
 };
 
