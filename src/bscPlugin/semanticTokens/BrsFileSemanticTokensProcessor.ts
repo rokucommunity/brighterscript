@@ -1,8 +1,9 @@
 import type { Range } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isCustomType } from '../../astUtils/reflection';
+import { isBinaryExpression, isCustomType } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnGetSemanticTokensEvent } from '../../interfaces';
+import type { Expression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import util from '../../util';
 
@@ -69,33 +70,43 @@ export class BrsFileSemanticTokensProcessor {
 
     private handleEnums() {
         const enumLookup = this.event.file.program.getFirstScopeForFile(this.event.file)?.getEnumMap();
-        for (const expression of this.event.file.parser.references.expressions) {
-            const parts = util.getAllDottedGetParts(expression)?.map(x => x.toLowerCase());
-            if (parts) {
-                //discard the enum member name
-                const memberName = parts.pop();
-                //get the name of the enum (including leading namespace if applicable)
-                const enumName = parts.join('.');
-                const lowerEnumName = enumName.toLowerCase();
-                const theEnum = enumLookup.get(lowerEnumName)?.item;
-                if (theEnum) {
-                    const tokens = util.splitGetRange('.', lowerEnumName + '.' + memberName, expression.range);
-                    //enum member name
-                    this.event.semanticTokens.push({
-                        range: tokens.pop().range,
-                        tokenType: SemanticTokenTypes.enumMember
-                    });
-                    //enum name
-                    this.event.semanticTokens.push({
-                        range: tokens.pop().range,
-                        tokenType: SemanticTokenTypes.enum
-                    });
-                    //namespace parts
-                    for (const token of tokens) {
+        for (const referenceExpression of this.event.file.parser.references.expressions) {
+            const actualExpressions: Expression[] = [];
+            //binary expressions actually have two expressions (left and right), so handle them independently
+            if (isBinaryExpression(referenceExpression)) {
+                actualExpressions.push(referenceExpression.left, referenceExpression.right);
+            } else {
+                //assume all other expressions are a single chain
+                actualExpressions.push(referenceExpression);
+            }
+            for (const expression of actualExpressions) {
+                const parts = util.getAllDottedGetParts(expression)?.map(x => x.toLowerCase());
+                if (parts) {
+                    //discard the enum member name
+                    const memberName = parts.pop();
+                    //get the name of the enum (including leading namespace if applicable)
+                    const enumName = parts.join('.');
+                    const lowerEnumName = enumName.toLowerCase();
+                    const theEnum = enumLookup.get(lowerEnumName)?.item;
+                    if (theEnum) {
+                        const tokens = util.splitGetRange('.', lowerEnumName + '.' + memberName, expression.range);
+                        //enum member name
                         this.event.semanticTokens.push({
-                            range: token.range,
-                            tokenType: SemanticTokenTypes.namespace
+                            range: tokens.pop().range,
+                            tokenType: SemanticTokenTypes.enumMember
                         });
+                        //enum name
+                        this.event.semanticTokens.push({
+                            range: tokens.pop().range,
+                            tokenType: SemanticTokenTypes.enum
+                        });
+                        //namespace parts
+                        for (const token of tokens) {
+                            this.event.semanticTokens.push({
+                                range: token.range,
+                                tokenType: SemanticTokenTypes.namespace
+                            });
+                        }
                     }
                 }
             }

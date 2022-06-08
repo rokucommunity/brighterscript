@@ -1,14 +1,12 @@
 import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { CallExpression, NamespacedVariableNameExpression } from '../parser/Expression';
-import { ParseMode } from '../parser/Parser';
-import type { References } from '../parser/Parser';
-import type { ClassFieldStatement, ClassMethodStatement, ClassStatement, InterfaceStatement, MemberFieldStatement, MemberMethodStatement, Statement } from '../parser/Statement';
+import type { ClassStatement, FieldStatement, InterfaceStatement, MemberFieldStatement, MemberMethodStatement, MethodStatement, Statement } from '../parser/Statement';
 import { CancellationTokenSource, Location } from 'vscode-languageserver';
 import type { DiagnosticSeverity } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isClassStatement, isCustomType, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isInterfaceType } from '../astUtils/reflection';
+import { isCallExpression, isClassStatement, isCustomType, isFieldStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isInterfaceType, isMethodStatement } from '../astUtils/reflection';
 import type { BscFile, BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
@@ -17,6 +15,8 @@ import { DynamicType } from '../types/DynamicType';
 import type { BscType, TypeContext } from '../types/BscType';
 import { getTypeFromContext } from '../types/BscType';
 import type { Identifier } from '../lexer/Token';
+import type { References } from '../parser/Parser';
+import { ParseMode } from '../parser/Parser';
 
 
 export class BsClassValidator implements BsClassValidator {
@@ -157,7 +157,7 @@ export class BsClassValidator implements BsClassValidator {
 
     private verifyChildConstructor() {
         for (const [, classStatement] of this.classes) {
-            const newMethod = classStatement.memberMap.new as ClassMethodStatement;
+            const newMethod = classStatement.memberMap.new as MethodStatement;
 
             if (
                 //this class has a "new method"
@@ -202,15 +202,15 @@ export class BsClassValidator implements BsClassValidator {
     }
 
     private isMemberFieldStatement(stmt: Statement): stmt is MemberFieldStatement {
-        return isClassFieldStatement(stmt) || isInterfaceFieldStatement(stmt);
+        return isFieldStatement(stmt) || isInterfaceFieldStatement(stmt);
     }
 
     private isMemberMethodStatement(stmt: Statement): stmt is MemberMethodStatement {
-        return isClassMethodStatement(stmt) || isInterfaceMethodStatement(stmt);
+        return isMethodStatement(stmt) || isInterfaceMethodStatement(stmt);
     }
 
     private isMemberStatement(stmt: Statement): stmt is Statement & MemberFieldOrMethod {
-        return this.isMemberFieldStatement(stmt) || this.isMemberMethodStatement(stmt);
+        return isFieldStatement(stmt) || isMethodStatement(stmt);
     }
 
     private validateMemberCollisionsForStatements<T extends AugmentedClassStatement | AugmentedInterfaceStatement>(map: Map<string, T>) {
@@ -263,7 +263,7 @@ export class BsClassValidator implements BsClassValidator {
                                 //flag incompatible child field type to ancestor field type
 
                                 const childFieldTypeName = childFieldType?.toString(this.typeContext) ?? member.type?.getText();
-                                const ancestorFieldTypeName = ancestorMemberType?.toString(this.typeContext) ?? (ancestorAndMember.member as ClassFieldStatement).type.getText();
+                                const ancestorFieldTypeName = ancestorMemberType?.toString(this.typeContext) ?? (ancestorAndMember.member as FieldStatement).type.getText();
                                 this.diagnostics.push({
                                     ...DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty(
                                         bodyStatement.getName(ParseMode.BrighterScript),
@@ -281,7 +281,7 @@ export class BsClassValidator implements BsClassValidator {
                         //child method missing the override keyword
                         if (
                             //is a method
-                            isClassMethodStatement(member) &&
+                            isMethodStatement(member) &&
                             //does not have an override keyword
                             !member.override &&
                             //is not the constructur function
@@ -299,7 +299,7 @@ export class BsClassValidator implements BsClassValidator {
                         //child member has different visiblity
                         if (
                             //is a method
-                            isClassMethodStatement(member) && isClassMethodStatement(ancestorAndMember.member) &&
+                            isMethodStatement(member) && isMethodStatement(ancestorAndMember.member) &&
                             (member.accessModifier?.kind ?? TokenKind.Public) !== (ancestorAndMember.member.accessModifier?.kind ?? TokenKind.Public)
                         ) {
                             this.diagnostics.push({

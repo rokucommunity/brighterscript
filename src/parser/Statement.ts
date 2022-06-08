@@ -9,9 +9,9 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isClassStatement, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isTypedefProvider, isVoidType } from '../astUtils/reflection';
-import type { TranspileResult, TypedefProvider, MemberSymbolTableProvider, InheritableStatement } from '../interfaces';
-import { createClassMethodStatement, createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
+import { isCallExpression, isClassStatement, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isTypedefProvider, isVoidType } from '../astUtils/reflection';
+import type { InheritableStatement, MemberSymbolTableProvider, TranspileResult, TypedefProvider } from '../interfaces';
+import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
@@ -19,6 +19,7 @@ import { SymbolTable } from '../SymbolTable';
 import { CustomType } from '../types/CustomType';
 import { InterfaceType } from '../types/InterfaceType';
 import { EnumMemberType, EnumType } from '../types/EnumType';
+import { FunctionType } from '../types/FunctionType';
 /**
  * A BrightScript statement
  */
@@ -1277,7 +1278,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider, Me
             } else if (isInterfaceFieldStatement(statement)) {
                 this.fields.push(statement);
 
-                this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
+                this.memberMap[statement?.name?.text.toLowerCase()] = statement;
             }
         }
     }
@@ -1306,7 +1307,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider, Me
             this.memberTable.addSymbol(statement?.name?.text, statement?.range, funcType);
         }
         for (const statement of this.fields) {
-            this.memberTable.addSymbol(statement?.tokens.name?.text, statement?.range, statement.getType());
+            this.memberTable.addSymbol(statement?.name?.text, statement?.range, statement.getType());
         }
     }
 
@@ -1534,10 +1535,10 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
         ) ?? interpolatedRange;
 
         for (let statement of this.body) {
-            if (isClassMethodStatement(statement)) {
+            if (isMethodStatement(statement)) {
                 this.methods.push(statement);
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
-            } else if (isClassFieldStatement(statement)) {
+            } else if (isFieldStatement(statement)) {
                 this.fields.push(statement);
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
             }
@@ -1560,10 +1561,9 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
         }
     }
 
-    public memberMap = {} as Record<string, ClassMemberStatement>;
-    public methods = [] as ClassMethodStatement[];
-    public fields = [] as ClassFieldStatement[];
-
+    public memberMap = {} as Record<string, MemberStatement>;
+    public methods = [] as MethodStatement[];
+    public fields = [] as FieldStatement[];
 
     public readonly range: Range;
 
@@ -1572,8 +1572,8 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
     }
 
     public getConstructorFunctionType() {
-        const constructFunc = this.getConstructorFunction() ?? this.getEmptyNewFunction();
-        const constructorFuncType = constructFunc.func.getFunctionType();
+        const constructFunc = this.getConstructorFunction();
+        const constructorFuncType = constructFunc?.func?.getFunctionType() ?? new FunctionType();
         constructorFuncType.setName(this.getName(ParseMode.BrighterScript));
         constructorFuncType.isNew = true;
         return constructorFuncType;
@@ -1613,8 +1613,6 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
     }
 
     getTypedef(state: BrsTranspileState) {
-        this.ensureConstructorFunctionExists();
-
         const result = [] as TranspileResult;
         for (let annotation of this.annotations ?? []) {
             result.push(
@@ -1638,7 +1636,17 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
         }
         result.push(state.newline);
         state.blockDepth++;
-        for (const member of this.body) {
+
+        let body = this.body;
+        //inject an empty "new" method if missing
+        if (!this.getConstructorFunction()) {
+            body = [
+                createMethodStatement('new', TokenKind.Sub),
+                ...this.body
+            ];
+        }
+
+        for (const member of body) {
             if (isTypedefProvider(member)) {
                 result.push(
                     state.indent(),
@@ -1675,7 +1683,12 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
                 break;
             }
         }
-        return myIndex - 1;
+        const result = myIndex - 1;
+        if (result >= 0) {
+            return result;
+        } else {
+            return null;
+        }
     }
 
     public hasParent() {
@@ -1736,26 +1749,9 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
      * Get the constructor function for this class (if exists), or undefined if not exist
      */
     private getConstructorFunction() {
-        for (let key in this.memberMap) {
-            let member = this.memberMap[key];
-            if (member.name?.text?.toLowerCase() === 'new') {
-                return member as ClassMethodStatement;
-            }
-        }
-    }
-
-    private getEmptyNewFunction() {
-        return createClassMethodStatement('new', TokenKind.Sub);
-    }
-
-    /**
-     * Create an empty `new` function if class is missing it (simplifies transpile logic)
-     */
-    private ensureConstructorFunctionExists() {
-        if (!this.getConstructorFunction()) {
-            this.memberMap.new = this.getEmptyNewFunction();
-            this.body = [this.memberMap.new, ...this.body];
-        }
+        return this.body.find((stmt) => {
+            return (stmt as MethodStatement)?.name?.text?.toLowerCase() === 'new';
+        }) as MethodStatement;
     }
 
     /**
@@ -1777,8 +1773,6 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
      * without instantiating the parent constructor at that point in time.
      */
     private getTranspiledBuilder(state: BrsTranspileState) {
-        this.ensureConstructorFunctionExists();
-
         let result = [];
         result.push(`function ${this.getBuilderName(this.getName(ParseMode.BrightScript))}()\n`);
         state.blockDepth++;
@@ -1809,14 +1803,23 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
         );
         let parentClassIndex = this.getParentClassIndex(state);
 
-        for (let statement of this.body) {
+        let body = this.body;
+        //inject an empty "new" method if missing
+        if (!this.getConstructorFunction()) {
+            body = [
+                createMethodStatement('new', TokenKind.Sub),
+                ...this.body
+            ];
+        }
+
+        for (let statement of body) {
             //is field statement
-            if (isClassFieldStatement(statement)) {
+            if (isFieldStatement(statement)) {
                 //do nothing with class fields in this situation, they are handled elsewhere
                 continue;
 
                 //methods
-            } else if (isClassMethodStatement(statement)) {
+            } else if (isMethodStatement(statement)) {
 
                 //store overridden parent methods as super{parentIndex}_{methodName}
                 if (
@@ -1931,16 +1934,33 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
     }
 }
 
-export class ClassMethodStatement extends FunctionStatement {
+const accessModifiers = [
+    TokenKind.Public,
+    TokenKind.Protected,
+    TokenKind.Private
+];
+export class MethodStatement extends FunctionStatement {
     constructor(
-        public accessModifier: Token,
+        modifiers: Token | Token[],
         name: Identifier,
         func: FunctionExpression,
         public override: Token
     ) {
         super(name, func, undefined);
+        if (modifiers) {
+            if (Array.isArray(modifiers)) {
+                this.modifiers.push(...modifiers);
+            } else {
+                this.modifiers.push(modifiers);
+            }
+        }
     }
 
+    public modifiers: Token[] = [];
+
+    public get accessModifier() {
+        return this.modifiers.find(x => accessModifiers.includes(x.kind));
+    }
     public get range() {
         return this.cacheRange();
     }
@@ -1964,7 +1984,7 @@ export class ClassMethodStatement extends FunctionStatement {
         const visitor = createVisitor({
             VariableExpression: e => {
                 if (e.name.text.toLocaleLowerCase() === 'super') {
-                    e.name.text = `m.super${parentClassIndex}_new`;
+                    state.editor.setProperty(e.name, 'text', `m.super${parentClassIndex}_new`);
                 }
             },
             DottedGetExpression: e => {
@@ -1972,7 +1992,7 @@ export class ClassMethodStatement extends FunctionStatement {
                 const lowerName = beginningVariable?.getName(ParseMode.BrighterScript).toLowerCase();
                 if (lowerName === 'super') {
                     beginningVariable.name.text = 'm';
-                    e.name.text = `super${parentClassIndex}_${e.name.text}`;
+                    state.editor.setProperty(e.name, 'text', `super${parentClassIndex}_${e.name.text}`);
                 }
             }
         });
@@ -2030,38 +2050,37 @@ export class ClassMethodStatement extends FunctionStatement {
         }
 
         //this is a child class, and the first statement isn't a call to super. Inject one
-        this.func.body.statements.unshift(
-            new ExpressionStatement(
-                new CallExpression(
-                    new VariableExpression(
-                        {
-                            kind: TokenKind.Identifier,
-                            text: 'super',
-                            isReserved: false,
-                            range: state.classStatement.name.range,
-                            leadingWhitespace: ''
-                        },
-                        null
-                    ),
+        const superCall = new ExpressionStatement(
+            new CallExpression(
+                new VariableExpression(
                     {
-                        kind: TokenKind.LeftParen,
-                        text: '(',
+                        kind: TokenKind.Identifier,
+                        text: 'super',
                         isReserved: false,
                         range: state.classStatement.name.range,
                         leadingWhitespace: ''
                     },
-                    {
-                        kind: TokenKind.RightParen,
-                        text: ')',
-                        isReserved: false,
-                        range: state.classStatement.name.range,
-                        leadingWhitespace: ''
-                    },
-                    [],
                     null
-                )
+                ),
+                {
+                    kind: TokenKind.LeftParen,
+                    text: '(',
+                    isReserved: false,
+                    range: state.classStatement.name.range,
+                    leadingWhitespace: ''
+                },
+                {
+                    kind: TokenKind.RightParen,
+                    text: ')',
+                    isReserved: false,
+                    range: state.classStatement.name.range,
+                    leadingWhitespace: ''
+                },
+                [],
+                null
             )
         );
+        state.editor.arrayUnshift(this.func.body.statements, superCall);
     }
 
     /**
@@ -2091,7 +2110,7 @@ export class ClassMethodStatement extends FunctionStatement {
                 );
             }
         }
-        this.func.body.statements.splice(startingIndex, 0, ...newStatements);
+        state.editor.arraySplice(this.func.body.statements, startingIndex, 0, ...newStatements);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -2101,7 +2120,7 @@ export class ClassMethodStatement extends FunctionStatement {
     }
 }
 
-export class ClassFieldStatement extends Statement implements TypedefProvider {
+export class FieldStatement extends Statement implements TypedefProvider {
 
     constructor(
         readonly accessModifier?: Token,
@@ -2177,10 +2196,10 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
         }
     }
 }
-export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;
+export type MemberStatement = FieldStatement | MethodStatement;
 export type InterfaceMemberStatement = InterfaceFieldStatement | InterfaceMethodStatement;
-export type MemberFieldStatement = ClassFieldStatement | InterfaceFieldStatement;
-export type MemberMethodStatement = ClassMethodStatement | InterfaceMethodStatement;
+export type MemberFieldStatement = FieldStatement | InterfaceFieldStatement;
+export type MemberMethodStatement = MethodStatement | InterfaceMethodStatement;
 
 export class TryCatchStatement extends Statement {
     constructor(

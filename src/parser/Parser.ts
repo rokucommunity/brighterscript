@@ -4,38 +4,37 @@ import type { BlockTerminator } from '../lexer/TokenKind';
 import { Lexer } from '../lexer/Lexer';
 import {
     AllowedLocalIdentifiers,
-    AssignmentOperators,
-    DisallowedLocalIdentifiersText,
-    DisallowedFunctionIdentifiersText,
     AllowedProperties,
+    AssignmentOperators,
     BrighterScriptSourceLiterals,
-    DeclarableTypes, TokenKind
+    DeclarableTypes,
+    DisallowedFunctionIdentifiersText,
+    DisallowedLocalIdentifiersText,
+    TokenKind
 } from '../lexer/TokenKind';
 import type {
-    Statement,
+    PrintSeparatorSpace,
     PrintSeparatorTab,
-    PrintSeparatorSpace
+    Statement
 } from './Statement';
 import {
-    InterfaceStatement,
     InterfaceMethodStatement,
     InterfaceFieldStatement,
     AssignmentStatement,
     Block,
     Body,
     CatchStatement,
-    ClassFieldStatement,
-    ClassMethodStatement,
     ClassStatement,
     CommentStatement,
     DimStatement,
     DottedSetStatement,
     EndStatement,
-    EnumStatement,
     EnumMemberStatement,
+    EnumStatement,
     ExitForStatement,
     ExitWhileStatement,
     ExpressionStatement,
+    FieldStatement,
     ForEachStatement,
     ForStatement,
     FunctionStatement,
@@ -44,8 +43,10 @@ import {
     ImportStatement,
     IncrementStatement,
     IndexedSetStatement,
+    InterfaceStatement,
     LabelStatement,
     LibraryStatement,
+    MethodStatement,
     NamespaceStatement,
     PrintStatement,
     ReturnStatement,
@@ -61,36 +62,36 @@ import type { Expression } from './Expression';
 import {
     AALiteralExpression,
     AAMemberExpression,
+    AnnotationExpression,
     ArrayLiteralExpression,
+    ArrayTypeExpression,
     BinaryExpression,
     CallExpression,
     CallfuncExpression,
     DottedGetExpression,
+    EscapedCharCodeLiteralExpression,
     FunctionExpression,
+    FunctionParameterExpression,
     GroupingExpression,
     IndexedGetExpression,
     LiteralExpression,
     NamespacedVariableNameExpression,
     NewExpression,
+    NullCoalescingExpression,
     RegexLiteralExpression,
+    SourceLiteralExpression,
+    TaggedTemplateStringExpression,
+    TemplateStringExpression,
+    TemplateStringQuasiExpression,
+    TernaryExpression,
+    TypeExpression,
     UnaryExpression,
     VariableExpression,
-    XmlAttributeGetExpression,
-    TemplateStringExpression,
-    EscapedCharCodeLiteralExpression,
-    TemplateStringQuasiExpression,
-    TaggedTemplateStringExpression,
-    SourceLiteralExpression,
-    AnnotationExpression,
-    FunctionParameterExpression,
-    TernaryExpression,
-    NullCoalescingExpression,
-    TypeExpression,
-    ArrayTypeExpression
+    XmlAttributeGetExpression
 } from './Expression';
 import type { Diagnostic, Position, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isInvalidType, isLiteralExpression, isNewExpression, isVariableExpression, isInterfaceMethodStatement } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallfuncExpression, isMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isInvalidType, isLiteralExpression, isNewExpression, isVariableExpression, isInterfaceMethodStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
@@ -658,7 +659,7 @@ export class Parser {
                         });
                     }
 
-                    decl = new ClassMethodStatement(
+                    decl = new MethodStatement(
                         accessModifier,
                         functionStatement.name,
                         functionStatement.func,
@@ -666,14 +667,14 @@ export class Parser {
                     );
 
                     //refer to this statement as parent of the expression
-                    functionStatement.func.functionStatement = decl as ClassMethodStatement;
+                    functionStatement.func.functionStatement = decl as MethodStatement;
                     //cache the range property so that plugins can't affect it
-                    (decl as ClassMethodStatement).cacheRange();
+                    (decl as MethodStatement).cacheRange();
 
                     //fields
                 } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
 
-                    decl = this.classFieldDeclaration(accessModifier);
+                    decl = this.fieldDeclaration(accessModifier);
 
                     //class fields cannot be overridden
                     if (overrideKeyword) {
@@ -728,7 +729,7 @@ export class Parser {
         return result;
     }
 
-    private classFieldDeclaration(accessModifier: Token | null) {
+    private fieldDeclaration(accessModifier: Token | null) {
         let name = this.consume(
             DiagnosticMessages.expectedClassFieldIdentifier(),
             TokenKind.Identifier,
@@ -758,7 +759,7 @@ export class Parser {
             initialValue = this.expression();
         }
 
-        return new ClassFieldStatement(
+        return new FieldStatement(
             accessModifier,
             name,
             asToken,
@@ -3307,7 +3308,7 @@ export class Parser {
             ClassStatement: s => {
                 this._references.classStatements.push(s);
             },
-            ClassFieldStatement: s => {
+            FieldStatement: s => {
                 if (s.initialValue) {
                     this._references.expressions.add(s.initialValue);
                 }
@@ -3328,7 +3329,7 @@ export class Parser {
                 this._references.libraryStatements.push(s);
             },
             FunctionExpression: (expression, parent) => {
-                if (!isClassMethodStatement(parent) && !isInterfaceMethodStatement(parent)) {
+                if (!isMethodStatement(parent) && !isInterfaceMethodStatement(parent)) {
                     this._references.functionExpressions.push(expression);
                 }
             },

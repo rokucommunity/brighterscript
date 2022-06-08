@@ -84,22 +84,22 @@ describe('DiagnosticCollection', () => {
         });
     });
 
-    function removeDiagnostic(filePath: string, message: string) {
+    function removeDiagnostic(srcPath: string, message: string) {
         for (let i = 0; i < diagnostics.length; i++) {
             const diagnostic = diagnostics[i];
-            if (diagnostic.file.srcPath === filePath && diagnostic.message === message) {
+            if (diagnostic.file.srcPath === srcPath && diagnostic.message === message) {
                 diagnostics.splice(i, 1);
                 return;
             }
         }
-        throw new Error(`Cannot find diagnostic ${filePath}:${message}`);
+        throw new Error(`Cannot find diagnostic ${srcPath}:${message}`);
     }
 
-    function addDiagnostics(filePath: string, messages: string[]) {
+    function addDiagnostics(srcPath: string, messages: string[]) {
         for (const message of messages) {
             diagnostics.push({
                 file: {
-                    srcPath: filePath
+                    srcPath: srcPath
                 } as BscFile,
                 range: util.createRange(0, 0, 0, 0),
                 //the code doesn't matter as long as the messages are different, so just enforce unique messages for this test files

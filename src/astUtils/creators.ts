@@ -4,7 +4,7 @@ import { SGAttribute, SGComponent, SGInterface, SGInterfaceField, SGInterfaceFun
 import { TokenKind } from '../lexer/TokenKind';
 import type { Expression, NamespacedVariableNameExpression } from '../parser/Expression';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../parser/Expression';
-import { Block, ClassMethodStatement } from '../parser/Statement';
+import { Block, MethodStatement } from '../parser/Statement';
 
 /**
  * A range that points to the beginning of the file. Used to give non-null ranges to programmatically-added source code.
@@ -148,13 +148,20 @@ export function createFunctionExpression(kind: TokenKind.Sub | TokenKind.Functio
     );
 }
 
-export function createClassMethodStatement(name: string, kind: TokenKind.Sub | TokenKind.Function = TokenKind.Function, accessModifier?: Token) {
-    return new ClassMethodStatement(
-        accessModifier,
+export function createMethodStatement(name: string, kind: TokenKind.Sub | TokenKind.Function = TokenKind.Function, modifiers?: Token[]) {
+    return new MethodStatement(
+        modifiers,
         createIdentifier(name),
         createFunctionExpression(kind),
         null
     );
+}
+
+/**
+ * @deprecated use `createMethodStatement`
+ */
+export function createClassMethodStatement(name: string, kind: TokenKind.Sub | TokenKind.Function = TokenKind.Function, accessModifier?: Token) {
+    return createMethodStatement(name, kind, [accessModifier]);
 }
 
 export function createCall(callee: Expression, args?: Expression[], namespaceName?: NamespacedVariableNameExpression) {

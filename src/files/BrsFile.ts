@@ -14,15 +14,15 @@ import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind
 import type { TokenChainMember } from '../parser/Parser';
 import { Parser, ParseMode, getBscTypeFromExpression, TokenUsage } from '../parser/Parser';
 import type { FunctionExpression, VariableExpression, Expression, DottedGetExpression } from '../parser/Expression';
-import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
+import type { ClassStatement, FunctionStatement, NamespaceStatement, LibraryStatement, ImportStatement, Statement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program, SignatureInfoObj } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
-import { LogLevel } from '../Logger';
+import { Logger, LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isTypedFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isArrayType, isCustomType, isDynamicType, isObjectType, isPrimitiveType, isRegexLiteralExpression, isInterfaceType, isEnumType } from '../astUtils/reflection';
+import { isMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isTypedFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isEnumStatement, isArrayType, isCustomType, isDynamicType, isObjectType, isPrimitiveType, isRegexLiteralExpression, isInterfaceType, isEnumType, isFieldStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -66,6 +66,17 @@ export class BrsFile {
         if (this.program) {
             this.resolveTypedef();
         }
+    }
+
+    /**
+     * The absolute path to the source location for this file
+     * @deprecated use `srcPath` instead
+     */
+    public get pathAbsolute() {
+        return this.srcPath;
+    }
+    public set pathAbsolute(value) {
+        this.srcPath = value;
     }
 
     /**
@@ -219,6 +230,15 @@ export class BrsFile {
         dependencyGraph.addOrReplace(this.dependencyGraphKey, dependencies);
     }
 
+    private get logger() {
+        const logger = this.program?.logger;
+        if (!logger && !this._logger) {
+            this._logger = new Logger();
+        }
+        return logger ?? this._logger;
+    }
+    private _logger: Logger;
+
     /**
      * Calculate the AST for this file
      * @param fileContents
@@ -236,7 +256,7 @@ export class BrsFile {
             }
 
             //tokenize the input file
-            let lexer = this.program.logger.time(LogLevel.debug, ['lexer.lex', chalk.green(this.srcPath)], () => {
+            let lexer = this.logger.time(LogLevel.debug, ['lexer.lex', chalk.green(this.srcPath)], () => {
                 return Lexer.scan(fileContents, {
                     includeWhitespace: false
                 });
@@ -250,7 +270,7 @@ export class BrsFile {
             //TODO preprocessor should go away in favor of the AST handling this internally (because it affects transpile)
             //currently the preprocessor throws exceptions on syntax errors...so we need to catch it
             try {
-                this.program.logger.time(LogLevel.debug, ['preprocessor.process', chalk.green(this.srcPath)], () => {
+                this.logger.time(LogLevel.debug, ['preprocessor.process', chalk.green(this.srcPath)], () => {
                     preprocessor.process(lexer.tokens, this.program.getManifest());
                 });
             } catch (error: any) {
@@ -263,10 +283,10 @@ export class BrsFile {
             //if the preprocessor generated tokens, use them.
             let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
 
-            this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.srcPath)], () => {
+            this.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.srcPath)], () => {
                 this._parser = Parser.parse(tokens, {
                     mode: this.parseMode,
-                    logger: this.program.logger
+                    logger: this.logger
                 });
             });
 
@@ -743,7 +763,7 @@ export class BrsFile {
                     if (!results.has(member.name.text.toLowerCase())) {
                         results.set(member.name.text.toLowerCase(), {
                             label: member.name.text,
-                            kind: isClassFieldStatement(member) ? CompletionItemKind.Field : CompletionItemKind.Method
+                            kind: isFieldStatement(member) ? CompletionItemKind.Field : CompletionItemKind.Method
                         });
                     }
                 }
@@ -1330,9 +1350,9 @@ export class BrsFile {
 
         if (isFunctionStatement(statement)) {
             symbolKind = SymbolKind.Function;
-        } else if (isClassMethodStatement(statement)) {
+        } else if (isMethodStatement(statement)) {
             symbolKind = SymbolKind.Method;
-        } else if (isClassFieldStatement(statement)) {
+        } else if (isFieldStatement(statement)) {
             symbolKind = SymbolKind.Field;
         } else if (isNamespaceStatement(statement)) {
             symbolKind = SymbolKind.Namespace;
@@ -1354,7 +1374,7 @@ export class BrsFile {
             return;
         }
 
-        const name = isClassFieldStatement(statement) ? statement.name.text : statement.getName(ParseMode.BrighterScript);
+        const name = isFieldStatement(statement) ? statement.name.text : statement.getName(ParseMode.BrighterScript);
         return DocumentSymbol.create(name, '', symbolKind, statement.range, statement.range, children);
     }
 
@@ -1367,7 +1387,7 @@ export class BrsFile {
 
         if (isFunctionStatement(statement)) {
             symbolKind = SymbolKind.Function;
-        } else if (isClassMethodStatement(statement)) {
+        } else if (isMethodStatement(statement)) {
             symbolKind = SymbolKind.Method;
         } else if (isNamespaceStatement(statement)) {
             symbolKind = SymbolKind.Namespace;
@@ -1513,19 +1533,17 @@ export class BrsFile {
     public getClassMemberDefinitions(textToSearchFor: string, file: BrsFile): Location[] {
         let results: Location[] = [];
         //get class fields and members
-        const statementHandler = (statement: ClassMethodStatement) => {
-            if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
-                results.push(Location.create(util.pathToUri(file.srcPath), statement.range));
-            }
-        };
-        const fieldStatementHandler = (statement: ClassFieldStatement) => {
-            if (statement.name.text.toLowerCase() === textToSearchFor) {
-                results.push(Location.create(util.pathToUri(file.srcPath), statement.range));
-            }
-        };
         file.parser.ast.walk(createVisitor({
-            ClassMethodStatement: statementHandler,
-            ClassFieldStatement: fieldStatementHandler
+            MethodStatement: (statement: MethodStatement) => {
+                if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
+                    results.push(Location.create(util.pathToUri(file.srcPath), statement.range));
+                }
+            },
+            FieldStatement: (statement: FieldStatement) => {
+                if (statement.name.text.toLowerCase() === textToSearchFor) {
+                    results.push(Location.create(util.pathToUri(file.srcPath), statement.range));
+                }
+            }
         }), {
             walkMode: WalkMode.visitStatements
         });
@@ -1690,7 +1708,7 @@ export class BrsFile {
     }
 
     public getSignatureHelpForStatement(statement: Statement): SignatureInfoObj {
-        if (!isFunctionStatement(statement) && !isClassMethodStatement(statement)) {
+        if (!isFunctionStatement(statement) && !isMethodStatement(statement)) {
             return undefined;
         }
         const func = statement.func;
@@ -1746,7 +1764,7 @@ export class BrsFile {
         return { key: key, signature: signature, index: index };
     }
 
-    private getClassMethod(classStatement: ClassStatement, name: string, walkParents = true): ClassMethodStatement | undefined {
+    private getClassMethod(classStatement: ClassStatement, name: string, walkParents = true): MethodStatement | undefined {
         //TODO - would like to write this with getClassHierarchy; but got stuck on working out the scopes to use... :(
         //TODO types - this could be solved with symbolTable?
         let statement;
@@ -1757,7 +1775,7 @@ export class BrsFile {
         };
         while (classStatement) {
             classStatement.walk(createVisitor({
-                ClassMethodStatement: statementHandler
+                MethodStatement: statementHandler
             }), {
                 walkMode: WalkMode.visitStatements
             });
@@ -1832,6 +1850,8 @@ export class BrsFile {
             //simple SourceNode wrapping the entire file to simplify the logic below
             transpileResult = new SourceNode(null, null, state.srcPath, this.fileContents);
         }
+        //undo any AST edits that the transpile cycle has made
+        state.editor.undoAll();
 
         if (this.program.options.sourceMap) {
             return new SourceNode(null, null, null, [

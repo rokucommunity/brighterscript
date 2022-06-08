@@ -886,7 +886,7 @@ export class LanguageServer {
         //ensure programs are initialized
         await this.waitAllProgramFirstRuns();
 
-        let srcPath = util.uriToPath(params.textDocument.uri);
+        const srcPath = util.uriToPath(params.textDocument.uri);
         let workspaces = this.getWorkspaces();
         let hovers = await Promise.all(
             Array.prototype.concat.call([],
@@ -1105,7 +1105,9 @@ export class LanguageServer {
     public async onExecuteCommand(params: ExecuteCommandParams) {
         await this.waitAllProgramFirstRuns();
         if (params.command === CustomCommands.TranspileFile) {
-            return this.transpileFile(params.arguments[0]);
+            const result = await this.transpileFile(params.arguments[0]);
+            //back-compat: include `pathAbsolute` property so older vscode versions still work
+            (result as any).pathAbsolute = result.srcPath;
         }
     }
 

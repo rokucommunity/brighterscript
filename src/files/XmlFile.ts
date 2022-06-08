@@ -29,7 +29,7 @@ export class XmlFile {
         public pkgPath: string,
         public program: Program
     ) {
-        this.extension = path.extname(srcPath).toLowerCase();
+        this.extension = path.extname(this.srcPath).toLowerCase();
 
         this.possibleCodebehindPkgPaths = [
             this.pkgPath.replace('.xml', '.bs'),
@@ -408,9 +408,10 @@ export class XmlFile {
      * Get the parent component (the component this component extends)
      */
     public get parentComponent() {
-        return this.cache.getOrAdd('parent', () => {
-            return this.program.getComponent(this.parentComponentName?.text)?.file ?? null;
+        const result = this.cache.getOrAdd('parent', () => {
+            return this.program.getComponent(this.parentComponentName?.text)?.file;
         });
+        return result;
     }
 
     public getHover(position: Position): Hover { //eslint-disable-line

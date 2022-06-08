@@ -583,9 +583,9 @@ describe('Program', () => {
         });
 
         it('adds xml file to files map', () => {
-            let xmlPath = `${rootDir}/components/component1.xml`;
-            program.setFile({ src: xmlPath, dest: 'components/component1.xml' }, '');
-            expect(program.getFile(xmlPath)).to.exist;
+            let srcPath = `${rootDir}/components/component1.xml`;
+            program.setFile({ src: srcPath, dest: 'components/component1.xml' }, '');
+            expect(program.getFile(srcPath)).to.exist;
         });
 
         it('detects missing script reference', () => {

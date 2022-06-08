@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.50.0](https://github.com/rokucommunity/brighterscript/compare/v0.49.0...v0.50.0) - 2022-05-17
+### Added
+ - `srcPath` property on `XmlFile` and `BrsFile` to line up with the v1 branch ([#581](https://github.com/rokucommunity/brighterscript/pull/581))
+ - more `AstEditor` functions ([#589](https://github.com/rokucommunity/brighterscript/pull/589))
+### Changed
+ - rename `ClassFieldStatement` and `ClassMethodStatement` to `FieldStatement` and `MethodStatement` respectively to allow their use in non-class-related things ([#582](https://github.com/rokucommunity/brighterscript/pull/582))
+### Fixed
+ - Fix semantic tokens for enums in if statements ([#584](https://github.com/rokucommunity/brighterscript/pull/584))
+ - Don't push synthetic constructor into each class ([#586](https://github.com/rokucommunity/brighterscript/pull/586))
+ - transpile bugs related to class `super` handling ([#590](https://github.com/rokucommunity/brighterscript/pull/590))
+
+
+
 ## [1.0.0-alpha.21](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha20...v1.0.0-alpha.21) - 2022-05-02
 ### Added
  - allow enym types as function parameters ([#579](https://github.com/rokucommunity/brighterscript/pull/579))

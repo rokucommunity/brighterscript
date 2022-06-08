@@ -17,7 +17,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile, TokenSymbolLookup } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isDynamicType, isEnumStatement, isFunctionStatement, isTypedFunctionType, isInvalidType, isFunctionType, isVariableExpression, isXmlFile, isArrayType, isInterfaceType, isInterfaceStatement } from './astUtils/reflection';
+import { isBrsFile, isMethodStatement, isClassStatement, isCustomType, isDynamicType, isEnumStatement, isFunctionStatement, isTypedFunctionType, isInvalidType, isFunctionType, isVariableExpression, isXmlFile, isArrayType, isInterfaceType, isInterfaceStatement } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { BscType, TypeContext } from './types/BscType';
 import { getTypeFromContext } from './types/BscType';
@@ -1337,7 +1337,7 @@ export class Scope {
                     if (!results.has(s.name.text) && s.name.text.toLowerCase() !== 'new') {
                         results.set(s.name.text, {
                             label: s.name.text,
-                            kind: isClassMethodStatement(s) ? CompletionItemKind.Method : CompletionItemKind.Field
+                            kind: isMethodStatement(s) ? CompletionItemKind.Method : CompletionItemKind.Field
                         });
                     }
                 }

@@ -20,7 +20,7 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
     suite.add(name, (deferred) => {
         const wait = [];
         for (const x of xmlFiles) {
-            const xmlFile = new XmlFile(x.srcPath || x.pathAbsolute, x.pkgPath, builder.program);
+            const xmlFile = new XmlFile(x.srcPath ?? x.pathAbsolute, x.pkgPath, builder.program);
             //handle async and sync parsing
             const prom = xmlFile.parse(x.fileContents);
             if (prom) {

@@ -218,5 +218,12 @@ module.exports = {
             'eol-last': 'off',
             '@typescript-eslint/semi': 'off'
         }
+    }, {
+        files: ['scripts/**/*.ts'],
+        rules: {
+            '@typescript-eslint/no-var-requires': 'off',
+            '@typescript-eslint/no-require-imports': 'off',
+            'camelcase': 'off'
+        }
     }]
 };

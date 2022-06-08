@@ -875,6 +875,14 @@ describe('LanguageServer', () => {
             }
         });
     });
+
+    describe('CustomCommands', () => {
+        describe('TranspileFile', () => {
+            it('returns pathAbsolute to support backwards compatibility', () => {
+
+            });
+        });
+    });
 });
 
 export function getFileProtocolPath(fullPath: string) {

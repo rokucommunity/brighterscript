@@ -19,7 +19,7 @@ import { globalFile } from './globalCallables';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope, isSGInterfaceFunction } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isMethodStatement, isXmlScope, isSGInterfaceFunction } from './astUtils/reflection';
 import type { FunctionStatement, Statement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
 import { TokenKind } from './lexer/TokenKind';
@@ -342,7 +342,7 @@ export class Program {
     /**
      * Update internal maps with this file reference
      */
-    private assignFile<T extends BscFile>(file: T) {
+    private assignFile<T extends BscFile = BscFile>(file: T) {
         this.files[file.srcPath.toLowerCase()] = file;
         this.pkgMap[file.pkgPath.toLowerCase()] = file;
         return file;
@@ -351,7 +351,7 @@ export class Program {
     /**
      * Remove this file from internal maps
      */
-    private unassignFile<T extends BscFile>(file: T) {
+    private unassignFile<T extends BscFile = BscFile>(file: T) {
         delete this.files[file.srcPath.toLowerCase()];
         delete this.pkgMap[file.pkgPath.toLowerCase()];
         return file;
@@ -1038,7 +1038,7 @@ export class Program {
                     if (myClass) {
                         let classes = scope.getClassHierarchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
                         //and anything from any class in scope to a non m class
-                        for (let statement of [...classes].filter((i) => isClassMethodStatement(i.item))) {
+                        for (let statement of [...classes].filter((i) => isMethodStatement(i.item))) {
                             let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
                             if (sigHelp && !results.has[sigHelp.key]) {
 

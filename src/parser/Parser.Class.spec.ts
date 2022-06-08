@@ -3,7 +3,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import { TokenKind, AllowedLocalIdentifiers, AllowedProperties } from '../lexer/TokenKind';
 import { Lexer } from '../lexer/Lexer';
 import { Parser, ParseMode } from './Parser';
-import type { FunctionStatement, AssignmentStatement, ClassFieldStatement } from './Statement';
+import type { FunctionStatement, AssignmentStatement, FieldStatement } from './Statement';
 import { ClassStatement } from './Statement';
 import { NewExpression } from './Expression';
 import { isBooleanType, isCustomType, isTypedFunctionType, isIntegerType, isStringType } from '../astUtils/reflection';
@@ -195,7 +195,7 @@ describe('parser class', () => {
             let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.empty;
             expect(statements[0]).instanceof(ClassStatement);
-            let field = (statements[0] as ClassStatement).body[0] as ClassFieldStatement;
+            let field = (statements[0] as ClassStatement).body[0] as FieldStatement;
             expect(field.accessModifier.kind).to.equal(TokenKind.Public);
             expect(field.name.text).to.equal('firstName');
             expect(field.as.text).to.equal('as');
@@ -317,10 +317,10 @@ describe('parser class', () => {
             let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics[0]?.message).not.to.exist;
             let cls = statements[0] as ClassStatement;
-            expect((cls.memberMap['name'] as ClassFieldStatement).initialValue).to.exist;
-            expect((cls.memberMap['age'] as ClassFieldStatement).initialValue).to.exist;
-            expect((cls.memberMap['isalive'] as ClassFieldStatement).initialValue).to.exist;
-            expect((cls.memberMap['callback'] as ClassFieldStatement).initialValue).to.exist;
+            expect((cls.memberMap['name'] as FieldStatement).initialValue).to.exist;
+            expect((cls.memberMap['age'] as FieldStatement).initialValue).to.exist;
+            expect((cls.memberMap['isalive'] as FieldStatement).initialValue).to.exist;
+            expect((cls.memberMap['callback'] as FieldStatement).initialValue).to.exist;
         });
 
         it('detects missing function keyword', () => {

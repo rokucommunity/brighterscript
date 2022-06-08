@@ -148,6 +148,7 @@ describe('ProgramBuilder', () => {
                 }]
             });
             expectZeroDiagnostics(builder);
+            expect(builder.program.getFile(s``));
         });
     });
 

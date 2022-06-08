@@ -1,4 +1,5 @@
 import type { Range } from 'vscode-languageserver';
+import { AstEditor } from '../astUtils/AstEditor';
 import type { BrsFile } from '../files/BrsFile';
 import type { Scope } from '../Scope';
 import type { TypeContext } from '../types/BscType';
@@ -41,4 +42,9 @@ export class BrsTranspileState extends TranspileState {
     public get typeContext(): TypeContext {
         return { file: this.file, scope: this.scope };
     }
+
+    /*
+     * An AST editor that can be used by the AST nodes to do various transformations to the AST which will be reverted at the end of the transpile cycle
+     */
+    public editor = new AstEditor();
 }
