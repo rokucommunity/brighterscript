@@ -1,5 +1,5 @@
 import * as fsExtra from 'fs-extra';
-import * as glob from 'glob';
+import * as fastGlob from 'fast-glob';
 import * as path from 'path';
 import { Program } from '../src/Program';
 import type { BsConfig } from '../src';
@@ -16,6 +16,7 @@ class DocCompiler {
     ) {
 
     }
+
     private lines: string[];
     private index: number;
     private bsconfig: BsConfig;
@@ -195,7 +196,7 @@ class DocCompiler {
     const docsFolder = path.resolve(
         path.join(__dirname, '..', 'docs')
     );
-    const docs = glob.sync('**/*.md', {
+    const docs = fastGlob.sync('**/*.md', {
         cwd: docsFolder,
         absolute: true
     });

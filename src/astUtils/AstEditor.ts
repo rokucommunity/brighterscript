@@ -115,6 +115,15 @@ export class AstEditor {
     }
 
     /**
+     * Add a custom edit. Provide custom `apply` and `undo` functions to apply the change and then undo the change
+     */
+    public edit<T>(onApply: (data: Record<string, any>) => T, onUndo: (data: Record<string, any>) => void) {
+        const change = new ManualChange(onApply, onUndo);
+        this.changes.push(change);
+        return change.apply();
+    }
+
+    /**
      * Unto all changes.
      */
     public undoAll() {
@@ -258,6 +267,23 @@ class ArrayUnshiftChange<T extends any[]> implements Change {
 
     public undo() {
         this.array.splice(0, this.newValues.length);
+    }
+}
+
+/**
+ * A manual change. This will allow the consumer to define custom `apply` and `undo` functions to apply the change and then undo the change
+ */
+class ManualChange<T> implements Change {
+    constructor(
+        private _apply: (data: Record<string, any>) => T,
+        private _undo: (data: Record<string, any>) => any
+    ) { }
+
+    public apply() {
+        return this._apply?.(this);
+    }
+    public undo() {
+        this._undo?.(this);
     }
 }
 

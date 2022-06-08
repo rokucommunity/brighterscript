@@ -278,4 +278,26 @@ describe('AstEditor', () => {
         editor.undoAll();
         expect(arr).to.eql([1, 2, 3]);
     });
+
+    it('edit works', () => {
+        const testObj = getTestObject();
+        editor.edit((data) => {
+            data.oldValue = testObj.name;
+            testObj.name = 'new name';
+        }, (data) => {
+            testObj.name = data.oldValue;
+        });
+        expect(testObj.name).to.eql('new name');
+        editor.undoAll();
+        expect(testObj.name).to.eql(getTestObject().name);
+    });
+
+    it('edit handles missing functions', () => {
+        //missing undo
+        editor.edit((data) => { }, undefined);
+        //missing edit
+        editor.edit(undefined, (data) => { });
+
+        //test passes if no exceptions were thrown
+    });
 });

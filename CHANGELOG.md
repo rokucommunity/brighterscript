@@ -6,6 +6,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.51.4](https://github.com/rokucommunity/brighterscript/compare/v0.51.3...v0.51.4) - 2022-05-31
+### Fixed
+ - Add allowBrighterScriptInBrightScript to bsconfig.schema.json ([#610](https://github.com/rokucommunity/brighterscript/pull/610))
+
+
+
+## [0.51.3](https://github.com/rokucommunity/brighterscript/compare/v0.51.2...v0.51.3) - 2022-05-31
+### Fixed
+ - hover for namespace functions ([#606](https://github.com/rokucommunity/brighterscript/pull/606))
+### Changed
+ - add `owner` and `key` to the visitor callbacks ([#600](https://github.com/rokucommunity/brighterscript/pull/600))
+
+
+
+## [0.51.2](https://github.com/rokucommunity/brighterscript/compare/v0.51.1...v0.51.2) - 2022-05-26
+### Fixed
+ - allow enums and interfaces as class field types ([#602](https://github.com/rokucommunity/brighterscript/pull/602))
+
+
+
+## [0.51.1](https://github.com/rokucommunity/brighterscript/compare/v0.51.0...v0.51.1) - 2022-05-26
+### Fixed
+ - allow enums and interfaces as function return types ([#601](https://github.com/rokucommunity/brighterscript/pull/601))
+ - support AstEditor in visitor editing pattern ([#599](https://github.com/rokucommunity/brighterscript/pull/599))
+
+
+
+## [0.51.0](https://github.com/rokucommunity/brighterscript/compare/v0.50.2...v0.51.0) - 2022-05-24
+### Added
+ - Add function-based` AstEditor.edit` method ([#598](https://github.com/rokucommunity/brighterscript/pull/598))
+ - Allow multiple keys for `DependencyGraph.getAllDependencies()` ([#596](https://github.com/rokucommunity/brighterscript/pull/596))
+
+
+
+## [0.50.2](https://github.com/rokucommunity/brighterscript/compare/v0.50.1...v0.50.2) - 2022-05-23
+### Added
+ - `allowBrighterScriptInBrightScript` config option to allow brighterscript features to be included in BrightScript files, and force those files to be transpiled ([#573](https://github.com/rokucommunity/brighterscript/pull/573))
+### Changed
+ - upgrade to  [roku-deploy@3.7.0](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#370---2022-05-23)
+
+
+
+## [0.50.1](https://github.com/rokucommunity/brighterscript/compare/v0.50.0...v0.50.1) - 2022-05-18
+### Fixed
+ - Expose all the AstEditor methods to plugin events ([#593](https://github.com/rokucommunity/brighterscript/pull/593))
+ - Fix language server cwd issue with multi-root workspaces ([#592](https://github.com/rokucommunity/brighterscript/pull/592))
+
+
+
 ## [0.50.0](https://github.com/rokucommunity/brighterscript/compare/v0.49.0...v0.50.0) - 2022-05-17
 ### Added
  - `srcPath` property on `XmlFile` and `BrsFile` to line up with the v1 branch ([#581](https://github.com/rokucommunity/brighterscript/pull/581))

@@ -40,7 +40,6 @@
             ],
             "sourceMaps": true,
             "cwd": "${workspaceRoot}",
-            "protocol": "inspector",
             "resolveSourceMapLocations": [
                 "${workspaceFolder}/**",
                 "!**/node_modules/typescript/**",
@@ -67,7 +66,7 @@
         },
         {
             "name": "Debug Roku Docs Scraper",
-            "type": "node",
+            "type": "pwa-node",
             "request": "launch",
             "runtimeExecutable": "node",
             "runtimeArgs": [

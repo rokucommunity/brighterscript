@@ -1,6 +1,6 @@
 import type { BsDiagnostic } from '.';
 import { DiagnosticCollection } from './DiagnosticCollection';
-import type { Workspace } from './LanguageServer';
+import type { Project } from './LanguageServer';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { BscFile } from './interfaces';
 import util from './util';
@@ -9,21 +9,21 @@ import { expect } from 'chai';
 describe('DiagnosticCollection', () => {
     let collection: DiagnosticCollection;
     let diagnostics: BsDiagnostic[];
-    let workspaces: Workspace[];
+    let projects: Project[];
     beforeEach(() => {
         collection = new DiagnosticCollection();
         diagnostics = [];
         //make simple mock of workspace to pass tests
-        workspaces = [{
+        projects = [{
             firstRunPromise: Promise.resolve(),
             builder: {
                 getDiagnostics: () => diagnostics
             } as ProgramBuilder
-        }] as Workspace[];
+        }] as Project[];
     });
 
     async function testPatch(expected: Record<string, string[]>) {
-        const patch = await collection.getPatch(workspaces);
+        const patch = await collection.getPatch(projects);
         //convert the patch into our test structure
         const actual = {};
         for (const filePath in patch) {

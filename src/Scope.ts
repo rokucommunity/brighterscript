@@ -523,7 +523,9 @@ export class Scope {
         let lowerName = name.toLowerCase();
         let callables = this.getAllCallables();
         for (let callable of callables) {
-            if (callable.callable.getName(ParseMode.BrighterScript).toLowerCase() === lowerName) {
+            const callableName = callable.callable.getName(ParseMode.BrighterScript);
+            // Split by `.` and check the last term to consider namespaces.
+            if (callableName.toLowerCase() === lowerName || callableName.split('.').pop()?.toLowerCase() === lowerName) {
                 return callable.callable;
             }
         }
@@ -916,7 +918,7 @@ export class Scope {
                 // check if this custom type is in our class map
                 const returnTypeName = func.returnType.getText();
                 const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
-                if (!this.hasClass(returnTypeName, currentNamespaceName)) {
+                if (!this.hasClass(returnTypeName, currentNamespaceName) && !this.hasInterface(returnTypeName) && !this.hasEnum(returnTypeName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.invalidFunctionReturnType(returnTypeName),
                         range: func.returnType.range,

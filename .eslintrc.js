@@ -26,6 +26,7 @@ module.exports = {
         '@typescript-eslint/explicit-member-accessibility': 'off',
         '@typescript-eslint/explicit-module-boundary-types': 'off',
         '@typescript-eslint/init-declarations': 'off',
+        '@typescript-eslint/parameter-properties': 'off',
         '@typescript-eslint/lines-between-class-members': 'off',
         '@typescript-eslint/member-ordering': 'off',
         '@typescript-eslint/method-signature-style': 'off',
@@ -82,6 +83,7 @@ module.exports = {
         '@typescript-eslint/restrict-template-expressions': 'off',
         '@typescript-eslint/sort-type-union-intersection-members': 'off',
         '@typescript-eslint/space-before-function-paren': 'off',
+        '@typescript-eslint/space-infix-ops': 'off',
         '@typescript-eslint/strict-boolean-expressions': 'off',
         '@typescript-eslint/typedef': 'off',
         '@typescript-eslint/unbound-method': 'off',
@@ -172,6 +174,7 @@ module.exports = {
         'sort-imports': 'off',
         'sort-keys': 'off',
         'spaced-comment': 'off',
+        'space-infix-ops': 'off',
         'vars-on-top': 'off',
         'wrap-regex': 'off'
     },

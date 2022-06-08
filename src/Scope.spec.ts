@@ -1275,6 +1275,97 @@ describe('Scope', () => {
                 ]);
             });
 
+            it('supports enums and interfaces as types', () => {
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+
+                    interface MyInterface
+                        title as string
+                    end interface
+                    enum myEnum
+                        title = "t"
+                    end enum
+
+                    class myClass
+                        foo as myInterface
+                        foo2 as myEnum
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds interface types', () => {
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    namespace MyNamespace
+                        interface MyInterface
+                          title as string
+                        end interface
+
+                        function bar(param as MyNamespace.MyInterface) as MyNamespace.MyInterface
+                        end function
+
+                    end namespace
+
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds non-namespaced interface types', () => {
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    interface MyInterface
+                        title as string
+                    end interface
+
+                    namespace MyNamespace
+                        function bar(param as MyInterface) as MyInterface
+                        end function
+
+                    end namespace
+
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds enum types', () => {
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    namespace MyNamespace
+                        enum MyEnum
+                          title = "t"
+                        end enum
+
+                        function bar(param as MyNamespace.MyEnum) as MyNamespace.MyEnum
+                        end function
+
+                    end namespace
+
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds non-namespaced enum types', () => {
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    enum MyEnum
+                        title = "t"
+                    end enum
+
+                    namespace MyNamespace
+                        function bar(param as MyEnum) as MyEnum
+                        end function
+
+                    end namespace
+
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
             it('finds custom types inside namespaces', () => {
                 program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     namespace MyNamespace

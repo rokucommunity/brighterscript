@@ -3,7 +3,7 @@ import * as fsExtra from 'fs-extra';
 import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
-import * as rokuDeploy from 'roku-deploy';
+import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
 import type { Diagnostic, Position, Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
@@ -167,7 +167,11 @@ export class Util {
             //load the project file
             let projectFileContents = fsExtra.readFileSync(configFilePath).toString();
             let parseErrors = [] as ParseError[];
-            let projectConfig = parseJsonc(projectFileContents, parseErrors) as BsConfig;
+            let projectConfig = parseJsonc(projectFileContents, parseErrors, {
+                allowEmptyContent: true,
+                allowTrailingComma: true,
+                disallowComments: false
+            }) as BsConfig;
             if (parseErrors.length > 0) {
                 let err = parseErrors[0];
                 let diagnostic = {
@@ -298,11 +302,12 @@ export class Util {
      */
     public normalizeConfig(config: BsConfig) {
         config = config || {} as BsConfig;
+        config.cwd = config.cwd ?? process.cwd();
         config.deploy = config.deploy === true ? true : false;
-        //use default options from rokuDeploy
-        config.files = config.files ?? rokuDeploy.getOptions().files;
+        //use default files array from rokuDeploy
+        config.files = config.files ?? [...DefaultFiles];
         config.createPackage = config.createPackage === false ? false : true;
-        let rootFolderName = path.basename(process.cwd());
+        let rootFolderName = path.basename(config.cwd);
         config.outFile = config.outFile ?? `./out/${rootFolderName}.zip`;
         config.sourceMap = config.sourceMap === true;
         config.username = config.username ?? 'rokudev';
@@ -316,7 +321,7 @@ export class Util {
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
         config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
         config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
-        config.cwd = config.cwd ?? process.cwd();
+        config.allowBrighterScriptInBrightScript = config.allowBrighterScriptInBrightScript === true ? true : false;
         config.emitDefinitions = config.emitDefinitions === true ? true : false;
         if (typeof config.logLevel === 'string') {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
@@ -1214,7 +1219,7 @@ export class Util {
      */
     public standardizePath(thePath: string) {
         return util.driveLetterToLower(
-            rokuDeploy.standardizePath(thePath)
+            rokuDeployStandardizePath(thePath)
         );
     }
 
@@ -1470,7 +1475,11 @@ export function standardizePath(stringParts, ...expressions: any[]) {
     for (let i = 0; i < stringParts.length; i++) {
         result.push(stringParts[i], expressions[i]);
     }
-    return util.standardizePath(result.join(''));
+    return util.driveLetterToLower(
+        rokuDeployStandardizePath(
+            result.join('')
+        )
+    );
 }
 
 

@@ -8,7 +8,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { getBscTypeFromExpression, ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
-import { walk, InternalWalkMode } from '../astUtils/visitors';
+import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
 import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -119,9 +119,7 @@ export class CallExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'callee', visitor, options);
-            for (let i = 0; i < this.args.length; i++) {
-                walk(this.args, i, visitor, options, this);
-            }
+            walkArray(this.args, visitor, options, this);
         }
     }
 }
@@ -290,9 +288,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            for (let i = 0; i < this.parameters.length; i++) {
-                walk(this.parameters, i, visitor, options, this);
-            }
+            walkArray(this.parameters, visitor, options, this);
 
             //This is the core of full-program walking...it allows us to step into sub functions
             if (options.walkMode & InternalWalkMode.recurseChildFunctions) {
@@ -672,9 +668,7 @@ export class ArrayLiteralExpression extends Expression {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            for (let i = 0; i < this.elements.length; i++) {
-                walk(this.elements, i, visitor, options, this);
-            }
+            walkArray(this.elements, visitor, options, this);
         }
     }
 }
@@ -802,13 +796,7 @@ export class AALiteralExpression extends Expression implements SymbolContainer {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            for (let i = 0; i < this.elements.length; i++) {
-                if (isCommentStatement(this.elements[i])) {
-                    walk(this.elements, i, visitor, options, this);
-                } else {
-                    walk(this.elements, i, visitor, options, this);
-                }
-            }
+            walkArray(this.elements, visitor, options, this);
         }
     }
 }
@@ -1042,9 +1030,7 @@ export class CallfuncExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'callee', visitor, options);
-            for (let i = 0; i < this.args.length; i++) {
-                walk(this.args, i, visitor, options, this);
-            }
+            walkArray(this.args, visitor, options, this);
         }
     }
 }
@@ -1083,9 +1069,7 @@ export class TemplateStringQuasiExpression extends Expression {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            for (let i = 0; i < this.expressions.length; i++) {
-                walk(this.expressions, i, visitor, options, this);
-            }
+            walkArray(this.expressions, visitor, options, this);
         }
     }
 }
