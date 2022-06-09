@@ -399,25 +399,25 @@ describe('EnumStatement', () => {
 
         it('catches unknown namespaced enum members', () => {
             program.setFile('source/main.bs', `
+                sub main()
+                    print Enums.Direction.DOWN
+                    print Enums.Direction.down
+                    print Enums.Direction.up
+                end sub
                 namespace Enums
                     enum Direction
                         up
                     end enum
                 end namespace
 
-                sub main()
-                    print Enums.Direction.up
-                    print Enums.Direction.DOWN
-                    print Enums.Direction.down
-                end sub
             `);
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.unknownEnumValue('DOWN', 'Enums.Direction'),
-                range: util.createRange(9, 42, 9, 46)
+                range: util.createRange(2, 42, 2, 46)
             }, {
                 ...DiagnosticMessages.unknownEnumValue('down', 'Enums.Direction'),
-                range: util.createRange(10, 42, 10, 46)
+                range: util.createRange(3, 42, 3, 46)
             }]);
         });
     });

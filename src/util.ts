@@ -24,9 +24,9 @@ import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
-import type { Locatable, Token } from './lexer/Token';
+import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isDottedGetExpression, isExpression, isVariableExpression } from './astUtils/reflection';
+import { isDottedGetExpression, isExpression, isNamespacedVariableNameExpression, isVariableExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
@@ -1299,15 +1299,17 @@ export class Util {
      * @param expression
      * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
      */
-    public getAllDottedGetParts(expression: Expression): string[] | undefined {
-        const parts: string[] = [];
+    public getAllDottedGetParts(expression: Expression): Identifier[] | undefined {
+        const parts: Identifier[] = [];
         let nextPart = expression;
         while (nextPart) {
             if (isDottedGetExpression(nextPart)) {
-                parts.push(nextPart?.name?.text);
+                parts.push(nextPart?.name);
                 nextPart = nextPart.obj;
+            } else if (isNamespacedVariableNameExpression(nextPart)) {
+                nextPart = nextPart.expression;
             } else if (isVariableExpression(nextPart)) {
-                parts.push(nextPart?.name?.text);
+                parts.push(nextPart?.name);
                 break;
             } else {
                 //we found a non-DottedGet expression, so return because this whole operation is invalid.

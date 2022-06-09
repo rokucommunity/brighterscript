@@ -7,7 +7,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement } from './parser/Statement';
+import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement } from './parser/Statement';
 import type { NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { standardizePath as s, util } from './util';
@@ -137,6 +137,23 @@ export class Scope {
             enumeration = enumMap.get(lowerName);
         }
         return enumeration;
+    }
+
+    /**
+     * Get a map of all enums by their member name.
+     * The keys are lower-case fully-qualified paths to the enum and its member. For example:
+     * namespace.enum.value
+     */
+    public getEnumMemberMap() {
+        return this.cache.getOrAdd('enumMemberMap', () => {
+            const result = new Map<string, EnumMemberStatement>();
+            for (const [key, eenum] of this.getEnumMap()) {
+                for (const member of eenum.item.getMembers()) {
+                    result.set(`${key}.${member.name.toLowerCase()}`, member);
+                }
+            }
+            return result;
+        });
     }
 
     /**

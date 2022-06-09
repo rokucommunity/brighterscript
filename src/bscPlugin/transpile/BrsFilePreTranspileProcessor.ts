@@ -33,7 +33,7 @@ export class BrsFilePreTranspileProcessor {
                 actualExpressions.push(referenceExpression);
             }
             for (const expression of actualExpressions) {
-                const parts = util.getAllDottedGetParts(expression)?.map(x => x.toLowerCase());
+                const parts = util.getAllDottedGetParts(expression)?.map(x => x.text.toLowerCase());
                 if (parts) {
                     //get the name of the enum member
                     const memberName = parts.pop();
