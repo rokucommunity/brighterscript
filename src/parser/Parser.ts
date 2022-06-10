@@ -89,7 +89,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAAMemberExpression, isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
@@ -999,12 +999,14 @@ export class Parser {
         if (operator.kind === TokenKind.Equal) {
             result = new AssignmentStatement(operator, name, value, this.currentFunctionExpression);
         } else {
+            const nameExpression = new VariableExpression(name, this.currentNamespaceName);
             result = new AssignmentStatement(
                 operator,
                 name,
-                new BinaryExpression(new VariableExpression(name, this.currentNamespaceName), operator, value),
+                new BinaryExpression(nameExpression, operator, value),
                 this.currentFunctionExpression
             );
+            this.addExpressionsToReferences(nameExpression);
             //remove the right-hand-side expression from this assignment operator, and replace with the full assignment expression
             this._references.expressions.delete(value);
             this._references.expressions.add(result);
@@ -2232,6 +2234,7 @@ export class Parser {
         while (this.matchAny(TokenKind.And, TokenKind.Or)) {
             let operator = this.previous();
             let right = this.relational();
+            this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
         }
 
@@ -2253,10 +2256,19 @@ export class Parser {
         ) {
             let operator = this.previous();
             let right = this.additive();
+            this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
         }
 
         return expr;
+    }
+
+    private addExpressionsToReferences(...expressions: Expression[]) {
+        for (const expression of expressions) {
+            if (!isBinaryExpression(expression)) {
+                this.references.expressions.add(expression);
+            }
+        }
     }
 
     // TODO: bitshift
@@ -2267,6 +2279,7 @@ export class Parser {
         while (this.matchAny(TokenKind.Plus, TokenKind.Minus)) {
             let operator = this.previous();
             let right = this.multiplicative();
+            this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
         }
 
@@ -2286,6 +2299,7 @@ export class Parser {
         )) {
             let operator = this.previous();
             let right = this.exponential();
+            this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
         }
 
@@ -2298,6 +2312,7 @@ export class Parser {
         while (this.match(TokenKind.Caret)) {
             let operator = this.previous();
             let right = this.prefixUnary();
+            this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
         }
 
@@ -3016,6 +3031,18 @@ export class Parser {
                     }
                 }
             },
+            BinaryExpression: (e, parent) => {
+                //walk the chain of binary expressions and add each one to the list of expressions
+                const expressions: Expression[] = [e];
+                let expression: Expression;
+                while ((expression = expressions.pop())) {
+                    if (isBinaryExpression(expression)) {
+                        expressions.push(expression.left, expression.right);
+                    } else {
+                        this._references.expressions.add(expression);
+                    }
+                }
+            },
             ArrayLiteralExpression: e => {
                 for (const element of e.elements) {
                     //keep everything except comments
@@ -3130,6 +3157,9 @@ export class References {
      *
      * Example 2:
      * `name.space.doSomething(a.b.c)` will result in 2 entries in this list. the `CallExpression` for `doSomething`, and the `.c` DottedGetExpression.
+     *
+     * Example 3:
+     * `value = SomeEnum.value > 2 or SomeEnum.otherValue < 10` will result in 4 entries. `SomeEnum.value`, `2`, `SomeEnum.otherValue`, `10`
      */
     public expressions = new Set<Expression>();
 

@@ -418,7 +418,7 @@ describe('LanguageServer', () => {
             await server['syncProjects']();
 
             expect(
-                server.projects.map(x => x.projectPath)
+                server.projects.map(x => x.projectPath).sort()
             ).to.eql([
                 s`${tempDir}/root`,
                 s`${tempDir}/root/subdir`

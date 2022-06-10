@@ -58,8 +58,9 @@ describe('parser', () => {
         it('works for references.expressions', () => {
             const parser = Parser.parse(`
                 a += 1 + 2
-                a++
-                a--
+                b += getValue1() + getValue2()
+                increment++
+                decrement--
                 some.node@.doCallfunc()
                 bravo(3 + 4).jump(callMe())
                 obj = {
@@ -80,11 +81,20 @@ describe('parser', () => {
                 end function
             `);
             const expected = [
+                '1',
+                '2',
+                'a',
                 'a += 1 + 2',
-                'a++',
-                'a--',
+                'getValue1()',
+                'getValue2()',
+                'b',
+                'b += getValue1() + getValue2()',
+                'increment++',
+                'decrement--',
                 //currently the "toString" does a transpile, so that's why this is different.
                 'some.node.callfunc("doCallfunc", invalid)',
+                '3',
+                '4',
                 '3 + 4',
                 'callMe()',
                 'bravo(3 + 4).jump(callMe())',
@@ -99,10 +109,10 @@ describe('parser', () => {
                 'call1().a.b.call2()',
                 '"bob"',
                 'name.space.getSomething()'
-            ].sort();
+            ];
 
             expect(
-                expressionsToStrings(parser.references.expressions).sort()
+                expressionsToStrings(parser.references.expressions)
             ).to.eql(expected);
 
             //tell the parser we modified the AST and need to regenerate references
@@ -110,7 +120,57 @@ describe('parser', () => {
 
             expect(
                 expressionsToStrings(parser.references.expressions).sort()
+            ).to.eql(expected.sort());
+        });
+
+        it('works for references.expressions', () => {
+            const parser = Parser.parse(`
+                value = true or type(true) = "something" or Enums.A.Value = "value" and Enum1.Value = Name.Space.Enum2.Value
+            `);
+            const expected = [
+                'true',
+                'type(true)',
+                '"something"',
+                'true',
+                'Enums.A.Value',
+                '"value"',
+                'Enum1.Value',
+                'Name.Space.Enum2.Value',
+                'true or type(true) = "something" or Enums.A.Value = "value" and Enum1.Value = Name.Space.Enum2.Value'
+            ];
+
+            expect(
+                expressionsToStrings(parser.references.expressions)
             ).to.eql(expected);
+
+            //tell the parser we modified the AST and need to regenerate references
+            parser.invalidateReferences();
+
+            expect(
+                expressionsToStrings(parser.references.expressions).sort()
+            ).to.eql(expected.sort());
+        });
+
+        it('works for logical expression', () => {
+            const parser = Parser.parse(`
+                value = Enums.A.Value = "value"
+            `);
+            const expected = [
+                'Enums.A.Value',
+                '"value"',
+                'Enums.A.Value = "value"'
+            ];
+
+            expect(
+                expressionsToStrings(parser.references.expressions)
+            ).to.eql(expected);
+
+            //tell the parser we modified the AST and need to regenerate references
+            parser.invalidateReferences();
+
+            expect(
+                expressionsToStrings(parser.references.expressions).sort()
+            ).to.eql(expected.sort());
         });
     });
 

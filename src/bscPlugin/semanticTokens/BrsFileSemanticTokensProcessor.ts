@@ -1,10 +1,9 @@
 import type { Range } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isBinaryExpression, isCallExpression, isCustomType, isNewExpression } from '../../astUtils/reflection';
+import { isCallExpression, isCustomType, isNewExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnGetSemanticTokensEvent } from '../../interfaces';
 import type { Locatable } from '../../lexer/Token';
-import type { Expression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import util from '../../util';
 
@@ -77,39 +76,29 @@ export class BrsFileSemanticTokensProcessor {
     private iterateExpressions() {
         const scope = this.event.scopes[0];
 
-        for (const referenceExpression of this.event.file.parser.references.expressions) {
-            const actualExpressions: Expression[] = [];
-            //binary expressions actually have two expressions (left and right), so handle them independently
-            if (isBinaryExpression(referenceExpression)) {
-                actualExpressions.push(referenceExpression.left, referenceExpression.right);
-            } else {
-                //assume all other expressions are a single chain
-                actualExpressions.push(referenceExpression);
+        for (let expression of this.event.file.parser.references.expressions) {
+            //lift the callee from call expressions to handle namespaced function calls
+            if (isCallExpression(expression)) {
+                expression = expression.callee;
+            } else if (isNewExpression(expression)) {
+                expression = expression.call.callee;
             }
-            for (let expression of actualExpressions) {
-                //lift the callee from call expressions to handle namespaced function calls
-                if (isCallExpression(expression)) {
-                    expression = expression.callee;
-                } else if (isNewExpression(expression)) {
-                    expression = expression.call.callee;
-                }
-                const tokens = util.getAllDottedGetParts(expression);
-                const processedNames: string[] = [];
-                for (const token of tokens ?? []) {
-                    processedNames.push(token.text?.toLowerCase());
-                    const entityName = processedNames.join('.');
+            const tokens = util.getAllDottedGetParts(expression);
+            const processedNames: string[] = [];
+            for (const token of tokens ?? []) {
+                processedNames.push(token.text?.toLowerCase());
+                const entityName = processedNames.join('.');
 
-                    if (scope.getEnumMemberMap().has(entityName)) {
-                        this.addToken(token, SemanticTokenTypes.enumMember);
-                    } else if (scope.getEnumMap().has(entityName)) {
-                        this.addToken(token, SemanticTokenTypes.enum);
-                    } else if (scope.getClassMap().has(entityName)) {
-                        this.addToken(token, SemanticTokenTypes.class);
-                    } else if (scope.getCallableByName(entityName)) {
-                        this.addToken(token, SemanticTokenTypes.function);
-                    } else if (scope.namespaceLookup.has(entityName)) {
-                        this.addToken(token, SemanticTokenTypes.namespace);
-                    }
+                if (scope.getEnumMemberMap().has(entityName)) {
+                    this.addToken(token, SemanticTokenTypes.enumMember);
+                } else if (scope.getEnumMap().has(entityName)) {
+                    this.addToken(token, SemanticTokenTypes.enum);
+                } else if (scope.getClassMap().has(entityName)) {
+                    this.addToken(token, SemanticTokenTypes.class);
+                } else if (scope.getCallableByName(entityName)) {
+                    this.addToken(token, SemanticTokenTypes.function);
+                } else if (scope.namespaceLookup.has(entityName)) {
+                    this.addToken(token, SemanticTokenTypes.namespace);
                 }
             }
         }
