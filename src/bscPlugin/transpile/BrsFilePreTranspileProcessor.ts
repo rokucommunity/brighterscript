@@ -1,8 +1,6 @@
-import { isBinaryExpression } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BeforeFileTranspileEvent } from '../../interfaces';
-import type { Expression } from '../../parser/Expression';
 import util from '../../util';
 
 export class BrsFilePreTranspileProcessor {

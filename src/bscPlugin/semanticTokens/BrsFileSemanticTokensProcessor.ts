@@ -1,10 +1,9 @@
 import type { Range } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isBinaryExpression, isCallExpression, isCustomType, isNewExpression } from '../../astUtils/reflection';
+import { isCallExpression, isCustomType, isNewExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnGetSemanticTokensEvent } from '../../interfaces';
 import type { Locatable } from '../../lexer/Token';
-import type { Expression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import util from '../../util';
 
