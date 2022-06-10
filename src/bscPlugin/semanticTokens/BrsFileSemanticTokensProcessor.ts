@@ -1,8 +1,9 @@
 import type { Range } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isBinaryExpression, isCustomType } from '../../astUtils/reflection';
+import { isBinaryExpression, isCallExpression, isCustomType, isNewExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnGetSemanticTokensEvent } from '../../interfaces';
+import type { Locatable } from '../../lexer/Token';
 import type { Expression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import util from '../../util';
@@ -16,7 +17,7 @@ export class BrsFileSemanticTokensProcessor {
 
     public process() {
         this.handleClasses();
-        this.handleEnums();
+        this.iterateExpressions();
     }
 
     private handleClasses() {
@@ -35,14 +36,6 @@ export class BrsFileSemanticTokensProcessor {
                 }
             }
         }
-        //classes used in `new` expressions
-        for (const expr of this.event.file.parser.references.newExpressions) {
-            classes.push({
-                className: expr.className.getName(ParseMode.BrighterScript),
-                namespaceName: expr.namespaceName?.getName(ParseMode.BrighterScript),
-                range: expr.className.range
-            });
-        }
 
         for (const cls of classes) {
             if (
@@ -51,25 +44,39 @@ export class BrsFileSemanticTokensProcessor {
                 this.event.scopes.some(x => x.hasClass(cls.className, cls.namespaceName))
             ) {
                 const tokens = util.splitGetRange('.', cls.className, cls.range);
-                //namespace parts (skip the final array entry)
-                for (let i = 0; i < tokens.length - 1; i++) {
-                    const token = tokens[i];
-                    this.event.semanticTokens.push({
-                        range: token.range,
-                        tokenType: SemanticTokenTypes.namespace
-                    });
-                }
-                //class name
-                this.event.semanticTokens.push({
-                    range: tokens.pop().range,
-                    tokenType: SemanticTokenTypes.class
-                });
+                this.addTokens(tokens.reverse(), SemanticTokenTypes.class, SemanticTokenTypes.namespace);
             }
         }
     }
 
-    private handleEnums() {
-        const enumLookup = this.event.file.program.getFirstScopeForFile(this.event.file)?.getEnumMap();
+    /**
+     * Add tokens for each locatable item in the list.
+     * Each locatable is paired with a token type. If there are more locatables than token types, all remaining locatables are given the final token type
+     */
+    private addTokens(locatables: Locatable[], ...semanticTokenTypes: SemanticTokenTypes[]) {
+        for (let i = 0; i < locatables.length; i++) {
+            const locatable = locatables[i];
+            //skip items that don't have a location
+            if (locatable?.range) {
+                this.addToken(
+                    locatables[i],
+                    //use the type at the index, or the last type if missing
+                    semanticTokenTypes[i] ?? semanticTokenTypes[semanticTokenTypes.length - 1]
+                );
+            }
+        }
+    }
+
+    private addToken(locatable: Locatable, type: SemanticTokenTypes) {
+        this.event.semanticTokens.push({
+            range: locatable.range,
+            tokenType: type
+        });
+    }
+
+    private iterateExpressions() {
+        const scope = this.event.scopes[0];
+
         for (const referenceExpression of this.event.file.parser.references.expressions) {
             const actualExpressions: Expression[] = [];
             //binary expressions actually have two expressions (left and right), so handle them independently
@@ -79,34 +86,29 @@ export class BrsFileSemanticTokensProcessor {
                 //assume all other expressions are a single chain
                 actualExpressions.push(referenceExpression);
             }
-            for (const expression of actualExpressions) {
-                const parts = util.getAllDottedGetParts(expression)?.map(x => x.toLowerCase());
-                if (parts) {
-                    //discard the enum member name
-                    const memberName = parts.pop();
-                    //get the name of the enum (including leading namespace if applicable)
-                    const enumName = parts.join('.');
-                    const lowerEnumName = enumName.toLowerCase();
-                    const theEnum = enumLookup.get(lowerEnumName)?.item;
-                    if (theEnum) {
-                        const tokens = util.splitGetRange('.', lowerEnumName + '.' + memberName, expression.range);
-                        //enum member name
-                        this.event.semanticTokens.push({
-                            range: tokens.pop().range,
-                            tokenType: SemanticTokenTypes.enumMember
-                        });
-                        //enum name
-                        this.event.semanticTokens.push({
-                            range: tokens.pop().range,
-                            tokenType: SemanticTokenTypes.enum
-                        });
-                        //namespace parts
-                        for (const token of tokens) {
-                            this.event.semanticTokens.push({
-                                range: token.range,
-                                tokenType: SemanticTokenTypes.namespace
-                            });
-                        }
+            for (let expression of actualExpressions) {
+                //lift the callee from call expressions to handle namespaced function calls
+                if (isCallExpression(expression)) {
+                    expression = expression.callee;
+                } else if (isNewExpression(expression)) {
+                    expression = expression.call.callee;
+                }
+                const tokens = util.getAllDottedGetParts(expression);
+                const processedNames: string[] = [];
+                for (const token of tokens ?? []) {
+                    processedNames.push(token.text?.toLowerCase());
+                    const entityName = processedNames.join('.');
+
+                    if (scope.getEnumMemberMap().has(entityName)) {
+                        this.addToken(token, SemanticTokenTypes.enumMember);
+                    } else if (scope.getEnumMap().has(entityName)) {
+                        this.addToken(token, SemanticTokenTypes.enum);
+                    } else if (scope.getClassMap().has(entityName)) {
+                        this.addToken(token, SemanticTokenTypes.class);
+                    } else if (scope.getCallableByName(entityName)) {
+                        this.addToken(token, SemanticTokenTypes.function);
+                    } else if (scope.namespaceLookup.has(entityName)) {
+                        this.addToken(token, SemanticTokenTypes.namespace);
                     }
                 }
             }

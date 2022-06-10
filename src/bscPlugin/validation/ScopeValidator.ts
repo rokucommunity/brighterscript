@@ -1,11 +1,11 @@
 import { Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
-import { isBrsFile, isLiteralExpression } from '../../astUtils/reflection';
+import { isBinaryExpression, isBrsFile, isLiteralExpression } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
-import type { DottedGetExpression } from '../../parser/Expression';
+import type { Expression } from '../../parser/Expression';
 import type { EnumStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
@@ -59,7 +59,6 @@ export class ScopeValidator {
     public validateEnumUsage(event: OnScopeValidateEvent) {
         const diagnostics = [] as BsDiagnostic[];
 
-        const membersByEnum = new Cache<string, Map<string, string>>();
         //if there are any enums defined in this scope
         const enumLookup = event.scope.getEnumMap();
 
@@ -74,34 +73,40 @@ export class ScopeValidator {
                 return;
             }
 
-            for (const expression of file.parser.references.expressions as Set<DottedGetExpression>) {
-                const parts = util.getAllDottedGetParts(expression);
-                //skip expressions that aren't fully dotted gets
-                if (!parts) {
-                    continue;
+            // const namespaceLookup = this.event.scopes[0]?.namespaceLookup;
+            for (const referenceExpression of file.parser.references.expressions) {
+                const actualExpressions: Expression[] = [];
+                //binary expressions actually have two expressions (left and right), so handle them independently
+                if (isBinaryExpression(referenceExpression)) {
+                    actualExpressions.push(referenceExpression.left, referenceExpression.right);
+                } else {
+                    //assume all other expressions are a single chain
+                    actualExpressions.push(referenceExpression);
                 }
-                //get the name of the enum member
-                const memberName = parts.pop();
-                //get the name of the enum (including leading namespace if applicable)
-                const enumName = parts.join('.');
-                const lowerEnumName = enumName.toLowerCase();
-                const theEnum = enumLookup.get(lowerEnumName)?.item;
-                if (theEnum) {
-                    const members = membersByEnum.getOrAdd(lowerEnumName, () => theEnum.getMemberValueMap());
-                    const value = members?.get(memberName.toLowerCase());
-                    if (!value) {
-                        diagnostics.push({
-                            file: file,
-                            ...DiagnosticMessages.unknownEnumValue(memberName, theEnum.fullName),
-                            range: expression.name.range,
-                            relatedInformation: [{
-                                message: 'Enum declared here',
-                                location: Location.create(
-                                    URI.file(file.srcPath).toString(),
-                                    theEnum.tokens.name.range
-                                )
-                            }]
-                        });
+                for (let expression of actualExpressions) {
+                    const tokens = util.getAllDottedGetParts(expression);
+                    if (tokens) {
+                        //build the full name of the thing
+                        const parts = tokens.map(x => x.text);
+                        const fullName = parts.join('.');
+                        const memberName = parts.pop();
+                        const fullParentName = parts.join('.');
+                        const theEnum = event.scope.getEnumMap().get(fullParentName.toLowerCase())?.item;
+                        //is an enum and this field does not exist
+                        if (theEnum && !event.scope.getEnumMemberMap().has(fullName.toLowerCase())) {
+                            diagnostics.push({
+                                file: file,
+                                ...DiagnosticMessages.unknownEnumValue(memberName, fullParentName),
+                                range: tokens[tokens.length - 1].range,
+                                relatedInformation: [{
+                                    message: 'Enum declared here',
+                                    location: Location.create(
+                                        URI.file(file.srcPath).toString(),
+                                        theEnum.tokens.name.range
+                                    )
+                                }]
+                            });
+                        }
                     }
                 }
             }
