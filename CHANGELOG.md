@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.52.1](https://github.com/rokucommunity/brighterscript/compare/v0.52.0...v0.52.1) - 2022-06-10
+### Fixed
+ - detect class circular extends ([#619](https://github.com/rokucommunity/brighterscript/pull/619))
+ - improve namespace/enum/class semantic token detection (better syntax highlighting) ([##621](https://github.com/rokucommunity/brighterscript/pull/#621))
+
+
+
 ## [0.52.0](https://github.com/rokucommunity/brighterscript/compare/v0.51.4...v0.52.0) - 2022-06-08
 ### Added
  - LanguageServer: Load projects based on bsconfig.json presence ([#613](https://github.com/rokucommunity/brighterscript/pull/613))
