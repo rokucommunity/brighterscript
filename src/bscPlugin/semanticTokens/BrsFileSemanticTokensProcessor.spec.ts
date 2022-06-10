@@ -22,15 +22,17 @@ describe('BrsFileSemanticTokensProcessor', () => {
     function expectSemanticTokens(file: BscFile, tokens: SemanticToken[]) {
         program.validate();
         expectZeroDiagnostics(program);
+        const result = util.sortByRange(
+            program.getSemanticTokens(file.srcPath)
+        );
         expect(
-            util.sortByRange(
-                program.getSemanticTokens(file.srcPath)
-            )
+            result
         ).to.eql(
             util.sortByRange(
                 tokens
             )
         );
+        return result;
     }
 
     it('matches each namespace section for class', () => {

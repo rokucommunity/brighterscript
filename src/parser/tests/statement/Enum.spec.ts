@@ -887,6 +887,22 @@ describe('EnumStatement', () => {
             `);
         });
 
+        it('handles when found in boolean expressions', () => {
+            testTranspile(`
+                sub main()
+                    result = Direction.up = "up" or Direction.down = "down" and Direction.up = Direction.down
+                end sub
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `, `
+                sub main()
+                    result = "up" = "up" or "down" = "down" and "up" = "down"
+                end sub
+            `);
+        });
+
         it('replaces enum values in if statements', () => {
             testTranspile(`
                 sub main()
