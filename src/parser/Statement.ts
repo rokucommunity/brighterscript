@@ -1223,6 +1223,14 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         this.tokens.name = name;
         this.tokens.extends = extendsToken;
         this.tokens.endInterface = endInterfaceToken;
+        this.range = util.createBoundingRange(
+            this.tokens.interface,
+            this.tokens.name,
+            this.tokens.extends,
+            this.parentInterfaceName,
+            ...this.body,
+            this.tokens.endInterface
+        );
     }
 
     public tokens = {} as {
