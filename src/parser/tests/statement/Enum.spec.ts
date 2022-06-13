@@ -604,6 +604,25 @@ describe('EnumStatement', () => {
                 end sub
             `);
         });
+
+        it('replaces enums in if statements', () => {
+            testTranspile(`
+                enum CharacterType
+                    zombie = "zombie"
+                end enum
+                sub main()
+                    if "one" = CharacterType.zombie or "two" = CharacterType.zombie and "three" = CharacterType.zombie
+                        print true
+                    end if
+                end sub
+            `, `
+                sub main()
+                    if "one" = "zombie" or "two" = "zombie" and "three" = "zombie"
+                        print true
+                    end if
+                end sub
+            `);
+        });
     });
 
     describe('completions', () => {
