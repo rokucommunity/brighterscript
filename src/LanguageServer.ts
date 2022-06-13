@@ -1191,6 +1191,7 @@ export class LanguageServer {
             const result = await this.transpileFile(params.arguments[0]);
             //back-compat: include `pathAbsolute` property so older vscode versions still work
             (result as any).pathAbsolute = result.srcPath;
+            return result;
         }
     }
 
