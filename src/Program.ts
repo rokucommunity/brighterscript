@@ -1345,8 +1345,10 @@ export class Program {
 
         const processedFiles = new Set<File>();
 
-        const transpileFile = async (file: BscFile, outputPath?: string) => {
-            //mark this file as processed so we don't do it again
+        const transpileFile = async (srcPath: string, outputPath?: string) => {
+            //find the file in the program
+            const file = this.getFile(srcPath);
+            //mark this file as processed so we don't process it more than once
             processedFiles.add(file);
 
             //skip transpiling typedef files
@@ -1386,7 +1388,7 @@ export class Program {
         this.plugins.emit('beforeProgramTranspile', this, entries, astEditor);
 
         let promises = entries.map(async (entry) => {
-            return transpileFile(entry.file, entry.outputPath);
+            return transpileFile(entry?.file?.srcPath, entry.outputPath);
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
@@ -1403,7 +1405,7 @@ export class Program {
                 //this is a new file
                 if (!processedFiles.has(file)) {
                     promises.push(
-                        transpileFile(file, getOutputPath(file))
+                        transpileFile(file?.srcPath, getOutputPath(file))
                     );
                 }
             }
