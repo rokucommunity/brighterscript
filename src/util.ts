@@ -177,7 +177,7 @@ export class Util {
                 allowEmptyContent: true,
                 allowTrailingComma: true,
                 disallowComments: false
-            }) as BsConfig;
+            }) as BsConfig ?? {};
             if (parseErrors.length > 0) {
                 let err = parseErrors[0];
                 let diagnostic = {

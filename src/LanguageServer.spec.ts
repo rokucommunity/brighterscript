@@ -5,13 +5,13 @@ import type { DidChangeWatchedFilesParams, Location } from 'vscode-languageserve
 import { FileChangeType, Range } from 'vscode-languageserver';
 import { Deferred } from './deferred';
 import type { Project } from './LanguageServer';
-import { LanguageServer } from './LanguageServer';
+import { CustomCommands, LanguageServer } from './LanguageServer';
 import * as sinonImport from 'sinon';
 import { standardizePath as s, util } from './util';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Program } from './Program';
 import * as assert from 'assert';
-import { expectZeroDiagnostics } from './testHelpers.spec';
+import { expectZeroDiagnostics, trim } from './testHelpers.spec';
 
 let sinon: sinonImport.SinonSandbox;
 beforeEach(() => {
@@ -964,8 +964,27 @@ describe('LanguageServer', () => {
 
     describe('CustomCommands', () => {
         describe('TranspileFile', () => {
-            it('returns pathAbsolute to support backwards compatibility', () => {
-
+            it('returns pathAbsolute to support backwards compatibility', async () => {
+                fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `
+                    sub main()
+                        print \`hello world\`
+                    end sub
+                `);
+                fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '');
+                server.run();
+                await server['syncProjects']();
+                const result = await server.onExecuteCommand({
+                    command: CustomCommands.TranspileFile,
+                    arguments: [s`${rootDir}/source/main.bs`]
+                });
+                expect(
+                    trim(result?.code)
+                ).to.eql(trim`
+                    sub main()
+                        print "hello world"
+                    end sub
+                `);
+                expect(result['pathAbsolute']).to.eql(result.srcPath);
             });
         });
     });
