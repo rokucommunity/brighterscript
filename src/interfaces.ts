@@ -315,9 +315,21 @@ export interface AfterFileParseEvent {
     file: BscFile;
 }
 export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
+    /**
+     * The program this file is from
+     */
     program: Program;
+    /**
+     * The file to get semantic tokens for
+     */
     file: T;
+    /**
+     * The list of scopes that this file is a member of
+     */
     scopes: Scope[];
+    /**
+     * The list of semantic tokens being produced during this event.
+     */
     semanticTokens: SemanticToken[];
 }
 export interface BeforeFileValidateEvent<T extends BscFile = BscFile> {

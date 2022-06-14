@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.52.2](https://github.com/rokucommunity/brighterscript/compare/v0.52.1...v0.52.2) - 2022-06-13
+### Fixed
+ - transpile crash when file was changed by a plugin in beforeTranspile events ([#627](https://github.com/rokucommunity/brighterscript/pull/627))
+ - bug in transpile preview custom command that wasn't returning the result ([#626](https://github.com/rokucommunity/brighterscript/pull/626))
+ - add missing range on interface statement, causing transpile crashes ([#623](https://github.com/rokucommunity/brighterscript/pull/623))
+ - transpile enum values in binary expressions ([#622](https://github.com/rokucommunity/brighterscript/pull/622))
+
+
+
+## [0.52.1](https://github.com/rokucommunity/brighterscript/compare/v0.52.0...v0.52.1) - 2022-06-10
+### Fixed
+ - detect class circular extends ([#619](https://github.com/rokucommunity/brighterscript/pull/619))
+ - improve namespace/enum/class semantic token detection (better syntax highlighting) ([##621](https://github.com/rokucommunity/brighterscript/pull/#621))
+
+
+
 ## [1.0.0-alpha.22](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha21...v1.0.0-alpha.22) - 2022-06-08
 ### Changed
  - all changes from [v0.52.0](#0520---2022-06-08)

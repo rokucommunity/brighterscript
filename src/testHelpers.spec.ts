@@ -150,13 +150,13 @@ export function expectInstanceOf<T>(items: any[], constructors: Array<new (...ar
     }
 }
 
-export function getTestTranspile(scopeGetter: () => [Program, string]) {
+export function getTestTranspile(scopeGetter: () => [program: Program, rootDir: string]) {
     return getTestFileAction((file) => {
         return file.program['_getTranspiledFileContents'](file);
     }, scopeGetter);
 }
 
-export function getTestGetTypedef(scopeGetter: () => [Program, string]) {
+export function getTestGetTypedef(scopeGetter: () => [program: Program, rootDir: string]) {
     return getTestFileAction((file) => {
         return {
             code: (file as BrsFile).getTypedef(),
@@ -167,7 +167,7 @@ export function getTestGetTypedef(scopeGetter: () => [Program, string]) {
 
 function getTestFileAction(
     action: (file: BscFile) => CodeWithSourceMap,
-    scopeGetter: () => [Program, string]
+    scopeGetter: () => [program: Program, rootDir: string]
 ) {
     return function testFileAction(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();

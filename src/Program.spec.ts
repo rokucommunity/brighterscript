@@ -1664,7 +1664,7 @@ describe('Program', () => {
     });
 
     describe('getTranspiledFileContents', () => {
-        it('fires plugin events', () => {
+        it('fires plugin events', async () => {
             const file = program.setFile('source/main.brs', trim`
                 sub main()
                     print "hello world"
@@ -1679,7 +1679,7 @@ describe('Program', () => {
                 afterFileTranspile: sinon.spy()
             });
             expect(
-                program.getTranspiledFileContents(file.srcPath).code
+                (await program.getTranspiledFileContents(file.srcPath)).code
             ).to.eql(trim`
                 sub main()
                     print "hello there"

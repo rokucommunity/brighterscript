@@ -1,4 +1,4 @@
-import { expectDiagnostics, expectZeroDiagnostics, getTestGetTypedef } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
 import { standardizePath as s } from '../../../util';
 import { Program } from '../../../Program';
 import { expect } from 'chai';
@@ -8,16 +8,17 @@ import { Lexer } from '../../../lexer/Lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { ClassStatement, InterfaceStatement } from '../../Statement';
 
+const rootDir = s`${process.cwd()}/.tmp/rootDir`;
+
 describe('InterfaceStatement', () => {
-    const rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
+    const testTranspile = getTestTranspile(() => [program, rootDir]);
+    const testGetTypedef = getTestGetTypedef(() => [program, rootDir]);
     beforeEach(() => {
         program = new Program({
             rootDir: rootDir
         });
     });
-
-    const testGetTypedef = getTestGetTypedef(() => [program, rootDir]);
 
     it('allows strange keywords as property names', () => {
         testGetTypedef(`
@@ -270,5 +271,19 @@ describe('InterfaceStatement', () => {
             expect(isStringType(ifaceStatement.memberTable.getSymbolType('furType'))).to.be.true;
             expect(isBooleanType(ifaceStatement.memberTable.getSymbolType('hasWings'))).to.be.true;
         });
+    });
+
+    it('allows comments after an interface', () => {
+        testTranspile(`
+            interface Iface1
+                name as dynamic
+            end interface
+            'this comment was throwing exception during transpile
+            interface IFace2
+                prop as dynamic
+            end interface
+        `, `
+            'this comment was throwing exception during transpile
+        `);
     });
 });

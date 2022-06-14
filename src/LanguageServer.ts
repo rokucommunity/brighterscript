@@ -87,6 +87,9 @@ export class LanguageServer {
     private keyedThrottler = new KeyedThrottler(this.debounceTimeout);
 
     public validateThrottler = new Throttler(0);
+
+    private sendDiagnosticsThrottler = new Throttler(0);
+
     private boundValidateAll = this.validateAll.bind(this);
 
     private validateAllThrottled() {
@@ -357,7 +360,6 @@ export class LanguageServer {
             }
             await this.waitAllProjectFirstRuns(false);
             projectCreatedDeferred.resolve();
-            await this.sendDiagnostics();
         } catch (e: any) {
             this.sendCriticalFailure(
                 `Critical failure during BrighterScript language server startup.
@@ -379,8 +381,8 @@ export class LanguageServer {
     /**
      * Wait for all programs' first run to complete
      */
-    private async waitAllProjectFirstRuns(waitForFirstWorkSpace = true) {
-        if (waitForFirstWorkSpace) {
+    private async waitAllProjectFirstRuns(waitForFirstProject = true) {
+        if (waitForFirstProject) {
             await this.initialProjectsCreated;
         }
 
@@ -460,6 +462,14 @@ export class LanguageServer {
         }
 
         let builder = new ProgramBuilder();
+
+        //flush diagnostics every time the program finishes validating
+        builder.plugins.add({
+            name: 'bsc-language-server',
+            afterProgramValidate: () => {
+                void this.sendDiagnostics();
+            }
+        });
 
         //prevent clearing the console on run...this isn't the CLI so we want to keep a full log of everything
         builder.allowConsoleClearing = false;
@@ -1041,8 +1051,6 @@ export class LanguageServer {
             await Promise.all(
                 projects.map((x) => x.builder.program.validate())
             );
-
-            await this.sendDiagnostics();
         } catch (e: any) {
             this.connection.console.error(e);
             this.sendCriticalFailure(`Critical error validating project: ${e.message}${e.stack ?? ''}`);
@@ -1171,17 +1179,24 @@ export class LanguageServer {
     private diagnosticCollection = new DiagnosticCollection();
 
     private async sendDiagnostics() {
-        //Get only the changes to diagnostics since the last time we sent them to the client
-        const patch = await this.diagnosticCollection.getPatch(this.projects);
+        await this.sendDiagnosticsThrottler.run(async () => {
+            //wait for all programs to finish running. This ensures the `Program` exists.
+            await Promise.all(
+                this.projects.map(x => x.firstRunPromise)
+            );
 
-        for (let filePath in patch) {
-            const diagnostics = patch[filePath].map(d => util.toDiagnostic(d));
+            //Get only the changes to diagnostics since the last time we sent them to the client
+            const patch = this.diagnosticCollection.getPatch(this.projects);
 
-            this.connection.sendDiagnostics({
-                uri: URI.file(filePath).toString(),
-                diagnostics: diagnostics
-            });
-        }
+            for (let filePath in patch) {
+                const diagnostics = patch[filePath].map(d => util.toDiagnostic(d));
+
+                this.connection.sendDiagnostics({
+                    uri: URI.file(filePath).toString(),
+                    diagnostics: diagnostics
+                });
+            }
+        });
     }
 
     @AddStackToErrorMessage
@@ -1191,6 +1206,7 @@ export class LanguageServer {
             const result = await this.transpileFile(params.arguments[0]);
             //back-compat: include `pathAbsolute` property so older vscode versions still work
             (result as any).pathAbsolute = result.srcPath;
+            return result;
         }
     }
 

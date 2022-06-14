@@ -23,6 +23,9 @@ export class BsClassValidator implements BsClassValidator {
     private scope: Scope;
     private file: BrsFile;
     public diagnostics: BsDiagnostic[];
+    /**
+     * The key is the namespace-prefixed class name. (i.e. `NameA.NameB.SomeClass` or `CoolClass`)
+     */
     private classes: Map<string, AugmentedClassStatement>;
     private interfaces: Map<string, AugmentedInterfaceStatement>;
 
@@ -39,6 +42,7 @@ export class BsClassValidator implements BsClassValidator {
         this.findInterfaces();
         this.findNamespaceNonNamespaceCollisions();
         this.linkClassesWithParents();
+        this.detectCircularReferences();
         this.validateMemberCollisions();
         this.verifyChildConstructor();
         this.verifyNewExpressions();
@@ -198,6 +202,30 @@ export class BsClassValidator implements BsClassValidator {
                     });
                 }
             }
+        }
+    }
+
+    private detectCircularReferences() {
+        for (let [, cls] of this.classes) {
+            const names = new Map<string, string>();
+            do {
+                const className = cls.getName(ParseMode.BrighterScript);
+                const lowerClassName = className.toLowerCase();
+                //if we've already seen this class name before, then we have a circular dependency
+                if (names.has(lowerClassName)) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.circularReferenceDetected([
+                            ...names.values(),
+                            className
+                        ], this.scope.name),
+                        file: cls.file,
+                        range: cls.name.range
+                    });
+                    break;
+                }
+                names.set(lowerClassName, className);
+                cls = cls.parent;
+            } while (cls);
         }
     }
 
@@ -395,7 +423,7 @@ export class BsClassValidator implements BsClassValidator {
                     ancestorStatement: ancestor
                 };
             }
-            ancestor = ancestor.parent;
+            ancestor = ancestor.parent !== ancestor ? ancestor.parent : null;
         }
     }
 

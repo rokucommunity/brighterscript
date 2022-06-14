@@ -1252,7 +1252,6 @@ export class InterfaceStatement extends Statement implements TypedefProvider, Me
         this.tokens.name = name;
         this.tokens.extends = extendsToken;
         this.tokens.endInterface = endInterfaceToken;
-
         this.range = util.createBoundingRange(
             this.tokens.interface,
             this.tokens.name,

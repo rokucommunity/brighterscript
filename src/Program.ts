@@ -24,7 +24,7 @@ import type { FunctionStatement, Statement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
 import { TokenKind } from './lexer/TokenKind';
 import { BscPlugin } from './bscPlugin/BscPlugin';
-import { util as rokuDeployUtil } from 'roku-deploy';
+import { rokuDeploy, util as rokuDeployUtil } from 'roku-deploy';
 import { AstEditor } from './astUtils/AstEditor';
 import type { SourceMapGenerator } from 'source-map';
 
@@ -598,7 +598,6 @@ export class Program {
 
     /**
      * Traverse the entire project, and validate all scopes
-     * @param force - if true, then all scopes are force to validate, even if they aren't marked as dirty
      */
     public validate() {
         this.logger.time(LogLevel.log, ['Validating project'], () => {
@@ -1306,12 +1305,21 @@ export class Program {
     /**
      * Transpile a single file and get the result as a string.
      * This does not write anything to the file system.
-     * @param srcPath can be a srcPath or a destPath
+     *
+     * This should only be called by `LanguageServer`.
+     * Internal usage should call `_getTranspiledFileContents` instead.
+     * @param filePath can be a srcPath or a destPath
      */
-    public getTranspiledFileContents(srcPath: string) {
-        return this._getTranspiledFileContents(
-            this.getFile(srcPath)
+    public async getTranspiledFileContents(filePath: string) {
+        const { entries, astEditor } = this.beforeProgramTranspile(
+            await rokuDeploy.getFilePaths(this.options.files, this.options.rootDir),
+            this.options.stagingFolderPath
         );
+        const result = this._getTranspiledFileContents(
+            this.getFile(filePath)
+        );
+        this.afterProgramTranspile(entries, astEditor);
+        return result;
     }
 
     /**
@@ -1366,8 +1374,8 @@ export class Program {
         };
     }
 
-    public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
-        // map fileEntries using their path as key to avoid excessive "find()" operations
+    private beforeProgramTranspile(fileEntries: FileObj[], stagingFolderPath: string) {
+        // map fileEntries using their path as key, to avoid excessive "find()" operations
         const mappedFileEntries = fileEntries.reduce<Record<string, FileObj>>((collection, entry) => {
             collection[s`${entry.src}`] = entry;
             return collection;
@@ -1396,10 +1404,36 @@ export class Program {
             return outputPath;
         };
 
+        const entries = Object.values(this.files).map(file => {
+            return {
+                file: file,
+                outputPath: getOutputPath(file)
+            };
+        });
+
+        const astEditor = new AstEditor();
+
+        this.plugins.emit('beforeProgramTranspile', {
+            program: this,
+            entries: entries,
+            editor: astEditor
+        });
+        return {
+            entries: entries,
+            getOutputPath: getOutputPath,
+            astEditor: astEditor
+        };
+    }
+
+    public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
+        const { entries, getOutputPath, astEditor } = this.beforeProgramTranspile(fileEntries, stagingFolderPath);
+
         const processedFiles = new Set<BscFile>();
 
-        const transpileFile = async (file: BscFile, outputPath?: string) => {
-            //mark this file as processed so we don't do it again
+        const transpileFile = async (srcPath: string, outputPath?: string) => {
+            //find the file in the program
+            const file = this.getFile(srcPath);
+            //mark this file as processed so we don't process it more than once
             processedFiles.add(file);
 
             //skip transpiling typedef files
@@ -1427,23 +1461,8 @@ export class Program {
             }
         };
 
-        const entries = Object.values(this.files).map(file => {
-            return {
-                file: file,
-                outputPath: getOutputPath(file)
-            };
-        });
-
-        const astEditor = new AstEditor();
-
-        this.plugins.emit('beforeProgramTranspile', {
-            program: this,
-            entries: entries,
-            editor: astEditor
-        });
-
         let promises = entries.map(async (entry) => {
-            return transpileFile(entry.file, entry.outputPath);
+            return transpileFile(entry?.file?.srcPath, entry.outputPath);
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
@@ -1460,7 +1479,7 @@ export class Program {
                 //this is a new file
                 if (!processedFiles.has(file)) {
                     promises.push(
-                        transpileFile(file, getOutputPath(file))
+                        transpileFile(file?.srcPath, getOutputPath(file))
                     );
                 }
             }
@@ -1470,7 +1489,10 @@ export class Program {
             }
         }
         while (promises.length > 0);
+        this.afterProgramTranspile(entries, astEditor);
+    }
 
+    private afterProgramTranspile(entries: TranspileObj[], astEditor: AstEditor) {
         this.plugins.emit('afterProgramTranspile', {
             program: this,
             entries: entries,

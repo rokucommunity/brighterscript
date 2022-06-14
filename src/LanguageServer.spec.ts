@@ -5,22 +5,19 @@ import type { DidChangeWatchedFilesParams, Location } from 'vscode-languageserve
 import { FileChangeType, Range } from 'vscode-languageserver';
 import { Deferred } from './deferred';
 import type { Project } from './LanguageServer';
-import { LanguageServer } from './LanguageServer';
-import * as sinonImport from 'sinon';
+import { CustomCommands, LanguageServer } from './LanguageServer';
+import type { SinonStub } from 'sinon';
+import { createSandbox } from 'sinon';
 import { standardizePath as s, util } from './util';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Program } from './Program';
 import * as assert from 'assert';
-import { expectZeroDiagnostics } from './testHelpers.spec';
+import { expectZeroDiagnostics, trim } from './testHelpers.spec';
+import { isBrsFile, isLiteralString } from './astUtils/reflection';
+import { createVisitor, WalkMode } from './astUtils/visitors';
 import type { XmlFile } from './files/XmlFile';
 
-let sinon: sinonImport.SinonSandbox;
-beforeEach(() => {
-    sinon = sinonImport.createSandbox();
-});
-afterEach(() => {
-    sinon.restore();
-});
+const sinon = createSandbox();
 
 const tempDir = s`${__dirname}/../.tmp`;
 const rootDir = s`${tempDir}/TestApp`;
@@ -78,6 +75,7 @@ describe('LanguageServer', () => {
     };
 
     beforeEach(() => {
+        sinon.restore();
         server = new LanguageServer();
         workspaceFolders = [workspacePath];
 
@@ -221,6 +219,24 @@ describe('LanguageServer', () => {
             let stub = sinon.stub(server['connection'], 'sendDiagnostics');
             await server['sendDiagnostics']();
             expect(stub.getCall(0).args?.[0]?.diagnostics).to.be.lengthOf(1);
+        });
+
+        it('sends diagnostics that were triggered by the program instead of vscode', async () => {
+            server['connection'] = server['createConnection']();
+            await server['createProject'](workspacePath);
+            let stub: SinonStub;
+            const promise = new Promise((resolve) => {
+                stub = sinon.stub(connection, 'sendDiagnostics').callsFake(resolve as any);
+            });
+            const { program } = server.projects[0].builder;
+            program.setFile('source/lib.bs', `
+                sub lib()
+                    functionDoesNotExist()
+                end sub
+            `);
+            program.validate();
+            await promise;
+            expect(stub.called).to.be.true;
         });
     });
 
@@ -419,7 +435,7 @@ describe('LanguageServer', () => {
             await server['syncProjects']();
 
             expect(
-                server.projects.map(x => x.projectPath)
+                server.projects.map(x => x.projectPath).sort()
             ).to.eql([
                 s`${tempDir}/root`,
                 s`${tempDir}/root/subdir`
@@ -962,8 +978,72 @@ describe('LanguageServer', () => {
 
     describe('CustomCommands', () => {
         describe('TranspileFile', () => {
-            it('returns pathAbsolute to support backwards compatibility', () => {
+            it('returns pathAbsolute to support backwards compatibility', async () => {
+                fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `
+                    sub main()
+                        print \`hello world\`
+                    end sub
+                `);
+                fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '');
+                server.run();
+                await server['syncProjects']();
+                const result = await server.onExecuteCommand({
+                    command: CustomCommands.TranspileFile,
+                    arguments: [s`${rootDir}/source/main.bs`]
+                });
+                expect(
+                    trim(result?.code)
+                ).to.eql(trim`
+                    sub main()
+                        print "hello world"
+                    end sub
+                `);
+                expect(result['pathAbsolute']).to.eql(result.srcPath);
+            });
 
+            it('calls beforeProgramTranspile and afterProgramTranspile plugin events', async () => {
+                fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `
+                    sub main()
+                        print \`hello world\`
+                    end sub
+                `);
+                fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '');
+                server.run();
+                await server['syncProjects']();
+                const afterSpy = sinon.spy();
+                const { program } = server.projects[0].builder;
+                //make a plugin that changes string text
+                program.plugins.add({
+                    name: 'test-plugin',
+                    beforeProgramTranspile: (event) => {
+                        const file = program.getFile('source/main.bs');
+                        if (isBrsFile(file)) {
+                            file.ast.walk(createVisitor({
+                                LiteralExpression: (expression) => {
+                                    if (isLiteralString(expression)) {
+                                        event.editor.setProperty(expression.token, 'text', 'hello moon');
+                                    }
+                                }
+                            }), {
+                                walkMode: WalkMode.visitAllRecursive
+                            });
+                        }
+                    },
+                    afterProgramTranspile: afterSpy
+                });
+
+                const result = await server.onExecuteCommand({
+                    command: CustomCommands.TranspileFile,
+                    arguments: [s`${rootDir}/source/main.bs`]
+                });
+                expect(
+                    trim(result?.code)
+                ).to.eql(trim`
+                    sub main()
+                        print "hello moon"
+                    end sub
+                `);
+                expect(afterSpy.called).to.be.true;
             });
         });
     });

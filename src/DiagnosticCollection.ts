@@ -4,8 +4,8 @@ import type { Project } from './LanguageServer';
 export class DiagnosticCollection {
     private previousDiagnosticsByFile = {} as Record<string, KeyedDiagnostic[]>;
 
-    public async getPatch(projects: Project[]): Promise<Record<string, KeyedDiagnostic[]>> {
-        const diagnosticsByFile = await this.getDiagnosticsByFileFromProjects(projects);
+    public getPatch(projects: Project[]) {
+        const diagnosticsByFile = this.getDiagnosticsByFileFromProjects(projects);
 
         const patch = {
             ...this.getRemovedPatch(diagnosticsByFile),
@@ -18,13 +18,8 @@ export class DiagnosticCollection {
         return patch;
     }
 
-    private async getDiagnosticsByFileFromProjects(projects: Project[]) {
+    private getDiagnosticsByFileFromProjects(projects: Project[]) {
         const result = {} as Record<string, KeyedDiagnostic[]>;
-
-        //wait for all programs to finish running. This ensures the `Program` exists.
-        await Promise.all(
-            projects.map(x => x.firstRunPromise)
-        );
 
         //get all diagnostics for all projects
         let diagnostics = Array.prototype.concat.apply([] as KeyedDiagnostic[],

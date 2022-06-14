@@ -1565,6 +1565,7 @@ export class ArrayTypeExpression extends TypeExpression {
     private get defaultTypeExpression() {
         return this.innerTypes[0];
     }
+
     /**
      * Derive a BscType from the type token
      * Returns an array type with the inner types based on the inner type expressions

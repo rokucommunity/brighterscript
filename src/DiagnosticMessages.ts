@@ -679,24 +679,29 @@ export let DiagnosticMessages = {
         code: 1131,
         severity: DiagnosticSeverity.Error
     }),
+    circularReferenceDetected: (items: string[], scopeName: string) => ({
+        message: `Circular reference detected between ${Array.isArray(items) ? items.join(' -> ') : ''} in scope '${scopeName}'`,
+        code: 1132,
+        severity: DiagnosticSeverity.Error
+    }),
     argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string) => ({
         message: `Argument of type '${actualTypeString}' is not assignable to parameter of type '${expectedTypeString}'`,
-        code: 1132,
+        code: 1133,
         severity: DiagnosticSeverity.Error
     }),
     duplicateInterfaceDeclaration: (scopeName: string, ifaceName: string) => ({
         message: `Scope '${scopeName}' already contains an interface with name '${ifaceName}'`,
-        code: 1133,
+        code: 1134,
         severity: DiagnosticSeverity.Error
     }),
     namespacedInterfaceCannotShareNameWithNonNamespacedInterface: (nonNamespacedInterfaceName: string) => ({
         message: `Namespaced interface cannot have the same name as a non-namespaced interface '${nonNamespacedInterfaceName}'`,
-        code: 1134,
+        code: 1135,
         severity: DiagnosticSeverity.Error
     }),
     classCannotShareNamewithInterface: (className: string) => ({
         message: `Class cannot have the same name as interface '${className}'`,
-        code: 1135,
+        code: 1136,
         severity: DiagnosticSeverity.Error
     })
 };
