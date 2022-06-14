@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.23](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha22...v1.0.0-alpha.23) - 2022-06-14
+### Changed
+ - all changes from [v0.52.3](#0523---2022-06-14)
+ - all changes from [v0.52.2](#0522---2022-06-13)
+ - all changes from [v0.52.1](#0521---2022-06-10)
+
+
+
+
 ## [0.52.3](https://github.com/rokucommunity/brighterscript/compare/v0.52.2...v0.52.3) - 2022-06-14
 ### Fixed
  - fix bug with class transpile in watch mode ([#630](https://github.com/rokucommunity/brighterscript/pull/630))
