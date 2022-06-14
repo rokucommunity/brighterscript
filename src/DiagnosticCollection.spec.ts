@@ -22,8 +22,8 @@ describe('DiagnosticCollection', () => {
         }] as Project[];
     });
 
-    async function testPatch(expected: Record<string, string[]>) {
-        const patch = await collection.getPatch(projects);
+    function testPatch(expected: Record<string, string[]>) {
+        const patch = collection.getPatch(projects);
         //convert the patch into our test structure
         const actual = {};
         for (const filePath in patch) {
@@ -33,53 +33,53 @@ describe('DiagnosticCollection', () => {
         expect(actual).to.eql(expected);
     }
 
-    it('returns full list of diagnostics on first call, and nothing on second call', async () => {
+    it('returns full list of diagnostics on first call, and nothing on second call', () => {
         addDiagnostics('file1.brs', ['message1', 'message2']);
         addDiagnostics('file2.brs', ['message3', 'message4']);
         //first patch should return all
-        await testPatch({
+        testPatch({
             'file1.brs': ['message1', 'message2'],
             'file2.brs': ['message3', 'message4']
         });
 
         //second patch should return empty (because nothing has changed)
-        await testPatch({});
+        testPatch({});
     });
 
-    it('removes diagnostics in patch', async () => {
+    it('removes diagnostics in patch', () => {
         addDiagnostics('file1.brs', ['message1', 'message2']);
         addDiagnostics('file2.brs', ['message3', 'message4']);
         //first patch should return all
-        await testPatch({
+        testPatch({
             'file1.brs': ['message1', 'message2'],
             'file2.brs': ['message3', 'message4']
         });
         removeDiagnostic('file1.brs', 'message1');
         removeDiagnostic('file1.brs', 'message2');
-        await testPatch({
+        testPatch({
             'file1.brs': []
         });
     });
 
-    it('adds diagnostics in patch', async () => {
+    it('adds diagnostics in patch', () => {
         addDiagnostics('file1.brs', ['message1', 'message2']);
-        await testPatch({
+        testPatch({
             'file1.brs': ['message1', 'message2']
         });
 
         addDiagnostics('file2.brs', ['message3', 'message4']);
-        await testPatch({
+        testPatch({
             'file2.brs': ['message3', 'message4']
         });
     });
 
-    it('sends full list when file diagnostics have changed', async () => {
+    it('sends full list when file diagnostics have changed', () => {
         addDiagnostics('file1.brs', ['message1', 'message2']);
-        await testPatch({
+        testPatch({
             'file1.brs': ['message1', 'message2']
         });
         addDiagnostics('file1.brs', ['message3', 'message4']);
-        await testPatch({
+        testPatch({
             'file1.brs': ['message1', 'message2', 'message3', 'message4']
         });
     });
