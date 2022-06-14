@@ -12,6 +12,8 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Program } from './Program';
 import * as assert from 'assert';
 import { expectZeroDiagnostics, trim } from './testHelpers.spec';
+import { isBrsFile, isLiteralString } from './astUtils/reflection';
+import { createVisitor, WalkMode } from './astUtils/visitors';
 
 let sinon: sinonImport.SinonSandbox;
 beforeEach(() => {
@@ -985,6 +987,50 @@ describe('LanguageServer', () => {
                     end sub
                 `);
                 expect(result['pathAbsolute']).to.eql(result.srcPath);
+            });
+
+            it('calls beforeProgramTranspile and afterProgramTranspile plugin events', async () => {
+                fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `
+                    sub main()
+                        print \`hello world\`
+                    end sub
+                `);
+                fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '');
+                server.run();
+                await server['syncProjects']();
+                const afterSpy = sinon.spy();
+                //make a plugin that changes string text
+                server.projects[0].builder.program.plugins.add({
+                    name: 'test-plugin',
+                    beforeProgramTranspile: (program, entries, editor) => {
+                        const file = program.getFile('source/main.bs');
+                        if (isBrsFile(file)) {
+                            file.ast.walk(createVisitor({
+                                LiteralExpression: (expression) => {
+                                    if (isLiteralString(expression)) {
+                                        editor.setProperty(expression.token, 'text', 'hello moon');
+                                    }
+                                }
+                            }), {
+                                walkMode: WalkMode.visitAllRecursive
+                            });
+                        }
+                    },
+                    afterProgramTranspile: afterSpy
+                });
+
+                const result = await server.onExecuteCommand({
+                    command: CustomCommands.TranspileFile,
+                    arguments: [s`${rootDir}/source/main.bs`]
+                });
+                expect(
+                    trim(result?.code)
+                ).to.eql(trim`
+                    sub main()
+                        print "hello moon"
+                    end sub
+                `);
+                expect(afterSpy.called).to.be.true;
             });
         });
     });

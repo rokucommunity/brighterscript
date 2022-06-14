@@ -26,6 +26,8 @@ import { TokenKind } from './lexer/TokenKind';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { AstEditor } from './astUtils/AstEditor';
 import type { SourceMapGenerator } from 'source-map';
+import { rokuDeploy } from 'roku-deploy';
+
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -1258,14 +1260,27 @@ export class Program {
     /**
      * Transpile a single file and get the result as a string.
      * This does not write anything to the file system.
+     *
+     * This should only be called by `LanguageServer`.
+     * Internal usage should call `_getTranspiledFileContents` instead.
      * @param filePath can be a srcPath or a destPath
      */
-    public getTranspiledFileContents(filePath: string) {
-        return this._getTranspiledFileContents(
+    public async getTranspiledFileContents(filePath: string) {
+        let fileMap = await rokuDeploy.getFilePaths(this.options.files, this.options.rootDir);
+        //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
+        let filteredFileMap = [] as FileObj[];
+        for (let fileEntry of fileMap) {
+            if (this.hasFile(fileEntry.src) === false) {
+                filteredFileMap.push(fileEntry);
+            }
+        }
+        const { entries, astEditor } = this.beforeProgramTranspile(fileMap, this.options.stagingFolderPath);
+        const result = this._getTranspiledFileContents(
             this.getFile(filePath)
         );
+        this.afterProgramTranspile(entries, astEditor);
+        return result;
     }
-
 
     /**
      * Internal function used to transpile files.
@@ -1319,7 +1334,7 @@ export class Program {
         };
     }
 
-    public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
+    private beforeProgramTranspile(fileEntries: FileObj[], stagingFolderPath: string) {
         // map fileEntries using their path as key, to avoid excessive "find()" operations
         const mappedFileEntries = fileEntries.reduce<Record<string, FileObj>>((collection, entry) => {
             collection[s`${entry.src}`] = entry;
@@ -1342,6 +1357,26 @@ export class Program {
             outputPath = s`${stagingFolderPath}/${outputPath}`;
             return outputPath;
         };
+
+        const entries = Object.values(this.files).map(file => {
+            return {
+                file: file,
+                outputPath: getOutputPath(file)
+            };
+        });
+
+        const astEditor = new AstEditor();
+
+        this.plugins.emit('beforeProgramTranspile', this, entries, astEditor);
+        return {
+            entries: entries,
+            getOutputPath: getOutputPath,
+            astEditor: astEditor
+        };
+    }
+
+    public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
+        const { entries, getOutputPath, astEditor } = this.beforeProgramTranspile(fileEntries, stagingFolderPath);
 
         const processedFiles = new Set<File>();
 
@@ -1376,17 +1411,6 @@ export class Program {
             }
         };
 
-        const entries = Object.values(this.files).map(file => {
-            return {
-                file: file,
-                outputPath: getOutputPath(file)
-            };
-        });
-
-        const astEditor = new AstEditor();
-
-        this.plugins.emit('beforeProgramTranspile', this, entries, astEditor);
-
         let promises = entries.map(async (entry) => {
             return transpileFile(entry?.file?.srcPath, entry.outputPath);
         });
@@ -1415,7 +1439,10 @@ export class Program {
             }
         }
         while (promises.length > 0);
+        this.afterProgramTranspile(entries, astEditor);
+    }
 
+    private afterProgramTranspile(entries: TranspileObj[], astEditor: AstEditor) {
         this.plugins.emit('afterProgramTranspile', this, entries, astEditor);
         astEditor.undoAll();
     }
