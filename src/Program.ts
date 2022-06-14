@@ -594,7 +594,6 @@ export class Program {
 
     /**
      * Traverse the entire project, and validate all scopes
-     * @param force - if true, then all scopes are force to validate, even if they aren't marked as dirty
      */
     public validate() {
         this.logger.time(LogLevel.log, ['Validating project'], () => {

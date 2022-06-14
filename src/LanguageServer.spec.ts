@@ -6,7 +6,8 @@ import { FileChangeType, Range } from 'vscode-languageserver';
 import { Deferred } from './deferred';
 import type { Project } from './LanguageServer';
 import { CustomCommands, LanguageServer } from './LanguageServer';
-import * as sinonImport from 'sinon';
+import type { SinonStub } from 'sinon';
+import { createSandbox } from 'sinon';
 import { standardizePath as s, util } from './util';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Program } from './Program';
@@ -15,13 +16,7 @@ import { expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { isBrsFile, isLiteralString } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 
-let sinon: sinonImport.SinonSandbox;
-beforeEach(() => {
-    sinon = sinonImport.createSandbox();
-});
-afterEach(() => {
-    sinon.restore();
-});
+const sinon = createSandbox();
 
 const tempDir = s`${__dirname}/../.tmp`;
 const rootDir = s`${tempDir}/TestApp`;
@@ -79,6 +74,7 @@ describe('LanguageServer', () => {
     };
 
     beforeEach(() => {
+        sinon.restore();
         server = new LanguageServer();
         workspaceFolders = [workspacePath];
 
@@ -222,6 +218,24 @@ describe('LanguageServer', () => {
             let stub = sinon.stub(server['connection'], 'sendDiagnostics');
             await server['sendDiagnostics']();
             expect(stub.getCall(0).args?.[0]?.diagnostics).to.be.lengthOf(1);
+        });
+
+        it('sends diagnostics that were triggered by the program instead of vscode', async () => {
+            server['connection'] = server['createConnection']();
+            await server['createProject'](workspacePath);
+            let stub: SinonStub;
+            const promise = new Promise((resolve) => {
+                stub = sinon.stub(connection, 'sendDiagnostics').callsFake(resolve as any);
+            });
+            const { program } = server.projects[0].builder;
+            program.setFile('source/lib.bs', `
+                sub lib()
+                    functionDoesNotExist()
+                end sub
+            `);
+            program.validate();
+            await promise;
+            expect(stub.called).to.be.true;
         });
     });
 
