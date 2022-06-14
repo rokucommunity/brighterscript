@@ -6,7 +6,7 @@ import { expect } from 'chai';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { Range } from 'vscode-languageserver';
 import { ParseMode } from '../parser/Parser';
-import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile } from '../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import { standardizePath as s } from '../util';
 import * as fsExtra from 'fs-extra';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
@@ -861,8 +861,57 @@ describe('BrsFile BrighterScript classes', () => {
         ]);
     });
 
-    it('does not cause infinite loop', () => {
+    it('transpiles super method calls twice', async () => {
+        program.setFile('source/lib.bs', `
+            class Being
+                function think()
+                    print "thinking..."
+                end function
+            end class
 
+            class Human extends Being
+                function think()
+                    super.think()
+                end function
+            end class
+        `);
+        await program.transpile([], stagingDir);
+        fsExtra.emptyDirSync(stagingDir);
+        await program.transpile([], stagingDir);
+        expect(
+            fsExtra.readFileSync(s`${stagingDir}/source/lib.brs`).toString().trimEnd()
+        ).to.eql(trim`
+            function __Being_builder()
+                instance = {}
+                instance.new = sub()
+                end sub
+                instance.think = function()
+                    print "thinking..."
+                end function
+                return instance
+            end function
+            function Being()
+                instance = __Being_builder()
+                instance.new()
+                return instance
+            end function
+            function __Human_builder()
+                instance = __Being_builder()
+                instance.super0_new = instance.new
+                instance.new = sub()
+                    m.super0_new()
+                end sub
+                instance.think = function()
+                    m.super0_think()
+                end function
+                return instance
+            end function
+            function Human()
+                instance = __Human_builder()
+                instance.new()
+                return instance
+            end function
+        `);
     });
 
     it('detects duplicate member names', () => {
