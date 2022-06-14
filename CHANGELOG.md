@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.52.3](https://github.com/rokucommunity/brighterscript/compare/v0.52.2...v0.52.3) - 2022-06-14
+### Fixed
+ - fix bug with class transpile in watch mode ([#630](https://github.com/rokucommunity/brighterscript/pull/630))
+ - Send program-triggered `validate()` diagnostics to language client ([#629](https://github.com/rokucommunity/brighterscript/pull/629))
+ - Emit before/after programTranspile during file transpile preview ([#628](https://github.com/rokucommunity/brighterscript/pull/628))
+
+
+
 ## [0.52.2](https://github.com/rokucommunity/brighterscript/compare/v0.52.1...v0.52.2) - 2022-06-13
 ### Fixed
  - transpile crash when file was changed by a plugin in beforeTranspile events ([#627](https://github.com/rokucommunity/brighterscript/pull/627))
