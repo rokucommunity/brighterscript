@@ -1,6 +1,6 @@
 import { Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
-import { isBinaryExpression, isBrsFile, isLiteralExpression } from '../../astUtils/reflection';
+import { isBinaryExpression, isBrsFile, isCallExpression, isLiteralExpression, isNamespacedVariableNameExpression, isNewExpression } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -32,6 +32,7 @@ export class ScopeValidator {
         this.validateEnumUsage(event);
         this.detectDuplicateEnums(event);
         this.validateCreateObjectCalls(event);
+        this.iterateExpressions(event);
     }
 
     public reset() {
@@ -52,6 +53,71 @@ export class ScopeValidator {
     }
 
     private cache = new Map<string, boolean>();
+
+    private iterateExpressions(event: OnScopeValidateEvent) {
+        const { scope } = event;
+        event.scope.enumerateOwnFiles((file) => {
+            if (isBrsFile(file)) {
+                const expressions = [
+                    ...file.parser.references.expressions,
+                    //all class "extends <whatever>"
+                    ...file.parser.references.classStatements.map(x => x.parentClassName)
+                ];
+                for (let referenceExpression of expressions) {
+                    if (!referenceExpression) {
+                        continue;
+                    }
+                    let expression: Expression;
+                    //lift the callee from call expressions to handle namespaced function calls
+                    if (isCallExpression(referenceExpression)) {
+                        expression = referenceExpression.callee;
+                    } else if (isNewExpression(referenceExpression)) {
+                        expression = referenceExpression.call.callee;
+                    } else {
+                        expression = referenceExpression;
+                    }
+                    const tokens = util.getAllDottedGetParts(expression);
+                    if (tokens?.length > 0) {
+                        const functionScope = file.getFunctionScopeAtPosition(tokens[0].range.start);
+                        const symbolTable = functionScope?.func.symbolTable ?? scope.symbolTable;
+                        if (!symbolTable.hasSymbol(tokens[0]?.text)) {
+                            if (isNewExpression(referenceExpression) || isNamespacedVariableNameExpression(referenceExpression)) {
+                                //skip for now because ClassValidator is handling this one
+                                // this.addDiagnosticOnce(event, {
+                                //     file: file as BscFile,
+                                //     ...DiagnosticMessages.classCouldNotBeFound(tokens[0].text, scope.name),
+                                //     range: tokens[0].range
+                                // });
+                            } else {
+                                this.addDiagnosticOnce(event, {
+                                    file: file as BscFile,
+                                    ...DiagnosticMessages.cannotFindName(tokens[0].text),
+                                    range: tokens[0].range
+                                });
+                            }
+                        }
+                        // const processedNames: string[] = [];
+                        // for (const token of tokens ?? []) {
+                        //     processedNames.push(token.text?.toLowerCase());
+                        //     const entityName = processedNames.join('.');
+
+                        //     if (scope.getEnumMemberMap().has(entityName)) {
+                        //         this.addToken(token, SemanticTokenTypes.enumMember);
+                        //     } else if (scope.getEnumMap().has(entityName)) {
+                        //         this.addToken(token, SemanticTokenTypes.enum);
+                        //     } else if (scope.getClassMap().has(entityName)) {
+                        //         this.addToken(token, SemanticTokenTypes.class);
+                        //     } else if (scope.getCallableByName(entityName)) {
+                        //         this.addToken(token, SemanticTokenTypes.function);
+                        //     } else if (scope.namespaceLookup.has(entityName)) {
+                        //         this.addToken(token, SemanticTokenTypes.namespace);
+                        //     }
+                        // }
+                    }
+                }
+            }
+        });
+    }
 
     /**
      * Find all expressions and validate the ones that look like enums

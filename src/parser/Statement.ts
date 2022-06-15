@@ -17,6 +17,7 @@ import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
+import { SymbolTable } from '../SymbolTable';
 
 /**
  * A BrightScript statement
@@ -1099,11 +1100,15 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
         public nameExpression: NamespacedVariableNameExpression,
         public body: Body,
-        public endKeyword: Token
+        public endKeyword: Token,
+        readonly parentSymbolTable?: SymbolTable
     ) {
         super();
         this.name = this.nameExpression.getName(ParseMode.BrighterScript);
+        this.symbolTable.pushParent(parentSymbolTable);
     }
+
+    public symbolTable = new SymbolTable();
 
     /**
      * The string name for this namespace
@@ -1111,10 +1116,20 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     public name: string;
 
     public get range() {
-        return util.createRangeFromPositions(
-            this.keyword.range.start,
-            (this.endKeyword ?? this.body ?? this.nameExpression ?? this.keyword).range.end
-        );
+        return this.cacheRange();
+    }
+    private _range: Range;
+
+    public cacheRange() {
+        if (!this._range) {
+            this._range = util.createBoundingRange(
+                this.keyword,
+                this.nameExpression,
+                this.body,
+                this.endKeyword
+            ) ?? interpolatedRange;
+        }
+        return this._range;
     }
 
     public getName(parseMode: ParseMode) {
@@ -1523,6 +1538,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     ) {
         super();
         this.body = this.body ?? [];
+
         for (let statement of this.body) {
             if (isMethodStatement(statement)) {
                 this.methods.push(statement);

@@ -494,7 +494,7 @@ describe('Program', () => {
 
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.callToUnknownFunction('DoSomething', 'source')
+                DiagnosticMessages.cannotFindName('DoSomething')
             ]);
         });
 
@@ -1360,7 +1360,7 @@ describe('Program', () => {
 
             //there should be an error when calling DoParentThing, since it doesn't exist on child or parent
             expectDiagnostics(program, [
-                DiagnosticMessages.callToUnknownFunction('DoParentThing', '').code
+                DiagnosticMessages.cannotFindName('DoParentThing')
             ]);
 
             //add the script into the parent
@@ -1519,7 +1519,7 @@ describe('Program', () => {
             ];
 
             expectDiagnostics(program, [
-                DiagnosticMessages.callToUnknownFunction('C', 'source')
+                DiagnosticMessages.cannotFindName('C')
             ]);
         });
     });
@@ -2186,7 +2186,8 @@ describe('Program', () => {
         it('gets signature help for callfunc method', () => {
             program.setFile('source/main.bs', `
                 function main()
-                    myNode@.sayHello(arg1)
+                    myNode = createObject("roSGNode", "Component1")
+                    myNode@.sayHello(1)
                 end function
             `);
             program.setFile('components/MyNode.bs', `
@@ -2203,7 +2204,7 @@ describe('Program', () => {
                 </component>`);
             program.validate();
 
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(3, 36)));
             expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
         });
@@ -2211,7 +2212,8 @@ describe('Program', () => {
         it('does not get signature help for callfunc method, referenced by dot', () => {
             program.setFile('source/main.bs', `
                 function main()
-                    myNode.sayHello(arg1)
+                    myNode = createObject("roSGNode", "Component1")
+                    myNode.sayHello(1, 2)
                 end function
             `);
             program.setFile('components/MyNode.bs', `
@@ -2228,7 +2230,7 @@ describe('Program', () => {
                 </component>`);
             program.validate();
 
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(3, 36)));
             expectZeroDiagnostics(program);
             //note - callfunc completions and signatures are not yet correctly identifying methods that are exposed in an interace - waiting on the new xml branch for that
             expect(signatureHelp).to.be.empty;

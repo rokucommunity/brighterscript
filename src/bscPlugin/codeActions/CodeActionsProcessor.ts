@@ -18,7 +18,8 @@ export class CodeActionsProcessor {
 
     public process() {
         for (const diagnostic of this.event.diagnostics) {
-            if (diagnostic.code === DiagnosticCodeMap.callToUnknownFunction) {
+            if (diagnostic.code === DiagnosticCodeMap.cannotFindName) {
+                this.suggestClassImports(diagnostic as any);
                 this.suggestFunctionImports(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
                 this.suggestClassImports(diagnostic as any);
@@ -64,16 +65,16 @@ export class CodeActionsProcessor {
         }
     }
 
-    private suggestFunctionImports(diagnostic: DiagnosticMessageType<'callToUnknownFunction'>) {
+    private suggestFunctionImports(diagnostic: DiagnosticMessageType<'cannotFindName'>) {
         //skip if not a BrighterScript file
         if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
             return;
         }
-        const lowerFunctionName = diagnostic.data.functionName.toLowerCase();
+        const lowerName = diagnostic.data.name.toLowerCase();
         this.suggestImports(
             diagnostic,
-            lowerFunctionName,
-            this.event.file.program.findFilesForFunction(lowerFunctionName)
+            lowerName,
+            this.event.file.program.findFilesForFunction(lowerName)
         );
     }
 

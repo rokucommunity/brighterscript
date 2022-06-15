@@ -160,6 +160,92 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
+        it('detects unknown namespace names', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    Name1.thing()
+                    Name2.thing()
+                end sub
+                namespace Name1
+                    sub thing()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('Name2')
+            ]);
+        });
+
+        it('detects unknown enum names', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print Direction.up
+                    print up.Direction
+                end sub
+                enum Direction
+                    up
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('up')
+            ]);
+        });
+
+        it('detects unknown function names', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print go.toStr()
+                    print go2.toStr()
+                end sub
+
+                function go()
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('go2')
+            ]);
+        });
+
+        it('detects unknown local var names', () => {
+            program.setFile('source/lib.bs', `
+                sub libFunc(param1)
+                    print param1
+                    print param2
+                    name1 = "bob"
+                    print name1
+                    print name2
+                    for each item1 in param1
+                        print item1
+                        print item2
+                    end for
+                    for idx1 = 0 to 10
+                        print idx1
+                        print idx2
+                    end for
+                    try
+                        print 1
+                    catch ex1
+                        print ex1
+                        print ex2
+                    end try
+                end sub
+
+                function go()
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('param2'),
+                DiagnosticMessages.cannotFindName('name2'),
+                DiagnosticMessages.cannotFindName('item2'),
+                DiagnosticMessages.cannotFindName('idx2'),
+                DiagnosticMessages.cannotFindName('ex2')
+            ]);
+        });
+
         describe('createObject', () => {
             it('recognizes various scenegraph nodes', () => {
                 program.setFile(`source/file.brs`, `
@@ -463,7 +549,7 @@ describe('Scope', () => {
             });
 
             it('flags scope function with same name (but different case) as built-in function', () => {
-                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile('source/main.brs', `
                     sub main()
                         print str(12345) ' prints 12345 (i.e. our str() function below is ignored)
                     end sub
@@ -509,7 +595,7 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.callToUnknownFunction('DoB', 'source')
+                DiagnosticMessages.cannotFindName('DoB')
             ]);
         });
 
@@ -525,7 +611,7 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.callToUnknownFunction('DoC', 'source')
+                DiagnosticMessages.cannotFindName('DoC')
             ]);
         });
 

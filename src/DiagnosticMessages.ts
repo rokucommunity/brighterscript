@@ -13,11 +13,11 @@ export let DiagnosticMessages = {
         code: 1000,
         severity: DiagnosticSeverity.Error
     }),
-    callToUnknownFunction: (name: string, scopeName: string) => ({
-        message: `Cannot find function with name '${name}' when this file is included in scope '${scopeName}'`,
+    cannotFindName: (name: string) => ({
+        message: `Cannot find name '${name}'`,
         code: 1001,
         data: {
-            functionName: name
+            name: name
         },
         severity: DiagnosticSeverity.Error
     }),
