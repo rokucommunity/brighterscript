@@ -120,12 +120,16 @@ export class BrsFile {
         return this._functionScopes;
     }
 
+    private get cache() {
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        return this._parser?.references['cache'];
+    }
+
     /**
      * files referenced by import statements
      */
     public get ownScriptImports() {
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        const result = this._parser?.references['cache'].getOrAdd('BrsFile_ownScriptImports', () => {
+        const result = this.cache?.getOrAdd('BrsFile_ownScriptImports', () => {
             const result = [] as FileReference[];
             for (const statement of this.parser?.references?.importStatements ?? []) {
                 //register import statements
@@ -710,14 +714,20 @@ export class BrsFile {
      * @param position
      * @param functionScopes
      */
-    public getFunctionScopeAtPosition(position: Position, functionScopes?: FunctionScope[]): FunctionScope {
+    public getFunctionScopeAtPosition(position: Position): FunctionScope {
+        return this.cache.getOrAdd(`functionScope-${position.line}:${position.character}`, () => {
+            return this._getFunctionScopeAtPosition(position, this.functionScopes);
+        });
+    }
+
+    public _getFunctionScopeAtPosition(position: Position, functionScopes?: FunctionScope[]): FunctionScope {
         if (!functionScopes) {
             functionScopes = this.functionScopes;
         }
         for (let scope of functionScopes) {
             if (util.rangeContains(scope.range, position)) {
                 //see if any of that scope's children match the position also, and give them priority
-                let childScope = this.getFunctionScopeAtPosition(position, scope.childrenScopes);
+                let childScope = this._getFunctionScopeAtPosition(position, scope.childrenScopes);
                 if (childScope) {
                     return childScope;
                 } else {

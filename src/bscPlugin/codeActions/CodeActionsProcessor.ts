@@ -19,7 +19,6 @@ export class CodeActionsProcessor {
     public process() {
         for (const diagnostic of this.event.diagnostics) {
             if (diagnostic.code === DiagnosticCodeMap.cannotFindName) {
-                this.suggestClassImports(diagnostic as any);
                 this.suggestFunctionImports(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
                 this.suggestClassImports(diagnostic as any);
