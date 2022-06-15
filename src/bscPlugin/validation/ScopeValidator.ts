@@ -52,6 +52,10 @@ export class ScopeValidator {
         }
     }
 
+    private addDiagnostic(event: OnScopeValidateEvent, diagnostic: BsDiagnostic) {
+        event.scope.addDiagnostics([diagnostic]);
+    }
+
     private cache = new Map<string, boolean>();
 
     private iterateExpressions(event: OnScopeValidateEvent) {
@@ -60,9 +64,12 @@ export class ScopeValidator {
             if (isBrsFile(file)) {
                 const expressions = [
                     ...file.parser.references.expressions,
-                    //all class "extends <whatever>"
-                    ...file.parser.references.classStatements.map(x => x.parentClassName)
+                    //all class "extends <whatever>" expressions
+                    ...file.parser.references.classStatements.map(x => x.parentClassName.expression),
+                    //all interface "extends <whatever>" expressions
+                    ...file.parser.references.interfaceStatements.map(x => x.parentInterfaceName.expression)
                 ];
+                outer:
                 for (let referenceExpression of expressions) {
                     if (!referenceExpression) {
                         continue;
@@ -95,24 +102,40 @@ export class ScopeValidator {
                                     range: tokens[0].range
                                 });
                             }
+                            //skip to the next expression
+                            continue;
                         }
-                        // const processedNames: string[] = [];
-                        // for (const token of tokens ?? []) {
-                        //     processedNames.push(token.text?.toLowerCase());
-                        //     const entityName = processedNames.join('.');
+                        //at this point, we know the first item is a known symbol. find unknown namespace parts after the first part
+                        if (tokens.length > 1) {
+                            const firstNamespacePart = tokens.shift().text?.toLowerCase();
+                            const namespaceContainer = scope.namespaceLookup.get(firstNamespacePart);
+                            //if this isn't a namespace, skip it
+                            if (!namespaceContainer) {
+                                continue;
+                            }
+                            //catch unknown namespace items
+                            const processedNames: string[] = [firstNamespacePart];
+                            for (const token of tokens ?? []) {
+                                processedNames.push(token.text?.toLowerCase());
+                                const entityName = processedNames.join('.');
 
-                        //     if (scope.getEnumMemberMap().has(entityName)) {
-                        //         this.addToken(token, SemanticTokenTypes.enumMember);
-                        //     } else if (scope.getEnumMap().has(entityName)) {
-                        //         this.addToken(token, SemanticTokenTypes.enum);
-                        //     } else if (scope.getClassMap().has(entityName)) {
-                        //         this.addToken(token, SemanticTokenTypes.class);
-                        //     } else if (scope.getCallableByName(entityName)) {
-                        //         this.addToken(token, SemanticTokenTypes.function);
-                        //     } else if (scope.namespaceLookup.has(entityName)) {
-                        //         this.addToken(token, SemanticTokenTypes.namespace);
-                        //     }
-                        // }
+                                if (
+                                    !scope.getEnumMemberMap().has(entityName) &&
+                                    !scope.getEnumMap().has(entityName) &&
+                                    !scope.getClassMap().has(entityName) &&
+                                    !scope.getCallableByName(entityName) &&
+                                    !scope.namespaceLookup.has(entityName)
+                                ) {
+                                    this.addDiagnostic(event, {
+                                        ...DiagnosticMessages.cannotFindName(token.text),
+                                        range: token.range,
+                                        file: file
+                                    });
+                                    //no need to add another diagnostic for future unknown items
+                                    continue outer;
+                                }
+                            }
+                        }
                     }
                 }
             }

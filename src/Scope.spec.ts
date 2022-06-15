@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
-import { standardizePath as s } from './util';
+import util, { standardizePath as s } from './util';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
@@ -175,6 +175,23 @@ describe('Scope', () => {
             expectDiagnostics(program, [
                 DiagnosticMessages.cannotFindName('Name2')
             ]);
+        });
+
+        it('detects unknown namespace sub-names', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    Name1.subname.thing()
+                end sub
+                namespace Name1
+                    sub thing()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('subname'),
+                range: util.createRange(2, 26, 2, 33)
+            }]);
         });
 
         it('detects unknown enum names', () => {
