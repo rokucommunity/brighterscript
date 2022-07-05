@@ -41,11 +41,30 @@ sub main()
 end sub
 ```
 
+## Complex objects
+Constants can contain complex objects or arrays as well, but keep in mind that these are inlined at compile-time, so it is not recommended to reach into these objects for specific values all the time.
+
+```BrighterScript
+namespace networking
+	const HEADERS = {
+		"Authorization": "Basic",
+		"Access-Control-Allow-Credentials": "true"
+	}
+	const METHODS = [
+	    "GET",
+	    "POST",
+	    "PUT",
+	    "DELETE"
+	]
+end namespace
+sub main()
+    print networking.HEADERS
+    print networking.METHODS
+end sub
+```
 **Transpiled:**
 ```vb
 sub main()
-	print "https://your-app.com/api/v1"
-	print "abcd1234"
 	print {
 		"Authorization": "Basic",
 		"Access-Control-Allow-Credentials": "true"
