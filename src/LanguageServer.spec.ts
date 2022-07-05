@@ -440,6 +440,31 @@ describe('LanguageServer', () => {
                 s`${tempDir}/root/subdir`
             ]);
         });
+
+        it('finds nested roku-like dirs', async () => {
+            fsExtra.outputFileSync(s`${tempDir}/project1/manifest`, '');
+            fsExtra.outputFileSync(s`${tempDir}/project1/source/main.brs`, '');
+
+            fsExtra.outputFileSync(s`${tempDir}/sub/dir/project2/manifest`, '');
+            fsExtra.outputFileSync(s`${tempDir}/sub/dir/project2/source/main.bs`, '');
+
+            //does not match folder with manifest without a sibling ./source folder
+            fsExtra.outputFileSync(s`${tempDir}/project3/manifest`, '');
+
+            workspaceFolders = [
+                s`${tempDir}/`
+            ];
+
+            server.run();
+            await server['syncProjects']();
+
+            expect(
+                server.projects.map(x => x.projectPath).sort()
+            ).to.eql([
+                s`${tempDir}/project1`,
+                s`${tempDir}/sub/dir/project2`
+            ]);
+        });
     });
 
     describe('onDidChangeWatchedFiles', () => {
