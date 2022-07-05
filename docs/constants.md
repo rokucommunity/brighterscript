@@ -24,9 +24,12 @@ Consts can be defined within namespaces, and accessed like a property.
 ```BrighterScript
 namespace networking
     const BASE_URL = "https://your-app.com/api/v1"
+    sub printBaseUrl()
+        print BASE_URL
+    end sub
 end namespace
 sub main()
-    print BASE_URL
+    print networking.BASE_URL
 end sub
 ```
 
