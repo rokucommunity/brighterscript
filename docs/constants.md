@@ -1,7 +1,7 @@
 # Constants
-You can use the `const` keyword to declare constant values. These values cannot ever be modified. These constants will be inlined at compile-time, which is very efficient(similar to how [enums](enums.md) work). Constants cannot be changed at runtime.
+You can use the `const` keyword to declare constant values. These values cannot be changed at runtime. Constant references will be inlined at compile-time, which is very efficient (similar to how [enums](enums.md) work). 
 
-These are not to be confused with the conditional compile `#const` statements, which are a completely separate concept.
+**NOTE:** These are not to be confused with the conditional compile `#const` statements, which are a completely separate concept.
 
 ## Basic usage
 Consts can be defined at the root level of files, and are scoped the same way as functions.
