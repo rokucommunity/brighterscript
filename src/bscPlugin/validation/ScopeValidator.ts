@@ -1,6 +1,7 @@
+import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
-import { isBinaryExpression, isBrsFile, isCallExpression, isLiteralExpression, isNamespacedVariableNameExpression, isNewExpression } from '../../astUtils/reflection';
+import { isBrsFile, isCallExpression, isLiteralExpression, isNamespacedVariableNameExpression, isNewExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -11,6 +12,7 @@ import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
+import type { Scope } from '../../Scope';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -29,14 +31,13 @@ export class ScopeValidator {
 
     public processEvent(event: OnScopeValidateEvent) {
         this.events.push(event);
-        this.validateEnumUsage(event);
         this.detectDuplicateEnums(event);
         this.validateCreateObjectCalls(event);
         this.iterateExpressions(event);
     }
 
     public reset() {
-        this.cache.clear();
+        this.onceCache.clear();
         this.events = [];
     }
 
@@ -45,18 +46,42 @@ export class ScopeValidator {
      * for diagnostics where scope isn't important. (i.e. CreateObject validations)
      */
     private addDiagnosticOnce(event: OnScopeValidateEvent, diagnostic: BsDiagnostic) {
-        const key = `${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`;
-        if (!this.cache.has(key)) {
-            this.cache.set(key, true);
+        this.onceCache.getOrAdd(`${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`, () => {
             event.scope.addDiagnostics([diagnostic]);
-        }
+            return true;
+        });
     }
+    private onceCache = new Cache<string, boolean>();
 
     private addDiagnostic(event: OnScopeValidateEvent, diagnostic: BsDiagnostic) {
         event.scope.addDiagnostics([diagnostic]);
     }
 
-    private cache = new Map<string, boolean>();
+    /**
+     * Add a diagnostic (to the first scope) that will have `relatedInformation` for each affected scope
+     */
+    private addMultiScopeDiagnostic(event: OnScopeValidateEvent, diagnostic: BsDiagnostic, message = 'Missing in scope') {
+        diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`, () => {
+            if (!diagnostic.relatedInformation) {
+                diagnostic.relatedInformation = [];
+            }
+            this.addDiagnostic(event, diagnostic);
+            return diagnostic;
+        });
+        let location;
+        if (isXmlScope(event.scope) && event.scope.xmlFile?.srcPath) {
+            location = Location.create(
+                URI.file(event.scope.xmlFile.srcPath).toString(),
+                util.createRange(0, 0, 0, 10)
+            );
+        }
+        diagnostic.relatedInformation.push({
+            message: `${message} '${event.scope.name}'`,
+            location: location
+        });
+    }
+
+    private multiScopeCache = new Cache<string, BsDiagnostic>();
 
     private iterateExpressions(event: OnScopeValidateEvent) {
         const { scope } = event;
@@ -89,12 +114,11 @@ export class ScopeValidator {
                         const symbolTable = functionScope?.func.symbolTable ?? scope.symbolTable;
                         if (!symbolTable.hasSymbol(tokens[0]?.text)) {
                             if (isNewExpression(referenceExpression) || isNamespacedVariableNameExpression(referenceExpression)) {
-                                //skip for now because ClassValidator is handling this one
-                                // this.addDiagnosticOnce(event, {
-                                //     file: file as BscFile,
-                                //     ...DiagnosticMessages.classCouldNotBeFound(tokens[0].text, scope.name),
-                                //     range: tokens[0].range
-                                // });
+                                this.addMultiScopeDiagnostic(event, {
+                                    file: file as BscFile,
+                                    ...DiagnosticMessages.classCouldNotBeFound(tokens[0].text, scope.name),
+                                    range: tokens[0].range
+                                });
                             } else {
                                 this.addDiagnosticOnce(event, {
                                     file: file as BscFile,
@@ -117,6 +141,7 @@ export class ScopeValidator {
                             const processedNames: string[] = [firstNamespacePart];
                             for (const token of tokens ?? []) {
                                 processedNames.push(token.text?.toLowerCase());
+
                                 const entityName = processedNames.join('.');
 
                                 if (
@@ -126,11 +151,28 @@ export class ScopeValidator {
                                     !scope.getCallableByName(entityName) &&
                                     !scope.namespaceLookup.has(entityName)
                                 ) {
-                                    this.addDiagnostic(event, {
-                                        ...DiagnosticMessages.cannotFindName(token.text),
-                                        range: token.range,
-                                        file: file
-                                    });
+                                    //if this looks like an enum member, provide a nicer error message
+                                    const theEnum = this.getEnum(scope, entityName)?.item;
+                                    if (theEnum) {
+                                        this.addMultiScopeDiagnostic(event, {
+                                            file: file,
+                                            ...DiagnosticMessages.unknownEnumValue(token.text?.split('.').pop(), theEnum.fullName),
+                                            range: tokens[tokens.length - 1].range,
+                                            relatedInformation: [{
+                                                message: 'Enum declared here',
+                                                location: Location.create(
+                                                    URI.file(file.srcPath).toString(),
+                                                    theEnum.tokens.name.range
+                                                )
+                                            }]
+                                        });
+                                    } else {
+                                        this.addMultiScopeDiagnostic(event, {
+                                            ...DiagnosticMessages.cannotFindName(token.text),
+                                            range: token.range,
+                                            file: file
+                                        });
+                                    }
                                     //no need to add another diagnostic for future unknown items
                                     continue outer;
                                 }
@@ -143,66 +185,25 @@ export class ScopeValidator {
     }
 
     /**
-     * Find all expressions and validate the ones that look like enums
+     * Given a string optionally separated by dots, find an enum related to it.
+     * For example, all of these would return the enum: `SomeNamespace.SomeEnum.SomeMember`, SomeEnum.SomeMember, `SomeEnum`
      */
-    public validateEnumUsage(event: OnScopeValidateEvent) {
-        const diagnostics = [] as BsDiagnostic[];
+    private getEnum(scope: Scope, name: string) {
+        //look for the enum directly
+        let result = scope.getEnumMap().get(name);
 
-        //if there are any enums defined in this scope
-        const enumLookup = event.scope.getEnumMap();
-
-        //skip enum validation if there are no enums defined in this scope
-        if (enumLookup.size === 0) {
-            return;
+        //assume we've been given the enum.member syntax, so pop the member and try again
+        if (!result) {
+            const parts = name.split('.');
+            parts.pop();
+            result = scope.getEnumMap().get(parts.join('.'));
         }
-
-        event.scope.enumerateOwnFiles((file) => {
-            //skip non-brs files
-            if (!isBrsFile(file)) {
-                return;
-            }
-
-            // const namespaceLookup = this.event.scopes[0]?.namespaceLookup;
-            for (const referenceExpression of file.parser.references.expressions) {
-                const actualExpressions: Expression[] = [];
-                //binary expressions actually have two expressions (left and right), so handle them independently
-                if (isBinaryExpression(referenceExpression)) {
-                    actualExpressions.push(referenceExpression.left, referenceExpression.right);
-                } else {
-                    //assume all other expressions are a single chain
-                    actualExpressions.push(referenceExpression);
-                }
-                for (let expression of actualExpressions) {
-                    const tokens = util.getAllDottedGetParts(expression);
-                    if (tokens) {
-                        //build the full name of the thing
-                        const parts = tokens.map(x => x.text);
-                        const fullName = parts.join('.');
-                        const memberName = parts.pop();
-                        const fullParentName = parts.join('.');
-                        const theEnum = event.scope.getEnumMap().get(fullParentName.toLowerCase())?.item;
-                        //is an enum and this field does not exist
-                        if (theEnum && !event.scope.getEnumMemberMap().has(fullName.toLowerCase())) {
-                            diagnostics.push({
-                                file: file,
-                                ...DiagnosticMessages.unknownEnumValue(memberName, fullParentName),
-                                range: tokens[tokens.length - 1].range,
-                                relatedInformation: [{
-                                    message: 'Enum declared here',
-                                    location: Location.create(
-                                        URI.file(file.srcPath).toString(),
-                                        theEnum.tokens.name.range
-                                    )
-                                }]
-                            });
-                        }
-                    }
-                }
-            }
-        });
-        event.scope.addDiagnostics(diagnostics);
+        return result;
     }
 
+    /**
+     * Flag duplicate enums
+     */
     private detectDuplicateEnums(event: OnScopeValidateEvent) {
         const diagnostics: BsDiagnostic[] = [];
         const enumLocationsByName = new Cache<string, Array<{ file: BrsFile; statement: EnumStatement }>>();
