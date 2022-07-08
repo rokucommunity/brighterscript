@@ -1,7 +1,7 @@
 import type { Position } from 'vscode-languageserver';
 import { Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
-import { isBrsFile, isCallExpression, isLiteralExpression, isNamespacedVariableNameExpression, isNewExpression, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isCallExpression, isLiteralExpression, isNewExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -128,21 +128,13 @@ export class ScopeValidator {
                     }
                     const tokens = util.getAllDottedGetParts(expression);
                     if (tokens?.length > 0) {
-                        const symbolTable = this.getSymbolTable(scope, file, tokens[0].range.start);
+                        const symbolTable = this.getSymbolTable(scope, file, tokens[0].range.start); //flag all unknown left-most variables
                         if (!symbolTable.hasSymbol(tokens[0]?.text)) {
-                            if (isNewExpression(referenceExpression) || isNamespacedVariableNameExpression(referenceExpression)) {
-                                this.addMultiScopeDiagnostic(event, {
-                                    file: file as BscFile,
-                                    ...DiagnosticMessages.classCouldNotBeFound(tokens[0].text, scope.name),
-                                    range: tokens[0].range
-                                });
-                            } else {
-                                this.addDiagnosticOnce(event, {
-                                    file: file as BscFile,
-                                    ...DiagnosticMessages.cannotFindName(tokens[0].text),
-                                    range: tokens[0].range
-                                });
-                            }
+                            this.addMultiScopeDiagnostic(event, {
+                                file: file as BscFile,
+                                ...DiagnosticMessages.cannotFindName(tokens[0].text),
+                                range: tokens[0].range
+                            });
                             //skip to the next expression
                             continue;
                         }
@@ -150,8 +142,9 @@ export class ScopeValidator {
                         if (tokens.length > 1) {
                             const firstNamespacePart = tokens.shift().text?.toLowerCase();
                             const namespaceContainer = scope.namespaceLookup.get(firstNamespacePart);
+                            const enumStatement = scope.getEnum(firstNamespacePart);
                             //if this isn't a namespace, skip it
-                            if (!namespaceContainer) {
+                            if (!namespaceContainer && !enumStatement) {
                                 continue;
                             }
                             //catch unknown namespace items

@@ -19,7 +19,7 @@ export class CodeActionsProcessor {
     public process() {
         for (const diagnostic of this.event.diagnostics) {
             if (diagnostic.code === DiagnosticCodeMap.cannotFindName) {
-                this.suggestFunctionImports(diagnostic as any);
+                this.suggestCannotFindName(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
                 this.suggestClassImports(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
@@ -64,16 +64,22 @@ export class CodeActionsProcessor {
         }
     }
 
-    private suggestFunctionImports(diagnostic: DiagnosticMessageType<'cannotFindName'>) {
+    private suggestCannotFindName(diagnostic: DiagnosticMessageType<'cannotFindName'>) {
         //skip if not a BrighterScript file
         if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
             return;
         }
         const lowerName = diagnostic.data.name.toLowerCase();
+
         this.suggestImports(
             diagnostic,
             lowerName,
-            this.event.file.program.findFilesForFunction(lowerName)
+            [
+                ...this.event.file.program.findFilesForFunction(lowerName),
+                ...this.event.file.program.findFilesForClass(lowerName),
+                ...this.event.file.program.findFilesForNamespace(lowerName),
+                ...this.event.file.program.findFilesForEnum(lowerName)
+            ]
         );
     }
 

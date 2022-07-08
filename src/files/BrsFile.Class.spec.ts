@@ -1186,7 +1186,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.classCouldNotBeFound('Duck', 'source')
+            DiagnosticMessages.cannotFindName('Duck')
         ]);
     });
 

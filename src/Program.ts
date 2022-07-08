@@ -1489,6 +1489,34 @@ export class Program {
         return files;
     }
 
+    public findFilesForNamespace(name: string) {
+        const files = [] as BscFile[];
+        const lowerName = name.toLowerCase();
+        //find every file with this class defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                if (file.parser.references.namespaceStatements.find(x => x.name.toLowerCase() === lowerName)) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
+    }
+
+    public findFilesForEnum(name: string) {
+        const files = [] as BscFile[];
+        const lowerName = name.toLowerCase();
+        //find every file with this class defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                if (file.parser.references.enumStatementLookup.get(lowerName)) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
+    }
+
     /**
      * Get a map of the manifest information
      */
