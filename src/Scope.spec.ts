@@ -42,6 +42,44 @@ describe('Scope', () => {
         expectZeroDiagnostics(program);
     });
 
+    it('builds symbol table with namespace-relative entries', () => {
+        const file = program.setFile<BrsFile>('source/alpha.bs', `
+            namespace alpha
+                class Beta
+                end class
+            end namespace
+            namespace alpha
+                class Charlie extends Beta
+                end class
+                function createBeta()
+                    return new Beta()
+                end function
+            end namespace
+        `);
+        program.setFile('source/main.bs', `
+            function main()
+                alpha.createBeta()
+                thing = new alpha.Beta()
+            end function
+        `);
+        program.validate();
+        const scope = program.getScopesForFile('source/alpha.bs')[0];
+        scope.linkSymbolTable();
+        const symbolTable = file.parser.references.namespaceStatements[1].symbolTable;
+        //the symbol table should contain the relative names for all items in this namespace across files
+        expect(
+            symbolTable.hasSymbol('Beta')
+        ).to.be.true;
+        expect(
+            symbolTable.hasSymbol('Charlie')
+        ).to.be.true;
+        expect(
+            symbolTable.hasSymbol('createBeta')
+        ).to.be.true;
+
+        expectZeroDiagnostics(program);
+    });
+
     it('handles variables with javascript prototype names', () => {
         program.setFile('source/main.brs', `
             sub main()

@@ -744,11 +744,13 @@ export class BrsFile {
      */
     public getNamespaceStatementForPosition(position: Position): NamespaceStatement {
         if (position) {
-            for (const statement of this.parser.references.namespaceStatements) {
-                if (util.rangeContains(statement.range, position)) {
-                    return statement;
+            return this.cache.getOrAdd(`namespaceStatementForPosition-${position.line}:${position.character}`, () => {
+                for (const statement of this.parser.references.namespaceStatements) {
+                    if (util.rangeContains(statement.range, position)) {
+                        return statement;
+                    }
                 }
-            }
+            });
         }
     }
 

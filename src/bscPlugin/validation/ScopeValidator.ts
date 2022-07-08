@@ -1,4 +1,4 @@
-import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
+import type { Position } from 'vscode-languageserver';
 import { Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import { isBrsFile, isCallExpression, isLiteralExpression, isNamespacedVariableNameExpression, isNewExpression, isXmlScope } from '../../astUtils/reflection';
@@ -13,6 +13,7 @@ import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
+import type { SymbolTable } from '../../SymbolTable';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -31,9 +32,11 @@ export class ScopeValidator {
 
     public processEvent(event: OnScopeValidateEvent) {
         this.events.push(event);
+        event.scope.linkSymbolTable();
         this.detectDuplicateEnums(event);
         this.validateCreateObjectCalls(event);
         this.iterateExpressions(event);
+        event.scope.unlinkSymbolTable();
     }
 
     public reset() {
@@ -60,7 +63,7 @@ export class ScopeValidator {
     /**
      * Add a diagnostic (to the first scope) that will have `relatedInformation` for each affected scope
      */
-    private addMultiScopeDiagnostic(event: OnScopeValidateEvent, diagnostic: BsDiagnostic, message = 'Missing in scope') {
+    private addMultiScopeDiagnostic(event: OnScopeValidateEvent, diagnostic: BsDiagnostic, message = 'Not defined in scope') {
         diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`, () => {
             if (!diagnostic.relatedInformation) {
                 diagnostic.relatedInformation = [];
@@ -81,6 +84,21 @@ export class ScopeValidator {
         });
     }
 
+    /**
+     * Find the closest symbol table for the given position
+     */
+    private getSymbolTable(scope: Scope, file: BrsFile, position: Position) {
+        let symbolTable: SymbolTable;
+        symbolTable = file.getFunctionScopeAtPosition(position)?.func.symbolTable;
+        if (!symbolTable) {
+            symbolTable = file.getNamespaceStatementForPosition(position)?.symbolTable;
+        }
+        if (!symbolTable) {
+            symbolTable = scope.symbolTable;
+        }
+        return symbolTable;
+    }
+
     private multiScopeCache = new Cache<string, BsDiagnostic>();
 
     private iterateExpressions(event: OnScopeValidateEvent) {
@@ -90,9 +108,9 @@ export class ScopeValidator {
                 const expressions = [
                     ...file.parser.references.expressions,
                     //all class "extends <whatever>" expressions
-                    ...file.parser.references.classStatements.map(x => x.parentClassName.expression),
+                    ...file.parser.references.classStatements.map(x => x.parentClassName?.expression),
                     //all interface "extends <whatever>" expressions
-                    ...file.parser.references.interfaceStatements.map(x => x.parentInterfaceName.expression)
+                    ...file.parser.references.interfaceStatements.map(x => x.parentInterfaceName?.expression)
                 ];
                 outer:
                 for (let referenceExpression of expressions) {
@@ -110,8 +128,7 @@ export class ScopeValidator {
                     }
                     const tokens = util.getAllDottedGetParts(expression);
                     if (tokens?.length > 0) {
-                        const functionScope = file.getFunctionScopeAtPosition(tokens[0].range.start);
-                        const symbolTable = functionScope?.func.symbolTable ?? scope.symbolTable;
+                        const symbolTable = this.getSymbolTable(scope, file, tokens[0].range.start);
                         if (!symbolTable.hasSymbol(tokens[0]?.text)) {
                             if (isNewExpression(referenceExpression) || isNamespacedVariableNameExpression(referenceExpression)) {
                                 this.addMultiScopeDiagnostic(event, {

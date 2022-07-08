@@ -1105,10 +1105,10 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     ) {
         super();
         this.name = this.nameExpression.getName(ParseMode.BrighterScript);
-        this.symbolTable.pushParent(parentSymbolTable);
+        this.symbolTable = new SymbolTable(parentSymbolTable);
     }
 
-    public symbolTable = new SymbolTable();
+    public symbolTable: SymbolTable;
 
     /**
      * The string name for this namespace

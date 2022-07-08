@@ -736,16 +736,21 @@ export class Program {
      * Get a list of all scopes the file is loaded into
      * @param file
      */
-    public getScopesForFile(file: XmlFile | BrsFile) {
-        let result = [] as Scope[];
-        for (let key in this.scopes) {
-            let scope = this.scopes[key];
-
-            if (scope.hasFile(file)) {
-                result.push(scope);
-            }
+    public getScopesForFile(file: XmlFile | BrsFile | string) {
+        if (typeof file === 'string') {
+            file = this.getFile(file);
         }
-        return result;
+        if (file) {
+            let result = [] as Scope[];
+            for (let key in this.scopes) {
+                let scope = this.scopes[key];
+
+                if (scope.hasFile(file)) {
+                    result.push(scope);
+                }
+            }
+            return result;
+        }
     }
 
     /**
