@@ -77,13 +77,8 @@ export class BsClassValidator {
                             range: newExpression.className.range
                         });
 
-                        //could not find a class with this name
                     } else {
-                        // this.diagnostics.push({
-                        //     ...DiagnosticMessages.classCouldNotBeFound(className, this.scope.name),
-                        //     file: file,
-                        //     range: newExpression.className.range
-                        // });
+                        //could not find a class with this name (handled by ScopeValidator)
                     }
                 }
             }
@@ -427,20 +422,15 @@ export class BsClassValidator {
                 } else if (absoluteParent) {
                     parentClass = absoluteParent;
 
-                    //couldn't find the parent class
                 } else {
-                    // this.diagnostics.push({
-                    //     ...DiagnosticMessages.classCouldNotBeFound(parentClassName, this.scope.name),
-                    //     file: classStatement.file,
-                    //     range: classStatement.parentClassName.range
-                    // });
+                    //couldn't find the parent class (validated in ScopeValidator)
                 }
                 classStatement.parentClass = parentClass;
             }
         }
     }
-
 }
+
 type AugmentedClassStatement = ClassStatement & {
     file: BscFile;
     parentClass: AugmentedClassStatement;
