@@ -4,7 +4,7 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
-import type { Diagnostic, Position, Range } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
@@ -864,6 +864,16 @@ export class Util {
         const lastLine = rangeLines.pop();
         rangeLines.push(lastLine.substring(0, endCharacter));
         return rangeLines.join('\n');
+    }
+
+    /**
+     * Helper for creating `Location` objects. Prefer using this function because vscode-languageserver's `Location.create()` is significantly slower at scale
+     */
+    public createLocation(uri: string, range: Range): Location {
+        return {
+            uri: uri,
+            range: range
+        };
     }
 
     /**

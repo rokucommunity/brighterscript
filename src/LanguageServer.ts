@@ -270,10 +270,34 @@ export class LanguageServer {
         //if we found at least one bsconfig.json, then ALL projects must have a bsconfig.json.
         if (files.length > 0) {
             return files.map(file => s`${path.dirname(file.src)}`);
-        } else {
-            //treat the workspace folder as a brightscript project itself
-            return [workspaceFolder];
         }
+
+        //look for roku project folders
+        const rokuLikeDirs = (await Promise.all(
+            //find all folders containing a `manifest` file
+            (await rokuDeploy.getFilePaths([
+                '**/manifest',
+                ...excludes
+
+                //is there at least one .bs|.brs file under the `/source` folder?
+            ], workspaceFolder)).map(async manifestEntry => {
+                const manifestDir = path.dirname(manifestEntry.src);
+                const files = await rokuDeploy.getFilePaths([
+                    'source/**/*.{brs,bs}',
+                    ...excludes
+                ], manifestDir);
+                if (files.length > 0) {
+                    return manifestDir;
+                }
+            })
+            //throw out nulls
+        )).filter(x => !!x);
+        if (rokuLikeDirs.length > 0) {
+            return rokuLikeDirs;
+        }
+
+        //treat the workspace folder as a brightscript project itself
+        return [workspaceFolder];
     }
 
     /**

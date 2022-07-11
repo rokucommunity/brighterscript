@@ -1,7 +1,7 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Position } from 'vscode-languageserver';
-import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
+import type { CompletionItem, Hover, Position, Location } from 'vscode-languageserver';
+import { CompletionItemKind, SymbolKind, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import type { Scope } from '../Scope';
@@ -1094,7 +1094,7 @@ export class BrsFile {
                 const namespaceItemStatementHandler = (statement: ClassStatement | FunctionStatement) => {
                     if (!location && statement.name.text.toLowerCase() === endName) {
                         const uri = util.pathToUri(file.srcPath);
-                        location = Location.create(uri, statement.range);
+                        location = util.createLocation(uri, statement.range);
                     }
                 };
 
@@ -1410,7 +1410,7 @@ export class BrsFile {
                 //to only get functions defined in interface methods
                 const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                 if (callable) {
-                    results.push(Location.create(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.range));
+                    results.push(util.createLocation(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.range));
                 }
             }
             return results;
@@ -1423,7 +1423,7 @@ export class BrsFile {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = this.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
                 if (extendedClass) {
-                    results.push(Location.create(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.range));
+                    results.push(util.createLocation(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.range));
                 }
             }
             return results;
@@ -1448,14 +1448,14 @@ export class BrsFile {
                 //we found a variable declaration with this token text!
                 if (varDeclaration.name.toLowerCase() === textToSearchFor) {
                     const uri = util.pathToUri(this.srcPath);
-                    results.push(Location.create(uri, varDeclaration.nameRange));
+                    results.push(util.createLocation(uri, varDeclaration.nameRange));
                 }
             }
             if (this.tokenFollows(token, TokenKind.Goto)) {
                 for (const label of functionScope.labelStatements) {
                     if (label.name.toLocaleLowerCase() === textToSearchFor) {
                         const uri = util.pathToUri(this.srcPath);
-                        results.push(Location.create(uri, label.nameRange));
+                        results.push(util.createLocation(uri, label.nameRange));
                     }
                 }
             }
@@ -1480,7 +1480,7 @@ export class BrsFile {
                 const statementHandler = (statement: FunctionStatement) => {
                     if (statement.getName(this.parseMode).toLowerCase() === textToSearchFor) {
                         const uri = util.pathToUri(file.srcPath);
-                        results.push(Location.create(uri, statement.range));
+                        results.push(util.createLocation(uri, statement.range));
                     }
                 };
 
@@ -1499,12 +1499,12 @@ export class BrsFile {
         //get class fields and members
         const statementHandler = (statement: MethodStatement) => {
             if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
-                results.push(Location.create(util.pathToUri(file.srcPath), statement.range));
+                results.push(util.createLocation(util.pathToUri(file.srcPath), statement.range));
             }
         };
         const fieldStatementHandler = (statement: FieldStatement) => {
             if (statement.name.text.toLowerCase() === textToSearchFor) {
-                results.push(Location.create(util.pathToUri(file.srcPath), statement.range));
+                results.push(util.createLocation(util.pathToUri(file.srcPath), statement.range));
             }
         };
         file.parser.ast.walk(createVisitor({
@@ -1756,7 +1756,7 @@ export class BrsFile {
                 file.ast.walk(createVisitor({
                     VariableExpression: (e) => {
                         if (e.name.text.toLowerCase() === searchFor) {
-                            locations.push(Location.create(util.pathToUri(file.srcPath), e.range));
+                            locations.push(util.createLocation(util.pathToUri(file.srcPath), e.range));
                         }
                     }
                 }), {
