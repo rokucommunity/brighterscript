@@ -5,6 +5,7 @@ import { Position, Range } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
+import { DiagnosticMessages } from './DiagnosticMessages';
 const sinon = createSandbox();
 let tempDir = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tempDir}/rootDir`;
@@ -660,6 +661,51 @@ describe('util', () => {
             }, {
                 text: 'i',
                 range: util.createRange(2, 21, 2, 22)
+            }]);
+        });
+    });
+
+    describe('toDiagnostic', () => {
+        it('uses a uri on relatedInfo missing location', () => {
+            expect(
+                util.toDiagnostic({
+                    ...DiagnosticMessages.cannotFindName('someVar'),
+                    file: undefined,
+                    range: util.createRange(1, 2, 3, 4),
+                    relatedInformation: [{
+                        message: 'Alpha',
+                        location: undefined
+                    }]
+                }, 'u/r/i').relatedInformation
+            ).to.eql([{
+                message: 'Alpha',
+                location: util.createLocation(
+                    'u/r/i', util.createRange(1, 2, 3, 4)
+                )
+            }]);
+        });
+
+        it('eliminates diagnostics with relatedInformation that are missing a uri', () => {
+            expect(
+                util.toDiagnostic({
+                    ...DiagnosticMessages.cannotFindName('someVar'),
+                    file: undefined,
+                    range: util.createRange(1, 2, 3, 4),
+                    relatedInformation: [{
+                        message: 'Alpha',
+                        location: util.createLocation(
+                            'uri', util.createRange(2, 3, 4, 5)
+                        )
+                    }, {
+                        message: 'Beta',
+                        location: undefined
+                    }]
+                }, undefined).relatedInformation
+            ).to.eql([{
+                message: 'Alpha',
+                location: util.createLocation(
+                    'uri', util.createRange(2, 3, 4, 5)
+                )
             }]);
         });
     });

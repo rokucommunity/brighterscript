@@ -740,8 +740,8 @@ export class Program {
         if (typeof file === 'string') {
             file = this.getFile(file);
         }
+        let result = [] as Scope[];
         if (file) {
-            let result = [] as Scope[];
             for (let key in this.scopes) {
                 let scope = this.scopes[key];
 
@@ -749,8 +749,8 @@ export class Program {
                     result.push(scope);
                 }
             }
-            return result;
         }
+        return result;
     }
 
     /**

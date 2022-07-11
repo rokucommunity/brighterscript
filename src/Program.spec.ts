@@ -2534,4 +2534,26 @@ describe('Program', () => {
             expect(plugin.afterFileValidate.callCount).to.equal(1);
         });
     });
+
+    describe('getScopesForFile', () => {
+        it('returns empty array when no scopes were found', () => {
+            expect(program.getScopesForFile('does/not/exist')).to.eql([]);
+        });
+    });
+
+    describe('findFilesForEnum', () => {
+        it('finds files', () => {
+            const file = program.setFile('source/main.bs', `
+                enum Direction
+                    up
+                    down
+                end enum
+            `);
+            expect(
+                program.findFilesForEnum('Direction').map(x => x.srcPath)
+            ).to.eql([
+                file.srcPath
+            ]);
+        });
+    });
 });
