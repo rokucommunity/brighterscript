@@ -3,7 +3,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
 import type { ClassStatement, MethodStatement } from '../parser/Statement';
-import { CancellationTokenSource, Location } from 'vscode-languageserver';
+import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCustomType } from '../astUtils/reflection';
@@ -102,7 +102,7 @@ export class BsClassValidator {
                     file: classStatement.file,
                     range: classStatement.name.range,
                     relatedInformation: [{
-                        location: Location.create(
+                        location: util.createLocation(
                             URI.file(nonNamespaceClass.file.srcPath).toString(),
                             nonNamespaceClass.name.range
                         ),
@@ -376,7 +376,7 @@ export class BsClassValidator {
                         file: file,
                         range: classStatement.name.range,
                         relatedInformation: [{
-                            location: Location.create(
+                            location: util.createLocation(
                                 URI.file(alreadyDefinedClass.file.srcPath).toString(),
                                 this.classes.get(lowerName).range
                             ),

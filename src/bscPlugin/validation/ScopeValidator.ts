@@ -1,4 +1,3 @@
-import { Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import { isBinaryExpression, isBrsFile, isLiteralExpression } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
@@ -100,7 +99,7 @@ export class ScopeValidator {
                                 range: tokens[tokens.length - 1].range,
                                 relatedInformation: [{
                                     message: 'Enum declared here',
-                                    location: Location.create(
+                                    location: util.createLocation(
                                         URI.file(file.srcPath).toString(),
                                         theEnum.tokens.name.range
                                     )
@@ -143,7 +142,7 @@ export class ScopeValidator {
                     range: duplicateEnumInfo.statement.tokens.name.range,
                     relatedInformation: [{
                         message: 'Enum declared here',
-                        location: Location.create(
+                        location: util.createLocation(
                             URI.file(primaryEnum.file.srcPath).toString(),
                             primaryEnum.statement.tokens.name.range
                         )
