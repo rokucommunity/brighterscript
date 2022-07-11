@@ -1,4 +1,4 @@
-import type { Position } from 'vscode-languageserver';
+import type { DiagnosticRelatedInformation, Position } from 'vscode-languageserver';
 import { Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import { isBrsFile, isCallExpression, isLiteralExpression, isNewExpression, isXmlScope } from '../../astUtils/reflection';
@@ -41,6 +41,7 @@ export class ScopeValidator {
 
     public reset() {
         this.onceCache.clear();
+        this.multiScopeCache.clear();
         this.events = [];
     }
 
@@ -71,17 +72,21 @@ export class ScopeValidator {
             this.addDiagnostic(event, diagnostic);
             return diagnostic;
         });
-        let location;
+        const info = {
+            message: `${message} '${event.scope.name}'`
+        } as DiagnosticRelatedInformation;
         if (isXmlScope(event.scope) && event.scope.xmlFile?.srcPath) {
-            location = Location.create(
+            info.location = util.createLocation(
                 URI.file(event.scope.xmlFile.srcPath).toString(),
                 util.createRange(0, 0, 0, 10)
             );
+        } else {
+            info.location = util.createLocation(
+                URI.file(diagnostic.file.srcPath).toString(),
+                diagnostic.range
+            );
         }
-        diagnostic.relatedInformation.push({
-            message: `${message} '${event.scope.name}'`,
-            location: location
-        });
+        diagnostic.relatedInformation.push(info);
     }
 
     /**

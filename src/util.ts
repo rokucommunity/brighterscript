@@ -4,7 +4,7 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
-import type { Diagnostic, Position, Range } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
@@ -867,7 +867,17 @@ export class Util {
     }
 
     /**
-     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `util.createRange()` is significantly slower
+     * Helper for creating `Location` objects. Prefer using this function because vscode-languageserver's `Location.create()` is significantly slower at scale
+     */
+    public createLocation(uri: string, range: Range): Location {
+        return {
+            uri: uri,
+            range: range
+        };
+    }
+
+    /**
+     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
         return {
@@ -1207,17 +1217,31 @@ export class Util {
     }
 
     /**
-     * Given a Diagnostic or BsDiagnostic, return a copy of the diagnostic
+     * Given a Diagnostic or BsDiagnostic, return a deep clone of the diagnostic.
+     * @param diagnostic the diagnostic to clone
+     * @param relatedInformationFallbackLocation a default location to use for all `relatedInformation` entries that are missing a location
      */
-    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic) {
+    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic, fileUri: string) {
         return {
             severity: diagnostic.severity,
             range: diagnostic.range,
             message: diagnostic.message,
             relatedInformation: diagnostic.relatedInformation?.map(x => {
+
                 //clone related information just in case a plugin added circular ref info here
-                return { ...x };
-            }),
+                const clone = { ...x };
+                if (!clone.location) {
+                    // use the fallback location if available
+                    if (fileUri) {
+                        clone.location = util.createLocation(fileUri, diagnostic.range);
+                    } else {
+                        //remove this related information so it doesn't bring crash the language server
+                        return undefined;
+                    }
+                }
+                return clone;
+                //filter out null relatedInformation items
+            }).filter(x => x),
             code: diagnostic.code,
             source: 'brs'
         };
