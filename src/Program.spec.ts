@@ -1,7 +1,7 @@
 import { assert, expect } from 'chai';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
-import { CompletionItemKind, Position, Range, Location } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
@@ -232,7 +232,7 @@ describe('Program', () => {
                 ...DiagnosticMessages.duplicateComponentName('Component1'),
                 range: Range.create(1, 17, 1, 27),
                 relatedInformation: [{
-                    location: Location.create(
+                    location: util.createLocation(
                         URI.file(s`${rootDir}/components/component1.xml`).toString(),
                         Range.create(1, 17, 1, 27)
                     ),
@@ -242,7 +242,7 @@ describe('Program', () => {
                 ...DiagnosticMessages.duplicateComponentName('Component1'),
                 range: Range.create(1, 17, 1, 27),
                 relatedInformation: [{
-                    location: Location.create(
+                    location: util.createLocation(
                         URI.file(s`${rootDir}/components/component2.xml`).toString(),
                         Range.create(1, 17, 1, 27)
                     ),

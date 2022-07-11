@@ -1,8 +1,8 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation } from 'vscode-languageserver';
-import { Location, CompletionItemKind } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
+import { CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -677,7 +677,7 @@ export class Program {
                         file: xmlFile,
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
-                                location: Location.create(
+                                location: util.createLocation(
                                     URI.file(xmlFile.srcPath ?? xmlFile.srcPath).toString(),
                                     x.componentName.range
                                 ),

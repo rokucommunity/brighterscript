@@ -1,6 +1,6 @@
-import type { CompletionItem, Position, Range } from 'vscode-languageserver';
+import type { CompletionItem, Position, Range, Location } from 'vscode-languageserver';
 import * as path from 'path';
-import { CompletionItemKind, Location } from 'vscode-languageserver';
+import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -686,7 +686,7 @@ export class Scope {
                         range: param.name.range,
                         relatedInformation: [{
                             message: 'Namespace declared here',
-                            location: Location.create(
+                            location: util.createLocation(
                                 URI.file(namespace.file.srcPath).toString(),
                                 namespace.nameRange
                             )
@@ -707,7 +707,7 @@ export class Scope {
                     range: assignment.name.range,
                     relatedInformation: [{
                         message: 'Namespace declared here',
-                        location: Location.create(
+                        location: util.createLocation(
                             URI.file(namespace.file.srcPath).toString(),
                             namespace.nameRange
                         )
