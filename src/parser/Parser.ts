@@ -12,7 +12,8 @@ import {
     DisallowedLocalIdentifiersText,
     TokenKind
 } from '../lexer/TokenKind';
-import type {
+import {
+    ConstStatement,
     PrintSeparatorSpace,
     PrintSeparatorTab,
     Statement
@@ -205,13 +206,7 @@ export class Parser {
      * Static wrapper around creating a new parser and parsing a list of tokens
      */
     public static parse(toParse: Token[] | string, options?: ParseOptions): Parser {
-        let tokens: Token[];
-        if (typeof toParse === 'string') {
-            tokens = Lexer.scan(toParse).tokens;
-        } else {
-            tokens = toParse;
-        }
-        return new Parser().parse(tokens, options);
+        return new Parser().parse(toParse, options);
     }
 
     /**
@@ -219,7 +214,13 @@ export class Parser {
      * @param toParse the array of tokens to parse. May not contain any whitespace tokens
      * @returns the same instance of the parser which contains the diagnostics and statements
      */
-    public parse(tokens: Token[], options?: ParseOptions) {
+    public parse(toParse: Token[] | string, options?: ParseOptions) {
+        let tokens: Token[];
+        if (typeof toParse === 'string') {
+            tokens = Lexer.scan(toParse).tokens;
+        } else {
+            tokens = toParse;
+        }
         this.logger = options?.logger ?? new Logger();
         this.tokens = tokens;
         this.options = this.sanitizeParseOptions(options);
@@ -320,6 +321,10 @@ export class Parser {
 
             if (this.checkLibrary()) {
                 return this.libraryStatement();
+            }
+
+            if (this.check(TokenKind.Const)) {
+                return this.constStatement();
             }
 
             if (this.check(TokenKind.At) && this.checkNext(TokenKind.Identifier)) {
@@ -1405,6 +1410,20 @@ export class Parser {
             result.push(this.advance());
         }
         return result;
+    }
+
+    private constStatement(): ConstStatement | undefined {
+        const constToken = this.advance();
+        const nameToken = this.identifier();
+        const equalToken = this.consumeToken(TokenKind.Equal);
+        const expression = this.expression();
+        const statement = new ConstStatement({
+            const: constToken,
+            name: nameToken,
+            equals: equalToken
+        }, expression);
+        this._references.constStatements.push(statement);
+        return statement;
     }
 
     private libraryStatement(): LibraryStatement | undefined {
@@ -3060,6 +3079,9 @@ export class Parser {
             EnumStatement: e => {
                 this._references.enumStatements.push(e);
             },
+            ConstStatement: s => {
+                this._references.constStatements.push(s);
+            },
             UnaryExpression: e => {
                 this._references.expressions.add(e);
             },
@@ -3142,6 +3164,18 @@ export class References {
         return this.cache.getOrAdd('enums', () => {
             const result = new Map<string, EnumStatement>();
             for (const stmt of this.enumStatements) {
+                result.set(stmt.fullName.toLowerCase(), stmt);
+            }
+            return result;
+        });
+    }
+
+    public constStatements = [] as ConstStatement[];
+
+    public get constStatementLookup() {
+        return this.cache.getOrAdd('consts', () => {
+            const result = new Map<string, ConstStatement>();
+            for (const stmt of this.constStatements) {
                 result.set(stmt.fullName.toLowerCase(), stmt);
             }
             return result;

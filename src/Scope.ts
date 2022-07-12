@@ -7,7 +7,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement } from './parser/Statement';
+import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
 import type { NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { standardizePath as s, util } from './util';
@@ -240,6 +240,26 @@ export class Scope {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (lowerEnumName) {
                         map.set(lowerEnumName, { item: enumStmt, file: file });
+                    }
+                }
+            });
+            return map;
+        });
+    }
+
+    /**
+     * A dictionary of all constants in this scope. This includes namespaced constants always with their full name.
+     * The key is stored in lower case
+     */
+    public getConstMap(): Map<string, FileLink<ConstStatement>> {
+        return this.cache.getOrAdd('constMap', () => {
+            const map = new Map<string, FileLink<ConstStatement>>();
+            this.enumerateBrsFiles((file) => {
+                for (let stmt of file.parser.references.constStatements) {
+                    const lowerEnumName = stmt.fullName.toLowerCase();
+                    //only track enums with a defined name (i.e. exclude nameless malformed enums)
+                    if (lowerEnumName) {
+                        map.set(lowerEnumName, { item: stmt, file: file });
                     }
                 }
             });
