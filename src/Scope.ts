@@ -17,7 +17,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
+import { isBrsFile, isClassMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 
 /**
@@ -533,10 +533,11 @@ export class Scope {
                             fullName: loopName,
                             nameRange: namespaceStatement.nameExpression.range,
                             lastPartName: part,
-                            namespaces: new Map<string, NamespaceContainer>(),
+                            namespaces: new Map(),
                             classStatements: {},
                             functionStatements: {},
-                            enumStatements: new Map<string, EnumStatement>(),
+                            enumStatements: new Map(),
+                            constStatements: new Map(),
                             statements: [],
                             symbolTable: new SymbolTable(this.symbolTable)
                         });
@@ -551,6 +552,8 @@ export class Scope {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
                     } else if (isEnumStatement(statement) && statement.fullName) {
                         ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
+                    } else if (isConstStatement(statement) && statement.fullName) {
+                        ns.constStatements.set(statement.fullName.toLowerCase(), statement);
                     }
                 }
                 // Merges all the symbol tables of the namespace statements into the new symbol table created above.
@@ -1196,6 +1199,7 @@ interface NamespaceContainer {
     classStatements: Record<string, ClassStatement>;
     functionStatements: Record<string, FunctionStatement>;
     enumStatements: Map<string, EnumStatement>;
+    constStatements: Map<string, ConstStatement>;
     namespaces: Map<string, NamespaceContainer>;
     symbolTable: SymbolTable;
 }

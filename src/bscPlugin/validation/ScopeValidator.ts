@@ -162,6 +162,7 @@ export class ScopeValidator {
                                     !scope.getEnumMemberMap().has(entityName) &&
                                     !scope.getEnumMap().has(entityName) &&
                                     !scope.getClassMap().has(entityName) &&
+                                    !scope.getConstMap().has(entityName) &&
                                     !scope.getCallableByName(entityName) &&
                                     !scope.namespaceLookup.has(entityName)
                                 ) {

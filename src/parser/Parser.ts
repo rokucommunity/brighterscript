@@ -341,7 +341,7 @@ export class Parser {
             }
 
             if (this.check(TokenKind.Const)) {
-                return this.constStatement();
+                return this.constDeclaration();
             }
 
             if (this.check(TokenKind.At) && this.checkNext(TokenKind.Identifier)) {
@@ -1468,7 +1468,7 @@ export class Parser {
         return result;
     }
 
-    private constStatement(): ConstStatement | undefined {
+    private constDeclaration(): ConstStatement | undefined {
         const constToken = this.advance();
         const nameToken = this.identifier();
         const equalToken = this.consumeToken(TokenKind.Equal);
@@ -1478,6 +1478,9 @@ export class Parser {
             name: nameToken,
             equals: equalToken
         }, expression, this.currentNamespaceName);
+        if (nameToken) {
+            this.currentSymbolTable.addSymbol(nameToken.text, nameToken.range, DynamicType.instance);
+        }
         this._references.constStatements.push(statement);
         return statement;
     }
