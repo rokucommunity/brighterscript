@@ -202,43 +202,61 @@ describe('NullCoalescingExpression', () => {
         });
 
         it('properly transpiles null coalesence assignments - complex consequent', () => {
-            testTranspile(`a = user.getAccount() ?? {"id": "default"}`, `
-                a = (function(user)
-                        __bsConsequent = user.getAccount()
-                        if __bsConsequent <> invalid then
-                            return __bsConsequent
-                        else
-                            return {
-                                "id": "default"
-                            }
-                        end if
-                    end function)(user)
+            testTranspile(`
+                sub main()
+                    user = {}
+                    a = user.getAccount() ?? {"id": "default"}
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    a = (function(user)
+                            __bsConsequent = user.getAccount()
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return {
+                                    "id": "default"
+                                }
+                            end if
+                        end function)(user)
+                end sub
             `);
         });
 
         it('transpiles null coalesence assignment for variable alternate- complex consequent', () => {
-            testTranspile(`a = obj.link ?? fallback`, `
-                a = (function(fallback, obj)
+            testTranspile(`a = obj.link ?? false`, `
+                a = (function(obj)
                         __bsConsequent = obj.link
                         if __bsConsequent <> invalid then
                             return __bsConsequent
                         else
-                            return fallback
+                            return false
                         end if
-                    end function)(fallback, obj)
+                    end function)(obj)
             `);
         });
 
         it('properly transpiles null coalesence assignments - complex alternate', () => {
-            testTranspile(`a = user ?? m.defaults.getAccount(settings.name)`, `
-                a = (function(m, settings, user)
-                        __bsConsequent = user
-                        if __bsConsequent <> invalid then
-                            return __bsConsequent
-                        else
-                            return m.defaults.getAccount(settings.name)
-                        end if
-                    end function)(m, settings, user)
+            testTranspile(`
+                sub main()
+                    user = {}
+                    settings = {}
+                    a = user ?? m.defaults.getAccount(settings.name)
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    settings = {}
+                    a = (function(m, settings, user)
+                            __bsConsequent = user
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return m.defaults.getAccount(settings.name)
+                            end if
+                        end function)(m, settings, user)
+                end sub
             `);
         });
     });

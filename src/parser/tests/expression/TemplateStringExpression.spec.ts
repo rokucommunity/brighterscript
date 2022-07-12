@@ -77,15 +77,15 @@ describe('TemplateStringExpression', () => {
         it('uses the proper prefix when aliased package is installed', () => {
             program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
             testTranspile(
-                'a = `${one},${two}`',
-                `a = rokucommunity_bslib_toString(one) + "," + rokucommunity_bslib_toString(two)`
+                'a = `${LINE_NUM},${LINE_NUM}`',
+                `a = rokucommunity_bslib_toString(LINE_NUM) + "," + rokucommunity_bslib_toString(LINE_NUM)`
             );
         });
 
         it('properly transpiles simple template string with no leading text', () => {
             testTranspile(
-                'a = `${one},${two}`',
-                `a = bslib_toString(one) + "," + bslib_toString(two)`
+                'a = `${LINE_NUM},${LINE_NUM}`',
+                `a = bslib_toString(LINE_NUM) + "," + bslib_toString(LINE_NUM)`
             );
         });
 
@@ -98,8 +98,8 @@ describe('TemplateStringExpression', () => {
 
         it('properly transpiles one line template string with expressions', () => {
             testTranspile(
-                'a = `hello ${a.text} world ${"template" + m.getChars()} test`',
-                `a = "hello " + bslib_toString(a.text) + " world " + bslib_toString("template" + m.getChars()) + " test"`
+                'a = `hello ${LINE_NUM.text} world ${"template" + "".getChars()} test`',
+                `a = "hello " + bslib_toString(LINE_NUM.text) + " world " + bslib_toString("template" + "".getChars()) + " test"`
             );
         });
 
@@ -174,7 +174,7 @@ describe('TemplateStringExpression', () => {
                         "a",
                         "b",
                         "c",
-                        \`d_open \${"inside" + m.items[i]} d_close\`
+                        \`d_open \${"inside" + m.items[1]} d_close\`
                     ])}\`
                 ]
             `, `
@@ -185,7 +185,7 @@ describe('TemplateStringExpression', () => {
                         "a"
                         "b"
                         "c"
-                        "d_open " + bslib_toString("inside" + m.items[i]) + " d_close"
+                        "d_open " + bslib_toString("inside" + m.items[1]) + " d_close"
                     ]))
                 ]
             `);

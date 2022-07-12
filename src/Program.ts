@@ -736,13 +736,18 @@ export class Program {
      * Get a list of all scopes the file is loaded into
      * @param file
      */
-    public getScopesForFile(file: XmlFile | BrsFile) {
+    public getScopesForFile(file: XmlFile | BrsFile | string) {
+        if (typeof file === 'string') {
+            file = this.getFile(file);
+        }
         let result = [] as Scope[];
-        for (let key in this.scopes) {
-            let scope = this.scopes[key];
+        if (file) {
+            for (let key in this.scopes) {
+                let scope = this.scopes[key];
 
-            if (scope.hasFile(file)) {
-                result.push(scope);
+                if (scope.hasFile(file)) {
+                    result.push(scope);
+                }
             }
         }
         return result;
@@ -1477,6 +1482,34 @@ export class Program {
                 //TODO handle namespace-relative classes
                 //if the file has a function with this name
                 if (file.parser.references.classStatementLookup.get(lowerClassName) !== undefined) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
+    }
+
+    public findFilesForNamespace(name: string) {
+        const files = [] as BscFile[];
+        const lowerName = name.toLowerCase();
+        //find every file with this class defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                if (file.parser.references.namespaceStatements.find(x => x.name.toLowerCase() === lowerName)) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
+    }
+
+    public findFilesForEnum(name: string) {
+        const files = [] as BscFile[];
+        const lowerName = name.toLowerCase();
+        //find every file with this class defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                if (file.parser.references.enumStatementLookup.get(lowerName)) {
                     files.push(file);
                 }
             }
