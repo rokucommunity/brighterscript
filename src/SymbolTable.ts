@@ -24,24 +24,6 @@ export class SymbolTable {
     }
 
     /**
-     * Get list of symbols declared directly in this SymbolTable (excludes parent SymbolTable).
-     */
-    public getOwnSymbols(): BscSymbol[] {
-        return [].concat(...this.symbolMap.values());
-    }
-
-    /**
-     * Get list of all symbols declared in this SymbolTable (includes parent SymbolTable).
-     */
-    public getAllSymbols(): BscSymbol[] {
-        let symbols = this.getOwnSymbols();
-        if (this.parent) {
-            symbols = symbols.concat(this.parent.getAllSymbols());
-        }
-        return symbols;
-    }
-
-    /**
      * Sets the parent table for lookups. There can only be one parent at a time, but sometimes you
      * want to temporarily change the parent, and then restore it later. This allows that.
      *
@@ -127,10 +109,6 @@ export class SymbolTable {
                 );
             }
         }
-    }
-
-    clear() {
-        this.symbolMap.clear();
     }
 }
 
