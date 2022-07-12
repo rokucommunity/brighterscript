@@ -694,7 +694,7 @@ export class LanguageServer {
         //clone the diagnostics for each code action, since certain diagnostics can have circular reference properties that kill the language server if serialized
         for (const codeAction of codeActions) {
             if (codeAction.diagnostics) {
-                codeAction.diagnostics = codeAction.diagnostics.map(x => util.toDiagnostic(x));
+                codeAction.diagnostics = codeAction.diagnostics.map(x => util.toDiagnostic(x, params.textDocument.uri));
             }
         }
         return codeActions;
@@ -1213,10 +1213,11 @@ export class LanguageServer {
             const patch = this.diagnosticCollection.getPatch(this.projects);
 
             for (let filePath in patch) {
-                const diagnostics = patch[filePath].map(d => util.toDiagnostic(d));
+                const uri = URI.file(filePath).toString();
+                const diagnostics = patch[filePath].map(d => util.toDiagnostic(d, uri));
 
                 this.connection.sendDiagnostics({
-                    uri: URI.file(filePath).toString(),
+                    uri: uri,
                     diagnostics: diagnostics
                 });
             }

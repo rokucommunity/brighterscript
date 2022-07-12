@@ -1091,7 +1091,7 @@ describe('BrsFile BrighterScript classes', () => {
             `);
             program.validate();
             expectDiagnostics(program, [{
-                ...DiagnosticMessages.classCouldNotBeFound('Animal', 'source'),
+                ...DiagnosticMessages.cannotFindName('Animal'),
                 range: Range.create(1, 35, 1, 41)
             }]);
         });
@@ -1107,7 +1107,7 @@ describe('BrsFile BrighterScript classes', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.classCouldNotBeFound('Animal', 'source')
+                DiagnosticMessages.cannotFindName('Animal')
             ]);
         });
 
@@ -1125,7 +1125,7 @@ describe('BrsFile BrighterScript classes', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.classCouldNotBeFound('Animal', 'source')
+                DiagnosticMessages.cannotFindName('Animal')
             ]);
         });
 
@@ -1144,7 +1144,7 @@ describe('BrsFile BrighterScript classes', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.classCouldNotBeFound('Vertibrates.GroundedBird', 'source')
+                DiagnosticMessages.cannotFindName('GroundedBird')
             ]);
         });
 
@@ -1164,9 +1164,12 @@ describe('BrsFile BrighterScript classes', () => {
                 end namespace
             `);
             program.validate();
-            expectDiagnostics(program, [
-                DiagnosticMessages.classCouldNotBeFound('Vertibrates.GroundedBird', 'source')
-            ]);
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('GroundedBird'),
+                relatedInformation: [{
+                    message: `Not defined in scope 'source'`
+                }]
+            }]);
         });
     });
 
@@ -1183,7 +1186,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.classCouldNotBeFound('Duck', 'source')
+            DiagnosticMessages.cannotFindName('Duck')
         ]);
     });
 
@@ -1206,13 +1209,13 @@ describe('BrsFile BrighterScript classes', () => {
             namespace NameA.NameB
                 class Animal
                 end class
-                class Duck extends NameA.NameB.Animal1
+                class Duck extends NameA.NameB.AnimalNotDefined
                 end class
             end namespace
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.classCouldNotBeFound('NameA.NameB.Animal1', 'source')
+            DiagnosticMessages.cannotFindName('AnimalNotDefined')
         ]);
     });
 

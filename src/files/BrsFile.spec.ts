@@ -1469,7 +1469,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.callToUnknownFunction('DoesNotExist', 'source')
+                DiagnosticMessages.cannotFindName('DoesNotExist')
             ]);
         });
 
@@ -2141,7 +2141,7 @@ describe('BrsFile', () => {
                 testTranspile(`
                     sub main()
                         try
-                            print a.b.c
+                            print m.b.c
                         catch e
                             print e
                         end try
@@ -2160,7 +2160,7 @@ describe('BrsFile', () => {
                     sub main()
                         sayHello = NameA.NameB.Speak
                         sayHello()
-                        someOtherObject = some.other.object
+                        someOtherObject = m.other.object
                     end sub
                 `, `
                     sub NameA_NameB_Speak()
@@ -2169,7 +2169,7 @@ describe('BrsFile', () => {
                     sub main()
                         sayHello = NameA_NameB_Speak
                         sayHello()
-                        someOtherObject = some.other.object
+                        someOtherObject = m.other.object
                     end sub
                 `);
             });
@@ -2306,27 +2306,42 @@ describe('BrsFile', () => {
         });
 
         it('transpiles dim', () => {
-            testTranspile(`Dim c[5]`, `Dim c[5]`);
-            testTranspile(`Dim c[5, 4]`, `Dim c[5, 4]`);
-            testTranspile(`Dim c[5, 4, 6]`, `Dim c[5, 4, 6]`);
-            testTranspile(`Dim requestData[requestList.count()]`, `Dim requestData[requestList.count()]`);
-            testTranspile(`Dim requestData[1, requestList.count()]`, `Dim requestData[1, requestList.count()]`);
-            testTranspile(`Dim requestData[1, requestList.count(), 2]`, `Dim requestData[1, requestList.count(), 2]`);
-            testTranspile(`Dim requestData[requestList[2]]`, `Dim requestData[requestList[2]]`);
-            testTranspile(`Dim requestData[1, requestList[2]]`, `Dim requestData[1, requestList[2]]`);
-            testTranspile(`Dim requestData[1, requestList[2], 2]`, `Dim requestData[1, requestList[2], 2]`);
-            testTranspile(`Dim requestData[requestList["2"]]`, `Dim requestData[requestList["2"]]`);
-            testTranspile(`Dim requestData[1, requestList["2"]]`, `Dim requestData[1, requestList["2"]]`);
-            testTranspile(`Dim requestData[1, requestList["2"], 2]`, `Dim requestData[1, requestList["2"], 2]`);
-            testTranspile(`Dim requestData[1, getValue(), 2]`, `Dim requestData[1, getValue(), 2]`);
+            function doTest(code: string) {
+                testTranspile(`
+                    sub main()
+                        requestList = []
+                        ${code}
+                    end sub
+                `, `
+                    sub main()
+                        requestList = []
+                        ${code}
+                    end sub
+                `);
+            }
+            doTest(`Dim c[5]`);
+            doTest(`Dim c[5, 4]`);
+            doTest(`Dim c[5, 4, 6]`);
+            doTest(`Dim requestData[requestList.count()]`);
+            doTest(`Dim requestData[1, requestList.count()]`);
+            doTest(`Dim requestData[1, requestList.count(), 2]`);
+            doTest(`Dim requestData[requestList[2]]`);
+            doTest(`Dim requestData[1, requestList[2]]`);
+            doTest(`Dim requestData[1, requestList[2], 2]`);
+            doTest(`Dim requestData[requestList["2"]]`);
+            doTest(`Dim requestData[1, requestList["2"]]`);
+            doTest(`Dim requestData[1, requestList["2"], 2]`);
+            doTest(`Dim requestData[1, StrToI("1"), 2]`);
             testTranspile(`
-                Dim requestData[1, getValue({
-                    key: "value"
-                }), 2]
-            `, `
-                Dim requestData[1, getValue({
-                    key: "value"
-                }), 2]
+                function getValue(param1)
+                end function
+
+                sub main()
+                    requestList = []
+                    Dim requestData[1, getValue({
+                        key: "value"
+                    }), 2]
+                end sub
             `);
         });
 
@@ -2611,7 +2626,7 @@ describe('BrsFile', () => {
                         3 'comment
                     ] 'comment
                     firstIndex = indexes[0] 'comment
-                    for each idx in indxes 'comment
+                    for each idx in indexes 'comment
                         indexes[idx] = idx + 1 'comment
                     end for 'comment
                     if not true then 'comment
@@ -2696,8 +2711,9 @@ describe('BrsFile', () => {
         describe('transpile', () => {
             it('does not produce diagnostics', () => {
                 program.setFile('source/main.bs', `
-                    sub main()
-                        someObject@.someFunction(paramObject.value)
+                    sub test()
+                        someNode = createObject("roSGNode", "Rectangle")
+                        someNode@.someFunction(test.value)
                     end sub
                 `);
                 program.validate();
