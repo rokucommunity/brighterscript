@@ -100,4 +100,26 @@ describe('ConstStatement', () => {
             end sub
         `);
     });
+
+    it('supports consts inside namespaces', () => {
+        testTranspile(`
+            namespace network
+                const API_KEY = "abc"
+                sub get()
+                    print API_KEY
+                end sub
+            end namespace
+            sub main()
+                print network.API_KEY
+            end sub
+        `, `
+            sub network_get()
+                print "abc"
+            end sub
+
+            sub main()
+                print "abc"
+            end sub
+        `);
+    });
 });

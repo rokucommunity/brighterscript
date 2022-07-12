@@ -1421,7 +1421,7 @@ export class Parser {
             const: constToken,
             name: nameToken,
             equals: equalToken
-        }, expression);
+        }, expression, this.currentNamespaceName);
         this._references.constStatements.push(statement);
         return statement;
     }
