@@ -25,6 +25,7 @@ Consts can be defined within namespaces, and accessed like a property.
 namespace networking
     const BASE_URL = "https://your-app.com/api/v1"
     sub printBaseUrl()
+		'namespace-relative access is allowed
         print BASE_URL
     end sub
 end namespace
@@ -36,6 +37,11 @@ end sub
 transpiles to
 
 ```BrightScript
+sub networking_printBaseUrl()
+    'namespace-relative access is allowed
+    print "https://your-app.com/api/v1"
+end sub
+
 sub main()
     print "https://your-app.com/api/v1"
 end sub
@@ -43,6 +49,8 @@ end sub
 
 ## Complex objects
 Constants can contain complex objects or arrays as well, but keep in mind that these are inlined at compile-time, so it is not recommended to reach into these objects for specific values all the time.
+
+non-primitive const values will be wrapped with parentheses when transpiled.
 
 ```BrighterScript
 namespace networking
@@ -63,17 +71,17 @@ sub main()
 end sub
 ```
 **Transpiled:**
-```vb
+```brightscript
 sub main()
-	print {
-		"Authorization": "Basic",
-		"Access-Control-Allow-Credentials": "true"
-	}
-	print [
-		"GET",
-		"POST",
-		"PUT",
-		"DELETE"
-	]
+    print ({
+        "Authorization": "Basic"
+        "Access-Control-Allow-Credentials": "true"
+    })
+    print ([
+        "GET"
+        "POST"
+        "PUT"
+        "DELETE"
+    ])
 end sub
 ```
