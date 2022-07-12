@@ -12,11 +12,13 @@ import {
     DisallowedLocalIdentifiersText,
     TokenKind
 } from '../lexer/TokenKind';
-import {
-    ConstStatement,
+import type {
     PrintSeparatorSpace,
     PrintSeparatorTab,
     Statement
+} from './Statement';
+import {
+    ConstStatement
 } from './Statement';
 import {
     AssignmentStatement,

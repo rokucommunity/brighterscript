@@ -1,10 +1,8 @@
-import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isVariableExpression } from '../../astUtils/reflection';
+import { isLiteralExpression, isVariableExpression } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BeforeFileTranspileEvent, FileLink } from '../../interfaces';
-import { Expression } from '../../parser/Expression';
+import type { BeforeFileTranspileEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
-import { ConstStatement, NamespaceStatement, Statement } from '../../parser/Statement';
 import util from '../../util';
 
 export class BrsFilePreTranspileProcessor {
