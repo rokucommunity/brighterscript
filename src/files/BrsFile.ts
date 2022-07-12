@@ -23,7 +23,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement } from '../astUtils/reflection';
+import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
@@ -857,17 +857,18 @@ export class BrsFile {
                 result.push(...scope.getPropertyNameCompletions());
             }
         } else {
-            //include namespaces
-            result.push(...namespaceCompletions);
-
-            //include class names
-            result.push(...classNameCompletions);
-
-            //include enums
-            result.push(...this.getNonNamespacedEnumStatementCompletions(currentToken, this.parseMode, scope));
-
-            //include the global callables
-            result.push(...scope.getCallablesAsCompletions(this.parseMode));
+            result.push(
+                //include namespaces
+                ...namespaceCompletions,
+                //include class names
+                ...classNameCompletions,
+                //include enums
+                ...this.getNonNamespacedEnumStatementCompletions(currentToken, this.parseMode, scope),
+                //include constants
+                ...this.getNonNamespacedConstStatementCompletions(currentToken, this.parseMode, scope),
+                //include the global callables
+                ...scope.getCallablesAsCompletions(this.parseMode)
+            );
 
             //add `m` because that's always valid within a function
             result.push({
@@ -996,6 +997,27 @@ export class BrsFile {
         return [...results.values()];
     }
 
+    private getNonNamespacedConstStatementCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
+        if (parseMode !== ParseMode.BrighterScript) {
+            return [];
+        }
+        const containingNamespaceName = this.getNamespaceStatementForPosition(currentToken?.range?.start)?.name + '.';
+        const results = new Map<string, CompletionItem>();
+        const map = scope.getConstMap();
+        for (const key of [...map.keys()]) {
+            const statement = map.get(key).item;
+            const fullName = statement.fullName;
+            //if the item is contained within our own namespace, or if it's non-namespaced
+            if (fullName.startsWith(containingNamespaceName) || !fullName.includes('.')) {
+                results.set(fullName, {
+                    label: statement.name,
+                    kind: CompletionItemKind.Constant
+                });
+            }
+        }
+        return [...results.values()];
+    }
+
     private getEnumMemberStatementCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
         if (parseMode === ParseMode.BrightScript || !currentToken) {
             return [];
@@ -1077,6 +1099,11 @@ export class BrsFile {
                         result.set(stmt.name, {
                             label: stmt.name,
                             kind: CompletionItemKind.Enum
+                        });
+                    } else if (isConstStatement(stmt) && !newToken) {
+                        result.set(stmt.name, {
+                            label: stmt.name,
+                            kind: CompletionItemKind.Constant
                         });
                     }
                 }

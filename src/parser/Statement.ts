@@ -2459,6 +2459,10 @@ export class ConstStatement extends Statement implements TypedefProvider {
 
     public range: Range;
 
+    public get name() {
+        return this.tokens.name.text;
+    }
+
     /**
      * The name of the statement WITH its leading namespace (if applicable)
      */

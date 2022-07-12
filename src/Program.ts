@@ -844,8 +844,8 @@ export class Program {
             }
             //no other result is possible in this case
             return result;
-
         }
+
         //find the scopes for this file
         let scopes = this.getScopesForFile(file);
 
