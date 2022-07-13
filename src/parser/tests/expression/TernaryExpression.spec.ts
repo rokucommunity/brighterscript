@@ -405,10 +405,15 @@ describe('ternary expressions', () => {
         });
 
         it('complex conditions do not cause scope capture', () => {
-            testTranspile(
-                `a = str("true") = "true" ? true : false `,
-                `a = bslib_ternary(str("true") = "true", true, false)`
-            );
+            testTranspile(`
+                sub main()
+                    a = str("true") = "true" ? true : false
+                end sub
+            `, `
+                sub main()
+                    a = bslib_ternary(str("true") = "true", true, false)
+                end sub
+            `);
 
             testTranspile(`
                 sub main()
@@ -525,18 +530,22 @@ describe('ternary expressions', () => {
         it('uses scope capture for property access', () => {
             testTranspile(
                 `
-                    person = {}
-                    name = person <> invalid ? person.name : "John Doe"
-                `,
+                    sub main()
+                        person = {}
+                        name = person <> invalid ? person.name : "John Doe"
+                    end sub
+                    `,
                 `
-                    person = {}
-                    name = (function(__bsCondition, person)
-                            if __bsCondition then
-                                return person.name
-                            else
-                                return "John Doe"
-                            end if
-                        end function)(person <> invalid, person)
+                    sub main()
+                        person = {}
+                        name = (function(__bsCondition, person)
+                                if __bsCondition then
+                                    return person.name
+                                else
+                                    return "John Doe"
+                                end if
+                            end function)(person <> invalid, person)
+                    end sub
                 `
             );
         });

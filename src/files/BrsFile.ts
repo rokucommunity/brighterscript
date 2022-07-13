@@ -1,13 +1,13 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Position, Location } from 'vscode-languageserver';
+import type { CompletionItem, Hover, Position, Location, Diagnostic } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import type { Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
-import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink } from '../interfaces';
+import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, BscFile } from '../interfaces';
 import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
@@ -99,6 +99,13 @@ export class BrsFile {
 
     public getDiagnostics() {
         return [...this.diagnostics];
+    }
+
+    public addDiagnostic(diagnostic: Diagnostic & { file?: BscFile }) {
+        if (!diagnostic.file) {
+            diagnostic.file = this;
+        }
+        this.diagnostics.push(diagnostic as any);
     }
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {

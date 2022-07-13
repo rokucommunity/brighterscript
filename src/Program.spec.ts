@@ -75,6 +75,22 @@ describe('Program', () => {
             //if the program didn't get stuck in an infinite loop, this test passes
         });
 
+        it('flags unsupported statements at root of file', () => {
+            program.setFile('source/main.brs', `
+                result = true
+                print true
+                createObject("roSGNode", "Rectangle")
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.unexpectedStatementOutsideFunction()
+            }, {
+                ...DiagnosticMessages.unexpectedStatementOutsideFunction()
+            }, {
+                ...DiagnosticMessages.unexpectedStatementOutsideFunction()
+            }]);
+        });
+
         it('only parses xml files as components when file is found within the "components" folder', () => {
             expect(Object.keys(program.files).length).to.equal(0);
 
