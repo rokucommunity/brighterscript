@@ -1,8 +1,12 @@
-import { isLiteralExpression, isVariableExpression } from '../../astUtils/reflection';
-import { Cache } from '../../Cache';
+import { createToken } from '../../astUtils/creators';
+import { isBrsFile, isDottedGetExpression, isLiteralExpression, isVariableExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BeforeFileTranspileEvent } from '../../interfaces';
+import { TokenKind } from '../../lexer/TokenKind';
+import type { Expression } from '../../parser/Expression';
+import { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
+import type { Scope } from '../../Scope';
 import util from '../../util';
 
 export class BrsFilePreTranspileProcessor {
@@ -12,68 +16,92 @@ export class BrsFilePreTranspileProcessor {
     }
 
     public process() {
-        this.replaceEnumValues();
+        if (isBrsFile(this.event.file)) {
+            this.iterateExpressions();
+        }
     }
 
-    private replaceEnumValues() {
-        const membersByEnum = new Cache<string, Map<string, string>>();
-
-        const scope = this.event.file.program.getFirstScopeForFile(this.event.file);
-
-        //skip this logic if current scope has no enums and no consts
-        if ((scope?.getEnumMap()?.size ?? 0) === 0 && (scope?.getConstMap()?.size ?? 0) === 0) {
-            return;
-        }
-        for (const expression of this.event.file.parser.references.expressions) {
-            let parts: string[];
-            //constants with no owner (i.e. SOME_CONST)
-            if (isVariableExpression(expression)) {
-                parts = [expression.name.text.toLowerCase()];
-
-                /**
-                 * direct enum member (i.e. Direction.up),
-                 * namespaced enum member access (i.e. Name.Space.Direction.up),
-                 * namespaced const access (i.e. Name.Space.SOME_CONST) or class consts (i.e. SomeClass.SOME_CONST),
-                 */
-            } else {
-                parts = util.getAllDottedGetParts(expression)?.map(x => x.text.toLowerCase());
+    private iterateExpressions() {
+        const scope = this.event.program.getFirstScopeForFile(this.event.file);
+        for (let expression of this.event.file.parser.references.expressions) {
+            if (expression) {
+                this.processExpression(expression, scope);
             }
-            if (parts) {
-                //get the name of the  member
-                const memberName = parts.pop();
-                //get the name of the enum (including leading namespace if applicable)
-                const ownerName = parts.join('.');
-                let containingNamespace = this.event.file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
+        }
+    }
 
-                /**
-                 * Enum member replacements
-                 */
-                const theEnum = scope.getEnumFileLink(ownerName, containingNamespace)?.item;
-                if (theEnum) {
-                    const members = membersByEnum.getOrAdd(ownerName, () => theEnum.getMemberValueMap());
-                    const value = members?.get(memberName);
-                    this.event.editor.overrideTranspileResult(expression, value);
-                    continue;
+    /**
+     * Given a string optionally separated by dots, find an enum related to it.
+     * For example, all of these would return the enum: `SomeNamespace.SomeEnum.SomeMember`, SomeEnum.SomeMember, `SomeEnum`
+     */
+    private getEnumInfo(name: string, containingNamespace: string, scope: Scope) {
+        //look for the enum directly
+        let result = scope.getEnumFileLink(name, containingNamespace);
+
+        if (result) {
+            return {
+                enum: result.item
+            };
+        }
+        //assume we've been given the enum.member syntax, so pop the member and try again
+        const parts = name.split('.');
+        const memberName = parts.pop();
+        result = scope.getEnumMap().get(parts.join('.'));
+        if (result) {
+            const value = result.item.getMemberValue(memberName);
+            return {
+                enum: result.item,
+                value: new LiteralExpression(createToken(
+                    //just use float literal for now...it will transpile properly with any literal value
+                    value.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
+                    value
+                ))
+            };
+        }
+    }
+
+    private processExpression(expression: Expression, scope: Scope) {
+        let containingNamespace = this.event.file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
+
+        const parts = util.splitExpression(expression);
+
+        const processedNames: string[] = [];
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            let entityName: string;
+            if (isVariableExpression(part) || isDottedGetExpression(part)) {
+                processedNames.push(part?.name?.text?.toLocaleLowerCase());
+                entityName = processedNames.join('.');
+            } else {
+                return;
+            }
+
+            let value: Expression;
+
+            //did we find a const? transpile the value
+            let constStatement = scope.getConstFileLink(entityName, containingNamespace)?.item;
+            if (constStatement) {
+                value = constStatement.value;
+            } else {
+                //did we find an enum member? transpile that
+                let enumInfo = this.getEnumInfo(entityName, containingNamespace, scope);
+                if (enumInfo?.value) {
+                    value = enumInfo.value;
                 }
+            }
 
-                /**
-                 * const replacements
-                 */
-                const fullName = ownerName ? `${ownerName}.${memberName}` : memberName.toLowerCase();
-
-                const constStatement = scope.getConstFileLink(fullName, containingNamespace)?.item;
-
-                //if we found a const, override the transpile result
-                if (constStatement) {
-                    this.event.editor.setProperty(expression, 'transpile', (state) => {
-                        return isLiteralExpression(constStatement.value)
-                            //transpile primitive value as-is
-                            ? constStatement.value.transpile(state)
-                            //wrap non-primitive value in parens
-                            : ['(', ...constStatement.value.transpile(state), ')'];
-                    });
-                    continue;
-                }
+            if (value) {
+                //override the transpile for this item.
+                this.event.editor.setProperty(part, 'transpile', (state) => {
+                    if (isLiteralExpression(value)) {
+                        return value.transpile(state);
+                    } else {
+                        //wrap non-literals with parens to prevent on-device compile errors
+                        return ['(', ...value.transpile(state), ')'];
+                    }
+                });
+                //we are finished handling this expression
+                return;
             }
         }
     }

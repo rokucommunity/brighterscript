@@ -125,6 +125,36 @@ describe('ConstStatement', () => {
                 end sub
             `);
         });
+
+        it('supports property access on complex objects', () => {
+            testTranspile(`
+                const DEFAULTS = {
+                    enabled: true
+                }
+                sub main()
+                    print DEFAULTS.enabled
+                end sub
+            `, `
+                sub main()
+                    print ({
+                        enabled: true
+                    }).enabled
+                end sub
+            `);
+        });
+
+        it('supports calling methods on consts', () => {
+            testTranspile(`
+                const API_KEY ="ABC"
+                sub main()
+                    print API_KEY.toString()
+                end sub
+            `, `
+                sub main()
+                    print "ABC".toString()
+                end sub
+            `);
+        });
     });
 
     describe('completions', () => {
