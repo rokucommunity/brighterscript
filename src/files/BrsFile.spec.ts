@@ -2019,15 +2019,17 @@ describe('BrsFile', () => {
 
         it('transpiles if statement keywords as provided', () => {
             const code = `
-                If True Then
-                    Print True
-                Else If True Then
-                    print True
-                Else If False Then
-                    Print False
-                Else
-                    Print False
-                End If
+                sub main()
+                    If True Then
+                        Print True
+                    Else If True Then
+                        print True
+                    Else If False Then
+                        Print False
+                    Else
+                        Print False
+                    End If
+                end sub
             `;
             testTranspile(code);
             testTranspile(code.toLowerCase());
@@ -2035,36 +2037,41 @@ describe('BrsFile', () => {
         });
 
         it('does not transpile `then` tokens', () => {
-            const code = `
-                if true
-                    print true
-                else if true
-                    print false
-                end if
-            `;
-            testTranspile(code);
+            testTranspile(`
+                sub main()
+                    if true
+                        print true
+                    else if true
+                        print false
+                    end if
+                end sub
+            `);
         });
 
         it('honors spacing between multi-word tokens', () => {
             testTranspile(`
-                if true
-                    print true
-                elseif true
-                    print false
-                endif
+                sub main()
+                    if true
+                        print true
+                    elseif true
+                        print false
+                    endif
+                end sub
             `);
         });
 
         it('handles when only some of the statements have `then`', () => {
             testTranspile(`
-                if true
-                else if true then
-                else if true
-                else if true then
-                    if true then
-                        return true
+                sub main()
+                    if true
+                    else if true then
+                    else if true
+                    else if true then
+                        if true then
+                            return true
+                        end if
                     end if
-                end if
+                end sub
             `);
         });
 
@@ -2467,51 +2474,57 @@ describe('BrsFile', () => {
 
         it('handles empty if block', () => {
             testTranspile(`
-                if true then
-                end if
-                if true then
-                else
-                    print "else"
-                end if
-                if true then
-                else if true then
-                    print "else"
-                end if
-                if true then
-                else if true then
-                    print "elseif"
-                else
-                    print "else"
-                end if
+                sub main()
+                    if true then
+                    end if
+                    if true then
+                    else
+                        print "else"
+                    end if
+                    if true then
+                    else if true then
+                        print "else"
+                    end if
+                    if true then
+                    else if true then
+                        print "elseif"
+                    else
+                        print "else"
+                    end if
+                end sub
             `);
         });
 
         it('handles empty elseif block', () => {
             testTranspile(`
-                if true then
-                    print "if"
-                else if true then
-                end if
-                if true then
-                    print "if"
-                else if true then
-                else if true then
-                end if
+                sub main()
+                    if true then
+                        print "if"
+                    else if true then
+                    end if
+                    if true then
+                        print "if"
+                    else if true then
+                    else if true then
+                    end if
+                end sub
             `);
         });
 
         it('handles empty else block', () => {
             testTranspile(`
-                if true then
-                    print "if"
-                else
-                end if
-                if true then
-                    print "if"
-                else if true then
-                    print "elseif"
-                else
-                end if
+                sub main()
+                    if true then
+                        print "if"
+                    else
+                    end if
+                    if true then
+                        print "if"
+                    else if true then
+                        print "elseif"
+                    else
+                    end if
+                end sub
             `);
         });
 
