@@ -191,14 +191,29 @@ describe('NullCoalescingExpression', () => {
 
         it('uses the proper prefix when aliased package is installed', () => {
             program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
-            testTranspile(
-                'a = user ?? false',
-                `a = rokucommunity_bslib_coalesce(user, false)`
-            );
+            testTranspile(`
+                sub main()
+                    a = user ?? false
+                end sub
+            `, `
+                sub main()
+                    a = rokucommunity_bslib_coalesce(user, false)
+                end sub
+            `);
         });
 
         it('properly transpiles null coalesence assignments - simple', () => {
-            testTranspile(`a = user ?? {"id": "default"}`, 'a = bslib_coalesce(user, {\n    "id": "default"\n})', 'none');
+            testTranspile(`
+                sub main()
+                    a = user ?? {"id": "default"}
+                end sub
+            `, `
+                sub main()
+                    a = bslib_coalesce(user, {
+                        "id": "default"
+                    })
+                end sub
+            `);
         });
 
         it('properly transpiles null coalesence assignments - complex consequent', () => {
@@ -225,15 +240,21 @@ describe('NullCoalescingExpression', () => {
         });
 
         it('transpiles null coalesence assignment for variable alternate- complex consequent', () => {
-            testTranspile(`a = obj.link ?? false`, `
-                a = (function(obj)
-                        __bsConsequent = obj.link
-                        if __bsConsequent <> invalid then
-                            return __bsConsequent
-                        else
-                            return false
-                        end if
-                    end function)(obj)
+            testTranspile(`
+                sub main()
+                    a = obj.link ?? false
+                end sub
+            `, `
+                sub main()
+                    a = (function(obj)
+                            __bsConsequent = obj.link
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return false
+                            end if
+                        end function)(obj)
+                end sub
             `);
         });
 
