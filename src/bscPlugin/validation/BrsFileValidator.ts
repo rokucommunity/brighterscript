@@ -1,4 +1,4 @@
-import { isLiteralExpression } from '../..';
+import { isClassStatement, isCommentStatement, isEnumStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement } from '../../astUtils/reflection';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, OnFileValidateEvent } from '../../interfaces';
@@ -14,9 +14,10 @@ export class BrsFileValidator {
 
     public process() {
         this.validateEnumDeclarations();
+        this.flagTopLevelStatements();
     }
 
-    public validateEnumDeclarations() {
+    private validateEnumDeclarations() {
         const diagnostics = [] as BsDiagnostic[];
         for (const stmt of this.event.file.parser.references.enumStatements) {
             const members = stmt.getMembers();
@@ -90,6 +91,35 @@ export class BrsFileValidator {
                     ),
                     range: (member.value ?? member)?.range
                 });
+            }
+        }
+    }
+
+    /**
+     * Find statements defined at the top level (or inside a namespace body) that are not allowed to be there
+     */
+    private flagTopLevelStatements() {
+        const statements = [...this.event.file.ast.statements];
+        while (statements.length > 0) {
+            const statement = statements.pop();
+            if (isNamespaceStatement(statement)) {
+                statements.push(...statement.body.statements);
+            } else {
+                //only allow these statement types
+                if (
+                    !isFunctionStatement(statement) &&
+                    !isClassStatement(statement) &&
+                    !isEnumStatement(statement) &&
+                    !isInterfaceStatement(statement) &&
+                    !isCommentStatement(statement) &&
+                    !isLibraryStatement(statement) &&
+                    !isImportStatement(statement)
+                ) {
+                    this.event.file.addDiagnostic({
+                        ...DiagnosticMessages.unexpectedStatementOutsideFunction(),
+                        range: statement.range
+                    });
+                }
             }
         }
     }

@@ -683,6 +683,11 @@ export let DiagnosticMessages = {
         message: `Circular reference detected between ${Array.isArray(items) ? items.join(' -> ') : ''} in scope '${scopeName}'`,
         code: 1132,
         severity: DiagnosticSeverity.Error
+    }),
+    unexpectedStatementOutsideFunction: () => ({
+        message: `Unexpected statement found outside of function body`,
+        code: 1133,
+        severity: DiagnosticSeverity.Error
     })
 };
 
