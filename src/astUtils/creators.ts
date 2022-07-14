@@ -21,7 +21,7 @@ export const interpolatedRange = {
     }
 } as Range;
 
-const tokenDefaults = {
+export const tokenDefaults = {
     [TokenKind.BackTick]: '`',
     [TokenKind.Backslash]: '\\',
     [TokenKind.BackslashEqual]: '\\=',
@@ -86,10 +86,7 @@ const tokenDefaults = {
 export function createToken<T extends TokenKind>(kind: T, text?: string, range = interpolatedRange): Token & { kind: T } {
     return {
         kind: kind,
-        text: text ?? tokenDefaults[kind as string] ?? kind.toString().toLowerCase(),
-        isReserved: !text || text === kind.toString(),
-        range: range,
-        leadingWhitespace: ''
+        text: text ?? tokenDefaults[kind as string] ?? kind.toString().toLowerCase()
     };
 }
 

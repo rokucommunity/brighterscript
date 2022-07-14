@@ -245,10 +245,10 @@ export let DiagnosticMessages = {
         code: 1045,
         severity: DiagnosticSeverity.Error
     }),
-    expectedOperatorAfterIdentifier: (operators: TokenKind[], name: string) => {
+    expectedOperatorAfterIdentifier: (operators: TokenKind[]) => {
         operators = Array.isArray(operators) ? operators : [];
         return {
-            message: `Expected operator ('${operators.join(`', '`)}') after idenfifier '${name}'`,
+            message: `Expected operator ('${operators.join(`', '`)}') after idenfifier`,
             code: 1046,
             severity: DiagnosticSeverity.Error
         };

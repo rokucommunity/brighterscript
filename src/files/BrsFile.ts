@@ -8,11 +8,10 @@ import type { NamespaceContainer, Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import type { Callable, CallableArg, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink } from '../interfaces';
 import type { Token } from '../lexer/Token';
-import { isToken } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
 import type { TokenChainMember } from '../parser/Parser';
-import { Parser, ParseMode, getBscTypeFromExpression, TokenUsage } from '../parser/Parser';
+import { Parser, getBscTypeFromExpression, TokenUsage } from '../parser/Parser';
 import type { FunctionExpression, VariableExpression, Expression, DottedGetExpression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, LibraryStatement, ImportStatement, Statement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program, SignatureInfoObj } from '../Program';
@@ -31,6 +30,7 @@ import { getTypeFromContext } from '../types/BscType';
 import { UninitializedType } from '../types/UninitializedType';
 import { InvalidType } from '../types/InvalidType';
 import type { SymbolTable } from '../SymbolTable';
+import { ParseMode } from '../parser/bs/BsParser';
 
 /**
  * Holds all details about this file within the scope of the whole program

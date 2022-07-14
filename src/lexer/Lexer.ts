@@ -11,32 +11,10 @@ export class Lexer {
      * The zero-indexed position at which the token under consideration begins.
      */
     private start: number;
-
     /**
      * The zero-indexed position being examined for the token under consideration.
      */
     private current: number;
-
-    /**
-     * The zero-indexed begin line number being parsed.
-     */
-    private lineBegin: number;
-
-    /**
-     * The zero-indexed end line number being parsed
-     */
-    private lineEnd: number;
-
-    /**
-     * The zero-indexed begin column number being parsed.
-     */
-    private columnBegin: number;
-
-    /**
-     * The zero-indexed end column number being parsed
-     */
-    private columnEnd: number;
-
     /**
      * The BrightScript code being converted to an array of `Token`s.
      */
@@ -56,11 +34,6 @@ export class Lexer {
      * The options used to scan this file
      */
     public options: ScanOptions;
-
-    /**
-     * Contains all of the leading whitespace that has not yet been consumed by a token
-     */
-    private leadingWhitespace = '';
 
     /**
      * A convenience function, equivalent to `new Lexer().scan(toScan)`, that converts a string
@@ -88,10 +61,6 @@ export class Lexer {
         this.options = this.sanitizeOptions(options);
         this.start = 0;
         this.current = 0;
-        this.lineBegin = 0;
-        this.lineEnd = 0;
-        this.columnBegin = 0;
-        this.columnEnd = 0;
         this.tokens = [];
         this.diagnostics = [];
         while (!this.isAtEnd()) {
@@ -100,12 +69,8 @@ export class Lexer {
 
         this.tokens.push({
             kind: TokenKind.Eof,
-            isReserved: false,
-            text: '',
-            range: util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1),
-            leadingWhitespace: this.leadingWhitespace
+            text: ''
         });
-        this.leadingWhitespace = '';
         return this;
     }
 
@@ -385,13 +350,7 @@ export class Lexer {
         while (this.peek() === ' ' || this.peek() === '\t') {
             this.advance();
         }
-        const whitespaceToken = this.addToken(TokenKind.Whitespace);
-        this.leadingWhitespace = whitespaceToken.text;
-        //if we aren't keeping the whitespace tokens, then remove this one
-        if (this.options.includeWhitespace === false) {
-            this.tokens.pop();
-        }
-        this.start = this.current;
+        this.addToken(TokenKind.Whitespace);
     }
 
     private newline() {
@@ -403,12 +362,6 @@ export class Lexer {
 
         this.addToken(TokenKind.Newline);
         this.start = this.current;
-        // advance the line counter
-        this.lineBegin++;
-        this.lineEnd = this.lineBegin;
-        // and always reset the column counter
-        this.columnBegin = 0;
-        this.columnEnd = 0;
     }
 
     /**
@@ -417,21 +370,20 @@ export class Lexer {
      */
     private advance(): void {
         this.current++;
-        this.columnEnd++;
     }
 
-    private lookaheadStack = [] as Array<{ current: number; columnEnd: number }>;
+
     private pushLookahead() {
-        this.lookaheadStack.push({
-            current: this.current,
-            columnEnd: this.columnEnd
-        });
+        this.lookaheadStack.push(this.current);
     }
     private popLookahead() {
-        const { current, columnEnd } = this.lookaheadStack.pop();
-        this.current = current;
-        this.columnEnd = columnEnd;
+        this.current = this.lookaheadStack.pop();
     }
+
+    /**
+     * Contains the index where we started doing the lookahead
+     */
+    private lookaheadStack = [] as Array<number>;
 
     /**
      * Returns the character at position `current` or a null character if we've reached the end of
@@ -529,12 +481,6 @@ export class Lexer {
                 let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
                 //store the char code
                 token.charCode = 10;
-
-                //move the location tracking to the next line
-                this.lineEnd++;
-                this.lineBegin = this.lineEnd;
-                this.columnEnd = 0;
-                this.columnBegin = this.columnEnd;
                 continue;
             } else if (this.check('\r') && this.peekNext() === '\n') {
                 this.templateQuasiString();
@@ -546,12 +492,6 @@ export class Lexer {
                 this.advance();
                 token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
                 token.charCode = 10;
-
-                //move the location tracking to the next line
-                this.lineEnd++;
-                this.lineBegin = this.lineEnd;
-                this.columnEnd = 0;
-                this.columnBegin = this.columnEnd;
                 continue;
 
                 //escaped chars
@@ -598,12 +538,6 @@ export class Lexer {
                 let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
                 //store the char code
                 token.charCode = '"'.charCodeAt(0);
-
-                //move the location tracking to the next line
-                this.lineEnd++;
-                this.lineBegin = this.lineEnd;
-                this.columnEnd = 0;
-                this.columnBegin = this.columnEnd;
                 continue;
             }
 
@@ -795,8 +729,7 @@ export class Lexer {
             (lowerText === 'end' || lowerText === 'exit' || lowerText === 'for') &&
             (this.peek() === ' ' || this.peek() === '\t')
         ) {
-            let savedCurrent = this.current;
-            let savedColumnEnd = this.columnEnd;
+            this.pushLookahead();
 
             // skip past any whitespace
             let whitespace = '';
@@ -818,23 +751,19 @@ export class Lexer {
                 return;
             } else {
                 // reset if the last word and the current word didn't form a multi-word TokenKind
-                this.current = savedCurrent;
-                this.columnEnd = savedColumnEnd;
+                this.popLookahead();
             }
         }
 
         // split `elseif` into `else` and `if` tokens
         if (lowerText === 'elseif' && !this.checkPreviousToken(TokenKind.Dot)) {
+            this.pushLookahead();
             let savedCurrent = this.current;
-            let savedColumnEnd = this.columnEnd;
             this.current -= 2;
-            this.columnEnd -= 2;
             this.addToken(TokenKind.Else);
 
             this.start = savedCurrent - 2;
-            this.current = savedCurrent;
-            this.columnBegin = savedColumnEnd - 2;
-            this.columnEnd = savedColumnEnd;
+            this.popLookahead();
             this.addToken(TokenKind.If);
             return;
         }
@@ -1043,12 +972,8 @@ export class Lexer {
         let text = this.source.slice(this.start, this.current);
         let token: Token = {
             kind: kind,
-            text: text,
-            isReserved: ReservedWords.has(text.toLowerCase()),
-            range: this.rangeOf(),
-            leadingWhitespace: this.leadingWhitespace
+            text: text
         };
-        this.leadingWhitespace = '';
         this.tokens.push(token);
         this.sync();
         return token;
@@ -1059,8 +984,6 @@ export class Lexer {
      */
     private sync() {
         this.start = this.current;
-        this.lineBegin = this.lineEnd;
-        this.columnBegin = this.columnEnd;
     }
 
     /**
@@ -1073,9 +996,7 @@ export class Lexer {
     }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface ScanOptions {
-    /**
-     * If true, the whitespace tokens are included. If false, they are discarded
-     */
-    includeWhitespace: boolean;
+
 }
