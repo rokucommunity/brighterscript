@@ -2457,3 +2457,66 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         }
     }
 }
+
+export class ConstStatement extends Statement implements TypedefProvider {
+
+    public constructor(
+        public tokens: {
+            const: Token;
+            name: Identifier;
+            equals: Token;
+        },
+        public value: Expression,
+        readonly namespaceName?: NamespacedVariableNameExpression
+    ) {
+        super();
+        this.range = util.createBoundingRange(this.tokens.const, this.tokens.name, this.tokens.equals, this.value);
+    }
+
+    public range: Range;
+
+    public get name() {
+        return this.tokens.name.text;
+    }
+
+    /**
+     * The name of the statement WITH its leading namespace (if applicable)
+     */
+    public get fullName() {
+        const name = this.tokens.name?.text;
+        if (name) {
+            if (this.namespaceName) {
+                let namespaceName = this.namespaceName.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this doesn't have a name
+            return undefined;
+        }
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        //const declarations don't exist at runtime, so just transpile empty
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
+        return [
+            state.tokenToSourceNode(this.tokens.const),
+            ' ',
+            state.tokenToSourceNode(this.tokens.name),
+            ' ',
+            state.tokenToSourceNode(this.tokens.equals),
+            ' ',
+            ...this.value.transpile(state)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.value && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
+    }
+}

@@ -7,7 +7,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement } from './parser/Statement';
+import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
 import type { NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { standardizePath as s, util } from './util';
@@ -17,7 +17,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isClassMethodStatement, isClassStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
+import { isBrsFile, isClassMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 
 /**
@@ -141,6 +141,25 @@ export class Scope {
     }
 
     /**
+     * Get a constant and its containing file by the constant name
+     * @param constName - The constant name, including the namespace of the constant if possible
+     * @param containingNamespace - The namespace used to resolve relative constant names. (i.e. the namespace around the current statement trying to find a constant)
+     */
+    public getConstFileLink(constName: string, containingNamespace?: string): FileLink<ConstStatement> {
+        const lowerName = constName?.toLowerCase();
+        const constMap = this.getConstMap();
+
+        let result = constMap.get(
+            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
+        );
+        //if we couldn't find the constant by its full namespaced name, look for a global constant with that name
+        if (!result) {
+            result = constMap.get(lowerName);
+        }
+        return result;
+    }
+
+    /**
      * Get a map of all enums by their member name.
      * The keys are lower-case fully-qualified paths to the enum and its member. For example:
      * namespace.enum.value
@@ -241,6 +260,26 @@ export class Scope {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (lowerEnumName) {
                         map.set(lowerEnumName, { item: enumStmt, file: file });
+                    }
+                }
+            });
+            return map;
+        });
+    }
+
+    /**
+     * A dictionary of all constants in this scope. This includes namespaced constants always with their full name.
+     * The key is stored in lower case
+     */
+    public getConstMap(): Map<string, FileLink<ConstStatement>> {
+        return this.cache.getOrAdd('constMap', () => {
+            const map = new Map<string, FileLink<ConstStatement>>();
+            this.enumerateBrsFiles((file) => {
+                for (let stmt of file.parser.references.constStatements) {
+                    const lowerEnumName = stmt.fullName.toLowerCase();
+                    //only track enums with a defined name (i.e. exclude nameless malformed enums)
+                    if (lowerEnumName) {
+                        map.set(lowerEnumName, { item: stmt, file: file });
                     }
                 }
             });
@@ -494,10 +533,11 @@ export class Scope {
                             fullName: loopName,
                             nameRange: namespaceStatement.nameExpression.range,
                             lastPartName: part,
-                            namespaces: new Map<string, NamespaceContainer>(),
+                            namespaces: new Map(),
                             classStatements: {},
                             functionStatements: {},
-                            enumStatements: new Map<string, EnumStatement>(),
+                            enumStatements: new Map(),
+                            constStatements: new Map(),
                             statements: [],
                             symbolTable: new SymbolTable(this.symbolTable)
                         });
@@ -512,6 +552,8 @@ export class Scope {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
                     } else if (isEnumStatement(statement) && statement.fullName) {
                         ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
+                    } else if (isConstStatement(statement) && statement.fullName) {
+                        ns.constStatements.set(statement.fullName.toLowerCase(), statement);
                     }
                 }
                 // Merges all the symbol tables of the namespace statements into the new symbol table created above.
@@ -1157,6 +1199,7 @@ interface NamespaceContainer {
     classStatements: Record<string, ClassStatement>;
     functionStatements: Record<string, FunctionStatement>;
     enumStatements: Map<string, EnumStatement>;
+    constStatements: Map<string, ConstStatement>;
     namespaces: Map<string, NamespaceContainer>;
     symbolTable: SymbolTable;
 }

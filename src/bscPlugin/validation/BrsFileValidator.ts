@@ -1,4 +1,4 @@
-import { isClassStatement, isCommentStatement, isEnumStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement } from '../../astUtils/reflection';
+import { isClassStatement, isCommentStatement, isConstStatement, isEnumStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement } from '../../astUtils/reflection';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, OnFileValidateEvent } from '../../interfaces';
@@ -113,7 +113,8 @@ export class BrsFileValidator {
                     !isInterfaceStatement(statement) &&
                     !isCommentStatement(statement) &&
                     !isLibraryStatement(statement) &&
-                    !isImportStatement(statement)
+                    !isImportStatement(statement) &&
+                    !isConstStatement(statement)
                 ) {
                     this.event.file.addDiagnostic({
                         ...DiagnosticMessages.unexpectedStatementOutsideFunction(),

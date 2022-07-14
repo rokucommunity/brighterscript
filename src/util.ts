@@ -26,7 +26,7 @@ import type { DottedGetExpression, Expression, VariableExpression } from './pars
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isDottedGetExpression, isExpression, isNamespacedVariableNameExpression, isVariableExpression } from './astUtils/reflection';
+import { isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isVariableExpression, isXmlAttributeGetExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
@@ -1341,6 +1341,28 @@ export class Util {
             }
         }
         return parts.reverse();
+    }
+
+    /**
+     * Break an expression into each part.
+     */
+    public splitExpression(expression: Expression) {
+        const parts: Expression[] = [expression];
+        let nextPart = expression;
+        while (nextPart) {
+            if (isDottedGetExpression(nextPart) || isIndexedGetExpression(nextPart) || isXmlAttributeGetExpression(nextPart)) {
+                nextPart = nextPart.obj;
+            } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
+                nextPart = nextPart.callee;
+
+            } else if (isNamespacedVariableNameExpression(nextPart)) {
+                nextPart = nextPart.expression;
+            } else {
+                break;
+            }
+            parts.unshift(nextPart);
+        }
+        return parts;
     }
 
     /**

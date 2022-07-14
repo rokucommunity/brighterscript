@@ -973,6 +973,21 @@ describe('EnumStatement', () => {
                 end sub
             `);
         });
-    });
 
+        it('transpiles enum values when used in complex expressions', () => {
+            testTranspile(`
+                sub main()
+                    print Direction.up.toStr()
+                end sub
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `, `
+                sub main()
+                    print "up".toStr()
+                end sub
+            `);
+        });
+    });
 });

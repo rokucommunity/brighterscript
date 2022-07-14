@@ -158,14 +158,19 @@ export class ScopeValidator {
 
                                 const entityName = processedNames.join('.');
 
+                                //if this is an enum member, stop validating here to prevent errors further down the chain
+                                if (scope.getEnumMemberMap().has(entityName)) {
+                                    break;
+                                }
+
                                 if (
-                                    !scope.getEnumMemberMap().has(entityName) &&
                                     !scope.getEnumMap().has(entityName) &&
                                     !scope.getClassMap().has(entityName) &&
+                                    !scope.getConstMap().has(entityName) &&
                                     !scope.getCallableByName(entityName) &&
                                     !scope.namespaceLookup.has(entityName)
                                 ) {
-                                    //if this looks like an enum member, provide a nicer error message
+                                    //if this looks like an enum, provide a nicer error message
                                     const theEnum = this.getEnum(scope, entityName)?.item;
                                     if (theEnum) {
                                         this.addMultiScopeDiagnostic(event, {
