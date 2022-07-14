@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.53.0](https://github.com/rokucommunity/brighterscript/compare/v0.52.3...0.53.0) - 2022-07-14
+### Added
+ - New Language Feature: Constants ([#632](https://github.com/rokucommunity/brighterscript/pull/632))
+### Changed
+ - Flag top level statements ([#638](https://github.com/rokucommunity/brighterscript/pull/638))
+ - Flag usage of undefined variables ([#631](https://github.com/rokucommunity/brighterscript/pull/631))
+ - Use `util.createLocation`, not `Location.create()` ([#637](https://github.com/rokucommunity/brighterscript/pull/637))
+ - Better project detection by language server ([#633](https://github.com/rokucommunity/brighterscript/pull/633))
+
+
+
 ## [0.52.3](https://github.com/rokucommunity/brighterscript/compare/v0.52.2...v0.52.3) - 2022-06-14
 ### Fixed
  - fix bug with class transpile in watch mode ([#630](https://github.com/rokucommunity/brighterscript/pull/630))
