@@ -85,3 +85,28 @@ sub main()
     ])
 end sub
 ```
+
+## Referencing other constants
+Constants can reference other constants (as long as there is no circular reference). You can even use template strings!
+
+```brighterscript
+const BASE_URL = "https://api.domain.com"
+const LOGIN_PATH = "/login"
+
+const LOGIN_URL = BASE_URL + LOGIN_PATH
+
+const ERROR_URL = `${BASE_URL}/some/error`
+sub main()
+    print LOGIN_URL
+    print ERROR_URL
+end sub
+```
+
+transpiles to
+
+```brightscript
+sub main()
+    print ("https://api.domain.com" + "/login")
+    print (bslib_toString("https://api.domain.com") + "/some/error")
+end sub
+```
