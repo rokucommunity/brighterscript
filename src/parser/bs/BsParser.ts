@@ -168,6 +168,8 @@ export class BsParser {
             this.checkNext(TokenKind.StringLiteral)
         ) {
             return this.libraryStatement();
+        } else if (this.check(TokenKind.Stop)) {
+            return this.stopStatement();
         }
     }
 
@@ -254,6 +256,12 @@ export class BsParser {
         this.consume(TokenKind.Library);
         this.consume(TokenKind.StringLiteral);
         return this.finishNode(NodeType.LibraryStatement);
+    }
+
+    private stopStatement() {
+        this.startNode();
+        this.consume(TokenKind.Stop);
+        return this.finishNode(NodeType.StopStatement);
     }
 
     /**
@@ -458,6 +466,7 @@ export enum NodeType {
     //statements
     AssignmentStatement = 'AssignmentStatement',
     LibraryStatement = 'LibraryStatement',
+    StopStatement = 'StopStatement',
 
     //expressions
     AALiteralExpression = 'AALiteralExpression',

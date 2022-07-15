@@ -45,12 +45,10 @@ import {
     IndexedSetStatement,
     InterfaceStatement,
     LabelStatement,
-    LibraryStatement,
     MethodStatement,
     NamespaceStatement,
     PrintStatement,
     ReturnStatement,
-    StopStatement,
     ThrowStatement,
     TryCatchStatement,
     WhileStatement
@@ -337,10 +335,6 @@ export class Parser {
         try {
             if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
                 return this.functionStatement({ hasName: true, hasBody: true, hasEnd: true });
-            }
-
-            if (this.checkLibrary()) {
-                return this.libraryStatement();
             }
 
             if (this.check(TokenKind.At) && this.checkNext(TokenKind.Identifier)) {
@@ -1041,35 +1035,9 @@ export class Parser {
         );
     }
 
-    private checkLibrary() {
-        let isLibraryToken = this.check(TokenKind.Library);
-
-        //if we are at the top level, any line that starts with "library" should be considered a library statement
-        if (this.isAtRootLevel() && isLibraryToken) {
-            return true;
-
-            //not at root level, library statements are all invalid here, but try to detect if the tokens look
-            //like a library statement (and let the libraryStatement function handle emitting the diagnostics)
-        } else if (isLibraryToken && this.checkNext(TokenKind.StringLiteral)) {
-            return true;
-
-            //definitely not a library statement
-        } else {
-            return false;
-        }
-    }
-
     private statement(): Statement | undefined {
-        if (this.checkLibrary()) {
-            return this.libraryStatement();
-        }
-
         if (this.check(TokenKind.Import)) {
             return this.importStatement();
-        }
-
-        if (this.check(TokenKind.Stop)) {
-            return this.stopStatement();
         }
 
         if (this.check(TokenKind.If)) {
@@ -1439,20 +1407,6 @@ export class Parser {
             result.push(this.advance());
         }
         return result;
-    }
-
-    private libraryStatement(): LibraryStatement | undefined {
-        let libStatement = new LibraryStatement({
-            library: this.advance(),
-            //grab the next token only if it's a string
-            filePath: this.tryConsume(
-                DiagnosticMessages.expectedStringLiteralAfterKeyword('library'),
-                TokenKind.StringLiteral
-            )
-        });
-
-        this._references.libraryStatements.push(libStatement);
-        return libStatement;
     }
 
     private importStatement() {
@@ -2138,15 +2092,6 @@ export class Parser {
         let endTokens = { end: this.advance() };
 
         return new EndStatement(endTokens);
-    }
-    /**
-     * Parses a `stop` statement
-     * @returns an AST representation of a `stop` statement
-     */
-    private stopStatement() {
-        let tokens = { stop: this.advance() };
-
-        return new StopStatement(tokens);
     }
 
     /**
@@ -3294,9 +3239,6 @@ export class Parser {
             ImportStatement: s => {
                 this._references.importStatements.push(s);
             },
-            LibraryStatement: s => {
-                this._references.libraryStatements.push(s);
-            },
             FunctionExpression: (expression, parent) => {
                 if (!isMethodStatement(parent) && !isInterfaceMethodStatement(parent)) {
                     this._references.functionExpressions.push(expression);
@@ -3478,7 +3420,6 @@ export class References {
     public expressions = new Set<Expression>();
 
     public importStatements = [] as ImportStatement[];
-    public libraryStatements = [] as LibraryStatement[];
     public namespaceStatements = [] as NamespaceStatement[];
     public newExpressions = [] as NewExpression[];
     public propertyHints = {} as Record<string, string>;
