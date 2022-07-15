@@ -1,6 +1,6 @@
 import { testParse } from '../BsParserTestUtils.spec';
 
-describe('AssignmentStatement', () => {
+describe.only('AssignmentStatement', () => {
     it('works with multiple spaces', () => {
         testParse(`
             name    =    1

@@ -1,10 +1,9 @@
 import { expect } from 'chai';
-import { createToken, tokenDefaults } from '../../../astUtils/creators';
-import { Lexer } from '../../../lexer/Lexer';
+import { tokenDefaults } from '../../../astUtils/creators';
 import type { Token } from '../../../lexer/Token';
 import { TokenKind } from '../../../lexer/TokenKind';
-import { nodes } from '../../../roku-types';
 import { trim } from '../../../testHelpers.spec';
+import type { NodeChild, ParseError } from '../BsParser';
 import { Node } from '../BsParser';
 import { BsParser } from '../BsParser';
 const tokenKindByText = new Map(
@@ -40,7 +39,7 @@ export function testParse(source: string | string[], expectedAst: ExpectedAst) {
  * Convert the `actual` node into the test format based on the `expected` structure.
  * This will do things like extract just the token value, or full token, or node.
  */
-function normalize(actual: Node | Token, expected: ExpectedAst) {
+function normalize(actual: NodeChild, expected: ExpectedAst) {
     //both are nodes
     if (expected instanceof Node && actual instanceof Node) {
         //normalize actual's children
@@ -72,4 +71,4 @@ function normalize(actual: Node | Token, expected: ExpectedAst) {
     }
 }
 
-type ExpectedAst = Node | string | Token | Array<ExpectedAst>;
+type ExpectedAst = Node | string | Token | ParseError | Array<ExpectedAst>;

@@ -2626,14 +2626,6 @@ export class Parser {
                 //if we found an expected terminator, don't throw a diagnostic...just return undefined
                 if (this.checkAny(...this.peekGlobalTerminators())) {
                     //don't throw a diagnostic, just return undefined
-
-                    //something went wrong...throw an error so the upstream processor can scrap this line and move on
-                } else {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.unexpectedToken(this.peek().text),
-                        range: this.peek().range
-                    });
-                    throw this.lastDiagnosticAsError();
                 }
         }
     }

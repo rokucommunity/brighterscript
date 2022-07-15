@@ -5,8 +5,6 @@ import { Lexer } from '../../lexer/Lexer';
 import type { Token } from '../../lexer/Token';
 import { AllowedLocalIdentifiers, AssignmentOperators, BrighterScriptSourceLiterals, DisallowedLocalIdentifiersText, TokenKind } from '../../lexer/TokenKind';
 import { Logger } from '../../Logger';
-import { Expression } from '../Expression';
-import { TokenManager } from './TokenManager';
 
 export class BsParser {
     constructor(
@@ -19,20 +17,7 @@ export class BsParser {
 
     public ast: Node;
 
-    /**
-     * Move the current token index to the next non-whitespace token
-     */
-    private advance() {
-        if (!this.isAtEnd()) {
-            //get the next concrete token (and any leading trivia tokens)
-            const tokens = this.getConcreteToken(1);
-            this.current += tokens.length;
-            this.children.push(...tokens);
-        }
-    }
-
     private tokens: Token[];
-
 
     /**
      * The current token index
@@ -106,6 +91,11 @@ export class BsParser {
                     //     } else {
                     //         this.consumeStatementSeparators(true);
                     //     }
+                    continue;
+                }
+                if (!this.isAtEnd()) {
+                    //if we got here, something is wrong. Flag the current token and move on
+                    this.unexpectedToken();
                 }
             }
         } catch (parseError) {
@@ -173,6 +163,11 @@ export class BsParser {
             this.checkNext(...AssignmentOperators)
         ) {
             return this.assignmentStatement();
+        } else if (
+            this.check(TokenKind.Library) &&
+            this.checkNext(TokenKind.StringLiteral)
+        ) {
+            return this.libraryStatement();
         }
     }
 
@@ -254,6 +249,42 @@ export class BsParser {
         return this.finishNode(NodeType.AssignmentStatement);
     }
 
+    private libraryStatement(): Node {
+        this.startNode();
+        this.consume(TokenKind.Library);
+        this.consume(TokenKind.StringLiteral);
+        return this.finishNode(NodeType.LibraryStatement);
+    }
+
+    /**
+     * Move the current token index to the next non-whitespace token
+     */
+    private advance() {
+        if (!this.isAtEnd()) {
+            //get the next concrete token (and any leading trivia tokens)
+            const tokens = this.getConcreteToken(1);
+            this.current += tokens.length;
+            this.children.push(...tokens);
+        }
+    }
+
+    /**
+     * Peek at the previous token (including whitespace tokens)
+     */
+    private peekPreviousRaw() {
+        return this.tokens[this.current - 1];
+    }
+
+    /**
+     * Flag the current token as unexpected
+     */
+    private unexpectedToken() {
+        this.advance();
+        this.children.push({
+            ...DiagnosticMessages.unexpectedToken(this.peekPreviousRaw().text)
+        });
+    }
+
     /**
      * Get the next non-trivia token (and any leading trivia tokens)
      * @param count 1 means the next non-trivia token. 2 means the second non-trivia token, etc.
@@ -331,6 +362,7 @@ export class BsParser {
         const tokens = this.getConcreteToken(1);
         if (tokenKinds.includes(tokens[tokens.length - 1]?.kind)) {
             this.children.push(...tokens);
+            this.current += tokens.length;
             return true;
         }
         return false;
@@ -398,7 +430,7 @@ export interface ParseOptions {
     logger?: Logger;
 }
 
-type NodeChild = Node | Token | ParseError;
+export type NodeChild = Node | Token | ParseError;
 
 export class Node {
     constructor(
@@ -425,7 +457,10 @@ export enum NodeType {
     Body = 'Body',
     //statements
     AssignmentStatement = 'AssignmentStatement',
+    LibraryStatement = 'LibraryStatement',
 
     //expressions
+    AALiteralExpression = 'AALiteralExpression',
     LiteralExpression = 'LiteralExpression'
+
 }
