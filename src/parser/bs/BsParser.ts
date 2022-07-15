@@ -3,7 +3,7 @@ import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Lexer } from '../../lexer/Lexer';
 import type { Token } from '../../lexer/Token';
-import { AllowedLocalIdentifiers, AssignmentOperators, BrighterScriptSourceLiterals, DisallowedLocalIdentifiersText, TokenKind } from '../../lexer/TokenKind';
+import { AllowedLocalIdentifiers, AssignmentOperators, BrighterScriptSourceLiterals, TokenKind } from '../../lexer/TokenKind';
 import { Logger } from '../../Logger';
 
 export class BsParser {
@@ -71,36 +71,30 @@ export class BsParser {
 
     private body() {
         this.startNode(false);
-        try {
-            while (
-                //not at end of tokens
-                !this.isAtEnd() &&
-                //the next token is not one of the end terminators
-                !this.check(...this.globalTerminators)
-            ) {
-                this.consumeManyRaw(TokenKind.Whitespace, TokenKind.Comment, TokenKind.Newline);
-                let dec = this.declaration();
-                if (dec) {
-                    this.children.push(dec);
-                    this.consumeStatementSeparators(true);
-                    //     if (!isAnnotationExpression(dec)) {
-                    //         this.consumePendingAnnotations(dec);
-                    //         body.children.push(dec);
-                    //         //ensure statement separator
-                    //         this.consumeStatementSeparators(false);
-                    //     } else {
-                    //         this.consumeStatementSeparators(true);
-                    //     }
-                    continue;
-                }
-                if (!this.isAtEnd()) {
-                    //if we got here, something is wrong. Flag the current token and move on
-                    this.unexpectedToken();
-                }
+        while (
+            //not at end of tokens
+            !this.isAtEnd() &&
+            //the next token is not one of the end terminators
+            !this.check(...this.globalTerminators)
+        ) {
+            this.consumeManyRaw(TokenKind.Whitespace, TokenKind.Comment, TokenKind.Newline);
+            if (this.isAtEnd()) {
+                break;
             }
-        } catch (parseError) {
-            if ((parseError as ParseError).code) {
-                this.children.push(parseError as ParseError);
+            let dec = this.declaration();
+            if (dec) {
+                this.children.push(dec);
+                this.consumeManyRaw(TokenKind.Whitespace, TokenKind.Comment);
+                this.consumeStatementSeparators(true);
+                //     if (!isAnnotationExpression(dec)) {
+                //         this.consumePendingAnnotations(dec);
+                //         body.children.push(dec);
+                //         //ensure statement separator
+                //         this.consumeStatementSeparators(false);
+                //     } else {
+                //         this.consumeStatementSeparators(true);
+                //     }
+                continue;
             }
         }
         return this.finishNode(NodeType.Body);
@@ -126,6 +120,7 @@ export class BsParser {
     }
 
     private declaration(): Node | undefined {
+        const children = this.children;
         try {
             // if (this.checkLibrary()) {
             //     return this.libraryStatement();
@@ -147,11 +142,10 @@ export class BsParser {
             //no declarations were found. Look for statements now
             return this.statement();
         } catch (error: any) {
-            //if the error is not a diagnostic, then log the error for debugging purposes
-            if (!(error as unknown as any).isDiagnostic) {
-                this.logger.error(error);
+            if ((error as ParseError).code) {
+                this.children.push(error as ParseError);
             }
-            // this.synchronize();
+            this.absorbUnfinishedNodes(children);
         }
     }
 
@@ -163,13 +157,15 @@ export class BsParser {
             this.checkNext(...AssignmentOperators)
         ) {
             return this.assignmentStatement();
-        } else if (
-            this.check(TokenKind.Library) &&
-            this.checkNext(TokenKind.StringLiteral)
-        ) {
+        } else if (this.check(TokenKind.Library)) {
             return this.libraryStatement();
+        } else if (this.check(TokenKind.Import)) {
+            return this.importStatement();
         } else if (this.check(TokenKind.Stop)) {
             return this.stopStatement();
+        } else {
+            //we don't know what this token is. Flag it and move on
+            this.unexpectedToken();
         }
     }
 
@@ -209,6 +205,7 @@ export class BsParser {
         }
         this.children = [];
         this.nodeStack.push(this.children);
+        return this.children;
     }
 
     /**
@@ -219,6 +216,27 @@ export class BsParser {
         this.children = this.nodeStack[this.nodeStack.length - 1];
         return result;
     }
+
+    /**
+     * If an error occurs in a child function, there's a chance the NodeStack
+     * will contain unfinished nodes. We can't discard those handled tokens,
+     * so consume them onto the specified `children` array IF that array
+     * exists on the NodeStack. Then reset the NodeStack to that index.
+     */
+    public absorbUnfinishedNodes(children: NodeChild[]) {
+        const idx = this.nodeStack.indexOf(children);
+        if (!idx) {
+            return;
+        }
+        for (let i = idx; i < this.nodeStack.length; i++) {
+            children.push(
+                ...this.nodeStack[i]
+            );
+        }
+        //scrap the items after our index
+        this.nodeStack.splice(idx, this.nodeStack.length - idx);
+    }
+
     /**
      * A collection of node children. Pushed to every time `startNode` is called,
      * and popped every time `finishNode` is called
@@ -254,14 +272,47 @@ export class BsParser {
     private libraryStatement(): Node {
         this.startNode();
         this.consume(TokenKind.Library);
-        this.consume(TokenKind.StringLiteral);
+        this.consumeOrThrow(
+            DiagnosticMessages.expectedStringLiteralAfterKeyword('library'),
+            TokenKind.StringLiteral
+        );
         return this.finishNode(NodeType.LibraryStatement);
+    }
+
+    private importStatement() {
+        this.startNode();
+        this.consume(TokenKind.Import);
+        this.warnIfNotBrighterScriptMode('import statements');
+        this.consumeOrThrow(
+            DiagnosticMessages.expectedStringLiteralAfterKeyword('import'),
+            TokenKind.StringLiteral
+        );
+        return this.finishNode(NodeType.ImportStatement);
     }
 
     private stopStatement() {
         this.startNode();
         this.consume(TokenKind.Stop);
         return this.finishNode(NodeType.StopStatement);
+    }
+
+    /**
+     * Flag the current token as unexpected
+     */
+    private unexpectedToken() {
+        this.advance();
+        this.children.push({
+            ...DiagnosticMessages.unexpectedToken(this.peekPreviousRaw().text)
+        });
+    }
+
+    /**
+     * Add diagnostic if not in BrighterScript parse mode
+     */
+    private warnIfNotBrighterScriptMode(featureName: string) {
+        if (this.options.mode !== ParseMode.BrighterScript) {
+            this.children.push(DiagnosticMessages.bsFeatureNotSupportedInBrsFiles(featureName));
+        }
     }
 
     /**
@@ -281,16 +332,6 @@ export class BsParser {
      */
     private peekPreviousRaw() {
         return this.tokens[this.current - 1];
-    }
-
-    /**
-     * Flag the current token as unexpected
-     */
-    private unexpectedToken() {
-        this.advance();
-        this.children.push({
-            ...DiagnosticMessages.unexpectedToken(this.peekPreviousRaw().text)
-        });
     }
 
     /**
@@ -465,6 +506,7 @@ export enum NodeType {
     Body = 'Body',
     //statements
     AssignmentStatement = 'AssignmentStatement',
+    ImportStatement = 'ImportStatement',
     LibraryStatement = 'LibraryStatement',
     StopStatement = 'StopStatement',
 

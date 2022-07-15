@@ -977,37 +977,6 @@ describe('parser', () => {
         });
     });
 
-    describe('import keyword', () => {
-
-        it('parses without errors', () => {
-            let { statements, diagnostics } = parse(`
-                import "somePath"
-            `, ParseMode.BrighterScript);
-            expect(diagnostics[0]?.message).not.to.exist;
-            expect(statements[0]).to.be.instanceof(ImportStatement);
-        });
-
-        it('catches import statements used in brightscript files', () => {
-            let { statements, diagnostics } = parse(`
-                import "somePath"
-            `, ParseMode.BrightScript);
-            expect(diagnostics[0]?.message).to.eql(
-                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('import statements').message
-            );
-            expect(statements[0]).to.be.instanceof(ImportStatement);
-        });
-
-        it('catches missing file path', () => {
-            let { statements, diagnostics } = parse(`
-                import
-            `, ParseMode.BrighterScript);
-            expect(diagnostics[0]?.message).to.equal(
-                DiagnosticMessages.expectedStringLiteralAfterKeyword('import').message
-            );
-            expect(statements[0]).to.be.instanceof(ImportStatement);
-        });
-    });
-
     describe('Annotations', () => {
         it('parses with error if malformed', () => {
             let { diagnostics } = parse(`

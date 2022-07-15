@@ -1,5 +1,4 @@
 import { DiagnosticMessages } from '../../../../DiagnosticMessages';
-import { Node, NodeType } from '../../BsParser';
 import { testParse } from '../BsParserTestUtils.spec';
 const newline = `
 `;
@@ -30,10 +29,14 @@ describe.only('LibraryStatement', () => {
             library cat dog mouse
             value = true
         `, [
-            'library', DiagnosticMessages.unexpectedToken('library'), ' ',
-            'cat', DiagnosticMessages.unexpectedToken('cat'), ' ',
-            'dog', DiagnosticMessages.unexpectedToken('dog'), ' ',
-            'mouse', DiagnosticMessages.unexpectedToken('mouse'),
+            'library',
+            DiagnosticMessages.expectedStringLiteralAfterKeyword('library'), ' ',
+            'cat',
+            DiagnosticMessages.unexpectedToken('cat'), ' ',
+            'dog',
+            DiagnosticMessages.unexpectedToken('dog'), ' ',
+            'mouse',
+            DiagnosticMessages.unexpectedToken('mouse'),
             newline,
             ['value', ' ', '=', ' ', ['true']]
         ]);
@@ -64,7 +67,7 @@ describe.only('LibraryStatement', () => {
             library = "Your Library"
         `, [
             'library',
-            DiagnosticMessages.unexpectedToken('library'),
+            DiagnosticMessages.expectedStringLiteralAfterKeyword('library'),
             newline,
             ['library', ' ', '=', ' ', ['"Your Library"']]
         ]);

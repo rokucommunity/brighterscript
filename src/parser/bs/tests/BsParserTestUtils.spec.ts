@@ -3,7 +3,7 @@ import { tokenDefaults } from '../../../astUtils/creators';
 import type { Token } from '../../../lexer/Token';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { trim } from '../../../testHelpers.spec';
-import type { NodeChild, ParseError } from '../BsParser';
+import { NodeChild, ParseError, ParseMode, ParseOptions } from '../BsParser';
 import { Node } from '../BsParser';
 import { BsParser } from '../BsParser';
 const tokenKindByText = new Map(
@@ -17,21 +17,18 @@ tokenKindByText.set('\r\n', TokenKind.Newline);
  * @param expectedAst the expected AST. This supports shorthand.
  * @param doTrim should the source be trimmed before testing
  */
-export function testParse(source: string | string[], expectedAst: ExpectedAst) {
+export function testParse(source: string | string[], expectedAst: ExpectedAst, parseOptions?: ParseOptions) {
     let text: string;
     if (Array.isArray(source)) {
         text = source.join('');
     } else {
         text = trim(source);
     }
-    const parser = BsParser.parse(text);
+    const parser = BsParser.parse(text, parseOptions ?? { mode: ParseMode.BrighterScript });
     const ast = parser.ast;
 
-    expect(
-        normalize(ast, expectedAst)
-    ).to.eql(
-        expectedAst
-    );
+    const normalized = normalize(ast, expectedAst);
+    expect(normalized).to.eql(expectedAst);
     return parser;
 }
 
@@ -49,7 +46,7 @@ function normalize(actual: NodeChild, expected: ExpectedAst) {
                 actual.children[i] = normalize(actual.children[i], expected.children[i] as any) as any;
             }
         }
-
+        return actual;
         //expected is an array, so lift actual's children into an array
     } else if (Array.isArray(expected) && actual instanceof Node) {
         let result = actual.children;

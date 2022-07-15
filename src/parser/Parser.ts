@@ -40,7 +40,6 @@ import {
     FunctionStatement,
     GotoStatement,
     IfStatement,
-    ImportStatement,
     IncrementStatement,
     IndexedSetStatement,
     InterfaceStatement,
@@ -1036,10 +1035,6 @@ export class Parser {
     }
 
     private statement(): Statement | undefined {
-        if (this.check(TokenKind.Import)) {
-            return this.importStatement();
-        }
-
         if (this.check(TokenKind.If)) {
             return this.ifStatement();
         }
@@ -1407,21 +1402,6 @@ export class Parser {
             result.push(this.advance());
         }
         return result;
-    }
-
-    private importStatement() {
-        this.warnIfNotBrighterScriptMode('import statements');
-        let importStatement = new ImportStatement(
-            this.advance(),
-            //grab the next token only if it's a string
-            this.tryConsume(
-                DiagnosticMessages.expectedStringLiteralAfterKeyword('import'),
-                TokenKind.StringLiteral
-            )
-        );
-
-        this._references.importStatements.push(importStatement);
-        return importStatement;
     }
 
     private annotationExpression() {
@@ -3168,146 +3148,6 @@ export class Parser {
         return { chain: tokenChain, includesUnknowableTokenType: !!includesUnknown };
     }
 
-    /**
-     * References are found during the initial parse.
-     * However, sometimes plugins can modify the AST, requiring a full walk to re-compute all references.
-     * This does that walk.
-     */
-    private findReferences() {
-        this._references = new References();
-        const excludedExpressions = new Set<Expression>();
-
-        const visitCallExpression = (e: CallExpression | CallfuncExpression) => {
-            for (const p of e.args) {
-                this._references.expressions.add(p);
-            }
-            //add calls that were not excluded (from loop below)
-            if (!excludedExpressions.has(e)) {
-                this._references.expressions.add(e);
-            }
-
-            //if this call is part of a longer expression that includes a call higher up, find that higher one and remove it
-            if (e.callee) {
-                let node: Expression = e.callee;
-                while (node) {
-                    //the primary goal for this loop. If we found a parent call expression, remove it from `references`
-                    if (isCallExpression(node)) {
-                        this.references.expressions.delete(node);
-                        excludedExpressions.add(node);
-                        //stop here. even if there are multiple calls in the chain, each child will find and remove its closest parent, so that reduces excess walking.
-                        break;
-
-                        //when we hit a variable expression, we're definitely at the leftmost expression so stop
-                    } else if (isVariableExpression(node)) {
-                        break;
-                        //if
-
-                    } else if (isDottedGetExpression(node) || isIndexedGetExpression(node)) {
-                        node = node.obj;
-                    } else {
-                        //some expression we don't understand. log it and quit the loop
-                        this.logger.info('Encountered unknown expression while calculating function expression chain', node);
-                        break;
-                    }
-                }
-            }
-        };
-
-        //gather up all the top-level statements
-        this.ast.walk(createVisitor({
-            AssignmentStatement: s => {
-                this._references.assignmentStatements.push(s);
-                this.references.expressions.add(s.value);
-            },
-            ClassStatement: s => {
-                this._references.classStatements.push(s);
-            },
-            FieldStatement: s => {
-                if (s.initialValue) {
-                    this._references.expressions.add(s.initialValue);
-                }
-            },
-            InterfaceStatement: s => {
-                this._references.interfaceStatements.push(s);
-            },
-            NamespaceStatement: s => {
-                this._references.namespaceStatements.push(s);
-            },
-            FunctionStatement: s => {
-                this._references.functionStatements.push(s);
-            },
-            ImportStatement: s => {
-                this._references.importStatements.push(s);
-            },
-            FunctionExpression: (expression, parent) => {
-                if (!isMethodStatement(parent) && !isInterfaceMethodStatement(parent)) {
-                    this._references.functionExpressions.push(expression);
-                }
-            },
-            NewExpression: e => {
-                this._references.newExpressions.push(e);
-                for (const p of e.call.args) {
-                    this._references.expressions.add(p);
-                }
-            },
-            ExpressionStatement: s => {
-                this._references.expressions.add(s.expression);
-            },
-            CallfuncExpression: e => {
-                visitCallExpression(e);
-            },
-            CallExpression: e => {
-                visitCallExpression(e);
-            },
-            AALiteralExpression: e => {
-                this.addPropertyHints(e);
-                this._references.expressions.add(e);
-                for (const member of e.elements) {
-                    if (isAAMemberExpression(member)) {
-                        this._references.expressions.add(member.value);
-                    }
-                }
-            },
-            BinaryExpression: (e, parent) => {
-                //walk the chain of binary expressions and add each one to the list of expressions
-                const expressions: Expression[] = [e];
-                let expression: Expression;
-                while ((expression = expressions.pop())) {
-                    if (isBinaryExpression(expression)) {
-                        expressions.push(expression.left, expression.right);
-                    } else {
-                        this._references.expressions.add(expression);
-                    }
-                }
-            },
-            ArrayLiteralExpression: e => {
-                for (const element of e.elements) {
-                    //keep everything except comments
-                    if (!isCommentStatement(element)) {
-                        this._references.expressions.add(element);
-                    }
-                }
-            },
-            DottedGetExpression: e => {
-                this.addPropertyHints(e.name);
-            },
-            DottedSetStatement: e => {
-                this.addPropertyHints(e.name);
-            },
-            EnumStatement: e => {
-                this._references.enumStatements.push(e);
-            },
-            UnaryExpression: e => {
-                this._references.expressions.add(e);
-            },
-            IncrementStatement: e => {
-                this._references.expressions.add(e);
-            }
-        }), {
-            walkMode: WalkMode.visitAllRecursive
-        });
-    }
-
     public getContainingClass(currentToken: Token): ClassStatement {
         return this.references.classStatements.find((cs) => util.rangeContains(cs.range, currentToken.range.start));
     }
@@ -3419,7 +3259,6 @@ export class References {
      */
     public expressions = new Set<Expression>();
 
-    public importStatements = [] as ImportStatement[];
     public namespaceStatements = [] as NamespaceStatement[];
     public newExpressions = [] as NewExpression[];
     public propertyHints = {} as Record<string, string>;
