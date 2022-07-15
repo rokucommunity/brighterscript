@@ -494,7 +494,13 @@ export class Util {
     }
 
     /**
-     * Does a touch b in any way?
+     * Do `a` and `b` overlap by at least one character. This returns false if they are at the edges. Here's some examples:
+     * ```
+     * | true | true | true | true | true | false | false | false | false |
+     * |------|------|------|------|------|-------|-------|-------|-------|
+     * | aa   |  aaa |  aaa | aaa  |  a   |  aa   |    aa | a     |     a |
+     * |  bbb | bb   |  bbb |  b   | bbb  |    bb |  bb   |     b | a     |
+     * ```
      */
     public rangesIntersect(a: Range, b: Range) {
         // Check if `a` is before `b`
@@ -504,6 +510,30 @@ export class Util {
 
         // Check if `b` is before `a`
         if (b.end.line < a.start.line || (b.end.line === a.start.line && b.end.character <= a.start.character)) {
+            return false;
+        }
+
+        // These ranges must intersect
+        return true;
+    }
+
+    /**
+     * Do `a` and `b` overlap by at least one character or touch at the edges
+     * ```
+     * | true | true | true | true | true | true  | true  | false | false |
+     * |------|------|------|------|------|-------|-------|-------|-------|
+     * | aa   |  aaa |  aaa | aaa  |  a   |  aa   |    aa | a     |     a |
+     * |  bbb | bb   |  bbb |  b   | bbb  |    bb |  bb   |     b | a     |
+     * ```
+     */
+    public rangesIntersectOrTouch(a: Range, b: Range) {
+        // Check if `a` is before `b`
+        if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character < b.start.character)) {
+            return false;
+        }
+
+        // Check if `b` is before `a`
+        if (b.end.line < a.start.line || (b.end.line === a.start.line && b.end.character < a.start.character)) {
             return false;
         }
 

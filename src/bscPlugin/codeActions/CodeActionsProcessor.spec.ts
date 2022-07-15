@@ -295,4 +295,24 @@ describe('CodeActionsProcessor', () => {
             testGetCodeActions(file, util.createRange(3, 34, 3, 34), [`import "pkg:/source/second.bs"`]);
         });
     });
+
+    it('suggests imports at very start and very end of diagnostic', () => {
+        program.setFile('source/first.bs', `
+            namespace alpha
+                function firstAction()
+                end function
+            end namespace
+        `);
+        program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+        const file = program.setFile('components/MainScene.bs', `
+            sub init()
+                print alpha.firstAction()
+            end sub
+        `);
+
+        // print |alpha.firstAction()
+        testGetCodeActions(file, util.createRange(2, 22, 2, 22), [`import "pkg:/source/first.bs"`]);
+        // print alpha|.firstAction()
+        testGetCodeActions(file, util.createRange(2, 27, 2, 27), [`import "pkg:/source/first.bs"`]);
+    });
 });
