@@ -1500,6 +1500,7 @@ export class Program {
                     return (
                         //the namespace name matches exactly
                         namespaceName === lowerName ||
+                        //the full namespace starts with the name (honoring the part boundary)
                         namespaceName.startsWith(lowerName + '.')
                     );
                 })) {
