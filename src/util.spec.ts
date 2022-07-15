@@ -534,6 +534,22 @@ describe('util', () => {
     });
 
     describe('rangesIntersect', () => {
+        it('does not match when ranges do not touch (a < b)', () => {
+            // AA BB
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 0, 0, 1),
+                util.createRange(0, 2, 0, 3)
+            )).to.be.false;
+        });
+
+        it('does not match when ranges do not touch (a < b)', () => {
+            // BB AA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 2, 0, 3),
+                util.createRange(0, 0, 0, 1)
+            )).to.be.false;
+        });
+
         it('does not match when ranges touch at right edge', () => {
             // AABB
             expect(util.rangesIntersect(
@@ -601,6 +617,96 @@ describe('util', () => {
         it('matches when B spans multiple lines', () => {
             // ABBA
             expect(util.rangesIntersect(
+                util.createRange(0, 1, 0, 3),
+                util.createRange(0, 1, 2, 0)
+            )).to.be.true;
+        });
+    });
+
+    describe('rangesIntersectOrTouch', () => {
+        it('does not match when ranges do not touch (a < b)', () => {
+            // AA BB
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 0, 0, 1),
+                util.createRange(0, 2, 0, 3)
+            )).to.be.false;
+        });
+
+        it('does not match when ranges do not touch (a < b)', () => {
+            // BB AA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 2, 0, 3),
+                util.createRange(0, 0, 0, 1)
+            )).to.be.false;
+        });
+
+        it('matches when ranges touch at right edge', () => {
+            // AABB
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 0, 0, 1),
+                util.createRange(0, 1, 0, 2)
+            )).to.be.true;
+        });
+
+        it('matches when ranges touch at left edge', () => {
+            // BBAA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 0, 2),
+                util.createRange(0, 0, 0, 1)
+            )).to.be.true;
+        });
+
+        it('matches when range overlaps by single character on the right', () => {
+            // A BA B
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 0, 3),
+                util.createRange(0, 2, 0, 4)
+            )).to.be.true;
+        });
+
+        it('matches when range overlaps by single character on the left', () => {
+            // B AB A
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 2, 0, 4),
+                util.createRange(0, 1, 0, 3)
+            )).to.be.true;
+        });
+
+        it('matches when A is contained by B at the edges', () => {
+            // B AA B
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 2, 0, 3),
+                util.createRange(0, 1, 0, 4)
+            )).to.be.true;
+        });
+
+        it('matches when B is contained by A at the edges', () => {
+            // A BB A
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 0, 4),
+                util.createRange(0, 2, 0, 3)
+            )).to.be.true;
+        });
+
+        it('matches when A and B are identical', () => {
+            // ABBA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 0, 2),
+                util.createRange(0, 1, 0, 2)
+            )).to.be.true;
+        });
+
+        it('matches when A spans multiple lines', () => {
+            // ABBA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 2, 0),
+                util.createRange(0, 1, 0, 3)
+            )).to.be.true;
+        });
+
+        it('matches when B spans multiple lines', () => {
+            // ABBA
+            expect(util.rangesIntersectOrTouch(
                 util.createRange(0, 1, 0, 3),
                 util.createRange(0, 1, 2, 0)
             )).to.be.true;

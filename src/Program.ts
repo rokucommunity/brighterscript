@@ -935,7 +935,7 @@ export class Program {
                 //only keep diagnostics related to this file
                 .filter(x => x.file === file)
                 //only keep diagnostics that touch this range
-                .filter(x => util.rangesIntersect(x.range, range));
+                .filter(x => util.rangesIntersectOrTouch(x.range, range));
 
             const scopes = this.getScopesForFile(file);
 
