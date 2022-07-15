@@ -144,9 +144,10 @@ export class ScopeValidator {
                         }
                         //at this point, we know the first item is a known symbol. find unknown namespace parts after the first part
                         if (tokens.length > 1) {
-                            const firstNamespacePart = tokens.shift().text?.toLowerCase();
-                            const namespaceContainer = scope.namespaceLookup.get(firstNamespacePart);
-                            const enumStatement = scope.getEnum(firstNamespacePart);
+                            const firstNamespacePart = tokens.shift().text;
+                            const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
+                            const namespaceContainer = scope.namespaceLookup.get(firstNamespacePartLower);
+                            const enumStatement = scope.getEnum(firstNamespacePartLower);
                             //if this isn't a namespace, skip it
                             if (!namespaceContainer && !enumStatement) {
                                 continue;
@@ -154,24 +155,24 @@ export class ScopeValidator {
                             //catch unknown namespace items
                             const processedNames: string[] = [firstNamespacePart];
                             for (const token of tokens ?? []) {
-                                processedNames.push(token.text?.toLowerCase());
-
+                                processedNames.push(token.text);
                                 const entityName = processedNames.join('.');
+                                const entityNameLower = entityName.toLowerCase();
 
                                 //if this is an enum member, stop validating here to prevent errors further down the chain
-                                if (scope.getEnumMemberMap().has(entityName)) {
+                                if (scope.getEnumMemberMap().has(entityNameLower)) {
                                     break;
                                 }
 
                                 if (
-                                    !scope.getEnumMap().has(entityName) &&
-                                    !scope.getClassMap().has(entityName) &&
-                                    !scope.getConstMap().has(entityName) &&
-                                    !scope.getCallableByName(entityName) &&
-                                    !scope.namespaceLookup.has(entityName)
+                                    !scope.getEnumMap().has(entityNameLower) &&
+                                    !scope.getClassMap().has(entityNameLower) &&
+                                    !scope.getConstMap().has(entityNameLower) &&
+                                    !scope.getCallableByName(entityNameLower) &&
+                                    !scope.namespaceLookup.has(entityNameLower)
                                 ) {
                                     //if this looks like an enum, provide a nicer error message
-                                    const theEnum = this.getEnum(scope, entityName)?.item;
+                                    const theEnum = this.getEnum(scope, entityNameLower)?.item;
                                     if (theEnum) {
                                         this.addMultiScopeDiagnostic(event, {
                                             file: file,
@@ -187,7 +188,7 @@ export class ScopeValidator {
                                         });
                                     } else {
                                         this.addMultiScopeDiagnostic(event, {
-                                            ...DiagnosticMessages.cannotFindName(token.text),
+                                            ...DiagnosticMessages.cannotFindName(token.text, entityName),
                                             range: token.range,
                                             file: file
                                         });

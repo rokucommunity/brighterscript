@@ -69,7 +69,7 @@ export class CodeActionsProcessor {
         if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
             return;
         }
-        const lowerName = diagnostic.data.name.toLowerCase();
+        const lowerName = (diagnostic.data.fullName ?? diagnostic.data.name).toLowerCase();
 
         this.suggestImports(
             diagnostic,

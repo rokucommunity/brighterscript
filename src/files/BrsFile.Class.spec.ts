@@ -1144,7 +1144,7 @@ describe('BrsFile BrighterScript classes', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('GroundedBird')
+                DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird')
             ]);
         });
 
@@ -1165,7 +1165,7 @@ describe('BrsFile BrighterScript classes', () => {
             `);
             program.validate();
             expectDiagnostics(program, [{
-                ...DiagnosticMessages.cannotFindName('GroundedBird'),
+                ...DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird'),
                 relatedInformation: [{
                     message: `Not defined in scope 'source'`
                 }]
@@ -1215,7 +1215,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.cannotFindName('AnimalNotDefined')
+            DiagnosticMessages.cannotFindName('AnimalNotDefined', 'NameA.NameB.AnimalNotDefined')
         ]);
     });
 
