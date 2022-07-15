@@ -252,19 +252,6 @@ export class BsParser {
             this.expression()
         );
         return this.finishNode(NodeType.AssignmentStatement);
-
-        // let result: AssignmentStatement;
-        // if (operator.kind === TokenKind.Equal) {
-        //     result = new AssignmentStatement(name, operator, value, this.currentFunctionExpression);
-        // } else {
-        //     const nameExpression = new VariableExpression(name, this.currentNamespaceName);
-        //     result = new AssignmentStatement(
-        //         name,
-        //         operator,
-        //         new BinaryExpression(nameExpression, operator, value),
-        //         this.currentFunctionExpression
-        //     );
-        // }
     }
 
     /**

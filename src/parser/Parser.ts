@@ -1041,44 +1041,6 @@ export class Parser {
         );
     }
 
-    private assignment(): AssignmentStatement {
-        let name = this.identifier(...this.allowedLocalIdentifiers);
-        //add diagnostic if name is a reserved word that cannot be used as an identifier
-        if (DisallowedLocalIdentifiersText.has(name.text.toLowerCase())) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.cannotUseReservedWordAsIdentifier(name.text),
-                range: name.range
-            });
-        }
-        let operator = this.consume(
-            DiagnosticMessages.expectedOperatorAfterIdentifier(AssignmentOperators, name.text),
-            ...AssignmentOperators
-        );
-        let value = this.expression();
-
-        let result: AssignmentStatement;
-        if (operator.kind === TokenKind.Equal) {
-            result = new AssignmentStatement(name, operator, value, this.currentFunctionExpression);
-        } else {
-            const nameExpression = new VariableExpression(name, this.currentNamespaceName);
-            result = new AssignmentStatement(
-                name,
-                operator,
-                new BinaryExpression(nameExpression, operator, value),
-                this.currentFunctionExpression
-            );
-            this.addExpressionsToReferences(nameExpression);
-            //remove the right-hand-side expression from this assignment operator, and replace with the full assignment expression
-            this._references.expressions.delete(value);
-            this._references.expressions.add(result);
-        }
-        this._references.assignmentStatements.push(result);
-        const assignmentType = getBscTypeFromExpression(result.value, this.currentFunctionExpression);
-
-        this.currentSymbolTable.addSymbol(name.text, name.range, assignmentType);
-        return result;
-    }
-
     private checkLibrary() {
         let isLibraryToken = this.check(TokenKind.Library);
 
