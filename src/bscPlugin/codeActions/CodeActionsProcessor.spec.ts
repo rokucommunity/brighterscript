@@ -1,5 +1,7 @@
 import { expect } from 'chai';
 import { URI } from 'vscode-uri';
+import type { Range } from 'vscode-languageserver';
+import type { BscFile } from '../../interfaces';
 import { Program } from '../../Program';
 import { expectCodeActions, trim } from '../../testHelpers.spec';
 import { standardizePath as s, util } from '../../util';
@@ -9,12 +11,26 @@ describe('CodeActionsProcessor', () => {
     let program: Program;
     beforeEach(() => {
         program = new Program({
-            rootDir: rootDir
+            rootDir: rootDir,
+            autoImportComponentScript: true
         });
     });
     afterEach(() => {
         program.dispose();
     });
+
+    /**
+     * Helper function for testing code actions
+     */
+    function testGetCodeActions(file: BscFile | string, range: Range, expected: string[]) {
+        program.validate();
+        expect(
+            program.getCodeActions(
+                typeof file === 'string' ? file : file.srcPath,
+                range
+            ).map(x => x.title).sort()
+        ).to.eql(expected);
+    }
 
     describe('getCodeActions', () => {
         it('suggests `extends=Group`', () => {
@@ -226,6 +242,57 @@ describe('CodeActionsProcessor', () => {
                 `import "pkg:/source/Animals.bs"`
             ]);
         });
-    });
 
+        it('suggests all files for a root namespace name', () => {
+            program.setFile('source/first.bs', `
+                namespace alpha
+                    function firstAction()
+                    end function
+                end namespace
+            `);
+            program.setFile('source/second.bs', `
+                namespace alpha.beta
+                    function secondAction()
+                    end function
+                end namespace
+            `);
+            program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+            const file = program.setFile('components/MainScene.bs', `
+                sub init()
+                    print alpha.secondAction()
+                end sub
+            `);
+
+            // print al|pha.secondAction()
+            testGetCodeActions(file, util.createRange(2, 28, 2, 28), [
+                `import "pkg:/source/first.bs"`,
+                `import "pkg:/source/second.bs"`
+            ]);
+        });
+
+        it('suggests files for second part of missing namespace', () => {
+            program.setFile('source/first.bs', `
+                namespace alpha
+                    function firstAction()
+                    end function
+                end namespace
+            `);
+            program.setFile('source/second.bs', `
+                namespace alpha.beta
+                    function secondAction()
+                    end function
+                end namespace
+            `);
+            program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+            const file = program.setFile('components/MainScene.bs', `
+                import "pkg:/source/first.bs"
+                sub init()
+                    print alpha.beta.secondAction()
+                end sub
+            `);
+
+            // print alpha.be|ta.secondAction()
+            testGetCodeActions(file, util.createRange(3, 34, 3, 34), [`import "pkg:/source/second.bs"`]);
+        });
+    });
 });

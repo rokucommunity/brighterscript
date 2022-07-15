@@ -1495,7 +1495,14 @@ export class Program {
         //find every file with this class defined
         for (const file of Object.values(this.files)) {
             if (isBrsFile(file)) {
-                if (file.parser.references.namespaceStatements.find(x => x.name.toLowerCase() === lowerName)) {
+                if (file.parser.references.namespaceStatements.find((x) => {
+                    const namespaceName = x.name.toLowerCase();
+                    return (
+                        //the namespace name matches exactly
+                        namespaceName === lowerName ||
+                        namespaceName.startsWith(lowerName + '.')
+                    );
+                })) {
                     files.push(file);
                 }
             }
