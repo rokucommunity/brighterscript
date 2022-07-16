@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.53.1](https://github.com/rokucommunity/brighterscript/compare/v0.53.0...0.53.1) - 2022-07-15
+### Fixed
+ - bug with codeactions at the edges of tokens. ([#642](https://github.com/rokucommunity/brighterscript/pull/642))
+ - nested namespace import codeActions bug. ([#641](https://github.com/rokucommunity/brighterscript/pull/641))
+
+
+
 ## [0.53.0](https://github.com/rokucommunity/brighterscript/compare/v0.52.3...0.53.0) - 2022-07-14
 ### Added
  - New Language Feature: Constants ([#632](https://github.com/rokucommunity/brighterscript/pull/632))
