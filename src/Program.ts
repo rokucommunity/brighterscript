@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, OnGetHoverEvent } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -923,8 +923,8 @@ export class Program {
                 position: position,
                 scopes: this.getScopesForFile(file),
                 hover: null
-            } as OnGetHoverEvent;
-            this.plugins.emit('onGetHover', event);
+            } as ProvideHoverEvent;
+            this.plugins.emit('provideHover', event);
             return event.hover;
         }
     }

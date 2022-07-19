@@ -1,6 +1,6 @@
 import { isBrsFile } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
-import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent } from '../interfaces';
+import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent } from '../interfaces';
 import type { Program } from '../Program';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { HoverProcessor } from './hover/HoverProcessor';
@@ -16,7 +16,7 @@ export class BscPlugin implements CompilerPlugin {
         new CodeActionsProcessor(event).process();
     }
 
-    public onGetHover(event: OnGetHoverEvent) {
+    public provideHover(event: ProvideHoverEvent) {
         return new HoverProcessor(event).process();
     }
 

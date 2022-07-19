@@ -2,14 +2,14 @@ import type { Hover } from 'vscode-languageserver-types';
 import { isBrsFile, isFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
-import type { Callable, OnGetHoverEvent } from '../../interfaces';
+import type { Callable, ProvideHoverEvent } from '../../interfaces';
 import type { Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import util from '../../util';
 
 export class HoverProcessor {
     public constructor(
-        public event: OnGetHoverEvent
+        public event: ProvideHoverEvent
     ) {
 
     }

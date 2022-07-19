@@ -201,7 +201,20 @@ export interface CompilerPlugin {
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
-    onGetHover?: PluginHandler<OnGetHoverEvent, void | boolean>;
+
+    /**
+     * Called before the `provideHover` hook. Use this if you need to prepare any of the in-memory objects before the `provideHover` gets called
+     */
+    beforeProvideHover?: PluginHandler<BeforeProvideHoverEvent>;
+    /**
+     * Called when bsc looks for hover information. Use this if your plugin wants to contribute hover information.
+     */
+    provideHover?: PluginHandler<ProvideHoverEvent>;
+    /**
+     * Called after the `provideHover` hook. Use this if you want to intercept or sanitize the hover data (even from other plugins) before it gets sent to the client.
+     */
+    afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
+
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;
@@ -241,13 +254,16 @@ export interface OnGetCodeActionsEvent {
     codeActions: CodeAction[];
 }
 
-export interface OnGetHoverEvent {
+export interface ProvideHoverEvent {
     program: Program;
     file: BscFile;
     position: Position;
     scopes: Scope[];
     hover: Hover;
 }
+export type BeforeProvideHoverEvent = ProvideHoverEvent;
+export type AfterProvideHoverEvent = ProvideHoverEvent;
+
 export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
     /**
      * The program this file is from

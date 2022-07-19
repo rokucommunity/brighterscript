@@ -21,7 +21,7 @@ describe('HoverProcessor', () => {
         const mock = sinon.mock();
         program.plugins.add({
             name: 'test-plugin',
-            onGetHover: mock
+            provideHover: mock
         });
         const file = program.setFile('source/main.brs', `
             sub main()
