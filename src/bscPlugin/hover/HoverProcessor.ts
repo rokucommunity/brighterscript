@@ -25,7 +25,7 @@ export class HoverProcessor {
         //if we got a result, "return" it
         if (hover) {
             //assign the hover to the event
-            this.event.hover = hover;
+            this.event.hovers.push(hover);
         }
     }
 

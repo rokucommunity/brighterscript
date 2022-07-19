@@ -45,12 +45,12 @@ describe('HoverProcessor', () => {
             `);
 
             //hover over the `name = 1` line
-            let hover = program.getHover(file.pathAbsolute, util.createPosition(2, 24));
+            let hover = program.getHover(file.pathAbsolute, util.createPosition(2, 24))[0];
             expect(hover).to.exist;
             expect(hover.range).to.eql(util.createRange(2, 20, 2, 24));
 
             //hover over the `name` parameter declaration
-            hover = program.getHover(file.pathAbsolute, util.createPosition(1, 34));
+            hover = program.getHover(file.pathAbsolute, util.createPosition(1, 34))[0];
             expect(hover).to.exist;
             expect(hover.range).to.eql(util.createRange(1, 32, 1, 36));
         });
@@ -64,9 +64,9 @@ describe('HoverProcessor', () => {
                 end sub
             `);
             //hover over the `as`
-            expect(program.getHover(file.pathAbsolute, util.createPosition(1, 31))).not.to.exist;
+            expect(program.getHover(file.pathAbsolute, util.createPosition(1, 31))).to.be.empty;
             //hover over the `string`
-            expect(program.getHover(file.pathAbsolute, util.createPosition(1, 36))).not.to.exist;
+            expect(program.getHover(file.pathAbsolute, util.createPosition(1, 36))).to.be.empty;
         });
 
         it('finds declared function', () => {
@@ -78,7 +78,7 @@ describe('HoverProcessor', () => {
                 end function
             `);
 
-            let hover = program.getHover(file.pathAbsolute, util.createPosition(1, 28));
+            let hover = program.getHover(file.pathAbsolute, util.createPosition(1, 28))[0];
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(util.createRange(1, 25, 1, 29));
@@ -95,7 +95,7 @@ describe('HoverProcessor', () => {
                 end sub
             `);
 
-            let hover = program.getHover(file.pathAbsolute, util.createPosition(5, 24));
+            let hover = program.getHover(file.pathAbsolute, util.createPosition(5, 24))[0];
 
             expect(hover.range).to.eql(util.createRange(5, 20, 5, 29));
             expect(hover.contents).to.eql(fence('sub sayMyName(name as string) as void'));
@@ -112,7 +112,7 @@ describe('HoverProcessor', () => {
                 end sub
             `);
 
-            let hover = program.getHover(file.pathAbsolute, util.createPosition(2, 25));
+            let hover = program.getHover(file.pathAbsolute, util.createPosition(2, 25))[0];
 
             expect(hover.range).to.eql(util.createRange(2, 20, 2, 29));
             expect(hover.contents).to.eql(fence('sub sayMyName() as void'));
@@ -136,7 +136,7 @@ describe('HoverProcessor', () => {
                 end sub
             `);
 
-            let hover = program.getHover(mainFile.pathAbsolute, util.createPosition(2, 25));
+            let hover = program.getHover(mainFile.pathAbsolute, util.createPosition(2, 25))[0];
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(util.createRange(2, 20, 2, 29));

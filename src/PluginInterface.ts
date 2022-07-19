@@ -21,14 +21,9 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
         for (let plugin of this.plugins) {
             if ((plugin as any)[event]) {
                 try {
-                    const returnValue = this.logger.time(LogLevel.debug, [plugin.name, event], () => {
-                        return (plugin as any)[event](...args);
+                    this.logger.time(LogLevel.debug, [plugin.name, event], () => {
+                        (plugin as any)[event](...args);
                     });
-
-                    //plugins can short-circuit the event by returning `false`
-                    if (returnValue === false) {
-                        return;
-                    }
                 } catch (err) {
                     this.logger.error(`Error when calling plugin ${plugin.name}.${event}:`, err);
                 }

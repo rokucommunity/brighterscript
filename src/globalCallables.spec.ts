@@ -63,7 +63,7 @@ describe('globalCallables', () => {
         program.validate();
         const hover = program.getHover(file.srcPath, util.createPosition(2, 25));
         expect(
-            hover.contents.toString().replace('\r\n', '\n')
+            hover[0].contents.toString().replace('\r\n', '\n')
         ).to.eql([
             '```brightscript',
             'function Mid(s as string, p as integer, n? as integer) as string',

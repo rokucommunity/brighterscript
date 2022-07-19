@@ -259,7 +259,7 @@ export interface ProvideHoverEvent {
     file: BscFile;
     position: Position;
     scopes: Scope[];
-    hover: Hover;
+    hovers: Hover[];
 }
 export type BeforeProvideHoverEvent = ProvideHoverEvent;
 export type AfterProvideHoverEvent = ProvideHoverEvent;

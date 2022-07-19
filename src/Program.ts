@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, Hover } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
@@ -914,7 +914,7 @@ export class Program {
     /**
      * Get hover information for a file and position
      */
-    public getHover(srcPath: string, position: Position) {
+    public getHover(srcPath: string, position: Position): Hover[] {
         let file = this.getFile(srcPath);
         if (file) {
             const event = {
@@ -922,10 +922,12 @@ export class Program {
                 file: file,
                 position: position,
                 scopes: this.getScopesForFile(file),
-                hover: null
+                hovers: []
             } as ProvideHoverEvent;
+            this.plugins.emit('beforeProvideHover', event);
             this.plugins.emit('provideHover', event);
-            return event.hover;
+            this.plugins.emit('afterProvideHover', event);
+            return event.hovers;
         }
     }
 
