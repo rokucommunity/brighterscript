@@ -10,13 +10,13 @@ export interface Token {
     /** The text found in the original BrightScript source, if any. */
     text: string;
     /** True if this token's `text` is a reserved word, otherwise `false`. */
-    isReserved: boolean;
+    isReserved?: boolean;
     /** Where the token was found. */
     range: Range;
     /**
      * Any leading whitespace found prior to this token. Excludes newline characters.
      */
-    leadingWhitespace: string;
+    leadingWhitespace?: string;
 }
 
 /**

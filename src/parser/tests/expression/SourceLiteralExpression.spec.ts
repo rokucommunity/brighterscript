@@ -37,7 +37,7 @@ describe('SourceLiteralExpression', () => {
                     print pkg_path
                     print pkg_location
                 end sub
-            `, undefined, 'none', 'source/main.brs');
+            `, undefined, undefined, 'source/main.brs');
         });
 
         it('computes SOURCE_FILE_PATH', () => {
@@ -47,7 +47,7 @@ describe('SourceLiteralExpression', () => {
                 end sub
             `, `
                 sub main()
-                    print "${fileUrl(`${rootDir}/source/main.bs`)}"
+                    print "${fileUrl(`${rootDir}/source/main.bs`).substring(0, 4)}" + "${fileUrl(`${rootDir}/source/main.bs`).substring(4)}"
                 end sub
             `, undefined, 'source/main.bs');
         });
@@ -139,7 +139,7 @@ describe('SourceLiteralExpression', () => {
                 end sub
             `, `
                 sub main()
-                    print "${fileUrl(`${rootDir}/source/main.bs`)}:3"
+                    print "${fileUrl(`${rootDir}/source/main.bs`).substring(0, 4)}" + "${fileUrl(`${rootDir}/source/main.bs`).substring(4)}:3"
                 end sub
             `, undefined, 'source/main.bs');
         });
@@ -188,7 +188,7 @@ describe('SourceLiteralExpression', () => {
                 end sub
             `, `
                 sub main()
-                    print "${fileUrl(s`${sourceRoot}/source/main.bs`)}"
+                    print "${fileUrl(s`${sourceRoot}/source/main.bs`).substring(0, 4)}" + "${fileUrl(s`${sourceRoot}/source/main.bs`).substring(4)}"
                 end sub
             `, undefined, 'source/main.bs');
         });
@@ -205,7 +205,7 @@ describe('SourceLiteralExpression', () => {
                 end sub
             `, `
                 sub main()
-                    print "${fileUrl(`${sourceRoot}/source/main.bs`)}:3"
+                    print "${fileUrl(s`${sourceRoot}/source/main.bs`).substring(0, 4)}" + "${fileUrl(s`${sourceRoot}/source/main.bs`).substring(4)}:3"
                 end sub
             `, undefined, 'source/main.bs');
         });

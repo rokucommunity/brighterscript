@@ -5,6 +5,7 @@ import { createSandbox } from 'sinon';
 let sinon = createSandbox();
 
 let rootDir = s`${process.cwd()}/.tmp/rootDir`;
+const fence = (code: string) => util.mdFence(code, 'brightscript');
 
 describe('HoverProcessor', () => {
     let program: Program;
@@ -22,7 +23,7 @@ describe('HoverProcessor', () => {
             name: 'test-plugin',
             onGetHover: mock
         });
-        const file = program.addOrReplaceFile('source/main.brs', `
+        const file = program.setFile('source/main.brs', `
             sub main()
             end sub
         `);
@@ -35,7 +36,7 @@ describe('HoverProcessor', () => {
 
     describe('BrsFile', () => {
         it('works for param types', () => {
-            const file = program.addOrReplaceFile('source/main.brs', `
+            const file = program.setFile('source/main.brs', `
                 sub DoSomething(name as string)
                     name = 1
                     sayMyName = function(name as string)
@@ -56,7 +57,7 @@ describe('HoverProcessor', () => {
 
         //ignore this for now...it's not a huge deal
         it('does not match on keywords or data types', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
                 end sub
                 sub as()
@@ -69,7 +70,7 @@ describe('HoverProcessor', () => {
         });
 
         it('finds declared function', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 function Main(count = 1)
                     firstName = "bob"
                     age = 21
@@ -81,14 +82,11 @@ describe('HoverProcessor', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(util.createRange(1, 25, 1, 29));
-            expect(hover.contents).to.eql({
-                language: 'brighterscript',
-                value: 'function Main(count? as dynamic) as dynamic'
-            });
+            expect(hover.contents).to.eql(fence('function Main(count? as dynamic) as dynamic'));
         });
 
         it('finds variable function hover in same scope', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     sayMyName = sub(name as string)
                     end sub
@@ -100,14 +98,11 @@ describe('HoverProcessor', () => {
             let hover = program.getHover(file.pathAbsolute, util.createPosition(5, 24));
 
             expect(hover.range).to.eql(util.createRange(5, 20, 5, 29));
-            expect(hover.contents).to.eql({
-                language: 'brighterscript',
-                value: 'sub sayMyName(name as string) as void'
-            });
+            expect(hover.contents).to.eql(fence('sub sayMyName(name as string) as void'));
         });
 
         it('finds function hover in file scope', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     sayMyName()
                 end sub
@@ -120,10 +115,7 @@ describe('HoverProcessor', () => {
             let hover = program.getHover(file.pathAbsolute, util.createPosition(2, 25));
 
             expect(hover.range).to.eql(util.createRange(2, 20, 2, 29));
-            expect(hover.contents).to.eql({
-                language: 'brighterscript',
-                value: 'sub sayMyName() as void'
-            });
+            expect(hover.contents).to.eql(fence('sub sayMyName() as void'));
         });
 
         it('finds function hover in scope', () => {
@@ -132,13 +124,13 @@ describe('HoverProcessor', () => {
                 rootDir: rootDir
             });
 
-            let mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     sayMyName()
                 end sub
             `);
 
-            program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+            program.setFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub sayMyName(name as string)
 
                 end sub
@@ -148,10 +140,7 @@ describe('HoverProcessor', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(util.createRange(2, 20, 2, 29));
-            expect(hover.contents).to.eql({
-                language: 'brighterscript',
-                value: 'sub sayMyName(name as string) as void'
-            });
+            expect(hover.contents).to.eql(fence('sub sayMyName(name as string) as void'));
         });
     });
 });

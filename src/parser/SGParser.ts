@@ -189,7 +189,7 @@ function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SG
     const content = children.content?.[0];
     switch (name.text) {
         case 'component':
-            const componentContent = mapElements(content, ['interface', 'script', 'children'], diagnostics);
+            const componentContent = mapElements(content, ['interface', 'script', 'children', 'customization'], diagnostics);
             return new SGComponent(name, attributes, componentContent, range);
         case 'interface':
             const interfaceContent = mapElements(content, ['field', 'function'], diagnostics);
@@ -305,9 +305,27 @@ function mapAttributes(attributes: AttributeCstNode[]): SGAttribute[] {
     return attributes?.map(({ children }) => {
         const key = children.Name[0];
         const value = children.STRING?.[0];
+
+        let openQuote: SGToken;
+        let closeQuote: SGToken;
+        //capture the leading and trailing quote tokens
+        const match = /^(["']).*?(["'])$/.exec(value?.image);
+        if (match) {
+            const range = rangeFromTokenValue(value);
+            openQuote = {
+                text: match[1],
+                range: util.createRange(range.start.line, range.start.character, range.start.line, range.start.character + 1)
+            };
+            closeQuote = {
+                text: match[1],
+                range: util.createRange(range.end.line, range.end.character - 1, range.end.line, range.end.character)
+            };
+        }
         return {
             key: mapToken(key),
+            openQuote: openQuote,
             value: mapToken(value, true),
+            closeQuote: closeQuote,
             range: rangeFromTokens(key, value)
         };
     }) || [];

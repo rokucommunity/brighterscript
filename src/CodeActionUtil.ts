@@ -1,5 +1,5 @@
-import type { CodeActionKind, Diagnostic, Position, Range, WorkspaceEdit } from 'vscode-languageserver';
-import { CodeAction, TextEdit } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range, WorkspaceEdit } from 'vscode-languageserver';
+import { CodeActionKind, CodeAction, TextEdit } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 
 export class CodeActionUtil {
@@ -20,12 +20,30 @@ export class CodeActionUtil {
                     TextEdit.insert(change.position, change.newText)
                 );
             } else if (change.type === 'replace') {
-                TextEdit.replace(change.range, change.newText);
+                edit.changes[uri].push(
+                    TextEdit.replace(change.range, change.newText)
+                );
             }
         }
-        return CodeAction.create(obj.title, edit);
+        const action = CodeAction.create(obj.title, edit, obj.kind);
+        action.isPreferred = obj.isPreferred;
+        action.diagnostics = this.serializableDiagnostics(obj.diagnostics);
+        return action;
+    }
+
+    public serializableDiagnostics(diagnostics: Diagnostic[]) {
+        return diagnostics?.map(({ range, severity, code, source, message, relatedInformation }) => ({
+            range: range,
+            severity: severity,
+            source: source,
+            code: code,
+            message: message,
+            relatedInformation: relatedInformation
+        }));
     }
 }
+
+export { CodeActionKind };
 
 export interface CodeActionShorthand {
     title: string;

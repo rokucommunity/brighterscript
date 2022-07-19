@@ -1,5 +1,5 @@
 /* eslint-disable func-names */
-import { TokenKind, ReservedWords, Keywords } from './TokenKind';
+import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes } from './TokenKind';
 import type { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
 import type { Range, Diagnostic } from 'vscode-languageserver';
@@ -83,7 +83,7 @@ export class Lexer {
      * @param options options used to customize the scan process
      * @returns an object containing an array of `errors` and an array of `tokens` to be passed to a parser.
      */
-    public scan(toScan: string, options?: ScanOptions): Lexer {
+    public scan(toScan: string, options?: ScanOptions): this {
         this.source = toScan;
         this.options = this.sanitizeOptions(options);
         this.start = 0;
@@ -199,14 +199,17 @@ export class Lexer {
             }
         },
         '/': function (this: Lexer) {
-            switch (this.peek()) {
-                case '=':
-                    this.advance();
-                    this.addToken(TokenKind.ForwardslashEqual);
-                    break;
-                default:
-                    this.addToken(TokenKind.Forwardslash);
-                    break;
+            //try capturing a regex literal. If that doesn't work, fall back to normal handling
+            if (!this.regexLiteral()) {
+                switch (this.peek()) {
+                    case '=':
+                        this.advance();
+                        this.addToken(TokenKind.ForwardslashEqual);
+                        break;
+                    default:
+                        this.addToken(TokenKind.Forwardslash);
+                        break;
+                }
             }
         },
         '\\': function (this: Lexer) {
@@ -274,11 +277,44 @@ export class Lexer {
             if (this.peek() === '?') {
                 this.advance();
                 this.addToken(TokenKind.QuestionQuestion);
+            } else if (this.peek() === '.') {
+                this.advance();
+                this.addToken(TokenKind.QuestionDot);
+            } else if (this.peek() === '[' && !this.isStartOfStatement()) {
+                this.advance();
+                this.addToken(TokenKind.QuestionLeftSquare);
+            } else if (this.peek() === '(' && !this.isStartOfStatement()) {
+                this.advance();
+                this.addToken(TokenKind.QuestionLeftParen);
+            } else if (this.peek() === '@') {
+                this.advance();
+                this.addToken(TokenKind.QuestionAt);
             } else {
                 this.addToken(TokenKind.Question);
             }
         }
     };
+
+    /**
+     * Determine if the current position is at the beginning of a statement.
+     * This means the token to the left, excluding whitespace, is either a newline or a colon
+     */
+    private isStartOfStatement() {
+        for (let i = this.tokens.length - 1; i >= 0; i--) {
+            const token = this.tokens[i];
+            //skip whitespace
+            if (token.kind === TokenKind.Whitespace) {
+                continue;
+            }
+            if (token.kind === TokenKind.Newline || token.kind === TokenKind.Colon) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+        //if we got here, there were no tokens or only whitespace, so it's the start of the file
+        return true;
+    }
 
     /**
      * Map for looking up token kinds based solely on a single character.
@@ -382,6 +418,19 @@ export class Lexer {
     private advance(): void {
         this.current++;
         this.columnEnd++;
+    }
+
+    private lookaheadStack = [] as Array<{ current: number; columnEnd: number }>;
+    private pushLookahead() {
+        this.lookaheadStack.push({
+            current: this.current,
+            columnEnd: this.columnEnd
+        });
+    }
+    private popLookahead() {
+        const { current, columnEnd } = this.lookaheadStack.pop();
+        this.current = current;
+        this.columnEnd = columnEnd;
     }
 
     /**
@@ -925,6 +974,64 @@ export class Lexer {
                     range: this.rangeOf()
                 });
         }
+    }
+
+    /**
+     * Find the closest previous non-whtespace token
+     */
+    private getPreviousNonWhitespaceToken() {
+        for (let i = this.tokens.length - 1; i >= 0; i--) {
+            let token = this.tokens[i];
+            if (token && token.kind !== TokenKind.Whitespace) {
+                return this.tokens[i];
+            }
+        }
+    }
+
+    /**
+     * Capture a regex literal token. Returns false if not found.
+     * This is lookahead lexing which might techincally belong in the parser,
+     * but it's easy enough to do here in the lexer
+     */
+    private regexLiteral() {
+        this.pushLookahead();
+
+        let nextCharNeedsEscaped = false;
+
+        //regexps can only occur when preceeded by exactly one of these tokens:
+        const previousKind = this.getPreviousNonWhitespaceToken()?.kind;
+
+        //preceeded by an allowed token, or if there are no previous tokens (i.e. this is the first token in the file).
+        if (PreceedingRegexTypes.has(previousKind) || !previousKind) {
+
+            //finite loop to prevent infinite loop if something went wrong
+            for (let i = this.current; i < this.source.length; i++) {
+
+                //if we reached the end of the regex, consume any flags
+                if (this.check('/') && !nextCharNeedsEscaped) {
+                    this.advance();
+                    //consume all flag-like chars (let the parser validate the actual values)
+                    while (/[a-z]/i.exec(this.peek())) {
+                        this.advance();
+                    }
+                    //finalize the regex literal and EXIT
+                    this.addToken(TokenKind.RegexLiteral);
+                    return true;
+
+                    //if we found a non-escaped newline, there's a syntax error with this regex (or it's not a regex), so quit
+                } else if (this.check('\n') || this.isAtEnd()) {
+                    break;
+                } else if (this.check('\\')) {
+                    this.advance();
+                    nextCharNeedsEscaped = true;
+                } else {
+                    this.advance();
+                    nextCharNeedsEscaped = false;
+                }
+            }
+        }
+        this.popLookahead();
+        return false;
     }
 
     /**

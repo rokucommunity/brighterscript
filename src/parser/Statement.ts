@@ -1,19 +1,23 @@
 /* eslint-disable no-bitwise */
-import type { Token, Identifier } from '../lexer';
-import { CompoundAssignmentOperators, TokenKind } from '../lexer';
-import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, AnnotationExpression } from './Expression';
+import type { Token, Identifier } from '../lexer/Token';
+import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
+import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, AnnotationExpression, FunctionParameterExpression, LiteralExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
 import { Position } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
-import { ParseMode, Parser } from './Parser';
+import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
-import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInvalidType, isLiteralExpression, isVoidType } from '../astUtils/reflection';
+import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
+import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isTypedefProvider, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
-import { createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
+import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
+import type { BscType } from '../types/BscType';
+import type { SourceNode } from 'source-map';
+import type { TranspileState } from './TranspileState';
+import { SymbolTable } from '../SymbolTable';
 
 /**
  * A BrightScript statement
@@ -112,10 +116,10 @@ export class Body extends Statement implements TypedefProvider {
         let result = [];
         for (const statement of this.statements) {
             //if the current statement supports generating typedef, call it
-            if ('getTypedef' in statement) {
+            if (isTypedefProvider(statement)) {
                 result.push(
                     state.indent(),
-                    ...(statement as TypedefProvider).getTypedef(state),
+                    ...statement.getTypedef(state),
                     state.newline
                 );
             }
@@ -125,9 +129,7 @@ export class Body extends Statement implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            for (let i = 0; i < this.statements.length; i++) {
-                walk(this.statements, i, visitor, options, this);
-            }
+            walkArray(this.statements, visitor, options, this);
         }
     }
 }
@@ -218,9 +220,7 @@ export class Block extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            for (let i = 0; i < this.statements.length; i++) {
-                walk(this.statements, i, visitor, options, this);
-            }
+            walkArray(this.statements, visitor, options, this);
         }
     }
 }
@@ -285,8 +285,8 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
         return result;
     }
 
-    public getTypedef(state: BrsTranspileState) {
-        return this.transpile(state);
+    public getTypedef(state: TranspileState) {
+        return this.transpile(state as BrsTranspileState);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -428,14 +428,12 @@ export class IfStatement extends Statement {
         results.push(' ');
         //conditions
         results.push(...this.condition.transpile(state));
-        results.push(' ');
         //then
         if (this.tokens.then) {
+            results.push(' ');
             results.push(
                 state.transpileToken(this.tokens.then)
             );
-        } else {
-            results.push('then');
         }
         state.lineage.unshift(this);
 
@@ -464,7 +462,8 @@ export class IfStatement extends Statement {
                 state.lineage.shift();
 
                 if (body.length > 0) {
-                    results.push(' ');
+                    //zero or more spaces between the `else` and the `if`
+                    results.push(this.elseBranch.tokens.if.leadingWhitespace);
                     results.push(...body);
 
                     // stop here because chained if will transpile the rest
@@ -596,12 +595,8 @@ export class PrintStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            for (let i = 0; i < this.expressions.length; i++) {
-                //sometimes we have semicolon `Token`s in the expressions list (should probably fix that...), so only emit the actual expressions
-                if (isExpression(this.expressions[i] as any)) {
-                    walk(this.expressions, i, visitor, options, this);
-                }
-            }
+            //sometimes we have semicolon Tokens in the expressions list (should probably fix that...), so only walk the actual expressions
+            walkArray(this.expressions, visitor, options, this, (item) => isExpression(item as any));
         }
     }
 }
@@ -643,9 +638,8 @@ export class DimStatement extends Statement {
 
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (this.dimensions?.length > 0 && options.walkMode & InternalWalkMode.walkExpressions) {
-            for (let i = 0; i < this.dimensions.length; i++) {
-                walk(this.dimensions, i, visitor, options, this);
-            }
+            walkArray(this.dimensions, visitor, options, this);
+
         }
     }
 }
@@ -833,9 +827,10 @@ export class ForStatement extends Statement {
         state.lineage.unshift(this);
         result.push(...this.body.transpile(state));
         state.lineage.shift();
-        if (this.body.statements.length > 0) {
-            result.push('\n');
-        }
+
+        // add new line before "end for"
+        result.push('\n');
+
         //end for
         result.push(
             state.indent(),
@@ -900,9 +895,10 @@ export class ForEachStatement extends Statement {
         state.lineage.unshift(this);
         result.push(...this.body.transpile(state));
         state.lineage.shift();
-        if (this.body.statements.length > 0) {
-            result.push('\n');
-        }
+
+        // add new line before "end for"
+        result.push('\n');
+
         //end for
         result.push(
             state.indent(),
@@ -1104,11 +1100,15 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
         public nameExpression: NamespacedVariableNameExpression,
         public body: Body,
-        public endKeyword: Token
+        public endKeyword: Token,
+        readonly parentSymbolTable?: SymbolTable
     ) {
         super();
         this.name = this.nameExpression.getName(ParseMode.BrighterScript);
+        this.symbolTable = new SymbolTable(parentSymbolTable);
     }
+
+    public symbolTable: SymbolTable;
 
     /**
      * The string name for this namespace
@@ -1116,10 +1116,20 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     public name: string;
 
     public get range() {
-        return util.createRangeFromPositions(
-            this.keyword.range.start,
-            (this.endKeyword ?? this.body ?? this.nameExpression ?? this.keyword).range.end
-        );
+        return this.cacheRange();
+    }
+    private _range: Range;
+
+    public cacheRange() {
+        if (!this._range) {
+            this._range = util.createBoundingRange(
+                this.keyword,
+                this.nameExpression,
+                this.body,
+                this.endKeyword
+            ) ?? interpolatedRange;
+        }
+        return this._range;
     }
 
     public getName(parseMode: ParseMode) {
@@ -1213,6 +1223,305 @@ export class ImportStatement extends Statement implements TypedefProvider {
     }
 }
 
+export class InterfaceStatement extends Statement implements TypedefProvider {
+    constructor(
+        interfaceToken: Token,
+        name: Identifier,
+        extendsToken: Token,
+        public parentInterfaceName: NamespacedVariableNameExpression,
+        public body: Statement[],
+        endInterfaceToken: Token,
+        public namespaceName: NamespacedVariableNameExpression
+    ) {
+        super();
+        this.tokens.interface = interfaceToken;
+        this.tokens.name = name;
+        this.tokens.extends = extendsToken;
+        this.tokens.endInterface = endInterfaceToken;
+        this.range = util.createBoundingRange(
+            this.tokens.interface,
+            this.tokens.name,
+            this.tokens.extends,
+            this.parentInterfaceName,
+            ...this.body,
+            this.tokens.endInterface
+        );
+    }
+
+    public tokens = {} as {
+        interface: Token;
+        name: Identifier;
+        extends: Token;
+        endInterface: Token;
+    };
+
+    public range: Range;
+
+    public get fields() {
+        return this.body.filter(x => isInterfaceFieldStatement(x));
+    }
+
+    public get methods() {
+        return this.body.filter(x => isInterfaceMethodStatement(x));
+    }
+
+    /**
+     * The name of the interface WITH its leading namespace (if applicable)
+     */
+    public get fullName() {
+        const name = this.tokens.name?.text;
+        if (name) {
+            if (this.namespaceName) {
+                let namespaceName = this.namespaceName.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this interface doesn't have a name
+            return undefined;
+        }
+    }
+
+    /**
+     * The name of the interface (without the namespace prefix)
+     */
+    public get name() {
+        return this.tokens.name?.text;
+    }
+
+    /**
+     * Get the name of this expression based on the parse mode
+     */
+    public getName(parseMode: ParseMode) {
+        if (this.namespaceName) {
+            let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
+            let namespaceName = this.namespaceName.getName(parseMode);
+            return namespaceName + delimiter + this.name;
+        } else {
+            return this.name;
+        }
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        //interfaces should completely disappear at runtime
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
+            this.tokens.interface.text,
+            ' ',
+            this.tokens.name.text
+        );
+        const parentInterfaceName = this.parentInterfaceName?.getName(ParseMode.BrighterScript);
+        if (parentInterfaceName) {
+            result.push(
+                ' extends ',
+                parentInterfaceName
+            );
+        }
+        const body = this.body ?? [];
+        if (body.length > 0) {
+            state.blockDepth++;
+        }
+        for (const statement of body) {
+            if (isInterfaceMethodStatement(statement) || isInterfaceFieldStatement(statement)) {
+                result.push(
+                    state.newline,
+                    state.indent(),
+                    ...statement.getTypedef(state)
+                );
+            } else {
+                result.push(
+                    state.newline,
+                    state.indent(),
+                    ...statement.transpile(state)
+                );
+            }
+        }
+        if (body.length > 0) {
+            state.blockDepth--;
+        }
+        result.push(
+            state.newline,
+            state.indent(),
+            'end interface',
+            state.newline
+        );
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            walkArray(this.body, visitor, options, this);
+
+        }
+    }
+}
+
+export class InterfaceFieldStatement extends Statement implements TypedefProvider {
+    public transpile(state: BrsTranspileState): TranspileResult {
+        throw new Error('Method not implemented.');
+    }
+    constructor(
+        nameToken: Identifier,
+        asToken: Token,
+        typeToken: Token,
+        public type: BscType
+    ) {
+        super();
+        this.tokens.name = nameToken;
+        this.tokens.as = asToken;
+        this.tokens.type = typeToken;
+    }
+    public get range() {
+        return util.createRangeFromPositions(
+            this.tokens.name.range.start,
+            (this.tokens.type ?? this.tokens.as ?? this.tokens.name).range.end
+        );
+    }
+
+    public tokens = {} as {
+        name: Identifier;
+        as: Token;
+        type: Token;
+    };
+
+    public get name() {
+        return this.tokens.name.text;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
+        const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+
+        result.push(
+            this.tokens.name.text
+        );
+        if (this.tokens.type?.text?.length > 0) {
+            result.push(
+                ' as ',
+                this.tokens.type.text
+            );
+        }
+        return result;
+    }
+
+}
+
+export class InterfaceMethodStatement extends Statement implements TypedefProvider {
+    public transpile(state: BrsTranspileState): TranspileResult {
+        throw new Error('Method not implemented.');
+    }
+    constructor(
+        functionTypeToken: Token,
+        nameToken: Identifier,
+        leftParen: Token,
+        public params: FunctionParameterExpression[],
+        rightParen: Token,
+        asToken?: Token,
+        returnTypeToken?: Token,
+        public returnType?: BscType
+    ) {
+        super();
+        this.tokens.functionType = functionTypeToken;
+        this.tokens.name = nameToken;
+        this.tokens.leftParen = leftParen;
+        this.tokens.rightParen = rightParen;
+        this.tokens.as = asToken;
+        this.tokens.returnType = returnTypeToken;
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            this.tokens.name.range.start,
+            (
+                this.tokens.returnType ??
+                this.tokens.as ??
+                this.tokens.rightParen ??
+                this.params?.[this.params?.length - 1] ??
+                this.tokens.leftParen ??
+                this.tokens.name ??
+                this.tokens.functionType
+            ).range.end
+        );
+    }
+
+    public tokens = {} as {
+        functionType: Token;
+        name: Identifier;
+        leftParen: Token;
+        rightParen: Token;
+        as: Token;
+        returnType: Token;
+    };
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+
+        result.push(
+            this.tokens.functionType.text,
+            ' ',
+            this.tokens.name.text,
+            '('
+        );
+        const params = this.params ?? [];
+        for (let i = 0; i < params.length; i++) {
+            if (i > 0) {
+                result.push(', ');
+            }
+            const param = params[i];
+            result.push(param.name.text);
+            if (param.typeToken?.text?.length > 0) {
+                result.push(
+                    ' as ',
+                    param.typeToken.text
+                );
+            }
+        }
+        result.push(
+            ')'
+        );
+        if (this.tokens.returnType?.text.length > 0) {
+            result.push(
+                ' as ',
+                this.tokens.returnType.text
+            );
+        }
+        return result;
+    }
+}
+
 export class ClassStatement extends Statement implements TypedefProvider {
 
     constructor(
@@ -1229,11 +1538,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
     ) {
         super();
         this.body = this.body ?? [];
+
         for (let statement of this.body) {
-            if (isClassMethodStatement(statement)) {
+            if (isMethodStatement(statement)) {
                 this.methods.push(statement);
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
-            } else if (isClassFieldStatement(statement)) {
+            } else if (isFieldStatement(statement)) {
                 this.fields.push(statement);
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
             }
@@ -1258,10 +1568,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }
     }
 
-    public memberMap = {} as Record<string, ClassMemberStatement>;
-    public methods = [] as ClassMethodStatement[];
-    public fields = [] as ClassFieldStatement[];
-
+    public memberMap = {} as Record<string, MemberStatement>;
+    public methods = [] as MethodStatement[];
+    public fields = [] as FieldStatement[];
 
     public readonly range: Range;
 
@@ -1302,11 +1611,21 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }
         result.push(state.newline);
         state.blockDepth++;
-        for (const member of this.body) {
-            if ('getTypedef' in member) {
+
+        let body = this.body;
+        //inject an empty "new" method if missing
+        if (!this.getConstructorFunction()) {
+            body = [
+                createMethodStatement('new', TokenKind.Sub),
+                ...this.body
+            ];
+        }
+
+        for (const member of body) {
+            if (isTypedefProvider(member)) {
                 result.push(
                     state.indent(),
-                    ...(member as TypedefProvider).getTypedef(state),
+                    ...member.getTypedef(state),
                     state.newline
                 );
             }
@@ -1339,7 +1658,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 break;
             }
         }
-        return myIndex - 1;
+        const result = myIndex - 1;
+        if (result >= 0) {
+            return result;
+        } else {
+            return null;
+        }
     }
 
     public hasParentClass() {
@@ -1378,22 +1702,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * Get the constructor function for this class (if exists), or undefined if not exist
      */
     private getConstructorFunction() {
-        for (let key in this.memberMap) {
-            let member = this.memberMap[key];
-            if (member.name?.text?.toLowerCase() === 'new') {
-                return member as ClassMethodStatement;
-            }
-        }
-    }
-    private getEmptyNewFunction() {
-        let stmt = (Parser.parse(`
-            class UtilClass
-                sub new()
-                end sub
-            end class
-        `, { mode: ParseMode.BrighterScript }).statements[0] as ClassStatement).memberMap.new as ClassMethodStatement;
-        //TODO make locations point to 0,0 (might not matter?)
-        return stmt;
+        return this.body.find((stmt) => {
+            return (stmt as MethodStatement)?.name?.text?.toLowerCase() === 'new';
+        }) as MethodStatement;
     }
 
     /**
@@ -1445,20 +1756,23 @@ export class ClassStatement extends Statement implements TypedefProvider {
         );
         let parentClassIndex = this.getParentClassIndex(state);
 
-        //create empty `new` function if class is missing it (simplifies transpile logic)
+        let body = this.body;
+        //inject an empty "new" method if missing
         if (!this.getConstructorFunction()) {
-            this.memberMap.new = this.getEmptyNewFunction();
-            this.body = [this.memberMap.new, ...this.body];
+            body = [
+                createMethodStatement('new', TokenKind.Sub),
+                ...this.body
+            ];
         }
 
-        for (let statement of this.body) {
+        for (let statement of body) {
             //is field statement
-            if (isClassFieldStatement(statement)) {
+            if (isFieldStatement(statement)) {
                 //do nothing with class fields in this situation, they are handled elsewhere
                 continue;
 
                 //methods
-            } else if (isClassMethodStatement(statement)) {
+            } else if (isMethodStatement(statement)) {
 
                 //store overridden parent methods as super{parentIndex}_{methodName}
                 if (
@@ -1566,25 +1880,41 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            for (let i = 0; i < this.body.length; i++) {
-                walk(this.body, i, visitor, options, this);
-            }
+            walkArray(this.body, visitor, options, this);
         }
     }
 }
 
-export class ClassMethodStatement extends FunctionStatement {
+const accessModifiers = [
+    TokenKind.Public,
+    TokenKind.Protected,
+    TokenKind.Private
+];
+export class MethodStatement extends FunctionStatement {
     constructor(
-        readonly accessModifier: Token,
+        modifiers: Token | Token[],
         name: Identifier,
         func: FunctionExpression,
-        readonly override: Token
+        public override: Token
     ) {
         super(name, func, undefined);
+        if (modifiers) {
+            if (Array.isArray(modifiers)) {
+                this.modifiers.push(...modifiers);
+            } else {
+                this.modifiers.push(modifiers);
+            }
+        }
         this.range = util.createRangeFromPositions(
             (this.accessModifier ?? this.func).range.start,
             this.func.range.end
         );
+    }
+
+    public modifiers: Token[] = [];
+
+    public get accessModifier() {
+        return this.modifiers.find(x => accessModifiers.includes(x.kind));
     }
 
     public readonly range: Range;
@@ -1601,15 +1931,15 @@ export class ClassMethodStatement extends FunctionStatement {
         const visitor = createVisitor({
             VariableExpression: e => {
                 if (e.name.text.toLocaleLowerCase() === 'super') {
-                    e.name.text = `m.super${parentClassIndex}_new`;
+                    state.editor.setProperty(e.name, 'text', `m.super${parentClassIndex}_new`);
                 }
             },
             DottedGetExpression: e => {
                 const beginningVariable = util.findBeginningVariableExpression(e);
                 const lowerName = beginningVariable?.getName(ParseMode.BrighterScript).toLowerCase();
                 if (lowerName === 'super') {
-                    beginningVariable.name.text = 'm';
-                    e.name.text = `super${parentClassIndex}_${e.name.text}`;
+                    state.editor.setProperty(beginningVariable.name, 'text', 'm');
+                    state.editor.setProperty(e.name, 'text', `super${parentClassIndex}_${e.name.text}`);
                 }
             }
         });
@@ -1667,38 +1997,37 @@ export class ClassMethodStatement extends FunctionStatement {
         }
 
         //this is a child class, and the first statement isn't a call to super. Inject one
-        this.func.body.statements.unshift(
-            new ExpressionStatement(
-                new CallExpression(
-                    new VariableExpression(
-                        {
-                            kind: TokenKind.Identifier,
-                            text: 'super',
-                            isReserved: false,
-                            range: state.classStatement.name.range,
-                            leadingWhitespace: ''
-                        },
-                        null
-                    ),
+        const superCall = new ExpressionStatement(
+            new CallExpression(
+                new VariableExpression(
                     {
-                        kind: TokenKind.LeftParen,
-                        text: '(',
+                        kind: TokenKind.Identifier,
+                        text: 'super',
                         isReserved: false,
                         range: state.classStatement.name.range,
                         leadingWhitespace: ''
                     },
-                    {
-                        kind: TokenKind.RightParen,
-                        text: ')',
-                        isReserved: false,
-                        range: state.classStatement.name.range,
-                        leadingWhitespace: ''
-                    },
-                    [],
                     null
-                )
+                ),
+                {
+                    kind: TokenKind.LeftParen,
+                    text: '(',
+                    isReserved: false,
+                    range: state.classStatement.name.range,
+                    leadingWhitespace: ''
+                },
+                {
+                    kind: TokenKind.RightParen,
+                    text: ')',
+                    isReserved: false,
+                    range: state.classStatement.name.range,
+                    leadingWhitespace: ''
+                },
+                [],
+                null
             )
         );
+        state.editor.arrayUnshift(this.func.body.statements, superCall);
     }
 
     /**
@@ -1728,7 +2057,7 @@ export class ClassMethodStatement extends FunctionStatement {
                 );
             }
         }
-        this.func.body.statements.splice(startingIndex, 0, ...newStatements);
+        state.editor.arraySplice(this.func.body.statements, startingIndex, 0, ...newStatements);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1737,8 +2066,12 @@ export class ClassMethodStatement extends FunctionStatement {
         }
     }
 }
+/**
+ * @deprecated use `MethodStatement`
+ */
+export class ClassMethodStatement extends MethodStatement { }
 
-export class ClassFieldStatement extends Statement implements TypedefProvider {
+export class FieldStatement extends Statement implements TypedefProvider {
 
     constructor(
         readonly accessModifier?: Token,
@@ -1757,7 +2090,7 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
 
     /**
      * Derive a ValueKind from the type token, or the initial value.
-     * Defaults to `ValueKind.Dynamic`
+     * Defaults to `DynamicType`
      */
     getType() {
         if (this.type) {
@@ -1808,46 +2141,87 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
         }
     }
 }
-export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;
+/**
+ * @deprecated use `FieldStatement`
+ */
+export class ClassFieldStatement extends FieldStatement { }
+
+export type MemberStatement = FieldStatement | MethodStatement;
+
+/**
+ * @deprecated use `MemeberStatement`
+ */
+export type ClassMemberStatement = MemberStatement;
 
 export class TryCatchStatement extends Statement {
     constructor(
-        public tryToken: Token,
+        public tokens: {
+            try: Token;
+            endTry?: Token;
+        },
         public tryBranch?: Block,
-        public catchToken?: Token,
-        public exceptionVariable?: Identifier,
-        public catchBranch?: Block,
-        public endTryToken?: Token
+        public catchStatement?: CatchStatement
     ) {
         super();
     }
 
     public get range() {
         return util.createRangeFromPositions(
-            this.tryToken.range.start,
-            (this.endTryToken ?? this.catchBranch ?? this.exceptionVariable ?? this.catchToken ?? this.tryBranch ?? this.tryToken).range.end
+            this.tokens.try.range.start,
+            (this.tokens.endTry ?? this.catchStatement ?? this.tryBranch ?? this.tokens.try).range.end
         );
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
-            state.transpileToken(this.tryToken),
+            state.transpileToken(this.tokens.try),
             ...this.tryBranch.transpile(state),
             state.newline,
             state.indent(),
-            state.transpileToken(this.catchToken),
-            ' ',
-            state.transpileToken(this.exceptionVariable),
-            ...this.catchBranch.transpile(state),
+            ...(this.catchStatement?.transpile(state) ?? ['catch']),
             state.newline,
             state.indent(),
-            state.transpileToken(this.endTryToken)
+            state.transpileToken(this.tokens.endTry)
         ];
     }
 
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (this.tryBranch && options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'tryBranch', visitor, options);
+            walk(this, 'catchStatement', visitor, options);
+        }
+    }
+}
+
+export class CatchStatement extends Statement {
+    constructor(
+        public tokens: {
+            catch: Token;
+        },
+        public exceptionVariable?: Identifier,
+        public catchBranch?: Block
+    ) {
+        super();
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            this.tokens.catch.range.start,
+            (this.catchBranch ?? this.exceptionVariable ?? this.tokens.catch).range.end
+        );
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [
+            state.transpileToken(this.tokens.catch),
+            ' ',
+            this.exceptionVariable?.text ?? 'e',
+            ...(this.catchBranch?.transpile(state) ?? [])
+        ];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.catchBranch && options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'catchBranch', visitor, options);
         }
     }
@@ -1888,6 +2262,261 @@ export class ThrowStatement extends Statement {
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (this.expression && options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'expression', visitor, options);
+        }
+    }
+}
+
+
+export class EnumStatement extends Statement implements TypedefProvider {
+
+    constructor(
+        public tokens: {
+            enum: Token;
+            name: Identifier;
+            endEnum: Token;
+        },
+        public body: Array<EnumMemberStatement | CommentStatement>,
+        public namespaceName?: NamespacedVariableNameExpression
+    ) {
+        super();
+        this.body = this.body ?? [];
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            this.tokens.enum.range.start ?? Position.create(0, 0),
+            (this.tokens.endEnum ?? this.tokens.name ?? this.tokens.enum).range.end
+        );
+    }
+
+    public getMembers() {
+        const result = [] as EnumMemberStatement[];
+        for (const statement of this.body) {
+            if (isEnumMemberStatement(statement)) {
+                result.push(statement);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Get a map of member names and their values.
+     * All values are stored as their AST LiteralExpression representation (i.e. string enum values include the wrapping quotes)
+     */
+    public getMemberValueMap() {
+        const result = new Map<string, string>();
+        const members = this.getMembers();
+        let currentIntValue = 0;
+        for (const member of members) {
+            //if there is no value, assume an integer and increment the int counter
+            if (!member.value) {
+                result.set(member.name?.toLowerCase(), currentIntValue.toString());
+                currentIntValue++;
+
+                //if explicit integer value, use it and increment the int counter
+            } else if (isLiteralExpression(member.value) && member.value.token.kind === TokenKind.IntegerLiteral) {
+                //try parsing as integer literal, then as hex integer literal.
+                let tokenIntValue = util.parseInt(member.value.token.text) ?? util.parseInt(member.value.token.text.replace(/&h/i, '0x'));
+                if (tokenIntValue !== undefined) {
+                    currentIntValue = tokenIntValue;
+                    currentIntValue++;
+                }
+                result.set(member.name?.toLowerCase(), member.value.token.text);
+
+                //all other values
+            } else {
+                result.set(member.name?.toLowerCase(), (member.value as LiteralExpression)?.token?.text ?? 'invalid');
+            }
+        }
+        return result;
+    }
+
+    public getMemberValue(name: string) {
+        return this.getMemberValueMap().get(name.toLowerCase());
+    }
+
+    /**
+     * The name of the enum (without the namespace prefix)
+     */
+    public get name() {
+        return this.tokens.name?.text;
+    }
+
+    /**
+     * The name of the enum WITH its leading namespace (if applicable)
+     */
+    public get fullName() {
+        const name = this.tokens.name?.text;
+        if (name) {
+            if (this.namespaceName) {
+                let namespaceName = this.namespaceName.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this doesn't have a name
+            return undefined;
+        }
+    }
+
+    transpile(state: BrsTranspileState) {
+        //enum declarations do not exist at runtime, so don't transpile anything...
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        const result = [] as TranspileResult;
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
+            this.tokens.enum.text ?? 'enum',
+            ' ',
+            this.tokens.name.text
+        );
+        result.push(state.newline);
+        state.blockDepth++;
+        for (const member of this.body) {
+            if (isTypedefProvider(member)) {
+                result.push(
+                    state.indent(),
+                    ...member.getTypedef(state),
+                    state.newline
+                );
+            }
+        }
+        state.blockDepth--;
+        result.push(
+            state.indent(),
+            this.tokens.endEnum.text ?? 'end enum'
+        );
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            walkArray(this.body, visitor, options, this);
+
+        }
+    }
+}
+
+export class EnumMemberStatement extends Statement implements TypedefProvider {
+
+    public constructor(
+        public tokens: {
+            name: Identifier;
+            equal?: Token;
+        },
+        public value?: Expression
+    ) {
+        super();
+    }
+
+    /**
+     * The name of the member
+     */
+    public get name() {
+        return this.tokens.name.text;
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            (this.tokens.name ?? this.tokens.equal ?? this.value).range.start ?? Position.create(0, 0),
+            (this.value ?? this.tokens.equal ?? this.tokens.name).range.end
+        );
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
+        const result = [
+            this.tokens.name.text
+        ] as TranspileResult;
+        if (this.tokens.equal) {
+            result.push(' ', this.tokens.equal.text, ' ');
+            if (this.value) {
+                result.push(
+                    ...this.value.transpile(state)
+                );
+            }
+        }
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.value && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
+    }
+}
+
+export class ConstStatement extends Statement implements TypedefProvider {
+
+    public constructor(
+        public tokens: {
+            const: Token;
+            name: Identifier;
+            equals: Token;
+        },
+        public value: Expression,
+        readonly namespaceName?: NamespacedVariableNameExpression
+    ) {
+        super();
+        this.range = util.createBoundingRange(this.tokens.const, this.tokens.name, this.tokens.equals, this.value);
+    }
+
+    public range: Range;
+
+    public get name() {
+        return this.tokens.name.text;
+    }
+
+    /**
+     * The name of the statement WITH its leading namespace (if applicable)
+     */
+    public get fullName() {
+        const name = this.tokens.name?.text;
+        if (name) {
+            if (this.namespaceName) {
+                let namespaceName = this.namespaceName.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this doesn't have a name
+            return undefined;
+        }
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        //const declarations don't exist at runtime, so just transpile empty
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
+        return [
+            state.tokenToSourceNode(this.tokens.const),
+            ' ',
+            state.tokenToSourceNode(this.tokens.name),
+            ' ',
+            state.tokenToSourceNode(this.tokens.equals),
+            ' ',
+            ...this.value.transpile(state)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.value && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
         }
     }
 }

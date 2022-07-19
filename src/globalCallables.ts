@@ -14,14 +14,17 @@ import util from './util';
 export let globalFile = new BrsFile('global', 'global', null);
 globalFile.parse('');
 
-let mathFunctions = [{
+type GlobalCallable = Pick<Callable, 'name' | 'shortDescription' | 'type' | 'file' | 'params' | 'documentation' | 'isDeprecated' | 'nameRange'>;
+
+let mathFunctions: GlobalCallable[] = [{
     name: 'Abs',
     shortDescription: 'Returns the absolute value of the argument.',
     type: new FunctionType(new FloatType()),
     file: globalFile,
     params: [{
         name: 'x',
-        type: new FloatType()
+        type: new FloatType(),
+        isOptional: false
     }]
 }, {
     name: 'Atn',
@@ -31,7 +34,8 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: 'x',
-        type: new FloatType()
+        type: new FloatType(),
+        isOptional: false
     }]
 }, {
     name: 'Cdbl',
@@ -40,7 +44,8 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: 'x',
-        type: new IntegerType()
+        type: new IntegerType(),
+        isOptional: false
     }]
 }, {
     name: 'Cint',
@@ -49,7 +54,8 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: 'x',
-        type: new FloatType()
+        type: new FloatType(),
+        isOptional: false
     }]
 }, {
     name: 'Cos',
@@ -58,7 +64,8 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: 'x',
-        type: new FloatType()
+        type: new FloatType(),
+        isOptional: false
     }]
 }, {
     name: 'Csng',
@@ -67,7 +74,8 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: 'x',
-        type: new IntegerType()
+        type: new IntegerType(),
+        isOptional: false
     }]
 }, {
     name: 'Exp',
@@ -76,7 +84,8 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: 'x',
-        type: new FloatType()
+        type: new FloatType(),
+        isOptional: false
     }]
 }, {
     name: 'Fix',
@@ -85,7 +94,8 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: 'x',
-        type: new FloatType()
+        type: new FloatType(),
+        isOptional: false
     }]
 }, {
     name: 'Int',
@@ -94,7 +104,8 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: 'x',
-        type: new FloatType()
+        type: new FloatType(),
+        isOptional: false
     }]
 }, {
     name: 'Log',
@@ -103,7 +114,8 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: 'x',
-        type: new FloatType()
+        type: new FloatType(),
+        isOptional: false
     }]
 }, {
     name: 'Rnd',
@@ -112,7 +124,8 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: 'range',
-        type: new IntegerType()
+        type: new IntegerType(),
+        isOptional: false
     }]
 }, {
     name: 'Rnd',
@@ -121,7 +134,8 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: '0',
-        type: new IntegerType()
+        type: new IntegerType(),
+        isOptional: false
     }]
 }, {
     name: 'Sgn',
@@ -130,7 +144,8 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: 'x',
-        type: new FloatType()
+        type: new FloatType(),
+        isOptional: false
     }]
 }, {
     name: 'Sgn',
@@ -139,7 +154,8 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: 'x',
-        type: new IntegerType()
+        type: new IntegerType(),
+        isOptional: false
     }]
 }, {
     name: 'Sin',
@@ -148,7 +164,8 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: 'x',
-        type: new FloatType()
+        type: new FloatType(),
+        isOptional: false
     }]
 }, {
     name: 'Sqr',
@@ -157,7 +174,8 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: 'x',
-        type: new FloatType()
+        type: new FloatType(),
+        isOptional: false
     }]
 }, {
     name: 'Tan',
@@ -166,18 +184,20 @@ let mathFunctions = [{
     file: globalFile,
     params: [{
         name: 'x',
-        type: new FloatType()
+        type: new FloatType(),
+        isOptional: false
     }]
-}] as Callable[];
+}];
 
-let runtimeFunctions = [{
+let runtimeFunctions: GlobalCallable[] = [{
     name: 'CreateObject',
     shortDescription: 'Creates a BrightScript Component of class classname specified. Return invalid if the object creation fails. Some Objects have optional parameters in their constructor that are passed after name.',
     type: new FunctionType(new ObjectType()),
     file: globalFile,
     params: [{
         name: 'name',
-        type: new StringType()
+        type: new StringType(),
+        isOptional: false
     }, {
         name: 'param2',
         type: new DynamicType(),
@@ -190,6 +210,14 @@ let runtimeFunctions = [{
         name: 'param4',
         type: new DynamicType(),
         isOptional: true
+    }, {
+        name: 'param5',
+        type: new DynamicType(),
+        isOptional: true
+    }, {
+        name: 'param6',
+        type: new DynamicType(),
+        isOptional: true
     }]
 }, {
     name: 'Type',
@@ -198,7 +226,8 @@ let runtimeFunctions = [{
     file: globalFile,
     params: [{
         name: 'variable',
-        type: new ObjectType()
+        type: new ObjectType(),
+        isOptional: false
     }, {
         name: 'version',
         type: new StringType(),
@@ -217,7 +246,8 @@ let runtimeFunctions = [{
     file: globalFile,
     params: [{
         name: 'x',
-        type: new DynamicType()
+        type: new DynamicType(),
+        isOptional: false
     }]
 }, {
     name: 'Run',
@@ -226,11 +256,13 @@ let runtimeFunctions = [{
     file: globalFile,
     params: [{
         name: 'filename',
-        type: new StringType()
+        type: new StringType(),
+        isOptional: false
     }, {
         name: 'arg',
         type: new DynamicType(),
-        isRestArgument: true
+        isRestArgument: true,
+        isOptional: false
     }]
 }, {
     name: 'Run',
@@ -239,11 +271,13 @@ let runtimeFunctions = [{
     file: globalFile,
     params: [{
         name: 'filename',
-        type: new ArrayType(new StringType())
+        type: new ArrayType(new StringType()),
+        isOptional: false
     }, {
         name: 'arg',
         type: new DynamicType(),
-        isRestArgument: true
+        isRestArgument: true,
+        isOptional: true
     }]
 }, {
     name: 'Eval',
@@ -253,7 +287,8 @@ let runtimeFunctions = [{
     isDeprecated: true,
     params: [{
         name: 'code',
-        type: new StringType()
+        type: new StringType(),
+        isOptional: false
     }]
 }, {
     name: 'GetLastRunCompileError',
@@ -267,9 +302,9 @@ let runtimeFunctions = [{
     type: new FunctionType(new IntegerType()),
     file: globalFile,
     params: []
-}] as Callable[];
+}];
 
-let globalUtilityFunctions = [
+let globalUtilityFunctions: GlobalCallable[] = [
     {
         name: 'Sleep',
         shortDescription: 'This function causes the script to pause for the specified time, without wasting CPU cycles. There are 1000 milliseconds in one second.',
@@ -277,7 +312,8 @@ let globalUtilityFunctions = [
         file: globalFile,
         params: [{
             name: 'milliseconds',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: false
         }]
     }, {
         name: 'Wait',
@@ -286,10 +322,12 @@ let globalUtilityFunctions = [
         file: globalFile,
         params: [{
             name: 'timeout',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: false
         }, {
             name: 'port',
-            type: new ObjectType()
+            type: new ObjectType(),
+            isOptional: false
         }]
     }, {
         name: 'GetInterface',
@@ -298,10 +336,12 @@ let globalUtilityFunctions = [
         file: globalFile,
         params: [{
             name: 'object',
-            type: new ObjectType()
+            type: new ObjectType(),
+            isOptional: false
         }, {
             name: 'ifname',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'FindMemberFunction',
@@ -310,10 +350,12 @@ let globalUtilityFunctions = [
         file: globalFile,
         params: [{
             name: 'object',
-            type: new ObjectType()
+            type: new ObjectType(),
+            isOptional: false
         }, {
             name: 'functionName',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'UpTime',
@@ -322,7 +364,8 @@ let globalUtilityFunctions = [
         file: globalFile,
         params: [{
             name: 'dummy',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: false
         }]
     }, {
         name: 'RebootSystem',
@@ -337,7 +380,8 @@ let globalUtilityFunctions = [
         file: globalFile,
         params: [{
             name: 'path',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'ReadAsciiFile',
@@ -346,7 +390,8 @@ let globalUtilityFunctions = [
         file: globalFile,
         params: [{
             name: 'filePath',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'WriteAsciiFile',
@@ -355,10 +400,12 @@ let globalUtilityFunctions = [
         file: globalFile,
         params: [{
             name: 'filePath',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }, {
             name: 'text',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'CopyFile',
@@ -367,10 +414,12 @@ let globalUtilityFunctions = [
         file: globalFile,
         params: [{
             name: 'source',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }, {
             name: 'destination',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'MoveFile',
@@ -379,10 +428,12 @@ let globalUtilityFunctions = [
         file: globalFile,
         params: [{
             name: 'source',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }, {
             name: 'destination',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'MatchFiles',
@@ -402,10 +453,12 @@ The characters '?', '*' and '[' lose their special meaning if preceded by a sing
         file: globalFile,
         params: [{
             name: 'path',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }, {
             name: 'pattern_in',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'DeleteFile',
@@ -414,7 +467,8 @@ The characters '?', '*' and '[' lose their special meaning if preceded by a sing
         file: globalFile,
         params: [{
             name: 'file',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'DeleteDirectory',
@@ -423,7 +477,8 @@ The characters '?', '*' and '[' lose their special meaning if preceded by a sing
         file: globalFile,
         params: [{
             name: 'dir',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'CreateDirectory',
@@ -432,7 +487,8 @@ The characters '?', '*' and '[' lose their special meaning if preceded by a sing
         file: globalFile,
         params: [{
             name: 'dir',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'FormatDrive',
@@ -441,10 +497,12 @@ The characters '?', '*' and '[' lose their special meaning if preceded by a sing
         file: globalFile,
         params: [{
             name: 'drive',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }, {
             name: 'fs_type',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'StrToI',
@@ -453,7 +511,8 @@ The characters '?', '*' and '[' lose their special meaning if preceded by a sing
         file: globalFile,
         params: [{
             name: 'str',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'RunGarbageCollector',
@@ -466,13 +525,20 @@ The characters '?', '*' and '[' lose their special meaning if preceded by a sing
         shortDescription:
             `This function will parse a string formatted according to RFC4627 and return an equivalent BrightScript object (consisting of booleans, integer and floating point numbers, strings, roArray, and roAssociativeArray objects).  If the string is not syntactically correct, Invalid will be returned.  A few other things to note:
 
-Any roAssociativeArray objects in the returned objects will be case sensitive.
+Any roAssociativeArray objects in the returned objects will be case sensitive. As of Roku OS 9.4, to return a case-insensitive structure, set the flags parameter to "i".
+If the "i" option is used, and the jsonString includes multiple keys that match case-insensitively, duplicates are overwritten and only the last matching values are preserved.
 An error will be returned if arrays/associative arrays are nested more than 256 levels deep.`,
         type: new FunctionType(new ObjectType()),
         file: globalFile,
         params: [{
             name: 'jsonString',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
+        },
+        {
+            name: 'flags',
+            type: new StringType(),
+            isOptional: true
         }]
     }, {
         name: 'FormatJson',
@@ -490,7 +556,8 @@ Normally non-ASCII characters are escaped in the output string as "\\uXXXX" wher
         file: globalFile,
         params: [{
             name: 'object',
-            type: new ObjectType()
+            type: new ObjectType(),
+            isOptional: false
         }, {
             name: 'flags',
             type: new StringType(),
@@ -507,12 +574,13 @@ One way to accomplish that is to use the Replace method on the string value retu
         file: globalFile,
         params: [{
             name: 'source',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }
-] as Callable[];
+];
 
-let globalStringFunctions = [
+let globalStringFunctions: GlobalCallable[] = [
     {
         name: 'UCase',
         shortDescription: 'Converts the string to all upper case.',
@@ -520,7 +588,8 @@ let globalStringFunctions = [
         file: globalFile,
         params: [{
             name: 's',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'LCase',
@@ -529,7 +598,8 @@ let globalStringFunctions = [
         file: globalFile,
         params: [{
             name: 's',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'Asc',
@@ -538,7 +608,8 @@ let globalStringFunctions = [
         file: globalFile,
         params: [{
             name: 'letter',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'Chr',
@@ -554,7 +625,8 @@ By using Chr, you can create strings containing characters which cannot be conta
         file: globalFile,
         params: [{
             name: 'ch',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: false
         }]
     }, {
         name: 'Instr',
@@ -563,13 +635,16 @@ By using Chr, you can create strings containing characters which cannot be conta
         file: globalFile,
         params: [{
             name: 'start',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: false
         }, {
             name: 'text',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }, {
             name: 'substring',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'Left',
@@ -578,10 +653,12 @@ By using Chr, you can create strings containing characters which cannot be conta
         file: globalFile,
         params: [{
             name: 's',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }, {
             name: 'n',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: false
         }]
     }, {
         name: 'Len',
@@ -590,7 +667,8 @@ By using Chr, you can create strings containing characters which cannot be conta
         file: globalFile,
         params: [{
             name: 's',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'Mid',
@@ -599,10 +677,12 @@ By using Chr, you can create strings containing characters which cannot be conta
         file: globalFile,
         params: [{
             name: 's',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }, {
             name: 'p',
-            description: '1-based position',
+            //description: '1-based position',
+            isOptional: false,
             type: new IntegerType()
         }, {
             name: 'n',
@@ -616,10 +696,12 @@ By using Chr, you can create strings containing characters which cannot be conta
         file: globalFile,
         params: [{
             name: 's',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }, {
             name: 'n',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: false
         }]
     }, {
         name: 'Str',
@@ -628,7 +710,8 @@ By using Chr, you can create strings containing characters which cannot be conta
         file: globalFile,
         params: [{
             name: 'value',
-            type: new FloatType()
+            type: new FloatType(),
+            isOptional: false
         }]
     }, {
         name: 'StrI',
@@ -637,10 +720,12 @@ By using Chr, you can create strings containing characters which cannot be conta
         file: globalFile,
         params: [{
             name: 'value',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: false
         }, {
             name: 'radix',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: true
         }]
     }, {
         name: 'string',
@@ -649,10 +734,12 @@ By using Chr, you can create strings containing characters which cannot be conta
         file: globalFile,
         params: [{
             name: 'n',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: false
         }, {
             name: 'str',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }]
     }, {
         name: 'StringI',
@@ -661,10 +748,12 @@ By using Chr, you can create strings containing characters which cannot be conta
         file: globalFile,
         params: [{
             name: 'n',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: false
         }, {
             name: 'ch',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: false
         }]
     }, {
         name: 'Val',
@@ -673,10 +762,12 @@ By using Chr, you can create strings containing characters which cannot be conta
         file: globalFile,
         params: [{
             name: 'str',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }, {
             name: 'radix',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: true
         }]
     }, {
         name: 'Substitute',
@@ -685,22 +776,27 @@ By using Chr, you can create strings containing characters which cannot be conta
         file: globalFile,
         params: [{
             name: 'str',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }, {
             name: 'arg0',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: false
         }, {
             name: 'arg1',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: true
         }, {
             name: 'arg2',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: true
         }, {
             name: 'arg3',
-            type: new StringType()
+            type: new StringType(),
+            isOptional: true
         }]
     }
-] as Callable[];
+];
 
 
 let programStatementFunctions = [
@@ -711,7 +807,8 @@ let programStatementFunctions = [
         file: globalFile,
         params: [{
             name: 'expression',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: false
         }]
     }, {
         name: 'Pos',
@@ -720,7 +817,8 @@ let programStatementFunctions = [
         file: globalFile,
         params: [{
             name: 'x',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: false
         }]
         //TODO this is a temporary fix for library imported files. Eventually this should be moved into `Roku_Ads.brs` and handled by the `Library` statement
     }, {
@@ -729,6 +827,172 @@ let programStatementFunctions = [
         type: new FunctionType(new ObjectType()),
         file: globalFile,
         params: []
+    }, { //TODO Same as the Roku_Ads.brs (RAF) library above, the following functions are from the 'v30/bslCore.brs' library
+        name: 'bslBrightScriptErrorCodes',
+        shortDescription: 'Returns an roAssociativeArray with name value pairs of the error name and corresponding integer value, for example ERR_OKAY = &hFF.',
+        type: new FunctionType(new ObjectType()),
+        file: globalFile,
+        params: []
+    }, {
+        name: 'bslGeneralConstants',
+        shortDescription: 'Returns an roAssociativeArray with name value pairs of system constants, for example MAX_INT = 2147483647.',
+        type: new FunctionType(new ObjectType()),
+        file: globalFile,
+        params: []
+    }, {
+        name: 'bslUniversalControlEventCodes',
+        shortDescription: 'Returns an roAssociativeArray with name value pairs of the remote key code (buttons) constants, for example BUTTON_SELECT_PRESSED = 6.',
+        type: new FunctionType(new ObjectType()),
+        file: globalFile,
+        params: []
+    },
+    {
+        name: 'AsciiToHex',
+        shortDescription: 'Returns the hex encoded string, for example AsciiToHex("Hi!") = "486921".',
+        type: new FunctionType(new StringType()),
+        file: globalFile,
+        params: [{
+            name: 'ascii',
+            type: new StringType(),
+            isOptional: false
+        }]
+    }, {
+        name: 'HexToAscii',
+        shortDescription: 'Returns a string that is the hex decoded string, for example HexToAscii("486921") = "Hi!".',
+        type: new FunctionType(new StringType()),
+        file: globalFile,
+        params: [{
+            name: 'hex',
+            type: new StringType(),
+            isOptional: false
+        }]
+    },
+    {
+        name: 'HexToInteger',
+        shortDescription: 'Returns the integer value of the passed in hex string.',
+        type: new FunctionType(new IntegerType()),
+        file: globalFile,
+        params: [{
+            name: 'hex',
+            type: new StringType(),
+            isOptional: false
+        }]
+    }, {
+        name: 'HexToInteger',
+        shortDescription: 'Returns a string that is the hex decoded string, for example HexToAscii("486921") = "Hi!".',
+        type: new FunctionType(new IntegerType()),
+        file: globalFile,
+        params: [{
+            name: 'hex',
+            type: new StringType(),
+            isOptional: false
+        }]
+    }, {
+        name: 'dfNewBitmapSet',
+        shortDescription: `The goal is to enable simple xml descriptions of graphics resources like bitmaps, regions, sprites, animations, and layouts to be used in your games. The library handles parsing, loading, rendering, and animation of sprites sheets (multiple images in a single png file).
+Filename is the path to an XML file that contains info about bitmap regions, animation frames, and ExtraInfo metadata (any fields you would like) about resources used in 2d games.
+Returns an roAssociativeArray with the following name value pairs:
+ExtraInfo: roAssociativeArray
+Regions: roAssociativeArray of name, roRegions pairs
+Animations: roAssociativeArray of name, roArray of roRegion pairs.
+Backgrounds: roAssociativeArray of name, path pairs.`,
+        type: new FunctionType(new ObjectType()),
+        file: globalFile,
+        params: [{
+            name: 'filename',
+            type: new StringType(),
+            isOptional: false
+        }]
+    }, {
+        name: 'dfDrawMessage',
+        shortDescription: 'dest is an roScreen/roBitmap/roRegion and region is an roRegion.\nGreys the entire dest region and draws it the region centered on the drawable dest.',
+        type: new FunctionType(new VoidType()),
+        file: globalFile,
+        params: [{
+            name: 'dest',
+            type: new ObjectType(),
+            isOptional: false
+        }, {
+            name: 'region',
+            type: new ObjectType(),
+            isOptional: false
+        }]
+    }, {
+        name: 'dfDrawImage',
+        shortDescription: 'Returns True if successful.\nCreates a bitmap out of the image stored in the filename "path" and draws it at position (x,y) of the drawable dest.',
+        type: new FunctionType(new BooleanType()),
+        file: globalFile,
+        params: [{
+            name: 'dest',
+            type: new ObjectType(),
+            isOptional: false
+        }, {
+            name: 'path',
+            type: new StringType(),
+            isOptional: false
+        }, {
+            name: 'x',
+            type: new IntegerType(),
+            isOptional: false
+        }, {
+            name: 'y',
+            type: new IntegerType(),
+            isOptional: false
+        }]
+    }, {
+        name: 'dfSetupDisplayRegions',
+        shortDescription: `Helper function to setup screen scaling with supplied pillar box or letterbox images to fill the entire screen.
+screen is an roScreen
+topx and topy are the coordinates of the upper left hand corner of the main drawing region
+Width and height is the size of the main drawing region
+
+Returns an associative array containing the following roRegions
+Main: main drawable region
+Left: left region if there is pillar box area on the left
+Right: right region if there is a pillar box area on the right
+Upper: upper region if there is a letterbox area at thetop
+Lower: lower region if there is a letterbox area at the bottom
+When using these regions as drawables, your graphics will be translated and clipped to these regions.`,
+        type: new FunctionType(new ObjectType()),
+        file: globalFile,
+        params: [{
+            name: 'screen',
+            type: new ObjectType(),
+            isOptional: false
+        }, {
+            name: 'topx',
+            type: new IntegerType(),
+            isOptional: false
+        }, {
+            name: 'topy',
+            type: new IntegerType(),
+            isOptional: false
+        }, {
+            name: 'width',
+            type: new IntegerType(),
+            isOptional: false
+        }, {
+            name: 'height',
+            type: new IntegerType(),
+            isOptional: false
+        }]
+    }, {
+        name: 'dfSetBackground',
+        shortDescription: `dfSetBackground helps manage the limited video memory. The video memory does not currently run a defragmenter, and is very limited. These constraints make it important that large bitmaps (like backgrounds that fill the entire screen) are only allocated when needed. It is also helpful if you set your first initial background very early in your program, and then immediately replace the background after it is no longer in use. This helper function supports this background management for your application.
+backgroundName is a key for the Backgrounds roAssociative array of backgrounds.
+Backgrounds is an roAssociative array of background name keys and file path string values
+This function creates an roBitmap out of the background image file and returns a region the size of the entire roBitmap.`,
+        type: new FunctionType(new ObjectType()),
+        file: globalFile,
+        params: [{
+            name: 'backgroundName',
+            type: new StringType(),
+            isOptional: false
+        }, {
+            name: 'backgrounds',
+            type: new ObjectType(),
+            isOptional: false
+        }]
     }
 ] as Callable[];
 
@@ -745,18 +1009,21 @@ for (let callable of globalCallables) {
     //set name in type
     callable.type.setName(callable.name);
 
-    callable.getName = function getName() {
+    (callable as Callable).getName = function getName() {
         return this.name;
     };
 
 }
-globalFile.callables = globalCallables;
+globalFile.callables = globalCallables as Callable[];
+for (const callable of globalCallables) {
+    globalFile.parser.symbolTable.addSymbol(callable.name, undefined, callable.type);
+}
 
 /**
  * A map of all built-in function names. We use this extensively in scope validation
  * so keep a single copy in memory to improve performance
  */
 export const globalCallableMap = globalCallables.reduce((map, x) => {
-    map.set(x.name.toLowerCase(), x);
+    map.set(x.name.toLowerCase(), x as Callable);
     return map;
 }, new Map<string, Callable>());

@@ -1,9 +1,11 @@
 import type { Hover } from 'vscode-languageserver-types';
-import { isBrsFile, isFunctionType, isXmlFile } from '../../astUtils';
+import { isBrsFile, isFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
-import type { OnGetHoverEvent } from '../../interfaces';
+import type { Callable, OnGetHoverEvent } from '../../interfaces';
+import type { Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
+import util from '../../util';
 
 export class HoverProcessor {
     public constructor(
@@ -28,6 +30,7 @@ export class HoverProcessor {
     }
 
     private getBrsFileHover(file: BrsFile): Hover {
+        const fence = (code: string) => util.mdFence(code, 'brightscript');
         //get the token at the position
         let token = file.getTokenAt(this.event.position);
 
@@ -63,10 +66,8 @@ export class HoverProcessor {
                         }
                         return {
                             range: token.range,
-                            contents: {
-                                language: 'brighterscript',
-                                value: typeText
-                            }
+                            //append the variable name to the front for scope
+                            contents: fence(typeText)
                         };
                     }
                 }
@@ -74,10 +75,7 @@ export class HoverProcessor {
                     if (labelStatement.name.toLocaleLowerCase() === lowerTokenText) {
                         return {
                             range: token.range,
-                            contents: {
-                                language: 'brighterscript',
-                                value: `${labelStatement.name}: label`
-                            }
+                            contents: fence(`${labelStatement.name}: label`)
                         };
                     }
                 }
@@ -90,14 +88,40 @@ export class HoverProcessor {
             if (callable) {
                 return {
                     range: token.range,
-                    contents: {
-                        language: 'brighterscript',
-                        value: callable.type.toString()
-                    }
+                    contents: this.getCallableDocumentation(callable)
                 };
             }
         }
     }
+
+    /**
+     * Build a hover documentation for a callable.
+     */
+    private getCallableDocumentation(callable: Callable) {
+        const comments = [] as Token[];
+        const tokens = callable.file.parser.tokens as Token[];
+        const idx = tokens.indexOf(callable.functionStatement?.func.functionType);
+        for (let i = idx - 1; i >= 0; i--) {
+            const token = tokens[i];
+            //skip whitespace and newline chars
+            if (token.kind === TokenKind.Comment) {
+                comments.push(token);
+            } else if (token.kind === TokenKind.Newline || token.kind === TokenKind.Whitespace) {
+                //skip these tokens
+                continue;
+
+                //any other token means there are no more comments
+            } else {
+                break;
+            }
+        }
+        let result = util.mdFence(callable.type.toString(), 'brightscript');
+        if (comments.length > 0) {
+            result += '\n***\n' + comments.reverse().map(x => x.text.replace(/^('|rem)/i, '')).join('\n');
+        }
+        return result;
+    }
+
 
     private getXmlFileHover(file: XmlFile) {
         //TODO add xml hovers

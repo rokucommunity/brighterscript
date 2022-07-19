@@ -1,8 +1,7 @@
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
-import * as path from 'path';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
-import type { Callable, CommentFlag, BsDiagnostic, VariableDeclaration } from '../interfaces';
+import type { Callable, CommentFlag, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
 import { BooleanType } from '../types/BooleanType';
 import { DynamicType } from '../types/DynamicType';
@@ -11,19 +10,24 @@ import { IntegerType } from '../types/IntegerType';
 import { StringType } from '../types/StringType';
 import { BrsFile } from './BrsFile';
 import { SourceMapConsumer } from 'source-map';
-import { TokenKind, Lexer, Keywords } from '../lexer';
+import { Lexer } from '../lexer/Lexer';
+import { TokenKind, Keywords } from '../lexer/TokenKind';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
+import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
+import { ImportStatement } from '../parser/Statement';
+import { createToken } from '../astUtils/creators';
+import * as fsExtra from 'fs-extra';
 
 let sinon = sinonImport.createSandbox();
 
 describe('BrsFile', () => {
-    let rootDir = s`${process.cwd()}/.tmp/rootDir`;
+    let tempDir = s`${process.cwd()}/.tmp`;
+    let rootDir = s`${tempDir}/rootDir`;
     let program: Program;
     let srcPath = s`${rootDir}/source/main.brs`;
     let destPath = 'source/main.brs';
@@ -31,6 +35,7 @@ describe('BrsFile', () => {
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
+        fsExtra.emptyDirSync(tempDir);
         program = new Program({ rootDir: rootDir, sourceMap: true });
         file = new BrsFile(srcPath, destPath, program);
     });
@@ -39,14 +44,47 @@ describe('BrsFile', () => {
         program.dispose();
     });
 
+    describe('allowBrighterScriptInBrightScript', () => {
+        it('is false by default', () => {
+            program.setFile('source/main.brs', `
+                namespace CustomApp
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('namespace')
+            }]);
+        });
+
+        it('allows bs features in brs', () => {
+            program.options.allowBrighterScriptInBrightScript = true;
+            program.setFile('source/main.brs', `
+                namespace CustomApp
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
     it('supports the third parameter in CreateObject', () => {
-        program.addOrReplaceFile('source/main.brs', `
+        program.setFile('source/main.brs', `
             sub main()
                 regexp = CreateObject("roRegex", "[a-z]+", "i")
             end sub
         `);
         program.validate();
-        expect(program.getDiagnostics()[0]?.message).to.not.exist;
+        expectZeroDiagnostics(program);
+    });
+
+    it('supports the 6 params in CreateObject for roRegion', () => {
+        program.setFile('source/main.brs', `
+            sub createRegion(bitmap as object)
+                region = CreateObject("roRegion", bitmap, 20, 40, 100, 200)
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
     });
 
     it('sets needsTranspiled to true for .bs files', () => {
@@ -56,6 +94,17 @@ describe('BrsFile', () => {
         expect(new BrsFile(`${rootDir}/source/main.bs`, 'source/main.bs', program).needsTranspiled).to.be.true;
     });
 
+    it('computes new import statements after clearing parser references', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', ``);
+        expect(file.ownScriptImports).to.be.empty;
+        file.parser.ast.statements.push(
+            new ImportStatement(createToken(TokenKind.Import), createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs'))
+        );
+        expect(file.ownScriptImports).to.be.empty;
+        file.parser.invalidateReferences();
+        expect(file.ownScriptImports.map(x => x.text)).to.eql(['pkg:/source/lib.brs']);
+    });
+
     it('allows adding diagnostics', () => {
         const expected = [{
             message: 'message',
@@ -63,8 +112,7 @@ describe('BrsFile', () => {
             range: undefined
         }];
         file.addDiagnostics(expected);
-        const actual = file.getDiagnostics();
-        expect(actual).deep.equal(expected);
+        expectDiagnostics(file, expected);
     });
 
     describe('getPartialVariableName', () => {
@@ -74,7 +122,7 @@ describe('BrsFile', () => {
         } as StandardizedFileEntry;
 
         it('creates proper tokens', () => {
-            file = program.addOrReplaceFile<BrsFile>(entry, `call(ModuleA.ModuleB.ModuleC.`);
+            file = program.setFile<BrsFile>(entry, `call(ModuleA.ModuleB.ModuleC.`);
             expect(file['getPartialVariableName'](file.parser.tokens[7])).to.equal('ModuleA.ModuleB.ModuleC.');
             expect(file['getPartialVariableName'](file.parser.tokens[6])).to.equal('ModuleA.ModuleB.ModuleC');
             expect(file['getPartialVariableName'](file.parser.tokens[5])).to.equal('ModuleA.ModuleB.');
@@ -86,25 +134,25 @@ describe('BrsFile', () => {
 
     describe('getScopesForFile', () => {
         it('finds the scope for the file', () => {
-            let file = program.addOrReplaceFile('source/main.brs', ``);
+            let file = program.setFile('source/main.brs', ``);
             expect(program.getScopesForFile(file)[0]?.name).to.equal('source');
         });
     });
 
     describe('getCompletions', () => {
         it('does not crash for callfunc on a function call', () => {
-            const file = program.addOrReplaceFile('source/main.brs', `
+            const file = program.setFile('source/main.brs', `
                 sub main()
                     getManager()@.
                 end sub
             `);
             expect(() => {
-                program.getCompletions(file.pathAbsolute, util.createPosition(2, 34));
+                program.getCompletions(file.srcPath, util.createPosition(2, 34));
             }).not.to.throw;
         });
 
         it('suggests pkg paths in strings that match that criteria', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print "pkg:"
                 end sub
@@ -117,7 +165,7 @@ describe('BrsFile', () => {
         });
 
         it('suggests libpkg paths in strings that match that criteria', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print "libpkg:"
                 end sub
@@ -130,7 +178,7 @@ describe('BrsFile', () => {
         });
 
         it('suggests pkg paths in template strings', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print \`pkg:\`
                 end sub
@@ -144,7 +192,7 @@ describe('BrsFile', () => {
 
         it('waits for the file to be processed before collecting completions', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub Main()
                     print "hello"
                     Say
@@ -160,9 +208,85 @@ describe('BrsFile', () => {
             expect(names).to.includes('SayHello');
         });
 
+        it('includes every type of item at base level', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print
+                end sub
+                sub speak()
+                end sub
+                namespace stuff
+                end namespace
+                class Person
+                end class
+                enum Direction
+                end enum
+            `);
+            expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 26)), [{
+                label: 'main',
+                kind: CompletionItemKind.Function
+            }, {
+                label: 'speak',
+                kind: CompletionItemKind.Function
+            }, {
+                label: 'stuff',
+                kind: CompletionItemKind.Module
+            }, {
+                label: 'Person',
+                kind: CompletionItemKind.Class
+            }, {
+                label: 'Direction',
+                kind: CompletionItemKind.Enum
+            }]);
+        });
+
+        describe('namespaces', () => {
+            it('gets full namespace completions at any point through the leading identifier', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        foo.bar
+                    end sub
+
+                    namespace foo.bar
+                    end namespace
+
+                    class Person
+                    end class
+                `);
+
+                const result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 24)).map(x => x.label);
+                expect(result).includes('main');
+                expect(result).includes('foo');
+                expect(result).includes('Person');
+            });
+
+            it('gets namespace completions', () => {
+                program.setFile('source/main.bs', `
+                    namespace foo.bar
+                        function sayHello()
+                        end function
+                    end namespace
+
+                    sub Main()
+                        print "hello"
+                        foo.ba
+                        foo.bar.
+                    end sub
+                `);
+
+                let result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 30));
+                let names = result.map(x => x.label);
+                expect(names).to.includes('bar');
+
+                result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(9, 32));
+                names = result.map(x => x.label);
+                expect(names).to.includes('sayHello');
+            });
+        });
+
         it('always includes `m`', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -175,7 +299,7 @@ describe('BrsFile', () => {
 
         it('does not fail for missing previousToken', () => {
             //add a single character to the file, and get completions after it
-            program.addOrReplaceFile('source/main.brs', `i`);
+            program.setFile('source/main.brs', `i`);
             expect(() => {
                 program.getCompletions(`${rootDir}/source/main.brs`, Position.create(0, 1)).map(x => x.label);
             }).not.to.throw;
@@ -183,7 +307,7 @@ describe('BrsFile', () => {
 
         it('includes all keywords`', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -208,7 +332,7 @@ describe('BrsFile', () => {
 
         it('does not provide completions within a comment', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     'some comment
                 end sub
@@ -221,7 +345,7 @@ describe('BrsFile', () => {
 
         it('does not provide duplicate entries for variables', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     name = "bob"
                     age = 12
@@ -239,7 +363,7 @@ describe('BrsFile', () => {
 
         it('does not include `as` and `string` text options when used in function params', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
 
                 end sub
@@ -252,7 +376,7 @@ describe('BrsFile', () => {
 
         it('does not provide intellisense results when inside a comment', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
                     'this is a comment
                 end sub
@@ -264,7 +388,7 @@ describe('BrsFile', () => {
 
         it('does provide intellisence for labels only after a goto keyword', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
                     something:
                     goto \nend sub
@@ -280,28 +404,28 @@ describe('BrsFile', () => {
     describe('comment flags', () => {
         describe('bs:disable-next-line', () => {
             it('disables critical diagnostic issues', () => {
-                program.addOrReplaceFile('source/main.brs', `
+                program.setFile('source/main.brs', `
                     sub main()
                         Dim requestData
                     end sub
                 `);
                 //should have an error
                 program.validate();
-                expect(program.getDiagnostics()[0]?.message).to.exist;
+                expectHasDiagnostics(program);
 
-                program.addOrReplaceFile('source/main.brs', `
+                program.setFile('source/main.brs', `
                     sub main()
                         'bs:disable-next-line
                         Dim requestData
                     end sub
                 `);
-                //should have an error
+                //should not have an error
                 program.validate();
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('works with leading whitespace', () => {
-                program.addOrReplaceFile('source/main.brs', `
+                program.setFile('source/main.brs', `
                     sub main()
                         ' bs:disable-next-line
                         =asdf=sadf=
@@ -309,11 +433,11 @@ describe('BrsFile', () => {
                 `);
                 //should have an error
                 program.validate();
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('works for all', () => {
-                let file = program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line
                         name = "bob
@@ -327,11 +451,11 @@ describe('BrsFile', () => {
                 } as CommentFlag);
                 program.validate();
                 //the "unterminated string" error should be filtered out
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('works for specific codes', () => {
-                let file = program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line: 1083, 1001
                         name = "bob
@@ -344,43 +468,59 @@ describe('BrsFile', () => {
                     affectedRange: util.createRange(3, 0, 3, Number.MAX_SAFE_INTEGER)
                 } as CommentFlag);
                 //the "unterminated string" error should be filtered out
-                expect(program.getDiagnostics()[0]?.message).to.not.exist;
+                expectZeroDiagnostics(program);
             });
 
-            it('ignores non-numeric codes', () => {
-                let file = program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('recognizes non-numeric codes', () => {
+                let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line: LINT9999
                         name = "bob
                     end sub
                 `);
-                expect(file.commentFlags[0]).to.not.exist;
-                expect(program.getDiagnostics()[0]?.message).to.exist;
+                expect(file.commentFlags[0]).to.exist;
+                expectHasDiagnostics(program);
+            });
+
+            it('supports disabling non-numeric error codes', () => {
+                const program = new Program({});
+                const file = program.setFile('source/main.brs', `
+                    sub main()
+                        something = true 'bs:disable-line: LINT1005
+                    end sub
+                `);
+                file.addDiagnostics([{
+                    code: 'LINT1005',
+                    file: file,
+                    message: 'Something is not right',
+                    range: util.createRange(2, 16, 2, 26)
+                }]);
+                const scope = program.getScopesForFile(file)[0];
+                expectZeroDiagnostics(scope);
             });
 
             it('adds diagnostics for unknown numeric diagnostic codes', () => {
-                program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         print "hi" 'bs:disable-line: 123456 999999   aaaab
                     end sub
                 `);
 
                 program.validate();
-
-                expect(program.getDiagnostics()).to.be.lengthOf(2);
-                expect(program.getDiagnostics()[0]).to.deep.include({
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unknownDiagnosticCode(123456),
                     range: Range.create(2, 53, 2, 59)
-                } as BsDiagnostic);
-                expect(program.getDiagnostics()[1]).to.deep.include({
+                }, {
+                    ...DiagnosticMessages.unknownDiagnosticCode(999999),
                     range: Range.create(2, 60, 2, 66)
-                } as BsDiagnostic);
+                }]);
             });
 
         });
 
         describe('bs:disable-line', () => {
             it('works for all', () => {
-                let file = program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         z::;;%%%%%% 'bs:disable-line
                     end sub
@@ -393,11 +533,11 @@ describe('BrsFile', () => {
                 } as CommentFlag);
                 program.validate();
                 //the "unterminated string" error should be filtered out
-                expect(program.getDiagnostics()).to.be.lengthOf(0);
+                expectZeroDiagnostics(program);
             });
 
             it('works for specific codes', () => {
-                program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         'should not have any errors
                         DoSomething(1) 'bs:disable-line:1002
@@ -410,31 +550,70 @@ describe('BrsFile', () => {
 
                 program.validate();
 
-                expect(program.getDiagnostics()).to.be.lengthOf(1);
-                expect(program.getDiagnostics()[0]).to.deep.include({
+                expectDiagnostics(program, [{
                     range: Range.create(5, 24, 5, 35)
-                } as BsDiagnostic);
+                }]);
             });
 
             it('handles the erraneous `stop` keyword', () => {
                 //the current version of BRS causes parse errors after the `parse` keyword, showing error in comments
                 //the program should ignore all diagnostics found in brs:* comment lines EXCEPT
                 //for the diagnostics about using unknown error codes
-                program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         stop 'bs:disable-line
                         print "need a valid line to fix stop error"
                     end sub
                 `);
                 program.validate();
-                expect(program.getDiagnostics()).to.be.lengthOf(0);
+                expectZeroDiagnostics(program);
             });
         });
     });
 
     describe('parse', () => {
+        it('allows class as parameter type', () => {
+            program.setFile(`source/main.bs`, `
+                class Person
+                    name as string
+                end class
+
+                sub PrintPerson(p as Person)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows interface as parameter type', () => {
+            program.setFile(`source/main.bs`, `
+                interface Person
+                    name as string
+                end interface
+
+                sub PrintPerson(p as Person)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows enum as parameter type', () => {
+            program.setFile(`source/main.bs`, `
+                enum Direction
+                    up
+                    down
+                end enum
+
+                sub PrintDirection(d as Direction)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('supports iife in assignment', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     result = sub()
                     end sub()
@@ -447,7 +626,7 @@ describe('BrsFile', () => {
 
         it('uses the proper parse mode based on file extension', () => {
             function testParseMode(destPath: string, expectedParseMode: ParseMode) {
-                const file = program.addOrReplaceFile<BrsFile>(destPath, '');
+                const file = program.setFile<BrsFile>(destPath, '');
                 expect(file.parseMode).to.equal(expectedParseMode);
             }
 
@@ -461,29 +640,29 @@ describe('BrsFile', () => {
         });
 
         it('supports labels and goto statements', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     'multiple goto statements on one line
                     goto myLabel : goto myLabel
                     myLabel:
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports empty print statements', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                    print
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         describe('conditional compile', () => {
 
             it('works for upper case keywords', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #CONST someFlag = true
                         #IF someFlag
@@ -495,11 +674,11 @@ describe('BrsFile', () => {
                         #ENDIF
                     end sub
                 `);
-                expect(file.getDiagnostics()).to.be.lengthOf(0);
+                expectZeroDiagnostics(file);
             });
 
             it('supports single-word #elseif and #endif', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #const someFlag = true
                         #if someFlag
@@ -509,11 +688,11 @@ describe('BrsFile', () => {
                         #endif
                     end sub
                 `);
-                expect(file.getDiagnostics()).to.be.lengthOf(0);
+                expectZeroDiagnostics(file);
             });
 
             it('supports multi-word #else if and #end if', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #const someFlag = true
                         #if someFlag
@@ -523,80 +702,82 @@ describe('BrsFile', () => {
                         #end if
                     end sub
                 `);
-                expect(file.getDiagnostics()).to.be.lengthOf(0);
+                expectZeroDiagnostics(file);
             });
 
             it('does not choke on invalid code inside a false conditional compile', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #if false
                             non-commented code here should not cause parse errors
                         #end if
                     end sub
                 `);
-                expect(file.getDiagnostics()).to.be.lengthOf(0);
+                expectZeroDiagnostics(file);
             });
 
             it('detects syntax error in #if', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #if true1
                             print "true"
                         #end if
                     end sub
                 `);
-                expect(file.getDiagnostics()[0]).to.exist.and.deep.include({
-                    ...DiagnosticMessages.invalidHashConstValue
-                });
+                expectDiagnostics(file, [
+                    DiagnosticMessages.referencedConstDoesNotExist()
+                ]);
             });
 
             it('detects syntax error in #const', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #if %
                             print "true"
                         #end if
                     end sub
                 `);
-                expect(file.getDiagnostics()[0]).to.exist.and.deep.include({
-                    ...DiagnosticMessages.unexpectedCharacter('%')
-                });
+                expectDiagnostics(file, [
+                    DiagnosticMessages.unexpectedCharacter('%'),
+                    DiagnosticMessages.invalidHashIfValue()
+                ]);
             });
 
             it('detects #const name using reserved word', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #const function = true
                     end sub
                 `);
-                expect(file.getDiagnostics()[0]).to.exist.and.deep.include({
-                    ...DiagnosticMessages.constNameCannotBeReservedWord()
-                });
+                expectDiagnostics(file, [
+                    DiagnosticMessages.constNameCannotBeReservedWord(),
+                    DiagnosticMessages.unexpectedToken('#const')
+                ]);
             });
 
             it('detects syntax error in #const', () => {
-                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #const someConst = 123
                     end sub
                 `);
-                expect(file.getDiagnostics()[0]).to.exist.and.deep.include({
-                    ...DiagnosticMessages.invalidHashConstValue()
-                });
+                expectDiagnostics(file, [
+                    DiagnosticMessages.invalidHashConstValue()
+                ]);
             });
         });
 
         it('supports stop statement', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                    stop
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports single-line if statements', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     if 1 < 2: return true: end if
                     if 1 < 2: return true
@@ -606,7 +787,7 @@ describe('BrsFile', () => {
                     if true then : test = sub() : print "yes" : end sub : end if
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports line_num as global variable', () => {
@@ -615,7 +796,7 @@ describe('BrsFile', () => {
                     print LINE_NUM
                 end sub
             `);
-            expect(file.getDiagnostics()[0]?.message).not.to.exist;
+            expectZeroDiagnostics(file);
         });
 
         it('supports many keywords as object property names', () => {
@@ -682,7 +863,7 @@ describe('BrsFile', () => {
                     person.new = true
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
         it('does not error on numeric literal type designators', () => {
             file.parse(`
@@ -696,7 +877,7 @@ describe('BrsFile', () => {
                     print 9876543210&
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('does not error when encountering sub with return type', () => {
@@ -705,7 +886,7 @@ describe('BrsFile', () => {
                     return
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('does not lose function scopes when mismatched end sub', () => {
@@ -743,7 +924,7 @@ describe('BrsFile', () => {
                     foo.bar = true and false or 3 > 4
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('does not error with boolean in RHS of set statement', () => {
@@ -757,7 +938,7 @@ describe('BrsFile', () => {
                     m.isTrue = m.isTrue = m.isTrue
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports variable names ending with type designators', () => {
@@ -770,7 +951,7 @@ describe('BrsFile', () => {
                   someHex& = 13
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports multiple spaces between two-word keywords', () => {
@@ -783,7 +964,7 @@ describe('BrsFile', () => {
                     end if
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('does not error with `stop` as object key', () => {
@@ -797,7 +978,7 @@ describe('BrsFile', () => {
                     return obj
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('does not error with `run` as object key', () => {
@@ -811,7 +992,7 @@ describe('BrsFile', () => {
                     return obj
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports assignment operators', () => {
@@ -829,7 +1010,7 @@ describe('BrsFile', () => {
                     print x
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports `then` as object property', () => {
@@ -842,7 +1023,7 @@ describe('BrsFile', () => {
                     promise.then()
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports function as parameter type', () => {
@@ -852,7 +1033,7 @@ describe('BrsFile', () => {
                     end function
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports increment operator', () => {
@@ -862,8 +1043,7 @@ describe('BrsFile', () => {
                     x++
                 end function
             `);
-            file.getDiagnostics();
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports decrement operator', () => {
@@ -873,8 +1053,7 @@ describe('BrsFile', () => {
                     x--
                 end function
             `);
-            file.getDiagnostics();
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports writing numbers with decimal but no trailing digit', () => {
@@ -884,7 +1063,7 @@ describe('BrsFile', () => {
                     print x
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports assignment operators against object properties', () => {
@@ -907,7 +1086,7 @@ describe('BrsFile', () => {
                     print m.age
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         //skipped until `brs` supports this
@@ -920,7 +1099,7 @@ describe('BrsFile', () => {
                     print x
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         //skipped until `brs` supports this
@@ -933,7 +1112,7 @@ describe('BrsFile', () => {
                         print m.x
                     end function
                 `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports leading and trailing periods for numeric literals', () => {
@@ -945,7 +1124,7 @@ describe('BrsFile', () => {
                     print pointOne
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports bitshift assignment operators on object properties accessed by array syntax', () => {
@@ -957,7 +1136,7 @@ describe('BrsFile', () => {
                         print m.x
                     end function
                 `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('supports weird period AA accessor', () => {
@@ -967,52 +1146,50 @@ describe('BrsFile', () => {
                     print m.["_uuid"]
                 end function
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('adds error for library statements NOT at top of file', () => {
-            let file = program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/file.brs', ``);
+            program.setFile('source/main.bs', `
                 sub main()
                 end sub
                 import "file.brs"
             `);
-            expect(
-                file.getDiagnostics().map(x => x.message)
-            ).to.eql([
-                DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile().message
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile()
             ]);
         });
 
         it('supports library imports', () => {
-            file.parse(`
+            program.setFile('source/main.brs', `
                 Library "v30/bslCore.brs"
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(program);
         });
 
         it('adds error for library statements NOT at top of file', () => {
-            let file = program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                 end sub
                 Library "v30/bslCore.brs"
             `);
-            expect(
-                file.getDiagnostics().map(x => x.message)
-            ).to.eql([
-                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile().message
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile()
             ]);
         });
 
         it('adds error for library statements inside of function body', () => {
-            let file = program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     Library "v30/bslCore.brs"
                 end sub
             `);
-            expect(
-                file.getDiagnostics().map(x => x.message)
-            ).to.eql([
-                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile().message
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile()
             ]);
         });
 
@@ -1022,11 +1199,11 @@ describe('BrsFile', () => {
                     obj = {x:0 : y: 1}
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expectZeroDiagnostics(file);
         });
 
         it('succeeds when finding variables with "sub" in them', () => {
-            let file = program.addOrReplaceFile('source/main.brs', `
+            let file = program.setFile('source/main.brs', `
                 function DoSomething()
                     return value.subType()
                 end function
@@ -1118,10 +1295,8 @@ describe('BrsFile', () => {
                 function DoSomething
                 end function
             `);
-            expect(file.getDiagnostics().length).to.be.greaterThan(0);
-            expect(file.getDiagnostics()[0]).to.deep.include({
-                file: file
-            });
+            expectHasDiagnostics(file);
+            expect(file.getDiagnostics()[0].file).to.equal(file);
             expect(file.getDiagnostics()[0].range.start.line).to.equal(1);
         });
 
@@ -1134,7 +1309,7 @@ describe('BrsFile', () => {
                     next
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.empty;
+            expectZeroDiagnostics(file);
         });
 
         //test is not working yet, but will be enabled when brs supports this syntax
@@ -1148,7 +1323,7 @@ describe('BrsFile', () => {
                     end sub
                 end function
             `);
-            expect(file.getDiagnostics().length).to.equal(0);
+            expectZeroDiagnostics(file);
         });
     });
 
@@ -1265,7 +1440,11 @@ describe('BrsFile', () => {
             `);
             expect(file.functionCalls.length).to.equal(1);
 
-            expect(file.functionCalls[0].args).to.eql([{
+            const argsMap = file.functionCalls[0].args.map(arg => {
+                // disregard arg.expression, etc.
+                return { type: arg.type, range: arg.range, text: arg.text };
+            });
+            expect(argsMap).to.eql([{
                 type: new StringType(),
                 range: util.createRange(2, 32, 2, 38),
                 text: '"name"'
@@ -1281,7 +1460,7 @@ describe('BrsFile', () => {
         });
 
         it('finds function calls nested inside statements', () => {
-            program.addOrReplaceFile(`source/main.brs`, `
+            program.setFile(`source/main.brs`, `
                 sub main()
                     if true then
                         DoesNotExist(1, 2)
@@ -1289,11 +1468,9 @@ describe('BrsFile', () => {
                 end sub
             `);
             program.validate();
-            expect(
-                program.getDiagnostics()[0]?.message
-            ).to.equal(
-                DiagnosticMessages.callToUnknownFunction('DoesNotExist', 'source').message
-            );
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('DoesNotExist')
+            ]);
         });
 
         it('finds arguments with variable values', () => {
@@ -1331,7 +1508,7 @@ describe('BrsFile', () => {
         });
 
         it('finds return type', () => {
-            let file = program.addOrReplaceFile('source/main.brs', `
+            let file = program.setFile('source/main.brs', `
                 function DoSomething() as string
                 end function
             `);
@@ -1434,7 +1611,7 @@ describe('BrsFile', () => {
         });
 
         it('finds value from global return', () => {
-            let file = program.addOrReplaceFile('source/main.brs', `
+            let file = program.setFile('source/main.brs', `
                 sub Main()
                    myName = GetName()
                 end sub
@@ -1484,7 +1661,7 @@ describe('BrsFile', () => {
     });
 
     it('handles mixed case `then` partions of conditionals', () => {
-        let mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
             sub Main()
                 if true then
                     print "works"
@@ -1493,7 +1670,7 @@ describe('BrsFile', () => {
         `);
 
         expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
-        mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
             sub Main()
                 if true Then
                     print "works"
@@ -1502,7 +1679,7 @@ describe('BrsFile', () => {
         `);
         expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
 
-        mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
             sub Main()
                 if true THEN
                     print "works"
@@ -1512,8 +1689,324 @@ describe('BrsFile', () => {
         expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
     });
 
+    describe('getHover', () => {
+        it('works for param types', () => {
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub DoSomething(name as string)
+                    name = 1
+                    sayMyName = function(name as string)
+                    end function
+                end sub
+            `);
+
+            //hover over the `name = 1` line
+            let hover = program.getHover(file.srcPath, Position.create(2, 24));
+            expect(hover).to.exist;
+            expect(hover.range).to.eql(Range.create(2, 20, 2, 24));
+
+            //hover over the `name` parameter declaration
+            hover = program.getHover(file.srcPath, Position.create(1, 34));
+            expect(hover).to.exist;
+            expect(hover.range).to.eql(Range.create(1, 32, 1, 36));
+        });
+
+        //ignore this for now...it's not a huge deal
+        it('does not match on keywords or data types', () => {
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main(name as string)
+                end sub
+                sub as()
+                end sub
+            `);
+            //hover over the `as`
+            expect(program.getHover(file.srcPath, Position.create(1, 31))).not.to.exist;
+            //hover over the `string`
+            expect(program.getHover(file.srcPath, Position.create(1, 36))).not.to.exist;
+        });
+
+        it('finds declared function', () => {
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                function Main(count = 1)
+                    firstName = "bob"
+                    age = 21
+                    shoeSize = 10
+                end function
+            `);
+
+            let hover = program.getHover(file.srcPath, Position.create(1, 28));
+            expect(hover).to.exist;
+
+            expect(hover.range).to.eql(Range.create(1, 25, 1, 29));
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'function Main(count? as dynamic) as dynamic',
+                '```'
+            ].join('\n'));
+        });
+
+        it('finds declared namespace function', () => {
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            namespace mySpace
+                function Main(count = 1)
+                    firstName = "bob"
+                    age = 21
+                    shoeSize = 10
+                end function
+            end namespace
+            `);
+
+            let hover = program.getHover(file.srcPath, Position.create(2, 28));
+            expect(hover).to.exist;
+
+            expect(hover.range).to.eql(Range.create(2, 25, 2, 29));
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'function Main(count? as dynamic) as dynamic',
+                '```'
+            ].join('\n'));
+        });
+
+        it('finds variable function hover in same scope', () => {
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main()
+                    sayMyName = sub(name as string)
+                    end sub
+
+                    sayMyName()
+                end sub
+            `);
+
+            let hover = program.getHover(file.srcPath, Position.create(5, 24));
+
+            expect(hover.range).to.eql(Range.create(5, 20, 5, 29));
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName(name as string) as void',
+                '```'
+            ].join('\n'));
+        });
+
+        it('does not crash when hovering on built-in functions', () => {
+            let file = program.setFile('source/main.brs', `
+                function doUcase(text)
+                    return ucase(text)
+                end function
+            `);
+
+            expect(
+                program.getHover(file.srcPath, Position.create(2, 30)).contents
+            ).to.equal([
+                '```brightscript',
+                'function UCase(s as string) as string',
+                '```'
+            ].join('\n'));
+        });
+
+        it('does not crash when hovering on object method call', () => {
+            let file = program.setFile('source/main.brs', `
+                function getInstr(url, text)
+                    return url.instr(text)
+                end function
+            `);
+
+            expect(
+                program.getHover(file.srcPath, Position.create(2, 35)).contents
+            ).to.equal([
+                '```brightscript',
+                //TODO this really shouldn't be returning the global function, but it does...so make sure it doesn't crash right now.
+                'function Instr(start as integer, text as string, substring as string) as integer',
+                '```'
+            ].join('\n'));
+        });
+
+        it('finds function hover in file scope', () => {
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main()
+                    sayMyName()
+                end sub
+
+                sub sayMyName()
+
+                end sub
+            `);
+
+            let hover = program.getHover(file.srcPath, Position.create(2, 25));
+
+            expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName() as void',
+                '```'
+            ].join('\n'));
+        });
+
+        it('finds namespace function hover in file scope', () => {
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                namespace mySpace
+                sub Main()
+                    sayMyName()
+                end sub
+
+                sub sayMyName()
+
+                end sub
+                end namespace
+            `);
+
+            let hover = program.getHover(file.srcPath, Position.create(3, 25));
+
+            expect(hover.range).to.eql(Range.create(3, 20, 3, 29));
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName() as void',
+                '```'
+            ].join('\n'));
+        });
+
+        it('finds function hover in scope', () => {
+            let rootDir = process.cwd();
+            program = new Program({
+                rootDir: rootDir
+            });
+
+            let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main()
+                    sayMyName()
+                end sub
+            `);
+
+            program.setFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+                sub sayMyName(name as string)
+
+                end sub
+            `);
+
+            let hover = program.getHover(mainFile.srcPath, Position.create(2, 25));
+            expect(hover).to.exist;
+
+            expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName(name as string) as void',
+                '```'
+            ].join('\n'));
+        });
+
+        it('finds namespace function hover in scope', () => {
+            let rootDir = process.cwd();
+            program = new Program({
+                rootDir: rootDir
+            });
+
+            let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main()
+                    mySpace.sayMyName()
+                end sub
+            `);
+
+            program.setFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+                namespace mySpace
+                    sub sayMyName(name as string)
+                    end sub
+                end namespace
+            `);
+
+            let hover = program.getHover(mainFile.srcPath, Position.create(2, 34));
+            expect(hover).to.exist;
+
+            expect(hover.range).to.eql(Range.create(2, 28, 2, 37));
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName(name as string) as void',
+                '```'
+            ].join('\n'));
+        });
+
+        it('includes markdown comments in hover.', () => {
+            let rootDir = process.cwd();
+            program = new Program({
+                rootDir: rootDir
+            });
+
+            const file = program.setFile('source/lib.brs', `
+                '
+                ' The main function
+                '
+                sub main()
+                    log("hello")
+                end sub
+
+                '
+                ' Prints a message to the log.
+                ' Works with *markdown* **content**
+                '
+                sub log(message as string)
+                    print message
+                end sub
+            `);
+
+            //hover over log("hello")
+            expect(
+                program.getHover(file.srcPath, Position.create(5, 22)).contents
+            ).to.equal([
+                '```brightscript',
+                'sub log(message as string) as void',
+                '```',
+                '***',
+                '',
+                ' Prints a message to the log.',
+                ' Works with *markdown* **content**',
+                ''
+            ].join('\n'));
+
+            //hover over sub ma|in()
+            expect(
+                trim(
+                    program.getHover(file.srcPath, Position.create(4, 22)).contents.toString()
+                )
+            ).to.equal(trim`
+                \`\`\`brightscript
+                sub main() as void
+                \`\`\`
+                ***
+
+                 The main function
+                `
+            );
+        });
+
+        it('handles mixed case `then` partions of conditionals', () => {
+            let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main()
+                    if true then
+                        print "works"
+                    end if
+                end sub
+            `);
+
+            expectZeroDiagnostics(mainFile);
+            mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main()
+                    if true Then
+                        print "works"
+                    end if
+                end sub
+            `);
+            expectZeroDiagnostics(mainFile);
+
+            mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main()
+                    if true THEN
+                        print "works"
+                    end if
+                end sub
+            `);
+            expectZeroDiagnostics(mainFile);
+        });
+    });
+
     it('does not throw when encountering incomplete import statement', () => {
-        program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
             import
             sub main()
             end sub
@@ -1523,6 +2016,149 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('excludes trailing commas in array literals', () => {
+            testTranspile(`
+                sub main()
+                    arr = [
+                        1,
+                        2,
+                        3
+                    ]
+                    obj = {
+                        one: 1,
+                        two: 2,
+                        three: 3
+                    }
+                end sub
+            `, `
+                sub main()
+                    arr = [
+                        1
+                        2
+                        3
+                    ]
+                    obj = {
+                        one: 1
+                        two: 2
+                        three: 3
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles if statement keywords as provided', () => {
+            const code = `
+                sub main()
+                    If True Then
+                        Print True
+                    Else If True Then
+                        print True
+                    Else If False Then
+                        Print False
+                    Else
+                        Print False
+                    End If
+                end sub
+            `;
+            testTranspile(code);
+            testTranspile(code.toLowerCase());
+            testTranspile(code.toUpperCase());
+        });
+
+        it('does not transpile `then` tokens', () => {
+            testTranspile(`
+                sub main()
+                    if true
+                        print true
+                    else if true
+                        print false
+                    end if
+                end sub
+            `);
+        });
+
+        it('honors spacing between multi-word tokens', () => {
+            testTranspile(`
+                sub main()
+                    if true
+                        print true
+                    elseif true
+                        print false
+                    endif
+                end sub
+            `);
+        });
+
+        it('handles when only some of the statements have `then`', () => {
+            testTranspile(`
+                sub main()
+                    if true
+                    else if true then
+                    else if true
+                    else if true then
+                        if true then
+                            return true
+                        end if
+                    end if
+                end sub
+            `);
+        });
+
+        it('retains casing of parameter types', () => {
+            function test(type: string) {
+                testTranspile(`
+                    sub one(a as ${type}, b as ${type.toUpperCase()}, c as ${type.toLowerCase()})
+                    end sub
+                `);
+            }
+            test('Boolean');
+            test('Double');
+            test('Dynamic');
+            test('Float');
+            test('Integer');
+            test('LongInteger');
+            test('Object');
+            test('String');
+        });
+
+        it('retains casing of return types', () => {
+            function test(type: string) {
+                testTranspile(`
+                    sub one() as ${type}
+                    end sub
+
+                    sub two() as ${type.toLowerCase()}
+                    end sub
+
+                    sub three() as ${type.toUpperCase()}
+                    end sub
+                `);
+            }
+            test('Boolean');
+            test('Double');
+            test('Dynamic');
+            test('Float');
+            test('Integer');
+            test('LongInteger');
+            test('Object');
+            test('String');
+            test('Void');
+        });
+
+        it('retains casing of literal types', () => {
+            function test(type: string) {
+                testTranspile(`
+                    sub main()
+                        thing = ${type}
+                        thing = ${type.toLowerCase()}
+                        thing = ${type.toUpperCase()}
+                    end sub
+                `);
+            }
+            test('Invalid');
+            test('True');
+            test('False');
+        });
         describe('throwStatement', () => {
             it('transpiles properly', () => {
                 testTranspile(`
@@ -1541,7 +2177,7 @@ describe('BrsFile', () => {
                 testTranspile(`
                     sub main()
                         try
-                            print a.b.c
+                            print m.b.c
                         catch e
                             print e
                         end try
@@ -1560,7 +2196,7 @@ describe('BrsFile', () => {
                     sub main()
                         sayHello = NameA.NameB.Speak
                         sayHello()
-                        someOtherObject = some.other.object
+                        someOtherObject = m.other.object
                     end sub
                 `, `
                     sub NameA_NameB_Speak()
@@ -1569,7 +2205,7 @@ describe('BrsFile', () => {
                     sub main()
                         sayHello = NameA_NameB_Speak
                         sayHello()
-                        someOtherObject = some.other.object
+                        someOtherObject = m.other.object
                     end sub
                 `);
             });
@@ -1674,7 +2310,7 @@ describe('BrsFile', () => {
             `, `
                 function Vertibrates_Birds_GetAllBirds()
                     return [
-                        Vertibrates_Birds_GetDuck(),
+                        Vertibrates_Birds_GetDuck()
                         Vertibrates_Birds_GetGoose()
                     ]
                 end function
@@ -1706,27 +2342,42 @@ describe('BrsFile', () => {
         });
 
         it('transpiles dim', () => {
-            testTranspile(`Dim c[5]`, `Dim c[5]`);
-            testTranspile(`Dim c[5, 4]`, `Dim c[5, 4]`);
-            testTranspile(`Dim c[5, 4, 6]`, `Dim c[5, 4, 6]`);
-            testTranspile(`Dim requestData[requestList.count()]`, `Dim requestData[requestList.count()]`);
-            testTranspile(`Dim requestData[1, requestList.count()]`, `Dim requestData[1, requestList.count()]`);
-            testTranspile(`Dim requestData[1, requestList.count(), 2]`, `Dim requestData[1, requestList.count(), 2]`);
-            testTranspile(`Dim requestData[requestList[2]]`, `Dim requestData[requestList[2]]`);
-            testTranspile(`Dim requestData[1, requestList[2]]`, `Dim requestData[1, requestList[2]]`);
-            testTranspile(`Dim requestData[1, requestList[2], 2]`, `Dim requestData[1, requestList[2], 2]`);
-            testTranspile(`Dim requestData[requestList["2"]]`, `Dim requestData[requestList["2"]]`);
-            testTranspile(`Dim requestData[1, requestList["2"]]`, `Dim requestData[1, requestList["2"]]`);
-            testTranspile(`Dim requestData[1, requestList["2"], 2]`, `Dim requestData[1, requestList["2"], 2]`);
-            testTranspile(`Dim requestData[1, getValue(), 2]`, `Dim requestData[1, getValue(), 2]`);
+            function doTest(code: string) {
+                testTranspile(`
+                    sub main()
+                        requestList = []
+                        ${code}
+                    end sub
+                `, `
+                    sub main()
+                        requestList = []
+                        ${code}
+                    end sub
+                `);
+            }
+            doTest(`Dim c[5]`);
+            doTest(`Dim c[5, 4]`);
+            doTest(`Dim c[5, 4, 6]`);
+            doTest(`Dim requestData[requestList.count()]`);
+            doTest(`Dim requestData[1, requestList.count()]`);
+            doTest(`Dim requestData[1, requestList.count(), 2]`);
+            doTest(`Dim requestData[requestList[2]]`);
+            doTest(`Dim requestData[1, requestList[2]]`);
+            doTest(`Dim requestData[1, requestList[2], 2]`);
+            doTest(`Dim requestData[requestList["2"]]`);
+            doTest(`Dim requestData[1, requestList["2"]]`);
+            doTest(`Dim requestData[1, requestList["2"], 2]`);
+            doTest(`Dim requestData[1, StrToI("1"), 2]`);
             testTranspile(`
-                Dim requestData[1, getValue({
-                    key: "value"
-                }), 2]
-            `, `
-                Dim requestData[1, getValue({
-                    key: "value"
-                }), 2]
+                function getValue(param1)
+                end function
+
+                sub main()
+                    requestList = []
+                    Dim requestData[1, getValue({
+                        key: "value"
+                    }), 2]
+                end sub
             `);
         });
 
@@ -1791,30 +2442,6 @@ describe('BrsFile', () => {
         `, null, 'trim');
         });
 
-        it('adds `then` when missing', () => {
-            testTranspile(`
-                sub a()
-                    if true
-                        print "true"
-                    else if true
-                        print "true"
-                    else
-                        print "true"
-                    end if
-                end sub
-            `, `
-                sub a()
-                    if true then
-                        print "true"
-                    else if true then
-                        print "true"
-                    else
-                        print "true"
-                    end if
-                end sub
-            `, 'trim');
-        });
-
         it('does not add leading or trailing newlines', () => {
             testTranspile(`function abc()\nend function`, undefined, 'none');
         });
@@ -1876,51 +2503,57 @@ describe('BrsFile', () => {
 
         it('handles empty if block', () => {
             testTranspile(`
-                if true then
-                end if
-                if true then
-                else
-                    print "else"
-                end if
-                if true then
-                else if true then
-                    print "else"
-                end if
-                if true then
-                else if true then
-                    print "elseif"
-                else
-                    print "else"
-                end if
+                sub main()
+                    if true then
+                    end if
+                    if true then
+                    else
+                        print "else"
+                    end if
+                    if true then
+                    else if true then
+                        print "else"
+                    end if
+                    if true then
+                    else if true then
+                        print "elseif"
+                    else
+                        print "else"
+                    end if
+                end sub
             `);
         });
 
         it('handles empty elseif block', () => {
             testTranspile(`
-                if true then
-                    print "if"
-                else if true then
-                end if
-                if true then
-                    print "if"
-                else if true then
-                else if true then
-                end if
+                sub main()
+                    if true then
+                        print "if"
+                    else if true then
+                    end if
+                    if true then
+                        print "if"
+                    else if true then
+                    else if true then
+                    end if
+                end sub
             `);
         });
 
         it('handles empty else block', () => {
             testTranspile(`
-                if true then
-                    print "if"
-                else
-                end if
-                if true then
-                    print "if"
-                else if true then
-                    print "elseif"
-                else
-                end if
+                sub main()
+                    if true then
+                        print "if"
+                    else
+                    end if
+                    if true then
+                        print "if"
+                    else if true then
+                        print "elseif"
+                    else
+                    end if
+                end sub
             `);
         });
 
@@ -1964,20 +2597,20 @@ describe('BrsFile', () => {
             testTranspile(`
                 sub doSomething()
                     person = {
-                        age: 12, 'comment
+                        age: 12 'comment
                         name: "child"
                     }
                     person = {
-                        age: 12, 'comment
+                        age: 12 'comment
                         name: "child" 'comment
                     }
                     person = {
-                        age: 12, 'comment
+                        age: 12 'comment
                         name: "child"
                         'comment
                     }
                     person = {
-                        age: 12, 'comment
+                        age: 12 'comment
                         name: "child" 'comment
                         'comment
                     }
@@ -1993,8 +2626,8 @@ describe('BrsFile', () => {
                 'a function that does something
                 function doSomething(age as integer, name = "bob") 'comment
                     person = { 'comment
-                        name: "parent", 'comment
-                        "age": 12,
+                        name: "parent" 'comment
+                        "age": 12
                         'comment as whole line
                         child: { 'comment
                             name: "child" 'comment
@@ -2030,12 +2663,12 @@ describe('BrsFile', () => {
                     stop 'comment
                     indexes = [ 'comment
                         'comment on its own line
-                        1, 'comment
-                        2, 'comment
+                        1 'comment
+                        2 'comment
                         3 'comment
                     ] 'comment
                     firstIndex = indexes[0] 'comment
-                    for each idx in indxes 'comment
+                    for each idx in indexes 'comment
                         indexes[idx] = idx + 1 'comment
                     end for 'comment
                     if not true then 'comment
@@ -2073,7 +2706,7 @@ describe('BrsFile', () => {
         });
 
         it('simple mapped files include a reference to the source map', () => {
-            let file = program.addOrReplaceFile('source/logger.brs', trim`
+            let file = program.setFile('source/logger.brs', trim`
                 sub logInfo()
                 end sub
             `);
@@ -2083,7 +2716,7 @@ describe('BrsFile', () => {
         });
 
         it('AST generated files include a reference to the source map', () => {
-            let file = program.addOrReplaceFile('source/logger.brs', trim`
+            let file = program.setFile('source/logger.brs', trim`
                 sub logInfo()
                 end sub
             `);
@@ -2093,7 +2726,7 @@ describe('BrsFile', () => {
         });
 
         it('replaces custom types in parameter types and return types', () => {
-            program.addOrReplaceFile('source/SomeKlass.bs', `
+            program.setFile('source/SomeKlass.bs', `
                 class SomeKlass
                 end class
             `);
@@ -2119,13 +2752,14 @@ describe('BrsFile', () => {
     describe('callfunc operator', () => {
         describe('transpile', () => {
             it('does not produce diagnostics', () => {
-                program.addOrReplaceFile('source/main.bs', `
-                    sub main()
-                        someObject@.someFunction(paramObject.value)
+                program.setFile('source/main.bs', `
+                    sub test()
+                        someNode = createObject("roSGNode", "Rectangle")
+                        someNode@.someFunction(test.value)
                     end sub
                 `);
                 program.validate();
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+                expectZeroDiagnostics(program);
             });
 
             it('sets invalid on empty callfunc', () => {
@@ -2168,13 +2802,12 @@ describe('BrsFile', () => {
                 name: 'transform callback',
                 afterFileParse: onParsed
             });
-            const file = new BrsFile(`absolute_path/file${ext}`, `relative_path/file${ext}`, program);
-            expect(file.extension).to.equal(ext);
-            file.parse(`
+            file = program.setFile({ src: `absolute_path/file${ext}`, dest: `relative_path/file${ext}` }, `
                 sub Sum()
                     print "hello world"
                 end sub
             `);
+            expect(file.extension).to.equal(ext);
             return file;
         }
 
@@ -2194,17 +2827,17 @@ describe('BrsFile', () => {
     describe('typedefKey', () => {
         it('works for .brs files', () => {
             expect(
-                s((program.addOrReplaceFile<BrsFile>('source/main.brs', '')).typedefKey)
+                s((program.setFile<BrsFile>('source/main.brs', '')).typedefKey)
             ).to.equal(
                 s`${rootDir.toLowerCase()}/source/main.d.bs`
             );
         });
         it('returns undefined for files that should not have a typedef', () => {
-            expect((program.addOrReplaceFile<BrsFile>('source/main.bs', '')).typedefKey).to.be.undefined;
+            expect((program.setFile<BrsFile>('source/main.bs', '')).typedefKey).to.be.undefined;
 
-            expect((program.addOrReplaceFile<BrsFile>('source/main.d.bs', '')).typedefKey).to.be.undefined;
+            expect((program.setFile<BrsFile>('source/main.d.bs', '')).typedefKey).to.be.undefined;
 
-            const xmlFile = program.addOrReplaceFile<BrsFile>('components/comp.xml', '');
+            const xmlFile = program.setFile<BrsFile>('components/comp.xml', '');
             expect(xmlFile.typedefKey).to.be.undefined;
         });
     });
@@ -2213,14 +2846,14 @@ describe('BrsFile', () => {
     describe('type definitions', () => {
         it('only exposes defined functions even if source has more', () => {
             //parse the .brs file first so it doesn't know about the typedef
-            program.addOrReplaceFile<BrsFile>('source/main.brs', `
+            program.setFile<BrsFile>('source/main.brs', `
                 sub main()
                 end sub
                 sub speak()
                 end sub
             `);
 
-            program.addOrReplaceFile('source/main.d.bs', `
+            program.setFile('source/main.d.bs', `
                 sub main()
                 end sub
             `);
@@ -2232,7 +2865,7 @@ describe('BrsFile', () => {
         });
 
         it('reacts to typedef file changes', () => {
-            let file = program.addOrReplaceFile<BrsFile>('source/main.brs', `
+            let file = program.setFile<BrsFile>('source/main.brs', `
                 sub main()
                 end sub
                 sub speak()
@@ -2241,7 +2874,7 @@ describe('BrsFile', () => {
             expect(file.hasTypedef).to.be.false;
             expect(file.typedefFile).not.to.exist;
 
-            program.addOrReplaceFile('source/main.d.bs', `
+            program.setFile('source/main.d.bs', `
                 sub main()
                 end sub
             `);
@@ -2249,7 +2882,7 @@ describe('BrsFile', () => {
             expect(file.typedefFile).to.exist;
 
             //add replace file, does it still find the typedef
-            file = program.addOrReplaceFile<BrsFile>('source/main.brs', `
+            file = program.setFile<BrsFile>('source/main.brs', `
                 sub main()
                 end sub
                 sub speak()
@@ -2267,42 +2900,42 @@ describe('BrsFile', () => {
 
     describe('typedef', () => {
         it('sets typedef path properly', () => {
-            expect((program.addOrReplaceFile<BrsFile>('source/main1.brs', '')).typedefKey).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
-            expect((program.addOrReplaceFile<BrsFile>('source/main2.d.bs', '')).typedefKey).to.equal(undefined);
-            expect((program.addOrReplaceFile<BrsFile>('source/main3.bs', '')).typedefKey).to.equal(undefined);
+            expect((program.setFile<BrsFile>('source/main1.brs', '')).typedefKey).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
+            expect((program.setFile<BrsFile>('source/main2.d.bs', '')).typedefKey).to.equal(undefined);
+            expect((program.setFile<BrsFile>('source/main3.bs', '')).typedefKey).to.equal(undefined);
             //works for dest with `.brs` extension
-            expect((program.addOrReplaceFile<BrsFile>({ src: 'source/main4.bs', dest: 'source/main4.brs' }, '')).typedefKey).to.equal(undefined);
+            expect((program.setFile<BrsFile>({ src: 'source/main4.bs', dest: 'source/main4.brs' }, '')).typedefKey).to.equal(undefined);
         });
 
         it('does not link when missing from program', () => {
-            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            const file = program.setFile<BrsFile>('source/main.brs', ``);
             expect(file.typedefFile).not.to.exist;
         });
 
         it('links typedef when added BEFORE .brs file', () => {
-            const typedef = program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
-            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            const typedef = program.setFile<BrsFile>('source/main.d.bs', ``);
+            const file = program.setFile<BrsFile>('source/main.brs', ``);
             expect(file.typedefFile).to.equal(typedef);
         });
 
         it('links typedef when added AFTER .brs file', () => {
-            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
-            const typedef = program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
+            const file = program.setFile<BrsFile>('source/main.brs', ``);
+            const typedef = program.setFile<BrsFile>('source/main.d.bs', ``);
             expect(file.typedefFile).to.eql(typedef);
         });
 
         it('removes typedef link when typedef is removed', () => {
-            const typedef = program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
-            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
-            program.removeFile(typedef.pathAbsolute);
+            const typedef = program.setFile<BrsFile>('source/main.d.bs', ``);
+            const file = program.setFile<BrsFile>('source/main.brs', ``);
+            program.removeFile(typedef.srcPath);
             expect(file.typedefFile).to.be.undefined;
         });
     });
 
     describe('getTypedef', () => {
         function testTypedef(original: string, expected: string) {
-            let file = program.addOrReplaceFile<BrsFile>('source/main.brs', original);
-            expect(file.getTypedef()).to.eql(expected);
+            let file = program.setFile<BrsFile>('source/main.brs', original);
+            expect(file.getTypedef().trimEnd()).to.eql(expected);
         }
 
         it('includes namespace on extend class names', () => {
@@ -2312,11 +2945,16 @@ describe('BrsFile', () => {
                     end class
                     class Duck extends Bird
                     end class
-                end namespace`, trim`
+                end namespace
+            `, trim`
                 namespace AnimalKingdom
                     class Bird
+                        sub new()
+                        end sub
                     end class
                     class Duck extends AnimalKingdom.Bird
+                        sub new()
+                        end sub
                     end class
                 end namespace
             `);
@@ -2358,6 +2996,8 @@ describe('BrsFile', () => {
                     function getDuck()
                     end function
                     class Duck
+                        sub new()
+                        end sub
                         @anMember
                         @anMember("field")
                         private thing as dynamic
@@ -2420,6 +3060,8 @@ describe('BrsFile', () => {
                 end namespace
             `, trim`
                 class Person
+                    sub new()
+                    end sub
                     public name as string
                     public age as integer
                     public sub getAge() as integer
@@ -2427,12 +3069,26 @@ describe('BrsFile', () => {
                 end class
                 namespace NameA.NameB
                     class Person
+                        sub new()
+                        end sub
                         public name as string
                         public age as integer
                         public sub getAge() as integer
                         end sub
                     end class
                 end namespace
+            `);
+        });
+
+        it('creates constructor properly', () => {
+            testTypedef(`
+                class Parent
+                end class
+            `, trim`
+                class Parent
+                    sub new()
+                    end sub
+                end class
             `);
         });
 
@@ -2444,6 +3100,8 @@ describe('BrsFile', () => {
                 end class
             `, trim`
                 class Human
+                    sub new()
+                    end sub
                     public firstName as dynamic
                     public lastName as string
                 end class
@@ -2492,6 +3150,8 @@ describe('BrsFile', () => {
                 end class
             `, trim`
                 class Human
+                    sub new()
+                    end sub
                     public firstName as string
                     protected middleName as string
                     private lastName as string
@@ -2519,10 +3179,14 @@ describe('BrsFile', () => {
                 end class
             `, trim`
                 class Animal
+                    sub new()
+                    end sub
                     public sub speak()
                     end sub
                 end class
                 class Dog extends Animal
+                    sub new()
+                    end sub
                     public override sub speak()
                     end sub
                 end class
@@ -2564,7 +3228,7 @@ describe('BrsFile', () => {
 
     describe('parser getter', () => {
         it('recreates the parser when missing', () => {
-            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', `
+            const file = program.setFile<BrsFile>('source/main.brs', `
                 sub main()
                 end sub
             `);
@@ -2582,11 +3246,11 @@ describe('BrsFile', () => {
         });
 
         it('call parse when previously skipped', () => {
-            program.addOrReplaceFile<BrsFile>('source/main.d.bs', `
+            program.setFile<BrsFile>('source/main.d.bs', `'typedef
                 sub main()
                 end sub
             `);
-            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', `
+            const file = program.setFile<BrsFile>('source/main.brs', `'source
                 sub main()
                 end sub
             `);
@@ -2603,59 +3267,43 @@ describe('BrsFile', () => {
     });
 
     describe('Plugins', () => {
-        function testPluginTranspile() {
-            testTranspile(`
-                sub main()
-                    sayHello(sub()
-                        print "sub hello"
-                    end sub)
-                    print "something"
-                end sub
-
-                sub sayHello(fn)
-                    fn()
-                    print "hello"
-                end sub
-            `, `
-                sub main()
-                    sayHello(sub()
-                        \n                    end sub)
-                    \n                end sub
-
-                sub sayHello(fn)
-                    fn()
-                    \n                end sub
+        let pluginFileName: string;
+        let idx = 1;
+        beforeEach(() => {
+            pluginFileName = `plugin-${idx++}.js`;
+            fsExtra.outputFileSync(s`${tempDir}/plugins/${pluginFileName}`, `
+                function plugin() {
+                    return {
+                        name: 'lower-file-name',
+                        afterFileParse: (evt) => {
+                            evt._customProp = true;
+                        }
+                    };
+                }
+                exports.default = plugin;
             `);
-        }
-
-        it('can use a plugin object which transforms the AST', () => {
-            program.plugins = new PluginInterface(
-                util.loadPlugins('', [
-                    require.resolve('../examples/plugins/removePrint')
-                ]),
-                new Logger()
-            );
-            testPluginTranspile();
         });
 
-        it('can load an absolute plugin which transforms the AST', () => {
+        it('can load an absolute plugin which receives callbacks', () => {
             program.plugins = new PluginInterface(
-                util.loadPlugins('', [
-                    path.resolve(process.cwd(), './dist/examples/plugins/removePrint.js')
+                util.loadPlugins(tempDir, [
+                    s`${tempDir}/plugins/${pluginFileName}`
                 ]),
                 new Logger()
             );
-            testPluginTranspile();
+            const file = program.setFile<any>('source/MAIN.brs', '');
+            expect(file._customProp).to.exist;
         });
 
-        it('can load a relative plugin which transforms the AST', () => {
+        it('can load a relative plugin which receives callbacks', () => {
             program.plugins = new PluginInterface(
-                util.loadPlugins(process.cwd(), [
-                    './dist/examples/plugins/removePrint.js'
+                util.loadPlugins(tempDir, [
+                    `./plugins/${pluginFileName}`
                 ]),
                 new Logger()
             );
-            testPluginTranspile();
+            const file = program.setFile<any>('source/MAIN.brs', '');
+            expect(file._customProp).to.exist;
         });
     });
 });

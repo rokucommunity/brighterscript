@@ -1,5 +1,9 @@
 # Ternary (Conditional) Operator: ?
-The ternary (conditional) operator is the only BrighterScript operator that takes three operands: a condition followed by a question mark (?), then an expression to execute (consequent) if the condition is true followed by a colon (:), and finally the expression to execute (alternate) if the condition is false. This operator is frequently used as a shortcut for the if statement. It can be used in assignments, and in any other place where an expression is valid. Due to ambiguity in the brightscript syntax, ternary operators cannot be used as standalone statements. See the [No standalone statements](#no-standalone-statements) for more information.
+The ternary (conditional) operator is the only BrighterScript operator that takes three operands: a condition followed by a question mark (?), then an expression to execute (consequent) if the condition is true followed by a colon (:), and finally the expression to execute (alternate) if the condition is false. This operator is frequently used as a shortcut for the if statement. It can be used in assignments, and in any other place where an expression is valid. Due to ambiguity in the brightscript syntax, ternary operators cannot be used as standalone statements. See the [No standalone statements](#no-standalone-statements) section for more information.
+
+## Warning
+<p style="background-color: #fdf8e3; color: #333; padding: 20px">The <a href="https://developer.roku.com/docs/references/brightscript/language/expressions-variables-types.md#optional-chaining-operators">optional chaining operator</a> was added to the BrightScript runtime in <a href="https://developer.roku.com/docs/developer-program/release-notes/roku-os-release-notes.md#roku-os-110">Roku OS 11</a>, which introduced a slight limitation to the BrighterScript ternary operator. As such, all ternary expressions must have a space to the right of the question mark when followed by <b>[</b> or <b>(</b>. See the <a href="#">optional chaning</a> section for more information.
+</p>
 
 ## Basic usage
 
@@ -10,7 +14,7 @@ authStatus = user <> invalid ? "logged in" : "not logged in"
 transpiles to:
 
 ```BrightScript
-a = bslib_ternary(user = invalid, "no user", "logged in")
+authStatus = bslib_ternary(user <> invalid, "logged in", "not logged in")
 ```
 
 The `bslib_ternary` function checks the condition, and returns either the consequent or alternate.
@@ -102,7 +106,7 @@ a = (function(__bsCondition, getNoNameMessage, m, user)
     end function)(user = invalid, getNoNameMessage, m, user)
 ```
 
-### nested scope protection
+### Nested Scope Protection
 The scope protection works for multiple levels as well
 ```BrighterScript
 m.count = 1
@@ -174,3 +178,45 @@ a = (myValue ? "a" : "b'")
 ```
 
 This ambiguity is why BrighterScript does not allow for standalone ternary statements.
+
+
+## Optional Chaining considerations
+The [optional chaining operator](https://developer.roku.com/docs/references/brightscript/language/expressions-variables-types.md#optional-chaining-operators) was added to the BrightScript runtime in <a href="https://developer.roku.com/docs/developer-program/release-notes/roku-os-release-notes.md#roku-os-110">Roku OS 11</a>, which introduced a slight limitation to the BrighterScript ternary operator. As such, all ternary expressions must have a space to the right of the question mark when followed by `[` or `(`. If there's no space, then it's optional chaining.
+
+For example:
+
+*Ternary:*
+```brightscript
+data = isTrue ? ["key"] : getFalseData()
+data = isTrue ? (1 + 2) : getFalseData()
+```
+*Optional chaining:*
+```brightscript
+data = isTrue ?["key"] : getFalseData()
+data = isTrue ?(1 + 2) : getFalseData()
+```
+
+The colon symbol `:` can be used in BrightScript to include multiple statements on a single line. So, let's look at the first ternary statement again.
+```brightscript
+data = isTrue ? ["key"] : getFalseData()
+```
+
+This can be logically rewritten as:
+```brightscript
+if isTrue then
+    data = ["key"]
+else
+    data = getFalseData()
+```
+
+Now consider the first optional chaining example:
+```brightscript
+data = isTrue ?["key"] : getFalseData()
+```
+This can be logically rewritten as:
+```brightscript
+data = isTrue ?["key"]
+getFalseData()
+```
+
+Both examples have valid use cases, so just remember that a single space could result in significantly different code output.

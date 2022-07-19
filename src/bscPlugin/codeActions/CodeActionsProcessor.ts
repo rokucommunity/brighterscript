@@ -6,7 +6,7 @@ import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { BscFile, OnGetCodeActionsEvent } from '../../interfaces';
-import { ParseMode } from '../../parser';
+import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
 
 export class CodeActionsProcessor {
@@ -18,8 +18,8 @@ export class CodeActionsProcessor {
 
     public process() {
         for (const diagnostic of this.event.diagnostics) {
-            if (diagnostic.code === DiagnosticCodeMap.callToUnknownFunction) {
-                this.suggestFunctionImports(diagnostic as any);
+            if (diagnostic.code === DiagnosticCodeMap.cannotFindName) {
+                this.suggestCannotFindName(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
                 this.suggestClassImports(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
@@ -55,7 +55,7 @@ export class CodeActionsProcessor {
                     kind: CodeActionKind.QuickFix,
                     changes: [{
                         type: 'insert',
-                        filePath: this.event.file.pathAbsolute,
+                        filePath: this.event.file.srcPath,
                         position: insertPosition,
                         newText: `import "${pkgPath}"\n`
                     }]
@@ -64,16 +64,22 @@ export class CodeActionsProcessor {
         }
     }
 
-    private suggestFunctionImports(diagnostic: DiagnosticMessageType<'callToUnknownFunction'>) {
+    private suggestCannotFindName(diagnostic: DiagnosticMessageType<'cannotFindName'>) {
         //skip if not a BrighterScript file
         if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
             return;
         }
-        const lowerFunctionName = diagnostic.data.functionName.toLowerCase();
+        const lowerName = (diagnostic.data.fullName ?? diagnostic.data.name).toLowerCase();
+
         this.suggestImports(
             diagnostic,
-            lowerFunctionName,
-            this.event.file.program.findFilesForFunction(lowerFunctionName)
+            lowerName,
+            [
+                ...this.event.file.program.findFilesForFunction(lowerName),
+                ...this.event.file.program.findFilesForClass(lowerName),
+                ...this.event.file.program.findFilesForNamespace(lowerName),
+                ...this.event.file.program.findFilesForEnum(lowerName)
+            ]
         );
     }
 
@@ -91,7 +97,7 @@ export class CodeActionsProcessor {
     }
 
     private addMissingExtends(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {
-        const srcPath = this.event.file.pathAbsolute;
+        const srcPath = this.event.file.srcPath;
         const { component } = (this.event.file as XmlFile).parser.ast;
         //inject new attribute after the final attribute, or after the `<component` if there are no attributes
         const pos = (component.attributes[component.attributes.length - 1] ?? component.tag).range.end;

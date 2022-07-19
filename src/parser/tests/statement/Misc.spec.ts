@@ -1,8 +1,10 @@
 import { expect } from 'chai';
 import { Parser } from '../../Parser';
-import { Lexer, DisallowedLocalIdentifiersText, TokenKind } from '../../../lexer';
+import { Lexer } from '../../../lexer/Lexer';
+import { DisallowedLocalIdentifiersText, TokenKind } from '../../../lexer/TokenKind';
 import { Range } from 'vscode-languageserver';
 import type { AAMemberExpression } from '../../Expression';
+import { expectZeroDiagnostics } from '../../../testHelpers.spec';
 
 describe('parser', () => {
     describe('`end` keyword', () => {
@@ -73,25 +75,28 @@ describe('parser', () => {
             statementList.push(statements);
         });
     });
+
     it('allows certain TokenKinds to be treated as local variables', () => {
         //a few additional keywords that we don't have tokenKinds for
-        let { tokens } = Lexer.scan(`
-            sub main()
-                Void = true
-                Number = true
-                Boolean = true
-                Integer = true
-                LongInteger = true
-                Float = true
-                Double = true
-                String = true
-                Object = true
-                Interface = true
-                Dynamic = true
-            end sub
-        `);
-        let { diagnostics } = Parser.parse(tokens);
-        expect(diagnostics).to.be.lengthOf(0);
+        expectZeroDiagnostics(
+            Parser.parse(`
+                sub main()
+                    Void = true
+                    Number = true
+                    Boolean = true
+                    Integer = true
+                    LongInteger = true
+                    Float = true
+                    Double = true
+                    String = true
+                    Object = true
+                    Interface = true
+                    Dynamic = true
+                    Class = true
+                    Namespace = true
+                end sub
+            `)
+        );
     });
 
     it('allows certain TokenKinds as object properties', () => {

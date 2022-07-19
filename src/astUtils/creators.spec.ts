@@ -1,4 +1,6 @@
 import { expect } from 'chai';
+import { interpolatedRange } from '..';
+import { TranspileState } from '../parser/TranspileState';
 import { createStringLiteral } from './creators';
 
 describe('creators', () => {
@@ -16,6 +18,15 @@ describe('creators', () => {
             expect(createStringLiteral('"hello world').token.text).to.equal('"hello world');
             //trailing
             expect(createStringLiteral('hello world"').token.text).to.equal('hello world"');
+        });
+    });
+
+    describe('interpolatedRange', () => {
+        it('can be used in sourcemaps', () => {
+            const state = new TranspileState('source/main.brs', {});
+            const node = state.sourceNode({ range: interpolatedRange }, 'code');
+            //should not crash
+            node.toStringWithSourceMap();
         });
     });
 });

@@ -2,10 +2,12 @@
 
 A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
-[![build](https://img.shields.io/github/workflow/status/rokucommunity/brighterscript/build.svg?logo=github)](https://github.com/rokucommunity/brighterscript/actions?query=workflow%3Abuild)
-[![Coverage Status](https://coveralls.io/repos/github/rokucommunity/brighterscript/badge.svg?branch=master)](https://coveralls.io/github/rokucommunity/brighterscript?branch=master)
-[![NPM Version](https://badge.fury.io/js/brighterscript.svg?style=flat)](https://npmjs.org/package/brighterscript)
-
+[![build status](https://img.shields.io/github/workflow/status/rokucommunity/brighterscript/build.svg?logo=github)](https://github.com/rokucommunity/brighterscript/actions?query=workflow%3Abuild)
+[![coverage status](https://img.shields.io/coveralls/github/rokucommunity/brighterscript?logo=coveralls)](https://coveralls.io/github/rokucommunity/brighterscript?branch=master)
+[![monthly downloads](https://img.shields.io/npm/dm/brighterscript.svg?sanitize=true&logo=npm&logoColor=)](https://npmcharts.com/compare/brighterscript?minimal=true)
+[![npm version](https://img.shields.io/npm/v/brighterscript.svg?logo=npm)](https://www.npmjs.com/package/brighterscript)
+[![license](https://img.shields.io/npm/l/brighterscript.svg)](LICENSE)
+[![Slack](https://img.shields.io/badge/Slack-RokuCommunity-4A154B?logo=slack)](https://join.slack.com/t/rokudevelopers/shared_invite/zt-4vw7rg6v-NH46oY7hTktpRIBM_zGvwA)
 
 ## Overview
 
@@ -59,12 +61,27 @@ BrighterScript adds several new features to the BrightScript language such as Na
   - And if it's not enough, the [plugin API](https://github.com/rokucommunity/brighterscript/blob/master/docs/plugins.md) allows extending the compiler to provide extra diagnostics or transformations.
 
 ## Who uses Brighterscript?
+<br/>
+<p align="center">
+    <a href="https://www.applicaster.com/">
+        <img src="https://user-images.githubusercontent.com/2544493/96571912-377af280-129a-11eb-8295-49eb12e54aeb.png">
+    </a>&nbsp;&nbsp;&nbsp;
+    <a href="https://www.miraclechannel.ca/corcoplus">
+        <img src="https://user-images.githubusercontent.com/2544493/157429644-ba0d574a-d3c3-425f-8e68-98103fb8f707.png">
+    </a>&nbsp;&nbsp;&nbsp;
+    <a href="https://www.nba.com/">
+        <img src="https://user-images.githubusercontent.com/2544493/157430017-a27b62d0-63de-4e87-a6df-8448007bd24d.png">
+    </a>&nbsp;&nbsp;&nbsp;
+    <a href="https://channelstore.roku.com/details/222212/phototv">
+        <img height="34" src="https://user-images.githubusercontent.com/2544493/169118062-81d94da5-2323-4e31-b19d-7db3f9c88dff.png">
+    </a>&nbsp;&nbsp;&nbsp;
+</p>
+<br/>
 
-Brighterscript is used by [applicaster](https://www.applicaster.com/), [The miracle channel](https://miraclechannel.ca/corco/), and in open source projects such as [rooibos](https://github.com/georgejecook/rooibos/blob/master/docs/index.md), and the [maestro framework](https://github.com/georgejecook/maestro/blob/master/docs/index.md). The language has been in use for almost a year, and there are at least 2,000+ BrighterScript transpiled files on published channels.
 
-The BrighterScript project is used to power the popular [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=celsoaf.brightscript) VSCode extension, and other tools.
+The BrighterScript project is used to power the popular [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=rokucommunity.brightscript) VSCode extension, the [maestro framework](https://github.com/georgejecook/maestro/blob/master/docs/index.md), and more.
 
-More projects are adopting BrighterScript all the time, from using the new BrighterScript language features to simply using the compiler as part of their build pipeline. Be sure to watch this space!
+[Contact us](https://github.com/rokucommunity/brighterscript/issues/new) if you use BrighterScript on your project and would like your logo listed above. More projects are adopting BrighterScript all the time, from using the new BrighterScript language features to simply using the compiler in their build pipeline.
 
 ## What's with the name?
 The name BrighterScript is a compliment to everything that is great about Roku's awesome BrightScript language. Naming things is hard, and discoverability and recognizability are both very important. Here are the reasons we chose this name:
@@ -225,6 +242,11 @@ These are the options available in the `bsconfig.json` file.
  - **sourceRoot**: `string` - Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
 
  - **plugins**: `Array<string>` - List of node scripts or npm modules to load as plugins to the BrighterScript compiler.
+
+ - **require**: `Array<string>` - List of node scripts or npm modules to load during the startup sequence. Useful for running things like `ts-node/require`
+
+ - **allowBrighterScriptInBrightScript**: `boolean` - Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
+
 
 ## Ignore errors and warnings on a per-line basis
 In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:

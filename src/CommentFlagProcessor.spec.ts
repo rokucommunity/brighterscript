@@ -153,4 +153,17 @@ describe('CommentFlagProcessor', () => {
             });
         });
     });
+
+    describe('tryAdd', () => {
+        it('supports non-numeric codes', () => {
+            processor.tryAdd(`'bs:disable-line lint123 LINT2 some-textual-diagnostic`, Range.create(0, 0, 0, 54));
+            expect(
+                processor.commentFlags.flatMap(x => x.codes)
+            ).to.eql([
+                'lint123',
+                'lint2',
+                'some-textual-diagnostic'
+            ]);
+        });
+    });
 });

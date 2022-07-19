@@ -5,6 +5,7 @@ import { Position, Range } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
+import { DiagnosticMessages } from './DiagnosticMessages';
 const sinon = createSandbox();
 let tempDir = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tempDir}/rootDir`;
@@ -85,7 +86,7 @@ describe('util', () => {
                     'bsplugin'
                 ]
             };
-            util.resolvePluginPaths(config, `${rootDir}/config/child.json`);
+            util.resolvePathsRelativeTo(config, 'plugins', s`${rootDir}/config`);
             expect(config.plugins.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
                 `${rootDir}/config/plugins.js`,
                 `${rootDir}/config/scripts/plugins.js`,
@@ -104,9 +105,9 @@ describe('util', () => {
                     undefined
                 ]
             };
-            util.resolvePluginPaths(config, `${process.cwd()}/config/child.json`);
+            util.resolvePathsRelativeTo(config, 'plugins', s`${process.cwd()}/config`);
             expect(config.plugins.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
-                `${process.cwd()}/config/plugins.js`,
+                s`${process.cwd()}/config/plugins.js`,
                 'bsplugin'
             ].map(p => util.pathSepNormalize(p, '/')));
         });
@@ -533,6 +534,22 @@ describe('util', () => {
     });
 
     describe('rangesIntersect', () => {
+        it('does not match when ranges do not touch (a < b)', () => {
+            // AA BB
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 0, 0, 1),
+                util.createRange(0, 2, 0, 3)
+            )).to.be.false;
+        });
+
+        it('does not match when ranges do not touch (a < b)', () => {
+            // BB AA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 2, 0, 3),
+                util.createRange(0, 0, 0, 1)
+            )).to.be.false;
+        });
+
         it('does not match when ranges touch at right edge', () => {
             // AABB
             expect(util.rangesIntersect(
@@ -603,6 +620,199 @@ describe('util', () => {
                 util.createRange(0, 1, 0, 3),
                 util.createRange(0, 1, 2, 0)
             )).to.be.true;
+        });
+    });
+
+    describe('rangesIntersectOrTouch', () => {
+        it('does not match when ranges do not touch (a < b)', () => {
+            // AA BB
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 0, 0, 1),
+                util.createRange(0, 2, 0, 3)
+            )).to.be.false;
+        });
+
+        it('does not match when ranges do not touch (a < b)', () => {
+            // BB AA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 2, 0, 3),
+                util.createRange(0, 0, 0, 1)
+            )).to.be.false;
+        });
+
+        it('matches when ranges touch at right edge', () => {
+            // AABB
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 0, 0, 1),
+                util.createRange(0, 1, 0, 2)
+            )).to.be.true;
+        });
+
+        it('matches when ranges touch at left edge', () => {
+            // BBAA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 0, 2),
+                util.createRange(0, 0, 0, 1)
+            )).to.be.true;
+        });
+
+        it('matches when range overlaps by single character on the right', () => {
+            // A BA B
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 0, 3),
+                util.createRange(0, 2, 0, 4)
+            )).to.be.true;
+        });
+
+        it('matches when range overlaps by single character on the left', () => {
+            // B AB A
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 2, 0, 4),
+                util.createRange(0, 1, 0, 3)
+            )).to.be.true;
+        });
+
+        it('matches when A is contained by B at the edges', () => {
+            // B AA B
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 2, 0, 3),
+                util.createRange(0, 1, 0, 4)
+            )).to.be.true;
+        });
+
+        it('matches when B is contained by A at the edges', () => {
+            // A BB A
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 0, 4),
+                util.createRange(0, 2, 0, 3)
+            )).to.be.true;
+        });
+
+        it('matches when A and B are identical', () => {
+            // ABBA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 0, 2),
+                util.createRange(0, 1, 0, 2)
+            )).to.be.true;
+        });
+
+        it('matches when A spans multiple lines', () => {
+            // ABBA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 2, 0),
+                util.createRange(0, 1, 0, 3)
+            )).to.be.true;
+        });
+
+        it('matches when B spans multiple lines', () => {
+            // ABBA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 0, 3),
+                util.createRange(0, 1, 2, 0)
+            )).to.be.true;
+        });
+    });
+
+    it('sortByRange', () => {
+        const front = {
+            range: util.createRange(1, 1, 1, 2)
+        };
+        const middle = {
+            range: util.createRange(1, 3, 1, 4)
+        };
+        const back = {
+            range: util.createRange(1, 5, 1, 6)
+        };
+        expect(
+            util.sortByRange([middle, front, back])
+        ).to.eql([
+            front, middle, back
+        ]);
+    });
+
+    describe('splitWithLocation', () => {
+        it('works with no split items', () => {
+            expect(
+                util.splitGetRange('.', 'hello', util.createRange(2, 10, 2, 15))
+            ).to.eql([{
+                text: 'hello',
+                range: util.createRange(2, 10, 2, 15)
+            }]);
+        });
+
+        it('handles empty chunks', () => {
+            expect(
+                util.splitGetRange('l', 'hello', util.createRange(2, 10, 2, 15))
+            ).to.eql([{
+                text: 'he',
+                range: util.createRange(2, 10, 2, 12)
+            }, {
+                text: 'o',
+                range: util.createRange(2, 14, 2, 15)
+            }]);
+        });
+
+        it('handles multiple non-empty chunks', () => {
+            expect(
+                util.splitGetRange('.', 'abc.d.efgh.i', util.createRange(2, 10, 2, 2))
+            ).to.eql([{
+                text: 'abc',
+                range: util.createRange(2, 10, 2, 13)
+            }, {
+                text: 'd',
+                range: util.createRange(2, 14, 2, 15)
+            }, {
+                text: 'efgh',
+                range: util.createRange(2, 16, 2, 20)
+            }, {
+                text: 'i',
+                range: util.createRange(2, 21, 2, 22)
+            }]);
+        });
+    });
+
+    describe('toDiagnostic', () => {
+        it('uses a uri on relatedInfo missing location', () => {
+            expect(
+                util.toDiagnostic({
+                    ...DiagnosticMessages.cannotFindName('someVar'),
+                    file: undefined,
+                    range: util.createRange(1, 2, 3, 4),
+                    relatedInformation: [{
+                        message: 'Alpha',
+                        location: undefined
+                    }]
+                }, 'u/r/i').relatedInformation
+            ).to.eql([{
+                message: 'Alpha',
+                location: util.createLocation(
+                    'u/r/i', util.createRange(1, 2, 3, 4)
+                )
+            }]);
+        });
+
+        it('eliminates diagnostics with relatedInformation that are missing a uri', () => {
+            expect(
+                util.toDiagnostic({
+                    ...DiagnosticMessages.cannotFindName('someVar'),
+                    file: undefined,
+                    range: util.createRange(1, 2, 3, 4),
+                    relatedInformation: [{
+                        message: 'Alpha',
+                        location: util.createLocation(
+                            'uri', util.createRange(2, 3, 4, 5)
+                        )
+                    }, {
+                        message: 'Beta',
+                        location: undefined
+                    }]
+                }, undefined).relatedInformation
+            ).to.eql([{
+                message: 'Alpha',
+                location: util.createLocation(
+                    'uri', util.createRange(2, 3, 4, 5)
+                )
+            }]);
         });
     });
 });
