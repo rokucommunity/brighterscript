@@ -22,6 +22,7 @@ import { Logger } from '../Logger';
 import { ImportStatement } from '../parser/Statement';
 import { createToken } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
+import { isBlock, isExpressionStatement, isFunctionExpression, isFunctionStatement, isPrintStatement, isCallExpression, isVariableExpression, isLiteralExpression, isClassStatement, isNamespacedVariableNameExpression, isFieldStatement, isDottedGetExpression, isNewExpression } from '../astUtils/reflection';
 
 let sinon = sinonImport.createSandbox();
 
@@ -386,7 +387,7 @@ describe('BrsFile', () => {
             expect(results).to.be.empty;
         });
 
-        it('does provide intellisence for labels only after a goto keyword', () => {
+        it('does provide intellisense for labels only after a goto keyword', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
@@ -400,6 +401,203 @@ describe('BrsFile', () => {
         });
 
     });
+
+    describe('findExpressionsAtPosition', () => {
+        it('finds a function statement', () => {
+            const file: BrsFile = program.setFile('source/main.brs', `
+                sub main()
+
+                end sub
+            `);
+            const expressions = file.getExpressionChainAtPosition(util.createPosition(1, 22)).expressions;
+            expect(expressions).to.have.lengthOf(2);
+            expect(isFunctionStatement(expressions[0])).to.be.true;
+            expect(isFunctionExpression(expressions[1])).to.be.true;
+        });
+
+        it('finds a print statement', () => {
+            const file: BrsFile = program.setFile('source/main.brs', `
+                sub main()
+                    print "hello" ; world
+
+                end sub
+            `);
+            const expressions = file.getExpressionChainAtPosition(util.createPosition(2, 22)).expressions;
+            expect(expressions).to.have.lengthOf(4);
+            expect(isFunctionStatement(expressions[0])).to.be.true;
+            expect(isFunctionExpression(expressions[1])).to.be.true;
+            expect(isBlock(expressions[2])).to.be.true;
+            expect(isPrintStatement(expressions[3])).to.be.true;
+        });
+        it('finds a variable', () => {
+            const file: BrsFile = program.setFile('source/main.brs', `
+                sub main()
+                    print "hello" ; world
+
+                end sub
+            `);
+            const expressions = file.getExpressionChainAtPosition(util.createPosition(2, 37)).expressions;
+            expect(expressions).to.have.lengthOf(5);
+            expect(isFunctionStatement(expressions[0])).to.be.true;
+            expect(isFunctionExpression(expressions[1])).to.be.true;
+            expect(isBlock(expressions[2])).to.be.true;
+            expect(isPrintStatement(expressions[3])).to.be.true;
+            expect(isVariableExpression(expressions[4])).to.be.true;
+        });
+
+        it('finds a function invocation', () => {
+            const file: BrsFile = program.setFile('source/main.brs', `
+                sub main()
+                    sayHello()
+                end sub
+                sub sayHello()
+                end sub
+            `);
+            const expressions = file.getExpressionChainAtPosition(util.createPosition(2, 22)).expressions;
+            expect(expressions).to.have.lengthOf(6);
+            expect(isFunctionStatement(expressions[0])).to.be.true;
+            expect(isFunctionExpression(expressions[1])).to.be.true;
+            expect(isBlock(expressions[2])).to.be.true;
+            expect(isExpressionStatement(expressions[3])).to.be.true;
+            expect(isCallExpression(expressions[4])).to.be.true;
+            expect(isVariableExpression(expressions[5])).to.be.true;
+        });
+        it('finds a nested invocation', () => {
+            const file: BrsFile = program.setFile('source/main.brs', `
+                sub main()
+                    sayHello(getNickName("Bob"), "Henry")
+                end sub
+                sub sayHello()
+                end sub
+                sub getNickName(name)
+                end sub
+            `);
+            let expressions = file.getExpressionChainAtPosition(util.createPosition(2, 22)).expressions;
+            expect(expressions).to.have.lengthOf(6);
+            expect(isFunctionStatement(expressions[0])).to.be.true;
+            expect(isFunctionExpression(expressions[1])).to.be.true;
+            expect(isBlock(expressions[2])).to.be.true;
+            expect(isExpressionStatement(expressions[3])).to.be.true;
+            expect(isCallExpression(expressions[4])).to.be.true;
+            expect(isVariableExpression(expressions[5])).to.be.true;
+            expressions = file.getExpressionChainAtPosition(util.createPosition(2, 30)).expressions;
+            expect(expressions).to.have.lengthOf(7);
+            expect(isFunctionStatement(expressions[0])).to.be.true;
+            expect(isFunctionExpression(expressions[1])).to.be.true;
+            expect(isBlock(expressions[2])).to.be.true;
+            expect(isExpressionStatement(expressions[3])).to.be.true;
+            expect(isCallExpression(expressions[4])).to.be.true;
+            expect(isCallExpression(expressions[5])).to.be.true;
+            expect(isVariableExpression(expressions[6])).to.be.true;
+            expressions = file.getExpressionChainAtPosition(util.createPosition(2, 50)).expressions;
+            expect(expressions).to.have.lengthOf(6);
+            expect(isFunctionStatement(expressions[0])).to.be.true;
+            expect(isFunctionExpression(expressions[1])).to.be.true;
+            expect(isBlock(expressions[2])).to.be.true;
+            expect(isExpressionStatement(expressions[3])).to.be.true;
+            expect(isCallExpression(expressions[4])).to.be.true;
+            expect(isLiteralExpression(expressions[5])).to.be.true;
+        });
+
+        describe('namespaces', () => {
+            it.only('', () => {
+                const file: BrsFile = program.setFile('source/main.bs', `
+                sub main()
+                    print foo.bar.getName()
+                    man = new foo.bar.Person()
+                    end sub
+
+                namespace foo.bar
+                function getName()
+                end function
+                class Person
+                end class
+                end namespace
+                `);
+
+                let expressions = file.getExpressionChainAtPosition(util.createPosition(2, 30)).expressions;
+                expect(expressions).to.have.lengthOf(7);
+                expect(isCallExpression(expressions[4])).to.be.true;
+                expressions = file.getExpressionChainAtPosition(util.createPosition(3, 35)).expressions;
+                expect(expressions).to.have.lengthOf(9);
+                expect(isNewExpression(expressions[4])).to.be.true;
+                expect(isCallExpression(expressions[5])).to.be.true;
+
+            });
+        });
+
+        describe('classes', () => {
+            it('gets class statement', () => {
+                const file: BrsFile = program.setFile('source/main.bs', `
+                    class Human
+                    end class
+                    `);
+
+                let expressions = file.getExpressionChainAtPosition(util.createPosition(1, 20)).expressions;
+                expect(expressions).to.have.lengthOf(1);
+                expect(isClassStatement(expressions[0])).to.be.true;
+
+            });
+
+            it('gets extends statement', () => {
+                const file: BrsFile = program.setFile('source/main.bs', `
+                class Human extends Animal
+                end class
+                class Animal
+                end class
+                `);
+
+                let expressions = file.getExpressionChainAtPosition(util.createPosition(1, 42)).expressions;
+                expect(expressions).to.have.lengthOf(2);
+                expect(isClassStatement(expressions[0])).to.be.true;
+                expect(isNamespacedVariableNameExpression(expressions[1])).to.be.true;
+            });
+
+            it('identifies field', () => {
+                const file: BrsFile = program.setFile('source/main.bs', `
+                    class Human
+                      private name
+                    end class
+                    `);
+
+                let expressions = file.getExpressionChainAtPosition(util.createPosition(2, 30)).expressions;
+                expect(expressions).to.have.lengthOf(2);
+                expect(isClassStatement(expressions[0])).to.be.true;
+                expect(isFieldStatement(expressions[1])).to.be.true;
+            });
+
+            it('identifies method calls', () => {
+                const file: BrsFile = program.setFile('source/main.bs', `
+                    class Human
+                      sub speak()
+                        print m.getWords()
+                      end sub
+                      sub getWords()
+                      end sub
+                    end class
+                    `);
+
+                let expressions = file.getExpressionChainAtPosition(util.createPosition(3, 30)).expressions;
+                expect(expressions).to.have.lengthOf(8);
+                expect(isClassStatement(expressions[0])).to.be.true;
+                expect(isCallExpression(expressions[5])).to.be.true;
+                expect(isDottedGetExpression(expressions[6])).to.be.true;
+                expect(isVariableExpression(expressions[7])).to.be.true;
+            });
+        });
+
+        it('does not provide completions within a comment', () => {
+            const file: BrsFile = program.setFile('source/main.brs', `
+                'sub main()
+                '    sayHello(getNickName("Bob"), "Henry")
+                'end sub
+            `);
+            let expressions = file.getExpressionChainAtPosition(util.createPosition(2, 22)).expressions;
+            expect(expressions).to.have.lengthOf(6);
+        });
+
+    });
+
 
     describe('comment flags', () => {
         describe('bs:disable-next-line', () => {
@@ -3174,3 +3372,4 @@ describe('BrsFile', () => {
         });
     });
 });
+

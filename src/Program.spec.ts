@@ -2023,7 +2023,7 @@ describe('Program', () => {
         });
     });
 
-    describe('getSignatureHelp', () => {
+    describe.only('getSignatureHelp', () => {
         it('does not crash when second previousToken is undefined', () => {
             const file = program.setFile<BrsFile>('source/main.brs', ` `);
             sinon.stub(file, 'getPreviousToken').returns(undefined);
@@ -2146,7 +2146,7 @@ describe('Program', () => {
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
         });
 
-        it('gets signature help for namespace function', () => {
+        it.only('gets signature help for namespace function', () => {
             program.setFile('source/main.bs', `
                 function main()
                     person.sayHello("hey", "you")
@@ -2234,7 +2234,7 @@ describe('Program', () => {
             expect(signatureHelp).to.be.empty;
         });
 
-        it('gets signature help for constructor with args', () => {
+        it.only('gets signature help for constructor with args', () => {
             program.setFile('source/main.bs', `
                 function main()
                     p = new Person(arg1, arg2)
@@ -2248,6 +2248,11 @@ describe('Program', () => {
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
             expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('Person(arg1, arg2)');
+            expect(signatureHelp[0].signature.activeParameter).to.equal(0);
+            signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 37)));
+            expectZeroDiagnostics(program);
+            expect(signatureHelp[0].signature.label).to.equal('Person(arg1, arg2)');
+            expect(signatureHelp[0].signature.activeParameter).to.equal(1);
         });
 
         it('gets signature help for constructor with args, defined in super class', () => {

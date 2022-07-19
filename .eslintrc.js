@@ -51,6 +51,7 @@ module.exports = {
             'always'
         ],
         '@typescript-eslint/no-shadow': 'off',
+        '@typescript-eslint/parameter-properties': 'off',
         '@typescript-eslint/no-this-alias': 'off',
         //possibly disable this once we have converted all throw statements to actual errors
         '@typescript-eslint/no-throw-literal': 'off',

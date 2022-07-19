@@ -1,6 +1,7 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import { CancellationTokenSource, CompletionItem, Hover, Position } from 'vscode-languageserver';
+import type { CompletionItem, Hover, Position } from 'vscode-languageserver';
+import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
@@ -12,7 +13,8 @@ import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
-import { FunctionExpression, VariableExpression, Expression, CallExpression } from '../parser/Expression';
+import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
+import { CallExpression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program, SignatureInfoObj } from '../Program';
 import { DynamicType } from '../types/DynamicType';
@@ -23,22 +25,26 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement } from '../astUtils/reflection';
+import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isEnumMemberStatement, isFieldStatement, isMethodStatement } from '../astUtils/reflection';
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
+import ExpressionChain from '../astUtils/ExpressionChain';
 
 /**
  * Holds all details about this file within the scope of the whole program
  */
 export class BrsFile {
     constructor(
+        // eslint-disable-next-line @typescript-eslint/parameter-properties
         public srcPath: string,
         /**
          * The full pkg path to this file
          */
+        // eslint-disable-next-line @typescript-eslint/parameter-properties
         public pkgPath: string,
+        // eslint-disable-next-line @typescript-eslint/parameter-properties
         public program: Program
     ) {
         this.srcPath = s`${this.srcPath}`;
@@ -727,24 +733,8 @@ export class BrsFile {
         }
     }
 
-    public findExpressionsAtPosition(position: Position) {
-        let expressionChain: Array<Expression | Statement> = [];
-        let cancellationToken = new CancellationTokenSource();
-        this.ast.walk((expression) => {
-            if (util.rangeContains(expression.range, position)) {
-                expressionChain.push(expression);
-            } else {
-                if (expressionChain) {
-                    cancellationToken.cancel();
-                }
-            }
-        }, { walkMode: WalkMode.visitAllRecursive, cancel: cancellationToken.token });
-
-        return expressionChain;
-    }
-
-    public getClosestAstNode<T>(position: Position, matcher: (item: Expression | Statement) => boolean = () => true) {
-        return this.findExpressionsAtPosition(position).reverse().find(matcher) as unknown as T;
+    public getExpressionChainAtPosition(position: Position): ExpressionChain {
+        return new ExpressionChain(this.ast, position);
     }
 
     /**
@@ -1332,12 +1322,16 @@ export class BrsFile {
         let symbolKind: SymbolKind;
         const children = [] as DocumentSymbol[];
 
+        let name;
         if (isFunctionStatement(statement)) {
             symbolKind = SymbolKind.Function;
-        } else if (isClassMethodStatement(statement)) {
+            name = statement.getName(ParseMode.BrighterScript);
+        } else if (isMethodStatement(statement)) {
             symbolKind = SymbolKind.Method;
-        } else if (isClassFieldStatement(statement)) {
+            name = statement.getName(ParseMode.BrighterScript);
+        } else if (isFieldStatement(statement)) {
             symbolKind = SymbolKind.Field;
+            name = statement.name.text;
         } else if (isNamespaceStatement(statement)) {
             symbolKind = SymbolKind.Namespace;
             for (const childStatement of statement.body.statements) {
@@ -1346,6 +1340,7 @@ export class BrsFile {
                     children.push(symbol);
                 }
             }
+            name = statement.getName(ParseMode.BrighterScript);
         } else if (isClassStatement(statement)) {
             symbolKind = SymbolKind.Class;
             for (const childStatement of statement.body) {
@@ -1354,11 +1349,22 @@ export class BrsFile {
                     children.push(symbol);
                 }
             }
+            name = statement.getName(ParseMode.BrighterScript);
+        } else if (isEnumStatement(statement)) {
+            symbolKind = SymbolKind.Enum;
+            for (const childStatement of statement.getMembers()) {
+                const symbol = this.getDocumentSymbol(childStatement);
+                if (symbol) {
+                    children.push(symbol);
+                }
+            }
+        } else if (isEnumMemberStatement(statement)) {
+            symbolKind = SymbolKind.EnumMember;
+            name = statement.name;
         } else {
             return;
         }
 
-        const name = isClassFieldStatement(statement) ? statement.name.text : statement.getName(ParseMode.BrighterScript);
         return DocumentSymbol.create(name, '', symbolKind, statement.range, statement.range, children);
     }
 
