@@ -5,15 +5,16 @@ import { expect } from 'chai';
 import * as sinon from 'sinon';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
-import type { Statement } from '../parser/Statement';
-import { PrintStatement, Block, ReturnStatement } from '../parser/Statement';
+import type { FunctionStatement, Statement } from '../parser/Statement';
+import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../parser/Statement';
 import type { Expression } from '../parser/Expression';
 import { TokenKind } from '../lexer/TokenKind';
 import { createVisitor, WalkMode, walkStatements } from './visitors';
 import { isPrintStatement } from './reflection';
-import { createToken } from './creators';
+import { createCall, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
 import { AstEditor } from './AstEditor';
+import { Parser } from '../parser/Parser';
 
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
@@ -923,6 +924,86 @@ describe('astUtils visitors', () => {
                 'LiteralExpression',
                 'LiteralExpression'
             ], WalkMode.visitExpressionsRecursive);
+        });
+
+        it('provides owner and key', () => {
+            const items = [];
+            const { ast } = Parser.parse(`
+                sub main()
+                    log = sub(message)
+                        print "hello " + message
+                    end sub
+                    log("hello" + " world")
+                end sub
+            `);
+            ast.walk((astNode, parent, owner, key) => {
+                items.push(astNode);
+                expect(owner[key]).to.equal(astNode);
+            }, {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            expect(items).to.be.length(17);
+        });
+
+        it('can be used to delete statements', () => {
+            const { ast } = Parser.parse(`
+                sub main()
+                    print 1
+                    print 2
+                    print 3
+                end sub
+            `);
+            let callCount = 0;
+            ast.walk((astNode, parent, owner: Statement[], key) => {
+                if (isPrintStatement(astNode)) {
+                    callCount++;
+                    //delete the print statement (we know owner is an array based on this specific test)
+                    owner.splice(key, 1);
+                }
+            }, {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            //the visitor should have been called for every statement
+            expect(callCount).to.eql(3);
+            expect(
+                (ast.statements[0] as FunctionStatement).func.body.statements
+            ).to.be.lengthOf(0);
+        });
+
+        it('can be used to insert statements', () => {
+            const { ast } = Parser.parse(`
+                sub main()
+                    print 1
+                    print 2
+                    print 3
+                end sub
+            `);
+            let printStatementCount = 0;
+            let callExpressionCount = 0;
+            const calls = [];
+            ast.walk(createVisitor({
+                PrintStatement: (astNode, parent, owner: Statement[], key) => {
+                    printStatementCount++;
+                    //add another expression to the list every time. This should result in 1 the first time, 2 the second, 3 the third.
+                    calls.push(new ExpressionStatement(
+                        createCall(
+                            createVariableExpression('doSomethingBeforePrint')
+                        )
+                    ));
+                    owner.splice(key, 0, ...calls);
+                },
+                CallExpression: () => {
+                    callExpressionCount++;
+                }
+            }), {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            //the visitor should have been called for every statement
+            expect(printStatementCount).to.eql(3);
+            expect(callExpressionCount).to.eql(0);
+            expect(
+                (ast.statements[0] as FunctionStatement).func.body.statements
+            ).to.be.lengthOf(9);
         });
     });
 });

@@ -6,6 +6,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.53.1](https://github.com/rokucommunity/brighterscript/compare/v0.53.0...0.53.1) - 2022-07-15
+### Fixed
+ - bug with codeactions at the edges of tokens. ([#642](https://github.com/rokucommunity/brighterscript/pull/642))
+ - nested namespace import codeActions bug. ([#641](https://github.com/rokucommunity/brighterscript/pull/641))
+
+
+
+## [0.53.0](https://github.com/rokucommunity/brighterscript/compare/v0.52.3...0.53.0) - 2022-07-14
+### Added
+ - New Language Feature: Constants ([#632](https://github.com/rokucommunity/brighterscript/pull/632))
+### Changed
+ - Flag top level statements ([#638](https://github.com/rokucommunity/brighterscript/pull/638))
+ - Flag usage of undefined variables ([#631](https://github.com/rokucommunity/brighterscript/pull/631))
+ - Use `util.createLocation`, not `Location.create()` ([#637](https://github.com/rokucommunity/brighterscript/pull/637))
+ - Better project detection by language server ([#633](https://github.com/rokucommunity/brighterscript/pull/633))
+
+
+
+## [0.52.3](https://github.com/rokucommunity/brighterscript/compare/v0.52.2...v0.52.3) - 2022-06-14
+### Fixed
+ - fix bug with class transpile in watch mode ([#630](https://github.com/rokucommunity/brighterscript/pull/630))
+ - Send program-triggered `validate()` diagnostics to language client ([#629](https://github.com/rokucommunity/brighterscript/pull/629))
+ - Emit before/after programTranspile during file transpile preview ([#628](https://github.com/rokucommunity/brighterscript/pull/628))
+
+
+
+## [0.52.2](https://github.com/rokucommunity/brighterscript/compare/v0.52.1...v0.52.2) - 2022-06-13
+### Fixed
+ - transpile crash when file was changed by a plugin in beforeTranspile events ([#627](https://github.com/rokucommunity/brighterscript/pull/627))
+ - bug in transpile preview custom command that wasn't returning the result ([#626](https://github.com/rokucommunity/brighterscript/pull/626))
+ - add missing range on interface statement, causing transpile crashes ([#623](https://github.com/rokucommunity/brighterscript/pull/623))
+ - transpile enum values in binary expressions ([#622](https://github.com/rokucommunity/brighterscript/pull/622))
+
+
+
+## [0.52.1](https://github.com/rokucommunity/brighterscript/compare/v0.52.0...v0.52.1) - 2022-06-10
+### Fixed
+ - detect class circular extends ([#619](https://github.com/rokucommunity/brighterscript/pull/619))
+ - improve namespace/enum/class semantic token detection (better syntax highlighting) ([##621](https://github.com/rokucommunity/brighterscript/pull/#621))
+
+
+
+## [0.52.0](https://github.com/rokucommunity/brighterscript/compare/v0.51.4...v0.52.0) - 2022-06-08
+### Added
+ - LanguageServer: Load projects based on bsconfig.json presence ([#613](https://github.com/rokucommunity/brighterscript/pull/613))
+### Changed
+ - upgrade to [roku-deploy@3.7.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#371---2022-06-08)
+
+
+
+## [0.51.4](https://github.com/rokucommunity/brighterscript/compare/v0.51.3...v0.51.4) - 2022-05-31
+### Fixed
+ - Add allowBrighterScriptInBrightScript to bsconfig.schema.json ([#610](https://github.com/rokucommunity/brighterscript/pull/610))
+
+
+
+## [0.51.3](https://github.com/rokucommunity/brighterscript/compare/v0.51.2...v0.51.3) - 2022-05-31
+### Fixed
+ - hover for namespace functions ([#606](https://github.com/rokucommunity/brighterscript/pull/606))
+### Changed
+ - add `owner` and `key` to the visitor callbacks ([#600](https://github.com/rokucommunity/brighterscript/pull/600))
+
+
+
+## [0.51.2](https://github.com/rokucommunity/brighterscript/compare/v0.51.1...v0.51.2) - 2022-05-26
+### Fixed
+ - allow enums and interfaces as class field types ([#602](https://github.com/rokucommunity/brighterscript/pull/602))
+
+
+
 ## [0.51.1](https://github.com/rokucommunity/brighterscript/compare/v0.51.0...v0.51.1) - 2022-05-26
 ### Fixed
  - allow enums and interfaces as function return types ([#601](https://github.com/rokucommunity/brighterscript/pull/601))

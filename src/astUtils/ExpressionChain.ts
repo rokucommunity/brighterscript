@@ -48,7 +48,7 @@ export default class ExpressionChain {
         if (isNewExpression(info.expression)) {
             let parts = util.getAllDottedGetParts(info.expression.call.callee);
             info.statementType = ExpressionChainStatementInfoType.new;
-            info.name = parts.pop();
+            info.name = parts.pop().text;
             info.dotPart = parts.join('.');
             info.argIndex = this.getArgIndex(info.expression.call.args, this.position);
         } else if (isCallfuncExpression(info.expression)) {
@@ -60,7 +60,7 @@ export default class ExpressionChain {
         } else if (isCallExpression(info.expression)) {
             let parts = util.getAllDottedGetParts(info.expression.callee);
             info.statementType = ExpressionChainStatementInfoType.dottedGet;
-            info.name = parts.pop();
+            info.name = parts.pop().text;
             info.dotPart = parts.join('.');
             info.argIndex = this.getArgIndex(info.expression.args, this.position);
         }

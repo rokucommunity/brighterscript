@@ -26,7 +26,11 @@ import type { DottedGetExpression, Expression, VariableExpression } from './pars
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isDottedGetExpression, isExpression, isVariableExpression, isNamespacedVariableNameExpression, isCallExpression, isIndexedGetExpression, isXmlAttributeGetExpression, isCallfuncExpression } from './astUtils/reflection';
+<<<<<<< HEAD
+import { isDottedGetExpression, isExpression, isVariableExpression, isNamespacedVariableNameExpression } from './astUtils/reflection';
+=======
+import { isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isVariableExpression, isXmlAttributeGetExpression } from './astUtils/reflection';
+>>>>>>> master
 import { WalkMode } from './astUtils/visitors';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
@@ -227,7 +231,7 @@ export class Util {
 
     /**
      * Convert relative paths to absolute paths, relative to the given directory. Also de-dupes the paths. Modifies the array in-place
-     * @param paths the list of paths to be resolved and de-duped
+     * @param paths the list of paths to be resolved and deduped
      * @param relativeDir the path to the folder where the paths should be resolved relative to. This should be an absolute path
      */
     public resolvePathsRelativeTo(collection: any, key: string, relativeDir: string) {
@@ -695,7 +699,7 @@ export class Util {
     }
 
     /**
-     * Determine whether this diagnostic should be suppressed or not, based on brs comment-flags
+     * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
      * @param diagnostic
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
@@ -1353,8 +1357,13 @@ export class Util {
      * @param expression
      * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
      */
+<<<<<<< HEAD
+    public getAllDottedGetParts(expression: Expression): string[] | undefined {
+        let parts: string[] = [];
+=======
     public getAllDottedGetParts(expression: Expression): Identifier[] | undefined {
         const parts: Identifier[] = [];
+>>>>>>> master
         let nextPart = expression;
         while (nextPart) {
             if (isDottedGetExpression(nextPart)) {
@@ -1364,6 +1373,9 @@ export class Util {
                 nextPart = nextPart.expression;
             } else if (isVariableExpression(nextPart)) {
                 parts.push(nextPart?.name);
+                break;
+            } else if (isNamespacedVariableNameExpression(nextPart)) {
+                parts = parts.concat(nextPart?.getNameParts());
                 break;
             } else {
                 //we found a non-DottedGet expression, so return because this whole operation is invalid.

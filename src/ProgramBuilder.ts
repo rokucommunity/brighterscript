@@ -301,7 +301,7 @@ export class ProgramBuilder {
                 filePath = path.relative(cwd, filePath);
             }
             //load the file text
-            const file = this.program.getFile(srcPath);
+            const file = this.program?.getFile(srcPath);
             //get the file's in-memory contents if available
             const lines = file?.fileContents?.split(/\r?\n/g) ?? [];
 

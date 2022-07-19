@@ -19,17 +19,20 @@ import { globalFile } from './globalCallables';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope, isNewExpression, isCallfuncExpression, isCallExpression } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope, isNewExpression, isFunctionExpression, isCallfuncExpression, isCallExpression } from './astUtils/reflection';
 import type { FunctionStatement, Statement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
 import { TokenKind } from './lexer/TokenKind';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { AstEditor } from './astUtils/AstEditor';
 import type { SourceMapGenerator } from 'source-map';
+<<<<<<< HEAD
 import type { ExpressionChainStatementInfo } from './astUtils/ExpressionChain';
 import { ExpressionChainStatementInfoType } from './astUtils/ExpressionChain';
+=======
 import { rokuDeploy } from 'roku-deploy';
 
+>>>>>>> master
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;

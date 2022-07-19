@@ -1,7 +1,13 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Position, Location } from 'vscode-languageserver';
+<<<<<<< HEAD
+import type { CompletionItem, Hover, Position } from 'vscode-languageserver';
+import { CancellationTokenSource } from 'vscode-languageserver';
+import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
+=======
+import type { CompletionItem, Hover, Position, Location, Diagnostic } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
+>>>>>>> master
 import chalk from 'chalk';
 import * as path from 'path';
 import type { Scope } from '../Scope';
@@ -13,6 +19,7 @@ import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
+import { CallExpression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program, SignatureInfoObj } from '../Program';
 import { DynamicType } from '../types/DynamicType';
@@ -23,7 +30,11 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isEnumMemberStatement, isFieldStatement, isMethodStatement, isConstStatement } from '../astUtils/reflection';
+<<<<<<< HEAD
+import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isEnumMemberStatement, isFieldStatement, isMethodStatement } from '../astUtils/reflection';
+=======
+import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
+>>>>>>> master
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
@@ -105,11 +116,11 @@ export class BrsFile {
         return [...this.diagnostics];
     }
 
-    public addDiagnostic(diagnostic: BsDiagnostic & { file?: BscFile }) {
+    public addDiagnostic(diagnostic: Diagnostic & { file?: BscFile }) {
         if (!diagnostic.file) {
             diagnostic.file = this;
         }
-        this.diagnostics.push(diagnostic);
+        this.diagnostics.push(diagnostic as any);
     }
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
@@ -1078,7 +1089,7 @@ export class BrsFile {
         if (!completionName || !completionName.includes('.')) {
             return [];
         }
-        //remove any trailing identifier and then any trailing dot, to give us the
+        //remove any trailing identifer and then any trailing dot, to give us the
         //name of its immediate parent namespace
         let closestParentNamespaceName = completionName.replace(/\.([a-z0-9_]*)?$/gi, '').toLowerCase();
         let newToken = this.getTokenBefore(currentToken, TokenKind.New);

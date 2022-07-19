@@ -8,7 +8,7 @@ import { EnumStatement, InterfaceStatement } from '../../Statement';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
 import type { BrsFile } from '../../../files/BrsFile';
-import { Location, CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver-protocol';
+import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver-protocol';
 import { WalkMode } from '../../../astUtils/visitors';
 import { isEnumStatement } from '../../../astUtils/reflection';
 import { URI } from 'vscode-uri';
@@ -216,7 +216,7 @@ describe('EnumStatement', () => {
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.duplicateEnumDeclaration('source', 'Direction'),
                 relatedInformation: [{
-                    location: Location.create(
+                    location: util.createLocation(
                         URI.file(s`${rootDir}/source/main.bs`).toString(),
                         util.createRange(1, 21, 1, 30)
                     ),
@@ -240,7 +240,7 @@ describe('EnumStatement', () => {
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.duplicateEnumDeclaration('source', 'Direction'),
                 relatedInformation: [{
-                    location: Location.create(
+                    location: util.createLocation(
                         URI.file(s`${rootDir}/source/lib.bs`).toString(),
                         util.createRange(1, 21, 1, 30)
                     ),
@@ -399,25 +399,25 @@ describe('EnumStatement', () => {
 
         it('catches unknown namespaced enum members', () => {
             program.setFile('source/main.bs', `
+                sub main()
+                    print Enums.Direction.DOWN
+                    print Enums.Direction.down
+                    print Enums.Direction.up
+                end sub
                 namespace Enums
                     enum Direction
                         up
                     end enum
                 end namespace
 
-                sub main()
-                    print Enums.Direction.up
-                    print Enums.Direction.DOWN
-                    print Enums.Direction.down
-                end sub
             `);
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.unknownEnumValue('DOWN', 'Enums.Direction'),
-                range: util.createRange(9, 42, 9, 46)
+                range: util.createRange(2, 42, 2, 46)
             }, {
                 ...DiagnosticMessages.unknownEnumValue('down', 'Enums.Direction'),
-                range: util.createRange(10, 42, 10, 46)
+                range: util.createRange(3, 42, 3, 46)
             }]);
         });
     });
@@ -601,6 +601,25 @@ describe('EnumStatement', () => {
                     print "Zombie"
                     print 0
                     print 1
+                end sub
+            `);
+        });
+
+        it('replaces enums in if statements', () => {
+            testTranspile(`
+                enum CharacterType
+                    zombie = "zombie"
+                end enum
+                sub main()
+                    if "one" = CharacterType.zombie or "two" = CharacterType.zombie and "three" = CharacterType.zombie
+                        print true
+                    end if
+                end sub
+            `, `
+                sub main()
+                    if "one" = "zombie" or "two" = "zombie" and "three" = "zombie"
+                        print true
+                    end if
                 end sub
             `);
         });
@@ -887,6 +906,22 @@ describe('EnumStatement', () => {
             `);
         });
 
+        it('handles when found in boolean expressions', () => {
+            testTranspile(`
+                sub main()
+                    result = Direction.up = "up" or Direction.down = "down" and Direction.up = Direction.down
+                end sub
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `, `
+                sub main()
+                    result = "up" = "up" or "down" = "down" and "up" = "down"
+                end sub
+            `);
+        });
+
         it('replaces enum values in if statements', () => {
             testTranspile(`
                 sub main()
@@ -938,6 +973,21 @@ describe('EnumStatement', () => {
                 end sub
             `);
         });
-    });
 
+        it('transpiles enum values when used in complex expressions', () => {
+            testTranspile(`
+                sub main()
+                    print Direction.up.toStr()
+                end sub
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `, `
+                sub main()
+                    print "up".toStr()
+                end sub
+            `);
+        });
+    });
 });

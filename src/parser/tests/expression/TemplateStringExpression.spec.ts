@@ -76,133 +76,201 @@ describe('TemplateStringExpression', () => {
 
         it('uses the proper prefix when aliased package is installed', () => {
             program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
-            testTranspile(
-                'a = `${one},${two}`',
-                `a = rokucommunity_bslib_toString(one) + "," + rokucommunity_bslib_toString(two)`
-            );
+            testTranspile(`
+                sub main()
+                    a = \`\${LINE_NUM},\${LINE_NUM}\`
+                end sub
+            `, `
+                sub main()
+                    a = rokucommunity_bslib_toString(LINE_NUM) + "," + rokucommunity_bslib_toString(LINE_NUM)
+                end sub
+            `);
         });
 
         it('properly transpiles simple template string with no leading text', () => {
-            testTranspile(
-                'a = `${one},${two}`',
-                `a = bslib_toString(one) + "," + bslib_toString(two)`
+            testTranspile(`
+                    sub main()
+                        a = \`\${LINE_NUM},\${LINE_NUM}\`
+                    end sub
+                `, `
+                    sub main()
+                        a = bslib_toString(LINE_NUM) + "," + bslib_toString(LINE_NUM)
+                    end sub
+                `
             );
         });
 
         it('properly transpiles simple template string', () => {
-            testTranspile(
-                'a = `hello world`',
-                'a = "hello world"'
-            );
+            testTranspile(`
+                sub main()
+                    a = \`hello world\`
+                end sub
+            `, `
+                sub main()
+                    a = "hello world"
+                end sub
+            `);
         });
 
         it('properly transpiles one line template string with expressions', () => {
-            testTranspile(
-                'a = `hello ${a.text} world ${"template" + m.getChars()} test`',
-                `a = "hello " + bslib_toString(a.text) + " world " + bslib_toString("template" + m.getChars()) + " test"`
-            );
+            testTranspile(`
+                sub main()
+                    a = \`hello \${LINE_NUM.text} world \${"template" + "".getChars()} test\`
+                end sub
+            `, `
+                sub main()
+                    a = "hello " + bslib_toString(LINE_NUM.text) + " world " + bslib_toString("template" + "".getChars()) + " test"
+                end sub
+            `);
         });
 
         it('handles escaped characters', () => {
-            testTranspile(
-                'a = `\\r\\n\\`\\$`',
-                `a = chr(13) + chr(10) + chr(96) + chr(36)`
-            );
+            testTranspile(`
+                sub main()
+                    a = \`\\r\\n\\\`\\$\`
+                end sub
+            `, `
+                sub main()
+                    a = chr(13) + chr(10) + chr(96) + chr(36)
+                end sub
+            `);
         });
 
         it('handles escaped unicode char codes', () => {
-            testTranspile(
-                'a = `\\c2\\c987`',
-                `a = chr(2) + chr(987)`
-            );
+            testTranspile(`
+                sub main()
+                    a = \`\\c2\\c987\`
+                end sub
+            `, `
+                sub main()
+                    a = chr(2) + chr(987)
+                end sub
+            `);
         });
 
         it('properly transpiles simple multiline template string', () => {
-            testTranspile(
-                'a = `hello world\nI am multiline`',
-                'a = "hello world" + chr(10) + "I am multiline"'
-            );
+            testTranspile(`
+                sub main()
+                    a = \`hello world\nI am multiline\`
+                end sub
+            `, `
+                sub main()
+                    a = "hello world" + chr(10) + "I am multiline"
+                end sub
+            `);
         });
 
         it('properly handles newlines', () => {
-            testTranspile(
-                'a = `\n`',
-                'a = chr(10)'
-            );
+            testTranspile(`
+                sub main()
+                    a = \`\n\`
+                end sub
+            `, `
+                sub main()
+                    a = chr(10)
+                end sub
+            `);
         });
 
         it('properly handles clrf', () => {
-            testTranspile(
-                'a = `\r\n`',
-                'a = chr(13) + chr(10)'
-            );
+            testTranspile(`
+                sub main()
+                    a = \`\r\n\`
+                end sub
+            `, `
+                sub main()
+                    a = chr(13) + chr(10)
+                end sub
+            `);
         });
 
         it('properly transpiles more complex multiline template string', () => {
-            testTranspile(
-                'a = `I am multiline\n${a.isRunning()}\nmore`',
-                'a = "I am multiline" + chr(10) + bslib_toString(a.isRunning()) + chr(10) + "more"'
-            );
+            testTranspile(`
+                sub main()
+                    a = \`I am multiline\n\${a.isRunning()}\nmore\`
+                end sub
+            `, `
+                sub main()
+                    a = "I am multiline" + chr(10) + bslib_toString(a.isRunning()) + chr(10) + "more"
+                end sub
+            `);
         });
 
         it('properly transpiles complex multiline template string in array def', () => {
-            testTranspile(
-                `a = [
-                    "one",
-                    "two",
-                    \`I am a complex example\${a.isRunning(["a", "b", "c"])}\`
-                ]
+            testTranspile(`
+                sub main()
+                    a = [
+                        "one",
+                        "two",
+                        \`I am a complex example\${a.isRunning(["a", "b", "c"])}\`
+                    ]
+                end sub
             `, `
-                a = [
-                    "one"
-                    "two"
-                    "I am a complex example" + bslib_toString(a.isRunning([
-                        "a"
-                        "b"
-                        "c"
-                    ]))
-                ]
+                sub main()
+                    a = [
+                        "one"
+                        "two"
+                        "I am a complex example" + bslib_toString(a.isRunning([
+                            "a"
+                            "b"
+                            "c"
+                        ]))
+                    ]
+                end sub
             `);
         });
 
         it('properly transpiles complex multiline template string in array def, with nested template', () => {
             testTranspile(`
-                a = [
-                    "one",
-                    "two",
-                    \`I am a complex example \${a.isRunning([
-                        "a",
-                        "b",
-                        "c",
-                        \`d_open \${"inside" + m.items[i]} d_close\`
-                    ])}\`
-                ]
+                sub main()
+                    a = [
+                        "one",
+                        "two",
+                        \`I am a complex example \${a.isRunning([
+                            "a",
+                            "b",
+                            "c",
+                            \`d_open \${"inside" + m.items[1]} d_close\`
+                        ])}\`
+                    ]
+                end sub
             `, `
-                a = [
-                    "one"
-                    "two"
-                    "I am a complex example " + bslib_toString(a.isRunning([
-                        "a"
-                        "b"
-                        "c"
-                        "d_open " + bslib_toString("inside" + m.items[i]) + " d_close"
-                    ]))
-                ]
+                sub main()
+                    a = [
+                        "one"
+                        "two"
+                        "I am a complex example " + bslib_toString(a.isRunning([
+                            "a"
+                            "b"
+                            "c"
+                            "d_open " + bslib_toString("inside" + m.items[1]) + " d_close"
+                        ]))
+                    ]
+                end sub
             `);
         });
 
         it('properly transpiles two template strings side-by-side', () => {
-            testTranspile(
-                'a = `${"hello"}${"world"}`',
-                'a = "hello" + "world"'
-            );
+            testTranspile(`
+                sub main()
+                    a = \`\${"hello"}\${"world"}\`
+                end sub
+            `, `
+                sub main()
+                    a = "hello" + "world"
+                end sub
+            `);
         });
 
         it('skips calling toString on strings', () => {
             testTranspile(`
-                text = \`Hello \${"world"}\`
+                sub main()
+                    text = \`Hello \${"world"}\`
+                end sub
             `, `
-                text = "Hello " + "world"
+                sub main()
+                    text = "Hello " + "world"
+                end sub
             `);
         });
 

@@ -1667,7 +1667,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.callToUnknownFunction('DoesNotExist', 'source')
+                DiagnosticMessages.cannotFindName('DoesNotExist')
             ]);
         });
 
@@ -1913,6 +1913,28 @@ describe('BrsFile', () => {
             ].join('\n'));
         });
 
+        it('finds declared namespace function', () => {
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            namespace mySpace
+                function Main(count = 1)
+                    firstName = "bob"
+                    age = 21
+                    shoeSize = 10
+                end function
+            end namespace
+            `);
+
+            let hover = file.getHover(Position.create(2, 28));
+            expect(hover).to.exist;
+
+            expect(hover.range).to.eql(Range.create(2, 25, 2, 29));
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'function Main(count? as dynamic) as dynamic',
+                '```'
+            ].join('\n'));
+        });
+
         it('finds variable function hover in same scope', () => {
             let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
@@ -1987,6 +2009,29 @@ describe('BrsFile', () => {
             ].join('\n'));
         });
 
+        it('finds namespace function hover in file scope', () => {
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                namespace mySpace
+                sub Main()
+                    sayMyName()
+                end sub
+
+                sub sayMyName()
+
+                end sub
+                end namespace
+            `);
+
+            let hover = file.getHover(Position.create(3, 25));
+
+            expect(hover.range).to.eql(Range.create(3, 20, 3, 29));
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName() as void',
+                '```'
+            ].join('\n'));
+        });
+
         it('finds function hover in scope', () => {
             let rootDir = process.cwd();
             program = new Program({
@@ -2009,6 +2054,36 @@ describe('BrsFile', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
+            expect(hover.contents).to.equal([
+                '```brightscript',
+                'sub sayMyName(name as string) as void',
+                '```'
+            ].join('\n'));
+        });
+
+        it('finds namespace function hover in scope', () => {
+            let rootDir = process.cwd();
+            program = new Program({
+                rootDir: rootDir
+            });
+
+            let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main()
+                    mySpace.sayMyName()
+                end sub
+            `);
+
+            program.setFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+                namespace mySpace
+                    sub sayMyName(name as string)
+                    end sub
+                end namespace
+            `);
+
+            let hover = mainFile.getHover(Position.create(2, 34));
+            expect(hover).to.exist;
+
+            expect(hover.range).to.eql(Range.create(2, 28, 2, 37));
             expect(hover.contents).to.equal([
                 '```brightscript',
                 'sub sayMyName(name as string) as void',
@@ -2142,15 +2217,17 @@ describe('BrsFile', () => {
 
         it('transpiles if statement keywords as provided', () => {
             const code = `
-                If True Then
-                    Print True
-                Else If True Then
-                    print True
-                Else If False Then
-                    Print False
-                Else
-                    Print False
-                End If
+                sub main()
+                    If True Then
+                        Print True
+                    Else If True Then
+                        print True
+                    Else If False Then
+                        Print False
+                    Else
+                        Print False
+                    End If
+                end sub
             `;
             testTranspile(code);
             testTranspile(code.toLowerCase());
@@ -2158,36 +2235,41 @@ describe('BrsFile', () => {
         });
 
         it('does not transpile `then` tokens', () => {
-            const code = `
-                if true
-                    print true
-                else if true
-                    print false
-                end if
-            `;
-            testTranspile(code);
+            testTranspile(`
+                sub main()
+                    if true
+                        print true
+                    else if true
+                        print false
+                    end if
+                end sub
+            `);
         });
 
         it('honors spacing between multi-word tokens', () => {
             testTranspile(`
-                if true
-                    print true
-                elseif true
-                    print false
-                endif
+                sub main()
+                    if true
+                        print true
+                    elseif true
+                        print false
+                    endif
+                end sub
             `);
         });
 
         it('handles when only some of the statements have `then`', () => {
             testTranspile(`
-                if true
-                else if true then
-                else if true
-                else if true then
-                    if true then
-                        return true
+                sub main()
+                    if true
+                    else if true then
+                    else if true
+                    else if true then
+                        if true then
+                            return true
+                        end if
                     end if
-                end if
+                end sub
             `);
         });
 
@@ -2264,7 +2346,7 @@ describe('BrsFile', () => {
                 testTranspile(`
                     sub main()
                         try
-                            print a.b.c
+                            print m.b.c
                         catch e
                             print e
                         end try
@@ -2283,7 +2365,7 @@ describe('BrsFile', () => {
                     sub main()
                         sayHello = NameA.NameB.Speak
                         sayHello()
-                        someOtherObject = some.other.object
+                        someOtherObject = m.other.object
                     end sub
                 `, `
                     sub NameA_NameB_Speak()
@@ -2292,7 +2374,7 @@ describe('BrsFile', () => {
                     sub main()
                         sayHello = NameA_NameB_Speak
                         sayHello()
-                        someOtherObject = some.other.object
+                        someOtherObject = m.other.object
                     end sub
                 `);
             });
@@ -2429,27 +2511,42 @@ describe('BrsFile', () => {
         });
 
         it('transpiles dim', () => {
-            testTranspile(`Dim c[5]`, `Dim c[5]`);
-            testTranspile(`Dim c[5, 4]`, `Dim c[5, 4]`);
-            testTranspile(`Dim c[5, 4, 6]`, `Dim c[5, 4, 6]`);
-            testTranspile(`Dim requestData[requestList.count()]`, `Dim requestData[requestList.count()]`);
-            testTranspile(`Dim requestData[1, requestList.count()]`, `Dim requestData[1, requestList.count()]`);
-            testTranspile(`Dim requestData[1, requestList.count(), 2]`, `Dim requestData[1, requestList.count(), 2]`);
-            testTranspile(`Dim requestData[requestList[2]]`, `Dim requestData[requestList[2]]`);
-            testTranspile(`Dim requestData[1, requestList[2]]`, `Dim requestData[1, requestList[2]]`);
-            testTranspile(`Dim requestData[1, requestList[2], 2]`, `Dim requestData[1, requestList[2], 2]`);
-            testTranspile(`Dim requestData[requestList["2"]]`, `Dim requestData[requestList["2"]]`);
-            testTranspile(`Dim requestData[1, requestList["2"]]`, `Dim requestData[1, requestList["2"]]`);
-            testTranspile(`Dim requestData[1, requestList["2"], 2]`, `Dim requestData[1, requestList["2"], 2]`);
-            testTranspile(`Dim requestData[1, getValue(), 2]`, `Dim requestData[1, getValue(), 2]`);
+            function doTest(code: string) {
+                testTranspile(`
+                    sub main()
+                        requestList = []
+                        ${code}
+                    end sub
+                `, `
+                    sub main()
+                        requestList = []
+                        ${code}
+                    end sub
+                `);
+            }
+            doTest(`Dim c[5]`);
+            doTest(`Dim c[5, 4]`);
+            doTest(`Dim c[5, 4, 6]`);
+            doTest(`Dim requestData[requestList.count()]`);
+            doTest(`Dim requestData[1, requestList.count()]`);
+            doTest(`Dim requestData[1, requestList.count(), 2]`);
+            doTest(`Dim requestData[requestList[2]]`);
+            doTest(`Dim requestData[1, requestList[2]]`);
+            doTest(`Dim requestData[1, requestList[2], 2]`);
+            doTest(`Dim requestData[requestList["2"]]`);
+            doTest(`Dim requestData[1, requestList["2"]]`);
+            doTest(`Dim requestData[1, requestList["2"], 2]`);
+            doTest(`Dim requestData[1, StrToI("1"), 2]`);
             testTranspile(`
-                Dim requestData[1, getValue({
-                    key: "value"
-                }), 2]
-            `, `
-                Dim requestData[1, getValue({
-                    key: "value"
-                }), 2]
+                function getValue(param1)
+                end function
+
+                sub main()
+                    requestList = []
+                    Dim requestData[1, getValue({
+                        key: "value"
+                    }), 2]
+                end sub
             `);
         });
 
@@ -2575,51 +2672,57 @@ describe('BrsFile', () => {
 
         it('handles empty if block', () => {
             testTranspile(`
-                if true then
-                end if
-                if true then
-                else
-                    print "else"
-                end if
-                if true then
-                else if true then
-                    print "else"
-                end if
-                if true then
-                else if true then
-                    print "elseif"
-                else
-                    print "else"
-                end if
+                sub main()
+                    if true then
+                    end if
+                    if true then
+                    else
+                        print "else"
+                    end if
+                    if true then
+                    else if true then
+                        print "else"
+                    end if
+                    if true then
+                    else if true then
+                        print "elseif"
+                    else
+                        print "else"
+                    end if
+                end sub
             `);
         });
 
         it('handles empty elseif block', () => {
             testTranspile(`
-                if true then
-                    print "if"
-                else if true then
-                end if
-                if true then
-                    print "if"
-                else if true then
-                else if true then
-                end if
+                sub main()
+                    if true then
+                        print "if"
+                    else if true then
+                    end if
+                    if true then
+                        print "if"
+                    else if true then
+                    else if true then
+                    end if
+                end sub
             `);
         });
 
         it('handles empty else block', () => {
             testTranspile(`
-                if true then
-                    print "if"
-                else
-                end if
-                if true then
-                    print "if"
-                else if true then
-                    print "elseif"
-                else
-                end if
+                sub main()
+                    if true then
+                        print "if"
+                    else
+                    end if
+                    if true then
+                        print "if"
+                    else if true then
+                        print "elseif"
+                    else
+                    end if
+                end sub
             `);
         });
 
@@ -2734,7 +2837,7 @@ describe('BrsFile', () => {
                         3 'comment
                     ] 'comment
                     firstIndex = indexes[0] 'comment
-                    for each idx in indxes 'comment
+                    for each idx in indexes 'comment
                         indexes[idx] = idx + 1 'comment
                     end for 'comment
                     if not true then 'comment
@@ -2819,8 +2922,9 @@ describe('BrsFile', () => {
         describe('transpile', () => {
             it('does not produce diagnostics', () => {
                 program.setFile('source/main.bs', `
-                    sub main()
-                        someObject@.someFunction(paramObject.value)
+                    sub test()
+                        someNode = createObject("roSGNode", "Rectangle")
+                        someNode@.someFunction(test.value)
                     end sub
                 `);
                 program.validate();

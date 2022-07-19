@@ -9,14 +9,15 @@ import { Position } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
-import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isTypedefProvider, isVoidType } from '../astUtils/reflection';
+import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
+import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isTypedefProvider, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
+import { SymbolTable } from '../SymbolTable';
 
 /**
  * A BrightScript statement
@@ -128,9 +129,7 @@ export class Body extends Statement implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            for (let i = 0; i < this.statements.length; i++) {
-                walk(this.statements, i, visitor, options, this);
-            }
+            walkArray(this.statements, visitor, options, this);
         }
     }
 }
@@ -221,9 +220,7 @@ export class Block extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            for (let i = 0; i < this.statements.length; i++) {
-                walk(this.statements, i, visitor, options, this);
-            }
+            walkArray(this.statements, visitor, options, this);
         }
     }
 }
@@ -598,12 +595,8 @@ export class PrintStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            for (let i = 0; i < this.expressions.length; i++) {
-                //sometimes we have semicolon `Token`s in the expressions list (should probably fix that...), so only emit the actual expressions
-                if (isExpression(this.expressions[i] as any)) {
-                    walk(this.expressions, i, visitor, options, this);
-                }
-            }
+            //sometimes we have semicolon Tokens in the expressions list (should probably fix that...), so only walk the actual expressions
+            walkArray(this.expressions, visitor, options, this, (item) => isExpression(item as any));
         }
     }
 }
@@ -645,9 +638,8 @@ export class DimStatement extends Statement {
 
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (this.dimensions?.length > 0 && options.walkMode & InternalWalkMode.walkExpressions) {
-            for (let i = 0; i < this.dimensions.length; i++) {
-                walk(this.dimensions, i, visitor, options, this);
-            }
+            walkArray(this.dimensions, visitor, options, this);
+
         }
     }
 }
@@ -1108,11 +1100,15 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
         public nameExpression: NamespacedVariableNameExpression,
         public body: Body,
-        public endKeyword: Token
+        public endKeyword: Token,
+        readonly parentSymbolTable?: SymbolTable
     ) {
         super();
         this.name = this.nameExpression.getName(ParseMode.BrighterScript);
+        this.symbolTable = new SymbolTable(parentSymbolTable);
     }
+
+    public symbolTable: SymbolTable;
 
     /**
      * The string name for this namespace
@@ -1120,10 +1116,20 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     public name: string;
 
     public get range() {
-        return util.createRangeFromPositions(
-            this.keyword.range.start,
-            (this.endKeyword ?? this.body ?? this.nameExpression ?? this.keyword).range.end
-        );
+        return this.cacheRange();
+    }
+    private _range: Range;
+
+    public cacheRange() {
+        if (!this._range) {
+            this._range = util.createBoundingRange(
+                this.keyword,
+                this.nameExpression,
+                this.body,
+                this.endKeyword
+            ) ?? interpolatedRange;
+        }
+        return this._range;
     }
 
     public getName(parseMode: ParseMode) {
@@ -1232,6 +1238,14 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         this.tokens.name = name;
         this.tokens.extends = extendsToken;
         this.tokens.endInterface = endInterfaceToken;
+        this.range = util.createBoundingRange(
+            this.tokens.interface,
+            this.tokens.name,
+            this.tokens.extends,
+            this.parentInterfaceName,
+            ...this.body,
+            this.tokens.endInterface
+        );
     }
 
     public tokens = {} as {
@@ -1348,9 +1362,8 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            for (let i = 0; i < this.body.length; i++) {
-                walk(this.body, i, visitor, options, this);
-            }
+            walkArray(this.body, visitor, options, this);
+
         }
     }
 }
@@ -1525,11 +1538,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
     ) {
         super();
         this.body = this.body ?? [];
+
         for (let statement of this.body) {
-            if (isClassMethodStatement(statement)) {
+            if (isMethodStatement(statement)) {
                 this.methods.push(statement);
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
-            } else if (isClassFieldStatement(statement)) {
+            } else if (isFieldStatement(statement)) {
                 this.fields.push(statement);
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
             }
@@ -1753,12 +1767,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         for (let statement of body) {
             //is field statement
-            if (isClassFieldStatement(statement)) {
+            if (isFieldStatement(statement)) {
                 //do nothing with class fields in this situation, they are handled elsewhere
                 continue;
 
                 //methods
-            } else if (isClassMethodStatement(statement)) {
+            } else if (isMethodStatement(statement)) {
 
                 //store overridden parent methods as super{parentIndex}_{methodName}
                 if (
@@ -1866,9 +1880,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            for (let i = 0; i < this.body.length; i++) {
-                walk(this.body, i, visitor, options, this);
-            }
+            walkArray(this.body, visitor, options, this);
         }
     }
 }
@@ -1926,7 +1938,7 @@ export class MethodStatement extends FunctionStatement {
                 const beginningVariable = util.findBeginningVariableExpression(e);
                 const lowerName = beginningVariable?.getName(ParseMode.BrighterScript).toLowerCase();
                 if (lowerName === 'super') {
-                    beginningVariable.name.text = 'm';
+                    state.editor.setProperty(beginningVariable.name, 'text', 'm');
                     state.editor.setProperty(e.name, 'text', `super${parentClassIndex}_${e.name.text}`);
                 }
             }
@@ -2388,9 +2400,8 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            for (let i = 0; i < this.body.length; i++) {
-                walk(this.body, i, visitor, options, this);
-            }
+            walkArray(this.body, visitor, options, this);
+
         }
     }
 }
@@ -2438,6 +2449,69 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
             }
         }
         return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.value && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
+    }
+}
+
+export class ConstStatement extends Statement implements TypedefProvider {
+
+    public constructor(
+        public tokens: {
+            const: Token;
+            name: Identifier;
+            equals: Token;
+        },
+        public value: Expression,
+        readonly namespaceName?: NamespacedVariableNameExpression
+    ) {
+        super();
+        this.range = util.createBoundingRange(this.tokens.const, this.tokens.name, this.tokens.equals, this.value);
+    }
+
+    public range: Range;
+
+    public get name() {
+        return this.tokens.name.text;
+    }
+
+    /**
+     * The name of the statement WITH its leading namespace (if applicable)
+     */
+    public get fullName() {
+        const name = this.tokens.name?.text;
+        if (name) {
+            if (this.namespaceName) {
+                let namespaceName = this.namespaceName.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this doesn't have a name
+            return undefined;
+        }
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        //const declarations don't exist at runtime, so just transpile empty
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
+        return [
+            state.tokenToSourceNode(this.tokens.const),
+            ' ',
+            state.tokenToSourceNode(this.tokens.name),
+            ' ',
+            state.tokenToSourceNode(this.tokens.equals),
+            ' ',
+            ...this.value.transpile(state)
+        ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

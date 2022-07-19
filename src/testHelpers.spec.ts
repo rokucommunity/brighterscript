@@ -1,7 +1,7 @@
 import type { BscFile, BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { CompletionItem, Diagnostic } from 'vscode-languageserver';
+import type { CodeDescription, CompletionItem, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from 'chai';
 import type { CodeActionShorthand } from './CodeActionUtil';
@@ -41,12 +41,37 @@ function sortDiagnostics(diagnostics: BsDiagnostic[]) {
     );
 }
 
+function cloneObject<TOriginal, TTemplate>(original: TOriginal, template: TTemplate, defaultKeys: Array<keyof TOriginal>) {
+    const clone = {} as Partial<TOriginal>;
+    let keys = Object.keys(template ?? {}) as Array<keyof TOriginal>;
+    //if there were no keys provided, use some sane defaults
+    keys = keys.length > 0 ? keys : defaultKeys;
+
+    //copy only compare the specified keys from actualDiagnostic
+    for (const key of keys) {
+        clone[key] = original[key];
+    }
+    return clone;
+}
+
+interface PartialDiagnostic {
+    range?: Range;
+    severity?: DiagnosticSeverity;
+    code?: integer | string;
+    codeDescription?: Partial<CodeDescription>;
+    source?: string;
+    message?: string;
+    tags?: Partial<DiagnosticTag>[];
+    relatedInformation?: Partial<DiagnosticRelatedInformation>[];
+    data?: unknown;
+}
+
 /**
  * Ensure the DiagnosticCollection exactly contains the data from expected list.
  * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
  * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
-export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Partial<Diagnostic> | string | number>) {
+export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<PartialDiagnostic | string | number>) {
     const diagnostics = sortDiagnostics(
         getDiagnostics(arg)
     );
@@ -58,23 +83,29 @@ export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Par
             } else if (typeof x === 'number') {
                 result = { code: x };
             }
-            return result as BsDiagnostic;
+            return result as unknown as BsDiagnostic;
         })
     );
 
     const actual = [] as BsDiagnostic[];
     for (let i = 0; i < diagnostics.length; i++) {
-        const actualDiagnostic = diagnostics[i];
-        const clone = {} as BsDiagnostic;
-        let keys = Object.keys(expectedDiagnostics[i] ?? {}) as Array<keyof BsDiagnostic>;
-        //if there were no keys provided, use some sane defaults
-        keys = keys.length > 0 ? keys : ['message', 'code', 'range', 'severity'];
-
-        //copy only compare the specified keys from actualDiagnostic
-        for (const key of keys) {
-            clone[key] = actualDiagnostic[key];
+        const expectedDiagnostic = expectedDiagnostics[i];
+        const clone = cloneObject(
+            diagnostics[i],
+            expectedDiagnostic,
+            ['message', 'code', 'range', 'severity', 'relatedInformation']
+        );
+        //deep clone relatedInformation if available
+        if (clone.relatedInformation) {
+            for (let j = 0; j < clone.relatedInformation.length; j++) {
+                clone.relatedInformation[j] = cloneObject(
+                    clone.relatedInformation[j],
+                    expectedDiagnostic.relatedInformation[j],
+                    ['location', 'message']
+                ) as any;
+            }
         }
-        actual.push(clone);
+        actual.push(clone as any);
     }
 
     expect(actual).to.eql(expectedDiagnostics);
@@ -148,13 +179,13 @@ export function expectInstanceOf<T>(items: any[], constructors: Array<new (...ar
     }
 }
 
-export function getTestTranspile(scopeGetter: () => [Program, string]) {
+export function getTestTranspile(scopeGetter: () => [program: Program, rootDir: string]) {
     return getTestFileAction((file) => {
         return file.program['_getTranspiledFileContents'](file);
     }, scopeGetter);
 }
 
-export function getTestGetTypedef(scopeGetter: () => [Program, string]) {
+export function getTestGetTypedef(scopeGetter: () => [program: Program, rootDir: string]) {
     return getTestFileAction((file) => {
         return {
             code: (file as BrsFile).getTypedef(),
@@ -165,7 +196,7 @@ export function getTestGetTypedef(scopeGetter: () => [Program, string]) {
 
 function getTestFileAction(
     action: (file: BscFile) => CodeWithSourceMap,
-    scopeGetter: () => [Program, string]
+    scopeGetter: () => [program: Program, rootDir: string]
 ) {
     return function testFileAction(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();

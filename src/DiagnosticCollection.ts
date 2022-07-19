@@ -1,11 +1,11 @@
 import type { BsDiagnostic } from './interfaces';
-import type { Workspace } from './LanguageServer';
+import type { Project } from './LanguageServer';
 
 export class DiagnosticCollection {
     private previousDiagnosticsByFile = {} as Record<string, KeyedDiagnostic[]>;
 
-    public async getPatch(workspaces: Workspace[]): Promise<Record<string, KeyedDiagnostic[]>> {
-        const diagnosticsByFile = await this.getDiagnosticsByFileFromWorkspaces(workspaces);
+    public getPatch(projects: Project[]) {
+        const diagnosticsByFile = this.getDiagnosticsByFileFromProjects(projects);
 
         const patch = {
             ...this.getRemovedPatch(diagnosticsByFile),
@@ -18,17 +18,12 @@ export class DiagnosticCollection {
         return patch;
     }
 
-    private async getDiagnosticsByFileFromWorkspaces(workspaces: Workspace[]) {
+    private getDiagnosticsByFileFromProjects(projects: Project[]) {
         const result = {} as Record<string, KeyedDiagnostic[]>;
 
-        //wait for all programs to finish running. This ensures the `Program` exists.
-        await Promise.all(
-            workspaces.map(x => x.firstRunPromise)
-        );
-
-        //get all diagnostics for all workspaces
+        //get all diagnostics for all projects
         let diagnostics = Array.prototype.concat.apply([] as KeyedDiagnostic[],
-            workspaces.map((x) => x.builder.getDiagnostics())
+            projects.map((x) => x.builder.getDiagnostics())
         ) as KeyedDiagnostic[];
 
         const keys = {};

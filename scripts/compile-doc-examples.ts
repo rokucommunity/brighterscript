@@ -1,5 +1,5 @@
 import * as fsExtra from 'fs-extra';
-import * as glob from 'glob';
+import * as fastGlob from 'fast-glob';
 import * as path from 'path';
 import { Program } from '../src/Program';
 import type { BsConfig } from '../src';
@@ -16,6 +16,7 @@ class DocCompiler {
     ) {
 
     }
+
     private lines: string[];
     private index: number;
     private bsconfig: BsConfig;
@@ -58,7 +59,7 @@ class DocCompiler {
         return this.lines[this.index + 1];
     }
 
-    public run() {
+    public async run() {
         //get the docs file contents
         let contents = fsExtra.readFileSync(this.docPath).toString();
         //split the doc by newline
@@ -68,7 +69,7 @@ class DocCompiler {
         while (this.nextLine !== undefined) {
             this.advance();
             if (this.currentLine.includes('```')) {
-                this.processCodeBlock();
+                await this.processCodeBlock();
             }
         }
 
@@ -118,7 +119,7 @@ class DocCompiler {
         }
     }
 
-    public processCodeBlock() {
+    public async processCodeBlock() {
         //get the source code block
         const sourceCodeBlock = this.consumeCodeBlock();
 
@@ -138,7 +139,7 @@ class DocCompiler {
 
         //now that we have the range for the transpiled code, we need to transpile the source code
         console.log(`Transpiling ${sourceCodeBlock.language} block at lines ${sourceCodeBlock.startIndex}-${sourceCodeBlock.endIndex + 1}`);
-        const transpiledCode = this.transpile(sourceCodeBlock.code);
+        const transpiledCode = await this.transpile(sourceCodeBlock.code);
         let transpiledLines = transpiledCode.split(/\r?\n/g);
 
         //replace the old transpiled lines with the new ones
@@ -175,7 +176,7 @@ class DocCompiler {
         );
     }
 
-    public transpile(code: string) {
+    public async transpile(code: string) {
         const program = new Program({
             rootDir: `${__dirname}/rootDir`,
             files: [
@@ -186,16 +187,16 @@ class DocCompiler {
         });
         const file = program.setFile({ src: `${__dirname}/rootDir/source/main.bs`, dest: 'source/main.bs' }, code);
         program.validate();
-        const tranpileResult = program.getTranspiledFileContents(file.srcPath).code;
+        const tranpileResult = (await program.getTranspiledFileContents(file.srcPath)).code;
         return tranpileResult.trim();
     }
 }
 
-(function main() {
+(async function main() {
     const docsFolder = path.resolve(
         path.join(__dirname, '..', 'docs')
     );
-    const docs = glob.sync('**/*.md', {
+    const docs = fastGlob.sync('**/*.md', {
         cwd: docsFolder,
         absolute: true
     });
@@ -203,6 +204,6 @@ class DocCompiler {
     for (let docPath of docs) {
         console.log('\n', docPath);
         const compiler = new DocCompiler(docPath, enableDebugLogging);
-        compiler.run();
+        await compiler.run();
     }
-}());
+}()).catch((e) => console.error(e));
