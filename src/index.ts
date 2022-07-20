@@ -17,7 +17,7 @@ export * from './parser/Statement';
 export * from './BsConfig';
 export * from './deferred';
 // convenience re-export from vscode
-export { Range, Position, CancellationToken, CancellationTokenSource, DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver';
+export { Range, Position, CancellationToken, CancellationTokenSource, DiagnosticSeverity, DiagnosticTag, SemanticTokenTypes, CodeAction } from 'vscode-languageserver';
 export * from './astUtils/visitors';
 export * from './astUtils/stackedVisitor';
 export * from './astUtils/reflection';
