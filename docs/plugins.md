@@ -96,13 +96,21 @@ When any file is modified:
 After file addition/removal (note: throttled/debounced):
 
 - `beforeProgramValidate`
+- For each invalidated/not-yet-validated file
+    - `beforeFileValidate`
+    - `onFileValidate`
+    - `afterFileValidate`
 - For each invalidated scope:
     - `beforeScopeValidate`
     - `afterScopeValidate`
 - `afterProgramValidate`
 
 Code Actions
- - `onProgramGetCodeActions`
+ - `onGetCodeActions`
+
+Semantic Tokens
+ - `onGetSemanticTokens`
+
 
 ## Compiler API
 
