@@ -2,7 +2,7 @@ import * as fsExtra from 'fs-extra';
 import * as fastGlob from 'fast-glob';
 import * as path from 'path';
 import { Program } from '../src/Program';
-import type { BsConfig } from '../src';
+import type { BsConfig } from '../src/BsConfig';
 import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 
@@ -74,10 +74,24 @@ class DocCompiler {
             }
         }
 
-        const result = this.lines.join(eol);
+        let result = this.lines.join(eol);
+        result = this.customProcessing(this.docPath, result);
         fsExtra.writeFileSync(this.docPath, result);
         delete this.lines;
         this.index = -1;
+    }
+
+    private customProcessing(docPath: string, contents: string) {
+        const docName = docPath.split(/[\/\\]/).pop().toLowerCase();
+        if (docName === 'plugins.md') {
+            const regexp = /export interface CompilerPlugin(.|\r?\n)*?}/;
+            //load the CompilerPlugin original source code
+            const [latestInterface] = regexp.exec(
+                fsExtra.readFileSync(`${__dirname}/../src/interfaces.ts`).toString()
+            );
+            contents = contents.replace(regexp, latestInterface);
+        }
+        return contents;
     }
 
     private consumeCodeBlock() {
