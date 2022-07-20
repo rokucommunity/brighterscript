@@ -62,6 +62,7 @@ class DocCompiler {
     public async run() {
         //get the docs file contents
         let contents = fsExtra.readFileSync(this.docPath).toString();
+        const [eol] = /\r?\n/.exec(contents);
         //split the doc by newline
         this.lines = contents.split(/\r?\n/g);
         this.index = -1;
@@ -73,7 +74,7 @@ class DocCompiler {
             }
         }
 
-        const result = this.lines.join('\n');
+        const result = this.lines.join(eol);
         fsExtra.writeFileSync(this.docPath, result);
         delete this.lines;
         this.index = -1;
