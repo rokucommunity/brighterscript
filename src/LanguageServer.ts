@@ -6,7 +6,6 @@ import type {
     CompletionItem,
     Connection,
     DidChangeWatchedFilesParams,
-    Hover,
     InitializeParams,
     ServerCapabilities,
     TextDocumentPositionParams,
@@ -21,7 +20,8 @@ import type {
     SemanticTokensOptions,
     SemanticTokens,
     SemanticTokensParams,
-    TextDocumentChangeEvent
+    TextDocumentChangeEvent,
+    Hover
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -1003,14 +1003,31 @@ export class LanguageServer {
 
         const srcPath = util.uriToPath(params.textDocument.uri);
         let projects = this.getProjects();
-        let hovers = await Promise.all(
-            Array.prototype.concat.call([],
-                projects.map(async (x) => x.builder.program.getHover(srcPath, params.position))
-            )
-        ) as Hover[];
+        let hovers = projects.map((x) => x.builder.program.getHover(srcPath, params.position)).flat();
+        hovers = [hovers[0], hovers[0], hovers[0]];
 
-        //return the first non-falsey hover. TODO is there a way to handle multiple hover results?
-        let hover = hovers.filter((x) => !!x)[0];
+        //eliminate duplicate hover text, and merge all hovers together into a single newline-separated string
+        const hoverText = [
+            ...hovers
+                //remove undefined hovers
+                .filter(x => !!x)
+                //dedupe and merge inner hovers
+                .reduce((set, hover) => {
+                    const hoverContentArray = Array.isArray(hover.contents) ? hover.contents : [hover.contents];
+                    const hoverText = hoverContentArray.map(x => {
+                        return typeof x === 'string' ? x : x.value;
+                    }).join('\n');
+                    return set.add(hoverText);
+                }, new Set<string>()).values()
+            //merge outer hovers
+        ].join('\n');
+
+        let hover: Hover = {
+            //use the range from the first hover
+            range: hovers[0]?.range,
+            //merge all the hovers into a single string, separated by newlines
+            contents: hoverText
+        };
         return hover;
     }
 

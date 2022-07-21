@@ -1660,6 +1660,35 @@ describe('BrsFile', () => {
         });
     });
 
+    it('handles mixed case `then` partions of conditionals', () => {
+        let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            sub Main()
+                if true then
+                    print "works"
+                end if
+            end sub
+        `);
+
+        expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
+        mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            sub Main()
+                if true Then
+                    print "works"
+                end if
+            end sub
+        `);
+        expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
+
+        mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            sub Main()
+                if true THEN
+                    print "works"
+                end if
+            end sub
+        `);
+        expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
+    });
+
     describe('getHover', () => {
         it('works for param types', () => {
             let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
@@ -1671,12 +1700,12 @@ describe('BrsFile', () => {
             `);
 
             //hover over the `name = 1` line
-            let hover = file.getHover(Position.create(2, 24));
+            let hover = program.getHover(file.srcPath, Position.create(2, 24))[0];
             expect(hover).to.exist;
             expect(hover.range).to.eql(Range.create(2, 20, 2, 24));
 
             //hover over the `name` parameter declaration
-            hover = file.getHover(Position.create(1, 34));
+            hover = program.getHover(file.srcPath, Position.create(1, 34))[0];
             expect(hover).to.exist;
             expect(hover.range).to.eql(Range.create(1, 32, 1, 36));
         });
@@ -1690,9 +1719,9 @@ describe('BrsFile', () => {
                 end sub
             `);
             //hover over the `as`
-            expect(file.getHover(Position.create(1, 31))).not.to.exist;
+            expect(program.getHover(file.srcPath, Position.create(1, 31))).to.be.empty;
             //hover over the `string`
-            expect(file.getHover(Position.create(1, 36))).not.to.exist;
+            expect(program.getHover(file.srcPath, Position.create(1, 36))).to.be.empty;
         });
 
         it('finds declared function', () => {
@@ -1704,7 +1733,7 @@ describe('BrsFile', () => {
                 end function
             `);
 
-            let hover = file.getHover(Position.create(1, 28));
+            let hover = program.getHover(file.srcPath, Position.create(1, 28))[0];
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(1, 25, 1, 29));
@@ -1726,7 +1755,7 @@ describe('BrsFile', () => {
             end namespace
             `);
 
-            let hover = file.getHover(Position.create(2, 28));
+            let hover = program.getHover(file.srcPath, Position.create(2, 28))[0];
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(2, 25, 2, 29));
@@ -1747,7 +1776,7 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            let hover = file.getHover(Position.create(5, 24));
+            let hover = program.getHover(file.srcPath, Position.create(5, 24))[0];
 
             expect(hover.range).to.eql(Range.create(5, 20, 5, 29));
             expect(hover.contents).to.equal([
@@ -1757,7 +1786,7 @@ describe('BrsFile', () => {
             ].join('\n'));
         });
 
-        it('does not crash when hovering on built-in functions', async () => {
+        it('does not crash when hovering on built-in functions', () => {
             let file = program.setFile('source/main.brs', `
                 function doUcase(text)
                     return ucase(text)
@@ -1765,7 +1794,7 @@ describe('BrsFile', () => {
             `);
 
             expect(
-                (await program.getHover(file.srcPath, Position.create(2, 30))).contents
+                program.getHover(file.srcPath, Position.create(2, 30))[0].contents
             ).to.equal([
                 '```brightscript',
                 'function UCase(s as string) as string',
@@ -1773,7 +1802,7 @@ describe('BrsFile', () => {
             ].join('\n'));
         });
 
-        it('does not crash when hovering on object method call', async () => {
+        it('does not crash when hovering on object method call', () => {
             let file = program.setFile('source/main.brs', `
                 function getInstr(url, text)
                     return url.instr(text)
@@ -1781,7 +1810,7 @@ describe('BrsFile', () => {
             `);
 
             expect(
-                (await program.getHover(file.srcPath, Position.create(2, 35))).contents
+                program.getHover(file.srcPath, Position.create(2, 35))[0].contents
             ).to.equal([
                 '```brightscript',
                 //TODO this really shouldn't be returning the global function, but it does...so make sure it doesn't crash right now.
@@ -1801,7 +1830,7 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            let hover = file.getHover(Position.create(2, 25));
+            let hover = program.getHover(file.srcPath, Position.create(2, 25))[0];
 
             expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
             expect(hover.contents).to.equal([
@@ -1824,7 +1853,7 @@ describe('BrsFile', () => {
                 end namespace
             `);
 
-            let hover = file.getHover(Position.create(3, 25));
+            let hover = program.getHover(file.srcPath, Position.create(3, 25))[0];
 
             expect(hover.range).to.eql(Range.create(3, 20, 3, 29));
             expect(hover.contents).to.equal([
@@ -1852,7 +1881,7 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            let hover = mainFile.getHover(Position.create(2, 25));
+            let hover = program.getHover(mainFile.srcPath, Position.create(2, 25))[0];
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
@@ -1882,7 +1911,7 @@ describe('BrsFile', () => {
                 end namespace
             `);
 
-            let hover = mainFile.getHover(Position.create(2, 34));
+            let hover = program.getHover(mainFile.srcPath, Position.create(2, 34))[0];
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(2, 28, 2, 37));
@@ -1893,7 +1922,7 @@ describe('BrsFile', () => {
             ].join('\n'));
         });
 
-        it('includes markdown comments in hover.', async () => {
+        it('includes markdown comments in hover.', () => {
             let rootDir = process.cwd();
             program = new Program({
                 rootDir: rootDir
@@ -1918,7 +1947,7 @@ describe('BrsFile', () => {
 
             //hover over log("hello")
             expect(
-                (await program.getHover(file.srcPath, Position.create(5, 22))).contents
+                program.getHover(file.srcPath, Position.create(5, 22))[0].contents
             ).to.equal([
                 '```brightscript',
                 'sub log(message as string) as void',
@@ -1933,7 +1962,7 @@ describe('BrsFile', () => {
             //hover over sub ma|in()
             expect(
                 trim(
-                    (await program.getHover(file.srcPath, Position.create(4, 22))).contents.toString()
+                    program.getHover(file.srcPath, Position.create(4, 22))[0].contents.toString()
                 )
             ).to.equal(trim`
                 \`\`\`brightscript

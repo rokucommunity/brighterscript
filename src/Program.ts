@@ -1,14 +1,14 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, Hover } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -911,15 +911,24 @@ export class Program {
         }
     }
 
-    public getHover(srcPath: string, position: Position) {
-        //find the file
+    /**
+     * Get hover information for a file and position
+     */
+    public getHover(srcPath: string, position: Position): Hover[] {
         let file = this.getFile(srcPath);
-        if (!file) {
-            return null;
+        if (file) {
+            const event = {
+                program: this,
+                file: file,
+                position: position,
+                scopes: this.getScopesForFile(file),
+                hovers: []
+            } as ProvideHoverEvent;
+            this.plugins.emit('beforeProvideHover', event);
+            this.plugins.emit('provideHover', event);
+            this.plugins.emit('afterProvideHover', event);
+            return event.hovers;
         }
-        const hover = file.getHover(position);
-
-        return Promise.resolve(hover);
     }
 
     /**

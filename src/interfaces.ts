@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, Hover } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -201,6 +201,20 @@ export interface CompilerPlugin {
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+
+    /**
+     * Called before the `provideHover` hook. Use this if you need to prepare any of the in-memory objects before the `provideHover` gets called
+     */
+    beforeProvideHover?: PluginHandler<BeforeProvideHoverEvent>;
+    /**
+     * Called when bsc looks for hover information. Use this if your plugin wants to contribute hover information.
+     */
+    provideHover?: PluginHandler<ProvideHoverEvent>;
+    /**
+     * Called after the `provideHover` hook. Use this if you want to intercept or sanitize the hover data (even from other plugins) before it gets sent to the client.
+     */
+    afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
+
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;
@@ -229,7 +243,7 @@ export interface CompilerPlugin {
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
 }
-export type PluginHandler<T> = (event: T) => void;
+export type PluginHandler<T, R = void> = (event: T) => R;
 
 export interface OnGetCodeActionsEvent {
     program: Program;
@@ -239,6 +253,16 @@ export interface OnGetCodeActionsEvent {
     diagnostics: BsDiagnostic[];
     codeActions: CodeAction[];
 }
+
+export interface ProvideHoverEvent {
+    program: Program;
+    file: BscFile;
+    position: Position;
+    scopes: Scope[];
+    hovers: Hover[];
+}
+export type BeforeProvideHoverEvent = ProvideHoverEvent;
+export type AfterProvideHoverEvent = ProvideHoverEvent;
 
 export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
     /**
