@@ -1,66 +1,21 @@
 import type { BscFile, BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { Diagnostic } from 'vscode-languageserver';
+import type { CodeDescription, CompletionItem, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from 'chai';
 import type { CodeActionShorthand } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
-// eslint-disable-next-line @typescript-eslint/consistent-type-imports
-import { BrsFile } from './files/BrsFile';
+import type { BrsFile } from './files/BrsFile';
 import type { Program } from './Program';
 import { standardizePath as s } from './util';
 import type { CodeWithSourceMap } from 'source-map';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
+import undent from 'undent';
 
-/**
- * Trim leading whitespace for every line (to make test writing cleaner
- */
-function trimLeading(text: string) {
-    if (!text) {
-        return text;
-    }
-    const lines = text.split(/\r?\n/);
-    let minIndent = Number.MAX_SAFE_INTEGER;
+export const trim = undent;
 
-    //skip leading empty lines
-    while (lines[0]?.trim().length === 0) {
-        lines.splice(0, 1);
-    }
-
-    for (const line of lines) {
-        const trimmedLine = line.trimLeft();
-        //skip empty lines
-        if (trimmedLine.length === 0) {
-            continue;
-        }
-        const leadingSpaceCount = line.length - trimmedLine.length;
-        if (leadingSpaceCount < minIndent) {
-            minIndent = leadingSpaceCount;
-        }
-    }
-
-    //apply the trim to each line
-    for (let i = 0; i < lines.length; i++) {
-        lines[i] = lines[i].substring(minIndent);
-    }
-    return lines.join('\n');
-}
-
-/**
- * Remove leading white space and remove excess indentation
- */
-export function trim(strings: TemplateStringsArray, ...args) {
-    let text = '';
-    for (let i = 0; i < strings.length; i++) {
-        text += strings[i];
-        if (args[i]) {
-            text += args[i];
-        }
-    }
-    return trimLeading(text);
-}
 type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[];
 
 function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
@@ -86,12 +41,37 @@ function sortDiagnostics(diagnostics: BsDiagnostic[]) {
     );
 }
 
+function cloneObject<TOriginal, TTemplate>(original: TOriginal, template: TTemplate, defaultKeys: Array<keyof TOriginal>) {
+    const clone = {} as Partial<TOriginal>;
+    let keys = Object.keys(template ?? {}) as Array<keyof TOriginal>;
+    //if there were no keys provided, use some sane defaults
+    keys = keys.length > 0 ? keys : defaultKeys;
+
+    //copy only compare the specified keys from actualDiagnostic
+    for (const key of keys) {
+        clone[key] = original[key];
+    }
+    return clone;
+}
+
+interface PartialDiagnostic {
+    range?: Range;
+    severity?: DiagnosticSeverity;
+    code?: integer | string;
+    codeDescription?: Partial<CodeDescription>;
+    source?: string;
+    message?: string;
+    tags?: Partial<DiagnosticTag>[];
+    relatedInformation?: Partial<DiagnosticRelatedInformation>[];
+    data?: unknown;
+}
+
 /**
  * Ensure the DiagnosticCollection exactly contains the data from expected list.
  * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
  * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
-export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Partial<Diagnostic> | string | number>) {
+export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<PartialDiagnostic | string | number>) {
     const diagnostics = sortDiagnostics(
         getDiagnostics(arg)
     );
@@ -103,23 +83,29 @@ export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Par
             } else if (typeof x === 'number') {
                 result = { code: x };
             }
-            return result as BsDiagnostic;
+            return result as unknown as BsDiagnostic;
         })
     );
 
     const actual = [] as BsDiagnostic[];
     for (let i = 0; i < diagnostics.length; i++) {
-        const actualDiagnostic = diagnostics[i];
-        const clone = {} as BsDiagnostic;
-        let keys = Object.keys(expectedDiagnostics[i] ?? {}) as Array<keyof BsDiagnostic>;
-        //if there were no keys provided, use some sane defaults
-        keys = keys.length > 0 ? keys : ['message', 'code', 'range', 'severity'];
-
-        //copy only compare the specified keys from actualDiagnostic
-        for (const key of keys) {
-            clone[key] = actualDiagnostic[key];
+        const expectedDiagnostic = expectedDiagnostics[i];
+        const clone = cloneObject(
+            diagnostics[i],
+            expectedDiagnostic,
+            ['message', 'code', 'range', 'severity', 'relatedInformation']
+        );
+        //deep clone relatedInformation if available
+        if (clone.relatedInformation) {
+            for (let j = 0; j < clone.relatedInformation.length; j++) {
+                clone.relatedInformation[j] = cloneObject(
+                    clone.relatedInformation[j],
+                    expectedDiagnostic.relatedInformation[j],
+                    ['location', 'message']
+                ) as any;
+            }
         }
-        actual.push(clone);
+        actual.push(clone as any);
     }
 
     expect(actual).to.eql(expectedDiagnostics);
@@ -135,8 +121,8 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
         for (const diagnostic of diagnostics) {
             //escape any newlines
             diagnostic.message = diagnostic.message.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
-            message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file?.pathAbsolute ?? ''}#(${diagnostic.range.start.line}:${diagnostic.range.start.character})-(${diagnostic.range.end.line}:${diagnostic.range.end.character})`;
-            //print the line containing the error (if we can find it)
+            message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file?.srcPath ?? ''}#(${diagnostic.range.start.line}:${diagnostic.range.start.character})-(${diagnostic.range.end.line}:${diagnostic.range.end.character})`;
+            //print the line containing the error (if we can find it)srcPath
             const line = diagnostic.file?.fileContents?.split(/\r?\n/g)?.[diagnostic.range.start.line];
             if (line) {
                 message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
@@ -163,7 +149,7 @@ export function expectHasDiagnostics(arg: DiagnosticCollection, length: number =
  * Remove sourcemap information at the end of the source
  */
 export function trimMap(source: string) {
-    return source.replace(/('|<!--)\/\/# sourceMappingURL=.*$/m, '');
+    return source.replace(/('|<!--)\/\/# sourceMappingURL=.*$/m, '').trimEnd();
 }
 
 export function expectCodeActions(test: () => any, expected: CodeActionShorthand[]) {
@@ -183,11 +169,23 @@ export function expectCodeActions(test: () => any, expected: CodeActionShorthand
     expect(args).to.eql(expected);
 }
 
-export function getTestTranspile(scopeGetter: () => [Program, string]) {
-    return getTestFileAction((file) => file.transpile(), scopeGetter);
+export function expectInstanceOf<T>(items: any[], constructors: Array<new (...args: any[]) => T>) {
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const constructor = constructors[i];
+        if (!(item instanceof constructor)) {
+            throw new Error(`Expected index ${i} to be instanceof ${constructor.name} but instead found ${item.constructor?.name}`);
+        }
+    }
 }
 
-export function getTestGetTypedef(scopeGetter: () => [Program, string]) {
+export function getTestTranspile(scopeGetter: () => [program: Program, rootDir: string]) {
+    return getTestFileAction((file) => {
+        return file.program['_getTranspiledFileContents'](file);
+    }, scopeGetter);
+}
+
+export function getTestGetTypedef(scopeGetter: () => [program: Program, rootDir: string]) {
     return getTestFileAction((file) => {
         return {
             code: (file as BrsFile).getTypedef(),
@@ -198,46 +196,27 @@ export function getTestGetTypedef(scopeGetter: () => [Program, string]) {
 
 function getTestFileAction(
     action: (file: BscFile) => CodeWithSourceMap,
-    scopeGetter: () => [Program, string]
+    scopeGetter: () => [program: Program, rootDir: string]
 ) {
     return function testFileAction(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
-        let file = program.addOrReplaceFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
+        let file = program.setFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
         program.validate();
         if (failOnDiagnostic !== false) {
             expectZeroDiagnostics(program);
         }
         let codeWithMap = action(file);
 
-        let sources = [codeWithMap.code, expected];
+        let sources = [trimMap(codeWithMap.code), expected];
+
         for (let i = 0; i < sources.length; i++) {
             if (formatType === 'trim') {
-                let lines = sources[i].split('\n');
-                //throw out leading newlines
-                while (lines[0].length === 0) {
-                    lines.splice(0, 1);
-                }
-                let trimStartIndex = null;
-                for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                    //if we don't have a starting trim count, compute it
-                    if (!trimStartIndex) {
-                        trimStartIndex = lines[lineIndex].length - lines[lineIndex].trim().length;
-                    }
-                    //only trim the expected file (since that's what we passed in from the test)
-                    if (lines[lineIndex].length > 0 && i === 1) {
-                        lines[lineIndex] = lines[lineIndex].substring(trimStartIndex);
-                    }
-                }
-                //trim trailing newlines
-                while (lines[lines.length - 1]?.length === 0) {
-                    lines.splice(lines.length - 1);
-                }
-                sources[i] = lines.join('\n');
-
+                sources[i] = trim(sources[i]);
             }
         }
-        expect(trimMap(sources[0])).to.equal(sources[1]);
+
+        expect(sources[0]).to.equal(sources[1]);
         return {
             file: file,
             source: source,
@@ -246,4 +225,85 @@ function getTestFileAction(
             map: codeWithMap.map
         };
     };
+}
+
+/**
+ * Create a new object based on the keys from another object
+ */
+function pick<T extends Record<string, any>>(example: T, subject: Record<string, any>): T {
+    if (!subject) {
+        return subject as T;
+    }
+    const result = {};
+    for (const key of Object.keys(example)) {
+        result[key] = subject?.[key];
+    }
+    return result as T;
+}
+
+/**
+ * Test a set of completions includes the provided items
+ */
+export function expectCompletionsIncludes(completions: CompletionItem[], expectedItems: Array<string | Partial<CompletionItem>>) {
+    for (const expectedItem of expectedItems) {
+        if (typeof expectedItem === 'string') {
+            expect(completions.map(x => x.label)).includes(expectedItem);
+        } else {
+            //match all existing properties of the expectedItem
+            let actualItem = pick(
+                expectedItem,
+                completions.find(x => x.label === expectedItem.label)
+            );
+            expect(actualItem).to.eql(expectedItem);
+        }
+    }
+}
+
+/**
+ * Expect that the completions list does not include the provided items
+ */
+export function expectCompletionsExcludes(completions: CompletionItem[], expectedItems: Array<string | Partial<CompletionItem>>) {
+    for (const expectedItem of expectedItems) {
+        if (typeof expectedItem === 'string') {
+            expect(completions.map(x => x.label)).not.includes(expectedItem);
+        } else {
+            //match all existing properties of the expectedItem
+            let actualItem = pick(
+                expectedItem,
+                completions.find(x => x.label === expectedItem.label)
+            );
+            expect(actualItem).to.not.eql(expectedItem);
+        }
+    }
+}
+
+export function expectThrows(callback: () => any, expectedMessage = undefined, failedTestMessage = 'Expected to throw but did not') {
+    let wasExceptionThrown = false;
+    try {
+        callback();
+    } catch (e) {
+        wasExceptionThrown = true;
+        if (expectedMessage) {
+            expect((e as any).message).to.eql(expectedMessage);
+        }
+    }
+    if (wasExceptionThrown === false) {
+        throw new Error(failedTestMessage);
+    }
+}
+
+export function objectToMap<T>(obj: Record<string, T>) {
+    const result = new Map<string, T>();
+    for (let key in obj) {
+        result.set(key, obj[key]);
+    }
+    return result;
+}
+
+export function mapToObject<T>(map: Map<any, T>) {
+    const result = {} as Record<string, T>;
+    for (let [key, value] of map) {
+        result[key] = value;
+    }
+    return result;
 }

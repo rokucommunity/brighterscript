@@ -120,6 +120,11 @@ export interface BsConfig {
     plugins?: Array<string>;
 
     /**
+     * A list of scripts or modules to pass to node's `require()` on startup. This is useful for doing things like ts-node registration
+     */
+    require?: Array<string>;
+
+    /**
      * When enabled, every xml component will search for a .bs or .brs file with the same name
      * in the same folder, and add it as a script import if found. Disabled by default"
      */
@@ -147,4 +152,10 @@ export interface BsConfig {
      * @default true
      */
     sourceMap?: boolean;
+
+    /**
+     * Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
+     * @default false
+     */
+    allowBrighterScriptInBrightScript?: boolean;
 }

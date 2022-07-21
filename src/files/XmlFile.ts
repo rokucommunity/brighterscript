@@ -1,7 +1,7 @@
 import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
+import type { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, File, FileReference, FunctionCall, CommentFlag } from '../interfaces';
@@ -19,19 +19,30 @@ import { TranspileState } from '../parser/TranspileState';
 
 export class XmlFile {
     constructor(
-        public pathAbsolute: string,
+        public srcPath: string,
         /**
          * The absolute path to the file, relative to the pkg
          */
         public pkgPath: string,
         public program: Program
     ) {
-        this.extension = path.extname(pathAbsolute).toLowerCase();
+        this.extension = path.extname(this.srcPath).toLowerCase();
 
         this.possibleCodebehindPkgPaths = [
             this.pkgPath.replace('.xml', '.bs'),
             this.pkgPath.replace('.xml', '.brs')
         ];
+    }
+
+    /**
+     * The absolute path to the source location for this file
+     * @deprecated use `srcPath` instead
+     */
+    public get pathAbsolute() {
+        return this.srcPath;
+    }
+    public set pathAbsolute(value) {
+        this.srcPath = value;
     }
 
     private cache = new Cache();
@@ -45,6 +56,12 @@ export class XmlFile {
      * An unsubscribe function for the dependencyGraph subscription
      */
     private unsubscribeFromDependencyGraph: () => void;
+
+    /**
+     * Indicates whether this file needs to be validated.
+     * Files are only ever validated a single time
+     */
+    public isValidated = false;
 
     /**
      * The extension for this file
@@ -111,7 +128,7 @@ export class XmlFile {
                 .filter(x => util.getExtension(x) !== '.d.bs');
 
             let result = [] as string[];
-            let filesInProgram = this.program.getFilesByPkgPaths(allDependencies);
+            let filesInProgram = this.program.getFiles(allDependencies);
             for (let file of filesInProgram) {
                 result.push(file.pkgPath);
             }
@@ -193,16 +210,19 @@ export class XmlFile {
 
         this.getCommentFlags(this.parser.tokens as any[]);
 
-        if (!this.parser.ast.root) {
+        //needsTranspiled should be true if an import is brighterscript
+        this.needsTranspiled = this.needsTranspiled || this.ast.component?.scripts?.some(
+            script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
+        );
+    }
+
+
+    public validate() {
+        if (this.parser.ast.root) {
+            this.validateComponent(this.parser.ast);
+        } else {
             //skip empty XML
-            return;
         }
-
-        //notify AST ready
-        this.program.plugins.emit('afterFileParse', this);
-
-        //initial validation
-        this.validateComponent(this.parser.ast);
     }
 
     /**
@@ -253,10 +273,6 @@ export class XmlFile {
             });
         }
 
-        //needsTranspiled should be true if an import is brighterscript
-        this.needsTranspiled = this.needsTranspiled || component.scripts.some(
-            script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
-        );
 
         //catch script imports with same path as the auto-imported codebehind file
         const scriptTagImports = this.parser.references.scriptTagImports;
@@ -403,15 +419,10 @@ export class XmlFile {
      * Get the parent component (the component this component extends)
      */
     public get parentComponent() {
-        return this.cache.getOrAdd('parent', () => {
-            return this.program.getComponent(this.parentComponentName?.text)?.file ?? null;
+        const result = this.cache.getOrAdd('parent', () => {
+            return this.program.getComponent(this.parentComponentName?.text)?.file;
         });
-    }
-
-    public getHover(position: Position): Hover { //eslint-disable-line
-        //TODO implement
-        // let result = {} as Hover;
-        return null;
+        return result;
     }
 
     public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
@@ -496,7 +507,7 @@ export class XmlFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        const state = new TranspileState(this.pathAbsolute, this.program.options);
+        const state = new TranspileState(this.srcPath, this.program.options);
 
         const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
             const script = new SGScript();
@@ -543,8 +554,7 @@ export class XmlFile {
     }
 
     public dispose() {
-        if (this.unsubscribeFromDependencyGraph) {
-            this.unsubscribeFromDependencyGraph();
-        }
+        //unsubscribe from any DependencyGraph subscriptions
+        this.unsubscribeFromDependencyGraph?.();
     }
 }

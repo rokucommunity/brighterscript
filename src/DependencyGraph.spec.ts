@@ -55,6 +55,15 @@ describe('DependencyGraph', () => {
         expect(graph.nodes['a'].getAllDependencies().sort()).to.eql(['b', 'd', 'e']);
     });
 
+    describe('addOrReplace', () => {
+        it('addOrReplace calls node.dispose()', () => {
+            graph.addOrReplace('a', ['b']);
+            const dispose = sinon.stub(graph.nodes['a'], 'dispose');
+            graph.addOrReplace('a');
+            expect(dispose.called).to.be.true;
+        });
+    });
+
     describe('remove', () => {
         it('notifies parents', () => {
             graph.addOrReplace('a', ['b']);
@@ -62,6 +71,13 @@ describe('DependencyGraph', () => {
             expect(graph.nodes['a'].getAllDependencies().sort()).to.eql(['b', 'c']);
             graph.remove('b');
             expect(graph.nodes['a'].getAllDependencies().sort()).to.eql(['b']);
+        });
+
+        it('calls node.dispose()', () => {
+            graph.addOrReplace('a', ['b']);
+            const dispose = sinon.stub(graph.nodes['a'], 'dispose');
+            graph.remove('a');
+            expect(dispose.called).to.be.true;
         });
     });
 
@@ -81,6 +97,13 @@ describe('DependencyGraph', () => {
             graph.addDependency('a', 'b');
             expect(graph.getAllDependencies('a')).to.eql(['b']);
         });
+
+        it('calls node.dispose()', () => {
+            graph.addOrReplace('a', ['b']);
+            const dispose = sinon.stub(graph.nodes['a'], 'dispose');
+            graph.addDependency('a', 'c');
+            expect(dispose.called).to.be.true;
+        });
     });
 
     describe('removeDependency', () => {
@@ -95,6 +118,13 @@ describe('DependencyGraph', () => {
             ]);
             graph.removeDependency('a', 'b');
             expect(graph.nodes['a'].dependencies).to.be.empty;
+        });
+
+        it('calls node.dispose()', () => {
+            graph.addOrReplace('a', ['b']);
+            const dispose = sinon.stub(graph.nodes['a'], 'dispose');
+            graph.removeDependency('a', 'b');
+            expect(dispose.called).to.be.true;
         });
     });
 
@@ -130,6 +160,14 @@ describe('DependencyGraph', () => {
                 'b',
                 'd',
                 'e'
+            ]);
+        });
+
+        it('works with multiple keys', () => {
+            graph.addOrReplace('a', ['b', 'c']);
+            graph.addOrReplace('b', ['c', 'd']);
+            expect(graph.getAllDependencies(['a', 'b']).sort()).to.eql([
+                'b', 'c', 'd'
             ]);
         });
     });

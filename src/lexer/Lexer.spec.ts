@@ -1,7 +1,7 @@
 /* eslint no-template-curly-in-string: 0 */
 import { expect } from 'chai';
 
-import { TokenKind } from '.';
+import { TokenKind } from './TokenKind';
 import { Lexer } from './Lexer';
 import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
@@ -9,6 +9,13 @@ import { Range } from 'vscode-languageserver';
 import util from '../util';
 
 describe('lexer', () => {
+    it('recognizes the `const` keyword', () => {
+        let { tokens } = Lexer.scan('const');
+        expect(tokens.map(x => x.kind)).to.eql([
+            TokenKind.Const,
+            TokenKind.Eof
+        ]);
+    });
     it('recognizes namespace keywords', () => {
         let { tokens } = Lexer.scan('namespace end namespace endnamespace end   namespace');
         expect(tokens.map(x => x.kind)).to.eql([
@@ -17,6 +24,67 @@ describe('lexer', () => {
             TokenKind.EndNamespace,
             TokenKind.EndNamespace,
             TokenKind.Eof
+        ]);
+    });
+
+    it('recognizes the question mark operator in various contexts', () => {
+        expectKinds('? ?? ?. ?[ ?.[ ?( ?@', [
+            TokenKind.Question,
+            TokenKind.QuestionQuestion,
+            TokenKind.QuestionDot,
+            TokenKind.QuestionLeftSquare,
+            TokenKind.QuestionDot,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionLeftParen,
+            TokenKind.QuestionAt
+        ]);
+    });
+
+    it('separates optional chain characters and LeftSquare when found at beginning of statement locations', () => {
+        //a statement starting with a question mark is actually a print statement, so we need to keep the ? separate from [
+        expectKinds(`?[ ?[ : ?[ ?[`, [
+            TokenKind.Question,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionLeftSquare,
+            TokenKind.Colon,
+            TokenKind.Question,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionLeftSquare
+        ]);
+    });
+
+    it('separates optional chain characters and LeftParen when found at beginning of statement locations', () => {
+        //a statement starting with a question mark is actually a print statement, so we need to keep the ? separate from [
+        expectKinds(`?( ?( : ?( ?(`, [
+            TokenKind.Question,
+            TokenKind.LeftParen,
+            TokenKind.QuestionLeftParen,
+            TokenKind.Colon,
+            TokenKind.Question,
+            TokenKind.LeftParen,
+            TokenKind.QuestionLeftParen
+        ]);
+    });
+
+    it('handles QuestionDot and Square properly', () => {
+        expectKinds('?.[ ?. [', [
+            TokenKind.QuestionDot,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionDot,
+            TokenKind.LeftSquareBracket
+        ]);
+    });
+
+    it('does not make conditional chaining tokens with space between', () => {
+        expectKinds('? . ? [ ? ( ? @', [
+            TokenKind.Question,
+            TokenKind.Dot,
+            TokenKind.Question,
+            TokenKind.LeftSquareBracket,
+            TokenKind.Question,
+            TokenKind.LeftParen,
+            TokenKind.Question,
+            TokenKind.At
         ]);
     });
 
@@ -33,11 +101,6 @@ describe('lexer', () => {
     it('recognizes library token', () => {
         let { tokens } = Lexer.scan('library');
         expect(tokens[0].kind).to.eql(TokenKind.Library);
-    });
-
-    it('recognizes the question mark operator', () => {
-        let { tokens } = Lexer.scan('?');
-        expect(tokens[0].kind).to.equal(TokenKind.Question);
     });
 
     it('produces an at symbol token', () => {
@@ -1140,6 +1203,17 @@ describe('lexer', () => {
         });
     });
 
+    it('recognizes enum-related keywords', () => {
+        expect(
+            Lexer.scan('enum end enum endenum').tokens.map(x => x.kind)
+        ).to.eql([
+            TokenKind.Enum,
+            TokenKind.EndEnum,
+            TokenKind.EndEnum,
+            TokenKind.Eof
+        ]);
+    });
+
     it('recognizes class-related keywords', () => {
         expect(
             Lexer.scan('class public protected private end class endclass new override').tokens.map(x => x.kind)
@@ -1295,3 +1369,10 @@ describe('lexer', () => {
         });
     });
 });
+
+function expectKinds(text: string, tokenKinds: TokenKind[]) {
+    let actual = Lexer.scan(text).tokens.map(x => x.kind);
+    //remove the EOF token
+    actual.pop();
+    expect(actual).to.eql(tokenKinds);
+}

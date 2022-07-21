@@ -3,8 +3,8 @@ import * as fsExtra from 'fs-extra';
 import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
-import * as rokuDeploy from 'roku-deploy';
-import type { Diagnostic, Position, Range } from 'vscode-languageserver';
+import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
+import type { Diagnostic, Position, Range, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
@@ -24,9 +24,10 @@ import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
-import type { Locatable, Token } from './lexer';
-import { TokenKind } from './lexer';
-import { isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
+import type { Identifier, Locatable, Token } from './lexer/Token';
+import { TokenKind } from './lexer/TokenKind';
+import { isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isVariableExpression, isXmlAttributeGetExpression } from './astUtils/reflection';
+import { WalkMode } from './astUtils/visitors';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
@@ -65,6 +66,25 @@ export class Util {
      */
     public isDirectorySync(dirPath: string | undefined) {
         return fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+    }
+
+    /**
+     * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
+     */
+    public sanitizePkgPath(pkgPath: string) {
+        pkgPath = pkgPath.replace(/\\/g, '/');
+        //if there's no protocol, assume it's supposed to start with `pkg:/`
+        if (!this.startsWithProtocol(pkgPath)) {
+            pkgPath = 'pkg:/' + pkgPath;
+        }
+        return pkgPath;
+    }
+
+    /**
+     * Determine if the given path starts with a protocol
+     */
+    public startsWithProtocol(path: string) {
+        return !!/^[-a-z]+:\//i.exec(path);
     }
 
     /**
@@ -153,21 +173,30 @@ export class Util {
             //load the project file
             let projectFileContents = fsExtra.readFileSync(configFilePath).toString();
             let parseErrors = [] as ParseError[];
-            let projectConfig = parseJsonc(projectFileContents, parseErrors) as BsConfig;
+            let projectConfig = parseJsonc(projectFileContents, parseErrors, {
+                allowEmptyContent: true,
+                allowTrailingComma: true,
+                disallowComments: false
+            }) as BsConfig ?? {};
             if (parseErrors.length > 0) {
                 let err = parseErrors[0];
                 let diagnostic = {
                     ...DiagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
                     file: {
-                        pathAbsolute: configFilePath
+                        srcPath: configFilePath
                     },
                     range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
                 } as BsDiagnostic;
                 throw diagnostic; //eslint-disable-line @typescript-eslint/no-throw-literal
             }
-            this.resolvePluginPaths(projectConfig, configFilePath);
 
             let projectFileCwd = path.dirname(configFilePath);
+
+            //`plugins` paths should be relative to the current bsconfig
+            this.resolvePathsRelativeTo(projectConfig, 'plugins', projectFileCwd);
+
+            //`require` paths should be relative to cwd
+            util.resolvePathsRelativeTo(projectConfig, 'require', projectFileCwd);
 
             let result: BsConfig;
             //if the project has a base file, load it
@@ -192,31 +221,28 @@ export class Util {
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
-
             return result;
         }
     }
 
     /**
-     * Relative paths to scripts in plugins should be resolved relatively to the bsconfig file
-     * and de-duplicated
-     * @param config Parsed configuration
-     * @param configFilePath Path of the configuration file
+     * Convert relative paths to absolute paths, relative to the given directory. Also de-dupes the paths. Modifies the array in-place
+     * @param paths the list of paths to be resolved and deduped
+     * @param relativeDir the path to the folder where the paths should be resolved relative to. This should be an absolute path
      */
-    public resolvePluginPaths(config: BsConfig, configFilePath: string) {
-        if (config.plugins?.length > 0) {
-            const relPath = path.dirname(configFilePath);
-            const exists: Record<string, boolean> = {};
-            config.plugins = config.plugins.map(p => {
-                return p?.startsWith('.') ? path.resolve(relPath, p) : p;
-            }).filter(p => {
-                if (!p || exists[p]) {
-                    return false;
-                }
-                exists[p] = true;
-                return true;
-            });
+    public resolvePathsRelativeTo(collection: any, key: string, relativeDir: string) {
+        if (!collection[key]) {
+            return;
         }
+        const result = new Set<string>();
+        for (const p of collection[key] as string[] ?? []) {
+            if (p) {
+                result.add(
+                    p?.startsWith('.') ? path.resolve(relativeDir, p) : p
+                );
+            }
+        }
+        collection[key] = [...result];
     }
 
     /**
@@ -282,11 +308,12 @@ export class Util {
      */
     public normalizeConfig(config: BsConfig) {
         config = config || {} as BsConfig;
+        config.cwd = config.cwd ?? process.cwd();
         config.deploy = config.deploy === true ? true : false;
-        //use default options from rokuDeploy
-        config.files = config.files ?? rokuDeploy.getOptions().files;
+        //use default files array from rokuDeploy
+        config.files = config.files ?? [...DefaultFiles];
         config.createPackage = config.createPackage === false ? false : true;
-        let rootFolderName = path.basename(process.cwd());
+        let rootFolderName = path.basename(config.cwd);
         config.outFile = config.outFile ?? `./out/${rootFolderName}.zip`;
         config.sourceMap = config.sourceMap === true;
         config.username = config.username ?? 'rokudev';
@@ -300,7 +327,7 @@ export class Util {
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
         config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
         config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
-        config.cwd = config.cwd ?? process.cwd();
+        config.allowBrighterScriptInBrightScript = config.allowBrighterScriptInBrightScript === true ? true : false;
         config.emitDefinitions = config.emitDefinitions === true ? true : false;
         if (typeof config.logLevel === 'string') {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
@@ -414,16 +441,16 @@ export class Util {
 
     /**
      * Compute the relative path from the source file to the target file
-     * @param pkgSourcePathAbsolute  - the absolute path to the source relative to the package location
-     * @param pkgTargetPathAbsolute  - the absolute path ro the target relative to the package location
+     * @param pkgSrcPath  - the absolute path to the source, where cwd is the package location
+     * @param pkgTargetPath  - the absolute path to the target, where cwd is the package location
      */
-    public getRelativePath(pkgSourcePathAbsolute: string, pkgTargetPathAbsolute: string) {
-        pkgSourcePathAbsolute = path.normalize(pkgSourcePathAbsolute);
-        pkgTargetPathAbsolute = path.normalize(pkgTargetPathAbsolute);
+    public getRelativePath(pkgSrcPath: string, pkgTargetPath: string) {
+        pkgSrcPath = path.normalize(pkgSrcPath);
+        pkgTargetPath = path.normalize(pkgTargetPath);
 
         //break by path separator
-        let sourceParts = pkgSourcePathAbsolute.split(path.sep);
-        let targetParts = pkgTargetPathAbsolute.split(path.sep);
+        let sourceParts = pkgSrcPath.split(path.sep);
+        let targetParts = pkgTargetPath.split(path.sep);
 
         let commonParts = [] as string[];
         //find their common root
@@ -467,7 +494,13 @@ export class Util {
     }
 
     /**
-     * Does a touch b in any way?
+     * Do `a` and `b` overlap by at least one character. This returns false if they are at the edges. Here's some examples:
+     * ```
+     * | true | true | true | true | true | false | false | false | false |
+     * |------|------|------|------|------|-------|-------|-------|-------|
+     * | aa   |  aaa |  aaa | aaa  |  a   |  aa   |    aa | a     |     a |
+     * |  bbb | bb   |  bbb |  b   | bbb  |    bb |  bb   |     b | a     |
+     * ```
      */
     public rangesIntersect(a: Range, b: Range) {
         // Check if `a` is before `b`
@@ -477,6 +510,30 @@ export class Util {
 
         // Check if `b` is before `a`
         if (b.end.line < a.start.line || (b.end.line === a.start.line && b.end.character <= a.start.character)) {
+            return false;
+        }
+
+        // These ranges must intersect
+        return true;
+    }
+
+    /**
+     * Do `a` and `b` overlap by at least one character or touch at the edges
+     * ```
+     * | true | true | true | true | true | true  | true  | false | false |
+     * |------|------|------|------|------|-------|-------|-------|-------|
+     * | aa   |  aaa |  aaa | aaa  |  a   |  aa   |    aa | a     |     a |
+     * |  bbb | bb   |  bbb |  b   | bbb  |    bb |  bb   |     b | a     |
+     * ```
+     */
+    public rangesIntersectOrTouch(a: Range, b: Range) {
+        // Check if `a` is before `b`
+        if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character < b.start.character)) {
+            return false;
+        }
+
+        // Check if `b` is before `a`
+        if (b.end.line < a.start.line || (b.end.line === a.start.line && b.end.character < a.start.character)) {
             return false;
         }
 
@@ -593,8 +650,8 @@ export class Util {
     /**
      * Given a file path, convert it to a URI string
      */
-    public pathToUri(pathAbsolute: string) {
-        return URI.file(pathAbsolute).toString();
+    public pathToUri(filePath: string) {
+        return URI.file(filePath).toString();
     }
 
     /**
@@ -840,7 +897,17 @@ export class Util {
     }
 
     /**
-     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `util.createRange()` is significantly slower
+     * Helper for creating `Location` objects. Prefer using this function because vscode-languageserver's `Location.create()` is significantly slower at scale
+     */
+    public createLocation(uri: string, range: Range): Location {
+        return {
+            uri: uri,
+            range: range
+        };
+    }
+
+    /**
+     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
         return {
@@ -869,6 +936,43 @@ export class Util {
                 character: endPosition.character
             }
         };
+    }
+
+    /**
+     * Given a list of ranges, create a range that starts with the first non-null lefthand range, and ends with the first non-null
+     * righthand range. Returns undefined if none of the items have a range.
+     */
+    public createBoundingRange(...locatables: Array<{ range?: Range }>) {
+        let leftmostRange: Range;
+        let rightmostRange: Range;
+
+        for (let i = 0; i < locatables.length; i++) {
+            //set the leftmost non-null-range item
+            const left = locatables[i];
+            //the range might be a getter, so access it exactly once
+            const leftRange = left?.range;
+            if (!leftmostRange && leftRange) {
+                leftmostRange = leftRange;
+            }
+
+            //set the rightmost non-null-range item
+            const right = locatables[locatables.length - 1 - i];
+            //the range might be a getter, so access it exactly once
+            const rightRange = right?.range;
+            if (!rightmostRange && rightRange) {
+                rightmostRange = rightRange;
+            }
+
+            //if we have both sides, quit
+            if (leftmostRange && rightmostRange) {
+                break;
+            }
+        }
+        if (leftmostRange) {
+            return this.createRangeFromPositions(leftmostRange.start, rightmostRange.end);
+        } else {
+            return undefined;
+        }
     }
 
     /**
@@ -901,60 +1005,66 @@ export class Util {
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (token.kind) {
             case TokenKind.Boolean:
+                return new BooleanType(token.text);
             case TokenKind.True:
             case TokenKind.False:
                 return new BooleanType();
             case TokenKind.Double:
+                return new DoubleType(token.text);
             case TokenKind.DoubleLiteral:
                 return new DoubleType();
             case TokenKind.Dynamic:
-                return new DynamicType();
+                return new DynamicType(token.text);
             case TokenKind.Float:
+                return new FloatType(token.text);
             case TokenKind.FloatLiteral:
                 return new FloatType();
             case TokenKind.Function:
                 //TODO should there be a more generic function type without a signature that's assignable to all other function types?
-                return new FunctionType(new DynamicType());
+                return new FunctionType(new DynamicType(token.text));
             case TokenKind.Integer:
+                return new IntegerType(token.text);
             case TokenKind.IntegerLiteral:
                 return new IntegerType();
             case TokenKind.Invalid:
-                return new InvalidType();
+                return new InvalidType(token.text);
             case TokenKind.LongInteger:
+                return new LongIntegerType(token.text);
             case TokenKind.LongIntegerLiteral:
                 return new LongIntegerType();
             case TokenKind.Object:
-                return new ObjectType();
+                return new ObjectType(token.text);
             case TokenKind.String:
+                return new StringType(token.text);
             case TokenKind.StringLiteral:
             case TokenKind.TemplateStringExpressionBegin:
             case TokenKind.TemplateStringExpressionEnd:
             case TokenKind.TemplateStringQuasi:
                 return new StringType();
             case TokenKind.Void:
-                return new VoidType();
+                return new VoidType(token.text);
             case TokenKind.Identifier:
                 switch (token.text.toLowerCase()) {
                     case 'boolean':
-                        return new BooleanType();
+                        return new BooleanType(token.text);
                     case 'double':
-                        return new DoubleType();
+                        return new DoubleType(token.text);
                     case 'float':
-                        return new FloatType();
+                        return new FloatType(token.text);
                     case 'function':
-                        return new FunctionType(new DynamicType());
+                        return new FunctionType(new DynamicType(token.text));
                     case 'integer':
-                        return new IntegerType();
+                        return new IntegerType(token.text);
                     case 'invalid':
-                        return new InvalidType();
+                        return new InvalidType(token.text);
                     case 'longinteger':
-                        return new LongIntegerType();
+                        return new LongIntegerType(token.text);
                     case 'object':
-                        return new ObjectType();
+                        return new ObjectType(token.text);
                     case 'string':
-                        return new StringType();
+                        return new StringType(token.text);
                     case 'void':
-                        return new VoidType();
+                        return new VoidType(token.text);
                 }
                 if (allowCustomType) {
                     return new CustomType(token.text);
@@ -1102,6 +1212,15 @@ export class Util {
     }
 
     /**
+     * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
+     */
+    public standardizePath(thePath: string) {
+        return util.driveLetterToLower(
+            rokuDeployStandardizePath(thePath)
+        );
+    }
+
+    /**
      * Copy the version of bslib from local node_modules to the staging folder
      */
     public async copyBslibToStaging(stagingDir: string) {
@@ -1128,20 +1247,46 @@ export class Util {
     }
 
     /**
-     * Given a Diagnostic or BsDiagnostic, return a copy of the diagnostic
+     * Given a Diagnostic or BsDiagnostic, return a deep clone of the diagnostic.
+     * @param diagnostic the diagnostic to clone
+     * @param relatedInformationFallbackLocation a default location to use for all `relatedInformation` entries that are missing a location
      */
-    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic) {
+    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic, fileUri: string) {
         return {
             severity: diagnostic.severity,
             range: diagnostic.range,
             message: diagnostic.message,
             relatedInformation: diagnostic.relatedInformation?.map(x => {
+
                 //clone related information just in case a plugin added circular ref info here
-                return { ...x };
-            }),
+                const clone = { ...x };
+                if (!clone.location) {
+                    // use the fallback location if available
+                    if (fileUri) {
+                        clone.location = util.createLocation(fileUri, diagnostic.range);
+                    } else {
+                        //remove this related information so it doesn't bring crash the language server
+                        return undefined;
+                    }
+                }
+                return clone;
+                //filter out null relatedInformation items
+            }).filter(x => x),
             code: diagnostic.code,
             source: 'brs'
         };
+    }
+
+    /**
+    * Get the first locatable item found at the specified position
+    * @param position
+    */
+    public getFirstLocatableAt(locatables: Locatable[], position: Position) {
+        for (let token of locatables) {
+            if (util.rangeContains(token.range, position)) {
+                return token;
+            }
+        }
     }
 
     /**
@@ -1207,6 +1352,79 @@ export class Util {
         }
         return result;
     }
+
+    /**
+     * Wrap the given code in a markdown code fence (with the language)
+     */
+    public mdFence(code: string, language = '') {
+        return '```' + language + '\n' + code + '\n```';
+    }
+
+    /**
+     * Gets each part of the dotted get.
+     * @param expression
+     * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
+     */
+    public getAllDottedGetParts(expression: Expression): Identifier[] | undefined {
+        const parts: Identifier[] = [];
+        let nextPart = expression;
+        while (nextPart) {
+            if (isDottedGetExpression(nextPart)) {
+                parts.push(nextPart?.name);
+                nextPart = nextPart.obj;
+            } else if (isNamespacedVariableNameExpression(nextPart)) {
+                nextPart = nextPart.expression;
+            } else if (isVariableExpression(nextPart)) {
+                parts.push(nextPart?.name);
+                break;
+            } else {
+                //we found a non-DottedGet expression, so return because this whole operation is invalid.
+                return undefined;
+            }
+        }
+        return parts.reverse();
+    }
+
+    /**
+     * Break an expression into each part.
+     */
+    public splitExpression(expression: Expression) {
+        const parts: Expression[] = [expression];
+        let nextPart = expression;
+        while (nextPart) {
+            if (isDottedGetExpression(nextPart) || isIndexedGetExpression(nextPart) || isXmlAttributeGetExpression(nextPart)) {
+                nextPart = nextPart.obj;
+            } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
+                nextPart = nextPart.callee;
+
+            } else if (isNamespacedVariableNameExpression(nextPart)) {
+                nextPart = nextPart.expression;
+            } else {
+                break;
+            }
+            parts.unshift(nextPart);
+        }
+        return parts;
+    }
+
+    /**
+     * Returns an integer if valid, or undefined. Eliminates checking for NaN
+     */
+    public parseInt(value: any) {
+        const result = parseInt(value);
+        if (!isNaN(result)) {
+            return result;
+        } else {
+            return undefined;
+        }
+    }
+
+    /**
+     * Converts a range to a string in the format 1:2-3:4
+     */
+    public rangeToString(range: Range) {
+        return `${range?.start?.line}:${range?.start?.character}-${range?.end?.line}:${range?.end?.character}`;
+    }
 }
 
 /**
@@ -1219,7 +1437,7 @@ export function standardizePath(stringParts, ...expressions: any[]) {
         result.push(stringParts[i], expressions[i]);
     }
     return util.driveLetterToLower(
-        rokuDeploy.standardizePath(
+        rokuDeployStandardizePath(
             result.join('')
         )
     );

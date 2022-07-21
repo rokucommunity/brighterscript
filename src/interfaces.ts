@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, CompletionItem } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, Hover, CompletionItem } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -7,11 +7,13 @@ import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program, SourceObj, TranspileObj } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { Expression, FunctionStatement } from './parser';
+import type { FunctionStatement } from './parser/Statement';
+import type { Expression } from './parser/Expression';
 import type { TranspileState } from './parser/TranspileState';
-import type { SourceNode } from 'source-map';
+import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
+import type { Token } from './lexer/Token';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -78,7 +80,9 @@ export interface FunctionCall {
 export interface CallableArg {
     text: string;
     type: BscType;
+    typeToken: Token;
     range: Range;
+    expression: Expression;
 }
 
 export interface CallableParam {
@@ -126,7 +130,7 @@ export interface File {
      * The absolute path to the file, relative to the pkg
      */
     pkgPath: string;
-    pathAbsolute: string;
+    srcPath: string;
     getDiagnostics(): BsDiagnostic[];
 }
 
@@ -194,8 +198,8 @@ export interface CompilerPlugin {
     afterProgramCreate?: (program: Program) => void;
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
-    beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
-    afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
 
     /**
@@ -211,23 +215,48 @@ export interface CompilerPlugin {
      */
     afterProvideCompletions?: PluginHandler<AfterProvideCompletionsEvent>;
 
+    /**
+     * Called before the `provideHover` hook. Use this if you need to prepare any of the in-memory objects before the `provideHover` gets called
+     */
+    beforeProvideHover?: PluginHandler<BeforeProvideHoverEvent>;
+    /**
+     * Called when bsc looks for hover information. Use this if your plugin wants to contribute hover information.
+     */
+    provideHover?: PluginHandler<ProvideHoverEvent>;
+    /**
+     * Called after the `provideHover` hook. Use this if you want to intercept or sanitize the hover data (even from other plugins) before it gets sent to the client.
+     */
+    afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
+
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;
     beforeScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
+    onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
     afterScopeValidate?: ValidateHandler;
     //file events
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: BscFile) => void;
+    /**
+     * Called before each file is validated
+     */
+    beforeFileValidate?: PluginHandler<BeforeFileValidateEvent>;
+    /**
+     * Called during the file validation process. If your plugin contributes file validations, this is a good place to contribute them.
+     */
+    onFileValidate?: PluginHandler<OnFileValidateEvent>;
+    /**
+     * Called after each file is validated
+     */
     afterFileValidate?: (file: BscFile) => void;
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
 }
-export type PluginHandler<T> = (event: T) => void;
+export type PluginHandler<T, R = void> = (event: T) => R;
 
 export interface OnGetCodeActionsEvent {
     program: Program;
@@ -245,21 +274,58 @@ export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
     position: Position;
     completions: CompletionItem[];
 }
-
 export type BeforeProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
 export type AfterProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
 
-export interface OnGetSemanticTokensEvent {
+export interface ProvideHoverEvent {
     program: Program;
     file: BscFile;
+    position: Position;
     scopes: Scope[];
+    hovers: Hover[];
+}
+export type BeforeProvideHoverEvent = ProvideHoverEvent;
+export type AfterProvideHoverEvent = ProvideHoverEvent;
+
+export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
+    /**
+     * The program this file is from
+     */
+    program: Program;
+    /**
+     * The file to get semantic tokens for
+     */
+    file: T;
+    /**
+     * The list of scopes that this file is a member of
+     */
+    scopes: Scope[];
+    /**
+     * The list of semantic tokens being produced during this event.
+     */
     semanticTokens: SemanticToken[];
 }
 
-export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty'>;
+export interface BeforeFileValidateEvent<T extends BscFile = BscFile> {
+    program: Program;
+    file: T;
+}
 
-export interface BeforeFileTranspileEvent {
-    file: BscFile;
+export interface OnFileValidateEvent<T extends BscFile = BscFile> {
+    program: Program;
+    file: T;
+}
+
+export interface OnScopeValidateEvent {
+    program: Program;
+    scope: Scope;
+}
+
+export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty' | 'overrideTranspileResult' | 'arrayPop' | 'arrayPush' | 'arrayShift' | 'arraySplice' | 'arrayUnshift' | 'removeProperty' | 'edit'>;
+
+export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
+    program: Program;
+    file: TFile;
     outputPath: string;
     /**
      * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
@@ -269,9 +335,25 @@ export interface BeforeFileTranspileEvent {
     editor: Editor;
 }
 
-export interface AfterFileTranspileEvent {
-    file: BscFile;
+export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
+    /**
+     * The program this event was triggered for
+     */
+    program: Program;
+    file: TFile;
     outputPath: string;
+    /**
+     * The resulting transpiled file contents
+     */
+    code: string;
+    /**
+     * The sourceMaps for the generated code (if emitting source maps is enabled)
+     */
+    map?: SourceMapGenerator;
+    /**
+     * The generated type definition file contents (if emitting type definitions are enabled)
+     */
+    typedef?: string;
     /**
      * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
      * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
@@ -295,7 +377,7 @@ export interface TypedefProvider {
 
 export type TranspileResult = Array<(string | SourceNode)>;
 
-export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined> | void;
+export type FileResolver = (srcPath: string) => string | undefined | Thenable<string | undefined> | void;
 
 export interface ExpressionInfo {
     expressions: Expression[];
@@ -304,3 +386,8 @@ export interface ExpressionInfo {
 }
 
 export type DiagnosticCode = number | string;
+
+export interface FileLink<T> {
+    item: T;
+    file: BrsFile;
+}

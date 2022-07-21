@@ -77,7 +77,10 @@ export enum TokenKind {
     Question = 'Question', // ?
     QuestionQuestion = 'QuestionQuestion', // ??
     BackTick = 'BackTick', // `
-
+    QuestionDot = 'QuestionDot', // ?.
+    QuestionLeftSquare = 'QuestionLeftSquare', // ?[
+    QuestionLeftParen = 'QuestionLeftParen', // ?(
+    QuestionAt = 'QuestionAt', // ?@
 
     // conditional compilation
     HashIf = 'HashIf', // #if
@@ -147,6 +150,8 @@ export enum TokenKind {
     EndClass = 'EndClass',
     Namespace = 'Namespace',
     EndNamespace = 'EndNamespace',
+    Enum = 'Enum',
+    EndEnum = 'EndEnum',
     Public = 'Public',
     Protected = 'Protected',
     Private = 'Private',
@@ -155,6 +160,7 @@ export enum TokenKind {
     Override = 'Override',
     Import = 'Import',
     EndInterface = 'EndInterface',
+    Const = 'Const',
 
     //brighterscript source literals
     LineNumLiteral = 'LineNumLiteral',
@@ -285,6 +291,9 @@ export const Keywords: Record<string, TokenKind> = {
     class: TokenKind.Class,
     endclass: TokenKind.EndClass,
     'end class': TokenKind.EndClass,
+    enum: TokenKind.Enum,
+    endenum: TokenKind.EndEnum,
+    'end enum': TokenKind.EndEnum,
     public: TokenKind.Public,
     protected: TokenKind.Protected,
     private: TokenKind.Private,
@@ -308,7 +317,8 @@ export const Keywords: Record<string, TokenKind> = {
     'end try': TokenKind.EndTry,
     throw: TokenKind.Throw,
     'end interface': TokenKind.EndInterface,
-    endinterface: TokenKind.EndInterface
+    endinterface: TokenKind.EndInterface,
+    const: TokenKind.Const
 };
 //hide the constructor prototype method because it causes issues
 Keywords.constructor = undefined;
@@ -429,7 +439,8 @@ export const AllowedProperties = [
     TokenKind.Catch,
     TokenKind.EndTry,
     TokenKind.Throw,
-    TokenKind.EndInterface
+    TokenKind.EndInterface,
+    TokenKind.Const
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */
@@ -461,7 +472,8 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Import,
     TokenKind.Try,
     TokenKind.Catch,
-    TokenKind.EndTry
+    TokenKind.EndTry,
+    TokenKind.Const
 ];
 
 export const BrighterScriptSourceLiterals = [

@@ -1,17 +1,18 @@
-import { getTestGetTypedef } from '../../../testHelpers.spec';
+import { expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
 import { standardizePath as s } from '../../../util';
 import { Program } from '../../../Program';
 
+const rootDir = s`${process.cwd()}/.tmp/rootDir`;
+
 describe('InterfaceStatement', () => {
-    const rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
+    const testTranspile = getTestTranspile(() => [program, rootDir]);
+    const testGetTypedef = getTestGetTypedef(() => [program, rootDir]);
     beforeEach(() => {
         program = new Program({
             rootDir: rootDir
         });
     });
-
-    const testGetTypedef = getTestGetTypedef(() => [program, rootDir]);
 
     it('allows strange keywords as property names', () => {
         testGetTypedef(`
@@ -60,5 +61,32 @@ describe('InterfaceStatement', () => {
                 someField as string
             end interface
         `, undefined, undefined, undefined, true);
+    });
+
+    it('allows declaring multiple interfaces in a file', () => {
+        program.setFile('source/interfaces.bs', `
+            interface Iface1
+                name as dynamic
+            end interface
+            interface IFace2
+                prop as dynamic
+            end interface
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('allows comments after an interface', () => {
+        testTranspile(`
+            interface Iface1
+                name as dynamic
+            end interface
+            'this comment was throwing exception during transpile
+            interface IFace2
+                prop as dynamic
+            end interface
+        `, `
+            'this comment was throwing exception during transpile
+        `);
     });
 });

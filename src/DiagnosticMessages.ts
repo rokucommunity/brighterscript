@@ -13,11 +13,17 @@ export let DiagnosticMessages = {
         code: 1000,
         severity: DiagnosticSeverity.Error
     }),
-    callToUnknownFunction: (name: string, scopeName: string) => ({
-        message: `Cannot find function with name '${name}' when this file is included in scope '${scopeName}'`,
+    /**
+     *
+     * @param name for local vars, it's the var name. for namespaced parts, it's the specific part that's unknown (`alpha.beta.charlie` would result in "cannot find name 'charlie')
+     * @param fullName if a namespaced name, this is the full name `alpha.beta.charlie`, otherwise it's the same as `name`
+     */
+    cannotFindName: (name: string, fullName?: string) => ({
+        message: `Cannot find name '${name}'`,
         code: 1001,
         data: {
-            functionName: name
+            name: name,
+            fullName: fullName ?? name
         },
         severity: DiagnosticSeverity.Error
     }),
@@ -634,6 +640,59 @@ export let DiagnosticMessages = {
     cannotFindType: (typeName: string) => ({
         message: `Cannot find type with name '${typeName}'`,
         code: 1123,
+        severity: DiagnosticSeverity.Error
+    }),
+    enumValueMustBeType: (expectedType: string) => ({
+        message: `Enum value must be type '${expectedType}'`,
+        code: 1124,
+        severity: DiagnosticSeverity.Error
+    }),
+    enumValueIsRequired: (expectedType: string) => ({
+        message: `Value is required for ${expectedType} enum`,
+        code: 1125,
+        severity: DiagnosticSeverity.Error
+    }),
+    unknownEnumValue: (name: string, enumName: string) => ({
+        message: `Property '${name}' does not exist on enum '${enumName}'`,
+        code: 1126,
+        severity: DiagnosticSeverity.Error
+    }),
+    duplicateEnumDeclaration: (scopeName: string, enumName: string) => ({
+        message: `Scope '${scopeName}' already contains an enum with name '${enumName}'`,
+        code: 1127,
+        severity: DiagnosticSeverity.Error
+    }),
+    unknownRoSGNode: (nodeName: string) => ({
+        message: `Unknown roSGNode '${nodeName}'`,
+        code: 1128,
+        severity: DiagnosticSeverity.Error
+    }),
+    unknownBrightScriptComponent: (componentName: string) => ({
+        message: `Unknown BrightScript component '${componentName}'`,
+        code: 1129,
+        severity: DiagnosticSeverity.Error
+    }),
+    mismatchCreateObjectArgumentCount: (componentName: string, allowedArgCounts: number[], actualCount: number) => {
+        const argCountArray = (allowedArgCounts || [1]).sort().filter((value, index, self) => self.indexOf(value) === index);
+        return {
+            message: `For ${componentName}, expected ${argCountArray.map(c => c.toString()).join(' or ')} total arguments, but got ${actualCount}.`,
+            code: 1130,
+            severity: DiagnosticSeverity.Error
+        };
+    },
+    deprecatedBrightScriptComponent: (componentName: string, deprecatedDescription?: string) => ({
+        message: `${componentName} has been deprecated${deprecatedDescription ? ': ' + deprecatedDescription : ''}`,
+        code: 1131,
+        severity: DiagnosticSeverity.Error
+    }),
+    circularReferenceDetected: (items: string[], scopeName: string) => ({
+        message: `Circular reference detected between ${Array.isArray(items) ? items.join(' -> ') : ''} in scope '${scopeName}'`,
+        code: 1132,
+        severity: DiagnosticSeverity.Error
+    }),
+    unexpectedStatementOutsideFunction: () => ({
+        message: `Unexpected statement found outside of function body`,
+        code: 1133,
         severity: DiagnosticSeverity.Error
     })
 };

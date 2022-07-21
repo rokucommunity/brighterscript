@@ -13,7 +13,9 @@ export interface SGToken {
 
 export interface SGAttribute {
     key: SGToken;
+    openQuote?: SGToken;
     value: SGToken;
+    closeQuote?: SGToken;
     range?: Range;
 }
 
@@ -77,9 +79,10 @@ export class SGTag {
             result.push(
                 ' ',
                 state.transpileToken(attr.key),
-                '="',
+                '=',
+                state.transpileToken(attr.openQuote ?? { text: '"' }),
                 state.transpileToken(attr.value),
-                '"'
+                state.transpileToken(attr.closeQuote ?? { text: '"' })
             );
         }
         return result;

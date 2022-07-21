@@ -5,7 +5,9 @@ const { spawnSync, execSync } = require('child_process');
 const yargs = require('yargs');
 const readline = require('readline');
 const rimraf = require('rimraf');
-const glob = require('glob');
+const fastGlob = require('fast-glob');
+let nodeParams = ['--max-old-space-size=8192'];
+const tempDir = path.join(__dirname, '.tmp');
 
 class Runner {
     constructor(options) {
@@ -15,6 +17,7 @@ class Runner {
         this.project = options.project;
         this.quick = options.quick;
         this.profile = options.profile;
+        this.tar = options.tar;
     }
     run() {
         this.downloadFiles();
@@ -29,7 +32,6 @@ class Runner {
      * Download the necessary files
      */
     downloadFiles() {
-        const tempDir = path.join(__dirname, '.tmp');
         //ensure the `.tmp` folder exists
         fsExtra.ensureDirSync(tempDir);
 
@@ -57,15 +59,28 @@ class Runner {
         }
     }
 
-    buildCurrentTarball() {
+    buildCurrent() {
         const bscDir = path.resolve(__dirname, '..');
         console.log('benchmark: build current brighterscript');
         this.npmSync(['run', 'build'], {
             cwd: bscDir
         });
+        return 'file:' + path.resolve(bscDir);
+    }
+
+    buildCurrentTarball() {
+        const bscDir = path.resolve(__dirname, '..');
+        this.buildCurrent();
         console.log('benchmark: pack current brighterscript');
+        //pack the package
         const filename = this.npmSync(['pack'], { cwd: bscDir, stdio: 'pipe' }).stdout.toString().trim();
-        return path.resolve(bscDir, filename);
+
+        //move the tarball to temp to declutter the outer project
+        let newFilename = path.join(tempDir, path.basename(filename).replace('.tgz', `${Date.now()}.tgz`));
+        fsExtra.renameSync(filename, newFilename);
+
+        //return path to the tarball
+        return path.resolve(newFilename);
     }
 
     /**
@@ -79,13 +94,15 @@ class Runner {
         fsExtra.emptyDirSync(nodeModulesDir);
 
         const dependencies = {};
+        console.log(`benchmark: using versions: ${this.versions}`);
         for (let i = 0; i < this.versions.length; i++) {
             const version = this.versions[i];
             const name = `brighterscript${i + 1}`;
 
             //if the version is "current", then make a local copy of the package from the dist folder to install (because npm link makes things slower)
             if (version === 'local') {
-                dependencies[name] = this.buildCurrentTarball();
+                const localVersion = this.tar ? this.buildCurrentTarball() : this.buildCurrent();
+                dependencies[name] = localVersion;
             } else {
                 dependencies[name] = `npm:brighterscript@${version}`;
             }
@@ -136,16 +153,16 @@ class Runner {
                 const alias = `brighterscript${versionIndex + 1}`;
 
                 //get the list of current profiler logs
-                const beforeLogs = glob.sync('isolate-*.log', {
+                const beforeLogs = fastGlob.sync('isolate-*.log', {
                     cwd: __dirname
                 });
 
-                execSync(`node ${this.profile ? '--prof ' : ''}target-runner.js "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.project}" "${this.quick}"`, {
+                execSync(`node ${nodeParams.join(' ')} ${this.profile ? '--prof ' : ''}target-runner.js "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.project}" "${this.quick}"`, {
                     cwd: path.join(__dirname),
                     stdio: 'inherit'
                 });
                 if (this.profile) {
-                    const logFile = glob.sync('isolate-*.log', {
+                    const logFile = fastGlob.sync('isolate-*.log', {
                         cwd: __dirname
                     }).filter(x => !beforeLogs.includes(x))[0];
 
@@ -201,6 +218,11 @@ let options = yargs
         alias: 'prof',
         description: 'Enable nodejs profiling of each benchmark run',
         default: false
+    })
+    .option('tar', {
+        type: 'boolean',
+        description: 'use a npm-packed tarball for local files instead of using the files directly',
+        default: true
     })
     .strict()
     .check(argv => {

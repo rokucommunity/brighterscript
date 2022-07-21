@@ -2,6 +2,10 @@ import type { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
 export class InvalidType implements BscType {
+    constructor(
+        public typeText?: string
+    ) { }
+
     public isAssignableTo(targetType: BscType) {
         return (
             targetType instanceof InvalidType ||
@@ -14,7 +18,7 @@ export class InvalidType implements BscType {
     }
 
     public toString() {
-        return 'invalid';
+        return this.typeText ?? 'invalid';
     }
 
     public toTypeString(): string {

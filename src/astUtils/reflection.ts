@@ -1,5 +1,5 @@
-import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement } from '../parser/Statement';
-import type { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression } from '../parser/Expression';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, MethodStatement, FieldStatement, ConstStatement } from '../parser/Statement';
+import type { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { BscFile, File, TypedefProvider } from '../interfaces';
@@ -123,11 +123,25 @@ export function isClassStatement(element: Statement | Expression | undefined): e
 export function isImportStatement(element: Statement | Expression | undefined): element is ImportStatement {
     return element?.constructor?.name === 'ImportStatement';
 }
-export function isClassMethodStatement(element: Statement | Expression | undefined): element is ClassMethodStatement {
-    return element?.constructor.name === 'ClassMethodStatement';
+export function isMethodStatement(element: Statement | Expression | undefined): element is MethodStatement {
+    const name = element?.constructor.name;
+    return name === 'MethodStatement' || name === 'ClassMethodStatement';
 }
+/**
+ * @deprecated use `isMethodStatement`
+ */
+export function isClassMethodStatement(element: Statement | Expression | undefined): element is ClassMethodStatement {
+    return isMethodStatement(element);
+}
+export function isFieldStatement(element: Statement | Expression | undefined): element is FieldStatement {
+    const name = element?.constructor.name;
+    return name === 'FieldStatement' || name === 'ClassFieldStatement';
+}
+/**
+ * @deprecated use `isFieldStatement`
+ */
 export function isClassFieldStatement(element: Statement | Expression | undefined): element is ClassFieldStatement {
-    return element?.constructor.name === 'ClassFieldStatement';
+    return isFieldStatement(element);
 }
 export function isInterfaceStatement(element: Statement | Expression | undefined): element is InterfaceStatement {
     return element?.constructor.name === 'InterfaceStatement';
@@ -137,6 +151,21 @@ export function isInterfaceMethodStatement(element: Statement | Expression | und
 }
 export function isInterfaceFieldStatement(element: Statement | Expression | undefined): element is InterfaceFieldStatement {
     return element?.constructor.name === 'InterfaceFieldStatement';
+}
+export function isEnumStatement(element: Statement | Expression | undefined): element is EnumStatement {
+    return element?.constructor.name === 'EnumStatement';
+}
+export function isEnumMemberStatement(element: Statement | Expression | undefined): element is EnumMemberStatement {
+    return element?.constructor.name === 'EnumMemberStatement';
+}
+export function isConstStatement(element: Statement | Expression | undefined): element is ConstStatement {
+    return element?.constructor.name === 'ConstStatement';
+}
+export function isTryCatchStatement(element: Statement | Expression | undefined): element is TryCatchStatement {
+    return element?.constructor.name === 'TryCatchStatement';
+}
+export function isCatchStatement(element: Statement | Expression | undefined): element is CatchStatement {
+    return element?.constructor.name === 'CatchStatement';
 }
 
 // Expressions reflection
@@ -187,6 +216,9 @@ export function isArrayLiteralExpression(element: Statement | Expression | undef
 }
 export function isAALiteralExpression(element: Statement | Expression | undefined): element is AALiteralExpression {
     return element?.constructor.name === 'AALiteralExpression';
+}
+export function isAAMemberExpression(element: Statement | Expression | undefined): element is AAMemberExpression {
+    return element?.constructor.name === 'AAMemberExpression';
 }
 export function isUnaryExpression(element: Statement | Expression | undefined): element is UnaryExpression {
     return element?.constructor.name === 'UnaryExpression';

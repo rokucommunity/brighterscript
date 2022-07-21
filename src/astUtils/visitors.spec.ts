@@ -4,20 +4,21 @@ import { CancellationTokenSource, Range } from 'vscode-languageserver';
 import { expect } from 'chai';
 import * as sinon from 'sinon';
 import { Program } from '../Program';
-import { BrsFile } from '../files/BrsFile';
-import type { Statement } from '../parser/Statement';
-import { PrintStatement, Block, ReturnStatement } from '../parser/Statement';
+import type { BrsFile } from '../files/BrsFile';
+import type { FunctionStatement, Statement } from '../parser/Statement';
+import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../parser/Statement';
 import type { Expression } from '../parser/Expression';
-import { TokenKind } from '../lexer';
+import { TokenKind } from '../lexer/TokenKind';
 import { createVisitor, WalkMode, walkStatements } from './visitors';
 import { isPrintStatement } from './reflection';
-import { createToken } from './creators';
+import { createCall, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
+import { AstEditor } from './AstEditor';
+import { Parser } from '../parser/Parser';
 
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
     let program: Program;
-    let file: BrsFile;
 
     const PRINTS_SRC = `
         sub Main()
@@ -76,7 +77,6 @@ describe('astUtils visitors', () => {
 
     beforeEach(() => {
         program = new Program({ rootDir: rootDir });
-        file = new BrsFile('abs.bs', 'rel.bs', program);
     });
     afterEach(() => {
         program.dispose();
@@ -102,9 +102,9 @@ describe('astUtils visitors', () => {
             const walker = functionsWalker(visitor);
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: () => walker(file)
+                afterFileParse: file => walker(file as BrsFile)
             });
-            file.parse(PRINTS_SRC);
+            program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
                 'Block:0',                // Main sub body
                 'PrintStatement:1',       // print 1
@@ -139,9 +139,9 @@ describe('astUtils visitors', () => {
             const walker = functionsWalker(s => actual.push(s.constructor.name), cancel.token);
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: () => walker(file)
+                afterFileParse: file => walker(file as BrsFile)
             });
-            file.parse(PRINTS_SRC);
+            program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
                 'Block',                // Main sub body
                 'PrintStatement',       // print 1
@@ -184,9 +184,9 @@ describe('astUtils visitors', () => {
             }, cancel.token);
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: () => walker(file)
+                afterFileParse: file => walker(file as BrsFile)
             });
-            file.parse(PRINTS_SRC);
+            program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
                 'Block',                // Main sub body
                 'PrintStatement',       // print 1
@@ -242,6 +242,33 @@ describe('astUtils visitors', () => {
             walkStatements(block, visitor);
             expect(block.statements[0]).to.equal(printStatement2);
         });
+
+        it('uses the AstEditor for replacement when provided', () => {
+            const editor = new AstEditor();
+
+            const printStatement1 = new PrintStatement({
+                print: createToken(TokenKind.Print)
+            }, []);
+
+            const printStatement2 = new PrintStatement({
+                print: createToken(TokenKind.Print)
+            }, []);
+
+            const block = new Block([
+                printStatement1
+            ], Range.create(0, 0, 0, 0));
+
+
+            block.walk(createVisitor({
+                PrintStatement: () => printStatement2
+            }), {
+                walkMode: WalkMode.visitAll,
+                editor: editor
+            });
+            expect(block.statements[0]).to.equal(printStatement2);
+            editor.undoAll();
+            expect(block.statements[0]).to.equal(printStatement1);
+        });
     });
 
     describe('Expressions', () => {
@@ -263,10 +290,10 @@ describe('astUtils visitors', () => {
             });
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: () => walker(file)
+                afterFileParse: (file) => walker(file as BrsFile)
             });
 
-            file.parse(EXPRESSIONS_SRC);
+            program.setFile('source/main.brs', EXPRESSIONS_SRC);
             expect(actual).to.deep.equal([
                 //The comment statement is weird because it can't be both a statement and expression, but is treated that way. Just ignore it for now until we refactor comments.
                 //'CommentStatement:1:CommentStatement',          // '<comment>
@@ -314,7 +341,7 @@ describe('astUtils visitors', () => {
 
     describe('walk', () => {
         function testWalk(text: string, expectedConstructors: string[], walkMode = WalkMode.visitAllRecursive) {
-            const file = program.addOrReplaceFile<BrsFile>('source/main.bs', text);
+            const file = program.setFile<BrsFile>('source/main.bs', text);
             const items = [];
             let index = 1;
             file.ast.walk((element: any) => {
@@ -328,7 +355,7 @@ describe('astUtils visitors', () => {
         }
 
         it('Walks through all expressions until cancelled', () => {
-            const file = program.addOrReplaceFile<BrsFile>('source/main.bs', `
+            const file = program.setFile<BrsFile>('source/main.bs', `
                 sub logger(message = "nil" as string)
                     innerLog = sub(message = "nil" as string)
                         print message
@@ -846,10 +873,10 @@ describe('astUtils visitors', () => {
                 end class
             `, [
                 'ClassStatement',
-                'ClassFieldStatement',
-                'ClassFieldStatement',
+                'FieldStatement',
+                'FieldStatement',
                 'LiteralExpression',
-                'ClassMethodStatement',
+                'MethodStatement',
                 'FunctionExpression',
                 'Block',
                 'ReturnStatement',
@@ -897,6 +924,86 @@ describe('astUtils visitors', () => {
                 'LiteralExpression',
                 'LiteralExpression'
             ], WalkMode.visitExpressionsRecursive);
+        });
+
+        it('provides owner and key', () => {
+            const items = [];
+            const { ast } = Parser.parse(`
+                sub main()
+                    log = sub(message)
+                        print "hello " + message
+                    end sub
+                    log("hello" + " world")
+                end sub
+            `);
+            ast.walk((astNode, parent, owner, key) => {
+                items.push(astNode);
+                expect(owner[key]).to.equal(astNode);
+            }, {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            expect(items).to.be.length(17);
+        });
+
+        it('can be used to delete statements', () => {
+            const { ast } = Parser.parse(`
+                sub main()
+                    print 1
+                    print 2
+                    print 3
+                end sub
+            `);
+            let callCount = 0;
+            ast.walk((astNode, parent, owner: Statement[], key) => {
+                if (isPrintStatement(astNode)) {
+                    callCount++;
+                    //delete the print statement (we know owner is an array based on this specific test)
+                    owner.splice(key, 1);
+                }
+            }, {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            //the visitor should have been called for every statement
+            expect(callCount).to.eql(3);
+            expect(
+                (ast.statements[0] as FunctionStatement).func.body.statements
+            ).to.be.lengthOf(0);
+        });
+
+        it('can be used to insert statements', () => {
+            const { ast } = Parser.parse(`
+                sub main()
+                    print 1
+                    print 2
+                    print 3
+                end sub
+            `);
+            let printStatementCount = 0;
+            let callExpressionCount = 0;
+            const calls = [];
+            ast.walk(createVisitor({
+                PrintStatement: (astNode, parent, owner: Statement[], key) => {
+                    printStatementCount++;
+                    //add another expression to the list every time. This should result in 1 the first time, 2 the second, 3 the third.
+                    calls.push(new ExpressionStatement(
+                        createCall(
+                            createVariableExpression('doSomethingBeforePrint')
+                        )
+                    ));
+                    owner.splice(key, 0, ...calls);
+                },
+                CallExpression: () => {
+                    callExpressionCount++;
+                }
+            }), {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            //the visitor should have been called for every statement
+            expect(printStatementCount).to.eql(3);
+            expect(callExpressionCount).to.eql(0);
+            expect(
+                (ast.statements[0] as FunctionStatement).func.body.statements
+            ).to.be.lengthOf(9);
         });
     });
 });

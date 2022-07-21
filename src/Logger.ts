@@ -120,8 +120,8 @@ export class Logger {
     time<T>(logLevel: LogLevel, messages: any[], action: (pause: () => void, resume: () => void) => T): T {
         //call the log if loglevel is in range
         if (this._logLevel >= logLevel) {
-            let stopwatch = new Stopwatch();
-            let logLevelString = LogLevel[logLevel];
+            const stopwatch = new Stopwatch();
+            const logLevelString = LogLevel[logLevel];
 
             //write the initial log
             this[logLevelString](...messages ?? []);
@@ -129,11 +129,11 @@ export class Logger {
 
             stopwatch.start();
             //execute the action
-            let result = action(stopwatch.stop.bind(stopwatch), stopwatch.start.bind(stopwatch)) as any;
-            stopwatch.stop();
+            const result = action(stopwatch.stop.bind(stopwatch), stopwatch.start.bind(stopwatch)) as any;
 
             //return a function to call when the timer is complete
-            let done = () => {
+            const done = () => {
+                stopwatch.stop();
                 this.indent = this.indent.substring(2);
                 this[logLevelString](...messages ?? [], `finished. (${chalk.blue(stopwatch.getDurationText())})`);
             };

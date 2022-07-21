@@ -21,6 +21,11 @@ Those plugins will be loaded by the VSCode extension and can provide live diagno
 }
 ```
 
+### Usage on the CLI
+```bash
+npx bsc --plugins "./scripts/myPlugin.js" "@rokucommunity/bslint"
+```
+
 ### Programmatic configuration
 
 When using the compiler API directly, plugins can directly reference your code:
@@ -45,10 +50,14 @@ Full compiler lifecycle:
         - `beforeFileParse`
         - `afterFileParse`
         - `afterScopeCreate` (component scope)
-        - `afterFileValidate`
     - `beforeProgramValidate`
+    - For each file:
+        - `beforeFileValidate`
+        - `onFileValidate`
+        - `afterFileValidate`
     - For each scope:
         - `beforeScopeValidate`
+        - `onScopeValidate`
         - `afterScopeValidate`
     - `afterProgramValidate`
 - `beforePrepublish`
@@ -87,13 +96,21 @@ When any file is modified:
 After file addition/removal (note: throttled/debounced):
 
 - `beforeProgramValidate`
+- For each invalidated/not-yet-validated file
+    - `beforeFileValidate`
+    - `onFileValidate`
+    - `afterFileValidate`
 - For each invalidated scope:
     - `beforeScopeValidate`
     - `afterScopeValidate`
 - `afterProgramValidate`
 
 Code Actions
- - `onProgramGetCodeActions`
+ - `onGetCodeActions`
+
+Semantic Tokens
+ - `onGetSemanticTokens`
+
 
 ## Compiler API
 
@@ -113,11 +130,14 @@ The top level object is the `ProgramBuilder` which runs the overall process: pre
 
 ### API definition
 
+Here are some important interfaces. You can view them in the code at [this link](https://github.com/rokucommunity/brighterscript/blob/ddcb7b2cd219bd9fecec93d52fbbe7f9b972816b/src/interfaces.ts#L190:~:text=export%20interface%20CompilerPlugin%20%7B).
+
 ```typescript
 export type CompilerPluginFactory = () => CompilierPlugin;
 
 export interface CompilerPlugin {
     name: string;
+    //program events
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
     beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
@@ -126,18 +146,34 @@ export interface CompilerPlugin {
     afterProgramCreate?: (program: Program) => void;
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
-    beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
-    afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
+    //scope events
     afterScopeCreate?: (scope: Scope) => void;
     beforeScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
+    onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
     afterScopeValidate?: ValidateHandler;
+    //file events
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: BscFile) => void;
+    /**
+     * Called before each file is validated
+     */
+    beforeFileValidate?: PluginHandler<BeforeFileValidateEvent>;
+    /**
+     * Called during the file validation process. If your plugin contributes file validations, this is a good place to contribute them.
+     */
+    onFileValidate?: PluginHandler<OnFileValidateEvent>;
+    /**
+     * Called after each file is validated
+     */
     afterFileValidate?: (file: BscFile) => void;
-    beforeFileTranspile?: (entry: TranspileObj) => void;
-    afterFileTranspile?: (entry: TranspileObj) => void;
+    beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
+    afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
 }
@@ -178,9 +214,30 @@ To walk/modify the AST, a number of helpers are provided in `brighterscript/dist
 
 It is highly recommended to use TypeScript as intellisense helps greatly writing code against new APIs.
 
+### Using ts-node to transpile plugin dynamically
+The ts-node module can transpile typescript on the fly. This is by far the easiest way to develop a brighterscript plugin, as you can elimintate the manual typescript transpile step.
+
 ```bash
 # install modules needed to compile a plugin
-npm install brighterscript typescript @types/node
+npm install brighterscript typescript @types/node ts-node -D
+
+#run the brighterscript cli and use ts-node to dynamically transpile your plugin
+npx bsc --sourceMap --require ts-node/register --plugins myPlugin.ts
+```
+
+The `require` flag can also be set in the `bsconfig.json`, simplifying your bsc command arguments.
+```javascript
+{
+    "require": ["ts-node/register"]
+}
+```
+
+### Transpiling manually
+If you would prefer to transpile your plugin manually, you can follow these steps:
+
+```bash
+# install modules needed to compile a plugin
+npm install brighterscript typescript @types/node -D
 
 # transpile to JS (with source maps for debugging)
 npx tsc myPlugin.ts -m commonjs --sourceMap
@@ -188,6 +245,7 @@ npx tsc myPlugin.ts -m commonjs --sourceMap
 # add --watch for continuous transpilation
 npx tsc myPlugin.ts -m commonjs --sourceMap --watch
 ```
+
 
 ### Example diagnostic plugins
 
@@ -199,30 +257,28 @@ Diagnostics must run every time it is relevant:
 Note: in a language-server context, Scope validation happens every time a file changes.
 
 ```typescript
-// myDiagnosticPlugin.ts
-import { CompilerPlugin, BrsFile, XmlFile } from 'brighterscript';
-import { isBrsFile } from 'brighterscript/dist/parser/ASTUtils';
+// bsc-plugin-no-underscores.ts
+import { CompilerPlugin, BscFile, isBrsFile } from 'brighterscript';
 
 // plugin factory
 export default function () {
     return {
-        name: 'myDiagnosticPlugin',
+        name: 'no-underscores',
         // post-parsing validation
         afterFileValidate: (file: BscFile) => {
-            if (!isBrsFile(file)) {
-                return;
+            if (isBrsFile(file)) {
+                // visit function statements and validate their name
+                file.parser.references.functionStatements.forEach((fun) => {
+                    if (fun.name.text.includes('_')) {
+                        file.addDiagnostics([{
+                            code: 9000,
+                            message: 'Do not use underscores in function names',
+                            range: fun.name.range,
+                            file
+                        }]);
+                    }
+                });
             }
-            // visit function statements and validate their name
-            file.parser.functionStatements.forEach((fun) => {
-                if (fun.name.text.toLowerCase() === 'main') {
-                    file.addDiagnostics([{
-                        code: 9000,
-                        message: 'Use RunUserInterface as entry point',
-                        range: fun.name.range,
-                        file
-                    }]);
-                }
-            });
         }
     } as CompilerPlugin;
 };
@@ -243,12 +299,12 @@ end sub
 Here's the plugin:
 
 ```typescript
-import { CompilerPlugin, BeforeFileTranspileEvent, isBrsFile, WalkMode, createVisitor, TokenKind } from './';
+import { CompilerPlugin, BeforeFileTranspileEvent, isBrsFile, WalkMode, createVisitor, TokenKind } from 'brighterscript';
 
 // plugin factory
 export default function () {
     return {
-        name: 'removePrint',
+        name: 'replacePlaceholders',
         // transform AST before transpilation
         beforeFileTranspile: (event: BeforeFileTranspileEvent) => {
             if (isBrsFile(event.file)) {
@@ -269,3 +325,33 @@ export default function () {
 ```
 
 This plugin will search through every LiteralExpression in the entire project, and every time we find a string literal, we will replace `<FIRST_NAME>` with `world`. This is done with the `event.editor` object. `editor` allows you to apply edits to the AST, and then the brighterscript compiler will `undo` those edits once the file has been transpiled.
+
+## Remove Comment and Print Statements
+
+Another common use case is to remove print statements and comments. Here's a plugin to do that:
+```typescript
+import { isBrsFile, createVisitor, WalkMode, BeforeFileTranspileEvent, CompilerPlugin } from 'brighterscript';
+
+export default function plugin() {
+    return {
+        name: 'removeCommentAndPrintStatements',
+        beforeFileTranspile: (event: BeforeFileTranspileEvent) => {
+            if (isBrsFile(event.file)) {
+                // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
+                for (const func of event.file.parser.references.functionExpressions) {
+                    func.body.walk(createVisitor({
+                        PrintStatement: (statement) => {
+                            event.editor.overrideTranspileResult(statement, '');
+                        },
+                        CommentStatement: (statement) => {
+                            event.editor.overrideTranspileResult(statement, '');
+                        }
+                    }), {
+                        walkMode: WalkMode.visitStatements
+                    });
+                }
+            }
+        }
+    } as CompilerPlugin;
+}
+```

@@ -3,6 +3,7 @@ import { expect } from 'chai';
 import * as diagnosticUtils from './diagnosticUtils';
 import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 import { util } from './util';
+import chalk from 'chalk';
 
 describe('diagnosticUtils', () => {
     let options: ReturnType<typeof diagnosticUtils.getPrintDiagnosticOptions>;
@@ -161,6 +162,43 @@ describe('diagnosticUtils', () => {
             expect(diagnosticUtils.getDiagnosticSquigglyText(<any>{
                 range: Range.create(5, 16, 5, 18)
             }, 'end functionasdf')).to.equal('            ~~~~');
+        });
+    });
+
+    describe('getDiagnosticLine', () => {
+        const color = ((text: string) => text) as any;
+
+        function testGetDiagnosticLine(range: Range, squigglyText: string, lineLength = 20) {
+            expect(
+                diagnosticUtils.getDiagnosticLine({ range: range } as any, '1'.repeat(lineLength), color)
+            ).to.eql([
+                chalk.bgWhite(' ' + chalk.black((range.start.line + 1).toString()) + ' ') + ' ' + '1'.repeat(lineLength),
+                chalk.bgWhite(' ' + chalk.white('_'.repeat((range.start.line + 1).toString().length)) + ' ') + ' ' + squigglyText.padEnd(lineLength, ' ')
+            ].join('\n'));
+        }
+
+        it('lines up at beginning of line for single-digit line num', () => {
+            testGetDiagnosticLine(util.createRange(0, 0, 0, 5), '~~~~~');
+        });
+
+        it('lines up in middle of line for single-digit line num', () => {
+            testGetDiagnosticLine(util.createRange(0, 5, 0, 10), '     ~~~~~');
+        });
+
+        it('lines up at end of line for single-digit line num', () => {
+            testGetDiagnosticLine(util.createRange(0, 5, 0, 10), '     ~~~~~', 10);
+        });
+
+        it('lines up at beginning of line for double-digit line num', () => {
+            testGetDiagnosticLine(util.createRange(15, 0, 15, 5), '~~~~~');
+        });
+
+        it('lines up in middle of line for double-digit line num', () => {
+            testGetDiagnosticLine(util.createRange(15, 5, 15, 10), '     ~~~~~');
+        });
+
+        it('lines up at end of line for double-digit line num', () => {
+            testGetDiagnosticLine(util.createRange(15, 5, 15, 10), '     ~~~~~', 10);
         });
     });
 });

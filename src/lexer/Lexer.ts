@@ -1,11 +1,10 @@
 /* eslint-disable func-names */
-import { TokenKind, ReservedWords, Keywords } from './TokenKind';
+import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes } from './TokenKind';
 import type { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
 import type { Range, Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
-import { PreceedingRegexTypes } from '.';
 
 export class Lexer {
     /**
@@ -278,11 +277,44 @@ export class Lexer {
             if (this.peek() === '?') {
                 this.advance();
                 this.addToken(TokenKind.QuestionQuestion);
+            } else if (this.peek() === '.') {
+                this.advance();
+                this.addToken(TokenKind.QuestionDot);
+            } else if (this.peek() === '[' && !this.isStartOfStatement()) {
+                this.advance();
+                this.addToken(TokenKind.QuestionLeftSquare);
+            } else if (this.peek() === '(' && !this.isStartOfStatement()) {
+                this.advance();
+                this.addToken(TokenKind.QuestionLeftParen);
+            } else if (this.peek() === '@') {
+                this.advance();
+                this.addToken(TokenKind.QuestionAt);
             } else {
                 this.addToken(TokenKind.Question);
             }
         }
     };
+
+    /**
+     * Determine if the current position is at the beginning of a statement.
+     * This means the token to the left, excluding whitespace, is either a newline or a colon
+     */
+    private isStartOfStatement() {
+        for (let i = this.tokens.length - 1; i >= 0; i--) {
+            const token = this.tokens[i];
+            //skip whitespace
+            if (token.kind === TokenKind.Whitespace) {
+                continue;
+            }
+            if (token.kind === TokenKind.Newline || token.kind === TokenKind.Colon) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+        //if we got here, there were no tokens or only whitespace, so it's the start of the file
+        return true;
+    }
 
     /**
      * Map for looking up token kinds based solely on a single character.

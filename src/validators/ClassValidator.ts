@@ -2,20 +2,23 @@ import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import type { ClassMethodStatement, ClassStatement } from '../parser/Statement';
-import { CancellationTokenSource, Location } from 'vscode-languageserver';
+import type { ClassStatement, MethodStatement } from '../parser/Statement';
+import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCustomType } from '../astUtils/reflection';
 import type { BscFile, BsDiagnostic } from '../interfaces';
-import { createVisitor, WalkMode } from '../astUtils';
+import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
-import { TokenKind } from '../lexer';
+import { TokenKind } from '../lexer/TokenKind';
 import { DynamicType } from '../types/DynamicType';
 
 export class BsClassValidator {
     private scope: Scope;
     public diagnostics: BsDiagnostic[];
+    /**
+     * The key is the namespace-prefixed class name. (i.e. `NameA.NameB.SomeClass` or `CoolClass`)
+     */
     private classes: Map<string, AugmentedClassStatement>;
 
     public validate(scope: Scope) {
@@ -25,6 +28,7 @@ export class BsClassValidator {
         this.findClasses();
         this.findNamespaceNonNamespaceCollisions();
         this.linkClassesWithParents();
+        this.detectCircularReferences();
         this.validateMemberCollisions();
         this.verifyChildConstructor();
         this.verifyNewExpressions();
@@ -73,13 +77,8 @@ export class BsClassValidator {
                             range: newExpression.className.range
                         });
 
-                        //could not find a class with this name
                     } else {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.classCouldNotBeFound(className, this.scope.name),
-                            file: file,
-                            range: newExpression.className.range
-                        });
+                        //could not find a class with this name (handled by ScopeValidator)
                     }
                 }
             }
@@ -98,8 +97,8 @@ export class BsClassValidator {
                     file: classStatement.file,
                     range: classStatement.name.range,
                     relatedInformation: [{
-                        location: Location.create(
-                            URI.file(nonNamespaceClass.file.pathAbsolute).toString(),
+                        location: util.createLocation(
+                            URI.file(nonNamespaceClass.file.srcPath).toString(),
                             nonNamespaceClass.name.range
                         ),
                         message: 'Original class declared here'
@@ -111,7 +110,7 @@ export class BsClassValidator {
 
     private verifyChildConstructor() {
         for (const [, classStatement] of this.classes) {
-            const newMethod = classStatement.memberMap.new as ClassMethodStatement;
+            const newMethod = classStatement.memberMap.new as MethodStatement;
 
             if (
                 //this class has a "new method"
@@ -152,6 +151,30 @@ export class BsClassValidator {
                     });
                 }
             }
+        }
+    }
+
+    private detectCircularReferences() {
+        for (let [, cls] of this.classes) {
+            const names = new Map<string, string>();
+            do {
+                const className = cls.getName(ParseMode.BrighterScript);
+                const lowerClassName = className.toLowerCase();
+                //if we've already seen this class name before, then we have a circular dependency
+                if (names.has(lowerClassName)) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.circularReferenceDetected([
+                            ...names.values(),
+                            className
+                        ], this.scope.name),
+                        file: cls.file,
+                        range: cls.name.range
+                    });
+                    break;
+                }
+                names.set(lowerClassName, className);
+                cls = cls.parentClass;
+            } while (cls);
         }
     }
 
@@ -282,7 +305,7 @@ export class BsClassValidator {
                         if (lowerFieldTypeName) {
                             const currentNamespaceName = classStatement.namespaceName?.getName(ParseMode.BrighterScript);
                             //check if this custom type is in our class map
-                            if (!this.getClassByName(lowerFieldTypeName, currentNamespaceName)) {
+                            if (!this.getClassByName(lowerFieldTypeName, currentNamespaceName) && !this.scope.hasInterface(lowerFieldTypeName) && !this.scope.hasEnum(lowerFieldTypeName)) {
                                 this.diagnostics.push({
                                     ...DiagnosticMessages.cannotFindType(fieldTypeName),
                                     range: statement.type.range,
@@ -299,7 +322,7 @@ export class BsClassValidator {
     /**
      * Get the closest member with the specified name (case-insensitive)
      */
-    private getAncestorMember(classStatement: AugmentedClassStatement, memberName: string) {
+    getAncestorMember(classStatement, memberName) {
         let lowerMemberName = memberName.toLowerCase();
         let ancestor = classStatement.parentClass;
         while (ancestor) {
@@ -310,7 +333,7 @@ export class BsClassValidator {
                     classStatement: ancestor
                 };
             }
-            ancestor = ancestor.parentClass;
+            ancestor = ancestor.parentClass !== ancestor ? ancestor.parentClass : null;
         }
     }
 
@@ -348,8 +371,8 @@ export class BsClassValidator {
                         file: file,
                         range: classStatement.name.range,
                         relatedInformation: [{
-                            location: Location.create(
-                                URI.file(alreadyDefinedClass.file.pathAbsolute).toString(),
+                            location: util.createLocation(
+                                URI.file(alreadyDefinedClass.file.srcPath).toString(),
                                 this.classes.get(lowerName).range
                             ),
                             message: ''
@@ -399,20 +422,15 @@ export class BsClassValidator {
                 } else if (absoluteParent) {
                     parentClass = absoluteParent;
 
-                    //couldn't find the parent class
                 } else {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.classCouldNotBeFound(parentClassName, this.scope.name),
-                        file: classStatement.file,
-                        range: classStatement.parentClassName.range
-                    });
+                    //couldn't find the parent class (validated in ScopeValidator)
                 }
                 classStatement.parentClass = parentClass;
             }
         }
     }
-
 }
+
 type AugmentedClassStatement = ClassStatement & {
     file: BscFile;
     parentClass: AugmentedClassStatement;

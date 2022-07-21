@@ -171,7 +171,7 @@ export class XmlScope extends Scope {
         ) {
             results.push({
                 range: util.createRange(0, 0, 0, 0),
-                uri: util.pathToUri(file.parentComponent.pathAbsolute)
+                uri: util.pathToUri(file.parentComponent.srcPath)
             });
         }
         return results;

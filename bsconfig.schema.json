@@ -165,7 +165,10 @@
                                 "items": {
                                     "anyOf": [
                                         {
-                                            "type": ["number", "string"],
+                                            "type": [
+                                                "number",
+                                                "string"
+                                            ],
                                             "description": "A code of diagnostics that should be filtered out from the files matched in 'src'"
                                         }
                                     ]
@@ -184,6 +187,18 @@
                     {
                         "type": "string",
                         "description": "a path to a node script or an npm module to load dynamically"
+                    }
+                ]
+            }
+        },
+        "require": {
+            "description": "A list of scripts or modules to pass to node's `require()` on startup. This is useful for doing things like ts-node registration",
+            "type": "array",
+            "items": {
+                "anyOf": [
+                    {
+                        "type": "string",
+                        "description": "a path to a node script or an npm module to load dynamically at startup."
                     }
                 ]
             }
@@ -220,6 +235,11 @@
                 "warn",
                 "error"
             ]
+        },
+        "allowBrighterScriptInBrightScript": {
+            "description": "Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.",
+            "type": "boolean",
+            "default": false
         }
     }
 }
