@@ -1,10 +1,13 @@
+import { SourceNode } from 'source-map';
 import type { Hover } from 'vscode-languageserver-types';
 import { isBrsFile, isFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
-import type { Callable, ProvideHoverEvent } from '../../interfaces';
+import type { ProvideHoverEvent } from '../../interfaces';
 import type { Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
+import { BrsTranspileState } from '../../parser/BrsTranspileState';
+import { ParseMode } from '../../parser/Parser';
 import util from '../../util';
 
 export class HoverProcessor {
@@ -29,7 +32,17 @@ export class HoverProcessor {
         }
     }
 
+    private buildContentsWithDocs(text: string, startingToken: Token) {
+        const parts = [text];
+        const docs = this.getTokenDocumentation((this.event.file as BrsFile).parser.tokens, startingToken);
+        if (docs) {
+            parts.push('***', docs);
+        }
+        return parts.join('\n');
+    }
+
     private getBrsFileHover(file: BrsFile): Hover {
+        const scope = this.event.scopes[0];
         const fence = (code: string) => util.mdFence(code, 'brightscript');
         //get the token at the position
         let token = file.getTokenAt(this.event.position);
@@ -45,6 +58,22 @@ export class HoverProcessor {
         //throw out invalid tokens and the wrong kind of tokens
         if (!token || !hoverTokenTypes.includes(token.kind)) {
             return null;
+        }
+
+        const expression = file.getClosestExpression(this.event.position);
+        if (expression) {
+            let containingNamespace = file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
+            const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
+
+            //find a constant with this name
+            const constant = scope.getConstFileLink(fullName, containingNamespace);
+            if (constant) {
+                const constantValue = new SourceNode(null, null, null, constant.item.value.transpile(new BrsTranspileState(file))).toString();
+                return {
+                    contents: this.buildContentsWithDocs(fence(`const ${constant.item.fullName} = ${constantValue}`), constant.item.tokens.const),
+                    range: token.range
+                };
+            }
         }
 
         let lowerTokenText = token.text.toLowerCase();
@@ -88,19 +117,21 @@ export class HoverProcessor {
             if (callable) {
                 return {
                     range: token.range,
-                    contents: this.getCallableDocumentation(callable)
+                    contents: this.buildContentsWithDocs(fence(callable.type.toString()), callable.functionStatement?.func?.functionType)
                 };
             }
         }
     }
 
     /**
-     * Build a hover documentation for a callable.
+     * Combine all the documentation found before a token (i.e. comment tokens)
      */
-    private getCallableDocumentation(callable: Callable) {
+    private getTokenDocumentation(tokens: Token[], token?: Token) {
         const comments = [] as Token[];
-        const tokens = callable.file.parser.tokens as Token[];
-        const idx = tokens.indexOf(callable.functionStatement?.func.functionType);
+        const idx = tokens?.indexOf(token);
+        if (!idx || idx === -1) {
+            return undefined;
+        }
         for (let i = idx - 1; i >= 0; i--) {
             const token = tokens[i];
             //skip whitespace and newline chars
@@ -115,13 +146,10 @@ export class HoverProcessor {
                 break;
             }
         }
-        let result = util.mdFence(callable.type.toString(), 'brightscript');
         if (comments.length > 0) {
-            result += '\n***\n' + comments.reverse().map(x => x.text.replace(/^('|rem)/i, '')).join('\n');
+            return comments.reverse().map(x => x.text.replace(/^('|rem)/i, '')).join('\n');
         }
-        return result;
     }
-
 
     private getXmlFileHover(file: XmlFile) {
         //TODO add xml hovers

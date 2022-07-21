@@ -1015,7 +1015,7 @@ export class LanguageServer {
                 .reduce((set, hover) => {
                     const hoverContentArray = Array.isArray(hover.contents) ? hover.contents : [hover.contents];
                     const hoverText = hoverContentArray.map(x => {
-                        return typeof x === 'string' ? x : x.value;
+                        return typeof x === 'string' ? x : x?.value;
                     }).join('\n');
                     return set.add(hoverText);
                 }, new Set<string>()).values()

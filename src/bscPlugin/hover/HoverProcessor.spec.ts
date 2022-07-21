@@ -137,10 +137,51 @@ describe('HoverProcessor', () => {
             `);
 
             let hover = program.getHover(mainFile.pathAbsolute, util.createPosition(2, 25))[0];
-            expect(hover).to.exist;
+            expect(hover?.range).to.eql(util.createRange(2, 20, 2, 29));
+            expect(hover?.contents).to.eql(fence('sub sayMyName(name as string) as void'));
+        });
 
-            expect(hover.range).to.eql(util.createRange(2, 20, 2, 29));
-            expect(hover.contents).to.eql(fence('sub sayMyName(name as string) as void'));
+        it('finds top-level constant value', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print SOME_VALUE
+                end sub
+                const SOME_VALUE = true
+            `);
+            // print SOM|E_VALUE
+            let hover = program.getHover('source/main.bs', util.createPosition(2, 29))[0];
+            expect(hover?.range).to.eql(util.createRange(2, 26, 2, 36));
+            expect(hover?.contents).to.eql(fence('const SOME_VALUE = true'));
+        });
+
+        it('finds namespaced constant value', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print name.SOME_VALUE
+                end sub
+                namespace name
+                    const SOME_VALUE = true
+                end namespace
+            `);
+            // print name.SOM|E_VALUE
+            let hover = program.getHover('source/main.bs', util.createPosition(2, 34))[0];
+            expect(hover?.range).to.eql(util.createRange(2, 31, 2, 41));
+            expect(hover?.contents).to.eql(fence('const name.SOME_VALUE = true'));
+        });
+
+        it('finds deep namespaced constant value', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print name.sp.a.c.e.SOME_VALUE
+                end sub
+                namespace name.sp.a.c.e
+                    const SOME_VALUE = true
+                end namespace
+            `);
+            // print name.sp.a.c.e.SOM|E_VALUE
+            let hover = program.getHover('source/main.bs', util.createPosition(2, 43))[0];
+            expect(hover?.range).to.eql(util.createRange(2, 40, 2, 50));
+            expect(hover?.contents).to.eql(fence('const name.sp.a.c.e.SOME_VALUE = true'));
         });
     });
 });

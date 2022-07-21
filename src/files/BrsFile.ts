@@ -1,6 +1,7 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Position, Location, Diagnostic } from 'vscode-languageserver';
+import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
@@ -180,6 +181,30 @@ export class BrsFile {
                 return token;
             }
         }
+    }
+
+    /**
+     * Walk the AST and find the expression that this token is most specifically contained within
+     */
+    public getClosestExpression(position: Position) {
+        const handle = new CancellationTokenSource();
+        let containingNode: Expression | Statement;
+        this.ast.walk((node) => {
+            const latestContainer = containingNode;
+            //bsc walks depth-first
+            if (util.rangeContains(node.range, position)) {
+                containingNode = node;
+            }
+            //we had a match before, and don't now. this means we've finished walking down the whole way, and found our match
+            if (latestContainer && !containingNode) {
+                containingNode = latestContainer;
+                handle.cancel();
+            }
+        }, {
+            walkMode: WalkMode.visitAllRecursive,
+            cancel: handle.token
+        });
+        return containingNode;
     }
 
     public get parser() {
