@@ -1,7 +1,7 @@
 import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
+import type { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, File, FileReference, FunctionCall, CommentFlag } from '../interfaces';
@@ -423,12 +423,6 @@ export class XmlFile {
             return this.program.getComponent(this.parentComponentName?.text)?.file;
         });
         return result;
-    }
-
-    public getHover(position: Position): Hover { //eslint-disable-line
-        //TODO implement
-        // let result = {} as Hover;
-        return null;
     }
 
     public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line

@@ -1278,6 +1278,18 @@ export class Util {
     }
 
     /**
+    * Get the first locatable item found at the specified position
+    * @param position
+    */
+    public getFirstLocatableAt(locatables: Locatable[], position: Position) {
+        for (let token of locatables) {
+            if (util.rangeContains(token.range, position)) {
+                return token;
+            }
+        }
+    }
+
+    /**
      * Sort an array of objects that have a Range
      */
     public sortByRange(locatables: Locatable[]) {
