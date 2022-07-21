@@ -27,10 +27,6 @@ end sub
 transpiles to:
 
 ```vb
-sub Greet(message as string, name as string)
-    print message + " " + name
-end sub
-
 sub main()
     'normal call
     Greet("Hello", "Alice")
@@ -40,6 +36,36 @@ sub main()
 
     'named argument call with params out of order
     Greet("Hello", "Clarice")
+end sub
+
+sub Greet(message as string, name as string)
+    print message + " " + name
+end sub
+```
+
+## Namespace functions
+Named arguments can be used for namespace function calls as well
+```vb
+sub main()
+   console.write(message: "Hello world", logLevel: "INFO")
+end sub
+
+namespace console
+    sub write(logLevel as string, message as string)
+        print logLevel + ": " + message
+    end sub
+end namespace
+```
+
+transpiles to:
+
+```vb
+sub main()
+   console_write("INFO", "Hello world")
+end sub
+
+sub console_write(logLevel as string, message as string)
+    print logLevel + ": " + message
 end sub
 ```
 
