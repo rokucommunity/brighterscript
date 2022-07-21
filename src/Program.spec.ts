@@ -1541,7 +1541,7 @@ describe('Program', () => {
     });
 
     describe('getCompletions', () => {
-        it.only('returns all functions in scope', () => {
+        it('returns all functions in scope', () => {
             program.setFile('source/main.brs', `
                 sub Main()
 
