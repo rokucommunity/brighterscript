@@ -1,7 +1,9 @@
 # Named arguments
 Named arguments allow you to match an argument to its position in the function parameter list by name.
 
-**NOTE:** Named arguments are not currently supported for function calls within complex expressions such as ternary, null coalescence, etc. This may change in the future as the compiler improves.
+## Limitations
+ - is only supported for functions where bsc can clearly identify the function signature. (i.e. unsupported for object method calls, callfuncs, etc).
+ - named argument usage utilizing complex expressions many not be used for function calls within complex expressions such as ternary, null coalescence, etc. This may change in the future as the compiler improves.
 
 ## Simple usage
 For simple functions, the usage is straightforward. Simply prefix the value with the parmaeter name and a colon.
