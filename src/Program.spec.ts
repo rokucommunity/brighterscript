@@ -1500,7 +1500,7 @@ describe('Program', () => {
 
     describe('getCompletions', () => {
         it('returns all functions in scope', () => {
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.addOrReplaceFile('source/main.brs', `
                 sub Main()
 
                 end sub
@@ -1508,7 +1508,7 @@ describe('Program', () => {
                 sub ActionA()
                 end sub
             `);
-            program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+            program.addOrReplaceFile('source/lib.brs', `
                 sub ActionB()
                 end sub
             `);
@@ -1517,7 +1517,7 @@ describe('Program', () => {
 
             let completions = program
                 //get completions
-                .getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10))
+                .getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 10))
                 //only keep the label property for this test
                 .map(x => pick(x, 'label'));
 

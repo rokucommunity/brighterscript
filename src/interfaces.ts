@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, CompletionItem } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -197,6 +197,20 @@ export interface CompilerPlugin {
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+
+    /**
+     * Emitted before the program starts collecting completions
+     */
+    beforeProvideCompletions?: PluginHandler<BeforeProvideCompletionsEvent>;
+    /**
+     * Use this event to contribute completions
+     */
+    provideCompletions?: PluginHandler<ProvideCompletionsEvent>;
+    /**
+     * Emitted after the program has finished collecting completions, but before they are sent to the client
+     */
+    afterProvideCompletions?: PluginHandler<AfterProvideCompletionsEvent>;
+
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;
@@ -223,6 +237,17 @@ export interface OnGetCodeActionsEvent {
     diagnostics: BsDiagnostic[];
     codeActions: CodeAction[];
 }
+
+export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
+    program: Program;
+    file: TFile;
+    scopes: Scope[];
+    position: Position;
+    completions: CompletionItem[];
+}
+
+export type BeforeProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
+export type AfterProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
 
 export interface OnGetSemanticTokensEvent {
     program: Program;

@@ -1,5 +1,6 @@
-import type { CompilerPlugin, OnGetCodeActionsEvent, OnGetSemanticTokensEvent } from '../interfaces';
+import type { CompilerPlugin, OnGetCodeActionsEvent, ProvideCompletionsEvent, OnGetSemanticTokensEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
+import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { SemanticTokensProcessor } from './semanticTokens/SemanticTokensProcessor';
 
 export class BscPlugin implements CompilerPlugin {
@@ -10,6 +11,10 @@ export class BscPlugin implements CompilerPlugin {
     }
 
     public onGetSemanticTokens(event: OnGetSemanticTokensEvent) {
-        return new SemanticTokensProcessor(event).process();
+        new SemanticTokensProcessor(event).process();
+    }
+
+    public provideCompletions(event: ProvideCompletionsEvent) {
+        new CompletionsProcessor(event).process();
     }
 }
