@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -836,20 +836,6 @@ export class Program {
         if (!file) {
             return [];
         }
-        let result = [] as CompletionItem[];
-
-        if (isBrsFile(file) && file.isPositionNextToTokenKind(position, TokenKind.Callfunc)) {
-            // is next to a @. callfunc invocation - must be an interface method
-            for (const scope of this.getScopes().filter((s) => isXmlScope(s))) {
-                let fileLinks = this.getStatementsForXmlFile(scope as XmlScope);
-                for (let fileLink of fileLinks) {
-
-                    result.push(scope.createCompletionFromFunctionStatement(fileLink.item));
-                }
-            }
-            //no other result is possible in this case
-            return result;
-        }
 
         //find the scopes for this file
         let scopes = this.getScopesForFile(file);
@@ -857,22 +843,21 @@ export class Program {
         //if there are no scopes, include the global scope so we at least get the built-in functions
         scopes = scopes.length > 0 ? scopes : [this.globalScope];
 
-        //get the completions from all scopes for this file
-        let allCompletions = util.flatMap(
-            scopes.map(ctx => file.getCompletions(position, ctx)),
-            c => c
-        );
+        const event: ProvideCompletionsEvent = {
+            program: this,
+            file: file,
+            scopes: scopes,
+            position: position,
+            completions: []
+        };
 
-        //only keep completions common to every scope for this file
-        let keyCounts = {} as Record<string, number>;
-        for (let completion of allCompletions) {
-            let key = `${completion.label}-${completion.kind}`;
-            keyCounts[key] = keyCounts[key] ? keyCounts[key] + 1 : 1;
-            if (keyCounts[key] === scopes.length) {
-                result.push(completion);
-            }
-        }
-        return result;
+        this.plugins.emit('beforeProvideCompletions', event);
+
+        this.plugins.emit('provideCompletions', event);
+
+        this.plugins.emit('afterProvideCompletions', event);
+
+        return event.completions;
     }
 
     /**

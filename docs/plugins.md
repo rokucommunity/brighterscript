@@ -108,6 +108,16 @@ After file addition/removal (note: throttled/debounced):
 Code Actions
  - `onGetCodeActions`
 
+Completions
+ - `beforeProvideCompletions`
+ - `provideCompletions`
+ - `afterProvideCompletions`
+
+Hovers
+ - `beforeProvideHover`
+ - `provideHover`
+ - `afterProvideHover`
+
 Semantic Tokens
  - `onGetSemanticTokens`
 
@@ -149,6 +159,33 @@ export interface CompilerPlugin {
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+
+    /**
+     * Emitted before the program starts collecting completions
+     */
+    beforeProvideCompletions?: PluginHandler<BeforeProvideCompletionsEvent>;
+    /**
+     * Use this event to contribute completions
+     */
+    provideCompletions?: PluginHandler<ProvideCompletionsEvent>;
+    /**
+     * Emitted after the program has finished collecting completions, but before they are sent to the client
+     */
+    afterProvideCompletions?: PluginHandler<AfterProvideCompletionsEvent>;
+
+    /**
+     * Called before the `provideHover` hook. Use this if you need to prepare any of the in-memory objects before the `provideHover` gets called
+     */
+    beforeProvideHover?: PluginHandler<BeforeProvideHoverEvent>;
+    /**
+     * Called when bsc looks for hover information. Use this if your plugin wants to contribute hover information.
+     */
+    provideHover?: PluginHandler<ProvideHoverEvent>;
+    /**
+     * Called after the `provideHover` hook. Use this if you want to intercept or sanitize the hover data (even from other plugins) before it gets sent to the client.
+     */
+    afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
+
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;
