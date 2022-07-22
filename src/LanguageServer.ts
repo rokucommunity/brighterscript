@@ -1004,7 +1004,6 @@ export class LanguageServer {
         const srcPath = util.uriToPath(params.textDocument.uri);
         let projects = this.getProjects();
         let hovers = projects.map((x) => x.builder.program.getHover(srcPath, params.position)).flat();
-        hovers = [hovers[0], hovers[0], hovers[0]];
 
         //eliminate duplicate hover text, and merge all hovers together into a single newline-separated string
         const hoverText = [
