@@ -901,6 +901,7 @@ export class Program {
      */
     public getHover(srcPath: string, position: Position): Hover[] {
         let file = this.getFile(srcPath);
+        let result: Hover[];
         if (file) {
             const event = {
                 program: this,
@@ -912,8 +913,10 @@ export class Program {
             this.plugins.emit('beforeProvideHover', event);
             this.plugins.emit('provideHover', event);
             this.plugins.emit('afterProvideHover', event);
-            return event.hovers;
+            result = event.hovers;
         }
+
+        return result ?? [];
     }
 
     /**

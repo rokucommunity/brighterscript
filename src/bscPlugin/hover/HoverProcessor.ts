@@ -1,9 +1,8 @@
 import { SourceNode } from 'source-map';
-import type { Hover } from 'vscode-languageserver-types';
 import { isBrsFile, isFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
-import type { ProvideHoverEvent } from '../../interfaces';
+import type { Hover, ProvideHoverEvent } from '../../interfaces';
 import type { Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import { BrsTranspileState } from '../../parser/BrsTranspileState';
