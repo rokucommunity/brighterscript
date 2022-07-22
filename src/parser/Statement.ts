@@ -42,6 +42,18 @@ export abstract class Statement {
     public visitMode = InternalWalkMode.visitStatements;
 
     public abstract walk(visitor: WalkVisitor, options: WalkOptions);
+
+    /**
+     * The parent node for this statement. This is set dynamically during `onFileValidate`, and should not be set directly.
+     */
+    public parent?: Statement | Expression;
+
+    /**
+     * Get the closest symbol table for this node. Should be overridden in children that directly contain a symbol table
+     */
+    public getSymbolTable() {
+        return this.parent?.getSymbolTable();
+    }
 }
 
 export class EmptyStatement extends Statement {
@@ -1109,6 +1121,10 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     public symbolTable: SymbolTable;
+
+    public getSymbolTable() {
+        return this.symbolTable;
+    }
 
     /**
      * The string name for this namespace

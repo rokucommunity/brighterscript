@@ -638,7 +638,9 @@ export class Program {
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
                 for (let scopeName in this.scopes) {
                     let scope = this.scopes[scopeName];
+                    scope.linkSymbolTable();
                     scope.validate();
+                    scope.unlinkSymbolTable();
                 }
             });
 
