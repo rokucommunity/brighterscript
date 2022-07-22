@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, Hover, CompletionItem } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, CompletionItem } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -283,6 +283,21 @@ export interface ProvideHoverEvent {
     position: Position;
     scopes: Scope[];
     hovers: Hover[];
+}
+export interface Hover {
+    /**
+     * The contents of the hover, written in markdown. If you want to display code in the hover, use code blocks, like this:
+     * ```text
+     *      ```brighterscript
+     *      some = "code" + "here"
+     *      ```
+     * ```
+     */
+    contents: string | string[];
+    /**
+     * An optional range
+     */
+    range?: Range;
 }
 export type BeforeProvideHoverEvent = ProvideHoverEvent;
 export type AfterProvideHoverEvent = ProvideHoverEvent;

@@ -1003,32 +1003,33 @@ export class LanguageServer {
 
         const srcPath = util.uriToPath(params.textDocument.uri);
         let projects = this.getProjects();
-        let hovers = projects.map((x) => x.builder.program.getHover(srcPath, params.position)).flat();
-        hovers = [hovers[0], hovers[0], hovers[0]];
+        let hovers = projects
+            //get hovers from all projects
+            .map((x) => x.builder.program.getHover(srcPath, params.position))
+            //flatten to a single list
+            .flat();
 
-        //eliminate duplicate hover text, and merge all hovers together into a single newline-separated string
-        const hoverText = [
-            ...hovers
-                //remove undefined hovers
+        const contents = [
+            ...(hovers ?? [])
+                //pull all hover contents out into a flag array of strings
+                .map(x => {
+                    return Array.isArray(x?.contents) ? x?.contents : [x?.contents];
+                }).flat()
+                //remove nulls
                 .filter(x => !!x)
-                //dedupe and merge inner hovers
-                .reduce((set, hover) => {
-                    const hoverContentArray = Array.isArray(hover.contents) ? hover.contents : [hover.contents];
-                    const hoverText = hoverContentArray.map(x => {
-                        return typeof x === 'string' ? x : x?.value;
-                    }).join('\n');
-                    return set.add(hoverText);
-                }, new Set<string>()).values()
-            //merge outer hovers
-        ].join('\n');
+                //dedupe hovers across all projects
+                .reduce((set, content) => set.add(content), new Set<string>()).values()
+        ];
 
-        let hover: Hover = {
-            //use the range from the first hover
-            range: hovers[0]?.range,
-            //merge all the hovers into a single string, separated by newlines
-            contents: hoverText
-        };
-        return hover;
+        if (contents.length > 0) {
+            let hover: Hover = {
+                //use the range from the first hover
+                range: hovers[0]?.range,
+                //the contents of all hovers
+                contents: contents
+            };
+            return hover;
+        }
     }
 
     @AddStackToErrorMessage
