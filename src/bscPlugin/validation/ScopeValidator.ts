@@ -1,10 +1,10 @@
 import { URI } from 'vscode-uri';
-import { isBrsFile, isCallExpression, isLiteralExpression, isNewExpression, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isLiteralExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
-import type { Expression } from '../../parser/Expression';
+import type { DottedGetExpression, Expression, VariableExpression } from '../../parser/Expression';
 import type { EnumStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
@@ -52,97 +52,104 @@ export class ScopeValidator {
         });
     }
 
+    private expressionsByFile = new Cache<BrsFile, Readonly<ExpressionInfo>[]>();
     private iterateFileExpressions(file: BrsFile) {
         const { scope } = this.event;
-        const expressions = [
-            ...file.parser.references.expressions,
-            //all class "extends <whatever>" expressions
-            ...file.parser.references.classStatements.map(x => x.parentClassName?.expression),
-            //all interface "extends <whatever>" expressions
-            ...file.parser.references.interfaceStatements.map(x => x.parentInterfaceName?.expression)
-        ];
-        outer:
-        for (let referenceExpression of expressions) {
-            if (!referenceExpression) {
-                continue;
-            }
-            let expression: Expression;
-            //lift the callee from call expressions to handle namespaced function calls
-            if (isCallExpression(referenceExpression)) {
-                expression = referenceExpression.callee;
-            } else if (isNewExpression(referenceExpression)) {
-                expression = referenceExpression.call.callee;
-            } else {
-                expression = referenceExpression;
-            }
-            const tokens = util.getAllDottedGetParts(expression);
-            if (tokens?.length > 0) {
-                const symbolTable = expression.getSymbolTable() ?? scope.symbolTable;
-                //flag all unknown left-most variables
-                if (!symbolTable.hasSymbol(tokens[0]?.text)) {
-                    this.addMultiScopeDiagnostic({
-                        file: file as BscFile,
-                        ...DiagnosticMessages.cannotFindName(tokens[0].text),
-                        range: tokens[0].range
-                    });
-                    //skip to the next expression
+        //build an expression collection ONCE per file
+        const expressionInfos = this.expressionsByFile.getOrAdd(file, () => {
+            const result: DeepWriteable<ExpressionInfo[]> = [];
+            const expressions = [
+                ...file.parser.references.expressions,
+                //all class "extends <whatever>" expressions
+                ...file.parser.references.classStatements.map(x => x.parentClassName?.expression),
+                //all interface "extends <whatever>" expressions
+                ...file.parser.references.interfaceStatements.map(x => x.parentInterfaceName?.expression)
+            ];
+            for (let expression of expressions) {
+                if (!expression) {
                     continue;
                 }
-                //at this point, we know the first item is a known symbol. find unknown namespace parts after the first part
-                if (tokens.length > 1) {
-                    const firstNamespacePart = tokens.shift().text;
-                    const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
-                    const namespaceContainer = scope.namespaceLookup.get(firstNamespacePartLower);
-                    const enumStatement = scope.getEnum(firstNamespacePartLower);
-                    //if this isn't a namespace, skip it
-                    if (!namespaceContainer && !enumStatement) {
-                        continue;
-                    }
-                    //catch unknown namespace items
-                    const processedNames: string[] = [firstNamespacePart];
-                    for (const token of tokens ?? []) {
-                        processedNames.push(token.text);
-                        const entityName = processedNames.join('.');
-                        const entityNameLower = entityName.toLowerCase();
 
-                        //if this is an enum member, stop validating here to prevent errors further down the chain
-                        if (scope.getEnumMemberMap().has(entityNameLower)) {
-                            break;
-                        }
+                //walk left-to-right on every expression, only keep the ones that start with VariableExpression, and then keep subsequent DottedGet parts
+                const parts = util.getDottedGetPath(expression);
 
-                        if (
-                            !scope.getEnumMap().has(entityNameLower) &&
-                            !scope.getClassMap().has(entityNameLower) &&
-                            !scope.getConstMap().has(entityNameLower) &&
-                            !scope.getCallableByName(entityNameLower) &&
-                            !scope.namespaceLookup.has(entityNameLower)
-                        ) {
-                            //if this looks like an enum, provide a nicer error message
-                            const theEnum = this.getEnum(scope, entityNameLower)?.item;
-                            if (theEnum) {
-                                this.addMultiScopeDiagnostic({
-                                    file: file,
-                                    ...DiagnosticMessages.unknownEnumValue(token.text?.split('.').pop(), theEnum.fullName),
-                                    range: tokens[tokens.length - 1].range,
-                                    relatedInformation: [{
-                                        message: 'Enum declared here',
-                                        location: util.createLocation(
-                                            URI.file(file.srcPath).toString(),
-                                            theEnum.tokens.name.range
-                                        )
-                                    }]
-                                });
-                            } else {
-                                this.addMultiScopeDiagnostic({
-                                    ...DiagnosticMessages.cannotFindName(token.text, entityName),
-                                    range: token.range,
-                                    file: file
-                                });
-                            }
-                            //no need to add another diagnostic for future unknown items
-                            continue outer;
-                        }
+                if (parts.length > 0) {
+                    result.push({
+                        parts: parts,
+                        expression: expression
+                    });
+                }
+            }
+            return result as unknown as Readonly<ExpressionInfo>[];
+        });
+
+        outer:
+        for (const info of expressionInfos) {
+            const symbolTable = info.expression.getSymbolTable();
+            const firstPart = info.parts[0];
+            //flag all unknown left-most variables
+            if (!symbolTable.hasSymbol(firstPart.name?.text)) {
+                this.addMultiScopeDiagnostic({
+                    file: file as BscFile,
+                    ...DiagnosticMessages.cannotFindName(firstPart.name?.text),
+                    range: firstPart.name.range
+                });
+                //skip to the next expression
+                continue;
+            }
+
+            const firstNamespacePart = info.parts[0].name.text;
+            const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
+            const namespaceContainer = scope.namespaceLookup.get(firstNamespacePartLower);
+            const enumStatement = scope.getEnum(firstNamespacePartLower);
+            //if this isn't a namespace, skip it
+            if (!namespaceContainer && !enumStatement) {
+                continue;
+            }
+            //catch unknown namespace items
+            const processedNames: string[] = [firstNamespacePart];
+            for (let i = 1; i < info.parts.length; i++) {
+                const part = info.parts[i];
+                processedNames.push(part.name.text);
+                const entityName = processedNames.join('.');
+                const entityNameLower = entityName.toLowerCase();
+
+                //if this is an enum member, stop validating here to prevent errors further down the chain
+                if (scope.getEnumMemberMap().has(entityNameLower)) {
+                    break;
+                }
+
+                if (
+                    !scope.getEnumMap().has(entityNameLower) &&
+                    !scope.getClassMap().has(entityNameLower) &&
+                    !scope.getConstMap().has(entityNameLower) &&
+                    !scope.getCallableByName(entityNameLower) &&
+                    !scope.namespaceLookup.has(entityNameLower)
+                ) {
+                    //if this looks like an enum, provide a nicer error message
+                    const theEnum = this.getEnum(scope, entityNameLower)?.item;
+                    if (theEnum) {
+                        this.addMultiScopeDiagnostic({
+                            file: file,
+                            ...DiagnosticMessages.unknownEnumValue(part.name.text?.split('.').pop(), theEnum.fullName),
+                            range: part.name.range,
+                            relatedInformation: [{
+                                message: 'Enum declared here',
+                                location: util.createLocation(
+                                    URI.file(file.srcPath).toString(),
+                                    theEnum.tokens.name.range
+                                )
+                            }]
+                        });
+                    } else {
+                        this.addMultiScopeDiagnostic({
+                            ...DiagnosticMessages.cannotFindName(part.name.text, entityName),
+                            range: part.name.range,
+                            file: file
+                        });
                     }
+                    //no need to add another diagnostic for future unknown items
+                    continue outer;
                 }
             }
         }
@@ -331,3 +338,9 @@ export class ScopeValidator {
 
     private multiScopeCache = new Cache<string, BsDiagnostic>();
 }
+
+interface ExpressionInfo {
+    parts: Readonly<[VariableExpression, ...DottedGetExpression[]]>;
+    expression: Readonly<Expression>;
+}
+type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };

@@ -317,7 +317,7 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('works with namespaces', () => {
+        it.only('works with namespaces', () => {
             testTranspile(`
                 namespace Birds.WaterFowl
                     class Duck

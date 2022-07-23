@@ -51,7 +51,7 @@ export abstract class Statement {
     /**
      * Get the closest symbol table for this node. Should be overridden in children that directly contain a symbol table
      */
-    public getSymbolTable() {
+    public getSymbolTable(): SymbolTable {
         return this.parent?.getSymbolTable();
     }
 }
@@ -79,9 +79,14 @@ export class EmptyStatement extends Statement {
  */
 export class Body extends Statement implements TypedefProvider {
     constructor(
-        public statements: Statement[] = []
+        public statements: Statement[] = [],
+        public symbolTable = new SymbolTable()
     ) {
         super();
+    }
+
+    public getSymbolTable() {
+        return this.symbolTable;
     }
 
     public get range() {

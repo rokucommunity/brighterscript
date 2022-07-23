@@ -1394,6 +1394,7 @@ export class Util {
         while (nextPart) {
             if (isDottedGetExpression(nextPart) || isIndexedGetExpression(nextPart) || isXmlAttributeGetExpression(nextPart)) {
                 nextPart = nextPart.obj;
+
             } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
                 nextPart = nextPart.callee;
 
@@ -1405,6 +1406,39 @@ export class Util {
             parts.unshift(nextPart);
         }
         return parts;
+    }
+
+    /**
+     * Break an expression into each part, and return any VariableExpression or DottedGet expresisons from left-to-right.
+     */
+    public getDottedGetPath(expression: Expression): [VariableExpression, ...DottedGetExpression[]] {
+        let parts: Expression[] = [];
+        let nextPart = expression;
+        while (nextPart) {
+            if (isDottedGetExpression(nextPart)) {
+                parts.unshift(nextPart);
+                nextPart = nextPart.obj;
+
+            } else if (isIndexedGetExpression(nextPart) || isXmlAttributeGetExpression(nextPart)) {
+                nextPart = nextPart.obj;
+                parts = [];
+
+            } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
+                nextPart = nextPart.callee;
+                parts = [];
+
+            } else if (isNamespacedVariableNameExpression(nextPart)) {
+                nextPart = nextPart.expression;
+
+            } else if (isVariableExpression(nextPart)) {
+                parts.unshift(nextPart);
+                break;
+            } else {
+                parts = [];
+                break;
+            }
+        }
+        return parts as any;
     }
 
     /**

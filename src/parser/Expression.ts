@@ -41,7 +41,7 @@ export abstract class Expression {
     /**
      * Get the closest symbol table for this node. Should be overridden in children that directly contain a symbol table
      */
-    public getSymbolTable() {
+    public getSymbolTable(): SymbolTable {
         return this.parent?.getSymbolTable();
     }
 }
@@ -823,7 +823,7 @@ export class VariableExpression extends Expression {
     public readonly range: Range;
 
     public getName(parseMode: ParseMode) {
-        return parseMode === ParseMode.BrightScript ? this.name.text : this.name.text;
+        return this.name.text;
     }
 
     transpile(state: BrsTranspileState) {

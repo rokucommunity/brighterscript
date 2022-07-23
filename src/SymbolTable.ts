@@ -1,7 +1,6 @@
 import type { Range } from 'vscode-languageserver';
 import type { BscType } from './types/BscType';
 
-
 /**
  * Stores the types associated with variables and functions in the Brighterscript code
  * Can be part of a hierarchy, so lookups can reference parent scopes
