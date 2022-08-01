@@ -1,4 +1,5 @@
-import { Range, SemanticTokenModifiers } from 'vscode-languageserver-protocol';
+import type { Range } from 'vscode-languageserver-protocol';
+import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
 import { isCallExpression, isCustomType, isNewExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
@@ -16,7 +17,14 @@ export class BrsFileSemanticTokensProcessor {
 
     public process() {
         this.handleClasses();
+        this.handleConstDeclarations();
         this.iterateExpressions();
+    }
+
+    private handleConstDeclarations() {
+        for (const stmt of this.event.file.parser.references.constStatements) {
+            this.addToken(stmt.tokens.name, SemanticTokenTypes.variable, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]);
+        }
     }
 
     private handleClasses() {

@@ -310,6 +310,14 @@ describe('BrsFileSemanticTokensProcessor', () => {
             range: util.createRange(3, 27, 3, 37),
             tokenType: SemanticTokenTypes.variable,
             tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
+        }, {
+            range: util.createRange(5, 18, 5, 25),
+            tokenType: SemanticTokenTypes.variable,
+            tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
+        }, {
+            range: util.createRange(7, 22, 7, 32),
+            tokenType: SemanticTokenTypes.variable,
+            tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
         }]);
     });
 });
