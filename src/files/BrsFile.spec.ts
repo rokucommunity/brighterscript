@@ -22,6 +22,7 @@ import { Logger } from '../Logger';
 import { ImportStatement } from '../parser/Statement';
 import { createToken } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
+import { URI } from 'vscode-uri';
 
 let sinon = sinonImport.createSandbox();
 
@@ -3304,6 +3305,24 @@ describe('BrsFile', () => {
             );
             const file = program.setFile<any>('source/MAIN.brs', '');
             expect(file._customProp).to.exist;
+        });
+    });
+
+    describe('getDefinition', () => {
+        it('returns const locations', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    print alpha.beta.charlie
+                end sub
+                namespace alpha.beta
+                    const CHARLIE = true
+                end namespace
+            `);
+            //print alpha.beta.char|lie
+            expect(program.getDefinition(file.srcPath, Position.create(2, 41))).to.eql([{
+                uri: URI.file(file.srcPath).toString(),
+                range: util.createRange(5, 26, 5, 33)
+            }]);
         });
     });
 });

@@ -1542,7 +1542,7 @@ describe('Program', () => {
 
     describe('getCompletions', () => {
         it('returns all functions in scope', () => {
-            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile('source/main.brs', `
                 sub Main()
 
                 end sub
@@ -1559,7 +1559,7 @@ describe('Program', () => {
 
             let completions = program
                 //get completions
-                .getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10))
+                .getCompletions(`${rootDir}/source/main.brs`, util.createPosition(2, 10))
                 //only keep the label property for this test
                 .map(x => pick(x, 'label'));
 
@@ -1569,7 +1569,7 @@ describe('Program', () => {
         });
 
         it('returns all variables in scope', () => {
-            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile('source/main.brs', `
                 sub Main()
                     name = "bob"
                     age = 20
@@ -1585,7 +1585,7 @@ describe('Program', () => {
 
             program.validate();
 
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, util.createPosition(2, 10));
             let labels = completions.map(x => pick(x, 'label'));
 
             expect(labels).to.deep.include({ label: 'Main' });
@@ -1608,7 +1608,7 @@ describe('Program', () => {
         });
 
         it('finds parameters', () => {
-            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile('source/main.brs', `
                 sub Main(count = 1)
                     firstName = "bob"
                     age = 21

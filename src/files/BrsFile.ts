@@ -1,6 +1,7 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Position, Location, Diagnostic } from 'vscode-languageserver';
+import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
@@ -28,6 +29,7 @@ import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
+import { URI } from 'vscode-uri';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -180,6 +182,30 @@ export class BrsFile {
                 return token;
             }
         }
+    }
+
+    /**
+     * Walk the AST and find the expression that this token is most specifically contained within
+     */
+    public getClosestExpression(position: Position) {
+        const handle = new CancellationTokenSource();
+        let containingNode: Expression | Statement;
+        this.ast.walk((node) => {
+            const latestContainer = containingNode;
+            //bsc walks depth-first
+            if (util.rangeContains(node.range, position)) {
+                containingNode = node;
+            }
+            //we had a match before, and don't now. this means we've finished walking down the whole way, and found our match
+            if (latestContainer && !containingNode) {
+                containingNode = latestContainer;
+                handle.cancel();
+            }
+        }, {
+            walkMode: WalkMode.visitAllRecursive,
+            cancel: handle.token
+        });
+        return containingNode;
     }
 
     public get parser() {
@@ -1430,7 +1456,7 @@ export class BrsFile {
      * Given a position in a file, if the position is sitting on some type of identifier,
      * go to the definition of that identifier (where this thing was first defined)
      */
-    public getDefinition(position: Position) {
+    public getDefinition(position: Position): Location[] {
         let results: Location[] = [];
 
         //get the token at the position
@@ -1447,12 +1473,34 @@ export class BrsFile {
             return results;
         }
 
+        const scopesForFile = this.program.getScopesForFile(this);
+        const [scope] = scopesForFile;
+        scope.linkSymbolTable();
+
+        const expression = this.getClosestExpression(position);
+        if (expression) {
+            let containingNamespace = this.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
+            const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
+
+            //find a constant with this name
+            const constant = scope.getConstFileLink(fullName, containingNamespace);
+            if (constant) {
+                results.push(
+                    util.createLocation(
+                        URI.file(constant.file.srcPath).toString(),
+                        constant.item.tokens.name.range
+                    )
+                );
+                return results;
+            }
+        }
+
         let textToSearchFor = token.text.toLowerCase();
 
         const previousToken = this.getTokenAt({ line: token.range.start.line, character: token.range.start.character });
 
         if (previousToken?.kind === TokenKind.Callfunc) {
-            for (const scope of this.program.getScopes()) {
+            for (const scope of scopesForFile) {
                 //to only get functions defined in interface methods
                 const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                 if (callable) {
@@ -1509,7 +1557,7 @@ export class BrsFile {
 
         const filesSearched = new Set<BrsFile>();
         //look through all files in scope for matches
-        for (const scope of this.program.getScopesForFile(this)) {
+        for (const scope of scopesForFile) {
             for (const file of scope.getAllFiles()) {
                 if (isXmlFile(file) || filesSearched.has(file)) {
                     continue;
