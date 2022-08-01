@@ -1276,7 +1276,7 @@ export class Util {
     /**
      * Sort an array of objects that have a Range
      */
-    public sortByRange(locatables: Locatable[]) {
+    public sortByRange<T extends Locatable>(locatables: T[]) {
         //sort the tokens by range
         return locatables.sort((a, b) => {
             //start line

@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
+import { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver-protocol';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, SemanticToken } from '../../interfaces';
 import { Program } from '../../Program';
@@ -25,6 +25,15 @@ describe('BrsFileSemanticTokensProcessor', () => {
         const result = util.sortByRange(
             program.getSemanticTokens(file.srcPath)
         );
+
+        //sort modifiers
+        for (const collection of [result, tokens]) {
+            for (const token of collection) {
+                token.tokenModifiers ??= [];
+                token.tokenModifiers.sort();
+            }
+        }
+
         expect(
             result
         ).to.eql(
@@ -276,6 +285,31 @@ describe('BrsFileSemanticTokensProcessor', () => {
         }, {
             range: util.createRange(2, 47, 2, 52),
             tokenType: SemanticTokenTypes.class
+        }]);
+    });
+
+    it('matches consts', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub init()
+                print API_URL
+                print info.FIRST_NAME
+            end sub
+            const API_URL = "some_url"
+            namespace info
+                const FIRST_NAME = "bob"
+            end namespace
+        `);
+        expectSemanticTokens(file, [{
+            range: util.createRange(2, 22, 2, 29),
+            tokenType: SemanticTokenTypes.variable,
+            tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
+        }, {
+            range: util.createRange(3, 22, 3, 26),
+            tokenType: SemanticTokenTypes.namespace
+        }, {
+            range: util.createRange(3, 27, 3, 37),
+            tokenType: SemanticTokenTypes.variable,
+            tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
         }]);
     });
 });
