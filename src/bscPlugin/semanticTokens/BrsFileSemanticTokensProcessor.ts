@@ -1,4 +1,5 @@
 import type { Range } from 'vscode-languageserver-protocol';
+import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
 import { isCallExpression, isCustomType, isNewExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
@@ -16,7 +17,14 @@ export class BrsFileSemanticTokensProcessor {
 
     public process() {
         this.handleClasses();
+        this.handleConstDeclarations();
         this.iterateExpressions();
+    }
+
+    private handleConstDeclarations() {
+        for (const stmt of this.event.file.parser.references.constStatements) {
+            this.addToken(stmt.tokens.name, SemanticTokenTypes.variable, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]);
+        }
     }
 
     private handleClasses() {
@@ -66,10 +74,11 @@ export class BrsFileSemanticTokensProcessor {
         }
     }
 
-    private addToken(locatable: Locatable, type: SemanticTokenTypes) {
+    private addToken(locatable: Locatable, type: SemanticTokenTypes, modifiers: SemanticTokenModifiers[] = []) {
         this.event.semanticTokens.push({
             range: locatable.range,
-            tokenType: type
+            tokenType: type,
+            tokenModifiers: modifiers
         });
     }
 
@@ -99,6 +108,8 @@ export class BrsFileSemanticTokensProcessor {
                     this.addToken(token, SemanticTokenTypes.function);
                 } else if (scope.namespaceLookup.has(entityName)) {
                     this.addToken(token, SemanticTokenTypes.namespace);
+                } else if (scope.getConstFileLink(entityName)) {
+                    this.addToken(token, SemanticTokenTypes.variable, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]);
                 }
             }
         }
