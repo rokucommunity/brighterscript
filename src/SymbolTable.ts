@@ -109,6 +109,22 @@ export class SymbolTable {
             }
         }
     }
+
+    /**
+     * Serialize this SymbolTable to JSON (useful for debugging reasons)
+     */
+    private toJSON() {
+        return {
+            parent: this.parent?.toJSON(),
+            symbols: [
+                ...new Set(
+                    [...this.symbolMap.entries()].map(([key, symbols]) => {
+                        return symbols.map(x => x.name);
+                    }).flat().sort()
+                )
+            ]
+        };
+    }
 }
 
 export interface BscSymbol {
