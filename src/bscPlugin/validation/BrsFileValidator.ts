@@ -1,10 +1,11 @@
 import { isClassStatement, isCommentStatement, isConstStatement, isEnumStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement } from '../../astUtils/reflection';
+import { WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BsDiagnostic, OnFileValidateEvent } from '../../interfaces';
+import type { OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { LiteralExpression } from '../../parser/Expression';
-import type { EnumMemberStatement } from '../../parser/Statement';
+import type { EnumMemberStatement, EnumStatement } from '../../parser/Statement';
 
 export class BrsFileValidator {
     constructor(
@@ -13,43 +14,66 @@ export class BrsFileValidator {
     }
 
     public process() {
-        this.validateEnumDeclarations();
+        this.walk();
         this.flagTopLevelStatements();
     }
 
-    private validateEnumDeclarations() {
-        const diagnostics = [] as BsDiagnostic[];
-        for (const stmt of this.event.file.parser.references.enumStatements) {
-            const members = stmt.getMembers();
-            //the enum data type is based on the first member value
-            const enumValueKind = (members.find(x => x.value)?.value as LiteralExpression)?.token?.kind ?? TokenKind.IntegerLiteral;
-            const memberNames = new Set<string>();
-            for (const member of members) {
-                const memberNameLower = member.name?.toLowerCase();
+    /**
+     * Walk the full AST
+     */
+    private walk() {
+        this.event.file.ast.walk((node, parent) => {
+            // link every child with its parent
+            node.parent = parent;
 
-                /**
-                 * flag duplicate member names
-                 */
-                if (memberNames.has(memberNameLower)) {
-                    diagnostics.push({
-                        ...DiagnosticMessages.duplicateIdentifier(member.name),
-                        file: this.event.file,
-                        range: member.range
-                    });
-                } else {
-                    memberNames.add(memberNameLower);
+            //do some file-based validations
+            if (isEnumStatement(node)) {
+                this.validateEnumDeclaration(node);
+            } else if (isNamespaceStatement(node)) {
+                //namespace names shouldn't be walked, but it needs its parent assigned
+                node.nameExpression.parent = parent;
+            } else if (isClassStatement(node)) {
+                //class extends names don't get walked, but it needs its parent
+                if (node.parentClassName) {
+                    node.parentClassName.parent = parent;
                 }
-
-                //Enforce all member values are the same type
-                this.validateEnumValueTypes(diagnostics, member, enumValueKind);
-
+            } else if (isInterfaceStatement(node)) {
+                //class extends names don't get walked, but it needs its parent
+                if (node.parentInterfaceName) {
+                    node.parentInterfaceName.parent = parent;
+                }
             }
-
-        }
-        this.event.file.addDiagnostics(diagnostics);
+        }, {
+            walkMode: WalkMode.visitAllRecursive
+        });
     }
 
-    private validateEnumValueTypes(diagnostics: BsDiagnostic[], member: EnumMemberStatement, enumValueKind: TokenKind) {
+    private validateEnumDeclaration(stmt: EnumStatement) {
+        const members = stmt.getMembers();
+        //the enum data type is based on the first member value
+        const enumValueKind = (members.find(x => x.value)?.value as LiteralExpression)?.token?.kind ?? TokenKind.IntegerLiteral;
+        const memberNames = new Set<string>();
+        for (const member of members) {
+            const memberNameLower = member.name?.toLowerCase();
+
+            /**
+             * flag duplicate member names
+             */
+            if (memberNames.has(memberNameLower)) {
+                this.event.file.addDiagnostic({
+                    ...DiagnosticMessages.duplicateIdentifier(member.name),
+                    range: member.range
+                });
+            } else {
+                memberNames.add(memberNameLower);
+            }
+
+            //Enforce all member values are the same type
+            this.validateEnumValueTypes(member, enumValueKind);
+        }
+    }
+
+    private validateEnumValueTypes(member: EnumMemberStatement, enumValueKind: TokenKind) {
         const memberValueKind = (member.value as LiteralExpression)?.token?.kind;
 
         if (
@@ -58,8 +82,7 @@ export class BrsFileValidator {
             //has value, that value is not a literal
             (member.value && !isLiteralExpression(member.value))
         ) {
-            diagnostics.push({
-                file: this.event.file,
+            this.event.file.addDiagnostic({
                 ...DiagnosticMessages.enumValueMustBeType(
                     enumValueKind.replace(/literal$/i, '').toLowerCase()
                 ),
@@ -73,8 +96,7 @@ export class BrsFileValidator {
             if (memberValueKind) {
                 //member value is same as enum
                 if (memberValueKind !== enumValueKind) {
-                    diagnostics.push({
-                        file: this.event.file,
+                    this.event.file.addDiagnostic({
                         ...DiagnosticMessages.enumValueMustBeType(
                             enumValueKind.replace(/literal$/i, '').toLowerCase()
                         ),
@@ -84,7 +106,7 @@ export class BrsFileValidator {
 
                 //default value missing
             } else {
-                diagnostics.push({
+                this.event.file.addDiagnostic({
                     file: this.event.file,
                     ...DiagnosticMessages.enumValueIsRequired(
                         enumValueKind.replace(/literal$/i, '').toLowerCase()
