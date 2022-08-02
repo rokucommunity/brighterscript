@@ -612,13 +612,25 @@ export class Scope {
             let callables = this.getAllCallables();
 
             //sort the callables by filepath and then method name, so the errors will be consistent
+            // eslint-disable-next-line prefer-arrow-callback
             callables = callables.sort((a, b) => {
-                return (
-                    //sort by path
-                    a.callable.file.srcPath.localeCompare(b.callable.file.srcPath) ||
-                    //then sort by method name
-                    a.callable.name.localeCompare(b.callable.name)
-                );
+                const pathA = a.callable.file.srcPath;
+                const pathB = b.callable.file.srcPath;
+                //sort by path
+                if (pathA < pathB) {
+                    return -1;
+                } else if (pathA > pathB) {
+                    return 1;
+                }
+                //sort by function name
+                const funcA = b.callable.name;
+                const funcB = b.callable.name;
+                if (funcA < funcB) {
+                    return -1;
+                } else if (funcA > funcB) {
+                    return 1;
+                }
+                return 0;
             });
 
             //get a list of all callables, indexed by their lower case names
