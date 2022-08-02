@@ -31,6 +31,7 @@ import { WalkMode } from './astUtils/visitors';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
+import * as requireRelative from 'require-relative';
 
 export class Util {
     public clearConsole() {
@@ -1096,7 +1097,7 @@ export class Util {
         return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
             if (typeof pathOrModule === 'string') {
                 try {
-                    const loaded = this.resolveRequire(cwd, pathOrModule);
+                    const loaded = requireRelative(pathOrModule, cwd);
                     const theExport: CompilerPlugin | CompilerPluginFactory = loaded.default ? loaded.default : loaded;
 
                     let plugin: CompilerPlugin;
@@ -1125,23 +1126,6 @@ export class Util {
             }
             return acc;
         }, []);
-    }
-
-    public resolveRequire(cwd: string, pathOrModule: string) {
-        let target = pathOrModule;
-        if (!path.isAbsolute(pathOrModule)) {
-            const localPath = path.resolve(cwd, pathOrModule);
-            if (fs.existsSync(localPath)) {
-                target = localPath;
-            } else {
-                const modulePath = path.resolve(cwd, 'node_modules', pathOrModule);
-                if (fs.existsSync(modulePath)) {
-                    target = modulePath;
-                }
-            }
-        }
-        // eslint-disable-next-line
-        return require(target);
     }
 
     /**
@@ -1292,7 +1276,7 @@ export class Util {
     /**
      * Sort an array of objects that have a Range
      */
-    public sortByRange(locatables: Locatable[]) {
+    public sortByRange<T extends Locatable>(locatables: T[]) {
         //sort the tokens by range
         return locatables.sort((a, b) => {
             //start line

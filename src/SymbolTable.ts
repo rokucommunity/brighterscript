@@ -1,7 +1,6 @@
 import type { Range } from 'vscode-languageserver';
 import type { BscType } from './types/BscType';
 
-
 /**
  * Stores the types associated with variables and functions in the Brighterscript code
  * Can be part of a hierarchy, so lookups can reference parent scopes
@@ -109,6 +108,22 @@ export class SymbolTable {
                 );
             }
         }
+    }
+
+    /**
+     * Serialize this SymbolTable to JSON (useful for debugging reasons)
+     */
+    private toJSON() {
+        return {
+            parent: this.parent?.toJSON(),
+            symbols: [
+                ...new Set(
+                    [...this.symbolMap.entries()].map(([key, symbols]) => {
+                        return symbols.map(x => x.name);
+                    }).flat().sort()
+                )
+            ]
+        };
     }
 }
 

@@ -198,9 +198,16 @@ export class Program {
             file: xmlFile,
             scope: scope
         });
-        this.components[key].sort(
-            (x, y) => x.file.pkgPath.toLowerCase().localeCompare(y.file.pkgPath.toLowerCase())
-        );
+        this.components[key].sort((a, b) => {
+            const pathA = a.file.pkgPath.toLowerCase();
+            const pathB = b.file.pkgPath.toLowerCase();
+            if (pathA < pathB) {
+                return -1;
+            } else if (pathA > pathB) {
+                return 1;
+            }
+            return 0;
+        });
         this.syncComponentDependencyGraph(this.components[key]);
     }
 
@@ -638,7 +645,9 @@ export class Program {
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
                 for (let scopeName in this.scopes) {
                     let scope = this.scopes[scopeName];
+                    scope.linkSymbolTable();
                     scope.validate();
+                    scope.unlinkSymbolTable();
                 }
             });
 

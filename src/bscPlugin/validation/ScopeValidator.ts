@@ -243,7 +243,16 @@ export class ScopeValidator {
         //now that we've collected all enum declarations, flag duplicates
         for (const enumLocations of enumLocationsByName.values()) {
             //sort by srcPath to keep the primary enum location consistent
-            enumLocations.sort((a, b) => a.file?.srcPath?.localeCompare(b.file?.srcPath));
+            enumLocations.sort((a, b) => {
+                const pathA = a.file?.srcPath;
+                const pathB = b.file?.srcPath;
+                if (pathA < pathB) {
+                    return -1;
+                } else if (pathA > pathB) {
+                    return 1;
+                }
+                return 0;
+            });
             const primaryEnum = enumLocations.shift();
             const fullName = primaryEnum.statement.fullName;
             for (const duplicateEnumInfo of enumLocations) {
