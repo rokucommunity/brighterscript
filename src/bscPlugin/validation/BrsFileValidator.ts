@@ -25,6 +25,8 @@ export class BrsFileValidator {
         this.event.file.ast.walk((node, parent) => {
             // link every child with its parent
             node.parent = parent;
+
+            //do some file-based validations
             if (isEnumStatement(node)) {
                 this.validateEnumDeclaration(node);
             } else if (isNamespaceStatement(node)) {

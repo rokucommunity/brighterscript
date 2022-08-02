@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.54.1](https://github.com/rokucommunity/brighterscript/compare/v0.54.0...0.54.1) - 2022-07-22
+### Changed
+ - Fix bug in languageserver hover provider ([#649](https://github.com/rokucommunity/brighterscript/pull/649))
+
+
+
 ## [0.54.0](https://github.com/rokucommunity/brighterscript/compare/v0.53.1...0.54.0) - 2022-07-22
 ### Added
  - hover for CONST references. ([#648](https://github.com/rokucommunity/brighterscript/pull/648))
