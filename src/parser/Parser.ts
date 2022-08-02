@@ -261,7 +261,7 @@ export class Parser {
     private body() {
         const parentAnnotations = this.enterAnnotationBlock();
 
-        let body = new Body([]);
+        let body = new Body([], this.symbolTable);
         if (this.tokens.length > 0) {
             this.consumeStatementSeparators(true);
 
