@@ -264,6 +264,21 @@ describe('Scope', () => {
             ]);
         });
 
+        it('detects unknown const in assignment operator', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    value = ""
+                    value += constants.API_KEY
+                    value += API_URL
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('constants'),
+                DiagnosticMessages.cannotFindName('API_URL')
+            ]);
+        });
+
         it('detects unknown local var names', () => {
             program.setFile('source/lib.bs', `
                 sub libFunc(param1)
