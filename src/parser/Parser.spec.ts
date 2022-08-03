@@ -57,6 +57,7 @@ describe('parser', () => {
 
         it('works for references.expressions', () => {
             const parser = Parser.parse(`
+                b += "plus-equal"
                 a += 1 + 2
                 b += getValue1() + getValue2()
                 increment++
@@ -81,6 +82,9 @@ describe('parser', () => {
                 end function
             `);
             const expected = [
+                '"plus-equal"',
+                'b',
+                'b += "plus-equal"',
                 '1',
                 '2',
                 'a',

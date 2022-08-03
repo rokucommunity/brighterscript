@@ -320,4 +320,49 @@ describe('BrsFileSemanticTokensProcessor', () => {
             tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
         }]);
     });
+
+    it('matches consts in assignment expressions', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub main()
+                value = ""
+                value += constants.API_KEY
+                value += API_URL
+            end sub
+            namespace constants
+                const API_KEY = "test"
+            end namespace
+            const API_URL = "url"
+        `);
+        expectSemanticTokens(file, [
+            // value += |constants|.API_KEY
+            {
+                range: util.createRange(3, 25, 3, 34),
+                tokenType: SemanticTokenTypes.namespace
+            },
+            // value += constants.|API_KEY|
+            {
+                range: util.createRange(3, 35, 3, 42),
+                tokenType: SemanticTokenTypes.variable,
+                tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
+            },
+            // value += |API_URL|
+            {
+                range: util.createRange(4, 25, 4, 32),
+                tokenType: SemanticTokenTypes.variable,
+                tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
+            },
+            // const |API_KEY| = "test"
+            {
+                range: util.createRange(7, 22, 7, 29),
+                tokenType: SemanticTokenTypes.variable,
+                tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
+            },
+            //const |API_URL| = "url"
+            {
+                range: util.createRange(9, 18, 9, 25),
+                tokenType: SemanticTokenTypes.variable,
+                tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
+            }
+        ]);
+    });
 });

@@ -155,6 +155,26 @@ describe('ConstStatement', () => {
                 end sub
             `);
         });
+
+        it('transpiles within += operator', () => {
+            testTranspile(`
+                namespace constants
+                    const API_KEY = "test"
+                end namespace
+                const API_URL = "url"
+                sub main()
+                    value = ""
+                    value += constants.API_KEY
+                    value += API_URL
+                end sub
+            `, `
+                sub main()
+                    value = ""
+                    value += "test"
+                    value += "url"
+                end sub
+            `);
+        });
     });
 
     describe('completions', () => {
