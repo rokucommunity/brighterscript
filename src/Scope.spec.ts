@@ -198,6 +198,54 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
+        it('diagnostics are assigned to correct child scope', () => {
+            program.options.autoImportComponentScript = true;
+            program.setFile('components/constants.bs', `
+                namespace constants.alpha.beta
+                    const charlie = "charlie"
+                end namespace
+            `);
+
+            program.setFile('components/ButtonBase.xml', `<component name="ButtonBase" extends="Scene" />`);
+
+            const buttonPrimary = program.setFile('components/ButtonPrimary.bs', `
+                import "constants.bs"
+                sub init()
+                    print constants.alpha.delta.charlie
+                end sub
+            `);
+            program.setFile('components/ButtonPrimary.xml', `<component name="ButtonPrimary" extends="ButtonBase" />`);
+
+            const buttonSecondary = program.setFile('components/ButtonSecondary.bs', `
+                import "constants.bs"
+                sub init()
+                    print constants.alpha.delta.charlie
+                end sub
+            `);
+            program.setFile('components/ButtonSecondary.xml', `<component name="ButtonSecondary" extends="ButtonBase" />`);
+
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    message: DiagnosticMessages.cannotFindName('delta').message,
+                    file: {
+                        srcPath: buttonPrimary.srcPath
+                    },
+                    relatedInformation: [{
+                        message: `Not defined in scope '${s('components/ButtonPrimary.xml')}'`
+                    }]
+                }, {
+                    message: DiagnosticMessages.cannotFindName('delta').message,
+                    file: {
+                        srcPath: buttonSecondary.srcPath
+                    },
+                    relatedInformation: [{
+                        message: `Not defined in scope '${s('components/ButtonSecondary.xml')}'`
+                    }]
+                }
+            ]);
+        });
+
         it('detects unknown namespace names', () => {
             program.setFile('source/main.bs', `
                 sub main()
