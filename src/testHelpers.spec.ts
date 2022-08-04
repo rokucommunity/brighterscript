@@ -64,6 +64,7 @@ interface PartialDiagnostic {
     tags?: Partial<DiagnosticTag>[];
     relatedInformation?: Partial<DiagnosticRelatedInformation>[];
     data?: unknown;
+    file?: Partial<BscFile>;
 }
 
 /**
@@ -72,7 +73,7 @@ interface PartialDiagnostic {
  * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
 export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<PartialDiagnostic | string | number>) {
-    const diagnostics = sortDiagnostics(
+    const actualDiagnostics = sortDiagnostics(
         getDiagnostics(arg)
     );
     const expectedDiagnostics = sortDiagnostics(
@@ -88,24 +89,32 @@ export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Par
     );
 
     const actual = [] as BsDiagnostic[];
-    for (let i = 0; i < diagnostics.length; i++) {
+    for (let i = 0; i < actualDiagnostics.length; i++) {
         const expectedDiagnostic = expectedDiagnostics[i];
-        const clone = cloneObject(
-            diagnostics[i],
+        const actualDiagnostic = cloneObject(
+            actualDiagnostics[i],
             expectedDiagnostic,
             ['message', 'code', 'range', 'severity', 'relatedInformation']
         );
         //deep clone relatedInformation if available
-        if (clone.relatedInformation) {
-            for (let j = 0; j < clone.relatedInformation.length; j++) {
-                clone.relatedInformation[j] = cloneObject(
-                    clone.relatedInformation[j],
-                    expectedDiagnostic.relatedInformation[j],
+        if (actualDiagnostic.relatedInformation) {
+            for (let j = 0; j < actualDiagnostic.relatedInformation.length; j++) {
+                actualDiagnostic.relatedInformation[j] = cloneObject(
+                    actualDiagnostic.relatedInformation[j],
+                    expectedDiagnostic?.relatedInformation[j],
                     ['location', 'message']
                 ) as any;
             }
         }
-        actual.push(clone as any);
+        //deep clone file info if available
+        if (actualDiagnostic.file) {
+            actualDiagnostic.file = cloneObject(
+                actualDiagnostic.file,
+                expectedDiagnostic?.file,
+                ['srcPath', 'pkgPath']
+            ) as any;
+        }
+        actual.push(actualDiagnostic as any);
     }
 
     expect(actual).to.eql(expectedDiagnostics);
