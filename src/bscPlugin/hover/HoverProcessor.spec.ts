@@ -154,6 +154,36 @@ describe('HoverProcessor', () => {
             expect(hover?.contents).to.eql(fence('const SOME_VALUE = true'));
         });
 
+        it('finds top-level constant in assignment expression', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    value = ""
+                    value += SOME_VALUE
+                end sub
+                const SOME_VALUE = "value"
+            `);
+            // value += SOME|_VALUE
+            let hover = program.getHover('source/main.bs', util.createPosition(3, 33))[0];
+            expect(hover?.range).to.eql(util.createRange(3, 29, 3, 39));
+            expect(hover?.contents).to.eql(fence('const SOME_VALUE = "value"'));
+        });
+
+        it('finds namespaced constant in assignment expression', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    value = ""
+                    value += someNamespace.SOME_VALUE
+                end sub
+                namespace someNamespace
+                    const SOME_VALUE = "value"
+                end namespace
+            `);
+            // value += SOME|_VALUE
+            let hover = program.getHover('source/main.bs', util.createPosition(3, 47))[0];
+            expect(hover?.range).to.eql(util.createRange(3, 43, 3, 53));
+            expect(hover?.contents).to.eql(fence('const someNamespace.SOME_VALUE = "value"'));
+        });
+
         it('finds namespaced constant value', () => {
             program.setFile('source/main.bs', `
                 sub main()

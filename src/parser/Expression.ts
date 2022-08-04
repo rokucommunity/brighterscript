@@ -348,18 +348,6 @@ export class NamespacedVariableNameExpression extends Expression {
     }
     range: Range;
 
-    // @ts-expect-error override the property
-    public get parent() {
-        return this._parent;
-    }
-    public set parent(value) {
-        if (this.expression) {
-            this.expression.parent = value;
-        }
-        this._parent = value;
-    }
-    private _parent: Expression | Statement;
-
     transpile(state: BrsTranspileState) {
         return [
             state.sourceNode(this, this.getName(ParseMode.BrightScript))
@@ -412,18 +400,6 @@ export class DottedGetExpression extends Expression {
     }
 
     public readonly range: Range;
-
-    // @ts-expect-error override the property
-    public get parent() {
-        return this._parent;
-    }
-    public set parent(value) {
-        if (this.obj) {
-            this.obj.parent = value;
-        }
-        this._parent = value;
-    }
-    private _parent: Expression | Statement;
 
     transpile(state: BrsTranspileState) {
         //if the callee starts with a namespace name, transpile the name

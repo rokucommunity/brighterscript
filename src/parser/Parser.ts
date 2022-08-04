@@ -1053,8 +1053,10 @@ export class Parser {
                 this.currentFunctionExpression
             );
             this.addExpressionsToReferences(nameExpression);
-            //remove the right-hand-side expression from this assignment operator, and replace with the full assignment expression
-            this._references.expressions.delete(value);
+            if (isBinaryExpression(value)) {
+                //remove the right-hand-side expression from this assignment operator, and replace with the full assignment expression
+                this._references.expressions.delete(value);
+            }
             this._references.expressions.add(result);
         }
 

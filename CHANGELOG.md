@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.55.0](https://github.com/rokucommunity/brighterscript/compare/v0.54.1...0.55.0) - 2022-08-03
+### Added
+ - a `toJSON` function to SymbolTable ([#655](https://github.com/rokucommunity/brighterscript/pull/655))
+ - link all brs AST nodes to parent onFileValidate ([#650](https://github.com/rokucommunity/brighterscript/pull/650))
+ - semantic token color for consts ([#654](https://github.com/rokucommunity/brighterscript/pull/654))
+ - go-to-definition support for const statements ([#653](https://github.com/rokucommunity/brighterscript/pull/653))
+### Changed
+### Fixed
+ - bug that wasn't transpiling const expressions when used inside assignment expressions ([#658](https://github.com/rokucommunity/brighterscript/pull/658))
+ - Performance boost: better function sorting during validation ([#651](https://github.com/rokucommunity/brighterscript/pull/651))
+ - broken plugin imports with custom cwd ([#652](https://github.com/rokucommunity/brighterscript/pull/652))
+
+
+
 ## [0.54.1](https://github.com/rokucommunity/brighterscript/compare/v0.54.0...0.54.1) - 2022-07-22
 ### Changed
  - Fix bug in languageserver hover provider ([#649](https://github.com/rokucommunity/brighterscript/pull/649))
