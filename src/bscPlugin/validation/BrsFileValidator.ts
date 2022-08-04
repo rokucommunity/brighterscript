@@ -1,8 +1,8 @@
-import { isClassStatement, isCommentStatement, isConstStatement, isEnumStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement } from '../../astUtils/reflection';
+import { isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isEnumStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespacedVariableNameExpression, isNamespaceStatement } from '../../astUtils/reflection';
 import { WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { OnFileValidateEvent } from '../../interfaces';
+import type { AstNode, OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { LiteralExpression } from '../../parser/Expression';
 import type { EnumMemberStatement, EnumStatement } from '../../parser/Statement';
@@ -19,29 +19,52 @@ export class BrsFileValidator {
     }
 
     /**
+     * Set the parent node on a given AstNode. This handles some edge cases where not every expression is iterated normally,
+     * so it will also reach into nested objects to set their parent values as well
+     */
+    private setParent(node1: AstNode, parent: AstNode) {
+        const pairs = [[node1, parent]];
+        while (pairs.length > 0) {
+            const [childNode, parentNode] = pairs.pop();
+            //skip this entry if there's already a parent
+            if (childNode?.parent) {
+                continue;
+            }
+            if (isDottedGetExpression(childNode)) {
+                if (!childNode.obj.parent) {
+                    pairs.push([childNode.obj, childNode]);
+                }
+            } else if (isNamespaceStatement(childNode)) {
+                //namespace names shouldn't be walked, but it needs its parent assigned
+                pairs.push([childNode.nameExpression, childNode]);
+            } else if (isClassStatement(childNode)) {
+                //class extends names don't get walked, but it needs its parent
+                if (childNode.parentClassName) {
+                    pairs.push([childNode.parentClassName, childNode]);
+                }
+            } else if (isInterfaceStatement(childNode)) {
+                //class extends names don't get walked, but it needs its parent
+                if (childNode.parentInterfaceName) {
+                    pairs.push([childNode.parentInterfaceName, childNode]);
+                }
+            } else if (isNamespacedVariableNameExpression(childNode)) {
+                pairs.push([childNode.expression, childNode]);
+            }
+            childNode.parent = parentNode;
+        }
+    }
+
+    /**
      * Walk the full AST
      */
     private walk() {
         this.event.file.ast.walk((node, parent) => {
             // link every child with its parent
-            node.parent = parent;
+            this.setParent(node, parent);
 
             //do some file-based validations
             if (isEnumStatement(node)) {
                 this.validateEnumDeclaration(node);
-            } else if (isNamespaceStatement(node)) {
-                //namespace names shouldn't be walked, but it needs its parent assigned
-                node.nameExpression.parent = parent;
-            } else if (isClassStatement(node)) {
-                //class extends names don't get walked, but it needs its parent
-                if (node.parentClassName) {
-                    node.parentClassName.parent = parent;
-                }
-            } else if (isInterfaceStatement(node)) {
-                //class extends names don't get walked, but it needs its parent
-                if (node.parentInterfaceName) {
-                    node.parentInterfaceName.parent = parent;
-                }
             }
         }, {
             walkMode: WalkMode.visitAllRecursive
