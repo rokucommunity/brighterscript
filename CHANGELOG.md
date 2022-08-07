@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.55.1](https://github.com/rokucommunity/brighterscript/compare/v0.55.0...0.55.1) - 2022-08-07
+### Fixed
+ - scope-specific diagnostic grouping issue ([#660](https://github.com/rokucommunity/brighterscript/pull/660))
+ - typescript error for ast parent setting ([#659](https://github.com/rokucommunity/brighterscript/pull/659))
+
+
+
 ## [0.55.0](https://github.com/rokucommunity/brighterscript/compare/v0.54.1...0.55.0) - 2022-08-03
 ### Added
  - a `toJSON` function to SymbolTable ([#655](https://github.com/rokucommunity/brighterscript/pull/655))
