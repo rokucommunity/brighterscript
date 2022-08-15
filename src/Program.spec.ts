@@ -1276,6 +1276,40 @@ describe('Program', () => {
         ).to.eql(['sayHello', 'sayHello2', 'sayHello3', 'sayHello4']);
     });
 
+    it('gets completions for callfunc invocation with multiple nodes and validates single code completion results', () => {
+        program.setFile('source/main.bs', `
+            function main()
+                ParentNode@.sayHello(arg1)
+            end function
+        `);
+        program.setFile('components/ParentNode.bs', `
+            function sayHello(text, text2)
+            end function
+        `);
+        program.setFile<XmlFile>('components/ParentNode.xml',
+            trim`<?xml version="1.0" encoding="utf-8" ?>
+            <component name="ParentNode" extends="Scene">
+                <script type="text/brightscript" uri="pkg:/components/ParentNode.bs" />
+                <interface>
+                    <function name="sayHello"/>
+                </interface>
+            </component>`);
+        program.setFile('components/ChildNode.bs', `
+            function sayHello(text, text2)
+            end function
+        `);
+        program.setFile<XmlFile>('components/ChildNode.xml',
+            trim`<?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildNode" extends="ParentNode">
+                <script type="text/brightscript" uri="pkg:/components/ChildNode.bs" />
+            </component>`);
+        program.validate();
+
+        expect(
+            (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
+        ).to.eql(['sayHello']);
+    });
+
     it('gets completions for extended nodes with callfunc invocation - ensure overridden methods included', () => {
         program.setFile('source/main.bs', `
             function main()
@@ -1318,7 +1352,7 @@ describe('Program', () => {
 
         expect(
             (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
-        ).to.eql(['sayHello', 'sayHello2', 'sayHello2', 'sayHello3', 'sayHello4']);
+        ).to.eql(['sayHello', 'sayHello2', 'sayHello3', 'sayHello4']);
     });
 
     describe('xml inheritance', () => {
