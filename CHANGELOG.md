@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.55.2](https://github.com/rokucommunity/brighterscript/compare/v0.55.1...0.55.2) - 2022-08-15
+### Fixed
+ - Dedupe code completions in components ([#664](https://github.com/rokucommunity/brighterscript/pull/664))
+
+
+
 ## [0.55.1](https://github.com/rokucommunity/brighterscript/compare/v0.55.0...0.55.1) - 2022-08-07
 ### Fixed
  - scope-specific diagnostic grouping issue ([#660](https://github.com/rokucommunity/brighterscript/pull/660))
