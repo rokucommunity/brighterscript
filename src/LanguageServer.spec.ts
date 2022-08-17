@@ -1003,6 +1003,23 @@ describe('LanguageServer', () => {
         });
     });
 
+    describe('getWorkspaceExcludeGlobs', () => {
+        it('honors the hasConfigurationCapability setting', async () => {
+            server.run();
+            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(
+                Promise.reject(
+                    new Error('Client does not support "workspace/configuration"')
+                )
+            );
+            server['hasConfigurationCapability'] = false;
+            expect(
+                await server['getWorkspaceExcludeGlobs'](workspaceFolders[0])
+            ).to.eql([
+                '**/node_modules/**/*'
+            ]);
+        });
+    });
+
     describe('CustomCommands', () => {
         describe('TranspileFile', () => {
             it('returns pathAbsolute to support backwards compatibility', async () => {
