@@ -158,4 +158,10 @@ export interface BsConfig {
      * @default false
      */
     allowBrighterScriptInBrightScript?: boolean;
+
+    /**
+     * Start a standalone LSP server
+     * @default false
+     */
+    lsp?: boolean;
 }

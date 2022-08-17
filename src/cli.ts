@@ -31,6 +31,7 @@ let options = yargs
     .option('source-root', { type: 'string', description: 'Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files.' })
     .option('watch', { type: 'boolean', defaultDescription: 'false', description: 'Watch input files.' })
     .option('require', { type: 'array', description: 'A list of modules to require() on startup. Useful for doing things like ts-node registration.' })
+    .option('lsp', { type: 'boolean', defaultDescription: 'false', description: 'Start a brightscript language server' })
     .check(argv => {
         const diagnosticLevel = argv.diagnosticLevel as string;
         //if we have the diagnostic level and it's not a known value, then fail
@@ -43,6 +44,13 @@ let options = yargs
         //cli-provided require paths should be relative to cwd
         util.resolvePathsRelativeTo(argv, 'require', cwd);
         return true;
+    })
+    .middleware(argv => {
+        // as lsp relies on stdio to communicate, logs may interfere
+        if (argv.lsp) {
+            argv.logLevel = 'off';
+            argv.diagnosticLevel = 'off';
+        }
     })
     .argv;
 
