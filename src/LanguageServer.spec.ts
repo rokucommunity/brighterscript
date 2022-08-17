@@ -95,6 +95,7 @@ describe('LanguageServer', () => {
         (server as any).createConnection = () => {
             return connection;
         };
+        server['hasConfigurationCapability'] = true;
     });
     afterEach(async () => {
         fsExtra.emptyDirSync(tempDir);
@@ -388,29 +389,6 @@ describe('LanguageServer', () => {
             fsExtra.outputJsonSync(s`${workspacePath}/vendor/someProject/bsconfig.json`, {});
             //it always ignores node_modules
             fsExtra.outputJsonSync(s`${workspacePath}/node_modules/someProject/bsconfig.json`, {});
-
-            await server['syncProjects']();
-
-            //no child bsconfig.json files, use the workspacePath
-            expect(
-                server.projects.map(x => x.projectPath)
-            ).to.eql([
-                workspacePath
-            ]);
-        });
-
-        it('ignores bsconfig.json files from vscode ignored paths', async () => {
-            server.run();
-            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({
-                exclude: {
-                    '**/vendor': true
-                }
-            }) as any);
-
-            fsExtra.outputJsonSync(s`${workspacePath}/vendor/someProject/bsconfig.json`, {});
-            //it always ignores node_modules
-            fsExtra.outputJsonSync(s`${workspacePath}/node_modules/someProject/bsconfig.json`, {});
-
             await server['syncProjects']();
 
             //no child bsconfig.json files, use the workspacePath
