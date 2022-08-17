@@ -1003,6 +1003,24 @@ describe('LanguageServer', () => {
         });
     });
 
+    describe('getConfigFilePath', () => {
+        it('honors the hasConfigurationCapability setting', async () => {
+            server.run();
+            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(
+                Promise.reject(
+                    new Error('Client does not support "workspace/configuration"')
+                )
+            );
+            server['hasConfigurationCapability'] = false;
+            fsExtra.outputFileSync(`${workspacePath}/bsconfig.json`, '{}');
+            expect(
+                await server['getConfigFilePath'](workspacePath)
+            ).to.eql(
+                s`${workspacePath}/bsconfig.json`
+            );
+        });
+    });
+
     describe('getWorkspaceExcludeGlobs', () => {
         it('honors the hasConfigurationCapability setting', async () => {
             server.run();
