@@ -12,7 +12,6 @@ import PluginInterface from './PluginInterface';
 import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
 import * as requireRelative from 'require-relative';
-import { LanguageServer } from './LanguageServer';
 
 /**
  * A runner class that handles
@@ -121,22 +120,17 @@ export class ProgramBuilder {
         }
         this.logger.logLevel = this.options.logLevel as LogLevel;
 
-        if (this.options.lsp) {
-            const server = new LanguageServer();
-            server.run();
+        this.program = this.createProgram();
+
+        //parse every file in the entire project
+        await this.loadAllFilesAST();
+
+        if (this.options.watch) {
+            this.logger.log('Starting compilation in watch mode...');
+            await this.runOnce();
+            this.enableWatchMode();
         } else {
-            this.program = this.createProgram();
-
-            //parse every file in the entire project
-            await this.loadAllFilesAST();
-
-            if (this.options.watch) {
-                this.logger.log('Starting compilation in watch mode...');
-                await this.runOnce();
-                this.enableWatchMode();
-            } else {
-                await this.runOnce();
-            }
+            await this.runOnce();
         }
     }
 

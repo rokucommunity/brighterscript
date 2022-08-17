@@ -4,6 +4,7 @@ import * as path from 'path';
 import { ProgramBuilder } from './ProgramBuilder';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import util from './util';
+import { LanguageServer } from './LanguageServer';
 
 let options = yargs
     .usage('$0', 'BrighterScript, a superset of Roku\'s BrightScript language')
@@ -45,24 +46,21 @@ let options = yargs
         util.resolvePathsRelativeTo(argv, 'require', cwd);
         return true;
     })
-    .middleware(argv => {
-        // as lsp relies on stdio to communicate, logs may interfere
-        if (argv.lsp) {
-            argv.logLevel = 'off';
-            argv.diagnosticLevel = 'off';
-        }
-    })
     .argv;
 
-let builder = new ProgramBuilder();
-builder.run(<any>options).then(() => {
-    //if this is a single run (i.e. not watch mode) and there are error diagnostics, return an error code
-    const hasError = !!builder.getDiagnostics().find(x => x.severity === DiagnosticSeverity.Error);
-    if (builder.options.watch === false && hasError) {
+if (options.lsp) {
+    const server = new LanguageServer();
+    server.run();
+} else {
+    let builder = new ProgramBuilder();
+    builder.run(<any>options).then(() => {
+        //if this is a single run (i.e. not watch mode) and there are error diagnostics, return an error code
+        const hasError = !!builder.getDiagnostics().find(x => x.severity === DiagnosticSeverity.Error);
+        if (builder.options.watch === false && hasError) {
+            process.exit(1);
+        }
+    }).catch((error) => {
+        console.error(error);
         process.exit(1);
-    }
-}).catch((error) => {
-    console.error(error);
-    process.exit(1);
-});
-
+    });
+}
