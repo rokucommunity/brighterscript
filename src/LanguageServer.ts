@@ -230,14 +230,18 @@ export class LanguageServer {
     /**
      * Ask the client for the list of `files.exclude` patterns. Useful when determining if we should process a file
      */
-    private async getWorkspaceExcludeGlobs(workspaceFolder: string) {
-        //get any `files.exclude` globs to use to filter
-        let config = await this.connection.workspace.getConfiguration({
-            scopeUri: workspaceFolder,
-            section: 'files'
-        }) as {
-            exclude: Record<string, boolean>;
+    private async getWorkspaceExcludeGlobs(workspaceFolder: string): Promise<string[]> {
+        let config = {
+            exclude: {} as Record<string, boolean>
         };
+        //if supported, ask vscode for the `files.exclude` configuration
+        if (this.hasConfigurationCapability) {
+            //get any `files.exclude` globs to use to filter
+            config = await this.connection.workspace.getConfiguration({
+                scopeUri: workspaceFolder,
+                section: 'files'
+            });
+        }
         return Object
             .keys(config?.exclude ?? {})
             .filter(x => config?.exclude?.[x])
@@ -444,11 +448,16 @@ export class LanguageServer {
         } else {
             scopeUri = URI.file(workspacePath).toString();
         }
-        //look for config group called "brightscript"
-        let config = await this.connection.workspace.getConfiguration({
-            scopeUri: scopeUri,
-            section: 'brightscript'
-        });
+        let config = {
+            configFile: undefined
+        };
+        //if the client supports configuration, look for config group called "brightscript"
+        if (this.hasConfigurationCapability) {
+            await this.connection.workspace.getConfiguration({
+                scopeUri: scopeUri,
+                section: 'brightscript'
+            });
+        }
         let configFilePath: string;
 
         //if there's a setting, we need to find the file or show error if it can't be found
