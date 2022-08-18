@@ -2,7 +2,7 @@ import { expectCompletionsIncludes, expectZeroDiagnostics, getTestGetTypedef, ge
 import util, { standardizePath as s } from '../../../util';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
-import { Parser } from '../../Parser';
+import { ParseMode, Parser } from '../../Parser';
 import { expect } from 'chai';
 import type { ConstStatement } from '../../Statement';
 import { TokenKind } from '../../../lexer/TokenKind';
@@ -27,8 +27,21 @@ describe('ConstStatement', () => {
         program.dispose();
     });
 
+    it('does not prevent using `const` as a variable name in .brs files', () => {
+        program.setFile('source/main.brs', `
+            sub main()
+                const = {
+                    name: "Bob"
+                }
+                print const.name = {}
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     it('supports basic structure', () => {
-        parser.parse('const API_KEY = "abc"');
+        parser.parse('const API_KEY = "abc"', { mode: ParseMode.BrighterScript });
         expectZeroDiagnostics(parser);
         const statement = parser.ast.statements[0] as ConstStatement;
         expect(statement.tokens.const?.kind).to.eql(TokenKind.Const);
