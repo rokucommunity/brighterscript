@@ -340,7 +340,7 @@ export class Parser {
                 return this.libraryStatement();
             }
 
-            if (this.check(TokenKind.Const)) {
+            if (this.check(TokenKind.Const) && this.checkAnyNext(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
                 return this.constDeclaration();
             }
 
@@ -1471,8 +1471,9 @@ export class Parser {
     }
 
     private constDeclaration(): ConstStatement | undefined {
+        this.warnIfNotBrighterScriptMode('const declaration');
         const constToken = this.advance();
-        const nameToken = this.identifier();
+        const nameToken = this.identifier(...this.allowedLocalIdentifiers);
         const equalToken = this.consumeToken(TokenKind.Equal);
         const expression = this.expression();
         const statement = new ConstStatement({
