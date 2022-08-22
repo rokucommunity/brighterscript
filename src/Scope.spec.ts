@@ -246,7 +246,7 @@ describe('Scope', () => {
             ]);
         });
 
-        it.only('recognizes dimmed vars', () => {
+        it('recognizes dimmed vars', () => {
             program.setFile(`source/file.brs`, `
                 function buildArray(numItems)
                     dim result[3]
