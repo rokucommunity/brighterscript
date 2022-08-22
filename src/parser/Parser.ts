@@ -1761,7 +1761,9 @@ export class Parser {
             });
         }
         let rightSquareBracket = this.tryConsume(DiagnosticMessages.missingRightSquareBracketAfterDimIdentifier(), TokenKind.RightSquareBracket);
-        this.currentSymbolTable.addSymbol(identifier.text, identifier.range, DynamicType.instance);
+        if (identifier) {
+            this.currentSymbolTable.addSymbol(identifier.text, identifier.range, DynamicType.instance);
+        }
         return new DimStatement(dim, identifier, leftSquareBracket, expressions, rightSquareBracket);
     }
 
