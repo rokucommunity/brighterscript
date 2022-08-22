@@ -246,6 +246,20 @@ describe('Scope', () => {
             ]);
         });
 
+        it.only('recognizes dimmed vars', () => {
+            program.setFile(`source/file.brs`, `
+                function buildArray(numItems)
+                    dim result[3]
+                    for i = 0 to numItems
+                        result.push(i)
+                    end for
+                    return result
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('detects unknown namespace names', () => {
             program.setFile('source/main.bs', `
                 sub main()
