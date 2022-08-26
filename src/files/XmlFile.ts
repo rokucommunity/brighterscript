@@ -218,6 +218,7 @@ export class XmlFile {
 
 
     public validate() {
+        util.validateTooDeepFile(this);
         if (this.parser.ast.root) {
             this.validateComponent(this.parser.ast);
         } else {
