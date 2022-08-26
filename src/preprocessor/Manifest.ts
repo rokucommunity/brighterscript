@@ -88,8 +88,8 @@ export function getBsConst(manifest: Manifest): Map<string, boolean> {
             }
             return [keyValuePair.slice(0, equals), keyValuePair.slice(equals + 1)];
         })
-        // remove leading/trailing whitespace from keys and values
-        .map(([key, value]) => [key.trim(), value.trim()])
+        // remove leading/trailing whitespace from keys and values, and force everything to lower case
+        .map(([key, value]) => [key.trim().toLowerCase(), value.trim().toLowerCase()])
         // convert value to boolean or throw
         .map(([key, value]): [string, boolean] => {
             if (value.toLowerCase() === 'true') {

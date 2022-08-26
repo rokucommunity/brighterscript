@@ -23,6 +23,7 @@ import { ImportStatement } from '../parser/Statement';
 import { createToken } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
 import { URI } from 'vscode-uri';
+import undent from 'undent';
 
 let sinon = sinonImport.createSandbox();
 
@@ -661,6 +662,26 @@ describe('BrsFile', () => {
         });
 
         describe('conditional compile', () => {
+            it('supports case-insensitive bs_const variables', () => {
+                fsExtra.outputFileSync(`${rootDir}/manifest`, undent`
+                    bs_const=SomeKey=true
+                `);
+                program.setFile('source/main.brs', `
+                    sub something()
+                        #if somekey
+                            print "lower"
+                        #end if
+                        #if SOMEKEY
+                            print "UPPER"
+                        #end if
+                        #if SomeKey
+                            print "MiXeD"
+                        #end if
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
 
             it('works for upper case keywords', () => {
                 let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
