@@ -32,8 +32,8 @@ import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
 import * as requireRelative from 'require-relative';
-import { BrsFile } from './files/BrsFile';
-import { XmlFile } from './files/XmlFile';
+import type { BrsFile } from './files/BrsFile';
+import type { XmlFile } from './files/XmlFile';
 
 export class Util {
     public clearConsole() {
@@ -1440,7 +1440,7 @@ export class Util {
         let fileDepth = this.getParentDirectoryCount(pkgPath);
         if (fileDepth >= 8) {
             file.addDiagnostics([{
-                ...DiagnosticMessages.detectedTooDeepFileSource(pkgPath, fileDepth),
+                ...DiagnosticMessages.detectedTooDeepFileSource(fileDepth),
                 file: file,
                 range: this.createRange(0, 0, 0, Number.MAX_VALUE)
             }]);

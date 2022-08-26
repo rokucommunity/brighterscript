@@ -695,7 +695,7 @@ export let DiagnosticMessages = {
         code: 1133,
         severity: DiagnosticSeverity.Error
     }),
-    detectedTooDeepFileSource: (pkgPath: string, numberOfParentDirectories: number) => ({
+    detectedTooDeepFileSource: (numberOfParentDirectories: number) => ({
         message: `Expected directory depth no larger than 7, but found ${numberOfParentDirectories}.`,
         code: 1134,
         severity: DiagnosticSeverity.Error
