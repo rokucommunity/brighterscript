@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.56.0](https://github.com/rokucommunity/brighterscript/compare/v0.55.2...0.56.0) - 2022-08-23
+### Added
+ - validation for dimmed variables ([#672](https://github.com/rokucommunity/brighterscript/pull/672))
+ - "--lsp" flag to bsc to start an LSP server ([#668](https://github.com/rokucommunity/brighterscript/pull/668))
+### Fixed
+ - compile crash for scope-less files ([#674](https://github.com/rokucommunity/brighterscript/pull/674))
+ - parse error for malformed dim statement ([#673](https://github.com/rokucommunity/brighterscript/pull/673))
+ - allow const as variable name ([#670](https://github.com/rokucommunity/brighterscript/pull/670))
+ - crashes for language clients that don't support "workspace/configuration" requests ([#667](https://github.com/rokucommunity/brighterscript/pull/667))
+
+
+
 ## [0.55.2](https://github.com/rokucommunity/brighterscript/compare/v0.55.1...0.55.2) - 2022-08-15
 ### Fixed
  - Dedupe code completions in components ([#664](https://github.com/rokucommunity/brighterscript/pull/664))

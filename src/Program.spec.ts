@@ -30,6 +30,7 @@ let stagingFolderPath = s`${tmpPath}/staging`;
 
 describe('Program', () => {
     let program: Program;
+
     beforeEach(() => {
         fsExtra.ensureDirSync(tmpPath);
         fsExtra.emptyDirSync(tmpPath);
@@ -44,6 +45,19 @@ describe('Program', () => {
         fsExtra.ensureDirSync(tmpPath);
         fsExtra.emptyDirSync(tmpPath);
         program.dispose();
+    });
+
+    it('Does not crazy for file not referenced by any other scope', async () => {
+        program.setFile('tests/testFile.spec.bs', `
+            function main(args as object) as object
+                return roca(args).describe("test suite", sub()
+                    m.pass()
+                end sub)
+            end function
+        `);
+        program.validate();
+        //test passes if this line does not throw
+        await program.getTranspiledFileContents('tests/testFile.spec.bs');
     });
 
     describe('global scope', () => {
