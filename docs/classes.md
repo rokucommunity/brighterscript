@@ -543,3 +543,68 @@ function Vertibrates_Birds_Duck()
 end function
 ```
 </details>
+
+
+## Instance binding
+As you would expect, methods attached to a class will have their `m` assigned to that class instance whenever they are invoked through the object. (i.e. `someClassInstance.doSomething()`. However, keep in mind that functions themselves retain no direct knowledge of what object they are bound to.
+
+This is no different than the way plain BrightScript functions and objects interact, but it was worth mentioning that classes cannot mitigate this fundamental runtime limitation.
+
+Consider this example:
+
+```brighterscript
+class Person
+    sub new(name as string)
+        m.name = name
+    end sub
+    sub sayHello()
+        print m.name
+    end sub
+end class
+
+sub main()
+    m.name = "Main method"
+    bob = new SomeClass("bob")
+
+    'works as expected...the `m` reference is `bob`
+    bob.sayHello() 'prints "Bob"
+
+    'lift the function off of `bob`
+    sayHello = bob.sayHello
+
+    '`m` is actually the global `m` scope
+    sayHello() ' prints "Main method"
+end sub
+```
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+```BrightScript
+function __Person_builder()
+    instance = {}
+    instance.new = sub(name as string)
+        m.name = name
+    end sub
+    instance.sayHello = sub()
+        print m.name
+    end sub
+    return instance
+end function
+function Person(name as string)
+    instance = __Person_builder()
+    instance.new(name)
+    return instance
+end function
+
+sub main()
+    m.name = "Main method"
+    bob = SomeClass("bob")
+    'works as expected...the `m` reference is `bob`
+    bob.sayHello() 'prints "Bob"
+    'lift the function off of `bob`
+    sayHello = bob.sayHello
+    '`m` is actually the global `m` scope
+    sayHello() ' prints "Main method"
+end sub
+```
+</details>
