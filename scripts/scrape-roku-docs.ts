@@ -14,13 +14,17 @@ import { gfm } from '@guyplusplus/turndown-plugin-gfm';
 import { marked } from 'marked';
 import * as he from 'he';
 import * as deepmerge from 'deepmerge';
+import { StringType } from '../src/types/StringType';
 
 type Token = marked.Token;
 
 const potentialTypes = ['object', 'integer', 'float', 'boolean', 'string', 'dynamic', 'function', 'longinteger', 'double', 'roassociativearray', 'object (string array)'];
 
 const foundTypesTranslation = {
-    'object (string array)': 'object'
+    'object (string array)': 'object',
+    'robytearray object': 'roByteArray',
+    'rolist of roassociativearray items': 'roList',
+    'roassociative array': 'roAssociativeArray'
 };
 
 const turndownService = new TurndownService({
@@ -367,7 +371,7 @@ class Runner {
             name: this.sanitizeMarkdownSymbol(paramName),
             default: null,
             isRequired: !isOptional,
-            type: paramType ?? 'dynamic',
+            type: chooseMoreSpecificType(paramType ?? 'dynamic'),
             description: undefined
         } as Param;
     }
@@ -669,7 +673,7 @@ class Runner {
 
                     const methodParam = method.params.find(p => p?.name && p.name?.toLowerCase() === rowNameSanitized);
                     if (methodParam) {
-                        methodParam.type = methodParam.type ?? row.type;
+                        methodParam.type = chooseMoreSpecificType(methodParam.type, row.type);
                         methodParam.description = row.description ?? methodParam.description;
                     }
                 }
@@ -817,6 +821,57 @@ function objectKeySorter(key, value) {
                 return sorted;
             }, {})
         : value;
+}
+
+/**
+ * For two types (or arrays of types), chooses the group that's "more specific"
+ *
+ * @param typeOne  the first type group or string
+ * @param typeTwo the first type group or string
+ * @returns a type (or group of types) that is more specific
+ */
+function chooseMoreSpecificType(typeOne: string | string[] = 'dynamic', typeTwo: string | string[] = 'dynamic'): string | string[] {
+
+    // deals with issue where it says "roScreen or roBitmap", etc
+    // also when there is a problematic space, eg "roAssoc Array"
+    const splitRegex = /,|\sor\s/;
+    if (typeof typeOne === 'string') {
+        typeOne = typeOne.split(splitRegex);
+    }
+    if (typeof typeTwo === 'string') {
+        typeTwo = typeTwo.split(splitRegex);
+    }
+    const typeOneArray = typeOne.map(paramType => foundTypesTranslation[paramType.toLowerCase()] || paramType);
+    const typeTwoArray = typeTwo.map(paramType => foundTypesTranslation[paramType.toLowerCase()] || paramType);
+
+    function getSingle(strArray: string[]): string | string[] {
+        return strArray.length === 1 ? strArray[0] : strArray;
+    }
+
+    if (typeTwo.map(a => a.toLowerCase()).includes('dynamic')) {
+        // the second group has "dynamic" in it, so prefer the first group
+        return getSingle(typeOneArray);
+    } else if (typeOne.map(a => a.toLowerCase()).includes('dynamic')) {
+        // second group does not have dynamic, but first does, so 2nd group is more specific
+        return getSingle(typeTwoArray);
+    } else if (typeOneArray.length > typeTwoArray.length) {
+        // first group has more types
+        return getSingle(typeOneArray);
+    } else if (typeTwoArray.length > typeOneArray.length) {
+        // 2nd group has more types
+        return getSingle(typeTwoArray);
+    } else if (typeOneArray.length === 1 && typeTwoArray.length === 1) {
+        // both have one type
+        if (typeOneArray[0].toLowerCase() === 'object' && typeTwoArray[0].toLowerCase().startsWith('ro')) {
+            // the first type is "Object", but is more specific in second type
+            return getSingle(typeTwoArray);
+        }
+        if (typeTwoArray[0].toLowerCase() === 'object') {
+            // Second type is Object ... so prefer the 1st, which usually comes from a code line
+            return getSingle(typeOneArray);
+        }
+    }
+    return getSingle(typeOneArray);
 }
 
 /**
@@ -1130,7 +1185,7 @@ interface Param {
     isRequired: boolean;
     description: string;
     default: string;
-    type: string;
+    type: string | string[];
 }
 interface Prop {
     name: string;
