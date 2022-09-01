@@ -277,6 +277,26 @@ describe('Scope', () => {
             ]);
         });
 
+        it('Validates NOT too deep nested files', () => {
+            program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/main.brs', ``);
+            program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/main2.bs', ``);
+            program.setFile('components/folder2/folder3/folder4/folder5/folder6/folder7/ButtonSecondary.xml', `<component name="ButtonSecondary" extends="ButtonBase" />`);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('Validates too deep nested files', () => {
+            program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/folder8/main.brs', ``);
+            program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/folder8/main2.bs', ``);
+            program.setFile('components/folder2/folder3/folder4/folder5/folder6/folder7/folder8/ButtonSecondary.xml', `<component name="ButtonSecondary" extends="ButtonBase" />`);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.detectedTooDeepFileSource(8),
+                DiagnosticMessages.detectedTooDeepFileSource(8),
+                DiagnosticMessages.detectedTooDeepFileSource(8)
+            ]);
+        });
+
         it('detects unknown namespace sub-names', () => {
             program.setFile('source/main.bs', `
                 sub main()

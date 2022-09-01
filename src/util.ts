@@ -26,16 +26,30 @@ import type { DottedGetExpression, Expression, VariableExpression } from './pars
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isVariableExpression, isXmlAttributeGetExpression } from './astUtils/reflection';
+import { isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
 import * as requireRelative from 'require-relative';
+import type { BrsFile } from './files/BrsFile';
+import type { XmlFile } from './files/XmlFile';
 
 export class Util {
     public clearConsole() {
         // process.stdout.write('\x1Bc');
+    }
+
+    /**
+     * Returns the number of parent directories in the filPath
+     * @param filePath
+     */
+    public getParentDirectoryCount(filePath: string | undefined) {
+        if (!filePath) {
+            return -1;
+        } else {
+            return filePath.replace(/^pkg:/, '').split(/[\\\/]/).length - 1;
+        }
     }
 
     /**
@@ -1408,6 +1422,29 @@ export class Util {
      */
     public rangeToString(range: Range) {
         return `${range?.start?.line}:${range?.start?.character}-${range?.end?.line}:${range?.end?.character}`;
+    }
+
+    public validateTooDeepFile(file: (BrsFile | XmlFile)) {
+        //find any files nested too deep
+        let pkgPath = file.pkgPath ?? file.pkgPath.toString();
+        let rootFolder = pkgPath.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
+
+        if (isBrsFile(file) && rootFolder !== 'source') {
+            return;
+        }
+
+        if (isXmlFile(file) && rootFolder !== 'components') {
+            return;
+        }
+
+        let fileDepth = this.getParentDirectoryCount(pkgPath);
+        if (fileDepth >= 8) {
+            file.addDiagnostics([{
+                ...DiagnosticMessages.detectedTooDeepFileSource(fileDepth),
+                file: file,
+                range: this.createRange(0, 0, 0, Number.MAX_VALUE)
+            }]);
+        }
     }
 }
 

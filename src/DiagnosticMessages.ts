@@ -694,6 +694,11 @@ export let DiagnosticMessages = {
         message: `Unexpected statement found outside of function body`,
         code: 1133,
         severity: DiagnosticSeverity.Error
+    }),
+    detectedTooDeepFileSource: (numberOfParentDirectories: number) => ({
+        message: `Expected directory depth no larger than 7, but found ${numberOfParentDirectories}.`,
+        code: 1134,
+        severity: DiagnosticSeverity.Error
     })
 };
 

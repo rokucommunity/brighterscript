@@ -362,6 +362,7 @@ export class BrsFile {
     }
 
     public validate() {
+        util.validateTooDeepFile(this);
         //only validate the file if it was actually parsed (skip files containing typedefs)
         if (!this.hasTypedef) {
             this.validateImportStatements();
