@@ -14,7 +14,7 @@ import { gfm } from '@guyplusplus/turndown-plugin-gfm';
 import { marked } from 'marked';
 import * as he from 'he';
 import * as deepmerge from 'deepmerge';
-import { StringType } from '../src/types/StringType';
+import { NodeHtmlMarkdown } from 'node-html-markdown';
 
 type Token = marked.Token;
 
@@ -674,7 +674,7 @@ class Runner {
                     const methodParam = method.params.find(p => p?.name && p.name?.toLowerCase() === rowNameSanitized);
                     if (methodParam) {
                         methodParam.type = chooseMoreSpecificType(methodParam.type, row.type);
-                        methodParam.description = row.description ?? methodParam.description;
+                        methodParam.description = convertHTMLTable(row.description ?? methodParam.description);
                     }
                 }
 
@@ -872,6 +872,13 @@ function chooseMoreSpecificType(typeOne: string | string[] = 'dynamic', typeTwo:
         }
     }
     return getSingle(typeOneArray);
+}
+
+
+function convertHTMLTable(description: string): string {
+    return description.replace(/\<table\>.*\<\/table\>/g, (match) => {
+        return '\n' + NodeHtmlMarkdown.translate(match, {}) + '\n';
+    });
 }
 
 /**
