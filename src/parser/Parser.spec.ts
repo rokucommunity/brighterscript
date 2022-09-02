@@ -1,7 +1,7 @@
 import { expect, assert } from 'chai';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
-import type { AALiteralExpression, AAMemberExpression, Expression } from './Expression';
+import type { AAMemberExpression, Expression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
 import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
