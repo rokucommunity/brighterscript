@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.57.0](https://github.com/rokucommunity/brighterscript/compare/v0.56.0...0.57.0) - 2022-09-02
+### Added
+ - validation for files that are nested too deep ([#680](https://github.com/rokucommunity/brighterscript/pull/680))
+### Changed
+ - upgrade to [roku-deploy@3.8.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#381---2022-09-02). Notable changes since 3.7.1:
+### Fixed
+ - Allow `mod` as an aa prop([#684](https://github.com/rokucommunity/brighterscript/pull/684))
+ - coerce AA member identifier kinds to `TokenKind.Identifier` ([#684](https://github.com/rokucommunity/brighterscript/pull/684))
+ - Doc Scraper issues ([#585](https://github.com/rokucommunity/brighterscript/pull/585))
+ - Fix case sensitivity issue with `bs_const` values ([#677](https://github.com/rokucommunity/brighterscript/pull/677))
+
+
+
 ## [0.56.0](https://github.com/rokucommunity/brighterscript/compare/v0.55.2...0.56.0) - 2022-08-23
 ### Added
  - validation for dimmed variables ([#672](https://github.com/rokucommunity/brighterscript/pull/672))

@@ -2733,7 +2733,7 @@ export class Parser {
                 range: null as Range
             };
             if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
-                result.keyToken = this.advance();
+                result.keyToken = this.identifier(...AllowedProperties);
             } else if (this.check(TokenKind.StringLiteral)) {
                 result.keyToken = this.advance();
             } else {

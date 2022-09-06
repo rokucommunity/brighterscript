@@ -389,6 +389,7 @@ export const AllowedProperties = [
     TokenKind.If,
     TokenKind.Invalid,
     TokenKind.Let,
+    TokenKind.Mod,
     TokenKind.Next,
     TokenKind.Not,
     TokenKind.ObjFun,
