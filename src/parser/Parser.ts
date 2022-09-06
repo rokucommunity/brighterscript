@@ -18,14 +18,12 @@ import type {
     Statement
 } from './Statement';
 import {
-    ConstStatement
-} from './Statement';
-import {
     AssignmentStatement,
     Block,
     Body,
     CatchStatement,
     ClassStatement,
+    ConstStatement,
     CommentStatement,
     DimStatement,
     DottedSetStatement,
@@ -972,6 +970,22 @@ export class Parser {
                 let result = new FunctionStatement(name, func, this.currentNamespaceName);
                 func.functionStatement = result;
                 this._references.functionStatements.push(result);
+
+                // Add the transpiled name for namespace functions
+                // to consider an edge case when defining namespaces in .bs files
+                // and using them in .brs files.
+                if (func.namespaceName) {
+                    const transpiledNamespaceFunctionName = result.getName(ParseMode.BrightScript);
+                    const funcType = func.getFunctionType();
+                    funcType.setName(transpiledNamespaceFunctionName);
+
+                    this.symbolTable.addSymbol(
+                        transpiledNamespaceFunctionName,
+                        name.range,
+                        funcType
+                    );
+                }
+
                 return result;
             }
         } finally {
