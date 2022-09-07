@@ -277,6 +277,35 @@ describe('Scope', () => {
             ]);
         });
 
+        it('accepts namespace names in their transpiled form on .brs files', () => {
+            program.setFile('source/ns.bs', `
+                namespace MyNamespace
+                    sub foo()
+                    end sub
+                end namespace
+
+                namespace A.B.C
+                    sub ga()
+                    end sub
+                end namespace
+            `);
+            program.setFile('source/main.brs', `
+                sub main()
+                    MyNamespace_foo()
+                    A_B_C_ga()
+                end sub
+            `);
+            program.setFile('source/main.xml', `
+                <?xml version="1.0" encoding="UTF-8"?>
+                    <component name="MyComponent" extends="Group">
+                    <script type="text/brightscript" uri="main.brs"/>
+                    <script type="text/brightscript" uri="ns.bs"/>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('Validates NOT too deep nested files', () => {
             program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/main.brs', ``);
             program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/main2.bs', ``);
