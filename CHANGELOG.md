@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.57.1](https://github.com/rokucommunity/brighterscript/compare/v0.57.0...0.57.1) - 2022-09-07
+### Fixed
+ - fix(parser): consider namespace function transpiled names ([#685](https://github.com/rokucommunity/brighterscript/pull/685))
+
+
+
 ## [0.57.0](https://github.com/rokucommunity/brighterscript/compare/v0.56.0...0.57.0) - 2022-09-02
 ### Added
  - validation for files that are nested too deep ([#680](https://github.com/rokucommunity/brighterscript/pull/680))
