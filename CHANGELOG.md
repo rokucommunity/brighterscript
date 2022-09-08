@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.57.2](https://github.com/rokucommunity/brighterscript/compare/v0.57.1...0.57.2) - 2022-09-08
+### Fixed
+ - Fix `brightscript.configFile` workspace config bug ([#686](https://github.com/rokucommunity/brighterscript/pull/686))
+
+
+
 ## [0.57.1](https://github.com/rokucommunity/brighterscript/compare/v0.57.0...0.57.1) - 2022-09-07
 ### Fixed
  - fix(parser): consider namespace function transpiled names ([#685](https://github.com/rokucommunity/brighterscript/pull/685))
