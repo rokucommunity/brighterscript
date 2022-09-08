@@ -453,7 +453,7 @@ export class LanguageServer {
         };
         //if the client supports configuration, look for config group called "brightscript"
         if (this.hasConfigurationCapability) {
-            await this.connection.workspace.getConfiguration({
+            config = await this.connection.workspace.getConfiguration({
                 scopeUri: scopeUri,
                 section: 'brightscript'
             });
