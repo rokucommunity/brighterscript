@@ -997,6 +997,22 @@ describe('LanguageServer', () => {
                 s`${workspacePath}/bsconfig.json`
             );
         });
+
+        it('executes the connection.workspace.getConfiguration call when enabled to do so', async () => {
+            server.run();
+            const bsconfigPath = `${tempDir}/bsconfig.test.json`;
+            //add a dummy bsconfig to reference for the test
+            fsExtra.outputFileSync(bsconfigPath, ``);
+
+            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({ configFile: bsconfigPath }) as any);
+            server['hasConfigurationCapability'] = true;
+            fsExtra.outputFileSync(`${workspacePath}/bsconfig.json`, '{}');
+            expect(
+                s`${await server['getConfigFilePath'](workspacePath)}`
+            ).to.eql(
+                s`${bsconfigPath}`
+            );
+        });
     });
 
     describe('getWorkspaceExcludeGlobs', () => {
