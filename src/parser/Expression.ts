@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Block, CommentStatement, FunctionStatement, LabelStatement } from './Statement';
+import type { Block, CommentStatement, FunctionStatement, LabelStatement, Statement } from './Statement';
 import type { Range } from 'vscode-languageserver';
 import util, { MAX_PARAM_COUNT } from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
@@ -15,9 +15,9 @@ import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType, SymbolContainer } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
-import { TypedFunctionType } from '../types/TypedFunctionType';
-import { ObjectType } from '../types/ObjectType';
 import { ArrayType } from '../types/ArrayType';
+import { ObjectType } from '../types/ObjectType';
+import { TypedFunctionType } from '../types/TypedFunctionType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -35,6 +35,17 @@ export abstract class Expression {
     public visitMode = InternalWalkMode.visitExpressions;
 
     public abstract walk(visitor: WalkVisitor, options: WalkOptions);
+    /**
+     * The parent node for this expression. This is set dynamically during `onFileValidate`, and should not be set directly.
+     */
+    public parent?: Statement | Expression;
+
+    /**
+     * Get the closest symbol table for this node. Should be overridden in children that directly contain a symbol table
+     */
+    public getSymbolTable(): SymbolTable {
+        return this.parent?.getSymbolTable();
+    }
 }
 
 export class BinaryExpression extends Expression {
@@ -155,6 +166,12 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
     }
 
+    public symbolTable: SymbolTable;
+
+    public getSymbolTable() {
+        return this.symbolTable;
+    }
+
     public get range() {
         return this.cacheRange();
     }
@@ -179,10 +196,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     }
     private _range: Range;
 
-    public readonly symbolTable: SymbolTable;
-
     public labelStatements = [] as LabelStatement[];
-
 
     private _returnType: BscType;
     /**
@@ -839,7 +853,7 @@ export class VariableExpression extends Expression {
     public readonly range: Range;
 
     public getName(parseMode: ParseMode) {
-        return parseMode === ParseMode.BrightScript ? this.name.text : this.name.text;
+        return this.name.text;
     }
 
     transpile(state: BrsTranspileState) {

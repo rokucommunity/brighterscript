@@ -95,6 +95,7 @@ describe('SymbolTable', () => {
             st.mergeSymbolTable(otherTable);
             expect(st.getSymbolType('foo').toString()).eq('dynamic');
             expect(st.getSymbolType('bar').toString()).eq('integer');
+            st.mergeSymbolTable(otherTable);
         });
     });
 });

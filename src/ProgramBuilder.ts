@@ -11,6 +11,7 @@ import { Logger, LogLevel } from './Logger';
 import PluginInterface from './PluginInterface';
 import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
+import * as requireRelative from 'require-relative';
 
 /**
  * A runner class that handles
@@ -163,7 +164,7 @@ export class ProgramBuilder {
      */
     protected loadRequires() {
         for (const dep of this.options.require ?? []) {
-            util.resolveRequire(this.options.cwd, dep);
+            requireRelative(dep, this.options.cwd);
         }
     }
 

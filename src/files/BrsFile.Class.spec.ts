@@ -1099,7 +1099,7 @@ describe('BrsFile BrighterScript classes', () => {
                                 `);
             program.validate();
             expectDiagnostics(program, [{
-                ...DiagnosticMessages.classCouldNotBeFound('Animal', 'source'),
+                ...DiagnosticMessages.cannotFindName('Animal'),
                 range: Range.create(1, 35, 1, 41)
             }]);
         });
@@ -1115,7 +1115,7 @@ describe('BrsFile BrighterScript classes', () => {
                                     `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.classCouldNotBeFound('Animal', 'source')
+                DiagnosticMessages.cannotFindName('Animal')
             ]);
         });
 
@@ -1133,7 +1133,7 @@ describe('BrsFile BrighterScript classes', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.classCouldNotBeFound('Animal', 'source')
+                DiagnosticMessages.cannotFindName('Animal')
             ]);
         });
 
@@ -1151,10 +1151,9 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             `);
             program.validate();
-            //TODO replace this with `expectDiagnostics` once we fix the duplicate diagnostic one-per-file for missing base classes issue
-            expect(program.getDiagnostics()[0].message).to.eql(
-                DiagnosticMessages.classCouldNotBeFound('Vertibrates.GroundedBird', 'source').message
-            );
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird')
+            ]);
         });
 
         it('namespaced parent class from inside namespace', () => {
@@ -1173,10 +1172,12 @@ describe('BrsFile BrighterScript classes', () => {
                 end namespace
             `);
             program.validate();
-            //TODO replace this with `expectDiagnostics` once we fix the duplicate diagnostic one-per-file for missing base classes issue
-            expect(program.getDiagnostics()[0].message).to.eql(
-                DiagnosticMessages.classCouldNotBeFound('Vertibrates.GroundedBird', 'source').message
-            );
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird'),
+                relatedInformation: [{
+                    message: `Not defined in scope 'source'`
+                }]
+            }]);
         });
     });
 
@@ -1193,7 +1194,7 @@ describe('BrsFile BrighterScript classes', () => {
                                             `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.classCouldNotBeFound('Duck', 'source')
+            DiagnosticMessages.cannotFindName('Duck')
         ]);
     });
 
@@ -1216,13 +1217,13 @@ describe('BrsFile BrighterScript classes', () => {
             namespace NameA.NameB
                 class Animal
                 end class
-                class Duck extends NameA.NameB.Animal1
+                class Duck extends NameA.NameB.AnimalNotDefined
                 end class
             end namespace
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.classCouldNotBeFound('NameA.NameB.Animal1', 'source')
+            DiagnosticMessages.cannotFindName('AnimalNotDefined', 'NameA.NameB.AnimalNotDefined')
         ]);
     });
 
@@ -1498,15 +1499,15 @@ describe('BrsFile BrighterScript classes', () => {
         it('gets the correct text for m', () => {
             let animalCode = program.setFile('source/animal.bs', animalClassCode);
             program.validate();
-            let hover = animalCode.getHover(Position.create(6, 21));
-            expect(hover?.contents).to.equal([
+            let hover = program.getHover(animalCode.srcPath, Position.create(6, 21));
+            expect(hover?.[0]?.contents).to.equal([
                 '```brightscript',
                 'm as Animal',
                 '```'
             ].join('\n'));
 
-            hover = animalCode.getHover(Position.create(26, 20));
-            expect(hover?.contents).to.equal([
+            hover = program.getHover(animalCode.srcPath, Position.create(26, 20));
+            expect(hover?.[0]?.contents).to.equal([
                 '```brightscript',
                 'm as Dog',
                 '```'
@@ -1516,15 +1517,15 @@ describe('BrsFile BrighterScript classes', () => {
         it('gets the correct text for m.field', () => {
             let animalCode = program.setFile('source/animal.bs', animalClassCode);
             program.validate();
-            let hover = animalCode.getHover(Position.create(6, 26));
-            expect(hover?.contents).to.equal([
+            let hover = program.getHover(animalCode.srcPath, Position.create(6, 26));
+            expect(hover?.[0]?.contents).to.equal([
                 '```brightscript',
                 'Animal.kind as string',
                 '```'
             ].join('\n'));
 
-            hover = animalCode.getHover(Position.create(26, 25));
-            expect(hover?.contents).to.equal([
+            hover = program.getHover(animalCode.srcPath, Position.create(26, 25));
+            expect(hover?.[0]?.contents).to.equal([
                 '```brightscript',
                 'Dog.breed as string',
                 '```'
@@ -1534,8 +1535,8 @@ describe('BrsFile BrighterScript classes', () => {
         it('gets the correct text for m.method', () => {
             let animalCode = program.setFile('source/animal.bs', animalClassCode);
             program.validate();
-            let hover = animalCode.getHover(Position.create(30, 25));
-            expect(hover?.contents).to.equal([
+            let hover = program.getHover(animalCode.srcPath, Position.create(30, 25));
+            expect(hover?.[0]?.contents).to.equal([
                 '```brightscript',
                 'sub Animal.sleep() as void',
                 '```'
@@ -1545,10 +1546,10 @@ describe('BrsFile BrighterScript classes', () => {
         it('gets the correct text for obj.field', () => {
             let animalCode = program.setFile('source/animal.brs', animalClassCode);
             program.validate();
-            let hover = animalCode.getHover(Position.create(46, 33));
+            let hover = program.getHover(animalCode.srcPath, Position.create(46, 33));
             expect(hover).to.exist;
             //TODO TYPES: This should probably say 'Animal.isHungry ...' because that field is defined in Animal
-            expect(hover?.contents).to.equal([
+            expect(hover?.[0]?.contents).to.equal([
                 '```brightscript',
                 'Dog.isHungry as boolean',
                 '```'
@@ -1566,8 +1567,8 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             `);
             program.validate();
-            let hover = animalCode.getHover(Position.create(2, 29));
-            expect(hover?.contents).to.equal([
+            let hover = program.getHover(animalCode.srcPath, Position.create(2, 29));
+            expect(hover?.[0]?.contents).to.equal([
                 '```brightscript',
                 'sub Animal.eat(foodAmount as integer) as void',
                 '```'
@@ -1619,8 +1620,8 @@ describe('BrsFile BrighterScript classes', () => {
         it('gets the correct text for new Class()', () => {
             let file = program.setFile('source/fooBar.bs', testCode);
             program.validate();
-            let hover = file.getHover(Position.create(8, 34)); // new Foo("hello")
-            expect(hover?.contents).to.equal([
+            let hover = program.getHover(file.srcPath, Position.create(8, 34)); // new Foo("hello")
+            expect(hover?.[0]?.contents).to.equal([
                 '```brightscript',
                 'new Foo(name as string)',
                 '```'
@@ -1630,8 +1631,8 @@ describe('BrsFile BrighterScript classes', () => {
         it('gets the correct text for created object', () => {
             let file = program.setFile('source/fooBar.bs', testCode);
             program.validate();
-            let hover = file.getHover(Position.create(8, 23)); // myFoo
-            expect(hover?.contents).to.equal([
+            let hover = program.getHover(file.srcPath, Position.create(8, 23)); // myFoo
+            expect(hover?.[0]?.contents).to.equal([
                 '```brightscript',
                 'myFoo as Foo',
                 '```'
@@ -1641,8 +1642,8 @@ describe('BrsFile BrighterScript classes', () => {
         it('gets the correct text for class declaration', () => {
             let file = program.setFile('source/fooBar.bs', testCode);
             program.validate();
-            let hover = file.getHover(Position.create(6, 21)); // class Bar
-            expect(hover?.contents).to.equal([
+            let hover = program.getHover(file.srcPath, Position.create(6, 21)); // class Bar
+            expect(hover?.[0]?.contents).to.equal([
                 '```brightscript',
                 'class Bar',
                 '```'
@@ -1652,8 +1653,8 @@ describe('BrsFile BrighterScript classes', () => {
         it('gets the correct text for class method declaration', () => {
             let file = program.setFile('source/fooBar.bs', testCode);
             program.validate();
-            let hover = file.getHover(Position.create(11, 29)); // getInt
-            expect(hover?.contents).to.equal([
+            let hover = program.getHover(file.srcPath, Position.create(11, 29)); // getInt
+            expect(hover?.[0]?.contents).to.equal([
                 '```brightscript',
                 'function Bar.getInt() as integer',
                 '```'
@@ -1663,8 +1664,8 @@ describe('BrsFile BrighterScript classes', () => {
         it('gets the correct text for class field declaration', () => {
             let file = program.setFile('source/fooBar.bs', testCode);
             program.validate();
-            let hover = file.getHover(Position.create(17, 20)); // myInt
-            expect(hover?.contents).to.equal([
+            let hover = program.getHover(file.srcPath, Position.create(17, 20)); // myInt
+            expect(hover?.[0]?.contents).to.equal([
                 '```brightscript',
                 'Buz.myInt as integer',
                 '```'
@@ -1674,8 +1675,8 @@ describe('BrsFile BrighterScript classes', () => {
         it('gets the correct text for super() call', () => {
             let file = program.setFile('source/fooBar.bs', testCode);
             program.validate();
-            let hover = file.getHover(Position.create(25, 23)); // super() in Bee.new
-            expect(hover?.contents).to.equal([
+            let hover = program.getHover(file.srcPath, Position.create(25, 23)); // super() in Bee.new
+            expect(hover?.[0]?.contents).to.equal([
                 '```brightscript',
                 'new Buz(i as integer)',
                 '```'
@@ -1685,8 +1686,8 @@ describe('BrsFile BrighterScript classes', () => {
         it('gets the correct text for variable with same name as a member', () => {
             let file = program.setFile('source/fooBar.bs', testCode);
             program.validate();
-            let hover = file.getHover(Position.create(29, 23)); // myInt in Bee.varSameNameAsMember
-            expect(hover?.contents).to.equal([
+            let hover = program.getHover(file.srcPath, Position.create(29, 23)); // myInt in Bee.varSameNameAsMember
+            expect(hover?.[0].contents).to.equal([
                 '```brightscript',
                 'myInt as integer',
                 '```'

@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
+import { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver-protocol';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, SemanticToken } from '../../interfaces';
 import { Program } from '../../Program';
@@ -25,6 +25,15 @@ describe('BrsFileSemanticTokensProcessor', () => {
         const result = util.sortByRange(
             program.getSemanticTokens(file.srcPath)
         );
+
+        //sort modifiers
+        for (const collection of [result, tokens]) {
+            for (const token of collection) {
+                token.tokenModifiers ??= [];
+                token.tokenModifiers.sort();
+            }
+        }
+
         expect(
             result
         ).to.eql(
@@ -277,5 +286,83 @@ describe('BrsFileSemanticTokensProcessor', () => {
             range: util.createRange(2, 47, 2, 52),
             tokenType: SemanticTokenTypes.class
         }]);
+    });
+
+    it('matches consts', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub init()
+                print API_URL
+                print info.FIRST_NAME
+            end sub
+            const API_URL = "some_url"
+            namespace info
+                const FIRST_NAME = "bob"
+            end namespace
+        `);
+        expectSemanticTokens(file, [{
+            range: util.createRange(2, 22, 2, 29),
+            tokenType: SemanticTokenTypes.variable,
+            tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
+        }, {
+            range: util.createRange(3, 22, 3, 26),
+            tokenType: SemanticTokenTypes.namespace
+        }, {
+            range: util.createRange(3, 27, 3, 37),
+            tokenType: SemanticTokenTypes.variable,
+            tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
+        }, {
+            range: util.createRange(5, 18, 5, 25),
+            tokenType: SemanticTokenTypes.variable,
+            tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
+        }, {
+            range: util.createRange(7, 22, 7, 32),
+            tokenType: SemanticTokenTypes.variable,
+            tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
+        }]);
+    });
+
+    it('matches consts in assignment expressions', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub main()
+                value = ""
+                value += constants.API_KEY
+                value += API_URL
+            end sub
+            namespace constants
+                const API_KEY = "test"
+            end namespace
+            const API_URL = "url"
+        `);
+        expectSemanticTokens(file, [
+            // value += |constants|.API_KEY
+            {
+                range: util.createRange(3, 25, 3, 34),
+                tokenType: SemanticTokenTypes.namespace
+            },
+            // value += constants.|API_KEY|
+            {
+                range: util.createRange(3, 35, 3, 42),
+                tokenType: SemanticTokenTypes.variable,
+                tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
+            },
+            // value += |API_URL|
+            {
+                range: util.createRange(4, 25, 4, 32),
+                tokenType: SemanticTokenTypes.variable,
+                tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
+            },
+            // const |API_KEY| = "test"
+            {
+                range: util.createRange(7, 22, 7, 29),
+                tokenType: SemanticTokenTypes.variable,
+                tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
+            },
+            //const |API_URL| = "url"
+            {
+                range: util.createRange(9, 18, 9, 25),
+                tokenType: SemanticTokenTypes.variable,
+                tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
+            }
+        ]);
     });
 });

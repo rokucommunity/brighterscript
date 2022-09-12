@@ -9,6 +9,13 @@ import { Range } from 'vscode-languageserver';
 import util from '../util';
 
 describe('lexer', () => {
+    it('recognizes the `const` keyword', () => {
+        let { tokens } = Lexer.scan('const');
+        expect(tokens.map(x => x.kind)).to.eql([
+            TokenKind.Const,
+            TokenKind.Eof
+        ]);
+    });
     it('recognizes namespace keywords', () => {
         let { tokens } = Lexer.scan('namespace end namespace endnamespace end   namespace');
         expect(tokens.map(x => x.kind)).to.eql([

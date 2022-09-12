@@ -17,9 +17,10 @@ import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
 import { CustomType } from '../types/CustomType';
-import { InterfaceType } from '../types/InterfaceType';
 import { EnumMemberType, EnumType } from '../types/EnumType';
 import { FunctionType } from '../types/FunctionType';
+import { InterfaceType } from '../types/InterfaceType';
+
 /**
  * A BrightScript statement
  */
@@ -43,6 +44,18 @@ export abstract class Statement {
     public visitMode = InternalWalkMode.visitStatements;
 
     public abstract walk(visitor: WalkVisitor, options: WalkOptions);
+
+    /**
+     * The parent node for this statement. This is set dynamically during `onFileValidate`, and should not be set directly.
+     */
+    public parent?: Statement | Expression;
+
+    /**
+     * Get the closest symbol table for this node. Should be overridden in children that directly contain a symbol table
+     */
+    public getSymbolTable(): SymbolTable {
+        return this.parent?.getSymbolTable();
+    }
 }
 
 export class EmptyStatement extends Statement {
@@ -68,13 +81,22 @@ export class EmptyStatement extends Statement {
  */
 export class Body extends Statement implements TypedefProvider {
     constructor(
-        public statements: Statement[] = []
+        public statements: Statement[] = [],
+        public symbolTable = new SymbolTable()
     ) {
         super();
-        this.range = util.createBoundingRange(...this.statements) ?? interpolatedRange;
     }
 
-    public readonly range: Range;
+    public getSymbolTable() {
+        return this.symbolTable;
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            this.statements[0]?.range.start ?? util.createPosition(0, 0),
+            this.statements[this.statements.length - 1]?.range.end ?? util.createPosition(0, 0)
+        );
+    }
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1109,8 +1131,6 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 }
 
 export class NamespaceStatement extends Statement implements TypedefProvider {
-    readonly symbolTable: SymbolTable;
-
     constructor(
         public keyword: Token,
         //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
@@ -1124,9 +1144,21 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         this.symbolTable = new SymbolTable(parentSymbolTable);
     }
 
+    public symbolTable: SymbolTable;
+
+    public getSymbolTable() {
+        return this.symbolTable;
+    }
+
+    /**
+     * The string name for this namespace
+     */
+    public name: string;
+
     public get range() {
         return this.cacheRange();
     }
+    private _range: Range;
 
     public cacheRange() {
         if (!this._range) {
@@ -1139,12 +1171,6 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         }
         return this._range;
     }
-    private _range: Range;
-
-    /**
-     * The string name for this namespace
-     */
-    public name: string;
 
     public getName(parseMode: ParseMode) {
         return this.nameExpression.getName(parseMode);
@@ -1289,7 +1315,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider, Me
     public buildSymbolTable(parentIface?: InheritableStatement) {
         this.memberTable.clear();
         if (parentIface) {
-            this.memberTable.setParent(parentIface?.memberTable);
+            this.memberTable.pushParent(parentIface?.memberTable);
         }
 
         for (const statement of this.methods) {
@@ -1512,16 +1538,6 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
     ) {
         super();
         this.body = this.body ?? [];
-        this.symbolTable.setParent(currentSymbolTable);
-
-        this.range = util.createBoundingRange(
-            this.classKeyword,
-            this.name,
-            this.extendsKeyword,
-            this.parentClassName,
-            ...this.body,
-            this.end
-        ) ?? interpolatedRange;
 
         for (let statement of this.body) {
             if (isMethodStatement(statement)) {
@@ -1574,11 +1590,11 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
         this.memberTable.clear();
         if (isClassStatement(parentClass)) {
             this.symbolTable.addSymbol('super', this.parentClassName?.range, parentClass.getConstructorFunctionType());
-            this.memberTable.setParent(parentClass?.memberTable);
+            this.memberTable.pushParent(parentClass?.memberTable);
         }
 
         for (const statement of this.methods) {
-            statement?.func.symbolTable.setParent(this.symbolTable);
+            statement?.func.symbolTable.pushParent(this.symbolTable);
             const funcType = statement?.func.getFunctionType();
             funcType.setName(this.getName(ParseMode.BrighterScript) + '.' + statement?.name?.text);
             this.memberTable.addSymbol(statement?.name?.text, statement?.range, funcType);
@@ -2495,6 +2511,69 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
             }
         }
         return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.value && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
+    }
+}
+
+export class ConstStatement extends Statement implements TypedefProvider {
+
+    public constructor(
+        public tokens: {
+            const: Token;
+            name: Identifier;
+            equals: Token;
+        },
+        public value: Expression,
+        readonly namespaceName?: NamespacedVariableNameExpression
+    ) {
+        super();
+        this.range = util.createBoundingRange(this.tokens.const, this.tokens.name, this.tokens.equals, this.value);
+    }
+
+    public range: Range;
+
+    public get name() {
+        return this.tokens.name.text;
+    }
+
+    /**
+     * The name of the statement WITH its leading namespace (if applicable)
+     */
+    public get fullName() {
+        const name = this.tokens.name?.text;
+        if (name) {
+            if (this.namespaceName) {
+                let namespaceName = this.namespaceName.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this doesn't have a name
+            return undefined;
+        }
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        //const declarations don't exist at runtime, so just transpile empty
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
+        return [
+            state.tokenToSourceNode(this.tokens.const),
+            ' ',
+            state.tokenToSourceNode(this.tokens.name),
+            ' ',
+            state.tokenToSourceNode(this.tokens.equals),
+            ' ',
+            ...this.value.transpile(state)
+        ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

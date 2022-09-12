@@ -8,7 +8,7 @@ import { EnumStatement, InterfaceStatement } from '../../Statement';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
 import type { BrsFile } from '../../../files/BrsFile';
-import { Location, CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver-protocol';
+import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver-protocol';
 import { WalkMode } from '../../../astUtils/visitors';
 import { isEnumStatement } from '../../../astUtils/reflection';
 import { URI } from 'vscode-uri';
@@ -216,7 +216,7 @@ describe('EnumStatement', () => {
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.duplicateEnumDeclaration('source', 'Direction'),
                 relatedInformation: [{
-                    location: Location.create(
+                    location: util.createLocation(
                         URI.file(s`${rootDir}/source/main.bs`).toString(),
                         util.createRange(1, 21, 1, 30)
                     ),
@@ -240,7 +240,7 @@ describe('EnumStatement', () => {
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.duplicateEnumDeclaration('source', 'Direction'),
                 relatedInformation: [{
-                    location: Location.create(
+                    location: util.createLocation(
                         URI.file(s`${rootDir}/source/lib.bs`).toString(),
                         util.createRange(1, 21, 1, 30)
                     ),
@@ -973,6 +973,21 @@ describe('EnumStatement', () => {
                 end sub
             `);
         });
-    });
 
+        it('transpiles enum values when used in complex expressions', () => {
+            testTranspile(`
+                sub main()
+                    print Direction.up.toStr()
+                end sub
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `, `
+                sub main()
+                    print "up".toStr()
+                end sub
+            `);
+        });
+    });
 });

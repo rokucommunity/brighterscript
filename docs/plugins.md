@@ -96,13 +96,31 @@ When any file is modified:
 After file addition/removal (note: throttled/debounced):
 
 - `beforeProgramValidate`
+- For each invalidated/not-yet-validated file
+    - `beforeFileValidate`
+    - `onFileValidate`
+    - `afterFileValidate`
 - For each invalidated scope:
     - `beforeScopeValidate`
     - `afterScopeValidate`
 - `afterProgramValidate`
 
 Code Actions
- - `onProgramGetCodeActions`
+ - `onGetCodeActions`
+
+Completions
+ - `beforeProvideCompletions`
+ - `provideCompletions`
+ - `afterProvideCompletions`
+
+Hovers
+ - `beforeProvideHover`
+ - `provideHover`
+ - `afterProvideHover`
+
+Semantic Tokens
+ - `onGetSemanticTokens`
+
 
 ## Compiler API
 
@@ -122,11 +140,14 @@ The top level object is the `ProgramBuilder` which runs the overall process: pre
 
 ### API definition
 
+Here are some important interfaces. You can view them in the code at [this link](https://github.com/rokucommunity/brighterscript/blob/ddcb7b2cd219bd9fecec93d52fbbe7f9b972816b/src/interfaces.ts#L190:~:text=export%20interface%20CompilerPlugin%20%7B).
+
 ```typescript
 export type CompilerPluginFactory = () => CompilierPlugin;
 
 export interface CompilerPlugin {
     name: string;
+    //program events
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
     beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
@@ -135,18 +156,61 @@ export interface CompilerPlugin {
     afterProgramCreate?: (program: Program) => void;
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
-    beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
-    afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+
+    /**
+     * Emitted before the program starts collecting completions
+     */
+    beforeProvideCompletions?: PluginHandler<BeforeProvideCompletionsEvent>;
+    /**
+     * Use this event to contribute completions
+     */
+    provideCompletions?: PluginHandler<ProvideCompletionsEvent>;
+    /**
+     * Emitted after the program has finished collecting completions, but before they are sent to the client
+     */
+    afterProvideCompletions?: PluginHandler<AfterProvideCompletionsEvent>;
+
+    /**
+     * Called before the `provideHover` hook. Use this if you need to prepare any of the in-memory objects before the `provideHover` gets called
+     */
+    beforeProvideHover?: PluginHandler<BeforeProvideHoverEvent>;
+    /**
+     * Called when bsc looks for hover information. Use this if your plugin wants to contribute hover information.
+     */
+    provideHover?: PluginHandler<ProvideHoverEvent>;
+    /**
+     * Called after the `provideHover` hook. Use this if you want to intercept or sanitize the hover data (even from other plugins) before it gets sent to the client.
+     */
+    afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
+
+    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
+    //scope events
     afterScopeCreate?: (scope: Scope) => void;
     beforeScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
+    onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
     afterScopeValidate?: ValidateHandler;
+    //file events
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: BscFile) => void;
+    /**
+     * Called before each file is validated
+     */
+    beforeFileValidate?: PluginHandler<BeforeFileValidateEvent>;
+    /**
+     * Called during the file validation process. If your plugin contributes file validations, this is a good place to contribute them.
+     */
+    onFileValidate?: PluginHandler<OnFileValidateEvent>;
+    /**
+     * Called after each file is validated
+     */
     afterFileValidate?: (file: BscFile) => void;
-    beforeFileTranspile?: (entry: TranspileObj) => void;
-    afterFileTranspile?: (entry: TranspileObj) => void;
+    beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
+    afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
 }

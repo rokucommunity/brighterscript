@@ -108,15 +108,19 @@ describe('parser print statements', () => {
     describe('transpile', () => {
         it('retains comma separators', () => {
             testTranspile(`
-                a$ = "string"
-                print a$, a$, a$
+                sub main()
+                    a$ = "string"
+                    print a$, a$, a$
+                end sub
             `);
         });
 
         it('retains semicolon separators', () => {
             testTranspile(`
-                a$ = "string"
-                print a$; a$; a$
+                sub main()
+                    a$ = "string"
+                    print a$; a$; a$
+                end sub
             `);
         });
 
@@ -125,71 +129,82 @@ describe('parser print statements', () => {
                 function getText()
                     return "text"
                 end function
-                print getText() getText() getText()
+
+                function main()
+                    print getText() getText() getText()
+                end function
             `);
         });
 
         it('supports print in loop', () => {
             testTranspile(`
-                paramArr = ["This", "is", true, "and", "this", "is", 1]
-                print "This is one line of stuff:";
-                for each item in paramArr
-                    print item; " ";
-                end for
-                print ""
+                sub main()
+                    paramArr = ["This", "is", true, "and", "this", "is", 1]
+                    print "This is one line of stuff:";
+                    for each item in paramArr
+                        print item; " ";
+                    end for
+                    print ""
+                end sub
             `, `
-                paramArr = [
-                    "This"
-                    "is"
-                    true
-                    "and"
-                    "this"
-                    "is"
-                    1
-                ]
-                print "This is one line of stuff:";
-                for each item in paramArr
-                    print item; " ";
-                end for
-                print ""
+                sub main()
+                    paramArr = [
+                        "This"
+                        "is"
+                        true
+                        "and"
+                        "this"
+                        "is"
+                        1
+                    ]
+                    print "This is one line of stuff:";
+                    for each item in paramArr
+                        print item; " ";
+                    end for
+                    print ""
+                end sub
             `);
         });
 
         it('handles roku documentation examples', () => {
             testTranspile(`
-                x=5:print 25; " is equal to"; x^2
-                a$="string":print a$;a$,a$;" ";a$
-                print "zone 1","zone 2","zone 3","zone 4"
-                print "print statement #1 ":print "print statement #2"
-                print "this is a five " 5 "!!"
-                print {}
-                print {a:1}
-                print []
-                print [5]
-                print tab(5)"tabbed 5";tab(25)"tabbed 25"
-                print tab(40) pos(0) 'prints 40 at position 40
-                print "these" tab(pos(0)+5)"words" tab(pos(0)+5)"are":print tab(pos(0)+5)"evenly" tab(pos(0)+5)"spaced"
+                sub main()
+                    x=5:print 25; " is equal to"; x^2
+                    a$="string":print a$;a$,a$;" ";a$
+                    print "zone 1","zone 2","zone 3","zone 4"
+                    print "print statement #1 ":print "print statement #2"
+                    print "this is a five " 5 "!!"
+                    print {}
+                    print {a:1}
+                    print []
+                    print [5]
+                    print tab(5)"tabbed 5";tab(25)"tabbed 25"
+                    print tab(40) pos(0) 'prints 40 at position 40
+                    print "these" tab(pos(0)+5)"words" tab(pos(0)+5)"are":print tab(pos(0)+5)"evenly" tab(pos(0)+5)"spaced"
+                end sub
             `, `
-                x = 5
-                print 25; " is equal to"; x ^ 2
-                a$ = "string"
-                print a$; a$, a$; " "; a$
-                print "zone 1", "zone 2", "zone 3", "zone 4"
-                print "print statement #1 "
-                print "print statement #2"
-                print "this is a five " 5 "!!"
-                print {}
-                print {
-                    a: 1
-                }
-                print []
-                print [
-                    5
-                ]
-                print tab(5) "tabbed 5"; tab(25) "tabbed 25"
-                print tab(40) pos(0) 'prints 40 at position 40
-                print "these" tab(pos(0) + 5) "words" tab(pos(0) + 5) "are"
-                print tab(pos(0) + 5) "evenly" tab(pos(0) + 5) "spaced"
+                sub main()
+                    x = 5
+                    print 25; " is equal to"; x ^ 2
+                    a$ = "string"
+                    print a$; a$, a$; " "; a$
+                    print "zone 1", "zone 2", "zone 3", "zone 4"
+                    print "print statement #1 "
+                    print "print statement #2"
+                    print "this is a five " 5 "!!"
+                    print {}
+                    print {
+                        a: 1
+                    }
+                    print []
+                    print [
+                        5
+                    ]
+                    print tab(5) "tabbed 5"; tab(25) "tabbed 25"
+                    print tab(40) pos(0) 'prints 40 at position 40
+                    print "these" tab(pos(0) + 5) "words" tab(pos(0) + 5) "are"
+                    print tab(pos(0) + 5) "evenly" tab(pos(0) + 5) "spaced"
+                end sub
             `);
         });
     });

@@ -1,7 +1,8 @@
 import { isBrsFile } from '../astUtils/reflection';
-import type { BrsFile } from '../files/BrsFile';
-import type { AfterProgramValidateEvent, BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent } from '../interfaces';
+import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, AfterProgramValidateEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
+import { CompletionsProcessor } from './completions/CompletionsProcessor';
+import { HoverProcessor } from './hover/HoverProcessor';
 import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
 import { BrsFilePreTranspileProcessor } from './transpile/BrsFilePreTranspileProcessor';
 import { BrsFileValidator } from './validation/BrsFileValidator';
@@ -14,6 +15,14 @@ export class BscPlugin implements CompilerPlugin {
         new CodeActionsProcessor(event).process();
     }
 
+    public provideHover(event: ProvideHoverEvent) {
+        return new HoverProcessor(event).process();
+    }
+
+    public provideCompletions(event: ProvideCompletionsEvent) {
+        new CompletionsProcessor(event).process();
+    }
+
     public onGetSemanticTokens(event: OnGetSemanticTokensEvent) {
         if (isBrsFile(event.file)) {
             return new BrsFileSemanticTokensProcessor(event as any).process();
@@ -22,7 +31,7 @@ export class BscPlugin implements CompilerPlugin {
 
     public onFileValidate(event: OnFileValidateEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFileValidator(event as OnFileValidateEvent<BrsFile>).process();
+            return new BrsFileValidator(event as any).process();
         }
     }
 

@@ -303,7 +303,7 @@ describe('parser class', () => {
             expect(cls.methods[0].accessModifier).to.be.undefined;
         });
 
-        it('supports primative field initializers', () => {
+        it('supports primitive field initializers', () => {
             let { tokens } = Lexer.scan(`
                 class Person
                     name = "Bob"

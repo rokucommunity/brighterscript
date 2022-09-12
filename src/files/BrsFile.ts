@@ -1,12 +1,13 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Position } from 'vscode-languageserver';
-import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
+import type { CompletionItem, Position, Location, Diagnostic } from 'vscode-languageserver';
+import { CancellationTokenSource } from 'vscode-languageserver';
+import { CompletionItemKind, SymbolKind, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import type { NamespaceContainer, Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
-import type { Callable, CallableArg, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink } from '../interfaces';
+import type { Callable, CallableArg, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, BscFile } from '../interfaces';
 import type { Token } from '../lexer/Token';
 import { isToken } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
@@ -22,15 +23,16 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { Logger, LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isTypedFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isEnumStatement, isArrayType, isCustomType, isDynamicType, isObjectType, isPrimitiveType, isRegexLiteralExpression, isInterfaceType, isEnumType, isFieldStatement } from '../astUtils/reflection';
+import { isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isEnumStatement, isConstStatement, isRegexLiteralExpression, isTypedFunctionType, isFieldStatement, isArrayType, isCustomType, isDynamicType, isEnumType, isInterfaceType, isMethodStatement, isObjectType, isPrimitiveType } from '../astUtils/reflection';
+import type { BscType, SymbolContainer } from '../types/BscType';
+import { getTypeFromContext } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
-import type { BscType, SymbolContainer } from '../types/BscType';
-import { getTypeFromContext } from '../types/BscType';
-import { UninitializedType } from '../types/UninitializedType';
-import { InvalidType } from '../types/InvalidType';
+import { URI } from 'vscode-uri';
 import type { SymbolTable } from '../SymbolTable';
+import { InvalidType } from '../types/InvalidType';
+import { UninitializedType } from '../types/UninitializedType';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -106,6 +108,13 @@ export class BrsFile {
         return [...this.diagnostics];
     }
 
+    public addDiagnostic(diagnostic: Diagnostic & { file?: BscFile }) {
+        if (!diagnostic.file) {
+            diagnostic.file = this;
+        }
+        this.diagnostics.push(diagnostic as any);
+    }
+
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
         this.diagnostics.push(...diagnostics);
     }
@@ -116,12 +125,16 @@ export class BrsFile {
 
     public functionCalls = [] as FunctionCall[];
 
+    private get cache() {
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        return this._parser?.references['cache'];
+    }
+
     /**
      * files referenced by import statements
      */
     public get ownScriptImports() {
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        const result = this._parser?.references['cache'].getOrAdd('BrsFile_ownScriptImports', () => {
+        const result = this.cache?.getOrAdd('BrsFile_ownScriptImports', () => {
             const result = [] as FileReference[];
             for (const statement of this.parser?.references?.importStatements ?? []) {
                 //register import statements
@@ -154,6 +167,42 @@ export class BrsFile {
     private documentSymbols: DocumentSymbol[];
 
     private workspaceSymbols: SymbolInformation[];
+
+    /**
+     * Get the token at the specified position
+     * @param position
+     */
+    public getTokenAt(position: Position) {
+        for (let token of this.parser.tokens) {
+            if (util.rangeContains(token.range, position)) {
+                return token;
+            }
+        }
+    }
+
+    /**
+     * Walk the AST and find the expression that this token is most specifically contained within
+     */
+    public getClosestExpression(position: Position) {
+        const handle = new CancellationTokenSource();
+        let containingNode: Expression | Statement;
+        this.ast.walk((node) => {
+            const latestContainer = containingNode;
+            //bsc walks depth-first
+            if (util.rangeContains(node.range, position)) {
+                containingNode = node;
+            }
+            //we had a match before, and don't now. this means we've finished walking down the whole way, and found our match
+            if (latestContainer && !containingNode) {
+                containingNode = latestContainer;
+                handle.cancel();
+            }
+        }, {
+            walkMode: WalkMode.visitAllRecursive,
+            cancel: handle.token
+        });
+        return containingNode;
+    }
 
     public get parser() {
         if (!this._parser) {
@@ -318,6 +367,7 @@ export class BrsFile {
     }
 
     public validate() {
+        util.validateTooDeepFile(this);
         //only validate the file if it was actually parsed (skip files containing typedefs)
         if (!this.hasTypedef) {
             this.validateImportStatements();
@@ -523,17 +573,23 @@ export class BrsFile {
         }
     }
 
+    public getFunctionExpressionAtPosition(position: Position) {
+        return this.cache.getOrAdd(`functionExpressionAtPosition-${position.line}:${position.character}`, () => {
+            return this._getFunctionExpressionAtPosition(position, this.parser.references.functionExpressions);
+        });
+    }
+
     /**
      * Find the function expression at the given position.
      */
-    public getFunctionExpressionAtPosition(position: Position, functionExpressions?: FunctionExpression[]): FunctionExpression {
+    public _getFunctionExpressionAtPosition(position: Position, functionExpressions?: FunctionExpression[]): FunctionExpression {
         if (!functionExpressions) {
             functionExpressions = this.parser.references.functionExpressions;
         }
         for (let functionExpression of functionExpressions) {
             if (util.rangeContains(functionExpression.range, position)) {
                 //see if any of that scope's children match the position also, and give them priority
-                let childFunc = this.getFunctionExpressionAtPosition(position, functionExpression.childFunctionExpressions);
+                let childFunc = this._getFunctionExpressionAtPosition(position, functionExpression.childFunctionExpressions);
                 if (childFunc) {
                     return childFunc;
                 } else {
@@ -550,11 +606,13 @@ export class BrsFile {
      */
     public getNamespaceStatementForPosition(position: Position): NamespaceStatement {
         if (position) {
-            for (const statement of this.parser.references.namespaceStatements) {
-                if (util.rangeContains(statement.range, position)) {
-                    return statement;
+            return this.cache.getOrAdd(`namespaceStatementForPosition-${position.line}:${position.character}`, () => {
+                for (const statement of this.parser.references.namespaceStatements) {
+                    if (util.rangeContains(statement.range, position)) {
+                        return statement;
+                    }
                 }
-            }
+            });
         }
     }
 
@@ -672,20 +730,20 @@ export class BrsFile {
                 result.push(...scope.getPropertyNameCompletions());
             }
         } else {
-            //include namespaces
-            result.push(...namespaceCompletions);
-
-            //include class names
-            result.push(...classNameCompletions);
-
-            //include interfaces
-            result.push(...interfaceNameCompletions);
-
-            //include enums
-            result.push(...this.getNonNamespacedEnumStatementCompletions(currentToken, this.parseMode, scope));
-
-            //include the global callables
-            result.push(...scope.getCallablesAsCompletions(this.parseMode));
+            result.push(
+                //include namespaces
+                ...namespaceCompletions,
+                //include class names
+                ...classNameCompletions,
+                //include interfaces
+                ...interfaceNameCompletions,
+                //include enums
+                ...this.getNonNamespacedEnumStatementCompletions(currentToken, this.parseMode, scope),
+                //include constants
+                ...this.getNonNamespacedConstStatementCompletions(currentToken, this.parseMode, scope),
+                //include the global callables
+                ...scope.getCallablesAsCompletions(this.parseMode)
+            );
 
             //add `m` because that's always valid within a function
             result.push({
@@ -1083,6 +1141,27 @@ export class BrsFile {
         return [...results.values()];
     }
 
+    private getNonNamespacedConstStatementCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
+        if (parseMode !== ParseMode.BrighterScript) {
+            return [];
+        }
+        const containingNamespaceName = this.getNamespaceStatementForPosition(currentToken?.range?.start)?.name + '.';
+        const results = new Map<string, CompletionItem>();
+        const map = scope.getConstMap();
+        for (const key of [...map.keys()]) {
+            const statement = map.get(key).item;
+            const fullName = statement.fullName;
+            //if the item is contained within our own namespace, or if it's non-namespaced
+            if (fullName.startsWith(containingNamespaceName) || !fullName.includes('.')) {
+                results.set(fullName, {
+                    label: statement.name,
+                    kind: CompletionItemKind.Constant
+                });
+            }
+        }
+        return [...results.values()];
+    }
+
     private getEnumMemberStatementCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
         if (parseMode === ParseMode.BrightScript || !currentToken) {
             return [];
@@ -1188,6 +1267,11 @@ export class BrsFile {
                             label: stmt.name,
                             kind: CompletionItemKind.Enum
                         });
+                    } else if (isConstStatement(stmt) && !newToken) {
+                        result.set(stmt.name, {
+                            label: stmt.name,
+                            kind: CompletionItemKind.Constant
+                        });
                     }
                 }
             }
@@ -1211,7 +1295,7 @@ export class BrsFile {
                 const namespaceItemStatementHandler = (statement: ClassStatement | FunctionStatement) => {
                     if (!location && statement.name.text.toLowerCase() === endName) {
                         const uri = util.pathToUri(file.srcPath);
-                        location = Location.create(uri, statement.range);
+                        location = util.createLocation(uri, statement.range);
                     }
                 };
 
@@ -1420,7 +1504,7 @@ export class BrsFile {
      * Given a position in a file, if the position is sitting on some type of identifier,
      * go to the definition of that identifier (where this thing was first defined)
      */
-    public getDefinition(position: Position) {
+    public getDefinition(position: Position): Location[] {
         let results: Location[] = [];
 
         //get the token at the position
@@ -1437,16 +1521,38 @@ export class BrsFile {
             return results;
         }
 
+        const scopesForFile = this.program.getScopesForFile(this);
+        const [scope] = scopesForFile;
+        scope.linkSymbolTable();
+
+        const expression = this.getClosestExpression(position);
+        if (expression) {
+            let containingNamespace = this.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
+            const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
+
+            //find a constant with this name
+            const constant = scope.getConstFileLink(fullName, containingNamespace);
+            if (constant) {
+                results.push(
+                    util.createLocation(
+                        URI.file(constant.file.srcPath).toString(),
+                        constant.item.tokens.name.range
+                    )
+                );
+                return results;
+            }
+        }
+
         let textToSearchFor = token.text.toLowerCase();
 
         const previousToken = this.parser.getTokenAt({ line: token.range.start.line, character: token.range.start.character });
 
         if (previousToken?.kind === TokenKind.Callfunc) {
-            for (const scope of this.program.getScopes()) {
+            for (const scope of scopesForFile) {
                 //to only get functions defined in interface methods
                 const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                 if (callable) {
-                    results.push(Location.create(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.range));
+                    results.push(util.createLocation(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.range));
                 }
             }
             return results;
@@ -1459,7 +1565,7 @@ export class BrsFile {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = this.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
                 if (extendedClass) {
-                    results.push(Location.create(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.range));
+                    results.push(util.createLocation(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.range));
                 }
             }
             return results;
@@ -1484,14 +1590,14 @@ export class BrsFile {
                 //we found a variable declaration with this token text
                 if (symbol.name.toLowerCase() === textToSearchFor) {
                     const uri = util.pathToUri(this.srcPath);
-                    results.push(Location.create(uri, symbol.range));
+                    results.push(util.createLocation(uri, symbol.range));
                 }
             }
             if (this.parser.tokenFollows(token, TokenKind.Goto)) {
                 for (const label of func.labelStatements) {
                     if (label.tokens.identifier.text.toLocaleLowerCase() === textToSearchFor) {
                         const uri = util.pathToUri(this.srcPath);
-                        results.push(Location.create(uri, label.tokens.identifier.range));
+                        results.push(util.createLocation(uri, label.tokens.identifier.range));
                     }
                 }
             }
@@ -1499,7 +1605,7 @@ export class BrsFile {
 
         const filesSearched = new Set<BrsFile>();
         //look through all files in scope for matches
-        for (const scope of this.program.getScopesForFile(this)) {
+        for (const scope of scopesForFile) {
             for (const file of scope.getAllFiles()) {
                 if (isXmlFile(file) || filesSearched.has(file)) {
                     continue;
@@ -1516,7 +1622,7 @@ export class BrsFile {
                 const statementHandler = (statement: FunctionStatement) => {
                     if (statement.getName(this.parseMode).toLowerCase() === textToSearchFor) {
                         const uri = util.pathToUri(file.srcPath);
-                        results.push(Location.create(uri, statement.range));
+                        results.push(util.createLocation(uri, statement.range));
                     }
                 };
 
@@ -1536,12 +1642,12 @@ export class BrsFile {
         file.parser.ast.walk(createVisitor({
             MethodStatement: (statement: MethodStatement) => {
                 if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
-                    results.push(Location.create(util.pathToUri(file.srcPath), statement.range));
+                    results.push(util.createLocation(util.pathToUri(file.srcPath), statement.range));
                 }
             },
             FieldStatement: (statement: FieldStatement) => {
                 if (statement.name.text.toLowerCase() === textToSearchFor) {
-                    results.push(Location.create(util.pathToUri(file.srcPath), statement.range));
+                    results.push(util.createLocation(util.pathToUri(file.srcPath), statement.range));
                 }
             }
         }), {
@@ -1549,134 +1655,6 @@ export class BrsFile {
         });
 
         return results;
-    }
-
-    public getHover(position: Position): Hover {
-        const fence = (code: string) => util.mdFence(code, 'brightscript');
-        //get the token at the position
-        let token = this.parser.getTokenAt(position);
-
-        let hoverTokenTypes = [
-            TokenKind.Identifier,
-            TokenKind.Function,
-            TokenKind.EndFunction,
-            TokenKind.Sub,
-            TokenKind.EndSub
-        ];
-
-        //throw out invalid tokens and the wrong kind of tokens
-        if (!token || !hoverTokenTypes.includes(token.kind)) {
-            return null;
-        }
-
-        let lowerTokenText = token.text.toLowerCase();
-
-        //look through local variables first
-        {
-            const func = this.getFunctionExpressionAtPosition(position);
-            if (func) {
-                // this identifier could possibly be a class field, so no function expression is available
-                for (const labelStatement of func?.labelStatements ?? []) {
-                    if (labelStatement.tokens.identifier.text.toLocaleLowerCase() === lowerTokenText) {
-                        return {
-                            range: token.range,
-                            contents: `${labelStatement.tokens.identifier.text}: label`
-                        };
-                    }
-                }
-            }
-            const typeTexts = new Set<string>();
-            const fileScopes = this.program.getScopesForFile(this).sort((a, b) => a.dependencyGraphKey?.localeCompare(b.dependencyGraphKey));
-            const callables = [] as Callable[];
-            for (const scope of fileScopes) {
-                scope.linkSymbolTable();
-                const typeContext = { file: this, scope: scope, position: position };
-                const typeTextPair = this.getSymbolTypeFromToken(token, func, scope);
-                if (typeTextPair) {
-                    let scopeTypeText = '';
-
-                    if (isTypedFunctionType(typeTextPair.type)) {
-                        scopeTypeText = typeTextPair.type?.toString(typeContext);
-                        //keep unique references to the callables for this function
-                        if (!typeTexts.has(scopeTypeText)) {
-                            callables.push(
-                                scope.getCallableByName(lowerTokenText)
-                            );
-                        }
-                    } else if (typeTextPair.useExpandedTextOnly) {
-                        scopeTypeText = typeTextPair.expandedTokenText;
-                    } else {
-                        scopeTypeText = `${typeTextPair.expandedTokenText} as ${typeTextPair.type?.toString(typeContext)}`;
-                    }
-
-                    if (scopeTypeText) {
-                        typeTexts.add(scopeTypeText);
-                    }
-                }
-                scope.unlinkSymbolTable();
-            }
-
-            if (callables.length === typeTexts.size) {
-                //this is a function in all scopes, so build the function hover
-                return {
-                    range: token.range,
-                    contents: this.getCallableDocumentation([...typeTexts], callables)
-                };
-            } else if (typeTexts?.size > 0) {
-                const typeText = [...typeTexts].join(' | ');
-                return {
-                    range: token.range,
-                    contents: fence(typeText)
-                };
-            }
-        }
-
-        // //look through all callables in relevant scopes
-        // {
-        //     let scopes = this.program.getScopesForFile(this);
-        //     for (let scope of scopes) {
-        //         let callable = scope.getCallableByName(lowerTokenText);
-        //         if (callable) {
-        //             return {
-        //                 range: token.range,
-        //                 contents: this.getCallableDocumentation(callables)
-        //             };
-        //         }
-        //     }
-        // }
-    }
-
-    /**
-     * Build a hover documentation for a callable.
-     */
-    private getCallableDocumentation(typeTexts: string[], callables: Callable[]) {
-        const callable = callables[0];
-        const typeText = typeTexts[0];
-
-        const comments = [] as Token[];
-        const tokens = callable?.file.parser.tokens as Token[];
-        const idx = tokens?.indexOf(callable.functionStatement?.func.functionType);
-        for (let i = idx - 1; i >= 0; i--) {
-            const token = tokens[i];
-            //skip whitespace and newline chars
-            if (token.kind === TokenKind.Comment) {
-                comments.push(token);
-            } else if (token.kind === TokenKind.Newline || token.kind === TokenKind.Whitespace) {
-                //skip these tokens
-                continue;
-
-                //any other token means there are no more comments
-            } else {
-                break;
-            }
-        }
-        //message indicating if there are variations. example: (+3 variations) if there are 4 unique function signatures
-        const multiText = callables.length > 1 ? ` (+${callables.length - 1} variations)` : '';
-        let result = util.mdFence(typeText + multiText, 'brightscript');
-        if (comments.length > 0) {
-            result += '\n***\n' + comments.reverse().map(x => x.text.replace(/^('|rem)/i, '')).join('\n');
-        }
-        return result;
     }
 
     public getSignatureHelpForNamespaceMethods(callableName: string, dottedGetText: string, scope: Scope): { key: string; signature: SignatureInformation }[] {
@@ -1823,7 +1801,7 @@ export class BrsFile {
                 file.ast.walk(createVisitor({
                     VariableExpression: (e) => {
                         if (e.name.text.toLowerCase() === searchFor) {
-                            locations.push(Location.create(util.pathToUri(file.srcPath), e.range));
+                            locations.push(util.createLocation(util.pathToUri(file.srcPath), e.range));
                         }
                     }
                 }), {

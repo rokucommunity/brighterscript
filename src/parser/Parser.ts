@@ -25,6 +25,7 @@ import {
     Body,
     CatchStatement,
     ClassStatement,
+    ConstStatement,
     CommentStatement,
     DimStatement,
     DottedSetStatement,
@@ -95,14 +96,13 @@ import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, is
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
+import { SymbolTable } from '../SymbolTable';
 import { DynamicType } from '../types/DynamicType';
 import { ArrayType } from '../types/ArrayType';
-import { getTypeFromCallExpression, getTypeFromDottedGetExpression, getTypeFromNewExpression, getTypeFromVariableExpression } from '../types/helpers';
-import { SymbolTable } from '../SymbolTable';
-import { ObjectType } from '../types/ObjectType';
 import type { BscType } from '../types/BscType';
+import { getTypeFromNewExpression, getTypeFromCallExpression, getTypeFromVariableExpression, getTypeFromDottedGetExpression } from '../types/helpers';
+import { ObjectType } from '../types/ObjectType';
 import type { FunctionDeclarationParseOptions } from '../interfaces';
-
 
 export class Parser {
     /**
@@ -124,11 +124,13 @@ export class Parser {
         return this.ast.statements;
     }
 
-
+    /**
+     * The top-level symbol table for this file. Things like top-level namespaces, non-namespaced classes, enums, interfaces, and functions beling here.
+     */
     public symbolTable = new SymbolTable();
 
     private get currentSymbolTable() {
-        return this.currentFunctionExpression?.symbolTable ?? this.symbolTable;
+        return this.currentFunctionExpression?.symbolTable ?? this.currentNamespace?.symbolTable ?? this.symbolTable;
     }
 
     /**
@@ -226,13 +228,7 @@ export class Parser {
      * Static wrapper around creating a new parser and parsing a list of tokens
      */
     public static parse(toParse: Token[] | string, options?: ParseOptions): Parser {
-        let tokens: Token[];
-        if (typeof toParse === 'string') {
-            tokens = Lexer.scan(toParse).tokens;
-        } else {
-            tokens = toParse;
-        }
-        return new Parser().parse(tokens, options);
+        return new Parser().parse(toParse, options);
     }
 
     /**
@@ -240,7 +236,13 @@ export class Parser {
      * @param toParse the array of tokens to parse. May not contain any whitespace tokens
      * @returns the same instance of the parser which contains the diagnostics and statements
      */
-    public parse(tokens: Token[], options?: ParseOptions) {
+    public parse(toParse: Token[] | string, options?: ParseOptions) {
+        let tokens: Token[];
+        if (typeof toParse === 'string') {
+            tokens = Lexer.scan(toParse).tokens;
+        } else {
+            tokens = toParse;
+        }
         this.logger = options?.logger ?? new Logger();
         this.tokens = tokens;
         this.options = this.sanitizeParseOptions(options);
@@ -264,7 +266,7 @@ export class Parser {
     private body() {
         const parentAnnotations = this.enterAnnotationBlock();
 
-        let body = new Body([]);
+        let body = new Body([], this.symbolTable);
         if (this.tokens.length > 0) {
             this.consumeStatementSeparators(true);
 
@@ -341,6 +343,10 @@ export class Parser {
 
             if (this.checkLibrary()) {
                 return this.libraryStatement();
+            }
+
+            if (this.check(TokenKind.Const) && this.checkAnyNext(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
+                return this.constDeclaration();
             }
 
             if (this.check(TokenKind.At) && this.checkNext(TokenKind.Identifier)) {
@@ -594,6 +600,10 @@ export class Parser {
             this.currentSymbolTable.addSymbol(tokens.name.text, tokens.name.range, result.getThisBscType());
         }
 
+        if (result.name) {
+            this.currentSymbolTable.addSymbol(result.tokens.name.text, result.tokens.name.range, DynamicType.instance);
+        }
+
         this._references.enumStatements.push(result);
         this.exitAnnotationBlock(parentAnnotations);
         return result;
@@ -671,6 +681,9 @@ export class Parser {
                     //cache the range property so that plugins can't affect it
                     (decl as MethodStatement).cacheRange();
 
+                    //add the `super` symbol to class methods
+                    functionStatement.func.symbolTable.addSymbol('super', undefined, DynamicType.instance);
+
                     //fields
                 } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
 
@@ -724,6 +737,10 @@ export class Parser {
             this.currentSymbolTable.addSymbol(className.text, className.range, result.getConstructorFunctionType());
         }
 
+        if (className) {
+            this.currentSymbolTable.addSymbol(className.text, className.range, DynamicType.instance);
+        }
+
         this._references.classStatements.push(result);
         this.exitAnnotationBlock(parentAnnotations);
         return result;
@@ -775,7 +792,6 @@ export class Parser {
      */
     private callExpressions = [];
 
-
     private functionStatement(options: FunctionDeclarationParseOptions): FunctionStatement {
         options.hasName = true;
         const funcResult = this.functionDeclaration(options);
@@ -784,6 +800,20 @@ export class Parser {
             funcResult.functionExpression.functionStatement = result;
             if (!options.onlyCallableAsMember) {
                 this._references.functionStatements.push(result);
+            }
+            // Add the transpiled name for namespace functions
+            // to consider an edge case when defining namespaces in .bs files
+            // and using them in .brs files.
+            if (result.func.namespaceName) {
+                const transpiledNamespaceFunctionName = result.getName(ParseMode.BrightScript);
+                const funcType = result.func.getFunctionType();
+                funcType.setName(transpiledNamespaceFunctionName);
+
+                this.symbolTable.addSymbol(
+                    transpiledNamespaceFunctionName,
+                    result.name.range,
+                    funcType
+                );
             }
             return result;
         }
@@ -912,10 +942,11 @@ export class Parser {
                 typeExpr, //return type
                 this.currentFunctionExpression,
                 this.currentNamespaceName,
-                this.currentNamespace?.symbolTable ?? this.symbolTable
+                this.currentSymbolTable
             );
-
-
+            if (!func.symbolTable.hasSymbol('m')) {
+                func.symbolTable.addSymbol('m', undefined, DynamicType.instance);
+            }
             //if there is a parent function, register this function with the parent
             if (this.currentFunctionExpression) {
                 this.currentFunctionExpression.childFunctionExpressions.push(func);
@@ -926,14 +957,8 @@ export class Parser {
                 const funcType = func.getFunctionType();
                 funcType.setName(name.text);
 
-                // add the function as declared to the current namespace's table
-                this.currentNamespace?.symbolTable.addSymbol(name.text, name.range, funcType);
-                let fullyQualifiedName = name.text;
-                if (this.currentNamespaceName) {
-                    // add the "namespaced" name of this function to the parent symbol table
-                    fullyQualifiedName = this.currentNamespaceName.getName(ParseMode.BrighterScript) + '.' + name.text;
-                }
-                this.currentSymbolTable.addSymbol(fullyQualifiedName, name.range, funcType);
+                // add the function as declared to the current symbol table
+                this.currentSymbolTable.addSymbol(name.text, name.range, funcType);
             }
 
             this._references.functionExpressions.push(func);
@@ -1068,10 +1093,14 @@ export class Parser {
                 this.currentFunctionExpression
             );
             this.addExpressionsToReferences(nameExpression);
-            //remove the right-hand-side expression from this assignment operator, and replace with the full assignment expression
-            this._references.expressions.delete(value);
+            if (isBinaryExpression(value)) {
+                //remove the right-hand-side expression from this assignment operator, and replace with the full assignment expression
+                this._references.expressions.delete(value);
+            }
             this._references.expressions.add(result);
         }
+
+        this.currentSymbolTable.addSymbol(name.text, name.range, DynamicType.instance);
         this._references.assignmentStatements.push(result);
         const assignmentType = getBscTypeFromExpression(result.value, this.currentFunctionExpression);
 
@@ -1404,6 +1433,14 @@ export class Parser {
         //cache the range property so that plugins can't affect it
         result.cacheRange();
 
+        if (result.name) {
+            this.symbolTable.addSymbol(
+                result.name.split('.')[0],
+                result.nameExpression.range,
+                DynamicType.instance
+            );
+        }
+
         return result;
     }
 
@@ -1477,6 +1514,24 @@ export class Parser {
             result.push(this.advance());
         }
         return result;
+    }
+
+    private constDeclaration(): ConstStatement | undefined {
+        this.warnIfNotBrighterScriptMode('const declaration');
+        const constToken = this.advance();
+        const nameToken = this.identifier(...this.allowedLocalIdentifiers);
+        const equalToken = this.consumeToken(TokenKind.Equal);
+        const expression = this.expression();
+        const statement = new ConstStatement({
+            const: constToken,
+            name: nameToken,
+            equals: equalToken
+        }, expression, this.currentNamespaceName);
+        if (nameToken) {
+            this.currentSymbolTable.addSymbol(nameToken.text, nameToken.range, DynamicType.instance);
+        }
+        this._references.constStatements.push(statement);
+        return statement;
     }
 
     private libraryStatement(): LibraryStatement | undefined {
@@ -1700,6 +1755,9 @@ export class Parser {
         } else {
             statement.tokens.endTry = this.advance();
         }
+        if (exceptionVarToken) {
+            this.currentSymbolTable.addSymbol(exceptionVarToken.text, exceptionVarToken.range, DynamicType.instance);
+        }
         return statement;
     }
 
@@ -1751,7 +1809,9 @@ export class Parser {
             });
         }
         let rightSquareBracket = this.tryConsume(DiagnosticMessages.missingRightSquareBracketAfterDimIdentifier(), TokenKind.RightSquareBracket);
-
+        if (identifier) {
+            this.currentSymbolTable.addSymbol(identifier.text, identifier.range, DynamicType.instance);
+        }
         return new DimStatement(dim, identifier, leftSquareBracket, expressions, rightSquareBracket);
     }
 
@@ -2730,7 +2790,7 @@ export class Parser {
                 range: null as Range
             };
             if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
-                result.keyToken = this.advance();
+                result.keyToken = this.identifier(...AllowedProperties);
             } else if (this.check(TokenKind.StringLiteral)) {
                 result.keyToken = this.advance();
             } else {
@@ -3401,6 +3461,9 @@ export class Parser {
             EnumStatement: e => {
                 this._references.enumStatements.push(e);
             },
+            ConstStatement: s => {
+                this._references.constStatements.push(s);
+            },
             UnaryExpression: e => {
                 this._references.expressions.add(e);
             },
@@ -3502,6 +3565,18 @@ export class References {
         return this.cache.getOrAdd('enums', () => {
             const result = new Map<string, EnumStatement>();
             for (const stmt of this.enumStatements) {
+                result.set(stmt.fullName.toLowerCase(), stmt);
+            }
+            return result;
+        });
+    }
+
+    public constStatements = [] as ConstStatement[];
+
+    public get constStatementLookup() {
+        return this.cache.getOrAdd('consts', () => {
+            const result = new Map<string, ConstStatement>();
+            for (const stmt of this.constStatements) {
                 result.set(stmt.fullName.toLowerCase(), stmt);
             }
             return result;

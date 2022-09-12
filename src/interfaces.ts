@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, CompletionItem } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -6,7 +6,7 @@ import type { TypedFunctionType } from './types/TypedFunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { FunctionStatement, ClassStatement, InterfaceStatement, EnumStatement } from './parser/Statement';
+import type { ClassStatement, EnumStatement, FunctionStatement, InterfaceStatement, Statement } from './parser/Statement';
 import type { Expression, FunctionExpression } from './parser/Expression';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceMapGenerator, SourceNode } from 'source-map';
@@ -193,6 +193,33 @@ export interface CompilerPlugin {
     beforeProgramTranspile?: PluginHandler<BeforeProgramTranspileEvent>;
     afterProgramTranspile?: PluginHandler<AfterProgramTranspileEvent>;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+
+    /**
+     * Emitted before the program starts collecting completions
+     */
+    beforeProvideCompletions?: PluginHandler<BeforeProvideCompletionsEvent>;
+    /**
+     * Use this event to contribute completions
+     */
+    provideCompletions?: PluginHandler<ProvideCompletionsEvent>;
+    /**
+     * Emitted after the program has finished collecting completions, but before they are sent to the client
+     */
+    afterProvideCompletions?: PluginHandler<AfterProvideCompletionsEvent>;
+
+    /**
+     * Called before the `provideHover` hook. Use this if you need to prepare any of the in-memory objects before the `provideHover` gets called
+     */
+    beforeProvideHover?: PluginHandler<BeforeProvideHoverEvent>;
+    /**
+     * Called when bsc looks for hover information. Use this if your plugin wants to contribute hover information.
+     */
+    provideHover?: PluginHandler<ProvideHoverEvent>;
+    /**
+     * Called after the `provideHover` hook. Use this if you want to intercept or sanitize the hover data (even from other plugins) before it gets sent to the client.
+     */
+    afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
+
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: PluginHandler<AfterScopeCreateEvent>;
@@ -221,7 +248,7 @@ export interface CompilerPlugin {
     beforeFileDispose?: PluginHandler<BeforeFileDisposeEvent>;
     afterFileDispose?: PluginHandler<AfterFileDisposeEvent>;
 }
-export type PluginHandler<T> = (event: T) => void;
+export type PluginHandler<T, R = void> = (event: T) => R;
 
 export interface BeforeProgramCreateEvent {
     builder: ProgramBuilder;
@@ -274,6 +301,42 @@ export interface OnGetCodeActionsEvent {
     diagnostics: BsDiagnostic[];
     codeActions: CodeAction[];
 }
+
+export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
+    program: Program;
+    file: TFile;
+    scopes: Scope[];
+    position: Position;
+    completions: CompletionItem[];
+}
+export type BeforeProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
+export type AfterProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
+
+export interface ProvideHoverEvent {
+    program: Program;
+    file: BscFile;
+    position: Position;
+    scopes: Scope[];
+    hovers: Hover[];
+}
+export interface Hover {
+    /**
+     * The contents of the hover, written in markdown. If you want to display code in the hover, use code blocks, like this:
+     * ```text
+     *      ```brighterscript
+     *      some = "code" + "here"
+     *      ```
+     * ```
+     */
+    contents: string | string[];
+    /**
+     * An optional range
+     */
+    range?: Range;
+}
+export type BeforeProvideHoverEvent = ProvideHoverEvent;
+export type AfterProvideHoverEvent = ProvideHoverEvent;
+
 export interface AfterScopeCreateEvent {
     program: Program;
     scope: Scope;
@@ -490,3 +553,4 @@ export interface FunctionDeclarationParseOptions {
      */
     onlyCallableAsMember?: boolean;
 }
+export type AstNode = Expression | Statement;

@@ -1,9 +1,9 @@
 import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
+import type { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
-import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag, BscFile } from '../interfaces';
+import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag, BscFile, Hover } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
 import SGParser from '../parser/SGParser';
@@ -202,6 +202,7 @@ export class XmlFile {
 
 
     public validate() {
+        util.validateTooDeepFile(this);
         if (this.parser.ast.root) {
             this.validateComponent(this.parser.ast);
         } else {
@@ -420,7 +421,7 @@ export class XmlFile {
         return null;
     }
 
-    public getReferences(position: Position): Promise<Location[]> {
+    public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
         //TODO implement
         return null;
     }

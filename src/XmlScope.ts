@@ -53,7 +53,7 @@ export class XmlScope extends Scope {
             const parentScope = this.getParentScope();
             this._topTable = new SymbolTable();
             if (isXmlScope(parentScope)) {
-                this._topTable.setParent(parentScope.topTable);
+                this._topTable.pushParent(parentScope.topTable);
             }
         }
         return this._topTable;

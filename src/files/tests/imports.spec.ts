@@ -158,7 +158,7 @@ describe('import statements', () => {
         program.validate();
 
         expectDiagnostics(program, [
-            DiagnosticMessages.callToUnknownFunction('Waddle', 'pkg:/components/ChildScene.xml')
+            DiagnosticMessages.cannotFindName('Waddle')
         ]);
 
         //add the missing function
