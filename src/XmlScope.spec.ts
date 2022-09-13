@@ -61,12 +61,12 @@ describe('XmlScope', () => {
 
     describe('getDefinition', () => {
         it('finds parent file', () => {
-            let parentXmlFile = program.setFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
+            let parentXmlFile = program.setFile<XmlFile>({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentComponent">
                 </component>
             `);
-            let childXmlFile = program.setFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
+            let childXmlFile = program.setFile<XmlFile>({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildComponent" extends="ParentComponent">
                 </component>

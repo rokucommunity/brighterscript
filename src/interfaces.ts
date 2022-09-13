@@ -23,7 +23,34 @@ export interface BsDiagnostic extends Diagnostic {
     data?: any;
 }
 
-export type BscFile = BrsFile | XmlFile;
+export interface BscFile {
+    /**
+     * The pkgPath to the file (without the `pkg:` prefix)
+     */
+    pkgPath: string;
+    /**
+     * The absolute path to the source file
+     */
+    srcPath: string;
+    /**
+     * The key used to identify this file in the dependency graph.
+     * If omitted, the pkgPath is used.
+     */
+    dependencyGraphKey?: string;
+    /**
+     * A list of diagnostics associated with this file
+     */
+    diagnostics: BsDiagnostic[];
+    /**
+     * Indicates whether the file has been validated. This flag is auto-set by the program during the validation cycle.
+     * You can set this to `true` to skip validation for this file or if you've validated the file yourself already
+     */
+    isValidated?: boolean;
+    /**
+     * Dispose of any resources the file may have created.
+     */
+    dispose?(): void;
+}
 
 export interface Callable {
     file: BscFile;
@@ -68,7 +95,7 @@ export interface FunctionCall {
      */
     range: Range;
     functionScope: FunctionScope;
-    file: File;
+    file: BscFile;
     name: string;
     args: CallableArg[];
     nameRange: Range;
@@ -123,15 +150,6 @@ export interface FileReference {
      * If the range is null, then this import is derived so skip any location-based logic
      */
     filePathRange?: Range;
-}
-
-export interface File {
-    /**
-     * The absolute path to the file, relative to the pkg
-     */
-    pkgPath: string;
-    srcPath: string;
-    getDiagnostics(): BsDiagnostic[];
 }
 
 export interface VariableDeclaration {
@@ -191,16 +209,19 @@ export interface CompilerPlugin {
     name: string;
     //program events
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    afterProgramCreate?: (program: Program) => void;
+
     beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+
     beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterProgramCreate?: (program: Program) => void;
+
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
+
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
-    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
 
     /**
      * Emitted before the program starts collecting completions
@@ -228,17 +249,35 @@ export interface CompilerPlugin {
      */
     afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
 
-    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;
+
     beforeScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
+
     beforeScopeValidate?: ValidateHandler;
     onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
     afterScopeValidate?: ValidateHandler;
-    //file events
+
+    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
+
+    /**
+     * Called before a file is added to the program. This is triggered for every file (even virtual files emitted by other files)
+     */
+    beforeProvideFile?: PluginHandler<BeforeProvideFileEvent>;
+    /**
+     * Give plugins the opportunity to handle parsing/validating a file
+     */
+    provideFile?: PluginHandler<ProvideFileEvent>;
+    /**
+     * Called after a file was added to the program.
+     */
+    afterProvideFile?: PluginHandler<AfterProvideFileEvent>;
+
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: BscFile) => void;
+
     /**
      * Called before each file is validated
      */
@@ -251,8 +290,10 @@ export interface CompilerPlugin {
      * Called after each file is validated
      */
     afterFileValidate?: (file: BscFile) => void;
+
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
+
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
 }
@@ -375,6 +416,28 @@ export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
      * the changes to persist in the in-memory file.
      */
     editor: Editor;
+}
+
+export interface BeforeProvideFileEvent {
+    srcPath: string;
+    /**
+     * An array of files that should be added to the program as a result of this event
+     */
+    files: BscFile[];
+}
+export interface ProvideFileEvent {
+    srcPath: string;
+    /**
+     * An array of files that should be added to the program as a result of this event
+     */
+    files: BscFile[];
+}
+export interface AfterProvideFileEvent<TFile extends BscFile = BscFile> {
+    file: TFile;
+    /**
+     * An array of files that should be added to the program as a result of this event
+     */
+    files: BscFile[];
 }
 
 export interface SemanticToken {

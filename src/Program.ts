@@ -1,14 +1,14 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, Hover } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideCompletionsEvent, ProvideHoverEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -250,7 +250,7 @@ export class Program {
      * by any scope in the program.
      */
     public getUnreferencedFiles() {
-        let result = [] as File[];
+        let result = [] as BscFile[];
         for (let filePath in this.files) {
             let file = this.files[filePath];
             if (!this.fileIsIncludedInAnyScope(file)) {
@@ -282,7 +282,7 @@ export class Program {
             let unreferencedFiles = this.getUnreferencedFiles();
             for (let file of unreferencedFiles) {
                 diagnostics.push(
-                    ...file.getDiagnostics()
+                    ...file.diagnostics
                 );
             }
             const filteredDiagnostics = this.logger.time(LogLevel.debug, ['filter diagnostics'], () => {
@@ -745,7 +745,7 @@ export class Program {
      * Get a list of all scopes the file is loaded into
      * @param file
      */
-    public getScopesForFile(file: XmlFile | BrsFile | string) {
+    public getScopesForFile(file: BscFile | string) {
         if (typeof file === 'string') {
             file = this.getFile(file);
         }
@@ -783,7 +783,8 @@ export class Program {
         //look through all files in scope for matches
         for (const scope of this.getScopesForFile(originFile)) {
             for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || filesSearched.has(file)) {
+                //skip non-brs files, or files we've already processed
+                if (!isBrsFile(file) || filesSearched.has(file)) {
                     continue;
                 }
                 filesSearched.add(file);
@@ -819,7 +820,8 @@ export class Program {
 
         //look through all files in scope for matches
         for (const file of scope.getOwnFiles()) {
-            if (isXmlFile(file) || filesSearched.has(file)) {
+            //skip non-brs files, or files we've already processed
+            if (!isBrsFile(file) || filesSearched.has(file)) {
                 continue;
             }
             filesSearched.add(file);

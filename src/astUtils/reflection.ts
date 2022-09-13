@@ -2,7 +2,7 @@ import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStat
 import type { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
-import type { BscFile, File, TypedefProvider } from '../interfaces';
+import type { BscFile, TypedefProvider } from '../interfaces';
 import { InvalidType } from '../types/InvalidType';
 import { VoidType } from '../types/VoidType';
 import { InternalWalkMode } from './visitors';
@@ -22,7 +22,7 @@ import type { ObjectType } from '../types/ObjectType';
 
 // File reflection
 
-export function isBrsFile(file: (BscFile | File)): file is BrsFile {
+export function isBrsFile(file: BscFile): file is BrsFile {
     return file?.constructor.name === 'BrsFile';
 }
 

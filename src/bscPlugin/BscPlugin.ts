@@ -1,5 +1,7 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent } from '../interfaces';
+import type { BrsFile } from '../files/BrsFile';
+import type { XmlFile } from '../files/XmlFile';
+import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideHoverEvent } from '../interfaces';
 import type { Program } from '../Program';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
@@ -33,9 +35,9 @@ export class BscPlugin implements CompilerPlugin {
 
     public onFileValidate(event: OnFileValidateEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFileValidator(event as any).process();
+            return new BrsFileValidator(event as OnFileValidateEvent<BrsFile>).process();
         } else if (isXmlFile(event.file)) {
-            return new XmlFileValidator(event as any).process();
+            return new XmlFileValidator(event as OnFileValidateEvent<XmlFile>).process();
         }
     }
 

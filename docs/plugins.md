@@ -196,23 +196,12 @@ export interface CompilerPlugin {
     afterScopeValidate?: ValidateHandler;
     //file events
     beforeFileParse?: (source: SourceObj) => void;
-    afterFileParse?: (file: BscFile) => void;
-    /**
-     * Called before each file is validated
-     */
-    beforeFileValidate?: PluginHandler<BeforeFileValidateEvent>;
-    /**
-     * Called during the file validation process. If your plugin contributes file validations, this is a good place to contribute them.
-     */
-    onFileValidate?: PluginHandler<OnFileValidateEvent>;
-    /**
-     * Called after each file is validated
-     */
-    afterFileValidate?: (file: BscFile) => void;
-    beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
-    afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
-    beforeFileDispose?: (file: BscFile) => void;
-    afterFileDispose?: (file: BscFile) => void;
+    afterFileParse?: (file: File) => void;
+    afterFileValidate?: (file: File) => void;
+    beforeFileTranspile?: (entry: TranspileObj) => void;
+    afterFileTranspile?: (entry: TranspileObj) => void;
+    beforeFileDispose?: (file: File) => void;
+    afterFileDispose?: (file: File) => void;
 }
 
 // related types:
@@ -227,7 +216,7 @@ interface SourceObj {
 }
 
 interface TranspileObj {
-    file: (BscFile);
+    file: BscFile;
     outputPath: string;
 }
 

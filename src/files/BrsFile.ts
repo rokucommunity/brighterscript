@@ -1,10 +1,9 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Position, Location, Diagnostic } from 'vscode-languageserver';
-import { CancellationTokenSource } from 'vscode-languageserver';
-import { CompletionItemKind, SymbolKind, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
-import chalk from 'chalk';
 import * as path from 'path';
+import type { CompletionItem, Position, Diagnostic, Hover } from 'vscode-languageserver';
+import { CancellationTokenSource, CompletionItemKind, SymbolKind, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit, Location } from 'vscode-languageserver';
+import chalk from 'chalk';
 import type { Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
@@ -19,12 +18,12 @@ import type { Program, SignatureInfoObj } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { VoidType } from '../types/VoidType';
-import { standardizePath as s, util } from '../util';
+import { util, standardizePath as s } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isClassMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
+import { isCallExpression, isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isConstStatement, isBrsFile, isClassMethodStatement } from '../astUtils/reflection';
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
@@ -34,7 +33,7 @@ import { URI } from 'vscode-uri';
 /**
  * Holds all details about this file within the scope of the whole program
  */
-export class BrsFile {
+export class BrsFile implements BscFile {
     constructor(
         public srcPath: string,
         /**
@@ -102,8 +101,11 @@ export class BrsFile {
      */
     public diagnostics = [] as BsDiagnostic[];
 
+    /**
+     * @deprecated use `.diagnostics` instead
+     */
     public getDiagnostics() {
-        return [...this.diagnostics];
+        return this.diagnostics;
     }
 
     public addDiagnostic(diagnostic: Diagnostic & { file?: BscFile }) {
@@ -362,13 +364,6 @@ export class BrsFile {
                 ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(serializeError(e)))
             });
         }
-    }
-
-    /**
-     * @deprecated logic has moved into BrsFileValidator, this is now an empty function
-     */
-    public validate() {
-
     }
 
     /**
@@ -945,7 +940,7 @@ export class BrsFile {
         if (previousToken?.kind === TokenKind.Dot) {
             previousToken = this.getPreviousToken(previousToken);
         }
-        if (previousToken?.kind === TokenKind.Identifier && previousToken?.text.toLowerCase() === 'm' && isClassMethodStatement(functionScope.func.functionStatement)) {
+        if (previousToken?.kind === TokenKind.Identifier && previousToken?.text.toLowerCase() === 'm' && isMethodStatement(functionScope.func.functionStatement)) {
             return { item: this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, position)), file: this };
         }
         return undefined;
@@ -1348,7 +1343,7 @@ export class BrsFile {
 
         if (isFunctionStatement(statement)) {
             symbolKind = SymbolKind.Function;
-        } else if (isClassMethodStatement(statement)) {
+        } else if (isMethodStatement(statement)) {
             symbolKind = SymbolKind.Method;
         } else if (isClassFieldStatement(statement)) {
             symbolKind = SymbolKind.Field;
@@ -1385,7 +1380,7 @@ export class BrsFile {
 
         if (isFunctionStatement(statement)) {
             symbolKind = SymbolKind.Function;
-        } else if (isClassMethodStatement(statement)) {
+        } else if (isMethodStatement(statement)) {
             symbolKind = SymbolKind.Method;
         } else if (isNamespaceStatement(statement)) {
             symbolKind = SymbolKind.Namespace;
@@ -1521,30 +1516,29 @@ export class BrsFile {
         //look through all files in scope for matches
         for (const scope of scopesForFile) {
             for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || filesSearched.has(file)) {
-                    continue;
-                }
-                filesSearched.add(file);
+                if (isBrsFile(file) && !filesSearched.has(file)) {
+                    filesSearched.add(file);
 
-                if (previousToken?.kind === TokenKind.Dot && file.parseMode === ParseMode.BrighterScript) {
-                    results.push(...this.getClassMemberDefinitions(textToSearchFor, file));
-                    const namespaceDefinition = this.getNamespaceDefinitions(token, file);
-                    if (namespaceDefinition) {
-                        results.push(namespaceDefinition);
+                    if (previousToken?.kind === TokenKind.Dot && file.parseMode === ParseMode.BrighterScript) {
+                        results.push(...this.getClassMemberDefinitions(textToSearchFor, file));
+                        const namespaceDefinition = this.getNamespaceDefinitions(token, file);
+                        if (namespaceDefinition) {
+                            results.push(namespaceDefinition);
+                        }
                     }
-                }
-                const statementHandler = (statement: FunctionStatement) => {
-                    if (statement.getName(this.parseMode).toLowerCase() === textToSearchFor) {
-                        const uri = util.pathToUri(file.srcPath);
-                        results.push(util.createLocation(uri, statement.range));
-                    }
-                };
+                    const statementHandler = (statement: FunctionStatement) => {
+                        if (statement.getName(this.parseMode).toLowerCase() === textToSearchFor) {
+                            const uri = util.pathToUri(file.srcPath);
+                            results.push(util.createLocation(uri, statement.range));
+                        }
+                    };
 
-                file.parser.ast.walk(createVisitor({
-                    FunctionStatement: statementHandler
-                }), {
-                    walkMode: WalkMode.visitStatements
-                });
+                    file.parser.ast.walk(createVisitor({
+                        FunctionStatement: statementHandler
+                    }), {
+                        walkMode: WalkMode.visitStatements
+                    });
+                }
             }
         }
         return results;
@@ -1709,19 +1703,18 @@ export class BrsFile {
         for (const scope of scopes) {
             const processedFiles = new Set<BrsFile>();
             for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || processedFiles.has(file)) {
-                    continue;
-                }
-                processedFiles.add(file);
-                file.ast.walk(createVisitor({
-                    VariableExpression: (e) => {
-                        if (e.name.text.toLowerCase() === searchFor) {
-                            locations.push(util.createLocation(util.pathToUri(file.srcPath), e.range));
+                if (isBrsFile(file) && !processedFiles) {
+                    processedFiles.add(file);
+                    file.ast.walk(createVisitor({
+                        VariableExpression: (e) => {
+                            if (e.name.text.toLowerCase() === searchFor) {
+                                locations.push(Location.create(util.pathToUri(file.pathAbsolute), e.range));
+                            }
                         }
-                    }
-                }), {
-                    walkMode: WalkMode.visitExpressionsRecursive
-                });
+                    }), {
+                        walkMode: WalkMode.visitExpressionsRecursive
+                    });
+                }
             }
         }
         return locations;

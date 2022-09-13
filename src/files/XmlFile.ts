@@ -4,7 +4,7 @@ import { SourceNode } from 'source-map';
 import type { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticCodeMap, diagnosticCodes } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
-import type { Callable, BsDiagnostic, File, FileReference, FunctionCall, CommentFlag } from '../interfaces';
+import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag, BscFile } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
 import SGParser, { rangeFromTokenValue } from '../parser/SGParser';
@@ -17,7 +17,7 @@ import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';
 
-export class XmlFile {
+export class XmlFile implements BscFile {
     constructor(
         public srcPath: string,
         /**
@@ -337,7 +337,7 @@ export class XmlFile {
      * Determines if this xml file has a reference to the specified file (or if it's itself)
      * @param file
      */
-    public doesReferenceFile(file: File) {
+    public doesReferenceFile(file: BscFile) {
         return this.cache.getOrAdd(`doesReferenceFile: ${file.pkgPath}`, () => {
             if (file === this) {
                 return true;

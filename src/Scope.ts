@@ -409,25 +409,18 @@ export class Scope {
     }
 
     /**
-     * Get the list of errors for this scope. It's calculated on the fly, so
-     * call this sparingly.
+     * Get the list of errors for this scope. It's calculated on the fly, so call this sparingly.
      */
     public getDiagnostics() {
-        let diagnosticLists = [this.diagnostics] as BsDiagnostic[][];
-
         //add diagnostics from every referenced file
-        this.enumerateOwnFiles((file) => {
-            diagnosticLists.push(file.getDiagnostics());
-        });
-        let allDiagnostics = Array.prototype.concat.apply([], diagnosticLists) as BsDiagnostic[];
-
-        let filteredDiagnostics = allDiagnostics.filter((x) => {
-            return !util.diagnosticIsSuppressed(x);
-        });
-
-        //filter out diangostics that match any of the comment flags
-
-        return filteredDiagnostics;
+        const diagnostics: BsDiagnostic[] = this.getOwnFiles()
+            .map(x => x.diagnostics ?? [])
+            .flat()
+            //filter out diangostics that match any of the comment flags
+            .filter((x) => {
+                return !util.diagnosticIsSuppressed(x);
+            });
+        return diagnostics;
     }
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
