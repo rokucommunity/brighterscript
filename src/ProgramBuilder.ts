@@ -1,6 +1,6 @@
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
-import * as rokuDeploy from 'roku-deploy';
+import { rokuDeploy } from 'roku-deploy';
 import type { BsConfig } from './BsConfig';
 import type { BscFile, BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
@@ -11,6 +11,7 @@ import { Logger, LogLevel } from './Logger';
 import PluginInterface from './PluginInterface';
 import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
+import * as requireRelative from 'require-relative';
 
 /**
  * A runner class that handles
@@ -160,7 +161,7 @@ export class ProgramBuilder {
      */
     protected loadRequires() {
         for (const dep of this.options.require ?? []) {
-            util.resolveRequire(this.options.cwd, dep);
+            requireRelative(dep, this.options.cwd);
         }
     }
 
@@ -301,7 +302,7 @@ export class ProgramBuilder {
                 filePath = path.relative(cwd, filePath);
             }
             //load the file text
-            const file = this.program.getFile(srcPath);
+            const file = this.program?.getFile(srcPath);
             //get the file's in-memory contents if available
             const lines = file?.fileContents?.split(/\r?\n/g) ?? [];
 

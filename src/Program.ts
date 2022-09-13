@@ -1,14 +1,14 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation } from 'vscode-languageserver';
-import { Location, CompletionItemKind } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
+import { CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -26,6 +26,8 @@ import { TokenKind } from './lexer/TokenKind';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { AstEditor } from './astUtils/AstEditor';
 import type { SourceMapGenerator } from 'source-map';
+import { rokuDeploy } from 'roku-deploy';
+
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -196,9 +198,16 @@ export class Program {
             file: xmlFile,
             scope: scope
         });
-        this.components[key].sort(
-            (x, y) => x.file.pkgPath.toLowerCase().localeCompare(y.file.pkgPath.toLowerCase())
-        );
+        this.components[key].sort((a, b) => {
+            const pathA = a.file.pkgPath.toLowerCase();
+            const pathB = b.file.pkgPath.toLowerCase();
+            if (pathA < pathB) {
+                return -1;
+            } else if (pathA > pathB) {
+                return 1;
+            }
+            return 0;
+        });
         this.syncComponentDependencyGraph(this.components[key]);
     }
 
@@ -592,7 +601,6 @@ export class Program {
 
     /**
      * Traverse the entire project, and validate all scopes
-     * @param force - if true, then all scopes are force to validate, even if they aren't marked as dirty
      */
     public validate() {
         this.logger.time(LogLevel.log, ['Validating project'], () => {
@@ -637,7 +645,9 @@ export class Program {
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
                 for (let scopeName in this.scopes) {
                     let scope = this.scopes[scopeName];
+                    scope.linkSymbolTable();
                     scope.validate();
+                    scope.unlinkSymbolTable();
                 }
             });
 
@@ -676,7 +686,7 @@ export class Program {
                         file: xmlFile,
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
-                                location: Location.create(
+                                location: util.createLocation(
                                     URI.file(xmlFile.srcPath ?? xmlFile.srcPath).toString(),
                                     x.componentName.range
                                 ),
@@ -735,13 +745,18 @@ export class Program {
      * Get a list of all scopes the file is loaded into
      * @param file
      */
-    public getScopesForFile(file: XmlFile | BrsFile) {
+    public getScopesForFile(file: XmlFile | BrsFile | string) {
+        if (typeof file === 'string') {
+            file = this.getFile(file);
+        }
         let result = [] as Scope[];
-        for (let key in this.scopes) {
-            let scope = this.scopes[key];
+        if (file) {
+            for (let key in this.scopes) {
+                let scope = this.scopes[key];
 
-            if (scope.hasFile(file)) {
-                result.push(scope);
+                if (scope.hasFile(file)) {
+                    result.push(scope);
+                }
             }
         }
         return result;
@@ -830,43 +845,28 @@ export class Program {
         if (!file) {
             return [];
         }
-        let result = [] as CompletionItem[];
 
-        if (isBrsFile(file) && file.isPositionNextToTokenKind(position, TokenKind.Callfunc)) {
-            // is next to a @. callfunc invocation - must be an interface method
-            for (const scope of this.getScopes().filter((s) => isXmlScope(s))) {
-                let fileLinks = this.getStatementsForXmlFile(scope as XmlScope);
-                for (let fileLink of fileLinks) {
-
-                    result.push(scope.createCompletionFromFunctionStatement(fileLink.item));
-                }
-            }
-            //no other result is possible in this case
-            return result;
-
-        }
         //find the scopes for this file
         let scopes = this.getScopesForFile(file);
 
         //if there are no scopes, include the global scope so we at least get the built-in functions
         scopes = scopes.length > 0 ? scopes : [this.globalScope];
 
-        //get the completions from all scopes for this file
-        let allCompletions = util.flatMap(
-            scopes.map(ctx => file.getCompletions(position, ctx)),
-            c => c
-        );
+        const event: ProvideCompletionsEvent = {
+            program: this,
+            file: file,
+            scopes: scopes,
+            position: position,
+            completions: []
+        };
 
-        //only keep completions common to every scope for this file
-        let keyCounts = {} as Record<string, number>;
-        for (let completion of allCompletions) {
-            let key = `${completion.label}-${completion.kind}`;
-            keyCounts[key] = keyCounts[key] ? keyCounts[key] + 1 : 1;
-            if (keyCounts[key] === scopes.length) {
-                result.push(completion);
-            }
-        }
-        return result;
+        this.plugins.emit('beforeProvideCompletions', event);
+
+        this.plugins.emit('provideCompletions', event);
+
+        this.plugins.emit('afterProvideCompletions', event);
+
+        return event.completions;
     }
 
     /**
@@ -905,15 +905,27 @@ export class Program {
         }
     }
 
-    public getHover(srcPath: string, position: Position) {
-        //find the file
+    /**
+     * Get hover information for a file and position
+     */
+    public getHover(srcPath: string, position: Position): Hover[] {
         let file = this.getFile(srcPath);
-        if (!file) {
-            return null;
+        let result: Hover[];
+        if (file) {
+            const event = {
+                program: this,
+                file: file,
+                position: position,
+                scopes: this.getScopesForFile(file),
+                hovers: []
+            } as ProvideHoverEvent;
+            this.plugins.emit('beforeProvideHover', event);
+            this.plugins.emit('provideHover', event);
+            this.plugins.emit('afterProvideHover', event);
+            result = event.hovers;
         }
-        const hover = file.getHover(position);
 
-        return Promise.resolve(hover);
+        return result ?? [];
     }
 
     /**
@@ -929,7 +941,7 @@ export class Program {
                 //only keep diagnostics related to this file
                 .filter(x => x.file === file)
                 //only keep diagnostics that touch this range
-                .filter(x => util.rangesIntersect(x.range, range));
+                .filter(x => util.rangesIntersectOrTouch(x.range, range));
 
             const scopes = this.getScopesForFile(file);
 
@@ -1258,14 +1270,27 @@ export class Program {
     /**
      * Transpile a single file and get the result as a string.
      * This does not write anything to the file system.
+     *
+     * This should only be called by `LanguageServer`.
+     * Internal usage should call `_getTranspiledFileContents` instead.
      * @param filePath can be a srcPath or a destPath
      */
-    public getTranspiledFileContents(filePath: string) {
-        return this._getTranspiledFileContents(
+    public async getTranspiledFileContents(filePath: string) {
+        let fileMap = await rokuDeploy.getFilePaths(this.options.files, this.options.rootDir);
+        //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
+        let filteredFileMap = [] as FileObj[];
+        for (let fileEntry of fileMap) {
+            if (this.hasFile(fileEntry.src) === false) {
+                filteredFileMap.push(fileEntry);
+            }
+        }
+        const { entries, astEditor } = this.beforeProgramTranspile(fileMap, this.options.stagingFolderPath);
+        const result = this._getTranspiledFileContents(
             this.getFile(filePath)
         );
+        this.afterProgramTranspile(entries, astEditor);
+        return result;
     }
-
 
     /**
      * Internal function used to transpile files.
@@ -1319,7 +1344,7 @@ export class Program {
         };
     }
 
-    public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
+    private beforeProgramTranspile(fileEntries: FileObj[], stagingFolderPath: string) {
         // map fileEntries using their path as key, to avoid excessive "find()" operations
         const mappedFileEntries = fileEntries.reduce<Record<string, FileObj>>((collection, entry) => {
             collection[s`${entry.src}`] = entry;
@@ -1343,10 +1368,32 @@ export class Program {
             return outputPath;
         };
 
+        const entries = Object.values(this.files).map(file => {
+            return {
+                file: file,
+                outputPath: getOutputPath(file)
+            };
+        });
+
+        const astEditor = new AstEditor();
+
+        this.plugins.emit('beforeProgramTranspile', this, entries, astEditor);
+        return {
+            entries: entries,
+            getOutputPath: getOutputPath,
+            astEditor: astEditor
+        };
+    }
+
+    public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
+        const { entries, getOutputPath, astEditor } = this.beforeProgramTranspile(fileEntries, stagingFolderPath);
+
         const processedFiles = new Set<File>();
 
-        const transpileFile = async (file: BscFile, outputPath?: string) => {
-            //mark this file as processed so we don't do it again
+        const transpileFile = async (srcPath: string, outputPath?: string) => {
+            //find the file in the program
+            const file = this.getFile(srcPath);
+            //mark this file as processed so we don't process it more than once
             processedFiles.add(file);
 
             //skip transpiling typedef files
@@ -1374,19 +1421,8 @@ export class Program {
             }
         };
 
-        const entries = Object.values(this.files).map(file => {
-            return {
-                file: file,
-                outputPath: getOutputPath(file)
-            };
-        });
-
-        const astEditor = new AstEditor();
-
-        this.plugins.emit('beforeProgramTranspile', this, entries, astEditor);
-
         let promises = entries.map(async (entry) => {
-            return transpileFile(entry.file, entry.outputPath);
+            return transpileFile(entry?.file?.srcPath, entry.outputPath);
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
@@ -1403,7 +1439,7 @@ export class Program {
                 //this is a new file
                 if (!processedFiles.has(file)) {
                     promises.push(
-                        transpileFile(file, getOutputPath(file))
+                        transpileFile(file?.srcPath, getOutputPath(file))
                     );
                 }
             }
@@ -1413,7 +1449,10 @@ export class Program {
             }
         }
         while (promises.length > 0);
+        this.afterProgramTranspile(entries, astEditor);
+    }
 
+    private afterProgramTranspile(entries: TranspileObj[], astEditor: AstEditor) {
         this.plugins.emit('afterProgramTranspile', this, entries, astEditor);
         astEditor.undoAll();
     }
@@ -1449,6 +1488,42 @@ export class Program {
                 //TODO handle namespace-relative classes
                 //if the file has a function with this name
                 if (file.parser.references.classStatementLookup.get(lowerClassName) !== undefined) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
+    }
+
+    public findFilesForNamespace(name: string) {
+        const files = [] as BscFile[];
+        const lowerName = name.toLowerCase();
+        //find every file with this class defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                if (file.parser.references.namespaceStatements.find((x) => {
+                    const namespaceName = x.name.toLowerCase();
+                    return (
+                        //the namespace name matches exactly
+                        namespaceName === lowerName ||
+                        //the full namespace starts with the name (honoring the part boundary)
+                        namespaceName.startsWith(lowerName + '.')
+                    );
+                })) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
+    }
+
+    public findFilesForEnum(name: string) {
+        const files = [] as BscFile[];
+        const lowerName = name.toLowerCase();
+        //find every file with this class defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                if (file.parser.references.enumStatementLookup.get(lowerName)) {
                     files.push(file);
                 }
             }

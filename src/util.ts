@@ -3,8 +3,8 @@ import * as fsExtra from 'fs-extra';
 import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
-import * as rokuDeploy from 'roku-deploy';
-import type { Diagnostic, Position, Range } from 'vscode-languageserver';
+import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
+import type { Diagnostic, Position, Range, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
@@ -24,17 +24,32 @@ import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
-import type { Locatable, Token } from './lexer/Token';
+import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isDottedGetExpression, isExpression, isVariableExpression } from './astUtils/reflection';
+import { isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
+import * as requireRelative from 'require-relative';
+import type { BrsFile } from './files/BrsFile';
+import type { XmlFile } from './files/XmlFile';
 
 export class Util {
     public clearConsole() {
         // process.stdout.write('\x1Bc');
+    }
+
+    /**
+     * Returns the number of parent directories in the filPath
+     * @param filePath
+     */
+    public getParentDirectoryCount(filePath: string | undefined) {
+        if (!filePath) {
+            return -1;
+        } else {
+            return filePath.replace(/^pkg:/, '').split(/[\\\/]/).length - 1;
+        }
     }
 
     /**
@@ -173,7 +188,11 @@ export class Util {
             //load the project file
             let projectFileContents = fsExtra.readFileSync(configFilePath).toString();
             let parseErrors = [] as ParseError[];
-            let projectConfig = parseJsonc(projectFileContents, parseErrors) as BsConfig;
+            let projectConfig = parseJsonc(projectFileContents, parseErrors, {
+                allowEmptyContent: true,
+                allowTrailingComma: true,
+                disallowComments: false
+            }) as BsConfig ?? {};
             if (parseErrors.length > 0) {
                 let err = parseErrors[0];
                 let diagnostic = {
@@ -304,11 +323,12 @@ export class Util {
      */
     public normalizeConfig(config: BsConfig) {
         config = config || {} as BsConfig;
+        config.cwd = config.cwd ?? process.cwd();
         config.deploy = config.deploy === true ? true : false;
-        //use default options from rokuDeploy
-        config.files = config.files ?? rokuDeploy.getOptions().files;
+        //use default files array from rokuDeploy
+        config.files = config.files ?? [...DefaultFiles];
         config.createPackage = config.createPackage === false ? false : true;
-        let rootFolderName = path.basename(process.cwd());
+        let rootFolderName = path.basename(config.cwd);
         config.outFile = config.outFile ?? `./out/${rootFolderName}.zip`;
         config.sourceMap = config.sourceMap === true;
         config.username = config.username ?? 'rokudev';
@@ -322,7 +342,7 @@ export class Util {
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
         config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
         config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
-        config.cwd = config.cwd ?? process.cwd();
+        config.allowBrighterScriptInBrightScript = config.allowBrighterScriptInBrightScript === true ? true : false;
         config.emitDefinitions = config.emitDefinitions === true ? true : false;
         if (typeof config.logLevel === 'string') {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
@@ -489,7 +509,13 @@ export class Util {
     }
 
     /**
-     * Does a touch b in any way?
+     * Do `a` and `b` overlap by at least one character. This returns false if they are at the edges. Here's some examples:
+     * ```
+     * | true | true | true | true | true | false | false | false | false |
+     * |------|------|------|------|------|-------|-------|-------|-------|
+     * | aa   |  aaa |  aaa | aaa  |  a   |  aa   |    aa | a     |     a |
+     * |  bbb | bb   |  bbb |  b   | bbb  |    bb |  bb   |     b | a     |
+     * ```
      */
     public rangesIntersect(a: Range, b: Range) {
         // Check if `a` is before `b`
@@ -499,6 +525,30 @@ export class Util {
 
         // Check if `b` is before `a`
         if (b.end.line < a.start.line || (b.end.line === a.start.line && b.end.character <= a.start.character)) {
+            return false;
+        }
+
+        // These ranges must intersect
+        return true;
+    }
+
+    /**
+     * Do `a` and `b` overlap by at least one character or touch at the edges
+     * ```
+     * | true | true | true | true | true | true  | true  | false | false |
+     * |------|------|------|------|------|-------|-------|-------|-------|
+     * | aa   |  aaa |  aaa | aaa  |  a   |  aa   |    aa | a     |     a |
+     * |  bbb | bb   |  bbb |  b   | bbb  |    bb |  bb   |     b | a     |
+     * ```
+     */
+    public rangesIntersectOrTouch(a: Range, b: Range) {
+        // Check if `a` is before `b`
+        if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character < b.start.character)) {
+            return false;
+        }
+
+        // Check if `b` is before `a`
+        if (b.end.line < a.start.line || (b.end.line === a.start.line && b.end.character < a.start.character)) {
             return false;
         }
 
@@ -862,7 +912,17 @@ export class Util {
     }
 
     /**
-     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `util.createRange()` is significantly slower
+     * Helper for creating `Location` objects. Prefer using this function because vscode-languageserver's `Location.create()` is significantly slower at scale
+     */
+    public createLocation(uri: string, range: Range): Location {
+        return {
+            uri: uri,
+            range: range
+        };
+    }
+
+    /**
+     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
         return {
@@ -1051,7 +1111,7 @@ export class Util {
         return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
             if (typeof pathOrModule === 'string') {
                 try {
-                    const loaded = this.resolveRequire(cwd, pathOrModule);
+                    const loaded = requireRelative(pathOrModule, cwd);
                     const theExport: CompilerPlugin | CompilerPluginFactory = loaded.default ? loaded.default : loaded;
 
                     let plugin: CompilerPlugin;
@@ -1080,23 +1140,6 @@ export class Util {
             }
             return acc;
         }, []);
-    }
-
-    public resolveRequire(cwd: string, pathOrModule: string) {
-        let target = pathOrModule;
-        if (!path.isAbsolute(pathOrModule)) {
-            const localPath = path.resolve(cwd, pathOrModule);
-            if (fs.existsSync(localPath)) {
-                target = localPath;
-            } else {
-                const modulePath = path.resolve(cwd, 'node_modules', pathOrModule);
-                if (fs.existsSync(modulePath)) {
-                    target = modulePath;
-                }
-            }
-        }
-        // eslint-disable-next-line
-        return require(target);
     }
 
     /**
@@ -1171,7 +1214,7 @@ export class Util {
      */
     public standardizePath(thePath: string) {
         return util.driveLetterToLower(
-            rokuDeploy.standardizePath(thePath)
+            rokuDeployStandardizePath(thePath)
         );
     }
 
@@ -1202,26 +1245,52 @@ export class Util {
     }
 
     /**
-     * Given a Diagnostic or BsDiagnostic, return a copy of the diagnostic
+     * Given a Diagnostic or BsDiagnostic, return a deep clone of the diagnostic.
+     * @param diagnostic the diagnostic to clone
+     * @param relatedInformationFallbackLocation a default location to use for all `relatedInformation` entries that are missing a location
      */
-    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic) {
+    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic, fileUri: string) {
         return {
             severity: diagnostic.severity,
             range: diagnostic.range,
             message: diagnostic.message,
             relatedInformation: diagnostic.relatedInformation?.map(x => {
+
                 //clone related information just in case a plugin added circular ref info here
-                return { ...x };
-            }),
+                const clone = { ...x };
+                if (!clone.location) {
+                    // use the fallback location if available
+                    if (fileUri) {
+                        clone.location = util.createLocation(fileUri, diagnostic.range);
+                    } else {
+                        //remove this related information so it doesn't bring crash the language server
+                        return undefined;
+                    }
+                }
+                return clone;
+                //filter out null relatedInformation items
+            }).filter(x => x),
             code: diagnostic.code,
             source: 'brs'
         };
     }
 
     /**
+    * Get the first locatable item found at the specified position
+    * @param position
+    */
+    public getFirstLocatableAt(locatables: Locatable[], position: Position) {
+        for (let token of locatables) {
+            if (util.rangeContains(token.range, position)) {
+                return token;
+            }
+        }
+    }
+
+    /**
      * Sort an array of objects that have a Range
      */
-    public sortByRange(locatables: Locatable[]) {
+    public sortByRange<T extends Locatable>(locatables: T[]) {
         //sort the tokens by range
         return locatables.sort((a, b) => {
             //start line
@@ -1294,15 +1363,17 @@ export class Util {
      * @param expression
      * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
      */
-    public getAllDottedGetParts(expression: Expression): string[] | undefined {
-        const parts: string[] = [];
+    public getAllDottedGetParts(expression: Expression): Identifier[] | undefined {
+        const parts: Identifier[] = [];
         let nextPart = expression;
         while (nextPart) {
             if (isDottedGetExpression(nextPart)) {
-                parts.push(nextPart?.name?.text);
+                parts.push(nextPart?.name);
                 nextPart = nextPart.obj;
+            } else if (isNamespacedVariableNameExpression(nextPart)) {
+                nextPart = nextPart.expression;
             } else if (isVariableExpression(nextPart)) {
-                parts.push(nextPart?.name?.text);
+                parts.push(nextPart?.name);
                 break;
             } else {
                 //we found a non-DottedGet expression, so return because this whole operation is invalid.
@@ -1310,6 +1381,28 @@ export class Util {
             }
         }
         return parts.reverse();
+    }
+
+    /**
+     * Break an expression into each part.
+     */
+    public splitExpression(expression: Expression) {
+        const parts: Expression[] = [expression];
+        let nextPart = expression;
+        while (nextPart) {
+            if (isDottedGetExpression(nextPart) || isIndexedGetExpression(nextPart) || isXmlAttributeGetExpression(nextPart)) {
+                nextPart = nextPart.obj;
+            } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
+                nextPart = nextPart.callee;
+
+            } else if (isNamespacedVariableNameExpression(nextPart)) {
+                nextPart = nextPart.expression;
+            } else {
+                break;
+            }
+            parts.unshift(nextPart);
+        }
+        return parts;
     }
 
     /**
@@ -1330,6 +1423,29 @@ export class Util {
     public rangeToString(range: Range) {
         return `${range?.start?.line}:${range?.start?.character}-${range?.end?.line}:${range?.end?.character}`;
     }
+
+    public validateTooDeepFile(file: (BrsFile | XmlFile)) {
+        //find any files nested too deep
+        let pkgPath = file.pkgPath ?? file.pkgPath.toString();
+        let rootFolder = pkgPath.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
+
+        if (isBrsFile(file) && rootFolder !== 'source') {
+            return;
+        }
+
+        if (isXmlFile(file) && rootFolder !== 'components') {
+            return;
+        }
+
+        let fileDepth = this.getParentDirectoryCount(pkgPath);
+        if (fileDepth >= 8) {
+            file.addDiagnostics([{
+                ...DiagnosticMessages.detectedTooDeepFileSource(fileDepth),
+                file: file,
+                range: this.createRange(0, 0, 0, Number.MAX_VALUE)
+            }]);
+        }
+    }
 }
 
 /**
@@ -1342,7 +1458,7 @@ export function standardizePath(stringParts, ...expressions: any[]) {
         result.push(stringParts[i], expressions[i]);
     }
     return util.driveLetterToLower(
-        rokuDeploy.standardizePath(
+        rokuDeployStandardizePath(
             result.join('')
         )
     );

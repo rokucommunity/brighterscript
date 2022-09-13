@@ -1,10 +1,12 @@
-import { isLiteralExpression } from '../..';
+import { isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isEnumStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespacedVariableNameExpression, isNamespaceStatement } from '../../astUtils/reflection';
+import { WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BsDiagnostic, OnFileValidateEvent } from '../../interfaces';
+import type { AstNode, OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { LiteralExpression } from '../../parser/Expression';
-import type { EnumMemberStatement } from '../../parser/Statement';
+import type { EnumMemberStatement, EnumStatement, ImportStatement, LibraryStatement } from '../../parser/Statement';
+import util from '../../util';
 
 export class BrsFileValidator {
     constructor(
@@ -13,42 +15,94 @@ export class BrsFileValidator {
     }
 
     public process() {
-        this.validateEnumDeclarations();
+        util.validateTooDeepFile(this.event.file);
+        this.walk();
+        this.flagTopLevelStatements();
+        //only validate the file if it was actually parsed (skip files containing typedefs)
+        if (!this.event.file.hasTypedef) {
+            this.validateImportStatements();
+        }
     }
 
-    public validateEnumDeclarations() {
-        const diagnostics = [] as BsDiagnostic[];
-        for (const stmt of this.event.file.parser.references.enumStatements) {
-            const members = stmt.getMembers();
-            //the enum data type is based on the first member value
-            const enumValueKind = (members.find(x => x.value)?.value as LiteralExpression)?.token?.kind ?? TokenKind.IntegerLiteral;
-            const memberNames = new Set<string>();
-            for (const member of members) {
-                const memberNameLower = member.name?.toLowerCase();
-
-                /**
-                 * flag duplicate member names
-                 */
-                if (memberNames.has(memberNameLower)) {
-                    diagnostics.push({
-                        ...DiagnosticMessages.duplicateIdentifier(member.name),
-                        file: this.event.file,
-                        range: member.range
-                    });
-                } else {
-                    memberNames.add(memberNameLower);
+    /**
+     * Set the parent node on a given AstNode. This handles some edge cases where not every expression is iterated normally,
+     * so it will also reach into nested objects to set their parent values as well
+     */
+    private setParent(node1: AstNode, parent: AstNode) {
+        const pairs = [[node1, parent]];
+        while (pairs.length > 0) {
+            const [childNode, parentNode] = pairs.pop();
+            //skip this entry if there's already a parent
+            if (childNode?.parent) {
+                continue;
+            }
+            if (isDottedGetExpression(childNode)) {
+                if (!childNode.obj.parent) {
+                    pairs.push([childNode.obj, childNode]);
                 }
+            } else if (isNamespaceStatement(childNode)) {
+                //namespace names shouldn't be walked, but it needs its parent assigned
+                pairs.push([childNode.nameExpression, childNode]);
+            } else if (isClassStatement(childNode)) {
+                //class extends names don't get walked, but it needs its parent
+                if (childNode.parentClassName) {
+                    pairs.push([childNode.parentClassName, childNode]);
+                }
+            } else if (isInterfaceStatement(childNode)) {
+                //class extends names don't get walked, but it needs its parent
+                if (childNode.parentInterfaceName) {
+                    pairs.push([childNode.parentInterfaceName, childNode]);
+                }
+            } else if (isNamespacedVariableNameExpression(childNode)) {
+                pairs.push([childNode.expression, childNode]);
+            }
+            childNode.parent = parentNode;
+        }
+    }
 
-                //Enforce all member values are the same type
-                this.validateEnumValueTypes(diagnostics, member, enumValueKind);
+    /**
+     * Walk the full AST
+     */
+    private walk() {
+        this.event.file.ast.walk((node, parent) => {
+            // link every child with its parent
+            this.setParent(node, parent);
 
+            //do some file-based validations
+            if (isEnumStatement(node)) {
+                this.validateEnumDeclaration(node);
+            }
+        }, {
+            walkMode: WalkMode.visitAllRecursive
+        });
+    }
+
+    private validateEnumDeclaration(stmt: EnumStatement) {
+        const members = stmt.getMembers();
+        //the enum data type is based on the first member value
+        const enumValueKind = (members.find(x => x.value)?.value as LiteralExpression)?.token?.kind ?? TokenKind.IntegerLiteral;
+        const memberNames = new Set<string>();
+        for (const member of members) {
+            const memberNameLower = member.name?.toLowerCase();
+
+            /**
+             * flag duplicate member names
+             */
+            if (memberNames.has(memberNameLower)) {
+                this.event.file.addDiagnostic({
+                    ...DiagnosticMessages.duplicateIdentifier(member.name),
+                    range: member.range
+                });
+            } else {
+                memberNames.add(memberNameLower);
             }
 
+            //Enforce all member values are the same type
+            this.validateEnumValueTypes(member, enumValueKind);
         }
-        this.event.file.addDiagnostics(diagnostics);
     }
 
-    private validateEnumValueTypes(diagnostics: BsDiagnostic[], member: EnumMemberStatement, enumValueKind: TokenKind) {
+    private validateEnumValueTypes(member: EnumMemberStatement, enumValueKind: TokenKind) {
         const memberValueKind = (member.value as LiteralExpression)?.token?.kind;
 
         if (
@@ -57,8 +111,7 @@ export class BrsFileValidator {
             //has value, that value is not a literal
             (member.value && !isLiteralExpression(member.value))
         ) {
-            diagnostics.push({
-                file: this.event.file,
+            this.event.file.addDiagnostic({
                 ...DiagnosticMessages.enumValueMustBeType(
                     enumValueKind.replace(/literal$/i, '').toLowerCase()
                 ),
@@ -72,8 +125,7 @@ export class BrsFileValidator {
             if (memberValueKind) {
                 //member value is same as enum
                 if (memberValueKind !== enumValueKind) {
-                    diagnostics.push({
-                        file: this.event.file,
+                    this.event.file.addDiagnostic({
                         ...DiagnosticMessages.enumValueMustBeType(
                             enumValueKind.replace(/literal$/i, '').toLowerCase()
                         ),
@@ -83,13 +135,86 @@ export class BrsFileValidator {
 
                 //default value missing
             } else {
-                diagnostics.push({
+                this.event.file.addDiagnostic({
                     file: this.event.file,
                     ...DiagnosticMessages.enumValueIsRequired(
                         enumValueKind.replace(/literal$/i, '').toLowerCase()
                     ),
                     range: (member.value ?? member)?.range
                 });
+            }
+        }
+    }
+
+    /**
+     * Find statements defined at the top level (or inside a namespace body) that are not allowed to be there
+     */
+    private flagTopLevelStatements() {
+        const statements = [...this.event.file.ast.statements];
+        while (statements.length > 0) {
+            const statement = statements.pop();
+            if (isNamespaceStatement(statement)) {
+                statements.push(...statement.body.statements);
+            } else {
+                //only allow these statement types
+                if (
+                    !isFunctionStatement(statement) &&
+                    !isClassStatement(statement) &&
+                    !isEnumStatement(statement) &&
+                    !isInterfaceStatement(statement) &&
+                    !isCommentStatement(statement) &&
+                    !isLibraryStatement(statement) &&
+                    !isImportStatement(statement) &&
+                    !isConstStatement(statement)
+                ) {
+                    this.event.file.addDiagnostic({
+                        ...DiagnosticMessages.unexpectedStatementOutsideFunction(),
+                        range: statement.range
+                    });
+                }
+            }
+        }
+    }
+
+    private validateImportStatements() {
+        let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement>;
+        for (let stmt of this.event.file.parser.ast.statements) {
+            //skip comments
+            if (isCommentStatement(stmt)) {
+                continue;
+            }
+            //if we found a non-library statement, this statement is not at the top of the file
+            if (isLibraryStatement(stmt) || isImportStatement(stmt)) {
+                topOfFileIncludeStatements.push(stmt);
+            } else {
+                //break out of the loop, we found all of our library statements
+                break;
+            }
+        }
+
+        let statements = [
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            ...this.event.file['_parser'].references.libraryStatements,
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            ...this.event.file['_parser'].references.importStatements
+        ];
+        for (let result of statements) {
+            //if this statement is not one of the top-of-file statements,
+            //then add a diagnostic explaining that it is invalid
+            if (!topOfFileIncludeStatements.includes(result)) {
+                if (isLibraryStatement(result)) {
+                    this.event.file.diagnostics.push({
+                        ...DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile(),
+                        range: result.range,
+                        file: this.event.file
+                    });
+                } else if (isImportStatement(result)) {
+                    this.event.file.diagnostics.push({
+                        ...DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile(),
+                        range: result.range,
+                        file: this.event.file
+                    });
+                }
             }
         }
     }

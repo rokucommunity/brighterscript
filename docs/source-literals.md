@@ -7,14 +7,14 @@ These source literals are converted into inline variables at transpile-time, so 
 ## SOURCE_FILE_PATH
 The absolute path to the source file, including a leading `file:/` scheme indicator. i.e. `"file:/C:/projects/RokuApp/source/main.bs"`.
 
-```BrighterScript
+```vb
 print SOURCE_FILE_PATH
 ```
 
 transpiles to:
 
-```BrightScript
-print "file" + ":///c:/projects/roku/local/brighterscript/scripts/rootDir/source/main.bs"
+```vb
+print "file" + ":///C:/projects/RokuApp/source/main.bs"
 ```
 
 _note: the literal is concatenated to keep the roku static analysis tool happy_
@@ -145,7 +145,7 @@ end function
 ## SOURCE_LOCATION
 A combination of SOURCE_FILE_PATH and SOURCE_LINE_NUM.
 
-```BrighterScript
+```vb
 function main()
     print SOURCE_LOCATION
 end function
@@ -153,9 +153,9 @@ end function
 
 transpiles to:
 
-```BrightScript
+```vb
 function main()
-    print "file" + ":///c:/projects/roku/local/brighterscript/scripts/rootDir/source/main.bs:2"
+    print "file" + ":///C:/projects/RokuApp/source/main.bs:2"
 end function
 ```
 

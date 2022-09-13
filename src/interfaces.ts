@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, CompletionItem } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -7,7 +7,7 @@ import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program, SourceObj, TranspileObj } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { FunctionStatement } from './parser/Statement';
+import type { FunctionStatement, Statement } from './parser/Statement';
 import type { Expression } from './parser/Expression';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceMapGenerator, SourceNode } from 'source-map';
@@ -201,6 +201,33 @@ export interface CompilerPlugin {
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+
+    /**
+     * Emitted before the program starts collecting completions
+     */
+    beforeProvideCompletions?: PluginHandler<BeforeProvideCompletionsEvent>;
+    /**
+     * Use this event to contribute completions
+     */
+    provideCompletions?: PluginHandler<ProvideCompletionsEvent>;
+    /**
+     * Emitted after the program has finished collecting completions, but before they are sent to the client
+     */
+    afterProvideCompletions?: PluginHandler<AfterProvideCompletionsEvent>;
+
+    /**
+     * Called before the `provideHover` hook. Use this if you need to prepare any of the in-memory objects before the `provideHover` gets called
+     */
+    beforeProvideHover?: PluginHandler<BeforeProvideHoverEvent>;
+    /**
+     * Called when bsc looks for hover information. Use this if your plugin wants to contribute hover information.
+     */
+    provideHover?: PluginHandler<ProvideHoverEvent>;
+    /**
+     * Called after the `provideHover` hook. Use this if you want to intercept or sanitize the hover data (even from other plugins) before it gets sent to the client.
+     */
+    afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
+
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;
@@ -229,7 +256,7 @@ export interface CompilerPlugin {
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
 }
-export type PluginHandler<T> = (event: T) => void;
+export type PluginHandler<T, R = void> = (event: T) => R;
 
 export interface OnGetCodeActionsEvent {
     program: Program;
@@ -240,10 +267,57 @@ export interface OnGetCodeActionsEvent {
     codeActions: CodeAction[];
 }
 
-export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
+export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
     program: Program;
-    file: T;
+    file: TFile;
     scopes: Scope[];
+    position: Position;
+    completions: CompletionItem[];
+}
+export type BeforeProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
+export type AfterProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
+
+export interface ProvideHoverEvent {
+    program: Program;
+    file: BscFile;
+    position: Position;
+    scopes: Scope[];
+    hovers: Hover[];
+}
+export interface Hover {
+    /**
+     * The contents of the hover, written in markdown. If you want to display code in the hover, use code blocks, like this:
+     * ```text
+     *      ```brighterscript
+     *      some = "code" + "here"
+     *      ```
+     * ```
+     */
+    contents: string | string[];
+    /**
+     * An optional range
+     */
+    range?: Range;
+}
+export type BeforeProvideHoverEvent = ProvideHoverEvent;
+export type AfterProvideHoverEvent = ProvideHoverEvent;
+
+export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
+    /**
+     * The program this file is from
+     */
+    program: Program;
+    /**
+     * The file to get semantic tokens for
+     */
+    file: T;
+    /**
+     * The list of scopes that this file is a member of
+     */
+    scopes: Scope[];
+    /**
+     * The list of semantic tokens being produced during this event.
+     */
     semanticTokens: SemanticToken[];
 }
 
@@ -262,7 +336,7 @@ export interface OnScopeValidateEvent {
     scope: Scope;
 }
 
-export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty' | 'overrideTranspileResult'>;
+export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty' | 'overrideTranspileResult' | 'arrayPop' | 'arrayPush' | 'arrayShift' | 'arraySplice' | 'arrayUnshift' | 'removeProperty' | 'edit'>;
 
 export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
     program: Program;
@@ -332,3 +406,5 @@ export interface FileLink<T> {
     item: T;
     file: BrsFile;
 }
+
+export type AstNode = Expression | Statement;

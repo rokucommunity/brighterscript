@@ -162,6 +162,14 @@ describe('DependencyGraph', () => {
                 'e'
             ]);
         });
+
+        it('works with multiple keys', () => {
+            graph.addOrReplace('a', ['b', 'c']);
+            graph.addOrReplace('b', ['c', 'd']);
+            expect(graph.getAllDependencies(['a', 'b']).sort()).to.eql([
+                'b', 'c', 'd'
+            ]);
+        });
     });
 
     describe('onchange', () => {

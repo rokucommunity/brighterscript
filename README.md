@@ -72,9 +72,9 @@ BrighterScript adds several new features to the BrightScript language such as Na
     <a href="https://www.nba.com/">
         <img src="https://user-images.githubusercontent.com/2544493/157430017-a27b62d0-63de-4e87-a6df-8448007bd24d.png">
     </a>&nbsp;&nbsp;&nbsp;
-    <a href="https://github.com/georgejecook/rooibos/blob/master/docs/index.md">
-        <img src="https://user-images.githubusercontent.com/2544493/157430331-20913e84-f3f4-447a-b093-8780cd1241e6.png">
-    </a>
+    <a href="https://channelstore.roku.com/details/222212/phototv">
+        <img height="34" src="https://user-images.githubusercontent.com/2544493/169118062-81d94da5-2323-4e31-b19d-7db3f9c88dff.png">
+    </a>&nbsp;&nbsp;&nbsp;
 </p>
 <br/>
 
@@ -244,6 +244,9 @@ These are the options available in the `bsconfig.json` file.
  - **plugins**: `Array<string>` - List of node scripts or npm modules to load as plugins to the BrighterScript compiler.
 
  - **require**: `Array<string>` - List of node scripts or npm modules to load during the startup sequence. Useful for running things like `ts-node/require`
+
+ - **allowBrighterScriptInBrightScript**: `boolean` - Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
+
 
 ## Ignore errors and warnings on a per-line basis
 In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:
