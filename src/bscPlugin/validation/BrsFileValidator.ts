@@ -5,7 +5,8 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { AstNode, OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { LiteralExpression } from '../../parser/Expression';
-import type { EnumMemberStatement, EnumStatement } from '../../parser/Statement';
+import type { EnumMemberStatement, EnumStatement, ImportStatement, LibraryStatement } from '../../parser/Statement';
+import util from '../../util';
 
 export class BrsFileValidator {
     constructor(
@@ -14,8 +15,13 @@ export class BrsFileValidator {
     }
 
     public process() {
+        util.validateTooDeepFile(this.event.file);
         this.walk();
         this.flagTopLevelStatements();
+        //only validate the file if it was actually parsed (skip files containing typedefs)
+        if (!this.event.file.hasTypedef) {
+            this.validateImportStatements();
+        }
     }
 
     /**
@@ -164,6 +170,49 @@ export class BrsFileValidator {
                     this.event.file.addDiagnostic({
                         ...DiagnosticMessages.unexpectedStatementOutsideFunction(),
                         range: statement.range
+                    });
+                }
+            }
+        }
+    }
+
+    private validateImportStatements() {
+        let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement>;
+        for (let stmt of this.event.file.parser.ast.statements) {
+            //skip comments
+            if (isCommentStatement(stmt)) {
+                continue;
+            }
+            //if we found a non-library statement, this statement is not at the top of the file
+            if (isLibraryStatement(stmt) || isImportStatement(stmt)) {
+                topOfFileIncludeStatements.push(stmt);
+            } else {
+                //break out of the loop, we found all of our library statements
+                break;
+            }
+        }
+
+        let statements = [
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            ...this.event.file['_parser'].references.libraryStatements,
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            ...this.event.file['_parser'].references.importStatements
+        ];
+        for (let result of statements) {
+            //if this statement is not one of the top-of-file statements,
+            //then add a diagnostic explaining that it is invalid
+            if (!topOfFileIncludeStatements.includes(result)) {
+                if (isLibraryStatement(result)) {
+                    this.event.file.diagnostics.push({
+                        ...DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile(),
+                        range: result.range,
+                        file: this.event.file
+                    });
+                } else if (isImportStatement(result)) {
+                    this.event.file.diagnostics.push({
+                        ...DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile(),
+                        range: result.range,
+                        file: this.event.file
                     });
                 }
             }

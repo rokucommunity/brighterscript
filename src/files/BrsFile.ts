@@ -14,7 +14,7 @@ import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
-import type { ClassStatement, FunctionStatement, NamespaceStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement, MethodStatement, FieldStatement } from '../parser/Statement';
+import type { ClassStatement, FunctionStatement, NamespaceStatement, AssignmentStatement, Statement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program, SignatureInfoObj } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
@@ -24,7 +24,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
+import { isCallExpression, isClassMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
@@ -97,7 +97,10 @@ export class BrsFile {
      */
     public extension: string;
 
-    private diagnostics = [] as BsDiagnostic[];
+    /**
+     * A collection of diagnostics related to this file
+     */
+    public diagnostics = [] as BsDiagnostic[];
 
     public getDiagnostics() {
         return [...this.diagnostics];
@@ -361,53 +364,11 @@ export class BrsFile {
         }
     }
 
+    /**
+     * @deprecated logic has moved into BrsFileValidator, this is now an empty function
+     */
     public validate() {
-        util.validateTooDeepFile(this);
-        //only validate the file if it was actually parsed (skip files containing typedefs)
-        if (!this.hasTypedef) {
-            this.validateImportStatements();
-        }
-    }
 
-    private validateImportStatements() {
-        let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement>;
-        for (let stmt of this.ast.statements) {
-            //skip comments
-            if (isCommentStatement(stmt)) {
-                continue;
-            }
-            //if we found a non-library statement, this statement is not at the top of the file
-            if (isLibraryStatement(stmt) || isImportStatement(stmt)) {
-                topOfFileIncludeStatements.push(stmt);
-            } else {
-                //break out of the loop, we found all of our library statements
-                break;
-            }
-        }
-
-        let statements = [
-            ...this._parser.references.libraryStatements,
-            ...this._parser.references.importStatements
-        ];
-        for (let result of statements) {
-            //if this statement is not one of the top-of-file statements,
-            //then add a diagnostic explaining that it is invalid
-            if (!topOfFileIncludeStatements.includes(result)) {
-                if (isLibraryStatement(result)) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile(),
-                        range: result.range,
-                        file: this
-                    });
-                } else if (isImportStatement(result)) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile(),
-                        range: result.range,
-                        file: this
-                    });
-                }
-            }
-        }
     }
 
     /**
