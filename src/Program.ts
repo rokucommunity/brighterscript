@@ -1423,13 +1423,13 @@ export class Program {
     public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
         const { entries, getOutputPath, astEditor } = this.beforeProgramTranspile(fileEntries, stagingFolderPath);
 
-        const processedFiles = new Set<File>();
+        const processedFiles = new Set<string>();
 
         const transpileFile = async (srcPath: string, outputPath?: string) => {
             //find the file in the program
             const file = this.getFile(srcPath);
             //mark this file as processed so we don't process it more than once
-            processedFiles.add(file);
+            processedFiles.add(outputPath?.toLowerCase());
 
             //skip transpiling typedef files
             if (isBrsFile(file) && file.isTypedef) {
@@ -1472,9 +1472,10 @@ export class Program {
             for (const key in this.files) {
                 const file = this.files[key];
                 //this is a new file
-                if (!processedFiles.has(file)) {
+                const outputPath = getOutputPath(file);
+                if (!processedFiles.has(outputPath?.toLowerCase())) {
                     promises.push(
-                        transpileFile(file?.srcPath, getOutputPath(file))
+                        transpileFile(file?.srcPath, outputPath)
                     );
                 }
             }
