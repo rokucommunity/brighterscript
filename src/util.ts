@@ -647,6 +647,19 @@ export class Util {
     }
 
     /**
+     * Replace the first instance of `search` in `subject` with `replacement`
+     */
+    public replaceCaseInsensitive(subject: string, search: string, replacement: string) {
+        let idx = subject.toLowerCase().indexOf(search.toLowerCase());
+        if (idx > -1) {
+            let result = subject.substring(0, idx) + replacement + subject.substring(idx + search.length);
+            return result;
+        } else {
+            return subject;
+        }
+    }
+
+    /**
      * Determine if two arrays containing primitive values are equal.
      * This considers order and compares by equality.
      */
