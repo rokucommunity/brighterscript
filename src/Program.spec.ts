@@ -552,6 +552,47 @@ describe('Program', () => {
         });
     });
 
+    describe('getPaths', () => {
+        function getPaths(...args: any[]) {
+            return (program as any).getPaths(...args);
+        }
+        it('works for dest', () => {
+            expect(
+                getPaths('source/main.brs', rootDir)
+            ).to.eql({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`source/main.brs`
+            });
+        });
+
+        it('works for absolute src', () => {
+            expect(
+                getPaths(`${rootDir}/source\\main.brs`, rootDir)
+            ).to.eql({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`source/main.brs`
+            });
+        });
+
+        it('works for missing src', () => {
+            expect(
+                getPaths({ dest: 'source/main.brs' }, rootDir)
+            ).to.eql({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`source/main.brs`
+            });
+        });
+
+        it('works for missing dest', () => {
+            expect(
+                getPaths({ src: `${rootDir}/source/main.brs` }, rootDir)
+            ).to.eql({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`source/main.brs`
+            });
+        });
+    });
+
     describe('setFile', () => {
         it('links xml scopes based on xml parent-child relationships', () => {
             program.setFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`

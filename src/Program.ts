@@ -396,21 +396,10 @@ export class Program {
      */
     public setFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
     public setFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
-        assert.ok(fileParam, 'fileParam is required');
-        let srcPath: string;
-        let pkgPath: string;
-        if (typeof fileParam === 'string') {
-            srcPath = s`${this.options.rootDir}/${fileParam}`;
-            pkgPath = s`${fileParam}`;
-        } else {
-            srcPath = s`${fileParam.src}`;
-            pkgPath = s`${fileParam.dest}`;
-        }
+        //normalize the file paths
+        const { src: srcPath, dest: pkgPath } = this.getPaths(fileParam, this.options.rootDir);
+
         let file = this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
-
-            assert.ok(srcPath, 'fileEntry.src is required');
-            assert.ok(pkgPath, 'fileEntry.dest is required');
-
             //if the file is already loaded, remove it
             if (this.hasFile(srcPath)) {
                 this.removeFile(srcPath);
@@ -496,6 +485,52 @@ export class Program {
             return file;
         });
         return file as T;
+    }
+
+    /**
+     * Given a srcPath, a pkgPath, or both, resolve whichever is missing, relative to rootDir.
+     * @param rootDir must be a pre-normalized path
+     */
+    private getPaths(fileParam: string | FileObj, rootDir: string) {
+        let src: string;
+        let dest: string;
+
+        assert.ok(fileParam, 'fileParam is required');
+        //lift the srcPath and pkgPath vars from the incoming param
+        if (typeof fileParam === 'string') {
+            src = s`${path.resolve(rootDir, fileParam)}`;
+            dest = s`${util.replaceCaseInsensitive(src, rootDir, '')}`;
+        } else {
+            if (fileParam.src) {
+                src = s`${fileParam.src}`;
+            }
+            if (fileParam.dest) {
+                dest = s`${fileParam.dest}`;
+            }
+        }
+
+        //if there's no srcPath, use the pkgPath to build an absolute srcPath
+        if (!src) {
+            src = s`${rootDir}/${dest}`;
+        }
+        //coerce srcPath to an absolute path
+        if (!path.isAbsolute(src)) {
+            src = util.standardizePath(src);
+        }
+
+        //if there's no pkgPath, compute relative path from rootDir
+        if (!dest) {
+            dest = s`${util.replaceCaseInsensitive(src, rootDir, '')}`;
+        }
+
+        assert.ok(src, 'fileEntry.src is required');
+        assert.ok(dest, 'fileEntry.dest is required');
+
+        return {
+            src: src,
+            //remove leading slash from pkgPath
+            dest: dest.replace(/^[\/\\]+/, '')
+        };
     }
 
     /**
@@ -1390,13 +1425,13 @@ export class Program {
     public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
         const { entries, getOutputPath, astEditor } = this.beforeProgramTranspile(fileEntries, stagingFolderPath);
 
-        const processedFiles = new Set<File>();
+        const processedFiles = new Set<string>();
 
         const transpileFile = async (srcPath: string, outputPath?: string) => {
             //find the file in the program
             const file = this.getFile(srcPath);
             //mark this file as processed so we don't process it more than once
-            processedFiles.add(file);
+            processedFiles.add(outputPath?.toLowerCase());
 
             //skip transpiling typedef files
             if (isBrsFile(file) && file.isTypedef) {
@@ -1439,9 +1474,10 @@ export class Program {
             for (const key in this.files) {
                 const file = this.files[key];
                 //this is a new file
-                if (!processedFiles.has(file)) {
+                const outputPath = getOutputPath(file);
+                if (!processedFiles.has(outputPath?.toLowerCase())) {
                     promises.push(
-                        transpileFile(file?.srcPath, getOutputPath(file))
+                        transpileFile(file?.srcPath, outputPath)
                     );
                 }
             }
