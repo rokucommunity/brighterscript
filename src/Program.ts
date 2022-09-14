@@ -1394,7 +1394,7 @@ export class Program {
             //find the file in the program
             const file = this.getFile(srcPath);
             //mark this file as processed so we don't process it more than once
-            processedFiles.add(outputPath);
+            processedFiles.add(outputPath?.toLowerCase());
 
             //skip transpiling typedef files
             if (isBrsFile(file) && file.isTypedef) {
@@ -1438,7 +1438,7 @@ export class Program {
                 const file = this.files[key];
                 //this is a new file
                 const outputPath = getOutputPath(file);
-                if (!processedFiles.has(outputPath)) {
+                if (!processedFiles.has(outputPath?.toLowerCase())) {
                     promises.push(
                         transpileFile(file?.srcPath, outputPath)
                     );
