@@ -654,20 +654,10 @@ export class Program {
                 for (let scope of Object.values(this.scopes)) {
                     //only validate unvalidated scopes
                     if (!scope.isValidated) {
-                        this.plugins.emit('beforeScopeValidate', {
-                            program: this,
-                            scope: scope
-                        });
-
                         scope.linkSymbolTable();
                         scope.validate();
                         scope.unlinkSymbolTable();
                         scope.isValidated = true;
-
-                        this.plugins.emit('afterScopeValidate', {
-                            program: this,
-                            scope: scope
-                        });
                     }
                 }
             });

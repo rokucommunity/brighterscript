@@ -1,6 +1,6 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Position, Location, Diagnostic } from 'vscode-languageserver';
+import type { CompletionItem, Position, Location, Diagnostic, Range } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
@@ -12,8 +12,7 @@ import type { Token } from '../lexer/Token';
 import { isToken } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
-import type { TokenChainMember } from '../parser/Parser';
-import { Parser, ParseMode, getBscTypeFromExpression, TokenUsage } from '../parser/Parser';
+import { Parser, ParseMode, getBscTypeFromExpression } from '../parser/Parser';
 import type { FunctionExpression, VariableExpression, Expression, DottedGetExpression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, LibraryStatement, ImportStatement, Statement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program, SignatureInfoObj } from '../Program';
@@ -23,7 +22,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { Logger, LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isEnumStatement, isConstStatement, isRegexLiteralExpression, isTypedFunctionType, isFieldStatement, isArrayType, isCustomType, isDynamicType, isEnumType, isInterfaceType, isMethodStatement, isObjectType, isPrimitiveType } from '../astUtils/reflection';
+import { isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isEnumStatement, isConstStatement, isRegexLiteralExpression, isTypedFunctionType, isFieldStatement, isArrayType, isCustomType, isDynamicType, isEnumType, isInterfaceType, isMethodStatement, isObjectType, isPrimitiveType, isIndexedGetExpression, isCallExpression, isPosition, isRange, isDottedSetStatement, isIndexedSetStatement, isFunctionExpression, isAssignmentStatement } from '../astUtils/reflection';
 import type { BscType, SymbolContainer } from '../types/BscType';
 import { getTypeFromContext } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
@@ -183,13 +182,15 @@ export class BrsFile {
     /**
      * Walk the AST and find the expression that this token is most specifically contained within
      */
-    public getClosestExpression(position: Position) {
+    public getClosestExpression(position: Position | Range) {
         const handle = new CancellationTokenSource();
         let containingNode: Expression | Statement;
         this.ast.walk((node) => {
             const latestContainer = containingNode;
             //bsc walks depth-first
-            if (util.rangeContains(node.range, position)) {
+            if (isPosition(position) && util.rangeContains(node.range, position)) {
+                containingNode = node;
+            } else if (isRange(position) && util.rangeContainsRange(node.range, position)) {
                 containingNode = node;
             }
             //we had a match before, and don't now. this means we've finished walking down the whole way, and found our match
@@ -863,13 +864,71 @@ export class BrsFile {
         return undefined;
     }
 
+    private isExpressionChainable(expression) {
+        return expression && (isVariableExpression(expression) ||
+            isIndexedGetExpression(expression) ||
+            isIndexedSetStatement(expression) ||
+            isDottedGetExpression(expression) ||
+            isDottedSetStatement(expression) ||
+            isCallExpression(expression));
+    }
+
+    public getTokenChain(currentToken: Token): TokenChain {
+        const tokenChain: TokenChainMember[] = [];
+        let expression = this.getClosestExpression(currentToken.range);
+        if (!this.isExpressionChainable(expression)) {
+            return { chain: [{ token: currentToken, usage: TokenUsage.Direct }], includesUnknowableTokenType: false };
+        }
+        let tokenUsage: TokenUsage;
+        let nextTokenUsage: TokenUsage;
+        let foundCurrentTokenInExpression = false;
+        while (expression && this.isExpressionChainable(expression)) {
+            let token: Token;
+
+            let nextExpression: Expression;
+            if (isVariableExpression(expression)) {
+                token = expression.name;
+                tokenUsage = nextTokenUsage ?? TokenUsage.Direct;
+                nextExpression = undefined;
+                nextTokenUsage = undefined;
+            } else if (isDottedGetExpression(expression) || isDottedSetStatement(expression)) {
+                token = expression.name;
+                tokenUsage = nextTokenUsage ?? TokenUsage.DottedGet;
+                nextTokenUsage = undefined;
+                nextExpression = expression.obj;
+                foundCurrentTokenInExpression ||= expression.dot === currentToken;
+            } else if (isIndexedGetExpression(expression) || isIndexedSetStatement(expression)) {
+                nextTokenUsage = TokenUsage.IndexedGet;
+                nextExpression = expression.obj;
+                foundCurrentTokenInExpression ||= expression.openingSquare === currentToken || expression.closingSquare === currentToken;
+
+            } else if (isCallExpression(expression)) {
+                nextExpression = expression.callee;
+                nextTokenUsage = TokenUsage.Call;
+                foundCurrentTokenInExpression ||= expression.openingParen === currentToken || expression.closingParen === currentToken;
+            }
+            foundCurrentTokenInExpression ||= token === currentToken;
+
+            if (token && foundCurrentTokenInExpression) {
+                tokenChain.push({ token: token, usage: tokenUsage });
+            }
+            if (!foundCurrentTokenInExpression) {
+                // we haven't found the searched for token yet - ignore usage
+                nextTokenUsage = undefined;
+            }
+            expression = nextExpression;
+        }
+        let includesUnknown = !!expression; // we have an expression but it's not a known kind of a chain
+        return { chain: tokenChain.reverse(), includesUnknowableTokenType: includesUnknown };
+    }
+
 
     private findNamespaceFromTokenChain(originalTokenChain: TokenChainMember[], scope: Scope): NamespacedTokenChain {
         let namespaceTokens: Token[] = [];
         let startsWithNamespace = '';
         let namespaceContainer: NamespaceContainer;
         let tokenChain = [...originalTokenChain];
-        while (tokenChain[0] && tokenChain[0].usage === TokenUsage.Direct) {
+        while (tokenChain[0] && (tokenChain[0].usage === TokenUsage.DottedGet || tokenChain[0].usage === TokenUsage.Direct)) {
             const namespaceNameToCheck = `${startsWithNamespace}${startsWithNamespace.length > 0 ? '.' : ''}${tokenChain[0].token.text}`.toLowerCase();
             const foundNamespace = scope.namespaceLookup.get(namespaceNameToCheck);
 
@@ -960,7 +1019,7 @@ export class BrsFile {
         if (cachedSymbolData) {
             return cachedSymbolData;
         }
-        const tokenChainResponse = this.parser.getTokenChain(currentToken);
+        const tokenChainResponse = this.getTokenChain(currentToken);
         if (tokenChainResponse.includesUnknowableTokenType) {
             const symbolData = { type: new DynamicType(), expandedTokenText: currentToken.text };
             scope.symbolCache.set(currentToken, symbolData);
@@ -980,6 +1039,7 @@ export class BrsFile {
         let symbolType: BscType;
         let tokenText = [];
         let justReturnDynamic = false;
+        let fullNamespaceName = nameSpacedTokenChain.namespaceContainer ? nameSpacedTokenChain.namespaceContainer.fullName + '.' : '';
         const typeContext = { file: this, scope: scope, position: tokenChain[0]?.token.range.start };
         for (const tokenChainMember of tokenChain) {
             const token = tokenChainMember?.token;
@@ -1021,7 +1081,7 @@ export class BrsFile {
                 }
             }
 
-            if (isArrayType(symbolType) && tokenUsage === TokenUsage.ArrayReference) {
+            if (isArrayType(symbolType) && tokenUsage === TokenUsage.IndexedGet) {
                 symbolType = getTypeFromContext(symbolType.getDefaultType(typeContext), typeContext);
             }
 
@@ -1091,7 +1151,7 @@ export class BrsFile {
 
             }
         }
-        const symbolData = { type: backUpReturnType, expandedTokenText: expandedTokenText };
+        const symbolData = { type: backUpReturnType, expandedTokenText: expandedTokenText, fullName: fullNamespaceName + expandedTokenText };
         scope.symbolCache.set(currentToken, symbolData);
         return symbolData;
     }
@@ -1891,4 +1951,33 @@ export interface TokenSymbolLookup {
     expandedTokenText: string;
     symbolContainer?: SymbolContainer;
     useExpandedTextOnly?: boolean;
+    fullName?: string; //includes namespace
+}
+
+
+export enum TokenUsage {
+    Direct = 1,
+    Call = 2,
+    IndexedGet = 3,
+    DottedGet = 4
+}
+
+/**
+ * A member of a token chain - a wrapper around a token, which also gives some context for how it is used, and if the type is knowable
+ */
+export interface TokenChainMember {
+    /**
+     * The token
+     */
+    token: Token;
+    /**
+     * How was this token used?
+     */
+    usage: TokenUsage;
+
+}
+
+export interface TokenChain {
+    chain: TokenChainMember[];
+    includesUnknowableTokenType?: boolean;
 }

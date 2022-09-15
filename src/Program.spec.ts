@@ -2282,8 +2282,8 @@ describe('Program', () => {
         it('does not get signature help for callfunc method, referenced by dot', () => {
             program.setFile('source/main.bs', `
                 function main()
-                    myNode = CreateObject("roSGNode").CreateScene("Component1")
-                    myNode.sayHello(arg1)
+                    myNode = createObject("roSGNode", "Component1")
+                    myNode.sayHello(1, 2)
                 end function
             `);
             program.setFile('components/MyNode.bs', `

@@ -82,7 +82,7 @@ export class EmptyStatement extends Statement {
 export class Body extends Statement implements TypedefProvider {
     constructor(
         public statements: Statement[] = [],
-        public symbolTable = new SymbolTable()
+        public symbolTable = new SymbolTable(undefined, `Body`)
     ) {
         super();
     }
@@ -1141,7 +1141,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     ) {
         super();
         this.name = this.nameExpression.getName(ParseMode.BrighterScript);
-        this.symbolTable = new SymbolTable(parentSymbolTable);
+        this.symbolTable = new SymbolTable(parentSymbolTable, `Namespace ${keyword.text}`);
     }
 
     public symbolTable: SymbolTable;
@@ -1297,6 +1297,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider, Me
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
             }
         }
+        this.memberTable.identifier = `Interface (members) ${name.text}`;
     }
 
     public tokens = {} as {
@@ -1538,6 +1539,16 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
     ) {
         super();
         this.body = this.body ?? [];
+        this.symbolTable.pushParent(currentSymbolTable);
+
+        this.range = util.createBoundingRange(
+            this.classKeyword,
+            this.name,
+            this.extendsKeyword,
+            this.parentClassName,
+            ...this.body,
+            this.end
+        ) ?? interpolatedRange;
 
         for (let statement of this.body) {
             if (isMethodStatement(statement)) {
@@ -1548,6 +1559,8 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
             }
         }
+        this.symbolTable.identifier = `Class (symbols) ${name.text}`;
+        this.memberTable.identifier = `Class (members) ${name.text}`;
     }
 
     public getName(parseMode: ParseMode) {
@@ -2335,6 +2348,8 @@ export class EnumStatement extends Statement implements TypedefProvider {
             this.tokens.endEnum
         ) ?? interpolatedRange;
         this.body = this.body ?? [];
+
+        this.symbolTable.identifier = `Enum ${tokens.name.text}`;
     }
 
     public readonly range: Range;

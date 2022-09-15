@@ -1,9 +1,9 @@
 import { URI } from 'vscode-uri';
-import { isBrsFile, isCallExpression, isLiteralExpression, isNewExpression, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isCallExpression, isDynamicType, isFunctionType, isInvalidType, isLiteralExpression, isNewExpression, isTypedFunctionType, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
+import type { BscFile, BsDiagnostic, CallableContainerMap, FunctionCall, MinMax, OnScopeValidateEvent } from '../../interfaces';
 import type { Expression } from '../../parser/Expression';
 import type { EnumStatement } from '../../parser/Statement';
 import util from '../../util';
@@ -13,6 +13,8 @@ import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
 import type { SymbolTable } from '../../SymbolTable';
 import type { DiagnosticRelatedInformation, Position } from 'vscode-languageserver';
+import { UninitializedType } from '../../types/UninitializedType';
+import { getTypeFromContext } from '../../types/BscType';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -35,6 +37,7 @@ export class ScopeValidator {
         this.detectDuplicateEnums(event);
         this.validateCreateObjectCalls(event);
         this.iterateExpressions(event);
+        this.detectInvalidFunctionCalls(event);
         event.scope.unlinkSymbolTable();
     }
 
@@ -130,6 +133,12 @@ export class ScopeValidator {
                     } else {
                         expression = referenceExpression;
                     }
+
+                    if (isCallExpression(expression.parent) && !isNewExpression(referenceExpression)) {
+                        // function calls are validated in detectInvalidFunctionCalls
+                        continue;
+                    }
+
                     const tokens = util.getAllDottedGetParts(expression);
                     if (tokens?.length > 0) {
                         const symbolTable = this.getSymbolTable(scope, file, tokens[0].range.start); //flag all unknown left-most variables
@@ -350,5 +359,109 @@ export class ScopeValidator {
             }
         });
         event.scope.addDiagnostics(diagnostics);
+    }
+
+    protected detectInvalidFunctionCalls(event: OnScopeValidateEvent) {
+        const diagnostics: BsDiagnostic[] = [];
+        //get a list of all callables, indexed by their lower case names
+        let callableContainerMap = event.scope.getCallableContainerMap();
+
+        event.scope.enumerateBrsFiles((file) => {
+            diagnostics.push(...this.diagnosticDetectInvalidFunctionCalls(event.scope, file, callableContainerMap));
+        });
+        event.scope.addDiagnostics(diagnostics);
+    }
+
+
+    /**
+    * Find functions with either the wrong type of parameters, or the wrong number of parameters
+    */
+    private diagnosticDetectInvalidFunctionCalls(scope: Scope, file: BscFile, callableContainersByLowerName: CallableContainerMap) {
+        const diagnostics: BsDiagnostic[] = [];
+        const specialCaseGlobalFunctions = ['val']; //  Global callables with multiple definitions
+        if (isBrsFile(file)) {
+            for (let expCall of file.functionCalls) {
+                const symbolTypeInfo = file.getSymbolTypeFromToken(expCall.name, expCall.functionExpression, scope);
+                let funcType = symbolTypeInfo.type;
+                if ((!isTypedFunctionType(funcType) && !isDynamicType(funcType)) || specialCaseGlobalFunctions.includes(expCall.name.text)) {
+                    // We don't know if this is a function. Try seeing if it is a global
+                    const callableContainer = util.getCallableContainerByFunctionCall(callableContainersByLowerName, expCall);
+                    if (callableContainer) {
+                        // We found a global callable with correct number of params - use that
+                        funcType = callableContainer.callable?.type;
+                    } else {
+                        const allowedParamCount = util.getMinMaxParamCountByFunctionCall(callableContainersByLowerName, expCall);
+                        if (allowedParamCount) {
+                            // We found a global callable, but it needs a different number of args
+                            diagnostics.push(this.getMismatchParamCountDiagnostic(allowedParamCount, expCall, file));
+                            continue;
+                        }
+                    }
+                }
+
+                if (isFunctionType(funcType)) {
+                    // This is a generic function, and it is callable
+                } else if (isTypedFunctionType(funcType)) {
+                    // Check for Argument count mismatch.
+                    //get min/max parameter count for callable
+                    let paramCount = util.getMinMaxParamCount(funcType.params);
+                    if (expCall.args.length > paramCount.max || expCall.args.length < paramCount.min) {
+                        diagnostics.push(this.getMismatchParamCountDiagnostic(paramCount, expCall, file));
+                    }
+
+                    // Check for Argument type mismatch.
+                    const paramTypeContext = { file: file, scope: scope, position: expCall.functionExpression.range?.start };
+                    const argTypeContext = { file: file, scope: scope, position: expCall.range?.start };
+                    for (let index = 0; index < funcType.params.length; index++) {
+                        const param = funcType.params[index];
+                        const arg = expCall.args[index];
+                        if (!arg) {
+                            // not enough args
+                            break;
+                        }
+                        let argType = arg.type ?? new UninitializedType();
+                        const paramType = getTypeFromContext(param.type, paramTypeContext);
+                        if (!paramType) {
+                            // other error - can not determine what type this parameter should be
+                            continue;
+                        }
+                        argType = getTypeFromContext(argType, argTypeContext);
+                        let assignable = argType?.isAssignableTo(paramType, argTypeContext);
+                        if (!assignable) {
+                            // TODO TYPES: perhaps this should be a strict mode setting?
+                            assignable = argType?.isConvertibleTo(paramType, argTypeContext);
+                        }
+                        if (!assignable) {
+                            diagnostics.push({
+                                ...DiagnosticMessages.argumentTypeMismatch(argType?.toString(argTypeContext), paramType.toString(paramTypeContext)),
+                                range: arg?.range,
+                                file: file
+                            });
+                        }
+                    }
+                } else if (isInvalidType(symbolTypeInfo.type)) {
+                    // TODO TYPES: standard member functions like integer.ToStr() are not detectable yet.
+                } else if (isDynamicType(symbolTypeInfo.type)) {
+                    // maybe this is a function? who knows
+                } else {
+                    diagnostics.push({
+                        ...DiagnosticMessages.cannotFindName(symbolTypeInfo.expandedTokenText, symbolTypeInfo.fullName),
+                        range: expCall.range,
+                        file: file
+                    });
+                }
+            }
+        }
+        return diagnostics;
+    }
+
+    private getMismatchParamCountDiagnostic(paramCount: MinMax, expCall: FunctionCall, file: BscFile) {
+        const minMaxParamsText = paramCount.min === paramCount.max ? paramCount.max : `${paramCount.min}-${paramCount.max}`;
+        const expCallArgCount = expCall.args.length;
+        return ({
+            ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
+            range: expCall.nameRange,
+            file: file
+        });
     }
 }

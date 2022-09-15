@@ -82,7 +82,7 @@ describe('HoverProcessor', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(util.createRange(1, 25, 1, 29));
-            expect(hover.contents).to.eql(fence('function Main(count? as dynamic) as dynamic'));
+            expect(hover.contents).to.eql(fence('function Main(count? as integer) as dynamic'));
         });
 
         it('finds variable function hover in same scope', () => {
@@ -98,7 +98,7 @@ describe('HoverProcessor', () => {
             let hover = program.getHover(file.srcPath, util.createPosition(5, 24))[0];
 
             expect(hover.range).to.eql(util.createRange(5, 20, 5, 29));
-            expect(hover.contents).to.eql(fence('sub sayMyName(name as string) as void'));
+            expect(hover.contents).to.eql(fence('sub (name as string) as void'));
         });
 
         it('finds function hover in file scope', () => {

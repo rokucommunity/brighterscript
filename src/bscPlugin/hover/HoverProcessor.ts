@@ -80,24 +80,6 @@ export class HoverProcessor {
         //get the function scope for this position (if exists)
         let func = file.getFunctionExpressionAtPosition(this.event.position);
         if (func) {
-            //TODO can I delete this?
-            // //find any variable with this name
-            // for (const varDeclaration of func.variableDeclarations) {
-            //     //we found a variable declaration with this token text!
-            //     if (varDeclaration.name.toLowerCase() === lowerTokenText) {
-            //         let typeText: string;
-            //         if (isFunctionType(varDeclaration.type)) {
-            //             typeText = varDeclaration.type.toString();
-            //         } else {
-            //             typeText = `${varDeclaration.name} as ${varDeclaration.type.toString()}`;
-            //         }
-            //         return {
-            //             range: token.range,
-            //             //append the variable name to the front for scope
-            //             contents: fence(typeText)
-            //         };
-            //     }
-            // }
             for (const labelStatement of func.labelStatements) {
                 if (labelStatement.tokens.identifier.text.toLocaleLowerCase() === lowerTokenText) {
                     return {
@@ -108,16 +90,6 @@ export class HoverProcessor {
             }
         }
 
-        //look through all callables in relevant scopes
-        for (let scope of this.event.scopes) {
-            let callable = scope.getCallableByName(lowerTokenText);
-            if (callable) {
-                return {
-                    range: token.range,
-                    contents: this.buildContentsWithDocs(fence(callable.type.toString()), callable.functionStatement?.func?.functionType)
-                };
-            }
-        }
         const typeTexts = new Set<string>();
         const fileScopes = this.event.program.getScopesForFile(file).sort((a, b) => a.dependencyGraphKey?.localeCompare(b.dependencyGraphKey));
         const callables = [] as Callable[];

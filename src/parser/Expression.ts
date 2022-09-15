@@ -160,7 +160,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         } else {
             this._returnType = new DynamicType();
         }
-        this.symbolTable = new SymbolTable(parentSymbolTable);
+        this.symbolTable = new SymbolTable(parentSymbolTable, `Function`);
         for (let param of parameters) {
             this.symbolTable.addSymbol(param.name.text, param.name.range, param.getType());
         }
@@ -731,6 +731,8 @@ export class AALiteralExpression extends Expression implements SymbolContainer {
     readonly memberTable: SymbolTable = new SymbolTable();
 
     public buildSymbolTable() {
+        this.symbolTable.identifier = `AALiteral (symbols)`;
+        this.memberTable.identifier = `AALiteral (members)`;
         this.symbolTable.clear();
         this.symbolTable.addSymbol('m', { start: this.open.range.start, end: this.close.range.end }, new ObjectType('object', this.memberTable));
         for (const element of this.elements) {

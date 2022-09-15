@@ -699,7 +699,7 @@ class Runner {
             const signature = {
                 name: func.name?.text,
                 params: [],
-                returnType: func.func.returnTypeToken?.text ?? 'Void'
+                returnType: func.func.returnType?.type?.toTypeString() ?? 'Void'
             } as Func;
 
 

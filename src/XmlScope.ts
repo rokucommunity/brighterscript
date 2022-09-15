@@ -52,6 +52,7 @@ export class XmlScope extends Scope {
         if (!this._topTable) {
             const parentScope = this.getParentScope();
             this._topTable = new SymbolTable();
+            this._topTable.identifier = `XmlScope (top) ${this.name}`;
             if (isXmlScope(parentScope)) {
                 this._topTable.pushParent(parentScope.topTable);
             }
@@ -61,7 +62,7 @@ export class XmlScope extends Scope {
 
     public get memberTable() {
         if (!this._memberTable) {
-            this._memberTable = new SymbolTable(this.getParentScope()?.memberTable);
+            this._memberTable = new SymbolTable(this.getParentScope()?.memberTable, `XmlScope (member) ${this.name}`);
             const interfaceMembers = this.xmlFile.parser.ast?.component?.interfaceMembers ?? [];
 
             for (const member of interfaceMembers) {

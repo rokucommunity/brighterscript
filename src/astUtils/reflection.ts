@@ -25,6 +25,7 @@ import type { LazyType } from '../types/LazyType';
 import type { SGInterfaceField, SGInterfaceFunction, SGNode } from '../parser/SGTypes';
 import type { FunctionType } from '../types/FunctionType';
 import type { EnumMemberType, EnumType } from '../types/EnumType';
+import type { Position, Range } from 'vscode-languageserver';
 
 // File reflection
 
@@ -347,4 +348,14 @@ export function isSGInterfaceField(e: SGNode): e is SGInterfaceField {
 }
 export function isSGInterfaceFunction(e: SGNode): e is SGInterfaceFunction {
     return e?.constructor.name === 'SGInterfaceFunction';
+}
+
+
+// Range and Position
+export function isRange(e: any): e is Range {
+    return e.start && isPosition(e.start) && e.end && isPosition(e.end);
+}
+
+export function isPosition(e: any): e is Position {
+    return Number.isInteger(e.line) && Number.isInteger(e.character);
 }

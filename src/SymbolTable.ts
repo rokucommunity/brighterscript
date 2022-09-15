@@ -9,7 +9,8 @@ import { DynamicType } from './types/DynamicType';
  */
 export class SymbolTable {
     constructor(
-        parent?: SymbolTable | undefined
+        parent?: SymbolTable | undefined,
+        public identifier: string = ''
     ) {
         this.pushParent(parent);
     }
@@ -51,7 +52,9 @@ export class SymbolTable {
     private parentStack: SymbolTable[] = [];
 
     public pushParent(parent?: SymbolTable) {
-        this.parentStack.unshift(parent);
+        if (parent) {
+            this.parentStack.unshift(parent);
+        }
         return parent;
     }
 
@@ -194,7 +197,9 @@ export class SymbolTable {
      */
     private toJSON() {
         return {
+            identifier: this.identifier,
             parent: this.parent?.toJSON(),
+            parentStack: this.parentStack.map(p => p?.toJSON()),
             symbols: [
                 ...new Set(
                     [...this.symbolMap.entries()].map(([key, symbols]) => {

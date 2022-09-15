@@ -554,3 +554,9 @@ export interface FunctionDeclarationParseOptions {
     onlyCallableAsMember?: boolean;
 }
 export type AstNode = Expression | Statement;
+
+
+export interface MinMax {
+    min: number;
+    max: number;
+}

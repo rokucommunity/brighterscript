@@ -163,7 +163,7 @@ export class BsClassValidator implements BsClassValidator {
                 //this class has a "new method"
                 newMethod &&
                 //this class has a parent class
-                classStatement.parent
+                classStatement.parentClass
             ) {
                 //prevent use of `m.` anywhere before the `super()` call
                 const cancellationToken = new CancellationTokenSource();
@@ -220,7 +220,7 @@ export class BsClassValidator implements BsClassValidator {
                     break;
                 }
                 names.set(lowerClassName, className);
-                cls = cls.parent;
+                cls = cls.parentClass;
             } while (cls);
         }
     }
@@ -410,7 +410,7 @@ export class BsClassValidator implements BsClassValidator {
      */
     private getAncestorMember(classStatement: AugmentedClassStatement | AugmentedInterfaceStatement, memberName: string) {
         let lowerMemberName = memberName.toLowerCase();
-        let ancestor = classStatement.parent;
+        let ancestor = classStatement.parentClass;
         while (ancestor) {
             let member = ancestor.memberMap[lowerMemberName];
             if (member) {
@@ -419,19 +419,19 @@ export class BsClassValidator implements BsClassValidator {
                     ancestorStatement: ancestor
                 };
             }
-            ancestor = ancestor.parent !== ancestor ? ancestor.parent : null;
+            ancestor = ancestor.parentClass !== ancestor ? ancestor.parentClass : null;
         }
     }
 
     private cleanUp() {
         //unlink all classes from their parents so it doesn't mess up the next scope
         for (const [, classStatement] of this.classes) {
-            delete classStatement.parent;
+            delete classStatement.parentClass;
             delete classStatement.file;
         }
         //unlink all interfaces from their parents so it doesn't mess up the next scope
         for (const [, interfaceStatement] of this.interfaces) {
-            delete interfaceStatement.parent;
+            delete interfaceStatement.parentClass;
             delete interfaceStatement.file;
         }
     }
@@ -504,7 +504,7 @@ export class BsClassValidator implements BsClassValidator {
                     }
                 }
                 if (parentClass) {
-                    classStatement.parent = parentClass;
+                    classStatement.parentClass = parentClass;
                 } else {
                     //couldn't find the parent class (validated in ScopeValidator)
                 }
@@ -515,13 +515,13 @@ export class BsClassValidator implements BsClassValidator {
 
 type AugmentedClassStatement = ClassStatement & {
     file?: BscFile;
-    parent?: AugmentedClassStatement;
+    parentClass?: AugmentedClassStatement;
 };
 
 
 type AugmentedInterfaceStatement = InterfaceStatement & {
     file?: BscFile;
-    parent?: AugmentedInterfaceStatement;
+    parentClass?: AugmentedInterfaceStatement;
 };
 
 interface MemberFieldOrMethod {

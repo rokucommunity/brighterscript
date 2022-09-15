@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, FunctionCall, CallableParam, TranspileResult } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, FunctionCall, CallableParam, TranspileResult, MinMax } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -564,6 +564,17 @@ export class Util {
             return 1;
         }
         return 0;
+    }
+
+    /**
+    * Test if `insideRange` is in `range`. If the position is at the edges, will return true.
+    * Adapted from core vscode
+    * @param range
+    * @param insideRange
+    */
+    public rangeContainsRange(range: Range, insideRange: Range) {
+        return this.comparePositionToRange(insideRange.start, range) === 0 &&
+            this.comparePositionToRange(insideRange.end, range) === 0;
     }
 
     /**
@@ -1595,11 +1606,5 @@ export function standardizePath(stringParts, ...expressions: any[]) {
 
 export let util = new Util();
 export default util;
-
-
-export interface MinMax {
-    min: number;
-    max: number;
-}
 
 export const MAX_PARAM_COUNT = 32;

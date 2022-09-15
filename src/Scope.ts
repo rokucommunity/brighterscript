@@ -3,28 +3,26 @@ import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink, FunctionCall, InheritableStatement, InheritableType, NamedTypeStatement } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink, InheritableStatement, InheritableType, NamedTypeStatement } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
 import type { FunctionExpression, NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { standardizePath as s, util } from './util';
-import type { MinMax } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile, TokenSymbolLookup } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isArrayType, isBrsFile, isClassStatement, isConstStatement, isCustomType, isDynamicType, isEnumStatement, isFunctionStatement, isFunctionType, isInterfaceStatement, isInterfaceType, isInvalidType, isMethodStatement, isTypedFunctionType, isVariableExpression, isXmlFile } from './astUtils/reflection';
+import { isArrayType, isBrsFile, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isInterfaceStatement, isInterfaceType, isMethodStatement, isTypedFunctionType, isVariableExpression, isXmlFile } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { Token } from './lexer/Token';
 import type { BscType, TypeContext } from './types/BscType';
 import { getTypeFromContext } from './types/BscType';
 import { DynamicType } from './types/DynamicType';
 import { ObjectType } from './types/ObjectType';
-import { UninitializedType } from './types/UninitializedType';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -668,10 +666,11 @@ export class Scope {
                             namespaces: new Map(),
                             classStatements: {},
                             functionStatements: {},
+                            interfaceStatements: {},
                             enumStatements: new Map(),
                             constStatements: new Map(),
                             statements: [],
-                            symbolTable: new SymbolTable(this.symbolTable)
+                            symbolTable: new SymbolTable(this.symbolTable, `Namespace ${loopName}`)
                         });
                     }
                 }
@@ -680,6 +679,8 @@ export class Scope {
                 for (let statement of namespaceStatement.body.statements) {
                     if (isClassStatement(statement) && statement.name) {
                         ns.classStatements[statement.name.text.toLowerCase()] = statement;
+                    } else if (isInterfaceStatement(statement) && statement.name) {
+                        ns.interfaceStatements[statement.name.text.toLowerCase()] = statement;
                     } else if (isFunctionStatement(statement) && statement.name) {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
                     } else if (isEnumStatement(statement) && statement.fullName) {
@@ -738,33 +739,6 @@ export class Scope {
             //Since statements from files are shared across multiple scopes, we need to link those statements to the current scope
             this.linkSymbolTable();
 
-            let callables = this.getAllCallables();
-
-            //sort the callables by filepath and then method name, so the errors will be consistent
-            // eslint-disable-next-line prefer-arrow-callback
-            callables = callables.sort((a, b) => {
-                const pathA = a.callable.file.srcPath;
-                const pathB = b.callable.file.srcPath;
-                //sort by path
-                if (pathA < pathB) {
-                    return -1;
-                } else if (pathA > pathB) {
-                    return 1;
-                }
-                //sort by function name
-                const funcA = b.callable.name;
-                const funcB = b.callable.name;
-                if (funcA < funcB) {
-                    return -1;
-                } else if (funcA > funcB) {
-                    return 1;
-                }
-                return 0;
-            });
-
-            //get a list of all callables, indexed by their lower case names
-            let callableContainerMap = util.getCallableContainersByLowerName(callables);
-
             this.program.plugins.emit('beforeScopeValidate', {
                 program: this.program,
                 scope: this
@@ -774,7 +748,7 @@ export class Scope {
                 program: this.program,
                 scope: this
             });
-            this._validate(callableContainerMap);
+            this._validate(this.getCallableContainerMap());
 
             this.program.plugins.emit('afterScopeValidate', {
                 program: this.program,
@@ -785,6 +759,36 @@ export class Scope {
 
             (this as any).isValidated = true;
         });
+    }
+
+    //Get a list of all callables, indexed by their lower case name
+    getCallableContainerMap() {
+        let callables = this.getAllCallables();
+
+        //sort the callables by filepath and then method name, so the errors will be consistent
+        // eslint-disable-next-line prefer-arrow-callback
+        callables = callables.sort((a, b) => {
+            const pathA = a.callable.file.srcPath;
+            const pathB = b.callable.file.srcPath;
+            //sort by path
+            if (pathA < pathB) {
+                return -1;
+            } else if (pathA > pathB) {
+                return 1;
+            }
+            //sort by function name
+            const funcA = b.callable.name;
+            const funcB = b.callable.name;
+            if (funcA < funcB) {
+                return -1;
+            } else if (funcA > funcB) {
+                return 1;
+            }
+            return 0;
+        });
+
+        //get a list of all callables, indexed by their lower case names
+        return util.getCallableContainersByLowerName(callables);
     }
 
     protected _validate(callableContainerMap: CallableContainerMap) {
@@ -803,7 +807,6 @@ export class Scope {
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.diagnosticDetectInvalidFunctionExpressionTypes(file);
-            this.diagnosticDetectInvalidFunctionCalls(file, callableContainerMap);
         });
     }
 
@@ -821,7 +824,7 @@ export class Scope {
 
     public get symbolTable() {
         return this.cache.getOrAdd('symbolTable', () => {
-            const result = new SymbolTable(this.getParentScope()?.symbolTable);
+            const result = new SymbolTable(this.getParentScope()?.symbolTable, `Scope ${this.name}`);
             result.addSymbol('m', null, new ObjectType('object', this.memberTable));
             for (let file of this.getOwnFiles()) {
                 if (isBrsFile(file)) {
@@ -1029,97 +1032,6 @@ export class Scope {
                 }
             }
         }
-    }
-
-    /**
-    * Find functions with either the wrong type of parameters, or the wrong number of parameters
-    */
-    private diagnosticDetectInvalidFunctionCalls(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
-        if (isBrsFile(file)) {
-            for (let expCall of file.functionCalls) {
-                const symbolTypeInfo = file.getSymbolTypeFromToken(expCall.name, expCall.functionExpression, this);
-                let funcType = symbolTypeInfo.type;
-                if (!isTypedFunctionType(funcType) && !isDynamicType(funcType)) {
-                    // We don't know if this is a function. Try seeing if it is a global
-                    const callableContainer = util.getCallableContainerByFunctionCall(callableContainersByLowerName, expCall);
-                    if (callableContainer) {
-                        // We found a global callable with correct number of params - use that
-                        funcType = callableContainer.callable?.type;
-                    } else {
-                        const allowedParamCount = util.getMinMaxParamCountByFunctionCall(callableContainersByLowerName, expCall);
-                        if (allowedParamCount) {
-                            // We found a global callable, but it needs a different number of args
-                            this.addMismatchParamCountDiagnostic(allowedParamCount, expCall, file);
-                            continue;
-                        }
-                    }
-                }
-
-                if (isFunctionType(funcType)) {
-                    // This is a generic function, and it is callable
-                } else if (isTypedFunctionType(funcType)) {
-                    // Check for Argument count mismatch.
-                    //get min/max parameter count for callable
-                    let paramCount = util.getMinMaxParamCount(funcType.params);
-                    if (expCall.args.length > paramCount.max || expCall.args.length < paramCount.min) {
-                        this.addMismatchParamCountDiagnostic(paramCount, expCall, file);
-                    }
-
-                    // Check for Argument type mismatch.
-                    const paramTypeContext = { file: file, scope: this, position: expCall.functionExpression.range?.start };
-                    const argTypeContext = { file: file, scope: this, position: expCall.range?.start };
-                    for (let index = 0; index < funcType.params.length; index++) {
-                        const param = funcType.params[index];
-                        const arg = expCall.args[index];
-                        if (!arg) {
-                            // not enough args
-                            break;
-                        }
-                        let argType = arg.type ?? new UninitializedType();
-                        const paramType = getTypeFromContext(param.type, paramTypeContext);
-                        if (!paramType) {
-                            // other error - can not determine what type this parameter should be
-                            continue;
-                        }
-                        argType = getTypeFromContext(argType, argTypeContext);
-                        let assignable = argType?.isAssignableTo(paramType, argTypeContext);
-                        if (!assignable) {
-                            // TODO TYPES: perhaps this should be a strict mode setting?
-                            assignable = argType?.isConvertibleTo(paramType, argTypeContext);
-                        }
-                        if (!assignable) {
-                            this.diagnostics.push({
-                                ...DiagnosticMessages.argumentTypeMismatch(argType?.toString(argTypeContext), paramType.toString(paramTypeContext)),
-                                range: arg?.range,
-                                file: file
-                            });
-                        }
-                    }
-                } else if (isInvalidType(symbolTypeInfo.type)) {
-                    // TODO TYPES: standard member functions like integer.ToStr() are not detectable yet.
-                } else if (isDynamicType(symbolTypeInfo.type)) {
-                    // maybe this is a function? who knows
-                } else {
-                    const functionNameText = symbolTypeInfo.expandedTokenText;
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.cannotFindName(functionNameText, this.name),
-                        range: expCall.nameRange,
-                        //TODO detect end of expression call
-                        file: file
-                    });
-                }
-            }
-        }
-    }
-
-    private addMismatchParamCountDiagnostic(paramCount: MinMax, expCall: FunctionCall, file: BscFile) {
-        const minMaxParamsText = paramCount.min === paramCount.max ? paramCount.max : `${paramCount.min}-${paramCount.max}`;
-        const expCallArgCount = expCall.args.length;
-        this.diagnostics.push({
-            ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
-            range: expCall.nameRange,
-            file: file
-        });
     }
 
     public getNewExpressions() {
@@ -1452,6 +1364,7 @@ export interface NamespaceContainer {
     lastPartName: string;
     statements: Statement[];
     classStatements: Record<string, ClassStatement>;
+    interfaceStatements: Record<string, InterfaceStatement>;
     functionStatements: Record<string, FunctionStatement>;
     enumStatements: Map<string, EnumStatement>;
     constStatements: Map<string, ConstStatement>;
