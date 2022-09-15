@@ -1,7 +1,8 @@
 import type { Range } from 'vscode-languageserver';
 import type { Identifier, Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Expression, NamespacedVariableNameExpression } from '../parser/Expression';
+import type { Expression } from '../parser/AstNode';
+import type { NamespacedVariableNameExpression } from '../parser/Expression';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../parser/Expression';
 import type { SGAttribute } from '../parser/SGTypes';
 import { Block, MethodStatement } from '../parser/Statement';

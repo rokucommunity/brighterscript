@@ -7,8 +7,8 @@ import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program, SourceObj, TranspileObj } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { FunctionStatement, Statement } from './parser/Statement';
-import type { Expression } from './parser/Expression';
+import type { FunctionStatement } from './parser/Statement';
+import type { Expression } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
@@ -406,5 +406,3 @@ export interface FileLink<T> {
     item: T;
     file: BrsFile;
 }
-
-export type AstNode = Expression | Statement;

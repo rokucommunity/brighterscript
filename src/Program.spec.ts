@@ -30,6 +30,7 @@ let stagingFolderPath = s`${tmpPath}/staging`;
 
 describe('Program', () => {
     let program: Program;
+
     beforeEach(() => {
         fsExtra.ensureDirSync(tmpPath);
         fsExtra.emptyDirSync(tmpPath);
@@ -44,6 +45,19 @@ describe('Program', () => {
         fsExtra.ensureDirSync(tmpPath);
         fsExtra.emptyDirSync(tmpPath);
         program.dispose();
+    });
+
+    it('Does not crazy for file not referenced by any other scope', async () => {
+        program.setFile('tests/testFile.spec.bs', `
+            function main(args as object) as object
+                return roca(args).describe("test suite", sub()
+                    m.pass()
+                end sub)
+            end function
+        `);
+        program.validate();
+        //test passes if this line does not throw
+        await program.getTranspiledFileContents('tests/testFile.spec.bs');
     });
 
     describe('global scope', () => {
@@ -535,6 +549,47 @@ describe('Program', () => {
             expect(program.hasFile('file1.brs')).to.be.false;
             program.setFile('file1.brs', `'comment`);
             expect(program.hasFile('file1.brs')).to.be.true;
+        });
+    });
+
+    describe('getPaths', () => {
+        function getPaths(...args: any[]) {
+            return (program as any).getPaths(...args);
+        }
+        it('works for dest', () => {
+            expect(
+                getPaths('source/main.brs', rootDir)
+            ).to.eql({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`source/main.brs`
+            });
+        });
+
+        it('works for absolute src', () => {
+            expect(
+                getPaths(`${rootDir}/source\\main.brs`, rootDir)
+            ).to.eql({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`source/main.brs`
+            });
+        });
+
+        it('works for missing src', () => {
+            expect(
+                getPaths({ dest: 'source/main.brs' }, rootDir)
+            ).to.eql({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`source/main.brs`
+            });
+        });
+
+        it('works for missing dest', () => {
+            expect(
+                getPaths({ src: `${rootDir}/source/main.brs` }, rootDir)
+            ).to.eql({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`source/main.brs`
+            });
         });
     });
 
@@ -1276,6 +1331,40 @@ describe('Program', () => {
         ).to.eql(['sayHello', 'sayHello2', 'sayHello3', 'sayHello4']);
     });
 
+    it('gets completions for callfunc invocation with multiple nodes and validates single code completion results', () => {
+        program.setFile('source/main.bs', `
+            function main()
+                ParentNode@.sayHello(arg1)
+            end function
+        `);
+        program.setFile('components/ParentNode.bs', `
+            function sayHello(text, text2)
+            end function
+        `);
+        program.setFile<XmlFile>('components/ParentNode.xml',
+            trim`<?xml version="1.0" encoding="utf-8" ?>
+            <component name="ParentNode" extends="Scene">
+                <script type="text/brightscript" uri="pkg:/components/ParentNode.bs" />
+                <interface>
+                    <function name="sayHello"/>
+                </interface>
+            </component>`);
+        program.setFile('components/ChildNode.bs', `
+            function sayHello(text, text2)
+            end function
+        `);
+        program.setFile<XmlFile>('components/ChildNode.xml',
+            trim`<?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildNode" extends="ParentNode">
+                <script type="text/brightscript" uri="pkg:/components/ChildNode.bs" />
+            </component>`);
+        program.validate();
+
+        expect(
+            (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
+        ).to.eql(['sayHello']);
+    });
+
     it('gets completions for extended nodes with callfunc invocation - ensure overridden methods included', () => {
         program.setFile('source/main.bs', `
             function main()
@@ -1318,7 +1407,7 @@ describe('Program', () => {
 
         expect(
             (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
-        ).to.eql(['sayHello', 'sayHello2', 'sayHello2', 'sayHello3', 'sayHello4']);
+        ).to.eql(['sayHello', 'sayHello2', 'sayHello3', 'sayHello4']);
     });
 
     describe('xml inheritance', () => {

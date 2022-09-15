@@ -14,11 +14,7 @@ import {
 } from '../lexer/TokenKind';
 import type {
     PrintSeparatorSpace,
-    PrintSeparatorTab,
-    Statement
-} from './Statement';
-import {
-    ConstStatement
+    PrintSeparatorTab
 } from './Statement';
 import {
     AssignmentStatement,
@@ -26,6 +22,7 @@ import {
     Body,
     CatchStatement,
     ClassStatement,
+    ConstStatement,
     CommentStatement,
     DimStatement,
     DottedSetStatement,
@@ -61,7 +58,6 @@ import {
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { util } from '../util';
-import type { Expression } from './Expression';
 import {
     AALiteralExpression,
     AAMemberExpression,
@@ -96,6 +92,8 @@ import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCal
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
+import { DynamicType } from '../types/DynamicType';
+import type { Expression, Statement } from './AstNode';
 
 export class Parser {
     /**
@@ -336,7 +334,7 @@ export class Parser {
                 return this.libraryStatement();
             }
 
-            if (this.check(TokenKind.Const)) {
+            if (this.check(TokenKind.Const) && this.checkAnyNext(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
                 return this.constDeclaration();
             }
 
@@ -950,6 +948,22 @@ export class Parser {
                 let result = new FunctionStatement(name, func, this.currentNamespaceName);
                 func.functionStatement = result;
                 this._references.functionStatements.push(result);
+
+                // Add the transpiled name for namespace functions
+                // to consider an edge case when defining namespaces in .bs files
+                // and using them in .brs files.
+                if (func.namespaceName) {
+                    const transpiledNamespaceFunctionName = result.getName(ParseMode.BrightScript);
+                    const funcType = func.getFunctionType();
+                    funcType.setName(transpiledNamespaceFunctionName);
+
+                    this.symbolTable.addSymbol(
+                        transpiledNamespaceFunctionName,
+                        name.range,
+                        funcType
+                    );
+                }
+
                 return result;
             }
         } finally {
@@ -1438,8 +1452,9 @@ export class Parser {
     }
 
     private constDeclaration(): ConstStatement | undefined {
+        this.warnIfNotBrighterScriptMode('const declaration');
         const constToken = this.advance();
-        const nameToken = this.identifier();
+        const nameToken = this.identifier(...this.allowedLocalIdentifiers);
         const equalToken = this.consumeToken(TokenKind.Equal);
         const expression = this.expression();
         const statement = new ConstStatement({
@@ -1721,7 +1736,9 @@ export class Parser {
             });
         }
         let rightSquareBracket = this.tryConsume(DiagnosticMessages.missingRightSquareBracketAfterDimIdentifier(), TokenKind.RightSquareBracket);
-
+        if (identifier) {
+            this.currentSymbolTable.addSymbol(identifier.text, identifier.range, DynamicType.instance);
+        }
         return new DimStatement(dim, identifier, leftSquareBracket, expressions, rightSquareBracket);
     }
 
@@ -2677,7 +2694,7 @@ export class Parser {
                 range: null as Range
             };
             if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
-                result.keyToken = this.advance();
+                result.keyToken = this.identifier(...AllowedProperties);
             } else if (this.check(TokenKind.StringLiteral)) {
                 result.keyToken = this.advance();
             } else {

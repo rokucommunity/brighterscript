@@ -6,6 +6,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.57.2](https://github.com/rokucommunity/brighterscript/compare/v0.57.1...0.57.2) - 2022-09-08
+### Fixed
+ - Fix `brightscript.configFile` workspace config bug ([#686](https://github.com/rokucommunity/brighterscript/pull/686))
+
+
+
+## [0.57.1](https://github.com/rokucommunity/brighterscript/compare/v0.57.0...0.57.1) - 2022-09-07
+### Fixed
+ - fix(parser): consider namespace function transpiled names ([#685](https://github.com/rokucommunity/brighterscript/pull/685))
+
+
+
+## [0.57.0](https://github.com/rokucommunity/brighterscript/compare/v0.56.0...0.57.0) - 2022-09-02
+### Added
+ - validation for files that are nested too deep ([#680](https://github.com/rokucommunity/brighterscript/pull/680))
+### Changed
+ - upgrade to [roku-deploy@3.8.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#381---2022-09-02). Notable changes since 3.7.1:
+### Fixed
+ - Allow `mod` as an aa prop([#684](https://github.com/rokucommunity/brighterscript/pull/684))
+ - coerce AA member identifier kinds to `TokenKind.Identifier` ([#684](https://github.com/rokucommunity/brighterscript/pull/684))
+ - Doc Scraper issues ([#585](https://github.com/rokucommunity/brighterscript/pull/585))
+ - Fix case sensitivity issue with `bs_const` values ([#677](https://github.com/rokucommunity/brighterscript/pull/677))
+
+
+
+## [0.56.0](https://github.com/rokucommunity/brighterscript/compare/v0.55.2...0.56.0) - 2022-08-23
+### Added
+ - validation for dimmed variables ([#672](https://github.com/rokucommunity/brighterscript/pull/672))
+ - "--lsp" flag to bsc to start an LSP server ([#668](https://github.com/rokucommunity/brighterscript/pull/668))
+### Fixed
+ - compile crash for scope-less files ([#674](https://github.com/rokucommunity/brighterscript/pull/674))
+ - parse error for malformed dim statement ([#673](https://github.com/rokucommunity/brighterscript/pull/673))
+ - allow const as variable name ([#670](https://github.com/rokucommunity/brighterscript/pull/670))
+ - crashes for language clients that don't support "workspace/configuration" requests ([#667](https://github.com/rokucommunity/brighterscript/pull/667))
+
+
+
+## [0.55.2](https://github.com/rokucommunity/brighterscript/compare/v0.55.1...0.55.2) - 2022-08-15
+### Fixed
+ - Dedupe code completions in components ([#664](https://github.com/rokucommunity/brighterscript/pull/664))
+
+
+
+## [0.55.1](https://github.com/rokucommunity/brighterscript/compare/v0.55.0...0.55.1) - 2022-08-07
+### Fixed
+ - scope-specific diagnostic grouping issue ([#660](https://github.com/rokucommunity/brighterscript/pull/660))
+ - typescript error for ast parent setting ([#659](https://github.com/rokucommunity/brighterscript/pull/659))
+
+
+
 ## [0.55.0](https://github.com/rokucommunity/brighterscript/compare/v0.54.1...0.55.0) - 2022-08-03
 ### Added
  - a `toJSON` function to SymbolTable ([#655](https://github.com/rokucommunity/brighterscript/pull/655))

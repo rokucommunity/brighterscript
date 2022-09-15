@@ -1,10 +1,10 @@
 import { expect, assert } from 'chai';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
-import type { Expression } from './Expression';
+import type { AAMemberExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
+import type { AssignmentStatement, ClassStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -14,6 +14,8 @@ import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
 import { BrsFile } from '../files/BrsFile';
 import { Program } from '../Program';
+import { createVisitor, WalkMode } from '../astUtils/visitors';
+import type { Expression, Statement } from './AstNode';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -843,7 +845,47 @@ describe('parser', () => {
                 `);
                 expect(diagnostics[0]?.message).not.to.exist;
             });
+
+            it('allows `mod` as an AA literal property', () => {
+                const parser = parse(`
+                    sub main()
+                        person = {
+                            mod: true
+                        }
+                        person.mod = false
+                        print person.mod
+                    end sub
+                `);
+                expectZeroDiagnostics(parser);
+            });
+
+            it('converts aa literal property TokenKind to Identifier', () => {
+                const parser = parse(`
+                    sub main()
+                        person = {
+                            mod: true
+                            and: true
+                        }
+                    end sub
+                `);
+                expectZeroDiagnostics(parser);
+                const elements = [] as AAMemberExpression[];
+                parser.ast.walk(createVisitor({
+                    AAMemberExpression: (node) => {
+                        elements.push(node as any);
+                    }
+                }), {
+                    walkMode: WalkMode.visitAllRecursive
+                });
+
+                expect(
+                    elements.map(x => x.keyToken.kind)
+                ).to.eql(
+                    [TokenKind.Identifier, TokenKind.Identifier]
+                );
+            });
         });
+
         it('"end" is not allowed as a local identifier', () => {
             let { diagnostics } = parse(`
                 sub main()

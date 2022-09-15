@@ -4,7 +4,6 @@ import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
-import type { DottedGetExpression, Expression, VariableExpression } from '../../parser/Expression';
 import type { EnumStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
@@ -12,6 +11,8 @@ import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
+import type { Expression } from '../../parser/AstNode';
+import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes

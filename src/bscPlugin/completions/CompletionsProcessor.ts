@@ -12,6 +12,7 @@ export class CompletionsProcessor {
     }
 
     public process() {
+        let completionsArray = [];
         if (isBrsFile(this.event.file) && this.event.file.isPositionNextToTokenKind(this.event.position, TokenKind.Callfunc)) {
             const xmlScopes = this.event.program.getScopes().filter((s) => isXmlScope(s)) as XmlScope[];
             // is next to a @. callfunc invocation - must be an interface method.
@@ -19,7 +20,11 @@ export class CompletionsProcessor {
             for (const scope of xmlScopes) {
                 let fileLinks = this.event.program.getStatementsForXmlFile(scope);
                 for (let fileLink of fileLinks) {
-                    this.event.completions.push(scope.createCompletionFromFunctionStatement(fileLink.item));
+                    let pushItem = scope.createCompletionFromFunctionStatement(fileLink.item);
+                    if (!completionsArray.includes(pushItem.label)) {
+                        completionsArray.push(pushItem.label);
+                        this.event.completions.push(pushItem);
+                    }
                 }
             }
             //no other result is possible in this case

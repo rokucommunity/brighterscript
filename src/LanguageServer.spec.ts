@@ -95,6 +95,7 @@ describe('LanguageServer', () => {
         (server as any).createConnection = () => {
             return connection;
         };
+        server['hasConfigurationCapability'] = true;
     });
     afterEach(async () => {
         fsExtra.emptyDirSync(tempDir);
@@ -388,29 +389,6 @@ describe('LanguageServer', () => {
             fsExtra.outputJsonSync(s`${workspacePath}/vendor/someProject/bsconfig.json`, {});
             //it always ignores node_modules
             fsExtra.outputJsonSync(s`${workspacePath}/node_modules/someProject/bsconfig.json`, {});
-
-            await server['syncProjects']();
-
-            //no child bsconfig.json files, use the workspacePath
-            expect(
-                server.projects.map(x => x.projectPath)
-            ).to.eql([
-                workspacePath
-            ]);
-        });
-
-        it('ignores bsconfig.json files from vscode ignored paths', async () => {
-            server.run();
-            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({
-                exclude: {
-                    '**/vendor': true
-                }
-            }) as any);
-
-            fsExtra.outputJsonSync(s`${workspacePath}/vendor/someProject/bsconfig.json`, {});
-            //it always ignores node_modules
-            fsExtra.outputJsonSync(s`${workspacePath}/node_modules/someProject/bsconfig.json`, {});
-
             await server['syncProjects']();
 
             //no child bsconfig.json files, use the workspacePath
@@ -1000,6 +978,57 @@ describe('LanguageServer', () => {
                 expect(symbols[2].containerName).to.equal(nestedNamespace);
                 expect(symbols[3].name).to.equal(nestedNamespace);
             }
+        });
+    });
+
+    describe('getConfigFilePath', () => {
+        it('honors the hasConfigurationCapability setting', async () => {
+            server.run();
+            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(
+                Promise.reject(
+                    new Error('Client does not support "workspace/configuration"')
+                )
+            );
+            server['hasConfigurationCapability'] = false;
+            fsExtra.outputFileSync(`${workspacePath}/bsconfig.json`, '{}');
+            expect(
+                await server['getConfigFilePath'](workspacePath)
+            ).to.eql(
+                s`${workspacePath}/bsconfig.json`
+            );
+        });
+
+        it('executes the connection.workspace.getConfiguration call when enabled to do so', async () => {
+            server.run();
+            const bsconfigPath = `${tempDir}/bsconfig.test.json`;
+            //add a dummy bsconfig to reference for the test
+            fsExtra.outputFileSync(bsconfigPath, ``);
+
+            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({ configFile: bsconfigPath }) as any);
+            server['hasConfigurationCapability'] = true;
+            fsExtra.outputFileSync(`${workspacePath}/bsconfig.json`, '{}');
+            expect(
+                s`${await server['getConfigFilePath'](workspacePath)}`
+            ).to.eql(
+                s`${bsconfigPath}`
+            );
+        });
+    });
+
+    describe('getWorkspaceExcludeGlobs', () => {
+        it('honors the hasConfigurationCapability setting', async () => {
+            server.run();
+            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(
+                Promise.reject(
+                    new Error('Client does not support "workspace/configuration"')
+                )
+            );
+            server['hasConfigurationCapability'] = false;
+            expect(
+                await server['getWorkspaceExcludeGlobs'](workspaceFolders[0])
+            ).to.eql([
+                '**/node_modules/**/*'
+            ]);
         });
     });
 

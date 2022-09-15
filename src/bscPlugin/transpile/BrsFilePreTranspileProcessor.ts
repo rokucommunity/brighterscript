@@ -3,7 +3,7 @@ import { isBrsFile, isDottedGetExpression, isLiteralExpression, isVariableExpres
 import type { BrsFile } from '../../files/BrsFile';
 import type { BeforeFileTranspileEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
-import type { Expression } from '../../parser/Expression';
+import type { Expression } from '../../parser/AstNode';
 import { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { Scope } from '../../Scope';
@@ -36,7 +36,7 @@ export class BrsFilePreTranspileProcessor {
      */
     private getEnumInfo(name: string, containingNamespace: string, scope: Scope) {
         //look for the enum directly
-        let result = scope.getEnumFileLink(name, containingNamespace);
+        let result = scope?.getEnumFileLink(name, containingNamespace);
 
         if (result) {
             return {
@@ -46,7 +46,7 @@ export class BrsFilePreTranspileProcessor {
         //assume we've been given the enum.member syntax, so pop the member and try again
         const parts = name.split('.');
         const memberName = parts.pop();
-        result = scope.getEnumMap().get(parts.join('.'));
+        result = scope?.getEnumMap().get(parts.join('.'));
         if (result) {
             const value = result.item.getMemberValue(memberName);
             return {
@@ -79,7 +79,7 @@ export class BrsFilePreTranspileProcessor {
             let value: Expression;
 
             //did we find a const? transpile the value
-            let constStatement = scope.getConstFileLink(entityName, containingNamespace)?.item;
+            let constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
             if (constStatement) {
                 value = constStatement.value;
             } else {
