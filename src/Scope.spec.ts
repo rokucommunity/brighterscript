@@ -1315,7 +1315,7 @@ describe('Scope', () => {
             program['scopes']['source'].buildNamespaceLookup();
         });
 
-        it('does not crash when function statement is missing `name` prop', () => {
+        it.only('does not crash when function statement is missing `name` prop', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 namespace NameA
                     function doSomething()
@@ -1323,6 +1323,7 @@ describe('Scope', () => {
                 end namespace
             `);
             delete ((file.ast.statements[0] as NamespaceStatement).body.statements[0] as FunctionStatement).name;
+            program.validate();
             program['scopes']['source'].buildNamespaceLookup();
         });
     });

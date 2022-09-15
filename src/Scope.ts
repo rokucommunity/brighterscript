@@ -558,7 +558,7 @@ export class Scope {
                 }
                 // Merges all the symbol tables of the namespace statements into the new symbol table created above.
                 // Set those symbol tables to have this new merged table as a parent
-                ns.symbolTable.mergeSymbolTable(namespaceStatement.symbolTable);
+                ns.symbolTable.mergeSymbolTable(namespaceStatement.getSymbolTable());
             }
 
             //associate child namespaces with their parents
@@ -710,7 +710,7 @@ export class Scope {
                 for (const namespace of file.parser.references.namespaceStatements) {
                     const namespaceNameLower = namespace.nameExpression.getName(ParseMode.BrighterScript).toLowerCase();
                     const namespaceSymbolTable = this.namespaceLookup.get(namespaceNameLower).symbolTable;
-                    namespace.symbolTable.pushParent(namespaceSymbolTable);
+                    namespace.getSymbolTable().pushParent(namespaceSymbolTable);
                 }
             }
         }
@@ -722,7 +722,7 @@ export class Scope {
                 file.parser?.symbolTable.popParent();
 
                 for (const namespace of file.parser.references.namespaceStatements) {
-                    namespace.symbolTable.popParent();
+                    namespace.getSymbolTable().popParent();
                 }
             }
         }

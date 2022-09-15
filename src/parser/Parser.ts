@@ -96,8 +96,6 @@ import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCal
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
-import { SymbolTable } from '../SymbolTable';
-import { DynamicType } from '../types/DynamicType';
 
 export class Parser {
     /**
@@ -120,12 +118,10 @@ export class Parser {
     }
 
     /**
-     * The top-level symbol table for this file. Things like top-level namespaces, non-namespaced classes, enums, interfaces, and functions beling here.
+     * The top-level symbol table for the body of this file.
      */
-    public symbolTable = new SymbolTable();
-
-    private get currentSymbolTable() {
-        return this.currentFunctionExpression?.symbolTable ?? this.currentNamespace?.symbolTable ?? this.symbolTable;
+    public get symbolTable() {
+        return this.ast.symbolTable;
     }
 
     /**
@@ -261,7 +257,7 @@ export class Parser {
     private body() {
         const parentAnnotations = this.enterAnnotationBlock();
 
-        let body = new Body([], this.symbolTable);
+        let body = new Body([]);
         if (this.tokens.length > 0) {
             this.consumeStatementSeparators(true);
 
@@ -602,10 +598,6 @@ export class Parser {
         //consume the final `end interface` token
         result.tokens.endEnum = this.consumeToken(TokenKind.EndEnum);
 
-        if (result.name) {
-            this.currentSymbolTable.addSymbol(result.tokens.name.text, result.tokens.name.range, DynamicType.instance);
-        }
-
         this._references.enumStatements.push(result);
         this.exitAnnotationBlock(parentAnnotations);
         return result;
@@ -684,9 +676,6 @@ export class Parser {
                     //refer to this statement as parent of the expression
                     functionStatement.func.functionStatement = decl as MethodStatement;
 
-                    //add the `super` symbol to class methods
-                    funcDeclaration.func.symbolTable.addSymbol('super', undefined, DynamicType.instance);
-
                     //fields
                 } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
 
@@ -735,10 +724,6 @@ export class Parser {
             parentClassName,
             this.currentNamespaceName
         );
-
-        if (className) {
-            this.currentSymbolTable.addSymbol(className.text, className.range, DynamicType.instance);
-        }
 
         this._references.classStatements.push(result);
         this.exitAnnotationBlock(parentAnnotations);
@@ -911,12 +896,8 @@ export class Parser {
                 asToken,
                 typeToken,
                 this.currentFunctionExpression,
-                this.currentNamespaceName,
-                this.currentSymbolTable
+                this.currentNamespaceName
             );
-            if (!func.symbolTable.hasSymbol('m')) {
-                func.symbolTable.addSymbol('m', undefined, DynamicType.instance);
-            }
             //if there is a parent function, register this function with the parent
             if (this.currentFunctionExpression) {
                 this.currentFunctionExpression.childFunctionExpressions.push(func);
@@ -926,9 +907,6 @@ export class Parser {
             if (!onlyCallableAsMember && name) {
                 const funcType = func.getFunctionType();
                 funcType.setName(name.text);
-
-                // add the function as declared to the current symbol table
-                this.currentSymbolTable.addSymbol(name.text, name.range, funcType);
             }
 
             this._references.functionExpressions.push(func);
@@ -1060,7 +1038,6 @@ export class Parser {
             this._references.expressions.add(result);
         }
 
-        this.currentSymbolTable.addSymbol(name.text, name.range, DynamicType.instance);
         this._references.assignmentStatements.push(result);
         return result;
     }
@@ -1296,8 +1273,6 @@ export class Parser {
             throw this.lastDiagnosticAsError();
         }
 
-        this.currentSymbolTable.addSymbol(name.text, name.range, DynamicType.instance);
-
         this.consumeStatementSeparators();
 
         let body = this.block(TokenKind.EndFor, TokenKind.Next);
@@ -1359,7 +1334,7 @@ export class Parser {
 
         let name = this.getNamespacedVariableNameExpression();
         //set the current namespace name
-        let result = new NamespaceStatement(keyword, name, null, null, this.currentSymbolTable);
+        let result = new NamespaceStatement(keyword, name, null, null);
         this.currentNamespace = result;
 
         this.globalTerminators.push([TokenKind.EndNamespace]);
@@ -1386,14 +1361,6 @@ export class Parser {
         this._references.namespaceStatements.push(result);
         //cache the range property so that plugins can't affect it
         result.cacheRange();
-
-        if (result.name) {
-            this.symbolTable.addSymbol(
-                result.name.split('.')[0],
-                result.nameExpression.range,
-                DynamicType.instance
-            );
-        }
 
         return result;
     }
@@ -1480,9 +1447,6 @@ export class Parser {
             name: nameToken,
             equals: equalToken
         }, expression, this.currentNamespaceName);
-        if (nameToken) {
-            this.currentSymbolTable.addSymbol(nameToken.text, nameToken.range, DynamicType.instance);
-        }
         this._references.constStatements.push(statement);
         return statement;
     }
@@ -1705,9 +1669,6 @@ export class Parser {
             });
         } else {
             statement.tokens.endTry = this.advance();
-        }
-        if (exceptionVarToken) {
-            this.currentSymbolTable.addSymbol(exceptionVarToken.text, exceptionVarToken.range, DynamicType.instance);
         }
         return statement;
     }

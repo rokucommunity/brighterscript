@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
-import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, AnnotationExpression, FunctionParameterExpression, LiteralExpression } from './Expression';
+import type { BinaryExpression, NamespacedVariableNameExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
@@ -18,43 +18,8 @@ import type { BscType } from '../types/BscType';
 import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
-
-/**
- * A BrightScript statement
- */
-export abstract class Statement {
-
-    /**
-     *  The starting and ending location of the statement.
-     **/
-    public abstract range: Range;
-
-    /**
-     * Statement annotations
-     */
-    public annotations: AnnotationExpression[];
-
-    public abstract transpile(state: BrsTranspileState): TranspileResult;
-
-    /**
-     * When being considered by the walk visitor, this describes what type of element the current class is.
-     */
-    public visitMode = InternalWalkMode.visitStatements;
-
-    public abstract walk(visitor: WalkVisitor, options: WalkOptions);
-
-    /**
-     * The parent node for this statement. This is set dynamically during `onFileValidate`, and should not be set directly.
-     */
-    public parent?: Statement | Expression;
-
-    /**
-     * Get the closest symbol table for this node. Should be overridden in children that directly contain a symbol table
-     */
-    public getSymbolTable(): SymbolTable {
-        return this.parent?.getSymbolTable();
-    }
-}
+import type { Expression } from './AstNode';
+import { Statement } from './AstNode';
 
 export class EmptyStatement extends Statement {
     constructor(
@@ -79,15 +44,12 @@ export class EmptyStatement extends Statement {
  */
 export class Body extends Statement implements TypedefProvider {
     constructor(
-        public statements: Statement[] = [],
-        public symbolTable = new SymbolTable()
+        public statements: Statement[] = []
     ) {
         super();
     }
 
-    public getSymbolTable() {
-        return this.symbolTable;
-    }
+    public symbolTable = new SymbolTable();
 
     public get range() {
         return util.createRangeFromPositions(
@@ -1117,18 +1079,10 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
         public nameExpression: NamespacedVariableNameExpression,
         public body: Body,
-        public endKeyword: Token,
-        readonly parentSymbolTable?: SymbolTable
+        public endKeyword: Token
     ) {
         super();
         this.name = this.nameExpression.getName(ParseMode.BrighterScript);
-        this.symbolTable = new SymbolTable(parentSymbolTable);
-    }
-
-    public symbolTable: SymbolTable;
-
-    public getSymbolTable() {
-        return this.symbolTable;
     }
 
     /**

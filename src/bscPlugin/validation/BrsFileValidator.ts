@@ -1,11 +1,12 @@
 import { isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isEnumStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespacedVariableNameExpression, isNamespaceStatement } from '../../astUtils/reflection';
-import { WalkMode } from '../../astUtils/visitors';
+import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { AstNode, OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { LiteralExpression } from '../../parser/Expression';
 import type { EnumMemberStatement, EnumStatement } from '../../parser/Statement';
+import { DynamicType } from '../../types/DynamicType';
 
 export class BrsFileValidator {
     constructor(
@@ -22,8 +23,8 @@ export class BrsFileValidator {
      * Set the parent node on a given AstNode. This handles some edge cases where not every expression is iterated normally,
      * so it will also reach into nested objects to set their parent values as well
      */
-    private setParent(node1: AstNode, parent: AstNode) {
-        const pairs = [[node1, parent]];
+    private setParent(node: AstNode, parent: AstNode) {
+        const pairs = [[node, parent]];
         while (pairs.length > 0) {
             const [childNode, parentNode] = pairs.pop();
             //skip this entry if there's already a parent
@@ -51,6 +52,13 @@ export class BrsFileValidator {
                 pairs.push([childNode.expression, childNode]);
             }
             childNode.parent = parentNode;
+            //if the node has a symbol table, link it to its parent's symbol table
+            if (childNode.symbolTable) {
+                const parentSymbolTable = parentNode.getSymbolTable();
+                if (parentSymbolTable) {
+                    childNode.getSymbolTable().pushParent(parentSymbolTable);
+                }
+            }
         }
     }
 
@@ -58,14 +66,60 @@ export class BrsFileValidator {
      * Walk the full AST
      */
     private walk() {
+        const visitor = createVisitor({
+            MethodStatement: (node) => {
+                //add the `super` symbol to class methods
+                node.func.body.symbolTable.addSymbol('super', undefined, DynamicType.instance);
+            },
+            EnumStatement: (node) => {
+                this.validateEnumDeclaration(node);
+
+                //register this enum declaration
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);
+            },
+            ClassStatement: (node) => {
+                //register this class
+                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
+            },
+            AssignmentStatement: (node) => {
+                //register this variable
+                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
+            },
+            ForEachStatement: (node) => {
+                //register the for loop variable
+                node.parent.getSymbolTable()?.addSymbol(node.item.text, node.item.range, DynamicType.instance);
+            },
+            NamespaceStatement: (node) => {
+                node.parent.getSymbolTable().addSymbol(
+                    node.name.split('.')[0],
+                    node.nameExpression.range,
+                    DynamicType.instance
+                );
+            },
+            FunctionStatement: (node) => {
+                node.parent.getSymbolTable().addSymbol(
+                    node.name.text,
+                    node.name.range,
+                    DynamicType.instance
+                );
+            },
+            FunctionExpression: (node) => {
+                if (!node.body.symbolTable.hasSymbol('m')) {
+                    node.body.symbolTable.addSymbol('m', undefined, DynamicType.instance);
+                }
+            },
+            ConstStatement: (node) => {
+                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);
+            },
+            CatchStatement: (node) => {
+                node.parent.getSymbolTable().addSymbol(node.exceptionVariable.text, node.exceptionVariable.range, DynamicType.instance);
+            }
+        });
+
         this.event.file.ast.walk((node, parent) => {
             // link every child with its parent
             this.setParent(node, parent);
-
-            //do some file-based validations
-            if (isEnumStatement(node)) {
-                this.validateEnumDeclaration(node);
-            }
+            visitor(node, parent);
         }, {
             walkMode: WalkMode.visitAllRecursive
         });

@@ -31,8 +31,12 @@ export class SymbolTable {
     private parentStack: SymbolTable[] = [];
 
     public pushParent(parent?: SymbolTable) {
-        this.parentStack.unshift(parent);
-        return parent;
+        if (parent) {
+            this.parentStack.unshift(parent);
+        } else {
+            console.log('parent not set');
+        }
+        return this.parentStack[this.parentStack.length - 1];
     }
 
     /**
