@@ -55,7 +55,8 @@ describe('optional chaining', () => {
     it(`transpiles '?@`, () => {
         testTranspile(`
             sub main()
-                print xmlThing?@someAttr
+                someXml = invalid
+                print someXml?@someAttr
             end sub
         `);
     });

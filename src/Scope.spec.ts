@@ -1378,7 +1378,7 @@ describe('Scope', () => {
             program['scopes']['source'].buildNamespaceLookup();
         });
 
-        it.only('does not crash when function statement is missing `name` prop', () => {
+        it('does not crash when function statement is missing `name` prop', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 namespace NameA
                     function doSomething()

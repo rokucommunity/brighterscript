@@ -92,7 +92,6 @@ import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCal
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
-import { DynamicType } from '../types/DynamicType';
 import type { Expression, Statement } from './AstNode';
 
 export class Parser {
@@ -949,21 +948,6 @@ export class Parser {
                 func.functionStatement = result;
                 this._references.functionStatements.push(result);
 
-                // Add the transpiled name for namespace functions
-                // to consider an edge case when defining namespaces in .bs files
-                // and using them in .brs files.
-                if (func.namespaceName) {
-                    const transpiledNamespaceFunctionName = result.getName(ParseMode.BrightScript);
-                    const funcType = func.getFunctionType();
-                    funcType.setName(transpiledNamespaceFunctionName);
-
-                    this.symbolTable.addSymbol(
-                        transpiledNamespaceFunctionName,
-                        name.range,
-                        funcType
-                    );
-                }
-
                 return result;
             }
         } finally {
@@ -1736,9 +1720,6 @@ export class Parser {
             });
         }
         let rightSquareBracket = this.tryConsume(DiagnosticMessages.missingRightSquareBracketAfterDimIdentifier(), TokenKind.RightSquareBracket);
-        if (identifier) {
-            this.currentSymbolTable.addSymbol(identifier.text, identifier.range, DynamicType.instance);
-        }
         return new DimStatement(dim, identifier, leftSquareBracket, expressions, rightSquareBracket);
     }
 

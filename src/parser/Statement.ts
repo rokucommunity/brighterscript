@@ -164,6 +164,8 @@ export class Block extends Statement {
 
     public readonly range: Range;
 
+    public symbolTable = new SymbolTable();
+
     transpile(state: BrsTranspileState) {
         state.blockDepth++;
         let results = [] as TranspileResult;
@@ -339,7 +341,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         if (this.namespaceName) {
             let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
             let namespaceName = this.namespaceName.getName(parseMode);
-            return namespaceName + delimiter + this.name.text;
+            return namespaceName + delimiter + this.name?.text;
         } else {
             return this.name.text;
         }
@@ -1084,6 +1086,8 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         super();
         this.name = this.nameExpression.getName(ParseMode.BrighterScript);
     }
+
+    public symbolTable = new SymbolTable();
 
     /**
      * The string name for this namespace

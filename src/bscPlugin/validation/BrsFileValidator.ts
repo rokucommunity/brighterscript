@@ -5,7 +5,8 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode } from '../../parser/AstNode';
-import type { LiteralExpression } from '../../parser/Expression';
+import type { FunctionExpression, LiteralExpression } from '../../parser/Expression';
+import { ParseMode } from '../../parser/Parser';
 import type { EnumMemberStatement, EnumStatement, ImportStatement, LibraryStatement } from '../../parser/Statement';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
@@ -63,7 +64,7 @@ export class BrsFileValidator {
             if (childNode.symbolTable) {
                 const parentSymbolTable = parentNode.getSymbolTable();
                 if (parentSymbolTable) {
-                    childNode.getSymbolTable().pushParent(parentSymbolTable);
+                    childNode.symbolTable.pushParent(parentSymbolTable);
                 }
             }
         }
@@ -92,6 +93,9 @@ export class BrsFileValidator {
                 //register this variable
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
             },
+            FunctionParameterExpression: (node) => {
+                node.getSymbolTable()?.addSymbol(node.name.text, node.name.range, node.type);
+            },
             ForEachStatement: (node) => {
                 //register the for loop variable
                 node.parent.getSymbolTable()?.addSymbol(node.item.text, node.item.range, DynamicType.instance);
@@ -104,11 +108,27 @@ export class BrsFileValidator {
                 );
             },
             FunctionStatement: (node) => {
-                node.parent.getSymbolTable().addSymbol(
-                    node.name.text,
-                    node.name.range,
-                    DynamicType.instance
-                );
+                if (node.name?.text) {
+                    node.parent.getSymbolTable().addSymbol(
+                        node.name.text,
+                        node.name.range,
+                        DynamicType.instance
+                    );
+                }
+
+                //this function is declared inside a namespace
+                if (isNamespaceStatement(node.parent)) {
+                    //add the transpiled name for namespaced functions to the root symbol table
+                    const transpiledNamespaceFunctionName = node.getName(ParseMode.BrightScript);
+                    const funcType = node.func.getFunctionType();
+                    funcType.setName(transpiledNamespaceFunctionName);
+
+                    this.event.file.parser.ast.symbolTable.addSymbol(
+                        transpiledNamespaceFunctionName,
+                        node.name.range,
+                        funcType
+                    );
+                }
             },
             FunctionExpression: (node) => {
                 if (!node.body.symbolTable.hasSymbol('m')) {
@@ -120,6 +140,11 @@ export class BrsFileValidator {
             },
             CatchStatement: (node) => {
                 node.parent.getSymbolTable().addSymbol(node.exceptionVariable.text, node.exceptionVariable.range, DynamicType.instance);
+            },
+            DimStatement: (node) => {
+                if (node.identifier) {
+                    node.parent.getSymbolTable().addSymbol(node.identifier.text, node.identifier.range, DynamicType.instance);
+                }
             }
         });
 
