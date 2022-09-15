@@ -1,9 +1,10 @@
 /* eslint-disable no-bitwise */
 import type { CancellationToken } from 'vscode-languageserver';
-import type { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement, EnumStatement, EnumMemberStatement, DimStatement, TryCatchStatement, CatchStatement, ThrowStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement, FieldStatement, MethodStatement, ConstStatement } from '../parser/Statement';
-import type { AALiteralExpression, AAMemberExpression, AnnotationExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, Expression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NamespacedVariableNameExpression, NewExpression, NullCoalescingExpression, RegexLiteralExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement, EnumStatement, EnumMemberStatement, DimStatement, TryCatchStatement, CatchStatement, ThrowStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement, FieldStatement, MethodStatement, ConstStatement } from '../parser/Statement';
+import type { AALiteralExpression, AAMemberExpression, AnnotationExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NamespacedVariableNameExpression, NewExpression, NullCoalescingExpression, RegexLiteralExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
 import { isExpression, isStatement } from './reflection';
 import type { AstEditor } from './AstEditor';
+import type { Statement, Expression, AstNode } from '../parser/AstNode';
 
 
 /**
@@ -20,19 +21,19 @@ export function walkStatements(
     });
 }
 
-export type WalkVisitor = <T = Statement | Expression>(stmtExpr: Statement | Expression, parent?: Statement | Expression, owner?: any, key?: any) => void | T;
+export type WalkVisitor = <T = AstNode>(node: AstNode, parent?: AstNode, owner?: any, key?: any) => void | T;
 
 /**
  * A helper function for Statement and Expression `walkAll` calls.
  */
-export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: WalkOptions, parent?: Expression | Statement) {
+export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode) {
     //stop processing if canceled
     if (options.cancel?.isCancellationRequested) {
         return;
     }
 
     //the object we're visiting
-    let element = owner[key] as any as Statement | Expression;
+    let element = owner[key] as any as AstNode;
     if (!element) {
         return;
     }
@@ -69,7 +70,7 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
  * Helper for AST elements to walk arrays when visitors might change the array size (to delete/insert items).
  * @param filter a function used to filter items from the array. return true if that item should be walked
  */
-export function walkArray<T>(array: Array<T>, visitor: WalkVisitor, options: WalkOptions, parent?: Expression | Statement, filter?: <T>(element: T) => boolean) {
+export function walkArray<T>(array: Array<T>, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode, filter?: <T>(element: T) => boolean) {
     for (let i = 0; i < array.length; i++) {
         if (!filter || filter(array[i])) {
             const startLength = array.length;
@@ -135,32 +136,32 @@ export function createVisitor(
         EnumMemberStatement?: (statement: EnumMemberStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         ConstStatement?: (statement: ConstStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         //expressions
-        BinaryExpression?: (expression: BinaryExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        CallExpression?: (expression: CallExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        FunctionExpression?: (expression: FunctionExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        FunctionParameterExpression?: (expression: FunctionParameterExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        NamespacedVariableNameExpression?: (expression: NamespacedVariableNameExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        DottedGetExpression?: (expression: DottedGetExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        XmlAttributeGetExpression?: (expression: XmlAttributeGetExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        IndexedGetExpression?: (expression: IndexedGetExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        GroupingExpression?: (expression: GroupingExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        LiteralExpression?: (expression: LiteralExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        EscapedCharCodeLiteralExpression?: (expression: EscapedCharCodeLiteralExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        ArrayLiteralExpression?: (expression: ArrayLiteralExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        AAMemberExpression?: (expression: AAMemberExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        AALiteralExpression?: (expression: AALiteralExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        UnaryExpression?: (expression: UnaryExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        VariableExpression?: (expression: VariableExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        SourceLiteralExpression?: (expression: SourceLiteralExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        NewExpression?: (expression: NewExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        CallfuncExpression?: (expression: CallfuncExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        TemplateStringQuasiExpression?: (expression: TemplateStringQuasiExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        TemplateStringExpression?: (expression: TemplateStringExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        TaggedTemplateStringExpression?: (expression: TaggedTemplateStringExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        AnnotationExpression?: (expression: AnnotationExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        TernaryExpression?: (expression: TernaryExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        NullCoalescingExpression?: (expression: NullCoalescingExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
-        RegexLiteralExpression?: (expression: RegexLiteralExpression, parent?: Statement | Expression, owner?: any, key?: any) => Expression | void;
+        BinaryExpression?: (expression: BinaryExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        CallExpression?: (expression: CallExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        FunctionExpression?: (expression: FunctionExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        FunctionParameterExpression?: (expression: FunctionParameterExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        NamespacedVariableNameExpression?: (expression: NamespacedVariableNameExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        DottedGetExpression?: (expression: DottedGetExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        XmlAttributeGetExpression?: (expression: XmlAttributeGetExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        IndexedGetExpression?: (expression: IndexedGetExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        GroupingExpression?: (expression: GroupingExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        LiteralExpression?: (expression: LiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        EscapedCharCodeLiteralExpression?: (expression: EscapedCharCodeLiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        ArrayLiteralExpression?: (expression: ArrayLiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        AAMemberExpression?: (expression: AAMemberExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        AALiteralExpression?: (expression: AALiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        UnaryExpression?: (expression: UnaryExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        VariableExpression?: (expression: VariableExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        SourceLiteralExpression?: (expression: SourceLiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        NewExpression?: (expression: NewExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        CallfuncExpression?: (expression: CallfuncExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        TemplateStringQuasiExpression?: (expression: TemplateStringQuasiExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        TemplateStringExpression?: (expression: TemplateStringExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        TaggedTemplateStringExpression?: (expression: TaggedTemplateStringExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        AnnotationExpression?: (expression: AnnotationExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        TernaryExpression?: (expression: TernaryExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        NullCoalescingExpression?: (expression: NullCoalescingExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        RegexLiteralExpression?: (expression: RegexLiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
     }
 ) {
     //remap some deprecated visitor names TODO remove this in v1

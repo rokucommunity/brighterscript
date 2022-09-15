@@ -22,7 +22,7 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
+import type { DottedGetExpression, VariableExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
@@ -34,6 +34,7 @@ import type { SGAttribute } from './parser/SGTypes';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
+import type { Expression } from './parser/AstNode';
 
 export class Util {
     public clearConsole() {

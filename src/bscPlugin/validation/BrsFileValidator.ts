@@ -2,8 +2,9 @@ import { isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpr
 import { WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { AstNode, OnFileValidateEvent } from '../../interfaces';
+import type { OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
+import type { AstNode } from '../../parser/AstNode';
 import type { LiteralExpression } from '../../parser/Expression';
 import type { EnumMemberStatement, EnumStatement, ImportStatement, LibraryStatement } from '../../parser/Statement';
 import util from '../../util';
