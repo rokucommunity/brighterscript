@@ -873,6 +873,11 @@ export class BrsFile {
             isCallExpression(expression));
     }
 
+    /**
+     * Gets the chain of tokens that can be used for doing a series of symbol lookups
+     * @param currentToken
+     * @returns a TokenChain, which has a tokens array that can be looped through
+     */
     public getTokenChain(currentToken: Token): TokenChain {
         const tokenChain: TokenChainMember[] = [];
         let expression = this.getClosestExpression(currentToken.range);

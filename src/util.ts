@@ -567,7 +567,7 @@ export class Util {
     }
 
     /**
-    * Test if `insideRange` is in `range`. If the position is at the edges, will return true.
+    * Test if `insideRange` is wholly in `range` - the start and end of `insideRange` must be contained in `range`
     * Adapted from core vscode
     * @param range
     * @param insideRange
