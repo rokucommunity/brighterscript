@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Block, CommentStatement, FunctionStatement, Statement } from './Statement';
+import type { Block, CommentStatement, FunctionStatement } from './Statement';
 import type { Range } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
@@ -16,35 +16,9 @@ import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
 import { SymbolTable } from '../SymbolTable';
+import { Expression } from './AstNode';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
-
-/** A BrightScript expression */
-export abstract class Expression {
-    /**
-     * The starting and ending location of the expression.
-     */
-    public abstract range: Range;
-
-    public abstract transpile(state: BrsTranspileState): TranspileResult;
-    /**
-     * When being considered by the walk visitor, this describes what type of element the current class is.
-     */
-    public visitMode = InternalWalkMode.visitExpressions;
-
-    public abstract walk(visitor: WalkVisitor, options: WalkOptions);
-    /**
-     * The parent node for this expression. This is set dynamically during `onFileValidate`, and should not be set directly.
-     */
-    public parent?: Statement | Expression;
-
-    /**
-     * Get the closest symbol table for this node. Should be overridden in children that directly contain a symbol table
-     */
-    public getSymbolTable(): SymbolTable {
-        return this.parent?.getSymbolTable();
-    }
-}
 
 export class BinaryExpression extends Expression {
     constructor(

@@ -19,14 +19,15 @@ import { globalFile } from './globalCallables';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope } from './astUtils/reflection';
-import type { FunctionStatement, Statement } from './parser/Statement';
+import { isBrsFile, isXmlFile, isMethodStatement, isXmlScope } from './astUtils/reflection';
+import type { FunctionStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
 import { TokenKind } from './lexer/TokenKind';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { AstEditor } from './astUtils/AstEditor';
 import type { SourceMapGenerator } from 'source-map';
 import { rokuDeploy } from 'roku-deploy';
+import type { Statement } from './parser/AstNode';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
@@ -1040,7 +1041,7 @@ export class Program {
                     for (let scope of this.getScopesForFile(myClass.file)) {
                         let classes = scope.getClassHierarchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
                         //and anything from any class in scope to a non m class
-                        for (let statement of [...classes].filter((i) => isClassMethodStatement(i.item))) {
+                        for (let statement of [...classes].filter((i) => isMethodStatement(i.item))) {
                             let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
                             if (sigHelp && !results.has[sigHelp.key]) {
 

@@ -5,9 +5,8 @@ import { expect } from 'chai';
 import * as sinon from 'sinon';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
-import type { FunctionStatement, Statement } from '../parser/Statement';
+import type { FunctionStatement } from '../parser/Statement';
 import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../parser/Statement';
-import type { Expression } from '../parser/Expression';
 import { TokenKind } from '../lexer/TokenKind';
 import { createVisitor, WalkMode, walkStatements } from './visitors';
 import { isPrintStatement } from './reflection';
@@ -15,6 +14,7 @@ import { createCall, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
 import { AstEditor } from './AstEditor';
 import { Parser } from '../parser/Parser';
+import type { Statement, Expression, AstNode } from '../parser/AstNode';
 
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
@@ -278,7 +278,7 @@ describe('astUtils visitors', () => {
             const statementVisitor = createStackedVisitor((statement: Statement, stack: Statement[]) => {
                 curr = { statement: statement, depth: stack.length };
             });
-            function expressionVisitor(expression: Expression, _: Statement | Expression) {
+            function expressionVisitor(expression: Expression, _: AstNode) {
                 const { statement, depth } = curr;
                 actual.push(`${statement.constructor.name}:${depth}:${expression.constructor.name}`);
             }

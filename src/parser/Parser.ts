@@ -14,8 +14,7 @@ import {
 } from '../lexer/TokenKind';
 import type {
     PrintSeparatorSpace,
-    PrintSeparatorTab,
-    Statement
+    PrintSeparatorTab
 } from './Statement';
 import {
     AssignmentStatement,
@@ -59,7 +58,6 @@ import {
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { util } from '../util';
-import type { Expression } from './Expression';
 import {
     AALiteralExpression,
     AAMemberExpression,
@@ -96,6 +94,7 @@ import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
 import { SymbolTable } from '../SymbolTable';
 import { DynamicType } from '../types/DynamicType';
+import type { Expression, Statement } from './AstNode';
 
 export class Parser {
     /**
