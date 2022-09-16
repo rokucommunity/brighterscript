@@ -407,11 +407,11 @@ describe('ternary expressions', () => {
         it('complex conditions do not cause scope capture', () => {
             testTranspile(`
                 sub main()
-                    a = str("true") = "true" ? true : false
+                    a = str(1) = "true" ? true : false
                 end sub
             `, `
                 sub main()
-                    a = bslib_ternary(str("true") = "true", true, false)
+                    a = bslib_ternary(str(1) = "true", true, false)
                 end sub
             `);
 

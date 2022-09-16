@@ -1297,7 +1297,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider, Me
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
             }
         }
-        this.memberTable.identifier = `Interface (members) ${name.text}`;
+        this.memberTable.identifier = `Interface (members) ${name?.text}`;
     }
 
     public tokens = {} as {
@@ -1559,8 +1559,8 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
             }
         }
-        this.symbolTable.identifier = `Class (symbols) ${name.text}`;
-        this.memberTable.identifier = `Class (members) ${name.text}`;
+        this.symbolTable.identifier = `Class (symbols) ${name?.text}`;
+        this.memberTable.identifier = `Class (members) ${name?.text}`;
     }
 
     public getName(parseMode: ParseMode) {
@@ -2349,7 +2349,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
         ) ?? interpolatedRange;
         this.body = this.body ?? [];
 
-        this.symbolTable.identifier = `Enum ${tokens.name.text}`;
+        this.symbolTable.identifier = `Enum ${tokens?.name?.text}`;
     }
 
     public readonly range: Range;

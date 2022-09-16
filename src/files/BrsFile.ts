@@ -880,6 +880,9 @@ export class BrsFile {
      */
     public getTokenChain(currentToken: Token): TokenChain {
         const tokenChain: TokenChainMember[] = [];
+        if (currentToken.kind === TokenKind.Dot) {
+            currentToken = this.parser.getPreviousToken(currentToken);
+        }
         let expression = this.getClosestExpression(currentToken.range);
         if (!this.isExpressionChainable(expression)) {
             return { chain: [{ token: currentToken, usage: TokenUsage.Direct }], includesUnknowableTokenType: false };

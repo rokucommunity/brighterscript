@@ -3996,5 +3996,22 @@ describe('BrsFile', () => {
             expect(tokenChainResponse.chain.map(tcm => tcm.usage)).to.eql([TokenUsage.Direct, TokenUsage.Call]);
         });
 
+        it.only('gets chain from ending dot', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                sub testDotAtEndOfChain()
+                   m.someFunc().data[0].param.
+                end sub
+            `);
+            program.validate();
+
+            const endDotToken = file.parser.getTokenAt(Position.create(2, 46)); // dot of 'param.'
+
+            let tokenChainResponse = file.getTokenChain(endDotToken);
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
+            expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['m', 'someFunc', 'data', 'param']);
+            expect(tokenChainResponse.chain.map(tcm => tcm.usage)).to.eql([TokenUsage.Direct, TokenUsage.Call, TokenUsage.IndexedGet, TokenUsage.DottedGet]);
+        });
+
+
     });
 });
