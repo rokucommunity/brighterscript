@@ -45,6 +45,19 @@ export abstract class AstNode {
             return this.parent?.getSymbolTable();
         }
     }
+
+    /**
+     * Walk upward and return the first node that results in `true` from the matcher
+     */
+    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode) => boolean | undefined) {
+        let node = this.parent;
+        while (node) {
+            if (matcher(node)) {
+                return node as TNode;
+            }
+            node = node.parent;
+        }
+    }
 }
 
 export abstract class Statement extends AstNode {

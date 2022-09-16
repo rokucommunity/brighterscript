@@ -181,7 +181,7 @@ describe('EnumStatement', () => {
     });
 
     it('allows enum in namespace', () => {
-        const parser = Parser.parse(`
+        const file = program.setFile<BrsFile>('source/types.bs', `
             namespace entities
                 enum Person
                     name
@@ -191,10 +191,11 @@ describe('EnumStatement', () => {
             enum Direction
                 up
             end enum
-        `, { mode: ParseMode.BrighterScript });
+        `);
+        program.validate();
 
-        expectZeroDiagnostics(parser);
-        expect(parser.references.enumStatements.map(x => x.fullName)).to.eql([
+        expectZeroDiagnostics(program);
+        expect(file.parser.references.enumStatements.map(x => x.fullName)).to.eql([
             'entities.Person',
             'Direction'
         ]);

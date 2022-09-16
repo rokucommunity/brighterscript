@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Block, CommentStatement, FunctionStatement } from './Statement';
+import type { Block, CommentStatement, FunctionStatement, NamespaceStatement } from './Statement';
 import type { Range } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
@@ -9,7 +9,7 @@ import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -59,11 +59,7 @@ export class CallExpression extends Expression {
          */
         readonly openingParen: Token,
         readonly closingParen: Token,
-        readonly args: Expression[],
-        /**
-         * The namespace that currently wraps this call expression. This is NOT the namespace of the callee...that will be represented in the callee expression itself.
-         */
-        readonly namespaceName: NamespacedVariableNameExpression
+        readonly args: Expression[]
     ) {
         super();
         this.range = util.createRangeFromPositions(this.callee.range.start, this.closingParen.range.end);
@@ -119,8 +115,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         /**
          * If this function is enclosed within another function, this will reference that parent function
          */
-        readonly parentFunction?: FunctionExpression,
-        readonly namespaceName?: NamespacedVariableNameExpression
+        readonly parentFunction?: FunctionExpression
     ) {
         super();
         if (this.returnTypeToken) {
@@ -251,8 +246,7 @@ export class FunctionParameterExpression extends Expression {
         public name: Identifier,
         public typeToken?: Token,
         public defaultValue?: Expression,
-        public asToken?: Token,
-        readonly namespaceName?: NamespacedVariableNameExpression
+        public asToken?: Token
     ) {
         super();
         if (typeToken) {
@@ -751,8 +745,7 @@ export class UnaryExpression extends Expression {
 
 export class VariableExpression extends Expression {
     constructor(
-        readonly name: Identifier,
-        readonly namespaceName: NamespacedVariableNameExpression
+        readonly name: Identifier
     ) {
         super();
         this.range = this.name.range;
@@ -766,11 +759,12 @@ export class VariableExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         let result = [];
+        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
         //if the callee is the name of a known namespace function
-        if (state.file.calleeIsKnownNamespaceFunction(this, this.namespaceName?.getName(ParseMode.BrighterScript))) {
+        if (state.file.calleeIsKnownNamespaceFunction(this, namespace?.getName(ParseMode.BrighterScript))) {
             result.push(
                 state.sourceNode(this, [
-                    this.namespaceName.getName(ParseMode.BrightScript),
+                    namespace.getName(ParseMode.BrightScript),
                     '_',
                     this.getName(ParseMode.BrightScript)
                 ])
@@ -889,16 +883,13 @@ export class NewExpression extends Expression {
         return this.call.callee as NamespacedVariableNameExpression;
     }
 
-    public get namespaceName() {
-        return this.call.namespaceName;
-    }
-
     public readonly range: Range;
 
     public transpile(state: BrsTranspileState) {
+        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
         const cls = state.file.getClassFileLink(
             this.className.getName(ParseMode.BrighterScript),
-            this.namespaceName?.getName(ParseMode.BrighterScript)
+            namespace?.getName(ParseMode.BrighterScript)
         )?.item;
         //new statements within a namespace block can omit the leading namespace if the class resides in that same namespace.
         //So we need to figure out if this is a namespace-omitted class, or if this class exists without a namespace.

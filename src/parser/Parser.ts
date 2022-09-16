@@ -178,16 +178,6 @@ export class Parser {
     private globalTerminators = [] as TokenKind[][];
 
     /**
-     * When a namespace has been started, this gets set. When it's done, this gets unset.
-     * It is useful for passing the namespace into certain statements that need it
-     */
-    private currentNamespace: NamespaceStatement;
-
-    private get currentNamespaceName(): NamespacedVariableNameExpression {
-        return this.currentNamespace?.nameExpression;
-    }
-
-    /**
      * When a FunctionExpression has been started, this gets set. When it's done, this gets unset.
      * It's useful for passing the function into statements and expressions that need to be located
      * by function later on.
@@ -531,8 +521,7 @@ export class Parser {
             extendsToken,
             parentInterfaceName,
             body,
-            endInterfaceToken,
-            this.currentNamespaceName
+            endInterfaceToken
         );
         this._references.interfaceStatements.push(statement);
         this.exitAnnotationBlock(parentAnnotations);
@@ -540,7 +529,7 @@ export class Parser {
     }
 
     private enumDeclaration(): EnumStatement {
-        const result = new EnumStatement({} as any, [], this.currentNamespaceName);
+        const result = new EnumStatement({} as any, []);
         this.warnIfNotBrighterScriptMode('enum declarations');
 
         const parentAnnotations = this.enterAnnotationBlock();
@@ -718,8 +707,7 @@ export class Parser {
             body,
             endingKeyword,
             extendsKeyword,
-            parentClassName,
-            this.currentNamespaceName
+            parentClassName
         );
 
         this._references.classStatements.push(result);
@@ -892,8 +880,7 @@ export class Parser {
                 rightParen,
                 asToken,
                 typeToken,
-                this.currentFunctionExpression,
-                this.currentNamespaceName
+                this.currentFunctionExpression
             );
             //if there is a parent function, register this function with the parent
             if (this.currentFunctionExpression) {
@@ -944,7 +931,7 @@ export class Parser {
             if (isAnonymous) {
                 return func;
             } else {
-                let result = new FunctionStatement(name, func, this.currentNamespaceName);
+                let result = new FunctionStatement(name, func);
                 func.functionStatement = result;
                 this._references.functionStatements.push(result);
 
@@ -997,8 +984,7 @@ export class Parser {
             name,
             typeToken,
             defaultValue,
-            asToken,
-            this.currentNamespaceName
+            asToken
         );
     }
 
@@ -1021,7 +1007,7 @@ export class Parser {
         if (operator.kind === TokenKind.Equal) {
             result = new AssignmentStatement(operator, name, value, this.currentFunctionExpression);
         } else {
-            const nameExpression = new VariableExpression(name, this.currentNamespaceName);
+            const nameExpression = new VariableExpression(name);
             result = new AssignmentStatement(
                 operator,
                 name,
@@ -1333,14 +1319,10 @@ export class Parser {
         let name = this.getNamespacedVariableNameExpression();
         //set the current namespace name
         let result = new NamespaceStatement(keyword, name, null, null);
-        this.currentNamespace = result;
 
         this.globalTerminators.push([TokenKind.EndNamespace]);
         let body = this.body();
         this.globalTerminators.pop();
-
-        //unset the current namespace name
-        this.currentNamespace = undefined;
 
         let endKeyword: Token;
         if (this.check(TokenKind.EndNamespace)) {
@@ -1378,7 +1360,7 @@ export class Parser {
         if (firstIdentifier) {
             // force it into an identifier so the AST makes some sense
             firstIdentifier.kind = TokenKind.Identifier;
-            const varExpr = new VariableExpression(firstIdentifier, null);
+            const varExpr = new VariableExpression(firstIdentifier);
             expr = varExpr;
 
             //consume multiple dot identifiers (i.e. `Name.Space.Can.Have.Many.Parts`)
@@ -1445,7 +1427,7 @@ export class Parser {
             const: constToken,
             name: nameToken,
             equals: equalToken
-        }, expression, this.currentNamespaceName);
+        }, expression);
         this._references.constStatements.push(statement);
         return statement;
     }
@@ -2512,7 +2494,7 @@ export class Parser {
             TokenKind.RightParen
         );
 
-        let expression = new CallExpression(callee, openingParen, closingParen, args, this.currentNamespaceName);
+        let expression = new CallExpression(callee, openingParen, closingParen, args);
         if (addToCallExpressionList) {
             this.callExpressions.push(expression);
         }
@@ -2573,7 +2555,7 @@ export class Parser {
                 return this.templateString(true);
 
             case this.matchAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers):
-                return new VariableExpression(this.previous() as Identifier, this.currentNamespaceName);
+                return new VariableExpression(this.previous() as Identifier);
 
             case this.match(TokenKind.LeftParen):
                 let left = this.previous();
@@ -2594,7 +2576,7 @@ export class Parser {
                 let token = Object.assign(this.previous(), {
                     kind: TokenKind.Identifier
                 }) as Identifier;
-                return new VariableExpression(token, this.currentNamespaceName);
+                return new VariableExpression(token);
 
             case this.checkAny(TokenKind.Function, TokenKind.Sub):
                 return this.anonymousFunction();

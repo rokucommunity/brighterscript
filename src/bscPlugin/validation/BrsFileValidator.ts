@@ -5,7 +5,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode } from '../../parser/AstNode';
-import type { FunctionExpression, LiteralExpression } from '../../parser/Expression';
+import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { EnumMemberStatement, EnumStatement, ImportStatement, LibraryStatement } from '../../parser/Statement';
 import { DynamicType } from '../../types/DynamicType';
@@ -116,8 +116,9 @@ export class BrsFileValidator {
                     );
                 }
 
+                const namespace = node.findAncestor(isNamespaceStatement);
                 //this function is declared inside a namespace
-                if (isNamespaceStatement(node.parent)) {
+                if (namespace) {
                     //add the transpiled name for namespaced functions to the root symbol table
                     const transpiledNamespaceFunctionName = node.getName(ParseMode.BrightScript);
                     const funcType = node.func.getFunctionType();
