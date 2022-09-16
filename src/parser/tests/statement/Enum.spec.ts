@@ -755,6 +755,7 @@ describe('EnumStatement', () => {
                     end enum
                 end namespace
             `);
+            program.validate();
             //      enums.direction.|down
             expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 36)), [{
                 label: 'up',
@@ -793,6 +794,7 @@ describe('EnumStatement', () => {
                     end enum
                 end namespace
             `);
+            program.validate();
             //should NOT find Direction because it's not directly available at the top level (you need to go through `enums.` to get at it)
             //      dire|ction.down
             expectCompletionsExcludes(program.getCompletions('source/main.bs', util.createPosition(2, 24)), [{

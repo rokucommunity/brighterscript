@@ -2961,6 +2961,7 @@ describe('BrsFile', () => {
     describe('getTypedef', () => {
         function testTypedef(original: string, expected: string) {
             let file = program.setFile<BrsFile>('source/main.brs', original);
+            program.validate();
             expect(file.getTypedef().trimEnd()).to.eql(expected);
         }
 
@@ -3343,6 +3344,7 @@ describe('BrsFile', () => {
                     const CHARLIE = true
                 end namespace
             `);
+            program.validate();
             //print alpha.beta.char|lie
             expect(program.getDefinition(file.srcPath, Position.create(2, 41))).to.eql([{
                 uri: URI.file(file.srcPath).toString(),

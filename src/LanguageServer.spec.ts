@@ -851,6 +851,7 @@ describe('LanguageServer', () => {
                     end function
                 end namespace
             `, 'bs');
+            program.validate();
 
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
@@ -965,6 +966,7 @@ describe('LanguageServer', () => {
                     end class
                 end namespace
             `, 'bs');
+            program.validate();
 
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
