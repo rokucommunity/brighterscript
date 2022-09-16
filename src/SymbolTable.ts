@@ -33,8 +33,6 @@ export class SymbolTable {
     public pushParent(parent?: SymbolTable) {
         if (parent) {
             this.parentStack.unshift(parent);
-        } else {
-            console.log('parent not set');
         }
         return this.parentStack[this.parentStack.length - 1];
     }

@@ -2,7 +2,6 @@ import type { Range } from 'vscode-languageserver';
 import type { Identifier, Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Expression } from '../parser/AstNode';
-import type { NamespacedVariableNameExpression } from '../parser/Expression';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../parser/Expression';
 import type { SGAttribute } from '../parser/SGTypes';
 import { Block, MethodStatement } from '../parser/Statement';
@@ -104,13 +103,13 @@ export function createIdentifier(name: string, range?: Range): Identifier {
     };
 }
 
-export function createVariableExpression(ident: string, range?: Range, namespaceName?: NamespacedVariableNameExpression): VariableExpression {
-    return new VariableExpression(createToken(TokenKind.Identifier, ident, range), namespaceName);
+export function createVariableExpression(ident: string, range?: Range): VariableExpression {
+    return new VariableExpression(createToken(TokenKind.Identifier, ident, range));
 }
 
-export function createDottedIdentifier(path: string[], range?: Range, namespaceName?: NamespacedVariableNameExpression): DottedGetExpression {
+export function createDottedIdentifier(path: string[], range?: Range): DottedGetExpression {
     const ident = path.pop();
-    const obj = path.length > 1 ? createDottedIdentifier(path, range, namespaceName) : createVariableExpression(path[0], range, namespaceName);
+    const obj = path.length > 1 ? createDottedIdentifier(path, range) : createVariableExpression(path[0], range);
     return new DottedGetExpression(obj, createToken(TokenKind.Identifier, ident, range), createToken(TokenKind.Dot, '.', range));
 }
 
@@ -165,13 +164,12 @@ export function createClassMethodStatement(name: string, kind: TokenKind.Sub | T
     return createMethodStatement(name, kind, [accessModifier]);
 }
 
-export function createCall(callee: Expression, args?: Expression[], namespaceName?: NamespacedVariableNameExpression) {
+export function createCall(callee: Expression, args?: Expression[]) {
     return new CallExpression(
         callee,
         createToken(TokenKind.LeftParen, '('),
         createToken(TokenKind.RightParen, ')'),
-        args || [],
-        namespaceName
+        args || []
     );
 }
 

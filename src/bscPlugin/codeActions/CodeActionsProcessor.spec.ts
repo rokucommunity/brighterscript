@@ -177,7 +177,7 @@ describe('CodeActionsProcessor', () => {
             expect(codeActions).to.be.empty;
         });
 
-        it.only('suggests class imports', () => {
+        it('suggests class imports', () => {
             //import the file in two scopes
             program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>

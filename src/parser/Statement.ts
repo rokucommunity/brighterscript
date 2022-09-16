@@ -1904,6 +1904,13 @@ export class MethodStatement extends FunctionStatement {
 
     public readonly range: Range;
 
+    /**
+     * Override the parent class method because class method names are always just the method name itself (no leading namespace)
+     */
+    public getName(parseMode: ParseMode) {
+        return this.name.text;
+    }
+
     transpile(state: BrsTranspileState) {
         if (this.name.text.toLowerCase() === 'new') {
             this.ensureSuperConstructorCall(state);

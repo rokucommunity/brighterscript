@@ -26,7 +26,7 @@ import type { DottedGetExpression, VariableExpression } from './parser/Expressio
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isNewExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
@@ -1437,6 +1437,10 @@ export class Util {
 
             } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
                 nextPart = nextPart.callee;
+                parts = [];
+
+            } else if (isNewExpression(nextPart)) {
+                nextPart = nextPart.call.callee;
                 parts = [];
 
             } else if (isNamespacedVariableNameExpression(nextPart)) {

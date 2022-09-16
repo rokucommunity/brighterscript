@@ -1,11 +1,12 @@
 import type { Range } from 'vscode-languageserver-protocol';
 import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isCallExpression, isCustomType, isNewExpression } from '../../astUtils/reflection';
+import { isCallExpression, isCustomType, isNamespaceStatement, isNewExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnGetSemanticTokensEvent } from '../../interfaces';
 import type { Locatable } from '../../lexer/Token';
 import { ParseMode } from '../../parser/Parser';
+import type { NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 
 export class BrsFileSemanticTokensProcessor {
@@ -35,9 +36,10 @@ export class BrsFileSemanticTokensProcessor {
         for (const func of this.event.file.parser.references.functionExpressions) {
             for (const parm of func.parameters) {
                 if (isCustomType(parm.type)) {
+                    const namespace = parm.findAncestor<NamespaceStatement>(isNamespaceStatement);
                     classes.push({
                         className: parm.typeToken.text,
-                        namespaceName: parm.namespaceName?.getName(ParseMode.BrighterScript),
+                        namespaceName: namespace?.getName(ParseMode.BrighterScript),
                         range: parm.typeToken.range
                     });
                 }

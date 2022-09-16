@@ -2,11 +2,11 @@ import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import type { ClassStatement, MethodStatement } from '../parser/Statement';
+import type { ClassStatement, MethodStatement, NamespaceStatement } from '../parser/Statement';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCustomType } from '../astUtils/reflection';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCustomType, isNamespaceStatement } from '../astUtils/reflection';
 import type { BscFile, BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
@@ -60,14 +60,15 @@ export class BsClassValidator {
             let newExpressions = file.parser.references.newExpressions;
             for (let newExpression of newExpressions) {
                 let className = newExpression.className.getName(ParseMode.BrighterScript);
+                const namespaceName = newExpression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
                 let newableClass = this.getClassByName(
                     className,
-                    newExpression.namespaceName?.getName(ParseMode.BrighterScript)
+                    namespaceName
                 );
 
                 if (!newableClass) {
                     //try and find functions with this name.
-                    let fullName = util.getFullyQualifiedClassName(className, newExpression.namespaceName?.getName(ParseMode.BrighterScript));
+                    let fullName = util.getFullyQualifiedClassName(className, namespaceName);
                     let callable = this.scope.getCallableByName(fullName);
                     //if we found a callable with this name, the user used a "new" keyword in front of a function. add error
                     if (callable) {
@@ -89,7 +90,8 @@ export class BsClassValidator {
         for (const [className, classStatement] of this.classes) {
             //catch namespace class collision with global class
             let nonNamespaceClass = this.classes.get(util.getTextAfterFinalDot(className).toLowerCase());
-            if (classStatement.namespaceName && nonNamespaceClass) {
+            const namespace = classStatement.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            if (namespace && nonNamespaceClass) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.namespacedClassCannotShareNamewithNonNamespacedClass(
                         nonNamespaceClass.name.text
@@ -303,7 +305,8 @@ export class BsClassValidator {
                         const fieldTypeName = fieldType.name;
                         const lowerFieldTypeName = fieldTypeName?.toLowerCase();
                         if (lowerFieldTypeName) {
-                            const currentNamespaceName = classStatement.namespaceName?.getName(ParseMode.BrighterScript);
+                            const namespace = classStatement.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                            const currentNamespaceName = namespace?.getName(ParseMode.BrighterScript);
                             //check if this custom type is in our class map
                             if (!this.getClassByName(lowerFieldTypeName, currentNamespaceName) && !this.scope.hasInterface(lowerFieldTypeName) && !this.scope.hasEnum(lowerFieldTypeName)) {
                                 this.diagnostics.push({
@@ -402,8 +405,9 @@ export class BsClassValidator {
                     //compute the relative name of the parent class and prepend the current class's namespace
                     //to the beginning of the parent class's name
                 } else {
-                    if (classStatement.namespaceName) {
-                        absoluteName = `${classStatement.namespaceName.getName(ParseMode.BrighterScript)}.${parentClassName}`;
+                    const namespace = classStatement.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                    if (namespace) {
+                        absoluteName = `${namespace.getName(ParseMode.BrighterScript)}.${parentClassName}`;
                     } else {
                         absoluteName = parentClassName;
                     }

@@ -20,7 +20,7 @@ import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isMethodStatement, isXmlScope, isNamespaceStatement } from './astUtils/reflection';
-import { FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
 import { TokenKind } from './lexer/TokenKind';
 import { BscPlugin } from './bscPlugin/BscPlugin';
