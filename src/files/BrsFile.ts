@@ -24,7 +24,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isClassMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
+import { isCallExpression, isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
@@ -932,7 +932,7 @@ export class BrsFile {
                     if (!results.has(member.name.text.toLowerCase())) {
                         results.set(member.name.text.toLowerCase(), {
                             label: member.name.text,
-                            kind: isClassFieldStatement(member) ? CompletionItemKind.Field : CompletionItemKind.Function
+                            kind: isFieldStatement(member) ? CompletionItemKind.Field : CompletionItemKind.Function
                         });
                     }
                 }
@@ -946,7 +946,7 @@ export class BrsFile {
         if (previousToken?.kind === TokenKind.Dot) {
             previousToken = this.getPreviousToken(previousToken);
         }
-        if (previousToken?.kind === TokenKind.Identifier && previousToken?.text.toLowerCase() === 'm' && isClassMethodStatement(functionScope.func.functionStatement)) {
+        if (previousToken?.kind === TokenKind.Identifier && previousToken?.text.toLowerCase() === 'm' && isMethodStatement(functionScope.func.functionStatement)) {
             return { item: this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, position)), file: this };
         }
         return undefined;
@@ -1349,9 +1349,9 @@ export class BrsFile {
 
         if (isFunctionStatement(statement)) {
             symbolKind = SymbolKind.Function;
-        } else if (isClassMethodStatement(statement)) {
+        } else if (isMethodStatement(statement)) {
             symbolKind = SymbolKind.Method;
-        } else if (isClassFieldStatement(statement)) {
+        } else if (isFieldStatement(statement)) {
             symbolKind = SymbolKind.Field;
         } else if (isNamespaceStatement(statement)) {
             symbolKind = SymbolKind.Namespace;
@@ -1373,7 +1373,7 @@ export class BrsFile {
             return;
         }
 
-        const name = isClassFieldStatement(statement) ? statement.name.text : statement.getName(ParseMode.BrighterScript);
+        const name = isFieldStatement(statement) ? statement.name.text : statement.getName(ParseMode.BrighterScript);
         return DocumentSymbol.create(name, '', symbolKind, statement.range, statement.range, children);
     }
 
@@ -1386,7 +1386,7 @@ export class BrsFile {
 
         if (isFunctionStatement(statement)) {
             symbolKind = SymbolKind.Function;
-        } else if (isClassMethodStatement(statement)) {
+        } else if (isMethodStatement(statement)) {
             symbolKind = SymbolKind.Method;
         } else if (isNamespaceStatement(statement)) {
             symbolKind = SymbolKind.Namespace;
@@ -1603,7 +1603,7 @@ export class BrsFile {
     }
 
     public getSignatureHelpForStatement(statement: Statement): SignatureInfoObj {
-        if (!isFunctionStatement(statement) && !isClassMethodStatement(statement)) {
+        if (!isFunctionStatement(statement) && !isMethodStatement(statement)) {
             return undefined;
         }
         const func = statement.func;
