@@ -17,7 +17,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isClassMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
+import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
 
@@ -1178,7 +1178,7 @@ export class Scope {
                     if (!results.has(s.name.text) && s.name.text.toLowerCase() !== 'new') {
                         results.set(s.name.text, {
                             label: s.name.text,
-                            kind: isClassMethodStatement(s) ? CompletionItemKind.Method : CompletionItemKind.Field
+                            kind: isMethodStatement(s) ? CompletionItemKind.Method : CompletionItemKind.Field
                         });
                     }
                 }
