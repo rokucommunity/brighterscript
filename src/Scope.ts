@@ -519,7 +519,7 @@ export class Scope {
         this.enumerateBrsFiles((file) => {
             for (let namespaceStatement of file.parser.references.namespaceStatements) {
                 //TODO should we handle non-brighterscript?
-                let name = namespaceStatement.nameExpression.getName(ParseMode.BrighterScript);
+                let name = namespaceStatement.getName(ParseMode.BrighterScript);
                 let nameParts = name.split('.');
 
                 let loopName = null;
@@ -709,7 +709,7 @@ export class Scope {
 
                 //link each NamespaceStatement's SymbolTable with the aggregate NamespaceLookup SymbolTable
                 for (const namespace of file.parser.references.namespaceStatements) {
-                    const namespaceNameLower = namespace.nameExpression.getName(ParseMode.BrighterScript).toLowerCase();
+                    const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
                     const namespaceSymbolTable = this.namespaceLookup.get(namespaceNameLower).symbolTable;
                     namespace.getSymbolTable().pushParent(namespaceSymbolTable);
                 }

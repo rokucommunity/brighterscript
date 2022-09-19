@@ -340,7 +340,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
         if (namespace) {
             let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
-            let namespaceName = namespace.nameExpression.getName(parseMode);
+            let namespaceName = namespace.getName(parseMode);
             return namespaceName + delimiter + this.name?.text;
         } else {
             return this.name.text;
@@ -1083,7 +1083,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         public endKeyword: Token
     ) {
         super();
-        this.name = this.nameExpression.getName(ParseMode.BrighterScript);
+        this.name = this.getName(ParseMode.BrighterScript);
     }
 
     public getSymbolTable() {
@@ -1124,7 +1124,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     getTypedef(state: BrsTranspileState) {
         let result = [
             'namespace ',
-            ...this.nameExpression.getName(ParseMode.BrighterScript),
+            ...this.getName(ParseMode.BrighterScript),
             state.newline
         ];
         state.blockDepth++;
@@ -1905,7 +1905,7 @@ export class MethodStatement extends FunctionStatement {
     public readonly range: Range;
 
     /**
-     * Override the parent class method because class method names are always just the method name itself (no leading namespace)
+     * Get the name of this method.
      */
     public getName(parseMode: ParseMode) {
         return this.name.text;
