@@ -32,7 +32,7 @@ export class SymbolTable {
 
     public pushParent(parent?: SymbolTable) {
         this.parentStack.unshift(parent);
-        return this.parentStack[this.parentStack.length - 1];
+        return parent;
     }
 
     /**
