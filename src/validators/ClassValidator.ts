@@ -6,7 +6,7 @@ import type { ClassStatement, MethodStatement, NamespaceStatement } from '../par
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCustomType, isNamespaceStatement } from '../astUtils/reflection';
+import { isCallExpression, isFieldStatement, isMethodStatement, isCustomType, isNamespaceStatement } from '../astUtils/reflection';
 import type { BscFile, BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
@@ -186,7 +186,7 @@ export class BsClassValidator {
             let fields = {};
 
             for (let statement of classStatement.body) {
-                if (isClassMethodStatement(statement) || isClassFieldStatement(statement)) {
+                if (isMethodStatement(statement) || isFieldStatement(statement)) {
                     let member = statement;
                     let lowerMemberName = member.name.text.toLowerCase();
 
@@ -199,10 +199,10 @@ export class BsClassValidator {
                         });
                     }
 
-                    let memberType = isClassFieldStatement(member) ? 'field' : 'method';
+                    let memberType = isFieldStatement(member) ? 'field' : 'method';
                     let ancestorAndMember = this.getAncestorMember(classStatement, lowerMemberName);
                     if (ancestorAndMember) {
-                        let ancestorMemberKind = isClassFieldStatement(ancestorAndMember.member) ? 'field' : 'method';
+                        let ancestorMemberKind = isFieldStatement(ancestorAndMember.member) ? 'field' : 'method';
 
                         //mismatched member type (field/method in child, opposite in ancestor)
                         if (memberType !== ancestorMemberKind) {
@@ -218,11 +218,11 @@ export class BsClassValidator {
                         }
 
                         //child field has same name as parent
-                        if (isClassFieldStatement(member)) {
+                        if (isFieldStatement(member)) {
                             let ancestorMemberType = new DynamicType();
-                            if (isClassFieldStatement(ancestorAndMember.member)) {
+                            if (isFieldStatement(ancestorAndMember.member)) {
                                 ancestorMemberType = ancestorAndMember.member.getType();
-                            } else if (isClassMethodStatement(ancestorAndMember.member)) {
+                            } else if (isMethodStatement(ancestorAndMember.member)) {
                                 ancestorMemberType = ancestorAndMember.member.func.getFunctionType();
                             }
                             const childFieldType = member.getType();
@@ -245,7 +245,7 @@ export class BsClassValidator {
                         //child method missing the override keyword
                         if (
                             //is a method
-                            isClassMethodStatement(member) &&
+                            isMethodStatement(member) &&
                             //does not have an override keyword
                             !member.override &&
                             //is not the constructur function
@@ -263,7 +263,7 @@ export class BsClassValidator {
                         //child member has different visiblity
                         if (
                             //is a method
-                            isClassMethodStatement(member) &&
+                            isMethodStatement(member) &&
                             (member.accessModifier?.kind ?? TokenKind.Public) !== (ancestorAndMember.member.accessModifier?.kind ?? TokenKind.Public)
                         ) {
                             this.diagnostics.push({
@@ -280,10 +280,10 @@ export class BsClassValidator {
                         }
                     }
 
-                    if (isClassMethodStatement(member)) {
+                    if (isMethodStatement(member)) {
                         methods[lowerMemberName] = member;
 
-                    } else if (isClassFieldStatement(member)) {
+                    } else if (isFieldStatement(member)) {
                         fields[lowerMemberName] = member;
                     }
                 }
@@ -298,7 +298,7 @@ export class BsClassValidator {
     private validateFieldTypes() {
         for (const [, classStatement] of this.classes) {
             for (let statement of classStatement.body) {
-                if (isClassFieldStatement(statement)) {
+                if (isFieldStatement(statement)) {
                     let fieldType = statement.getType();
 
                     if (isCustomType(fieldType)) {
