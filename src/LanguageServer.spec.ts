@@ -153,7 +153,7 @@ describe('LanguageServer', () => {
         });
     });
 
-    describe.skip('sendDiagnostics', () => {
+    describe('sendDiagnostics', () => {
         it('waits for program to finish loading before sending diagnostics', async () => {
             server.onInitialize({
                 capabilities: {
