@@ -1,6 +1,6 @@
 import type { BsDiagnostic, CommentFlag } from '../interfaces';
 
-export interface BscFile {
+export interface File {
     /**
      * A string name representing the file type. This is generally the class name (i.e. 'BrsFile', 'XmlFile')
      */
@@ -57,11 +57,13 @@ export interface BscFile {
      */
     dispose?(): void;
 }
+//included for backwards compatibility reasons
+export type BscFile = File;
 
-export function createBscFile(props: Partial<BscFile>) {
+export function createFile(props: Partial<File>) {
     props.diagnostics ??= [];
     props.dependencies ??= [];
     props.dependencyGraphKey ??= props.pkgPath;
     props.disposables ??= [];
-    return props as BscFile;
+    return props as File;
 }

@@ -20,7 +20,7 @@ import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph'
 import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isNamespaceStatement } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
-import type { BscFile } from './files/BscFile';
+import type { File } from './files/File';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -387,9 +387,9 @@ export class Scope {
      * Get the list of files referenced by this scope that are actually loaded in the program.
      * Includes files from this scope and all ancestor scopes
      */
-    public getAllFiles(): BscFile[] {
+    public getAllFiles(): File[] {
         return this.cache.getOrAdd('getAllFiles', () => {
-            let result = [] as BscFile[];
+            let result = [] as File[];
             let dependencies = this.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
             for (let dependency of dependencies) {
                 //load components by their name
@@ -478,7 +478,7 @@ export class Scope {
     /**
      * Call a function for each file directly included in this scope (excluding files found only in parent scopes).
      */
-    public enumerateOwnFiles(callback: (file: BscFile) => void) {
+    public enumerateOwnFiles(callback: (file: File) => void) {
         const files = this.getOwnFiles();
         for (const file of files) {
             //either XML components or files without a typedef
@@ -1107,7 +1107,7 @@ export class Scope {
      * Determine if this file is included in this scope (excluding parent scopes)
      * @param file
      */
-    public hasFile(file: BscFile) {
+    public hasFile(file: File) {
         let files = this.getOwnFiles();
         let hasFile = files.includes(file);
         return hasFile;
@@ -1150,7 +1150,7 @@ export class Scope {
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
      */
-    public getDefinition(file: BscFile, position: Position): Location[] {
+    public getDefinition(file: File, position: Position): Location[] {
         // Overridden in XMLScope. Brs files use implementation in BrsFile
         return [];
     }
@@ -1168,7 +1168,7 @@ export class Scope {
 
     public getAllClassMemberCompletions() {
         let results = new Map<string, CompletionItem>();
-        let filesSearched = new Set<BscFile>();
+        let filesSearched = new Set<File>();
         for (const file of this.getAllFiles()) {
             if (!isBrsFile(file) || filesSearched.has(file)) {
                 continue;
@@ -1205,7 +1205,7 @@ export class Scope {
 }
 
 interface NamespaceContainer {
-    file: BscFile;
+    file: File;
     fullName: string;
     nameRange: Range;
     lastPartName: string;
@@ -1219,5 +1219,5 @@ interface NamespaceContainer {
 }
 
 interface AugmentedNewExpression extends NewExpression {
-    file: BscFile;
+    file: File;
 }

@@ -216,7 +216,7 @@ export interface CompilerPlugin {
     afterProvideFile?: PluginHandler<AfterProvideFileEvent>;
 
     beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
-    afterFileParse?: (file: BscFile) => void;
+    afterFileParse?: (file: File) => void;
 
     /**
      * Called before each file is validated
@@ -229,13 +229,13 @@ export interface CompilerPlugin {
     /**
      * Called after each file is validated
      */
-    afterFileValidate?: (file: BscFile) => void;
+    afterFileValidate?: (file: File) => void;
 
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
 
-    beforeFileDispose?: (file: BscFile) => void;
-    afterFileDispose?: (file: BscFile) => void;
+    beforeFileDispose?: (file: File) => void;
+    afterFileDispose?: (file: File) => void;
 }
 
 // related types:
@@ -250,11 +250,11 @@ interface SourceObj {
 }
 
 interface TranspileObj {
-    file: BscFile;
+    file: File;
     outputPath: string;
 }
 
-type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
+type ValidateHandler = (scope: Scope, files: File[], callables: CallableContainerMap) => void;
 interface CallableContainerMap {
     [name: string]: CallableContainer[];
 }
@@ -318,14 +318,14 @@ Note: in a language-server context, Scope validation happens every time a file c
 
 ```typescript
 // bsc-plugin-no-underscores.ts
-import { CompilerPlugin, BscFile, isBrsFile } from 'brighterscript';
+import { CompilerPlugin, File, isBrsFile } from 'brighterscript';
 
 // plugin factory
 export default function () {
     return {
         name: 'no-underscores',
         // post-parsing validation
-        afterFileValidate: (file: BscFile) => {
+        afterFileValidate: (file: File) => {
             if (isBrsFile(file)) {
                 // visit function statements and validate their name
                 file.parser.references.functionStatements.forEach((fun) => {

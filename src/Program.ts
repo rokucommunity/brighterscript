@@ -28,8 +28,8 @@ import { AstEditor } from './astUtils/AstEditor';
 import type { SourceMapGenerator } from 'source-map';
 import { rokuDeploy } from 'roku-deploy';
 import type { Statement } from './parser/AstNode';
-import type { BscFile } from './files/BscFile';
-import { RawFile } from './files/RawFile';
+import type { File } from './files/File';
+import { GenericFile } from './files/GenericFile';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const startOfComponentsPkgPath = `components${path.sep}`;
@@ -37,7 +37,7 @@ const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bs
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
 
 export interface TranspileObj {
-    file: BscFile;
+    file: File;
     outputPath: string;
 }
 
@@ -149,14 +149,14 @@ export class Program {
     /**
      * A map of every file loaded into this program, indexed by its original file location
      */
-    public files = {} as Record<string, BscFile>;
-    private pkgMap = {} as Record<string, BscFile>;
+    public files = {} as Record<string, File>;
+    private pkgMap = {} as Record<string, File>;
     /**
      * Plugins can contribute multiple virtual files for a single physical file.
      * This collection links the virtual files back to the physical file that produced them.
      * The key is the standardized and lower-cased srcPath
      */
-    private fileClusters = new Map<string, BscFile[]>();
+    private fileClusters = new Map<string, File[]>();
 
     private scopes = {} as Record<string, Scope>;
 
@@ -251,7 +251,7 @@ export class Program {
      * by any scope in the program.
      */
     public getUnreferencedFiles() {
-        let result = [] as BscFile[];
+        let result = [] as File[];
         for (let filePath in this.files) {
             let file = this.files[filePath];
             if (!this.fileIsIncludedInAnyScope(file)) {
@@ -349,7 +349,7 @@ export class Program {
     /**
      * Update internal maps with this file reference
      */
-    private assignFile<T extends BscFile = BscFile>(file: T) {
+    private assignFile<T extends File = File>(file: T) {
         this.files[file.srcPath.toLowerCase()] = file;
         this.pkgMap[file.pkgPath.toLowerCase()] = file;
         return file;
@@ -358,7 +358,7 @@ export class Program {
     /**
      * Remove this file from internal maps
      */
-    private unassignFile<T extends BscFile = BscFile>(file: T) {
+    private unassignFile<T extends File = File>(file: T) {
         delete this.files[file.srcPath.toLowerCase()];
         delete this.pkgMap[file.pkgPath.toLowerCase()];
         return file;
@@ -371,15 +371,15 @@ export class Program {
      * @param fileContents the file contents
      * @deprecated use `setFile` instead
      */
-    public addOrReplaceFile<T extends BscFile>(srcPath: string, fileContents: string): T;
+    public addOrReplaceFile<T extends File>(srcPath: string, fileContents: string): T;
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * @param fileEntry an object that specifies src and dest for the file.
      * @param fileContents the file contents
      * @deprecated use `setFile` instead
      */
-    public addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
-    public addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
+    public addOrReplaceFile<T extends File>(fileEntry: FileObj, fileContents: string): T;
+    public addOrReplaceFile<T extends File>(fileParam: FileObj | string, fileContents: string): T {
         return this.setFile<T>(fileParam as any, fileContents);
     }
 
@@ -389,14 +389,14 @@ export class Program {
      * @param srcDestOrPkgPath the absolute path, the pkg path (i.e. `pkg:/path/to/file.brs`), or the destPath (i.e. `path/to/file.brs` relative to `pkg:/`)
      * @param fileData the file contents
      */
-    public setFile<T extends BscFile>(srcDestOrPkgPath: string, fileData: FileData): T;
+    public setFile<T extends File>(srcDestOrPkgPath: string, fileData: FileData): T;
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * @param fileEntry an object that specifies src and dest for the file.
      * @param fileData the file contents
      */
-    public setFile<T extends BscFile>(fileEntry: FileObj, fileData: FileData): T;
-    public setFile<T extends BscFile>(fileParam: FileObj | string, fileData: FileData): T {
+    public setFile<T extends File>(fileEntry: FileObj, fileData: FileData): T;
+    public setFile<T extends File>(fileParam: FileObj | string, fileData: FileData): T {
         //normalize the file paths
         const { src: srcPath, dest: destPath } = this.getPaths(fileParam, this.options.rootDir);
 
@@ -421,7 +421,7 @@ export class Program {
             //if no files were provided, create a RawFile to represent it.
             if (event.files.length === 0) {
                 event.files.push(
-                    new RawFile(event.srcPath, event.destPath)
+                    new GenericFile(event.srcPath, event.destPath)
                 );
             }
 
@@ -568,7 +568,7 @@ export class Program {
      * @param srcPath
      * @deprecated use `getFile` instead, which auto-detects the path type
      */
-    public getFileByPathAbsolute<T extends BscFile>(srcPath: string) {
+    public getFileByPathAbsolute<T extends File>(srcPath: string) {
         srcPath = s`${srcPath}`;
         for (let filePath in this.files) {
             if (filePath.toLowerCase() === srcPath.toLowerCase()) {
@@ -582,7 +582,7 @@ export class Program {
      * Missing files are just ignored.
      * @deprecated use `getFiles` instead, which auto-detects the path types
      */
-    public getFilesByPkgPaths<T extends BscFile[]>(pkgPaths: string[]) {
+    public getFilesByPkgPaths<T extends File[]>(pkgPaths: string[]) {
         return pkgPaths
             .map(pkgPath => this.getFileByPkgPath(pkgPath))
             .filter(file => file !== undefined) as T;
@@ -593,7 +593,7 @@ export class Program {
      * If not found, return undefined
      * @deprecated use `getFile` instead, which auto-detects the path type
      */
-    public getFileByPkgPath<T extends BscFile>(pkgPath: string) {
+    public getFileByPkgPath<T extends File>(pkgPath: string) {
         return this.pkgMap[pkgPath.toLowerCase()] as T;
     }
 
@@ -616,7 +616,7 @@ export class Program {
     public removeFile(filePath: string, normalizePath = true) {
         this.logger.debug('Program.removeFile()', filePath);
         const paths = this.getPaths(filePath, this.options.rootDir);
-        //there can be one or more BscFile entries for a single srcPath, so get all of them and remove them all
+        //there can be one or more File entries for a single srcPath, so get all of them and remove them all
         const files = this.fileClusters.get(paths.src?.toLowerCase()) ?? [];
         for (const file of files) {
             this.plugins.emit('beforeFileDispose', file);
@@ -758,7 +758,7 @@ export class Program {
     /**
      * Determine if the given file is included in at least one scope in this program
      */
-    private fileIsIncludedInAnyScope(file: BscFile) {
+    private fileIsIncludedInAnyScope(file: File) {
         for (let scopeName in this.scopes) {
             if (this.scopes[scopeName].hasFile(file)) {
                 return true;
@@ -772,7 +772,7 @@ export class Program {
      * @param filePaths can be an array of srcPath or a destPath strings
      * @param normalizePath should this function repair and standardize the paths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
      */
-    public getFiles<T extends BscFile>(filePaths: string[], normalizePath = true) {
+    public getFiles<T extends File>(filePaths: string[], normalizePath = true) {
         return filePaths
             .map(filePath => this.getFile(filePath, normalizePath))
             .filter(file => file !== undefined) as T[];
@@ -783,7 +783,7 @@ export class Program {
      * @param filePath can be a srcPath or a destPath
      * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
-    public getFile<T extends BscFile>(filePath: string, normalizePath = true) {
+    public getFile<T extends File>(filePath: string, normalizePath = true) {
         if (typeof filePath !== 'string') {
             return undefined;
         } else if (path.isAbsolute(filePath)) {
@@ -801,7 +801,7 @@ export class Program {
      * Get a list of all scopes the file is loaded into
      * @param file
      */
-    public getScopesForFile(file: BscFile | string) {
+    public getScopesForFile(file: File | string) {
         if (typeof file === 'string') {
             file = this.getFile(file);
         }
@@ -1355,7 +1355,7 @@ export class Program {
      * Internal function used to transpile files.
      * This does not write anything to the file system
      */
-    private _getTranspiledFileContents(file: BscFile, outputPath?: string): FileTranspileResult {
+    private _getTranspiledFileContents(file: File, outputPath?: string): FileTranspileResult {
         const editor = new AstEditor();
 
         this.plugins.emit('beforeFileTranspile', {
@@ -1410,7 +1410,7 @@ export class Program {
             return collection;
         }, {});
 
-        const getOutputPath = (file: BscFile) => {
+        const getOutputPath = (file: File) => {
             let filePathObj = mappedFileEntries[s`${file.srcPath}`];
             if (!filePathObj) {
                 //this file has been added in-memory, from a plugin, for example
@@ -1521,7 +1521,7 @@ export class Program {
      * Find a list of files in the program that have a function with the given name (case INsensitive)
      */
     public findFilesForFunction(functionName: string) {
-        const files = [] as BscFile[];
+        const files = [] as File[];
         const lowerFunctionName = functionName.toLowerCase();
         //find every file with this function defined
         for (const file of Object.values(this.files)) {
@@ -1540,7 +1540,7 @@ export class Program {
      * Find a list of files in the program that have a class with the given name (case INsensitive)
      */
     public findFilesForClass(className: string) {
-        const files = [] as BscFile[];
+        const files = [] as File[];
         const lowerClassName = className.toLowerCase();
         //find every file with this class defined
         for (const file of Object.values(this.files)) {
@@ -1556,7 +1556,7 @@ export class Program {
     }
 
     public findFilesForNamespace(name: string) {
-        const files = [] as BscFile[];
+        const files = [] as File[];
         const lowerName = name.toLowerCase();
         //find every file with this class defined
         for (const file of Object.values(this.files)) {
@@ -1578,7 +1578,7 @@ export class Program {
     }
 
     public findFilesForEnum(name: string) {
-        const files = [] as BscFile[];
+        const files = [] as File[];
         const lowerName = name.toLowerCase();
         //find every file with this class defined
         for (const file of Object.values(this.files)) {

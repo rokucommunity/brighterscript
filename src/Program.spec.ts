@@ -118,13 +118,13 @@ describe('Program', () => {
                 src: s`${rootDir}/notComponents/comp1.xml`,
                 dest: util.pathSepNormalize(`notComponents/comp1.xml`)
             }, '');
-            expect(file.type).to.eql('RawFile');
+            expect(file.type).to.eql('GenericFile');
 
             program.setFile({
                 src: s`${rootDir}/componentsExtra/comp1.xml`,
                 dest: util.pathSepNormalize(`componentsExtra/comp1.xml`)
             }, '');
-            expect(file.type).to.eql('RawFile');
+            expect(file.type).to.eql('GenericFile');
         });
 
         it('supports empty statements for transpile', async () => {

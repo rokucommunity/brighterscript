@@ -13,8 +13,8 @@ import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
-import type { BscFile } from './files/BscFile';
-import { createBscFile } from './files/BscFile';
+import type { File } from './files/File';
+import { createFile } from './files/File';
 
 /**
  * A runner class that handles
@@ -69,9 +69,9 @@ export class ProgramBuilder {
     private staticDiagnostics = [] as BsDiagnostic[];
 
     public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
-        let file: BscFile = this.program.getFile(srcPath);
+        let file: File = this.program.getFile(srcPath);
         if (!file) {
-            file = createBscFile({
+            file = createFile({
                 type: 'BrsFile',
                 pkgPath: this.program.getPkgPath(srcPath),
                 pathAbsolute: srcPath, //keep this for backwards-compatibility. TODO remove in v1

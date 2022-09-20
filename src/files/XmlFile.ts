@@ -16,9 +16,9 @@ import { SGScript } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';
-import type { BscFile } from './BscFile';
+import type { File } from './File';
 
-export class XmlFile implements BscFile {
+export class XmlFile implements File {
     constructor(
         public srcPath: string,
         /**
@@ -342,7 +342,7 @@ export class XmlFile implements BscFile {
      * Determines if this xml file has a reference to the specified file (or if it's itself)
      * @param file
      */
-    public doesReferenceFile(file: BscFile) {
+    public doesReferenceFile(file: File) {
         return this.cache.getOrAdd(`doesReferenceFile: ${file.pkgPath}`, () => {
             if (file === this) {
                 return true;

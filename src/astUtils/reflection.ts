@@ -20,15 +20,15 @@ import { DynamicType } from '../types/DynamicType';
 import type { InterfaceType } from '../types/InterfaceType';
 import type { ObjectType } from '../types/ObjectType';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
-import type { BscFile } from '../files/BscFile';
+import type { File } from '../files/File';
 
 // File reflection
 
-export function isBrsFile(file: BscFile): file is BrsFile {
+export function isBrsFile(file: File): file is BrsFile {
     return file?.constructor.name === 'BrsFile';
 }
 
-export function isXmlFile(file: (BscFile)): file is XmlFile {
+export function isXmlFile(file: (File)): file is XmlFile {
     return file?.constructor.name === 'XmlFile';
 }
 

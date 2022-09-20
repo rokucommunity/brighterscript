@@ -30,12 +30,12 @@ import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
-import type { BscFile } from './BscFile';
+import type { File } from './File';
 
 /**
  * Holds all details about this file within the scope of the whole program
  */
-export class BrsFile implements BscFile {
+export class BrsFile implements File {
     constructor(
         public srcPath: string,
         /**
@@ -112,7 +112,7 @@ export class BrsFile implements BscFile {
         return this.diagnostics;
     }
 
-    public addDiagnostic(diagnostic: Diagnostic & { file?: BscFile }) {
+    public addDiagnostic(diagnostic: Diagnostic & { file?: File }) {
         if (!diagnostic.file) {
             diagnostic.file = this;
         }

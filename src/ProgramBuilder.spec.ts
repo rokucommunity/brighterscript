@@ -11,7 +11,7 @@ import { DiagnosticSeverity, Range } from 'vscode-languageserver';
 import { BrsFile } from './files/BrsFile';
 import { expectZeroDiagnostics } from './testHelpers.spec';
 import type { BsConfig } from './BsConfig';
-import type { BscFile } from './files/BscFile';
+import type { File } from './files/File';
 import type { BsDiagnostic } from './interfaces';
 
 describe('ProgramBuilder', () => {
@@ -342,7 +342,7 @@ function createBsDiagnostic(filePath: string, messages: string[]): BsDiagnostic[
     return diagnostics;
 }
 function createDiagnostic(
-    bscFile: BscFile,
+    file: File,
     code: number,
     message: string,
     startLine = 0,
@@ -355,7 +355,7 @@ function createDiagnostic(
         code: code,
         message: message,
         range: Range.create(startLine, startCol, endLine, endCol),
-        file: bscFile,
+        file: file,
         severity: severity
     };
     return diagnostic;

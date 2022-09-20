@@ -12,7 +12,7 @@ import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer/TokenKind';
 import { DynamicType } from '../types/DynamicType';
-import type { BscFile } from '../files/BscFile';
+import type { File } from '../files/File';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -437,6 +437,6 @@ export class BsClassValidator {
 }
 
 type AugmentedClassStatement = ClassStatement & {
-    file: BscFile;
+    file: File;
     parentClass: AugmentedClassStatement;
 };

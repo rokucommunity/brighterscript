@@ -8,7 +8,7 @@ import util from './util';
 import { isXmlFile } from './astUtils/reflection';
 import { SGFieldTypes } from './parser/SGTypes';
 import type { SGTag } from './parser/SGTypes';
-import type { BscFile } from './files/BscFile';
+import type { File } from './files/File';
 
 export class XmlScope extends Scope {
     constructor(
@@ -146,7 +146,7 @@ export class XmlScope extends Scope {
         return this.cache.getOrAdd('getOwnFiles', () => {
             let result = [
                 this.xmlFile
-            ] as BscFile[];
+            ] as File[];
             let scriptPkgPaths = this.xmlFile.getOwnDependencies();
             for (let scriptPkgPath of scriptPkgPaths) {
                 let file = this.program.getFileByPkgPath(scriptPkgPath);
@@ -161,7 +161,7 @@ export class XmlScope extends Scope {
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
      */
-    public getDefinition(file: BscFile, position: Position): Location[] {
+    public getDefinition(file: File, position: Position): Location[] {
         let results = [] as Location[];
         //if the position is within the file's parent component name
         if (

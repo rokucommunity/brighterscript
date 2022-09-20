@@ -13,7 +13,7 @@ import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import type { Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
-import type { BscFile } from '../../files/BscFile';
+import type { File } from '../../files/File';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -92,7 +92,7 @@ export class ScopeValidator {
             //flag all unknown left-most variables
             if (!symbolTable.hasSymbol(firstPart.name?.text)) {
                 this.addMultiScopeDiagnostic({
-                    file: file as BscFile,
+                    file: file as File,
                     ...DiagnosticMessages.cannotFindName(firstPart.name?.text),
                     range: firstPart.name.range
                 });
@@ -253,21 +253,21 @@ export class ScopeValidator {
                 const unquotedComponentName = componentName?.text?.replace(/"/g, '');
                 if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !this.event.program.getComponent(unquotedComponentName)) {
                     this.addDiagnosticOnce({
-                        file: file as BscFile,
+                        file: file as File,
                         ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
                         range: componentName.range
                     });
                 } else if (call?.args.length !== 2) {
                     // roSgNode should only ever have 2 args in `createObject`
                     this.addDiagnosticOnce({
-                        file: file as BscFile,
+                        file: file as File,
                         ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, [2], call?.args.length),
                         range: call.range
                     });
                 }
             } else if (!platformComponentNames.has(firstParamStringValue.toLowerCase())) {
                 this.addDiagnosticOnce({
-                    file: file as BscFile,
+                    file: file as File,
                     ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
                     range: firstParamToken.range
                 });
@@ -284,7 +284,7 @@ export class ScopeValidator {
                 if (!validArgCounts.includes(call?.args.length)) {
                     // Incorrect number of arguments included in `createObject()`
                     this.addDiagnosticOnce({
-                        file: file as BscFile,
+                        file: file as File,
                         ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, validArgCounts, call?.args.length),
                         range: call.range
                     });
@@ -293,7 +293,7 @@ export class ScopeValidator {
                 // Test for deprecation
                 if (brightScriptComponent.isDeprecated) {
                     this.addDiagnosticOnce({
-                        file: file as BscFile,
+                        file: file as File,
                         ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),
                         range: call.range
                     });

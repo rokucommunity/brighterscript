@@ -13,7 +13,7 @@ import type { CodeWithSourceMap } from 'source-map';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
-import type { BscFile } from './files/BscFile';
+import type { File } from './files/File';
 
 export const trim = undent;
 
@@ -65,7 +65,7 @@ interface PartialDiagnostic {
     tags?: Partial<DiagnosticTag>[];
     relatedInformation?: Partial<DiagnosticRelatedInformation>[];
     data?: unknown;
-    file?: Partial<BscFile>;
+    file?: Partial<File>;
 }
 
 /**
@@ -205,7 +205,7 @@ export function getTestGetTypedef(scopeGetter: () => [program: Program, rootDir:
 }
 
 function getTestFileAction(
-    action: (file: BscFile) => CodeWithSourceMap,
+    action: (file: File) => CodeWithSourceMap,
     scopeGetter: () => [program: Program, rootDir: string]
 ) {
     return function testFileAction(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) {

@@ -14,10 +14,10 @@ import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
 import type { Token } from './lexer/Token';
-import type { BscFile } from './files/BscFile';
+import type { File } from './files/File';
 
 export interface BsDiagnostic extends Diagnostic {
-    file: BscFile;
+    file: File;
     /**
      * A generic data container where additional details of the diagnostic can be stored. These are stripped out before being sent to a languageclient, and not printed to the console.
      */
@@ -25,7 +25,7 @@ export interface BsDiagnostic extends Diagnostic {
 }
 
 export interface Callable {
-    file: BscFile;
+    file: File;
     name: string;
     /**
      * Is the callable declared as "sub". If falsey, assumed declared as "function"
@@ -67,7 +67,7 @@ export interface FunctionCall {
      */
     range: Range;
     functionScope: FunctionScope;
-    file: BscFile;
+    file: File;
     name: string;
     args: CallableArg[];
     nameRange: Range;
@@ -161,7 +161,7 @@ export interface CallableContainer {
 export type CallableContainerMap = Map<string, CallableContainer[]>;
 
 export interface CommentFlag {
-    file: BscFile;
+    file: File;
     /**
      * The location of the ignore comment.
      */
@@ -173,7 +173,7 @@ export interface CommentFlag {
     codes: DiagnosticCode[] | null;
 }
 
-type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
+type ValidateHandler = (scope: Scope, files: File[], callables: CallableContainerMap) => void;
 
 export type CompilerPluginFactory = () => CompilerPlugin;
 
@@ -248,7 +248,7 @@ export interface CompilerPlugin {
     afterProvideFile?: PluginHandler<AfterProvideFileEvent>;
 
     beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
-    afterFileParse?: (file: BscFile) => void;
+    afterFileParse?: (file: File) => void;
 
     /**
      * Called before each file is validated
@@ -261,17 +261,17 @@ export interface CompilerPlugin {
     /**
      * Called after each file is validated
      */
-    afterFileValidate?: (file: BscFile) => void;
+    afterFileValidate?: (file: File) => void;
 
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
 
-    beforeFileDispose?: (file: BscFile) => void;
-    afterFileDispose?: (file: BscFile) => void;
+    beforeFileDispose?: (file: File) => void;
+    afterFileDispose?: (file: File) => void;
 }
 export type PluginHandler<T, R = void> = (event: T) => R;
 
-export interface OnGetCodeActionsEvent<TFile extends BscFile = BscFile> {
+export interface OnGetCodeActionsEvent<TFile extends File = File> {
     program: Program;
     file: TFile;
     range: Range;
@@ -280,19 +280,19 @@ export interface OnGetCodeActionsEvent<TFile extends BscFile = BscFile> {
     codeActions: CodeAction[];
 }
 
-export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
+export interface ProvideCompletionsEvent<TFile extends File = File> {
     program: Program;
     file: TFile;
     scopes: Scope[];
     position: Position;
     completions: CompletionItem[];
 }
-export type BeforeProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
-export type AfterProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
+export type BeforeProvideCompletionsEvent<TFile extends File = File> = ProvideCompletionsEvent<TFile>;
+export type AfterProvideCompletionsEvent<TFile extends File = File> = ProvideCompletionsEvent<TFile>;
 
 export interface ProvideHoverEvent {
     program: Program;
-    file: BscFile;
+    file: File;
     position: Position;
     scopes: Scope[];
     hovers: Hover[];
@@ -315,7 +315,7 @@ export interface Hover {
 export type BeforeProvideHoverEvent = ProvideHoverEvent;
 export type AfterProvideHoverEvent = ProvideHoverEvent;
 
-export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
+export interface OnGetSemanticTokensEvent<T extends File = File> {
     /**
      * The program this file is from
      */
@@ -334,12 +334,12 @@ export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
     semanticTokens: SemanticToken[];
 }
 
-export interface BeforeFileValidateEvent<T extends BscFile = BscFile> {
+export interface BeforeFileValidateEvent<T extends File = File> {
     program: Program;
     file: T;
 }
 
-export interface OnFileValidateEvent<T extends BscFile = BscFile> {
+export interface OnFileValidateEvent<T extends File = File> {
     program: Program;
     file: T;
 }
@@ -351,7 +351,7 @@ export interface OnScopeValidateEvent {
 
 export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty' | 'overrideTranspileResult' | 'arrayPop' | 'arrayPush' | 'arrayShift' | 'arraySplice' | 'arrayUnshift' | 'removeProperty' | 'edit'>;
 
-export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
+export interface BeforeFileTranspileEvent<TFile extends File = File> {
     program: Program;
     file: TFile;
     outputPath: string;
@@ -363,7 +363,7 @@ export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
     editor: Editor;
 }
 
-export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
+export interface AfterFileTranspileEvent<TFile extends File = File> {
     /**
      * The program this event was triggered for
      */
@@ -390,8 +390,8 @@ export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
     editor: Editor;
 }
 
-type BeforeProvideFileEvent<TFile extends BscFile = BscFile> = ProvideFileEvent<TFile>;
-export interface ProvideFileEvent<TFile extends BscFile = BscFile> {
+type BeforeProvideFileEvent<TFile extends File = File> = ProvideFileEvent<TFile>;
+export interface ProvideFileEvent<TFile extends File = File> {
     /**
      * The srcPath for the file
      */
@@ -414,7 +414,7 @@ export interface ProvideFileEvent<TFile extends BscFile = BscFile> {
      */
     program: Program;
 }
-type AfterProvideFileEvent<TFile extends BscFile = BscFile> = ProvideFileEvent<TFile>;
+type AfterProvideFileEvent<TFile extends File = File> = ProvideFileEvent<TFile>;
 
 
 export interface BeforeFileParseEvent {

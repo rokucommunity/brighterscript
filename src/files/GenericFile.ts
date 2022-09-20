@@ -1,17 +1,17 @@
-import type { BscFile } from './BscFile';
+import type { File } from './File';
 
-export class RawFile implements BscFile {
+export class GenericFile implements File {
     public constructor(
         public srcPath: string,
         public pkgPath: string
     ) {
         this.dependencyGraphKey = this.pkgPath.toLowerCase();
     }
-    public type = 'RawFile';
+    public type = 'GenericFile';
 
     dependencyGraphKey: string;
     //mark this file as validated so it skips all validation checks
     isValidated = true;
-    //raw files don't need transpiled
+    //generic files don't need transpiled
     needsTranspiled = false;
 }
