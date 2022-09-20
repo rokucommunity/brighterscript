@@ -10,12 +10,10 @@ import type { TranspileObj } from './Program';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { URI } from 'vscode-uri';
-import PluginInterface from './PluginInterface';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
 import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
-import { Logger } from './Logger';
 import { createToken } from './astUtils/creators';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
@@ -110,23 +108,23 @@ describe('Program', () => {
         it('only parses xml files as components when file is found within the "components" folder', () => {
             expect(Object.keys(program.files).length).to.equal(0);
 
-            program.setFile({
+            let file = program.setFile({
                 src: s`${rootDir}/components/comp1.xml`,
                 dest: util.pathSepNormalize(`components/comp1.xml`)
             }, '');
-            expect(Object.keys(program.files).length).to.equal(1);
+            expect(file.type).to.eql('XmlFile');
 
-            program.setFile({
+            file = program.setFile({
                 src: s`${rootDir}/notComponents/comp1.xml`,
                 dest: util.pathSepNormalize(`notComponents/comp1.xml`)
             }, '');
-            expect(Object.keys(program.files).length).to.equal(1);
+            expect(file.type).to.eql('RawFile');
 
             program.setFile({
                 src: s`${rootDir}/componentsExtra/comp1.xml`,
                 dest: util.pathSepNormalize(`componentsExtra/comp1.xml`)
             }, '');
-            expect(Object.keys(program.files).length).to.equal(1);
+            expect(file.type).to.eql('RawFile');
         });
 
         it('supports empty statements for transpile', async () => {

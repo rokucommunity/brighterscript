@@ -29,6 +29,7 @@ import type { SourceMapGenerator } from 'source-map';
 import { rokuDeploy } from 'roku-deploy';
 import type { Statement } from './parser/AstNode';
 import type { BscFile } from './files/BscFile';
+import { RawFile } from './files/RawFile';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const startOfComponentsPkgPath = `components${path.sep}`;
@@ -417,9 +418,16 @@ export class Program {
             this.plugins.emit('provideFile', event);
             this.plugins.emit('afterProvideFile', event);
 
+            //if no files were provided, create a RawFile to represent it.
+            if (event.files.length === 0) {
+                event.files.push(
+                    new RawFile(event.srcPath, event.destPath)
+                );
+            }
+
             //find the file instance for the srcPath that triggered this action.
             const primaryFile = event.files.find(x => x.srcPath === srcPath);
-            //
+
             if (!primaryFile) {
                 throw new Error(`No file provided for srcPath '${srcPath}'. Instead, received ${JSON.stringify(event.files.map(x => ({
                     type: x.type,
