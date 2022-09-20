@@ -33,16 +33,32 @@ export abstract class AstNode {
      * Certain expressions or statements can have a symbol table (such as blocks, functions, namespace bodies, etc).
      * If you're interested in getting the closest SymbolTable, use `getSymbolTable` instead.
      */
-    protected symbolTable?: SymbolTable;
+    public symbolTable?: SymbolTable;
 
     /**
      * Get the closest symbol table for this node. Should be overridden in children that directly contain a symbol table
      */
     public getSymbolTable(): SymbolTable {
-        return this.parent?.getSymbolTable();
+        if (this.symbolTable) {
+            return this.symbolTable;
+        } else {
+            return this.parent?.getSymbolTable();
+        }
+    }
+
+    /**
+     * Walk upward and return the first node that results in `true` from the matcher
+     */
+    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode) => boolean | undefined) {
+        let node = this.parent;
+        while (node) {
+            if (matcher(node)) {
+                return node as TNode;
+            }
+            node = node.parent;
+        }
     }
 }
-
 
 export abstract class Statement extends AstNode {
     /**
