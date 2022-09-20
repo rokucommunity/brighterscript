@@ -1705,7 +1705,7 @@ export class BrsFile implements BscFile {
         for (const scope of scopes) {
             const processedFiles = new Set<BrsFile>();
             for (const file of scope.getAllFiles()) {
-                if (isBrsFile(file) && !processedFiles) {
+                if (isBrsFile(file) && !processedFiles.has(file)) {
                     processedFiles.add(file);
                     file.ast.walk(createVisitor({
                         VariableExpression: (e) => {
