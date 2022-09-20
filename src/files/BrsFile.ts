@@ -12,8 +12,8 @@ import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
-import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
-import type { ClassStatement, FunctionStatement, NamespaceStatement, AssignmentStatement, Statement, MethodStatement, FieldStatement } from '../parser/Statement';
+import type { FunctionExpression, VariableExpression } from '../parser/Expression';
+import type { ClassStatement, FunctionStatement, NamespaceStatement, AssignmentStatement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program, SignatureInfoObj } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
@@ -23,12 +23,13 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement, isBrsFile, isClassMethodStatement } from '../astUtils/reflection';
+import { isCallExpression, isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement, isBrsFile } from '../astUtils/reflection';
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
+import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import type { BscFile } from './BscFile';
 
 /**
@@ -197,7 +198,7 @@ export class BrsFile implements BscFile {
      */
     public getClosestExpression(position: Position) {
         const handle = new CancellationTokenSource();
-        let containingNode: Expression | Statement;
+        let containingNode: AstNode;
         this.ast.walk((node) => {
             const latestContainer = containingNode;
             //bsc walks depth-first
@@ -600,7 +601,7 @@ export class BrsFile implements BscFile {
                 range: statement.func.range,
                 type: functionType,
                 getName: statement.getName.bind(statement),
-                hasNamespace: !!statement.namespaceName,
+                hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
                 functionStatement: statement
             });
         }
@@ -1597,7 +1598,7 @@ export class BrsFile implements BscFile {
     }
 
     public getSignatureHelpForStatement(statement: Statement): SignatureInfoObj {
-        if (!isFunctionStatement(statement) && !isClassMethodStatement(statement)) {
+        if (!isFunctionStatement(statement) && !isMethodStatement(statement)) {
             return undefined;
         }
         const func = statement.func;

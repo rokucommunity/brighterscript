@@ -7,7 +7,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, FileLink } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
+import type { NamespaceStatement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
 import type { NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { standardizePath as s, util } from './util';
@@ -17,8 +17,9 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isClassMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
+import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isNamespaceStatement } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
+import type { Statement } from './parser/AstNode';
 import type { BscFile } from './files/BscFile';
 
 /**
@@ -514,7 +515,7 @@ export class Scope {
         this.enumerateBrsFiles((file) => {
             for (let namespaceStatement of file.parser.references.namespaceStatements) {
                 //TODO should we handle non-brighterscript?
-                let name = namespaceStatement.nameExpression.getName(ParseMode.BrighterScript);
+                let name = namespaceStatement.getName(ParseMode.BrighterScript);
                 let nameParts = name.split('.');
 
                 let loopName = null;
@@ -554,7 +555,7 @@ export class Scope {
                 }
                 // Merges all the symbol tables of the namespace statements into the new symbol table created above.
                 // Set those symbol tables to have this new merged table as a parent
-                ns.symbolTable.mergeSymbolTable(namespaceStatement.symbolTable);
+                ns.symbolTable.mergeSymbolTable(namespaceStatement.getSymbolTable());
             }
 
             //associate child namespaces with their parents
@@ -706,9 +707,9 @@ export class Scope {
 
                 //link each NamespaceStatement's SymbolTable with the aggregate NamespaceLookup SymbolTable
                 for (const namespace of file.parser.references.namespaceStatements) {
-                    const namespaceNameLower = namespace.nameExpression.getName(ParseMode.BrighterScript).toLowerCase();
+                    const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
                     const namespaceSymbolTable = this.namespaceLookup.get(namespaceNameLower).symbolTable;
-                    namespace.symbolTable.pushParent(namespaceSymbolTable);
+                    namespace.getSymbolTable().pushParent(namespaceSymbolTable);
                 }
             }
         }
@@ -720,7 +721,7 @@ export class Scope {
                 file.parser?.symbolTable.popParent();
 
                 for (const namespace of file.parser.references.namespaceStatements) {
-                    namespace.symbolTable.popParent();
+                    namespace.getSymbolTable().popParent();
                 }
             }
         }
@@ -809,7 +810,7 @@ export class Scope {
             if (isCustomType(func.returnType) && func.returnTypeToken) {
                 // check if this custom type is in our class map
                 const returnTypeName = func.returnType.name;
-                const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
+                const currentNamespaceName = func.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
                 if (!this.hasClass(returnTypeName, currentNamespaceName) && !this.hasInterface(returnTypeName) && !this.hasEnum(returnTypeName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.invalidFunctionReturnType(returnTypeName),
@@ -822,7 +823,7 @@ export class Scope {
             for (let param of func.parameters) {
                 if (isCustomType(param.type) && param.typeToken) {
                     const paramTypeName = param.type.name;
-                    const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
+                    const currentNamespaceName = func.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
                     if (!this.hasClass(paramTypeName, currentNamespaceName) && !this.hasInterface(paramTypeName) && !this.hasEnum(paramTypeName)) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.functionParameterTypeIsInvalid(param.name.text, paramTypeName),
@@ -1175,7 +1176,7 @@ export class Scope {
                     if (!results.has(s.name.text) && s.name.text.toLowerCase() !== 'new') {
                         results.set(s.name.text, {
                             label: s.name.text,
-                            kind: isClassMethodStatement(s) ? CompletionItemKind.Method : CompletionItemKind.Field
+                            kind: isMethodStatement(s) ? CompletionItemKind.Method : CompletionItemKind.Field
                         });
                     }
                 }

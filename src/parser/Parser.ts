@@ -14,8 +14,7 @@ import {
 } from '../lexer/TokenKind';
 import type {
     PrintSeparatorSpace,
-    PrintSeparatorTab,
-    Statement
+    PrintSeparatorTab
 } from './Statement';
 import {
     AssignmentStatement,
@@ -59,7 +58,6 @@ import {
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { util } from '../util';
-import type { Expression } from './Expression';
 import {
     AALiteralExpression,
     AAMemberExpression,
@@ -90,12 +88,11 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCallExpression, isCallfuncExpression, isMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
-import { SymbolTable } from '../SymbolTable';
-import { DynamicType } from '../types/DynamicType';
+import type { Expression, Statement } from './AstNode';
 
 export class Parser {
     /**
@@ -118,12 +115,10 @@ export class Parser {
     }
 
     /**
-     * The top-level symbol table for this file. Things like top-level namespaces, non-namespaced classes, enums, interfaces, and functions beling here.
+     * The top-level symbol table for the body of this file.
      */
-    public symbolTable = new SymbolTable();
-
-    private get currentSymbolTable() {
-        return this.currentFunctionExpression?.symbolTable ?? this.currentNamespace?.symbolTable ?? this.symbolTable;
+    public get symbolTable() {
+        return this.ast.symbolTable;
     }
 
     /**
@@ -181,16 +176,6 @@ export class Parser {
     public options: ParseOptions;
 
     private globalTerminators = [] as TokenKind[][];
-
-    /**
-     * When a namespace has been started, this gets set. When it's done, this gets unset.
-     * It is useful for passing the namespace into certain statements that need it
-     */
-    private currentNamespace: NamespaceStatement;
-
-    private get currentNamespaceName(): NamespacedVariableNameExpression {
-        return this.currentNamespace?.nameExpression;
-    }
 
     /**
      * When a FunctionExpression has been started, this gets set. When it's done, this gets unset.
@@ -259,7 +244,7 @@ export class Parser {
     private body() {
         const parentAnnotations = this.enterAnnotationBlock();
 
-        let body = new Body([], this.symbolTable);
+        let body = new Body([]);
         if (this.tokens.length > 0) {
             this.consumeStatementSeparators(true);
 
@@ -536,8 +521,7 @@ export class Parser {
             extendsToken,
             parentInterfaceName,
             body,
-            endInterfaceToken,
-            this.currentNamespaceName
+            endInterfaceToken
         );
         this._references.interfaceStatements.push(statement);
         this.exitAnnotationBlock(parentAnnotations);
@@ -545,7 +529,7 @@ export class Parser {
     }
 
     private enumDeclaration(): EnumStatement {
-        const result = new EnumStatement({} as any, [], this.currentNamespaceName);
+        const result = new EnumStatement({} as any, []);
         this.warnIfNotBrighterScriptMode('enum declarations');
 
         const parentAnnotations = this.enterAnnotationBlock();
@@ -599,10 +583,6 @@ export class Parser {
 
         //consume the final `end interface` token
         result.tokens.endEnum = this.consumeToken(TokenKind.EndEnum);
-
-        if (result.name) {
-            this.currentSymbolTable.addSymbol(result.tokens.name.text, result.tokens.name.range, DynamicType.instance);
-        }
 
         this._references.enumStatements.push(result);
         this.exitAnnotationBlock(parentAnnotations);
@@ -682,9 +662,6 @@ export class Parser {
                     //refer to this statement as parent of the expression
                     functionStatement.func.functionStatement = decl as MethodStatement;
 
-                    //add the `super` symbol to class methods
-                    funcDeclaration.func.symbolTable.addSymbol('super', undefined, DynamicType.instance);
-
                     //fields
                 } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
 
@@ -730,13 +707,8 @@ export class Parser {
             body,
             endingKeyword,
             extendsKeyword,
-            parentClassName,
-            this.currentNamespaceName
+            parentClassName
         );
-
-        if (className) {
-            this.currentSymbolTable.addSymbol(className.text, className.range, DynamicType.instance);
-        }
 
         this._references.classStatements.push(result);
         this.exitAnnotationBlock(parentAnnotations);
@@ -908,13 +880,8 @@ export class Parser {
                 rightParen,
                 asToken,
                 typeToken,
-                this.currentFunctionExpression,
-                this.currentNamespaceName,
-                this.currentSymbolTable
+                this.currentFunctionExpression
             );
-            if (!func.symbolTable.hasSymbol('m')) {
-                func.symbolTable.addSymbol('m', undefined, DynamicType.instance);
-            }
             //if there is a parent function, register this function with the parent
             if (this.currentFunctionExpression) {
                 this.currentFunctionExpression.childFunctionExpressions.push(func);
@@ -924,9 +891,6 @@ export class Parser {
             if (!onlyCallableAsMember && name) {
                 const funcType = func.getFunctionType();
                 funcType.setName(name.text);
-
-                // add the function as declared to the current symbol table
-                this.currentSymbolTable.addSymbol(name.text, name.range, funcType);
             }
 
             this._references.functionExpressions.push(func);
@@ -967,24 +931,9 @@ export class Parser {
             if (isAnonymous) {
                 return func;
             } else {
-                let result = new FunctionStatement(name, func, this.currentNamespaceName);
+                let result = new FunctionStatement(name, func);
                 func.functionStatement = result;
                 this._references.functionStatements.push(result);
-
-                // Add the transpiled name for namespace functions
-                // to consider an edge case when defining namespaces in .bs files
-                // and using them in .brs files.
-                if (func.namespaceName) {
-                    const transpiledNamespaceFunctionName = result.getName(ParseMode.BrightScript);
-                    const funcType = func.getFunctionType();
-                    funcType.setName(transpiledNamespaceFunctionName);
-
-                    this.symbolTable.addSymbol(
-                        transpiledNamespaceFunctionName,
-                        name.range,
-                        funcType
-                    );
-                }
 
                 return result;
             }
@@ -1035,8 +984,7 @@ export class Parser {
             name,
             typeToken,
             defaultValue,
-            asToken,
-            this.currentNamespaceName
+            asToken
         );
     }
 
@@ -1059,7 +1007,7 @@ export class Parser {
         if (operator.kind === TokenKind.Equal) {
             result = new AssignmentStatement(operator, name, value, this.currentFunctionExpression);
         } else {
-            const nameExpression = new VariableExpression(name, this.currentNamespaceName);
+            const nameExpression = new VariableExpression(name);
             result = new AssignmentStatement(
                 operator,
                 name,
@@ -1074,7 +1022,6 @@ export class Parser {
             this._references.expressions.add(result);
         }
 
-        this.currentSymbolTable.addSymbol(name.text, name.range, DynamicType.instance);
         this._references.assignmentStatements.push(result);
         return result;
     }
@@ -1310,8 +1257,6 @@ export class Parser {
             throw this.lastDiagnosticAsError();
         }
 
-        this.currentSymbolTable.addSymbol(name.text, name.range, DynamicType.instance);
-
         this.consumeStatementSeparators();
 
         let body = this.block(TokenKind.EndFor, TokenKind.Next);
@@ -1373,15 +1318,11 @@ export class Parser {
 
         let name = this.getNamespacedVariableNameExpression();
         //set the current namespace name
-        let result = new NamespaceStatement(keyword, name, null, null, this.currentSymbolTable);
-        this.currentNamespace = result;
+        let result = new NamespaceStatement(keyword, name, null, null);
 
         this.globalTerminators.push([TokenKind.EndNamespace]);
         let body = this.body();
         this.globalTerminators.pop();
-
-        //unset the current namespace name
-        this.currentNamespace = undefined;
 
         let endKeyword: Token;
         if (this.check(TokenKind.EndNamespace)) {
@@ -1401,14 +1342,6 @@ export class Parser {
         //cache the range property so that plugins can't affect it
         result.cacheRange();
 
-        if (result.name) {
-            this.symbolTable.addSymbol(
-                result.name.split('.')[0],
-                result.nameExpression.range,
-                DynamicType.instance
-            );
-        }
-
         return result;
     }
 
@@ -1427,7 +1360,7 @@ export class Parser {
         if (firstIdentifier) {
             // force it into an identifier so the AST makes some sense
             firstIdentifier.kind = TokenKind.Identifier;
-            const varExpr = new VariableExpression(firstIdentifier, null);
+            const varExpr = new VariableExpression(firstIdentifier);
             expr = varExpr;
 
             //consume multiple dot identifiers (i.e. `Name.Space.Can.Have.Many.Parts`)
@@ -1494,10 +1427,7 @@ export class Parser {
             const: constToken,
             name: nameToken,
             equals: equalToken
-        }, expression, this.currentNamespaceName);
-        if (nameToken) {
-            this.currentSymbolTable.addSymbol(nameToken.text, nameToken.range, DynamicType.instance);
-        }
+        }, expression);
         this._references.constStatements.push(statement);
         return statement;
     }
@@ -1721,9 +1651,6 @@ export class Parser {
         } else {
             statement.tokens.endTry = this.advance();
         }
-        if (exceptionVarToken) {
-            this.currentSymbolTable.addSymbol(exceptionVarToken.text, exceptionVarToken.range, DynamicType.instance);
-        }
         return statement;
     }
 
@@ -1775,9 +1702,6 @@ export class Parser {
             });
         }
         let rightSquareBracket = this.tryConsume(DiagnosticMessages.missingRightSquareBracketAfterDimIdentifier(), TokenKind.RightSquareBracket);
-        if (identifier) {
-            this.currentSymbolTable.addSymbol(identifier.text, identifier.range, DynamicType.instance);
-        }
         return new DimStatement(dim, identifier, leftSquareBracket, expressions, rightSquareBracket);
     }
 
@@ -2570,7 +2494,7 @@ export class Parser {
             TokenKind.RightParen
         );
 
-        let expression = new CallExpression(callee, openingParen, closingParen, args, this.currentNamespaceName);
+        let expression = new CallExpression(callee, openingParen, closingParen, args);
         if (addToCallExpressionList) {
             this.callExpressions.push(expression);
         }
@@ -2631,7 +2555,7 @@ export class Parser {
                 return this.templateString(true);
 
             case this.matchAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers):
-                return new VariableExpression(this.previous() as Identifier, this.currentNamespaceName);
+                return new VariableExpression(this.previous() as Identifier);
 
             case this.match(TokenKind.LeftParen):
                 let left = this.previous();
@@ -2652,7 +2576,7 @@ export class Parser {
                 let token = Object.assign(this.previous(), {
                     kind: TokenKind.Identifier
                 }) as Identifier;
-                return new VariableExpression(token, this.currentNamespaceName);
+                return new VariableExpression(token);
 
             case this.checkAny(TokenKind.Function, TokenKind.Sub):
                 return this.anonymousFunction();
@@ -3103,7 +3027,7 @@ export class Parser {
                 this._references.libraryStatements.push(s);
             },
             FunctionExpression: (expression, parent) => {
-                if (!isClassMethodStatement(parent)) {
+                if (!isMethodStatement(parent)) {
                     this._references.functionExpressions.push(expression);
                 }
             },

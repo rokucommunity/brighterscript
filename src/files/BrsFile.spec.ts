@@ -2787,12 +2787,14 @@ describe('BrsFile', () => {
             it('sets invalid on empty callfunc', () => {
                 testTranspile(`
                     sub main()
+                        node = invalid
                         node@.doSomething()
                         m.top.node@.doSomething()
                         m.top.node@.doSomething(1)
                     end sub
                 `, `
                     sub main()
+                        node = invalid
                         node.callfunc("doSomething", invalid)
                         m.top.node.callfunc("doSomething", invalid)
                         m.top.node.callfunc("doSomething", 1)
@@ -2803,10 +2805,12 @@ describe('BrsFile', () => {
             it('includes original arguments', () => {
                 testTranspile(`
                     sub main()
+                        node = invalid
                         node@.doSomething(1, true, m.top.someVal)
                     end sub
                 `, `
                     sub main()
+                        node = invalid
                         node.callfunc("doSomething", 1, true, m.top.someVal)
                     end sub
                 `);
@@ -2957,6 +2961,7 @@ describe('BrsFile', () => {
     describe('getTypedef', () => {
         function testTypedef(original: string, expected: string) {
             let file = program.setFile<BrsFile>('source/main.brs', original);
+            program.validate();
             expect(file.getTypedef().trimEnd()).to.eql(expected);
         }
 
@@ -3339,6 +3344,7 @@ describe('BrsFile', () => {
                     const CHARLIE = true
                 end namespace
             `);
+            program.validate();
             //print alpha.beta.char|lie
             expect(program.getDefinition(file.srcPath, Position.create(2, 41))).to.eql([{
                 uri: URI.file(file.srcPath).toString(),
