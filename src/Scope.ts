@@ -399,7 +399,7 @@ export class Scope {
                         result.push(comp.file);
                     }
                 } else {
-                    let file = this.program.getFileByPkgPath(dependency);
+                    let file = this.program.getFile(dependency);
                     if (file) {
                         result.push(file);
                     }
@@ -415,10 +415,13 @@ export class Scope {
      */
     public getDiagnostics() {
         //add diagnostics from every referenced file
-        const diagnostics: BsDiagnostic[] = this.getOwnFiles()
-            .map(x => x.diagnostics ?? [])
-            .flat()
-            //filter out diangostics that match any of the comment flags
+        const diagnostics: BsDiagnostic[] = [
+            //diagnostics raised on this scope
+            ...this.diagnostics,
+            //get diagnostics from all files
+            ...this.getOwnFiles().map(x => x.diagnostics ?? []).flat()
+        ]
+            //exclude diangostics that match any of the comment flags
             .filter((x) => {
                 return !util.diagnosticIsSuppressed(x);
             });
