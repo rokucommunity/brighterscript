@@ -1,13 +1,13 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import * as path from 'path';
-import type { CompletionItem, Position, Diagnostic, Hover } from 'vscode-languageserver';
+import type { CompletionItem, Position, Diagnostic } from 'vscode-languageserver';
 import { CancellationTokenSource, CompletionItemKind, SymbolKind, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
-import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, BscFile } from '../interfaces';
+import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink } from '../interfaces';
 import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
@@ -23,12 +23,13 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isConstStatement, isBrsFile, isClassMethodStatement } from '../astUtils/reflection';
+import { isCallExpression, isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement, isBrsFile, isClassMethodStatement } from '../astUtils/reflection';
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
+import type { BscFile } from './BscFile';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -63,6 +64,8 @@ export class BrsFile implements BscFile {
             this.resolveTypedef();
         }
     }
+
+    public type = 'BrsFile';
 
     /**
      * The absolute path to the source location for this file
@@ -253,11 +256,6 @@ export class BrsFile implements BscFile {
     public typedefFile?: BrsFile;
 
     /**
-     * An unsubscribe function for the dependencyGraph subscription
-     */
-    private unsubscribeFromDependencyGraph: () => void;
-
-    /**
      * Find and set the typedef variables (if a matching typedef file exists)
      */
     private resolveTypedef() {
@@ -265,27 +263,30 @@ export class BrsFile implements BscFile {
         this.hasTypedef = !!this.typedefFile;
     }
 
+    public onDependenciesChanged() {
+        this.resolveTypedef();
+    }
+
     /**
      * Attach the file to the dependency graph so it can monitor changes.
      * Also notify the dependency graph of our current dependencies so other dependents can be notified.
+     * @deprecated this does nothing. This functionality is now handled by the file api and will be deleted in v1
      */
-    public attachDependencyGraph(dependencyGraph: DependencyGraph) {
-        this.unsubscribeFromDependencyGraph?.();
+    public attachDependencyGraph(dependencyGraph: DependencyGraph) { }
 
-        //event that fires anytime a dependency changes
-        this.unsubscribeFromDependencyGraph = dependencyGraph.onchange(this.dependencyGraphKey, () => {
-            this.resolveTypedef();
-        });
-
-        const dependencies = this.ownScriptImports.filter(x => !!x.pkgPath).map(x => x.pkgPath.toLowerCase());
+    /**
+     * The list of files that this file depends on
+     */
+    public get dependencies() {
+        const result = this.ownScriptImports.filter(x => !!x.pkgPath).map(x => x.pkgPath.toLowerCase());
 
         //if this is a .brs file, watch for typedef changes
         if (this.extension === '.brs') {
-            dependencies.push(
+            result.push(
                 util.getTypedefPath(this.pkgPath)
             );
         }
-        dependencyGraph.addOrReplace(this.dependencyGraphKey, dependencies);
+        return result;
     }
 
     /**
@@ -926,7 +927,7 @@ export class BrsFile implements BscFile {
                     if (!results.has(member.name.text.toLowerCase())) {
                         results.set(member.name.text.toLowerCase(), {
                             label: member.name.text,
-                            kind: isClassFieldStatement(member) ? CompletionItemKind.Field : CompletionItemKind.Function
+                            kind: isFieldStatement(member) ? CompletionItemKind.Field : CompletionItemKind.Function
                         });
                     }
                 }
@@ -1345,7 +1346,7 @@ export class BrsFile implements BscFile {
             symbolKind = SymbolKind.Function;
         } else if (isMethodStatement(statement)) {
             symbolKind = SymbolKind.Method;
-        } else if (isClassFieldStatement(statement)) {
+        } else if (isFieldStatement(statement)) {
             symbolKind = SymbolKind.Field;
         } else if (isNamespaceStatement(statement)) {
             symbolKind = SymbolKind.Namespace;
@@ -1367,7 +1368,7 @@ export class BrsFile implements BscFile {
             return;
         }
 
-        const name = isClassFieldStatement(statement) ? statement.name.text : statement.getName(ParseMode.BrighterScript);
+        const name = isFieldStatement(statement) ? statement.name.text : statement.getName(ParseMode.BrighterScript);
         return DocumentSymbol.create(name, '', symbolKind, statement.range, statement.range, children);
     }
 
@@ -1762,8 +1763,6 @@ export class BrsFile implements BscFile {
 
     public dispose() {
         this._parser?.dispose();
-        //unsubscribe from any DependencyGraph subscriptions
-        this.unsubscribeFromDependencyGraph?.();
 
         //deleting these properties result in lower memory usage (garbage collection is magic!)
         delete this.fileContents;

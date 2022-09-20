@@ -1,10 +1,11 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
-import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideHoverEvent } from '../interfaces';
+import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideFileEvent, ProvideHoverEvent } from '../interfaces';
 import type { Program } from '../Program';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
+import { FileProvider } from './fileProviders/FileProvider';
 import { HoverProcessor } from './hover/HoverProcessor';
 import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
 import { BrsFilePreTranspileProcessor } from './transpile/BrsFilePreTranspileProcessor';
@@ -14,6 +15,10 @@ import { XmlFileValidator } from './validation/XmlFileValidator';
 
 export class BscPlugin implements CompilerPlugin {
     public name = 'BscPlugin';
+
+    public provideFile(event: ProvideFileEvent) {
+        new FileProvider(event).process();
+    }
 
     public onGetCodeActions(event: OnGetCodeActionsEvent) {
         new CodeActionsProcessor(event).process();

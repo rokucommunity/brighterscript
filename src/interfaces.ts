@@ -5,7 +5,7 @@ import type { XmlFile } from './files/XmlFile';
 import type { FunctionScope } from './FunctionScope';
 import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
-import type { Program, SourceObj, TranspileObj } from './Program';
+import type { Program, TranspileObj } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { FunctionStatement, Statement } from './parser/Statement';
 import type { Expression } from './parser/Expression';
@@ -14,6 +14,7 @@ import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
 import type { Token } from './lexer/Token';
+import type { BscFile } from './files/BscFile';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -21,35 +22,6 @@ export interface BsDiagnostic extends Diagnostic {
      * A generic data container where additional details of the diagnostic can be stored. These are stripped out before being sent to a languageclient, and not printed to the console.
      */
     data?: any;
-}
-
-export interface BscFile {
-    /**
-     * The pkgPath to the file (without the `pkg:` prefix)
-     */
-    pkgPath: string;
-    /**
-     * The absolute path to the source file
-     */
-    srcPath: string;
-    /**
-     * The key used to identify this file in the dependency graph.
-     * If omitted, the pkgPath is used.
-     */
-    dependencyGraphKey?: string;
-    /**
-     * A list of diagnostics associated with this file
-     */
-    diagnostics: BsDiagnostic[];
-    /**
-     * Indicates whether the file has been validated. This flag is auto-set by the program during the validation cycle.
-     * You can set this to `true` to skip validation for this file or if you've validated the file yourself already
-     */
-    isValidated?: boolean;
-    /**
-     * Dispose of any resources the file may have created.
-     */
-    dispose?(): void;
 }
 
 export interface Callable {
@@ -275,7 +247,7 @@ export interface CompilerPlugin {
      */
     afterProvideFile?: PluginHandler<AfterProvideFileEvent>;
 
-    beforeFileParse?: (source: SourceObj) => void;
+    beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
     afterFileParse?: (file: BscFile) => void;
 
     /**
@@ -299,9 +271,9 @@ export interface CompilerPlugin {
 }
 export type PluginHandler<T, R = void> = (event: T) => R;
 
-export interface OnGetCodeActionsEvent {
+export interface OnGetCodeActionsEvent<TFile extends BscFile = BscFile> {
     program: Program;
-    file: BscFile;
+    file: TFile;
     range: Range;
     scopes: Scope[];
     diagnostics: BsDiagnostic[];
@@ -418,27 +390,44 @@ export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
     editor: Editor;
 }
 
-export interface BeforeProvideFileEvent {
+type BeforeProvideFileEvent<TFile extends BscFile = BscFile> = ProvideFileEvent<TFile>;
+export interface ProvideFileEvent<TFile extends BscFile = BscFile> {
+    /**
+     * The srcPath for the file
+     */
     srcPath: string;
     /**
+     * The dest path for the file (i.e. the pkgPath without leading `pkg:/` )
+     */
+    destPath: string;
+    /**
+     * A function that returns the data for this file. This is a function to allow lazy-loading of the data
+     * (for situations like images where you may never need to actually load the file)
+     */
+    getFileData: () => Buffer;
+    /**
      * An array of files that should be added to the program as a result of this event
      */
-    files: BscFile[];
+    files: TFile[];
+    /**
+     * The program for this event
+     */
+    program: Program;
 }
-export interface ProvideFileEvent {
+type AfterProvideFileEvent<TFile extends BscFile = BscFile> = ProvideFileEvent<TFile>;
+
+
+export interface BeforeFileParseEvent {
     srcPath: string;
     /**
-     * An array of files that should be added to the program as a result of this event
+     * @deprecated use `srcPath` instead
      */
-    files: BscFile[];
+    pathAbsolute: string;
+    source: string;
 }
-export interface AfterProvideFileEvent<TFile extends BscFile = BscFile> {
-    file: TFile;
-    /**
-     * An array of files that should be added to the program as a result of this event
-     */
-    files: BscFile[];
-}
+
+export type SourceObj = BeforeFileParseEvent;
+
 
 export interface SemanticToken {
     range: Range;

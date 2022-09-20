@@ -4,7 +4,7 @@ import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, FileLink } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
@@ -19,6 +19,7 @@ import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { isBrsFile, isClassMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
+import type { BscFile } from './files/BscFile';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -477,7 +478,7 @@ export class Scope {
         const files = this.getOwnFiles();
         for (const file of files) {
             //either XML components or files without a typedef
-            if (isXmlFile(file) || !file.hasTypedef) {
+            if (isXmlFile(file) || (isBrsFile(file) && !file.hasTypedef)) {
                 callback(file);
             }
         }
@@ -493,11 +494,13 @@ export class Scope {
 
         //get callables from own files
         this.enumerateOwnFiles((file) => {
-            for (let callable of file.callables) {
-                result.push({
-                    callable: callable,
-                    scope: this
-                });
+            if (isBrsFile(file)) {
+                for (let callable of file.callables) {
+                    result.push({
+                        callable: callable,
+                        scope: this
+                    });
+                }
             }
         });
         return result;
@@ -660,11 +663,13 @@ export class Scope {
 
         //do many per-file checks
         this.enumerateBrsFiles((file) => {
-            this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
-            this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
-            this.diagnosticDetectFunctionCollisions(file);
-            this.detectVariableNamespaceCollisions(file);
-            this.diagnosticDetectInvalidFunctionExpressionTypes(file);
+            if (isBrsFile(file)) {
+                this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
+                this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
+                this.diagnosticDetectFunctionCollisions(file);
+                this.detectVariableNamespaceCollisions(file);
+                this.diagnosticDetectInvalidFunctionExpressionTypes(file);
+            }
         });
     }
 
@@ -769,7 +774,7 @@ export class Scope {
     /**
      * Find various function collisions
      */
-    private diagnosticDetectFunctionCollisions(file: BscFile) {
+    private diagnosticDetectFunctionCollisions(file: BrsFile) {
         for (let func of file.callables) {
             const funcName = func.getName(ParseMode.BrighterScript);
             const lowerFuncName = funcName?.toLowerCase();
@@ -854,7 +859,7 @@ export class Scope {
      * @param file
      * @param callableContainersByLowerName
      */
-    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
+    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BrsFile, callableContainersByLowerName: CallableContainerMap) {
         //validate all function calls
         for (let expCall of file.functionCalls) {
             let callableContainersWithThisName = callableContainersByLowerName.get(expCall.name.toLowerCase());
@@ -893,7 +898,7 @@ export class Scope {
      * @param file
      * @param callableContainerMap
      */
-    private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: CallableContainerMap) {
+    private diagnosticDetectShadowedLocalVars(file: BrsFile, callableContainerMap: CallableContainerMap) {
         const classMap = this.getClassMap();
         //loop through every function scope
         for (let scope of file.functionScopes) {
@@ -1161,7 +1166,7 @@ export class Scope {
         let results = new Map<string, CompletionItem>();
         let filesSearched = new Set<BscFile>();
         for (const file of this.getAllFiles()) {
-            if (isXmlFile(file) || filesSearched.has(file)) {
+            if (!isBrsFile(file) || filesSearched.has(file)) {
                 continue;
             }
             filesSearched.add(file);

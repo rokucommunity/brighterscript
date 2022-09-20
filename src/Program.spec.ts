@@ -22,6 +22,8 @@ import { isBrsFile } from './astUtils/reflection';
 import { TokenKind } from './lexer/TokenKind';
 import type { LiteralExpression } from './parser/Expression';
 import type { AstEditor } from './astUtils/AstEditor';
+import type { ProvideFileEvent } from './interfaces';
+import * as path from 'path';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -594,6 +596,7 @@ describe('Program', () => {
     });
 
     describe('setFile', () => {
+
         it('links xml scopes based on xml parent-child relationships', () => {
             program.setFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -683,6 +686,43 @@ describe('Program', () => {
             expectDiagnostics(program, [
                 DiagnosticMessages.scriptImportCaseMismatch(s`components\\COMPONENT1.brs`)
             ]);
+        });
+
+        describe('multiple files', () => {
+            beforeEach(() => {
+                program.plugins.add({
+                    name: 'test',
+                    provideFile: (event: ProvideFileEvent) => {
+                        //every .test file also produces a secondary file
+                        if (event.srcPath.endsWith('.component')) {
+                            const fileName = path.parse(event.srcPath).name;
+                            event.files.push({
+                                type: 'XmlFile',
+                                srcPath: event.srcPath,
+                                pkgPath: `components/${fileName}.xml`
+                            }, {
+                                type: 'BrsFile',
+                                srcPath: `virtual:/${fileName}.brs`,
+                                pkgPath: `components/${fileName}.brs`
+                            });
+                        }
+                    }
+                });
+            });
+
+            it('supports virtual file contributions', () => {
+                //add the file
+                program.setFile('components/ButtonPrimary.component', ``);
+                //both virtual files should exist
+                expect(program.hasFile('components/ButtonPrimary.xml')).to.be.true;
+                expect(program.hasFile('components/ButtonPrimary.brs')).to.be.true;
+
+                //remove the file
+                program.removeFile('components/ButtonPrimary.component');
+                //the virtual files should be missing
+                expect(program.hasFile('components/ButtonPrimary.xml')).to.be.false;
+                expect(program.hasFile('components/ButtonPrimary.brs')).to.be.false;
+            });
         });
     });
 
@@ -1690,7 +1730,7 @@ describe('Program', () => {
             program.setFile('source/main.brs', '');
             let completions = program.getCompletions(`${rootDir}/source/main.brs`, position);
             //get the name of all global completions
-            const globalCompletions = program.globalScope.getAllFiles().flatMap(x => x.getCompletions(position)).map(x => x.label);
+            const globalCompletions = program.globalScope.getAllFiles().flatMap(x => (x as BrsFile).getCompletions(position)).map(x => x.label);
             //filter out completions from global scope
             completions = completions.filter(x => !globalCompletions.includes(x.label));
             expect(completions).to.be.empty;

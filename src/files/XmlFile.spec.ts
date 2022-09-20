@@ -866,9 +866,7 @@ describe('XmlFile', () => {
         });
 
         it('returns the XML unmodified if needsTranspiled is false', () => {
-            let file = program.setFile(
-                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
-                trim`
+            let file = program.setFile<XmlFile>('components/SimpleScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <!-- should stay as-is -->
                 <component name="SimpleScene" extends="Scene" >
@@ -911,9 +909,7 @@ describe('XmlFile', () => {
 
         it('simple source mapping includes sourcemap reference', () => {
             program.options.sourceMap = true;
-            let file = program.setFile(
-                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
-                trim`
+            let file = program.setFile<XmlFile>('components/SimpleScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene">
                 </component>
@@ -926,9 +922,7 @@ describe('XmlFile', () => {
 
         it('AST-based source mapping includes sourcemap reference', () => {
             program.options.sourceMap = true;
-            let file = program.setFile(
-                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
-                trim`
+            let file = program.setFile<XmlFile>('components/SimpleScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene">
                 </component>
@@ -973,12 +967,12 @@ describe('XmlFile', () => {
             name: 'Xml diagnostic test',
             afterFileParse: (file) => {
                 if (file.srcPath.endsWith('.xml')) {
-                    file.addDiagnostics([{
+                    file.diagnostics.push({
                         file: file,
                         message: 'Test diagnostic',
                         range: Range.create(0, 0, 0, 0),
                         code: 9999
-                    }]);
+                    });
                 }
             }
         });

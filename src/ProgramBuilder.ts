@@ -2,7 +2,7 @@ import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import { rokuDeploy } from 'roku-deploy';
 import type { BsConfig } from './BsConfig';
-import type { BscFile, BsDiagnostic, FileObj, FileResolver } from './interfaces';
+import type { BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
@@ -12,6 +12,9 @@ import PluginInterface from './PluginInterface';
 import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
 import * as requireRelative from 'require-relative';
+import type { BrsFile } from './files/BrsFile';
+import type { BscFile } from './files/BscFile';
+import { createBscFile } from './files/BscFile';
 
 /**
  * A runner class that handles
@@ -68,14 +71,13 @@ export class ProgramBuilder {
     public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
         let file: BscFile = this.program.getFile(srcPath);
         if (!file) {
-            file = {
+            file = createBscFile({
+                type: 'BrsFile',
                 pkgPath: this.program.getPkgPath(srcPath),
                 pathAbsolute: srcPath, //keep this for backwards-compatibility. TODO remove in v1
                 srcPath: srcPath,
-                getDiagnostics: () => {
-                    return [<any>diagnostic];
-                }
-            } as BscFile;
+                diagnostics: diagnostic
+            } as any);
         }
         diagnostic.file = file;
         this.staticDiagnostics.push(<any>diagnostic);
@@ -304,7 +306,7 @@ export class ProgramBuilder {
             //load the file text
             const file = this.program?.getFile(srcPath);
             //get the file's in-memory contents if available
-            const lines = file?.fileContents?.split(/\r?\n/g) ?? [];
+            const lines = (file as BrsFile)?.fileContents?.split(/\r?\n/g) ?? [];
 
             for (let diagnostic of sortedDiagnostics) {
                 //default the severity to error if undefined

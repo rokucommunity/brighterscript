@@ -4,8 +4,9 @@ import { codeActionUtil } from '../../CodeActionUtil';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
+import type { BscFile } from '../../files/BscFile';
 import type { XmlFile } from '../../files/XmlFile';
-import type { BscFile, OnGetCodeActionsEvent } from '../../interfaces';
+import type { OnGetCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
 
@@ -75,10 +76,10 @@ export class CodeActionsProcessor {
             diagnostic,
             lowerName,
             [
-                ...this.event.file.program.findFilesForFunction(lowerName),
-                ...this.event.file.program.findFilesForClass(lowerName),
-                ...this.event.file.program.findFilesForNamespace(lowerName),
-                ...this.event.file.program.findFilesForEnum(lowerName)
+                ...this.event.program.findFilesForFunction(lowerName),
+                ...this.event.program.findFilesForClass(lowerName),
+                ...this.event.program.findFilesForNamespace(lowerName),
+                ...this.event.program.findFilesForEnum(lowerName)
             ]
         );
     }
@@ -92,7 +93,7 @@ export class CodeActionsProcessor {
         this.suggestImports(
             diagnostic,
             lowerClassName,
-            this.event.file.program.findFilesForClass(lowerClassName)
+            this.event.program.findFilesForClass(lowerClassName)
         );
     }
 

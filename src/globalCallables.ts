@@ -994,7 +994,7 @@ This function creates an roBitmap out of the background image file and returns a
             isOptional: false
         }]
     }
-] as Callable[];
+] as unknown as Callable[];
 
 export let globalCallables = [...mathFunctions, ...runtimeFunctions, ...globalUtilityFunctions, ...globalStringFunctions, ...programStatementFunctions];
 for (let callable of globalCallables) {

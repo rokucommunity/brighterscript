@@ -4,7 +4,7 @@ import { SourceNode } from 'source-map';
 import type { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticCodeMap, diagnosticCodes } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
-import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag, BscFile } from '../interfaces';
+import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
 import SGParser, { rangeFromTokenValue } from '../parser/SGParser';
@@ -16,6 +16,7 @@ import { SGScript } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';
+import type { BscFile } from './BscFile';
 
 export class XmlFile implements BscFile {
     constructor(
@@ -33,6 +34,8 @@ export class XmlFile implements BscFile {
             this.pkgPath.replace('.xml', '.brs')
         ];
     }
+
+    public type = 'XmlFile';
 
     /**
      * The absolute path to the source location for this file
@@ -248,23 +251,25 @@ export class XmlFile implements BscFile {
 
     private dependencyGraph: DependencyGraph;
 
+    public onDependenciesChanged() {
+        this.logDebug('clear cache because dependency graph changed');
+        this.cache.clear();
+    }
+
     /**
      * Attach the file to the dependency graph so it can monitor changes.
      * Also notify the dependency graph of our current dependencies so other dependents can be notified.
+     * @deprecated this does nothing. This functionality is now handled by the file api and will be deleted in v1
      */
     public attachDependencyGraph(dependencyGraph: DependencyGraph) {
         this.dependencyGraph = dependencyGraph;
-        if (this.unsubscribeFromDependencyGraph) {
-            this.unsubscribeFromDependencyGraph();
-        }
+    }
 
-        //anytime a dependency changes, clean up some cached values
-        this.unsubscribeFromDependencyGraph = dependencyGraph.onchange(this.dependencyGraphKey, () => {
-            this.logDebug('clear cache because dependency graph changed');
-            this.cache.clear();
-        });
-
-        let dependencies = [
+    /**
+     * The list of files that this file depends on
+     */
+    public get dependencies() {
+        const dependencies = [
             ...this.scriptTagImports.map(x => x.pkgPath.toLowerCase())
         ];
         //if autoImportComponentScript is enabled, add the .bs and .brs files with the same name
@@ -289,7 +294,7 @@ export class XmlFile implements BscFile {
         if (this.parentComponentName) {
             dependencies.push(this.parentComponentDependencyGraphKey);
         }
-        this.dependencyGraph.addOrReplace(this.dependencyGraphKey, dependencies);
+        return dependencies;
     }
 
     /**

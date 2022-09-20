@@ -196,7 +196,7 @@ describe('BrsFile BrighterScript classes', () => {
 
     describe('transpile', () => {
         it('does not mess with AST when injecting `super()` call', async () => {
-            const file = program.setFile('source/classes.bs', `
+            const file = program.setFile<BrsFile>('source/classes.bs', `
                 class Parent
                 end class
 
