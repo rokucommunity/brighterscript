@@ -7,11 +7,12 @@ import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
 import { isCallExpression, isFieldStatement, isMethodStatement, isCustomType, isNamespaceStatement } from '../astUtils/reflection';
-import type { BscFile, BsDiagnostic } from '../interfaces';
+import type { BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer/TokenKind';
 import { DynamicType } from '../types/DynamicType';
+import type { BscFile } from '../files/BscFile';
 
 export class BsClassValidator {
     private scope: Scope;

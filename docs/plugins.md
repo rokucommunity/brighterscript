@@ -149,16 +149,19 @@ export interface CompilerPlugin {
     name: string;
     //program events
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    afterProgramCreate?: (program: Program) => void;
+
     beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+
     beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterProgramCreate?: (program: Program) => void;
+
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
+
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
-    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
 
     /**
      * Emitted before the program starts collecting completions
@@ -186,22 +189,53 @@ export interface CompilerPlugin {
      */
     afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
 
-    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;
+
     beforeScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
+
     beforeScopeValidate?: ValidateHandler;
     onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
     afterScopeValidate?: ValidateHandler;
-    //file events
-    beforeFileParse?: (source: SourceObj) => void;
-    afterFileParse?: (file: File) => void;
-    afterFileValidate?: (file: File) => void;
-    beforeFileTranspile?: (entry: TranspileObj) => void;
-    afterFileTranspile?: (entry: TranspileObj) => void;
-    beforeFileDispose?: (file: File) => void;
-    afterFileDispose?: (file: File) => void;
+
+    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
+
+    /**
+     * Called before a file is added to the program. This is triggered for every file (even virtual files emitted by other files)
+     */
+    beforeProvideFile?: PluginHandler<BeforeProvideFileEvent>;
+    /**
+     * Give plugins the opportunity to handle parsing/validating a file
+     */
+    provideFile?: PluginHandler<ProvideFileEvent>;
+    /**
+     * Called after a file was added to the program.
+     */
+    afterProvideFile?: PluginHandler<AfterProvideFileEvent>;
+
+    beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
+    afterFileParse?: (file: BscFile) => void;
+
+    /**
+     * Called before each file is validated
+     */
+    beforeFileValidate?: PluginHandler<BeforeFileValidateEvent>;
+    /**
+     * Called during the file validation process. If your plugin contributes file validations, this is a good place to contribute them.
+     */
+    onFileValidate?: PluginHandler<OnFileValidateEvent>;
+    /**
+     * Called after each file is validated
+     */
+    afterFileValidate?: (file: BscFile) => void;
+
+    beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
+    afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
+
+    beforeFileDispose?: (file: BscFile) => void;
+    afterFileDispose?: (file: BscFile) => void;
 }
 
 // related types:

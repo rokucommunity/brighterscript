@@ -2,7 +2,7 @@ import type { BsDiagnostic } from '.';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import type { Project } from './LanguageServer';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { BscFile } from './interfaces';
+import type { BscFile } from './files/BscFile';
 import util from './util';
 import { expect } from 'chai';
 

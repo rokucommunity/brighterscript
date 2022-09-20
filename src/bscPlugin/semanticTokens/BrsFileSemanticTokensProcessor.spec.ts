@@ -1,7 +1,8 @@
 import { expect } from 'chai';
 import { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver-protocol';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BscFile, SemanticToken } from '../../interfaces';
+import type { BscFile } from '../../files/BscFile';
+import type { SemanticToken } from '../../interfaces';
 import { Program } from '../../Program';
 import { expectZeroDiagnostics } from '../../testHelpers.spec';
 import { standardizePath as s, util } from '../../util';

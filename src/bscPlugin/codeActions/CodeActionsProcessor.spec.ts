@@ -1,10 +1,10 @@
 import { expect } from 'chai';
 import { URI } from 'vscode-uri';
 import type { Range } from 'vscode-languageserver';
-import type { BscFile } from '../../interfaces';
 import { Program } from '../../Program';
 import { expectCodeActions, trim } from '../../testHelpers.spec';
 import { standardizePath as s, util } from '../../util';
+import type { BscFile } from '../../files/BscFile';
 
 const rootDir = s`${process.cwd()}/.tmp/rootDir`;
 describe('CodeActionsProcessor', () => {

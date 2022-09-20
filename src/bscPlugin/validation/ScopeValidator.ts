@@ -3,7 +3,7 @@ import { isBrsFile, isLiteralExpression, isXmlScope } from '../../astUtils/refle
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
+import type { BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
 import type { EnumStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
@@ -13,6 +13,7 @@ import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import type { Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
+import type { BscFile } from '../../files/BscFile';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes

@@ -7,12 +7,12 @@ import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { Logger, LogLevel } from './Logger';
 import * as diagnosticUtils from './diagnosticUtils';
-import type { BscFile, BsDiagnostic } from '.';
-import { Range } from '.';
-import { DiagnosticSeverity } from 'vscode-languageserver';
+import { DiagnosticSeverity, Range } from 'vscode-languageserver';
 import { BrsFile } from './files/BrsFile';
 import { expectZeroDiagnostics } from './testHelpers.spec';
 import type { BsConfig } from './BsConfig';
+import type { BscFile } from './files/BscFile';
+import type { BsDiagnostic } from './interfaces';
 
 describe('ProgramBuilder', () => {
 
