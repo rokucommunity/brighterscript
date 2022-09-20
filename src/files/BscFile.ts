@@ -1,4 +1,4 @@
-import type { BsDiagnostic } from '../interfaces';
+import type { BsDiagnostic, CommentFlag } from '../interfaces';
 
 export interface BscFile {
     /**
@@ -44,6 +44,10 @@ export interface BscFile {
      * TODO do we need this property?
      */
     needsTranspiled?: boolean;
+    /**
+     * An array of comment-based flags that can be used to suppress diagnostics
+     */
+    commentFlags?: CommentFlag[];
     /**
      * An array of functions that will be called when this file gets destroyed (i.e. event handler disconnection functions)
      */

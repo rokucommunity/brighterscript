@@ -197,7 +197,7 @@ describe('Program', () => {
             const beforeFileParse = sinon.spy();
             const afterFileParse = sinon.spy();
             const afterFileValidate = sinon.spy();
-            program.plugins = new PluginInterface([{
+            program.plugins.add({
                 name: 'emits events for scope and file creation',
                 beforeProgramValidate: beforeProgramValidate,
                 afterProgramValidate: afterProgramValidate,
@@ -207,7 +207,7 @@ describe('Program', () => {
                 beforeFileParse: beforeFileParse,
                 afterFileParse: afterFileParse,
                 afterFileValidate: afterFileValidate
-            }], new Logger());
+            });
 
             let mainPath = s`${rootDir}/source/main.brs`;
             //add a new source file

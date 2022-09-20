@@ -440,8 +440,7 @@ export class Program {
                 //add a dependency graph key if missing
                 file.dependencyGraphKey ??= file.pkgPath.toLowerCase();
 
-                //register this file (and its dependencies) with the dependency graph
-                this.dependencyGraph.addOrReplace(file.dependencyGraphKey, file.dependencies ?? []);
+                this.assignFile(file);
 
                 //register a callback anytime this file's dependencies change
                 if (typeof file.onDependenciesChanged === 'function') {
@@ -450,6 +449,9 @@ export class Program {
                         this.dependencyGraph.onchange(file.dependencyGraphKey, file.onDependenciesChanged.bind(file))
                     );
                 }
+
+                //register this file (and its dependencies) with the dependency graph
+                this.dependencyGraph.addOrReplace(file.dependencyGraphKey, file.dependencies ?? []);
 
                 //if this is a `source` file, add it to the source scope's dependency list
                 if (file.pkgPath.startsWith(startOfSourcePkgPath)) {
@@ -466,10 +468,7 @@ export class Program {
                     //register this compoent now that we have parsed it and know its component name
                     this.registerComponent(file, scope);
                 }
-
-                this.assignFile(file);
             }
-
 
             return primaryFile;
         });

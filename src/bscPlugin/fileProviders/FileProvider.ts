@@ -4,7 +4,6 @@ import { BrsFile } from '../../files/BrsFile';
 import chalk from 'chalk';
 import { LogLevel } from '../../Logger';
 import { XmlFile } from '../../files/XmlFile';
-import { XmlScope } from '../../XmlScope';
 import { util } from '../../util';
 
 export class FileProvider {

@@ -1176,7 +1176,7 @@ describe('XmlFile', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('ignores warning from previous line just for the specified code', () => {
+        it('ignores a specific diagnostic on next line', () => {
             //component without a name attribute
             program.setFile<XmlFile>('components/file.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -1190,7 +1190,7 @@ describe('XmlFile', () => {
             ]);
         });
 
-        it('ignores warning from previous line comment', () => {
+        it('ignores all warnings from previous line comment', () => {
             //component without a name attribute
             program.setFile<XmlFile>('components/file.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -1205,7 +1205,7 @@ describe('XmlFile', () => {
             //component without a name attribute
             program.setFile<XmlFile>('components/file.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component> <!--bs:disable-line 1006-->
+                <component name="ButtonCustom"> <!--bs:disable-line 1006-->
                 </component>
             `);
             program.validate();

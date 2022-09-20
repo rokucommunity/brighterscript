@@ -2868,7 +2868,6 @@ describe('BrsFile', () => {
         });
     });
 
-
     describe('type definitions', () => {
         it('only exposes defined functions even if source has more', () => {
             //parse the .brs file first so it doesn't know about the typedef
@@ -3312,23 +3311,17 @@ describe('BrsFile', () => {
         });
 
         it('can load an absolute plugin which receives callbacks', () => {
-            program.plugins = new PluginInterface(
-                util.loadPlugins(tempDir, [
-                    s`${tempDir}/plugins/${pluginFileName}`
-                ]),
-                new Logger()
-            );
+            for (const plugin of util.loadPlugins(tempDir, [s`${tempDir}/plugins/${pluginFileName}`])) {
+                program.plugins.add(plugin);
+            }
             const file = program.setFile<any>('source/MAIN.brs', '');
             expect(file._customProp).to.exist;
         });
 
         it('can load a relative plugin which receives callbacks', () => {
-            program.plugins = new PluginInterface(
-                util.loadPlugins(tempDir, [
-                    `./plugins/${pluginFileName}`
-                ]),
-                new Logger()
-            );
+            for (const plugin of util.loadPlugins(tempDir, [`./plugins/${pluginFileName}`])) {
+                program.plugins.add(plugin);
+            }
             const file = program.setFile<any>('source/MAIN.brs', '');
             expect(file._customProp).to.exist;
         });

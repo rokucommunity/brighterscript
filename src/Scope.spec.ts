@@ -295,13 +295,6 @@ describe('Scope', () => {
                     A_B_C_ga()
                 end sub
             `);
-            program.setFile('source/main.xml', `
-                <?xml version="1.0" encoding="UTF-8"?>
-                    <component name="MyComponent" extends="Group">
-                    <script type="text/brightscript" uri="main.brs"/>
-                    <script type="text/brightscript" uri="ns.bs"/>
-                </component>
-            `);
             program.validate();
             expectZeroDiagnostics(program);
         });
