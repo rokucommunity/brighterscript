@@ -11,8 +11,11 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
         diagnosticFilters: ['**/*'],
         logLevel: 'error'
     });
-    //collect all the XML files
-    const xmlFiles = Object.values(builder.program.files).filter(x => x.extension === '.xml');
+    //collect all the XML file contents
+    const xmlFiles = Object.values(builder.program.files).filter(x => x.extension === '.xml').map(x => ({
+        pkgPath: x.pkgPath,
+        fileContents: x.fileContents
+    }));
     if (xmlFiles.length === 0) {
         console.log('[xml-parser] No XML files found in program');
         return;
