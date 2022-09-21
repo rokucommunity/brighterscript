@@ -29,7 +29,7 @@ import type { SourceMapGenerator } from 'source-map';
 import { rokuDeploy } from 'roku-deploy';
 import type { Statement } from './parser/AstNode';
 import type { File } from './files/File';
-import { GenericFile } from './files/GenericFile';
+import { AssetFile } from './files/AssetFile';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const startOfComponentsPkgPath = `components${path.sep}`;
@@ -418,10 +418,10 @@ export class Program {
             this.plugins.emit('provideFile', event);
             this.plugins.emit('afterProvideFile', event);
 
-            //if no files were provided, create a RawFile to represent it.
+            //if no files were provided, create a AssetFile to represent it.
             if (event.files.length === 0) {
                 event.files.push(
-                    new GenericFile(event.srcPath, event.destPath)
+                    new AssetFile(event.srcPath, event.destPath)
                 );
             }
 
