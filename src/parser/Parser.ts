@@ -2087,6 +2087,9 @@ export class Parser {
             ...DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression(),
             range: expressionStart.range
         });
+        // we can also add this expression to the references, for type checking purposes
+        this._references.expressions.add(expr);
+
         throw this.lastDiagnosticAsError();
     }
 
@@ -3318,7 +3321,7 @@ export class Parser {
         });
     }
     public getContainingExpression(currentToken: Token): Expression {
-        return [...this.references.expressions].find((cs) => util.rangeContains(cs.range, currentToken.range.start));
+        return [...this.references.expressions].find((cs) => util.rangeContainsRange(cs.range, currentToken.range));
     }
     public getContainingClass(currentToken: Token): ClassStatement {
         return this.references.classStatements.find((cs) => util.rangeContains(cs.range, currentToken.range.start));
