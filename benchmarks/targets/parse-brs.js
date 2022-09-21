@@ -11,8 +11,11 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
         diagnosticFilters: ['**/*'],
         logLevel: 'error'
     });
-    //collect all the XML files
-    const files = Object.values(builder.program.files).filter(x => ['.brs', '.bs', '.d.bs'].includes(x.extension));
+    //collect all the brs file contents
+    const files = Object.values(builder.program.files).filter(x => ['.brs', '.bs', '.d.bs'].includes(x.extension)).map(x => ({
+        pkgPath: x.pkgPath,
+        fileContents: x.fileContents
+    }));
     if (files.length === 0) {
         console.log('[parse-brs] No brs files found in program');
         return;
