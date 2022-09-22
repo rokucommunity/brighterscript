@@ -12,6 +12,10 @@ export class FileProvider {
     ) { }
 
     public process() {
+        //if the event already has a file for this path, assume some other plugin has processed this event already
+        if (this.event.files.find(x => x.srcPath === this.event.srcPath)) {
+            return;
+        }
         //get the file extension (including the leading dot)
         let fileExtension = path.extname(this.event.srcPath).toLowerCase();
 

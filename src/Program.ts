@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileReference, FileObj, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideCompletionsEvent, ProvideHoverEvent, ProvideFileEvent } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideCompletionsEvent, ProvideHoverEvent, ProvideFileEvent, BeforeFileAddEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -350,8 +350,18 @@ export class Program {
      * Update internal maps with this file reference
      */
     private assignFile<T extends File = File>(file: T) {
+        const fileAddEvent: BeforeFileAddEvent = {
+            file: file,
+            program: this
+        };
+
+        this.plugins.emit('beforeFileAdd', fileAddEvent);
+
         this.files[file.srcPath.toLowerCase()] = file;
         this.pkgMap[file.pkgPath.toLowerCase()] = file;
+
+        this.plugins.emit('afterFileAdd', fileAddEvent);
+
         return file;
     }
 
@@ -406,13 +416,7 @@ export class Program {
                 this.removeFile(srcPath);
             }
 
-            const event = {
-                srcPath: srcPath,
-                destPath: destPath,
-                program: this,
-                getFileData: this.createFileDataFetcher(fileData),
-                files: []
-            } as ProvideFileEvent;
+            const event = this.createProvideFileEvent(srcPath, destPath, fileData);
 
             this.plugins.emit('beforeProvideFile', event);
             this.plugins.emit('provideFile', event);
@@ -484,25 +488,38 @@ export class Program {
     }
 
     /**
-     * Creates a function that returns a buffer. Inputs can be a string, a buffer, or a function that returns a string or buffer
+     * Creates a new `ProvideFile` event instance, with built-in file data resolving
      */
-    private createFileDataFetcher(data: FileData) {
-        let result;
-        return () => {
-            if (!result) {
-                if (typeof data === 'string') {
-                    result = Buffer.from(data);
-                } else if (typeof data === 'function') {
-                    result = data();
-                    if (typeof result === 'string') {
-                        result = Buffer.from(result);
+    private createProvideFileEvent(srcPath: string, destPath: string, data: FileData): ProvideFileEvent {
+        const result = {
+            srcPath: srcPath,
+            destPath: destPath,
+            program: this,
+            _fileData: undefined as Buffer,
+            getFileData: function getFileData() {
+                if (!this._fileData) {
+                    let result: any;
+                    if (typeof data === 'string') {
+                        result = Buffer.from(data);
+                    } else if (typeof data === 'function') {
+                        result = data();
+                        if (typeof result === 'string') {
+                            result = Buffer.from(result);
+                        }
                     }
+                    this._fileData = result;
                 }
-            }
-            return result;
+                return this._fileData;
+            },
+            setFileData: function setFileData(fileData: FileData) {
+                //override the outer data object, and delete any cache so it'll get re-resolved next time `getFileData` is called
+                data = fileData;
+                delete this._fileData;
+            },
+            files: []
         };
+        return result;
     }
-
     /**
      * Given a srcPath, a pkgPath, or both, resolve whichever is missing, relative to rootDir.
      * @param rootDir must be a pre-normalized path

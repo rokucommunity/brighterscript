@@ -5,7 +5,7 @@ import type { XmlFile } from './files/XmlFile';
 import type { FunctionScope } from './FunctionScope';
 import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
-import type { Program, TranspileObj } from './Program';
+import type { FileData, Program, TranspileObj } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { FunctionStatement } from './parser/Statement';
 import type { Expression } from './parser/AstNode';
@@ -221,7 +221,6 @@ export interface CompilerPlugin {
      */
     afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
 
-    //scope events
     afterScopeCreate?: (scope: Scope) => void;
 
     beforeScopeDispose?: (scope: Scope) => void;
@@ -235,19 +234,40 @@ export interface CompilerPlugin {
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
 
     /**
-     * Called before a file is added to the program. This is triggered for every file (even virtual files emitted by other files)
+     * Called before plugins are asked to provide files to the program. (excludes virtual files produced by `provideFile` events).
+     * Call the `setFileData()` method to override the file contents.
      */
     beforeProvideFile?: PluginHandler<BeforeProvideFileEvent>;
     /**
-     * Give plugins the opportunity to handle parsing/validating a file
+     * Give plugins the opportunity to handle processing a file. (excludes virtual files produced by `provideFile` events)
      */
     provideFile?: PluginHandler<ProvideFileEvent>;
     /**
-     * Called after a file was added to the program.
+     * Called after a file was added to the program. (excludes virtual files produced by `provideFile` events)
      */
     afterProvideFile?: PluginHandler<AfterProvideFileEvent>;
 
+    /**
+     * Called before a file is added to the program.
+     * Includes physical files as well as any virtual files produced by `provideFile` events
+     */
+    beforeFileAdd?: PluginHandler<BeforeFileAddEvent>;
+    /**
+     * Called after a file has been added to the program.
+     * Includes physical files as well as any virtual files produced by `provideFile` events
+     */
+    afterFileAdd?: PluginHandler<AfterFileAddEvent>;
+
+    /**
+     * Called before parsing a file. This is an opportunity to manipulate or replace the source code before the file is parsed.
+     * NOTE: this only applies to .brs, .bs, .d.bs files, or .xml files located within the pkg:/components folder
+     * @deprecated To override file contents, use the `setData()` method in the `beforeProvideFile` event instead
+     */
     beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
+    /**
+     * Called after a file has been parsed.
+     * @deprecated use `afterFileAdd` instead
+     */
     afterFileParse?: (file: File) => void;
 
     /**
@@ -390,7 +410,7 @@ export interface AfterFileTranspileEvent<TFile extends File = File> {
     editor: Editor;
 }
 
-type BeforeProvideFileEvent<TFile extends File = File> = ProvideFileEvent<TFile>;
+export type BeforeProvideFileEvent<TFile extends File = File> = ProvideFileEvent<TFile>;
 export interface ProvideFileEvent<TFile extends File = File> {
     /**
      * The srcPath for the file
@@ -402,9 +422,15 @@ export interface ProvideFileEvent<TFile extends File = File> {
     destPath: string;
     /**
      * A function that returns the data for this file. This is a function to allow lazy-loading of the data
-     * (for situations like images where you may never need to actually load the file)
+     * (for situations like images where you may never need to actually load the file).
+     * Data previously set by `setFileData()` will be used if present.
      */
     getFileData: () => Buffer;
+    /**
+     * A function that sets the file data for this file (in memory). This is a way for a plugin to override the data that is used by
+     * future event handlers for this file
+     */
+    setFileData: (data: FileData) => void;
     /**
      * An array of files that should be added to the program as a result of this event
      */
@@ -414,8 +440,13 @@ export interface ProvideFileEvent<TFile extends File = File> {
      */
     program: Program;
 }
-type AfterProvideFileEvent<TFile extends File = File> = ProvideFileEvent<TFile>;
+export type AfterProvideFileEvent<TFile extends File = File> = ProvideFileEvent<TFile>;
 
+export interface BeforeFileAddEvent<TFile extends File = File> {
+    file: TFile;
+    program: Program;
+}
+export type AfterFileAddEvent<TFile extends File = File> = BeforeFileAddEvent<TFile>;
 
 export interface BeforeFileParseEvent {
     srcPath: string;

@@ -20,8 +20,9 @@ import { isBrsFile } from './astUtils/reflection';
 import { TokenKind } from './lexer/TokenKind';
 import type { LiteralExpression } from './parser/Expression';
 import type { AstEditor } from './astUtils/AstEditor';
-import type { ProvideFileEvent } from './interfaces';
+import type { AfterFileAddEvent, AfterProvideFileEvent, BeforeFileAddEvent, BeforeFileParseEvent, BeforeProvideFileEvent, ProvideFileEvent } from './interfaces';
 import * as path from 'path';
+import { AssetFile } from './files/AssetFile';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -2653,6 +2654,119 @@ describe('Program', () => {
     });
 
     describe('plugins', () => {
+        it('emits provideFile events', () => {
+            const plugin = {
+                name: 'test',
+                beforeProvideFile: sinon.spy(),
+                provideFile: sinon.spy(),
+                afterProvideFile: sinon.spy()
+            };
+            program.plugins.add(plugin);
+            program.setFile('source/main.brs', `'main`);
+            program.setFile('source/lib.brs', `'lib`);
+            program.validate();
+            function test(spy: sinonImport.SinonSpy) {
+                expect(
+                    plugin.beforeProvideFile.getCalls().map(x => ({
+                        srcPath: x.args[0].srcPath,
+                        destPath: x.args[0].destPath,
+                        fileData: x.args[0].getFileData().toString()
+                    }))
+                ).to.eql([{
+                    srcPath: s`${rootDir}/source/main.brs`,
+                    destPath: s`source/main.brs`,
+                    fileData: `'main`
+                }, {
+                    srcPath: s`${rootDir}/source/lib.brs`,
+                    destPath: s`source/lib.brs`,
+                    fileData: `'lib`
+                }]);
+            }
+            test(plugin.beforeProvideFile);
+            test(plugin.provideFile);
+            test(plugin.afterProvideFile);
+        });
+
+        it('beforeFileParse can override source contents', () => {
+            const plugin = {
+                name: 'test',
+                beforeFileParse: (event: BeforeFileParseEvent) => {
+                    event.source = `'override`;
+                }
+            };
+            program.plugins.add(plugin);
+            const file = program.setFile<BrsFile>('source/main.brs', `'original`);
+            expect(file.fileContents).to.eql(`'override`);
+        });
+
+        it('beforeProvideFile can override source contents', () => {
+            const plugin = {
+                name: 'test',
+                beforeProvideFile: (event: BeforeProvideFileEvent) => {
+                    event.setFileData(`'override`);
+                }
+            };
+            program.plugins.add(plugin);
+            const file = program.setFile<BrsFile>('source/main.brs', `'original`);
+            expect(file.fileContents).to.eql(`'override`);
+        });
+
+        it('beforeFileParse overrides beforeProvideFile event contents', () => {
+            const plugin = {
+                name: 'test',
+                beforeFileParse: (event: BeforeFileParseEvent) => {
+                    event.source = `'beforeFileParse`;
+                },
+                beforeProvideFile: (event: BeforeProvideFileEvent) => {
+                    event.setFileData(`'beforeProvideFile`);
+                }
+            };
+            program.plugins.add(plugin);
+            const file = program.setFile<BrsFile>('source/main.brs', `'original`);
+            expect(file.fileContents).to.eql(`'beforeFileParse`);
+        });
+
+        it('emits event for each virtual file', () => {
+            const events: string[] = [];
+            const plugin = {
+                name: 'test',
+                beforeProvideFile: (e: BeforeProvideFileEvent) => {
+                    events.push(`beforeProvideFile:${e.destPath}`);
+                    e.files.push(
+                        new AssetFile(e.srcPath, e.destPath)
+                    );
+                    e.files.push(
+                        new AssetFile(e.srcPath + '.two', e.destPath + '.two')
+                    );
+                },
+                provideFile: (e: ProvideFileEvent) => {
+                    events.push(`provideFile:${e.destPath}`);
+                },
+                afterProvideFile: (e: AfterProvideFileEvent) => {
+                    events.push(`afterProvideFile:${e.destPath}`);
+                },
+                beforeFileAdd: (e: BeforeFileAddEvent) => {
+                    events.push(`beforeFileAdd:${e.file.pkgPath}`);
+                },
+                afterFileAdd: (e: AfterFileAddEvent) => {
+                    events.push(`afterFileAdd:${e.file.pkgPath}`);
+                }
+            };
+            program.plugins.add(plugin);
+
+            program.setFile('source/buttons.component.bs', '');
+
+            expect(events).to.eql([
+                'beforeProvideFile:' + s('source/buttons.component.bs'),
+                'provideFile:' + s('source/buttons.component.bs'),
+                'afterProvideFile:' + s('source/buttons.component.bs'),
+                'beforeFileAdd:' + s('source/buttons.component.bs'),
+                'afterFileAdd:' + s('source/buttons.component.bs'),
+                'beforeFileAdd:' + s('source/buttons.component.bs.two'),
+                'afterFileAdd:' + s('source/buttons.component.bs.two')
+            ]);
+        });
+
         it('emits file validation events', () => {
             const plugin = {
                 name: 'test',
