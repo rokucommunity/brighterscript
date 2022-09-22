@@ -61,6 +61,21 @@ describe('Program', () => {
         await program.getTranspiledFileContents('tests/testFile.spec.bs');
     });
 
+    it('allows diagnostics to be set on AssetFile', () => {
+        const file = program.setFile<AssetFile>('manifest', ``);
+        file.diagnostics.push({
+            file: file,
+            message: 'Manifest is totally bogus',
+            range: util.createRange(0, 0, 0, 10),
+            code: 10
+        });
+        program.validate();
+        expectDiagnostics(program, [{
+            code: 10,
+            message: 'Manifest is totally bogus'
+        }]);
+    });
+
     describe('global scope', () => {
         it('returns all callables when asked', () => {
             expect(program.globalScope.getAllCallables().length).to.be.greaterThan(0);

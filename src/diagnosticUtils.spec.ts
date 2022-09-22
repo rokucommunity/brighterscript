@@ -4,6 +4,7 @@ import * as diagnosticUtils from './diagnosticUtils';
 import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 import { util } from './util';
 import chalk from 'chalk';
+import { AssetFile } from './files/AssetFile';
 
 describe('diagnosticUtils', () => {
     let options: ReturnType<typeof diagnosticUtils.getPrintDiagnosticOptions>;
@@ -12,6 +13,15 @@ describe('diagnosticUtils', () => {
     });
 
     describe('printDiagnostic', () => {
+        it('does not crash when file has no content', () => {
+            //print a diagnostic that has an AssetFile. It should not explode
+            diagnosticUtils.printDiagnostic(options, DiagnosticSeverity.Error, './temp/file.brs', [], {
+                message: 'Bad thing happened',
+                range: null, //important...this needs to be null for the test to pass,
+                code: 1234,
+                file: new AssetFile('src', 'dest')
+            } as any);
+        });
         it('does not crash when range is undefined', () => {
             //print a diagnostic that doesn't have a range...it should not explode
             diagnosticUtils.printDiagnostic(options, DiagnosticSeverity.Error, './temp/file.brs', [], {

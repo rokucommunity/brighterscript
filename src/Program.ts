@@ -684,7 +684,7 @@ export class Program {
             for (const file of Object.values(this.files)) {
 
                 //find any files NOT loaded into a scope
-                if (!this.fileIsIncludedInAnyScope(file)) {
+                if (!this.fileIsIncludedInAnyScope(file) && (isBrsFile(file) || isXmlFile(file))) {
                     this.logger.debug('Program.validate(): fileNotReferenced by any scope', () => chalk.green(file?.pkgPath));
                     //the file is not loaded in any scope
                     this.diagnostics.push({

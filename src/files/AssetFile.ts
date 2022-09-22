@@ -1,3 +1,4 @@
+import type { BsDiagnostic } from '../interfaces';
 import type { File } from './File';
 
 export class AssetFile implements File {
@@ -9,6 +10,7 @@ export class AssetFile implements File {
     }
     public type = 'AssetFile';
 
+    public diagnostics: BsDiagnostic[] = [];
     dependencyGraphKey: string;
     //mark this file as validated so it skips all validation checks
     isValidated = true;
