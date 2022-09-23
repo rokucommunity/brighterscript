@@ -6,6 +6,10 @@ import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { AssignmentStatement } from '../../Statement';
+import { expectDiagnostics, expectDiagnosticsIncludes } from '../../../testHelpers.spec';
+import { isAssignmentStatement, isDottedGetExpression, isIndexedGetExpression, isVariableExpression } from '../../../astUtils/reflection';
+import type { DottedGetExpression, IndexedGetExpression, VariableExpression } from '../../Expression';
+
 
 describe('parser indexing', () => {
     describe('one level', () => {
@@ -58,7 +62,7 @@ describe('parser indexing', () => {
             });
 
             it('multiple dots', () => {
-                let { diagnostics } = Parser.parse([
+                let { diagnostics, statements } = Parser.parse([
                     identifier('_'),
                     token(TokenKind.Equal, '='),
                     identifier('foo'),
@@ -68,15 +72,18 @@ describe('parser indexing', () => {
                     token(TokenKind.LeftSquareBracket, '['),
                     token(TokenKind.Integer, '2'),
                     token(TokenKind.RightSquareBracket, ']'),
+                    token(TokenKind.Newline),
                     EOF
                 ]);
 
-                expect(diagnostics.length).to.equal(1);
-                expect(
-                    diagnostics[0]?.message
-                ).to.exist.and.to.equal(
-                    DiagnosticMessages.expectedPropertyNameAfterPeriod().message
-                );
+                expect(diagnostics.length).to.equal(3);
+                expectDiagnostics(diagnostics, [
+                    DiagnosticMessages.expectedPropertyNameAfterPeriod(), // expected name after first dot
+                    DiagnosticMessages.expectedNewlineOrColon(), // expected newline after "_ = foo" statement
+                    DiagnosticMessages.unexpectedToken('.') // everything after the 2nd dot is ignored
+                ]);
+                // expect statement "_ = foo" to still be included
+                expect(statements.length).to.equal(1);
             });
         });
 
@@ -231,6 +238,59 @@ describe('parser indexing', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
+        });
+    });
+
+    describe('unfinished brackets', () => {
+        it('parses expression inside of brackets', () => {
+            let { statements, diagnostics } = Parser.parse([
+                identifier('_'),
+                token(TokenKind.Equal, '='),
+                identifier('foo'),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.Identifier, 'bar'),
+                token(TokenKind.Dot),
+                token(TokenKind.Identifier, 'baz'),
+                token(TokenKind.Dot),
+                EOF
+            ]);
+
+            // Parses as `_ = foo[bar.baz]`
+
+            expect(diagnostics.length).to.be.greaterThan(0);
+            expect(statements).to.be.lengthOf(1);
+            expect(isAssignmentStatement(statements[0])).to.be.true;
+            const assignStmt = statements[0] as AssignmentStatement;
+            expect(assignStmt.name.text).to.equal('_');
+            expect(isIndexedGetExpression(assignStmt.value)).to.be.true;
+            const indexedGetExpr = assignStmt.value as IndexedGetExpression;
+            expect((indexedGetExpr.obj as VariableExpression).name.text).to.equal('foo');
+            expect(isDottedGetExpression(indexedGetExpr.index)).to.be.true;
+            const dottedGetExpr = indexedGetExpr.index as DottedGetExpression;
+            expect(dottedGetExpr.name.text).to.equal('baz');
+            expect(isVariableExpression(dottedGetExpr.obj)).to.be.true;
+        });
+
+        it('gets correct diagnostic for missing square brace without index', () => {
+            let { diagnostics } = Parser.parse(`
+                sub setData(obj)
+                    m.data = obj[
+                end sub
+            `);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.expectedRightSquareBraceAfterArrayOrObjectIndex()
+            ]);
+        });
+
+        it('gets correct diagnostic for missing square brace with index', () => {
+            let { diagnostics } = Parser.parse(`
+                sub setData(obj)
+                    m.data = obj[1
+                end sub
+            `);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.expectedRightSquareBraceAfterArrayOrObjectIndex()
+            ]);
         });
     });
 });

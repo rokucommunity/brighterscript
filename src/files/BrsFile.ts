@@ -692,7 +692,7 @@ export class BrsFile {
                     }
                 }
                 let functionCall: FunctionCall = {
-                    range: util.createRangeFromPositions(expression.range.start, expression.closingParen.range.end),
+                    range: expression.range, //util.(expression.range.start, expression.closingParen.range.end),
                     functionScope: this.getFunctionScopeAtPosition(callee.range.start),
                     file: this,
                     name: functionName,

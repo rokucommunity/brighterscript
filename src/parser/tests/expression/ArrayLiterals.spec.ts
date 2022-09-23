@@ -4,6 +4,11 @@ import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import { expectDiagnostics, expectDiagnosticsIncludes } from '../../../testHelpers.spec';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
+import { isArrayLiteralExpression, isAssignmentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
+import type { AssignmentStatement } from '../../Statement';
+import type { ArrayLiteralExpression } from '../../Expression';
 
 describe('parser array literals', () => {
     describe('empty arrays', () => {
@@ -166,6 +171,53 @@ describe('parser array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
+        });
+    });
+
+    describe('unfinished', () => {
+        it('will still be parsed', () => {
+            let { statements, diagnostics } = Parser.parse([
+                identifier('_'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '1'),
+                token(TokenKind.Comma, ','),
+                identifier('data'),
+                token(TokenKind.Dot, '.'),
+                identifier('foo'),
+                EOF
+            ]);
+
+            expectDiagnostics(diagnostics, [DiagnosticMessages.unmatchedLeftSquareBraceAfterArrayLiteral()]);
+            expect(statements).to.be.lengthOf(1);
+            expect(isAssignmentStatement(statements[0])).to.be.true;
+            const assignStmt = statements[0] as AssignmentStatement;
+            expect(isArrayLiteralExpression(assignStmt.value));
+            const arryLitExpr = assignStmt.value as ArrayLiteralExpression;
+            expect(isLiteralExpression(arryLitExpr.elements[0])).to.be.true;
+            expect(isDottedGetExpression(arryLitExpr.elements[1])).to.be.true;
+        });
+
+        it('gets correct diagnostic for missing square brace without elements', () => {
+            let { diagnostics } = Parser.parse(`
+                sub setData()
+                    m.data = [
+                end sub
+            `);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.unmatchedLeftSquareBraceAfterArrayLiteral()
+            ]);
+        });
+
+        it('gets correct diagnostic for missing curly brace with elements', () => {
+            let { diagnostics } = Parser.parse(`
+                sub setData()
+                    m.data = [1,2,3
+                end sub
+            `);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.unmatchedLeftSquareBraceAfterArrayLiteral()
+            ]);
         });
     });
 
