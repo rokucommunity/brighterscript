@@ -431,7 +431,7 @@ export class IndexedGetExpression extends Expression {
             ...this.obj.transpile(state),
             this.questionDotToken ? state.transpileToken(this.questionDotToken) : '',
             state.transpileToken(this.openingSquare),
-            ...(this.index ? this.index.transpile(state) : []),
+            ...(this.index?.transpile(state) ?? []),
             this.closingSquare ? state.transpileToken(this.closingSquare) : ''
         ];
     }
