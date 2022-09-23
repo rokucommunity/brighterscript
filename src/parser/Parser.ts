@@ -2937,8 +2937,8 @@ export class Parser {
     }
 
     /**
-     * There are sometimes we get catch an error that is a diagnostic
-     * If that's the case, we want to continue parsing
+     * Sometimes we catch an error that is a diagnostic.
+     * If that's the case, we want to continue parsing.
      * Otherwise, re-throw the error
      *
      * @param error error caught in a try/catch
