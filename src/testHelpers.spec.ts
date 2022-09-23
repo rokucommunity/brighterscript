@@ -67,7 +67,9 @@ interface PartialDiagnostic {
     file?: Partial<BscFile>;
 }
 
-
+/**
+ *  Helper function to clone a Diagnostic so it will give partial data that has the same properties as the expected
+ */
 function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic: BsDiagnostic) {
     const actualDiagnostic = cloneObject(
         actualDiagnosticInput,
@@ -127,7 +129,7 @@ export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Par
 }
 
 /**
- * Ensure the DiagnosticCollection exactly contains the data from expected list.
+ * Ensure the DiagnosticCollection includes data from expected list (note - order does not matter).
  * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
  * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
