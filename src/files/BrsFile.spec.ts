@@ -1321,6 +1321,13 @@ describe('BrsFile', () => {
                     DoC(
                 end function
             `);
+            expectDiagnostics(file.parser.diagnostics, [
+                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.expectedNewlineOrColon(),
+                DiagnosticMessages.unexpectedToken('end function'),
+                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.expectedNewlineOrColon()
+            ]);
             expect(file.functionCalls.length).to.equal(2);
 
             expect(file.functionCalls[0].range).to.eql(Range.create(2, 20, 2, 27));

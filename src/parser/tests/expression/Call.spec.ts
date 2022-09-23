@@ -263,7 +263,6 @@ describe('parser call expressions', () => {
             expect(statements).to.be.lengthOf(1);
             const bodyStatements = (statements[0] as FunctionStatement).func.body.statements;
             expect(bodyStatements).to.be.lengthOf(1);
-
         });
     });
 

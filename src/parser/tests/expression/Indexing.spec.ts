@@ -243,19 +243,7 @@ describe('parser indexing', () => {
 
     describe('unfinished brackets', () => {
         it('parses expression inside of brackets', () => {
-            let { statements, diagnostics } = Parser.parse([
-                identifier('_'),
-                token(TokenKind.Equal, '='),
-                identifier('foo'),
-                token(TokenKind.LeftSquareBracket, '['),
-                token(TokenKind.Identifier, 'bar'),
-                token(TokenKind.Dot),
-                token(TokenKind.Identifier, 'baz'),
-                token(TokenKind.Dot),
-                EOF
-            ]);
-
-            // Parses as `_ = foo[bar.baz]`
+            let { statements, diagnostics } = Parser.parse(`_ = foo[bar.baz.`);
 
             expect(diagnostics.length).to.be.greaterThan(0);
             expect(statements).to.be.lengthOf(1);

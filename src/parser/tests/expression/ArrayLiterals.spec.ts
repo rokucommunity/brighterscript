@@ -176,17 +176,8 @@ describe('parser array literals', () => {
 
     describe('unfinished', () => {
         it('will still be parsed', () => {
-            let { statements, diagnostics } = Parser.parse([
-                identifier('_'),
-                token(TokenKind.Equal, '='),
-                token(TokenKind.LeftSquareBracket, '['),
-                token(TokenKind.IntegerLiteral, '1'),
-                token(TokenKind.Comma, ','),
-                identifier('data'),
-                token(TokenKind.Dot, '.'),
-                identifier('foo'),
-                EOF
-            ]);
+            // no closing brace:
+            let { statements, diagnostics } = Parser.parse(`_ = [1, data.foo`);
 
             expectDiagnostics(diagnostics, [DiagnosticMessages.unmatchedLeftSquareBraceAfterArrayLiteral()]);
             expect(statements).to.be.lengthOf(1);
