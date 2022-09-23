@@ -62,7 +62,7 @@ export class CallExpression extends Expression {
         readonly args: Expression[]
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.callee.range.start, this.closingParen.range.end);
+        this.range = util.createBoundingRange(this.callee, this.openingParen, ...args, this.closingParen);
     }
 
     public readonly range: Range;
@@ -88,9 +88,11 @@ export class CallExpression extends Expression {
             let arg = this.args[i];
             result.push(...arg.transpile(state));
         }
-        result.push(
-            state.transpileToken(this.closingParen)
-        );
+        if (this.closingParen) {
+            result.push(
+                state.transpileToken(this.closingParen)
+            );
+        }
         return result;
     }
 
@@ -429,8 +431,8 @@ export class IndexedGetExpression extends Expression {
             ...this.obj.transpile(state),
             this.questionDotToken ? state.transpileToken(this.questionDotToken) : '',
             state.transpileToken(this.openingSquare),
-            ...this.index.transpile(state),
-            state.transpileToken(this.closingSquare)
+            ...(this.index?.transpile(state) ?? []),
+            this.closingSquare ? state.transpileToken(this.closingSquare) : ''
         ];
     }
 
@@ -546,7 +548,7 @@ export class ArrayLiteralExpression extends Expression {
         readonly hasSpread = false
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.open.range.start, this.close.range.end);
+        this.range = util.createBoundingRange(this.open, ...this.elements, this.close);
     }
 
     public readonly range: Range;
@@ -591,10 +593,11 @@ export class ArrayLiteralExpression extends Expression {
             result.push('\n');
             result.push(state.indent());
         }
-
-        result.push(
-            state.transpileToken(this.close)
-        );
+        if (this.close) {
+            result.push(
+                state.transpileToken(this.close)
+            );
+        }
         return result;
     }
 
@@ -637,7 +640,7 @@ export class AALiteralExpression extends Expression {
         readonly close: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.open.range.start, this.close.range.end);
+        this.range = util.createBoundingRange(this.open, ...this.elements, this.close);
     }
 
     public readonly range: Range;
@@ -704,9 +707,11 @@ export class AALiteralExpression extends Expression {
             result.push(state.indent());
         }
         //close curly
-        result.push(
-            state.transpileToken(this.close)
-        );
+        if (this.close) {
+            result.push(
+                state.transpileToken(this.close)
+            );
+        }
         return result;
     }
 
