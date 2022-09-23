@@ -46,9 +46,15 @@ Full compiler lifecycle:
 - `beforeProgramCreate`
 - `afterProgramCreate`
     - `afterScopeCreate` ("source" scope)
-    - For each file:
-        - `beforeFileParse`
-        - `afterFileParse`
+    - For each physical file:
+        - `beforeProvideFile`
+        - `onProvideFile`
+            - `beforeFileParse` (deprecated)
+            - `afterFileParse` (deprecated)
+        - `afterProvideFile`
+    - For each physical and virtual file
+        - `beforeAddFile`
+        - `afterAddFile`
         - `afterScopeCreate` (component scope)
     - `beforeProgramValidate`
     - For each file:
@@ -410,6 +416,98 @@ export default function plugin() {
                         walkMode: WalkMode.visitStatements
                     });
                 }
+            }
+        }
+    } as CompilerPlugin;
+}
+```
+
+## File API
+By default, BrighterScript only parses files that it knows how to handle. Generally this includes `.xml` files in the compontents folder, `.brs`, `.bs` and `.d.bs` files. In the future, `manifest`, `.ts` files may also be handled. All other files are loaded into the program as `AssetFile` types and have no special handling or processing.
+
+BrighterScript will perform all of its file providing at the very start of the `provideFile` event. If you need to handle files before brighterscript does, you should do this in the `beforeProvideFile` event.
+
+Your plugin may want to add enhanced features for file types (such as parsing javascript and converting it to BrightScript). BrighterScript supports this by asking plugins to "`provide`" file objects for a given file path.
+
+Here's a sample plugin showing how to handle this:
+
+```typescript
+import { ProvideFileEvent, CompilerPlugin, BrsFile } from 'brighterscript';
+
+export default function plugin() {
+    return {
+        name: 'removeCommentAndPrintStatements',
+        provideFile: (event: ProvideFileEvent) => {
+            //convert all javascript files into .brs files (magically!)
+            if (event.srcExtension === '.js') {
+                //get the file contents as a string
+                const jsCode = event.getFileData().toString();
+
+                //somehow magically convert javascript code to brightscript code
+                const brsCode = convertJsToBrsUsingMagic(jsCode);
+
+                //create a new BrsFile which will hold the final brs code after the js file was parsed
+                const file = new BrsFile(
+                    event.srcPath,
+                    //rename the .js extension to .brs
+                    event.destPath.replace(/\.js$/, '.brs'),
+                    event.program
+                );
+                //parse the generated brs code
+                file.parse(brsCode);
+
+                //add this brs file to the event, which is how you "provide" the file
+                event.files.push(file);
+            }
+        }
+    } as CompilerPlugin;
+}
+```
+
+### Multiple files
+Plugins can also provide _multiple_ files from a single physical file. Consider this example:
+```typescript
+
+
+import { BeforeProvideFileEvent, CompilerPlugin, BrsFile, XmlFile, trim } from 'brighterscript';
+
+export default function plugin() {
+    return {
+        name: 'removeCommentAndPrintStatements',
+        beforeProvideFile: (event: BeforeProvideFileEvent) => {
+            // source/buttons.component.bs
+
+            event.files
+            //split a .component file into a .brs and a .xml file
+            if (event.srcExtension === '.component') {
+                //get the filename (we will use this as the component name)
+                const componentName = path.basename(event.srcPath);
+                //get the file contents as a string
+                const code = event.getFileData().toString();
+
+                //create a new BrsFile
+                const brsFile = new BrsFile(
+                    event.srcPath,
+                    //rename the .js extension to .brs
+                    event.destPath,
+                    event.program
+                );
+                //parse the generated brs code
+                brsFile.parse(code);
+
+                //add this brs file to the event, which is how you "provide" the file
+                event.files.push(brsFile);
+
+                //create an XmlFile component
+                const xmlFile = new XmlFile(event.srcPath, event.destPath, event.program);
+                xmlFile.parse(trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="${componentName}">
+                        <script uri="pkg:/${event.destPath}" />
+                    </component>
+                `);
+                //add this brs file to the event, which is how you "provide" the file
+                event.files.push(xmlFile);
             }
         }
     } as CompilerPlugin;
