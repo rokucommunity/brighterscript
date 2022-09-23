@@ -56,6 +56,12 @@ export interface File {
      * Dispose of any resources the file may have created.
      */
     dispose?(): void;
+    /**
+     * Should this file be included or excluded when generating the project output (i.e. transpiling the project)
+     * This affects setting affects whether the file is transpiled, or copied, or completely excluded.
+     * `true` means exclude, all other values mean include.
+     */
+    excludeFromOutput?: boolean;
 }
 //included for backwards compatibility reasons
 export type BscFile = File;
