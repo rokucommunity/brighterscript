@@ -16,10 +16,8 @@ export class FileProvider {
         if (this.event.files.find(x => x.srcPath === this.event.srcPath)) {
             return;
         }
-        //get the file extension (including the leading dot)
-        let fileExtension = path.extname(this.event.srcPath).toLowerCase();
 
-        switch (fileExtension) {
+        switch (this.event.srcExtension) {
             case '.brs':
             case '.bs':
                 return this.handleBrsFile();

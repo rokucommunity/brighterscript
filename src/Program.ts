@@ -492,6 +492,7 @@ export class Program {
      */
     private createProvideFileEvent(srcPath: string, destPath: string, data: FileData): ProvideFileEvent {
         const result = {
+            srcExtension: path.extname(srcPath)?.toLowerCase() ?? '',
             srcPath: srcPath,
             destPath: destPath,
             program: this,

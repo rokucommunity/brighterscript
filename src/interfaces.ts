@@ -1,6 +1,6 @@
 import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, CompletionItem } from 'vscode-languageserver';
 import type { Scope } from './Scope';
-import type { BrsFile } from './files/BrsFile';
+import { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { FunctionScope } from './FunctionScope';
 import type { FunctionType } from './types/FunctionType';
@@ -412,6 +412,10 @@ export interface AfterFileTranspileEvent<TFile extends File = File> {
 
 export type BeforeProvideFileEvent<TFile extends File = File> = ProvideFileEvent<TFile>;
 export interface ProvideFileEvent<TFile extends File = File> {
+    /**
+     * The lower-case file extension for the srcPath. (i.e. ".brs" or ".xml")
+     */
+    srcExtension: string;
     /**
      * The srcPath for the file
      */
