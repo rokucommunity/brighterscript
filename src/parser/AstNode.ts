@@ -1,10 +1,13 @@
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
-import type { Range } from 'vscode-languageserver';
+import { WalkMode } from '../astUtils/visitors';
+import type { Position, Range } from 'vscode-languageserver';
+import { CancellationTokenSource } from 'vscode-languageserver';
 import { InternalWalkMode } from '../astUtils/visitors';
 import type { SymbolTable } from '../SymbolTable';
 import type { BrsTranspileState } from './BrsTranspileState';
 import type { TranspileResult } from '../interfaces';
 import type { AnnotationExpression } from './Expression';
+import util from '../util';
 
 /**
  * A BrightScript AST node
@@ -57,6 +60,39 @@ export abstract class AstNode {
             }
             node = node.parent;
         }
+    }
+
+    /**
+     * Find the first child where the matcher evaluates to true.
+     * @param matcher a function called for each node. If you return true, this function returns the specified node. If you return a node, that node is returned. all other return values continue the loop
+     */
+    public findChild<TNodeType extends AstNode = AstNode>(matcher: (node: AstNode) => boolean | AstNode, options?: WalkOptions) {
+        const cancel = new CancellationTokenSource();
+        let result: AstNode;
+        this.walk((node) => {
+            const matcherValue = matcher(node);
+            if (matcherValue) {
+                cancel.cancel();
+                result = matcherValue === true ? node : matcherValue;
+            }
+        }, {
+            walkMode: WalkMode.visitAllRecursive,
+            ...options ?? {},
+            cancel: cancel.token
+        });
+        return result as TNodeType;
+    }
+
+    /**
+     * FInd the deepest child that includes the given position
+     */
+    public findChildAtPosition<TNodeType extends AstNode = AstNode>(position: Position, options?: WalkOptions): TNodeType {
+        return this.findChild<TNodeType>((node) => {
+            //if the current node includes this range, keep that node
+            if (util.rangeContains(node.range, position)) {
+                return node.findChildAtPosition(position, options) ?? node;
+            }
+        }, options);
     }
 }
 
