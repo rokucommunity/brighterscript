@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.58.0](https://github.com/rokucommunity/brighterscript/compare/v0.57.2...0.58.0) - 2022-09-23
+### Added
+ - AST child searching functionality. ([#695](https://github.com/rokucommunity/brighterscript/pull/695))
+ - `stagingFolderPath` option to the docs ([f521066](https://github.com/rokucommunity/brighterscript/commit/f521066))
+ - Create common ancestor for Expression and Statement ([#693](https://github.com/rokucommunity/brighterscript/pull/693))
+### Fixed
+ - Scope validation performance boost ([#656](https://github.com/rokucommunity/brighterscript/pull/656))
+ - Finds and includes more deeply embedded expressions ([#696](https://github.com/rokucommunity/brighterscript/pull/696))
+### Changed
+ - Rename refs to `isClassFieldStatement` and `isClassMethodStatement` ([#694](https://github.com/rokucommunity/brighterscript/pull/694))
+ - Centralize file path normalization for Program ([#692](https://github.com/rokucommunity/brighterscript/pull/692))
+ - use outputPath instead of object reference during transpiling to prevent duplicate file collisions ([#691](https://github.com/rokucommunity/brighterscript/pull/691))
+ - Move file validation into BscPlugin ([#688](https://github.com/rokucommunity/brighterscript/pull/688))
+ - upgrade to [roku-deploy@3.9.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#391---2022-09-19). Notable changes since 3.8.1:
+     - Sync retainStagingFolder, stagingFolderPath with options. ([roku-deploy#100](https://github.com/rokucommunity/roku-deploy/pull/100))
+     - Add stagingDir and retainStagingDir. ([roku-deploy#99](https://github.com/rokucommunity/roku-deploy/pull/99))
+
+
+
 ## [0.57.2](https://github.com/rokucommunity/brighterscript/compare/v0.57.1...0.57.2) - 2022-09-08
 ### Fixed
  - Fix `brightscript.configFile` workspace config bug ([#686](https://github.com/rokucommunity/brighterscript/pull/686))
