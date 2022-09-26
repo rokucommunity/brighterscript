@@ -12,7 +12,8 @@ import type { Token } from '../lexer/Token';
 import { isToken } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
-import { Parser, ParseMode, getBscTypeFromExpression } from '../parser/Parser';
+import type { TokenChainMember } from '../parser/Parser';
+import { Parser, ParseMode, getBscTypeFromExpression, TokenUsage } from '../parser/Parser';
 import type { FunctionExpression, VariableExpression, Expression, DottedGetExpression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, LibraryStatement, ImportStatement, Statement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program, SignatureInfoObj } from '../Program';
@@ -864,79 +865,12 @@ export class BrsFile {
         return undefined;
     }
 
-    private isExpressionChainable(expression) {
-        return expression && (isVariableExpression(expression) ||
-            isIndexedGetExpression(expression) ||
-            isIndexedSetStatement(expression) ||
-            isDottedGetExpression(expression) ||
-            isDottedSetStatement(expression) ||
-            isCallExpression(expression));
-    }
-
-    /**
-     * Gets the chain of tokens that can be used for doing a series of symbol lookups
-     * @param currentToken
-     * @returns a TokenChain, which has a tokens array that can be looped through
-     */
-    public getTokenChain(currentToken: Token): TokenChain {
-        const tokenChain: TokenChainMember[] = [];
-        if (currentToken.kind === TokenKind.Dot) {
-            currentToken = this.parser.getPreviousToken(currentToken);
-        }
-        let expression = this.getClosestExpression(currentToken.range);
-        if (!this.isExpressionChainable(expression)) {
-            return { chain: [{ token: currentToken, usage: TokenUsage.Direct }], includesUnknowableTokenType: false };
-        }
-        let tokenUsage: TokenUsage;
-        let nextTokenUsage: TokenUsage;
-        let foundCurrentTokenInExpression = false;
-        while (expression && this.isExpressionChainable(expression)) {
-            let token: Token;
-
-            let nextExpression: Expression;
-            if (isVariableExpression(expression)) {
-                token = expression.name;
-                tokenUsage = nextTokenUsage ?? TokenUsage.Direct;
-                nextExpression = undefined;
-                nextTokenUsage = undefined;
-            } else if (isDottedGetExpression(expression) || isDottedSetStatement(expression)) {
-                token = expression.name;
-                tokenUsage = nextTokenUsage ?? TokenUsage.DottedGet;
-                nextTokenUsage = undefined;
-                nextExpression = expression.obj;
-                foundCurrentTokenInExpression ||= expression.dot === currentToken;
-            } else if (isIndexedGetExpression(expression) || isIndexedSetStatement(expression)) {
-                nextTokenUsage = TokenUsage.IndexedGet;
-                nextExpression = expression.obj;
-                foundCurrentTokenInExpression ||= expression.openingSquare === currentToken || expression.closingSquare === currentToken;
-
-            } else if (isCallExpression(expression)) {
-                nextExpression = expression.callee;
-                nextTokenUsage = TokenUsage.Call;
-                foundCurrentTokenInExpression ||= expression.openingParen === currentToken || expression.closingParen === currentToken;
-            }
-            foundCurrentTokenInExpression ||= token === currentToken;
-
-            if (token && foundCurrentTokenInExpression) {
-                tokenChain.push({ token: token, usage: tokenUsage });
-            }
-            if (!foundCurrentTokenInExpression) {
-                // we haven't found the searched for token yet - ignore usage
-                nextTokenUsage = undefined;
-            }
-            expression = nextExpression;
-        }
-        let includesUnknown = !!expression; // we have an expression but it's not a known kind of a chain
-        return { chain: tokenChain.reverse(), includesUnknowableTokenType: includesUnknown };
-    }
-
-
     private findNamespaceFromTokenChain(originalTokenChain: TokenChainMember[], scope: Scope): NamespacedTokenChain {
         let namespaceTokens: Token[] = [];
         let startsWithNamespace = '';
         let namespaceContainer: NamespaceContainer;
         let tokenChain = [...originalTokenChain];
-        while (tokenChain[0] && (tokenChain[0].usage === TokenUsage.DottedGet || tokenChain[0].usage === TokenUsage.Direct)) {
+        while (tokenChain[0] && (tokenChain[0].usage === TokenUsage.Direct)) {
             const namespaceNameToCheck = `${startsWithNamespace}${startsWithNamespace.length > 0 ? '.' : ''}${tokenChain[0].token.text}`.toLowerCase();
             const foundNamespace = scope.namespaceLookup.get(namespaceNameToCheck);
 
@@ -1027,7 +961,7 @@ export class BrsFile {
         if (cachedSymbolData) {
             return cachedSymbolData;
         }
-        const tokenChainResponse = this.getTokenChain(currentToken);
+        const tokenChainResponse = this.parser.getTokenChain(currentToken);
         if (tokenChainResponse.includesUnknowableTokenType) {
             const symbolData = { type: new DynamicType(), expandedTokenText: currentToken.text };
             scope.symbolCache.set(currentToken, symbolData);
@@ -1089,7 +1023,7 @@ export class BrsFile {
                 }
             }
 
-            if (isArrayType(symbolType) && tokenUsage === TokenUsage.IndexedGet) {
+            if (isArrayType(symbolType) && tokenUsage === TokenUsage.ArrayReference) {
                 symbolType = getTypeFromContext(symbolType.getDefaultType(typeContext), typeContext);
             }
 
@@ -1960,32 +1894,4 @@ export interface TokenSymbolLookup {
     symbolContainer?: SymbolContainer;
     useExpandedTextOnly?: boolean;
     fullName?: string; //includes namespace
-}
-
-
-export enum TokenUsage {
-    Direct = 1,
-    Call = 2,
-    IndexedGet = 3,
-    DottedGet = 4
-}
-
-/**
- * A member of a token chain - a wrapper around a token, which also gives some context for how it is used, and if the type is knowable
- */
-export interface TokenChainMember {
-    /**
-     * The token
-     */
-    token: Token;
-    /**
-     * How was this token used?
-     */
-    usage: TokenUsage;
-
-}
-
-export interface TokenChain {
-    chain: TokenChainMember[];
-    includesUnknowableTokenType?: boolean;
 }
