@@ -237,7 +237,7 @@ describe('Scope', () => {
                         srcPath: buttonPrimary.srcPath
                     },
                     relatedInformation: [{
-                        message: `Not defined in scope '${s('components/ButtonPrimary.xml')}'`
+                        message: `Not defined in scope '${s('pkg:/components/ButtonPrimary.xml')}'`
                     }]
                 }, {
                     message: DiagnosticMessages.cannotFindName('delta').message,
@@ -245,7 +245,7 @@ describe('Scope', () => {
                         srcPath: buttonSecondary.srcPath
                     },
                     relatedInformation: [{
-                        message: `Not defined in scope '${s('components/ButtonSecondary.xml')}'`
+                        message: `Not defined in scope '${s('pkg:/components/ButtonSecondary.xml')}'`
                     }]
                 }
             ]);
@@ -319,7 +319,7 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('Validates too deep nested files', () => {
+        it.only('Validates too deep nested files', () => {
             program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/folder8/main.brs', ``);
             program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/folder8/main2.bs', ``);
             program.setFile('components/folder2/folder3/folder4/folder5/folder6/folder7/folder8/ButtonSecondary.xml', `<component name="ButtonSecondary" extends="ButtonBase" />`);
