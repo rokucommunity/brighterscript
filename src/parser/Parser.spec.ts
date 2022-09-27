@@ -557,8 +557,8 @@ describe('parser', () => {
                     end namespace
                 `, ParseMode.BrighterScript);
 
-                expect(parser.symbolTable.getSymbolType('Name.Space.funcInt'.replaceAll('.', '_'))).to.be.instanceof(TypedFunctionType);
-                expect(parser.symbolTable.getSymbolType('Name.Space.funcStr'.replaceAll('.', '_'))).to.be.instanceof(TypedFunctionType);
+                expect(parser.symbolTable.getSymbolType('Name_Space_funcInt')).to.be.instanceof(TypedFunctionType);
+                expect(parser.symbolTable.getSymbolType('Name_Space_funcStr')).to.be.instanceof(TypedFunctionType);
             });
 
         });
