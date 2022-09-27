@@ -1,6 +1,6 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Position, Location, Diagnostic, Range } from 'vscode-languageserver';
+import type { CompletionItem, Position, Location, Diagnostic } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
@@ -23,7 +23,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { Logger, LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isEnumStatement, isConstStatement, isRegexLiteralExpression, isTypedFunctionType, isFieldStatement, isArrayType, isCustomType, isDynamicType, isEnumType, isInterfaceType, isMethodStatement, isObjectType, isPrimitiveType, isIndexedGetExpression, isCallExpression, isPosition, isRange, isDottedSetStatement, isIndexedSetStatement, isFunctionExpression, isAssignmentStatement } from '../astUtils/reflection';
+import { isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isEnumStatement, isConstStatement, isRegexLiteralExpression, isTypedFunctionType, isFieldStatement, isArrayType, isCustomType, isDynamicType, isEnumType, isInterfaceType, isMethodStatement, isObjectType, isPrimitiveType } from '../astUtils/reflection';
 import type { BscType, SymbolContainer } from '../types/BscType';
 import { getTypeFromContext } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
@@ -183,15 +183,13 @@ export class BrsFile {
     /**
      * Walk the AST and find the expression that this token is most specifically contained within
      */
-    public getClosestExpression(position: Position | Range) {
+    public getClosestExpression(position: Position) {
         const handle = new CancellationTokenSource();
         let containingNode: Expression | Statement;
         this.ast.walk((node) => {
             const latestContainer = containingNode;
             //bsc walks depth-first
-            if (isPosition(position) && util.rangeContains(node.range, position)) {
-                containingNode = node;
-            } else if (isRange(position) && util.rangeContainsRange(node.range, position)) {
+            if (util.rangeContains(node.range, position)) {
                 containingNode = node;
             }
             //we had a match before, and don't now. this means we've finished walking down the whole way, and found our match
