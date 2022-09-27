@@ -40,7 +40,10 @@ export class CompletionsProcessor {
         //get the completions from all scopes for this file
         let allCompletions = util.flatMap(
             scopesForFile.map(scope => {
-                return this.event.file.getCompletions(this.event.position, scope);
+                scope.linkSymbolTable();
+                const completions = this.event.file.getCompletions(this.event.position, scope);
+                scope.unlinkSymbolTable();
+                return completions;
             }),
             c => c
         );

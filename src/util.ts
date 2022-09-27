@@ -50,7 +50,7 @@ export class Util {
         if (!filePath) {
             return -1;
         } else {
-            return filePath.replace(/^pkg:/, '').split(/[\\\/]/).length - 1;
+            return filePath.replace(/^pkg:\//, '').split(/[\\\/]/).length - 1;
         }
     }
 
@@ -1566,7 +1566,7 @@ export class Util {
     public validateTooDeepFile(file: (BrsFile | XmlFile)) {
         //find any files nested too deep
         let pkgPath = file.pkgPath ?? file.pkgPath.toString();
-        let rootFolder = pkgPath.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
+        let rootFolder = pkgPath.replace(/^pkg:\//, '').split(/[\\\/]/)[0].toLowerCase();
 
         if (isBrsFile(file) && rootFolder !== 'source') {
             return;

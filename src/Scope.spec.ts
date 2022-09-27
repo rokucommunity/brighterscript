@@ -319,7 +319,7 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
-        it.only('Validates too deep nested files', () => {
+        it('Validates too deep nested files', () => {
             program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/folder8/main.brs', ``);
             program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/folder8/main2.bs', ``);
             program.setFile('components/folder2/folder3/folder4/folder5/folder6/folder7/folder8/ButtonSecondary.xml', `<component name="ButtonSecondary" extends="ButtonBase" />`);
@@ -342,10 +342,9 @@ describe('Scope', () => {
                 end namespace
             `);
             program.validate();
-            expectDiagnostics(program, [{
-                ...DiagnosticMessages.cannotFindName('subname', 'Name1.subname'),
-                range: util.createRange(2, 26, 2, 33)
-            }]);
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('subname', 'Name1.subname')
+            ]);
         });
 
         it('detects unknown enum names', () => {
@@ -2116,8 +2115,8 @@ describe('Scope', () => {
             const sourceSymbols = sourceScope.symbolTable;
 
             expect((sourceSymbols.getSymbolType('funcInt') as TypedFunctionType).returnType.toString()).to.equal('integer');
-            expect((sourceSymbols.getSymbolType('Name.Space.nsFunc1') as TypedFunctionType).returnType.toString()).to.equal('integer');
-            expect((sourceSymbols.getSymbolType('Name.Space.nsFunc2') as TypedFunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('Name_Space_nsFunc1') as TypedFunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('Name_Space_nsFunc2') as TypedFunctionType).returnType.toString()).to.equal('integer');
 
         });
 
@@ -2148,8 +2147,8 @@ describe('Scope', () => {
             expect(mergedNsSymbolTable).not.to.be.undefined;
             expect((mergedNsSymbolTable.getSymbolType('nsFunc1') as TypedFunctionType).returnType.toString()).to.equal('integer');
             expect((mergedNsSymbolTable.getSymbolType('nsFunc2') as TypedFunctionType).returnType.toString()).to.equal('integer');
-            expect((mergedNsSymbolTable.getSymbolType('Name.Space.nsFunc2') as TypedFunctionType).returnType.toString()).to.equal('integer');
-            expect((mergedNsSymbolTable.getSymbolType('Name.outerNsFunc') as TypedFunctionType).returnType.toString()).to.equal('string');
+            expect((mergedNsSymbolTable.getSymbolType('Name_Space_nsFunc2') as TypedFunctionType).returnType.toString()).to.equal('integer');
+            expect((mergedNsSymbolTable.getSymbolType('Name_outerNsFunc') as TypedFunctionType).returnType.toString()).to.equal('string');
         });
 
         describe('lazytypes and scope', () => {
