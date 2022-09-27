@@ -367,7 +367,7 @@ export class ScopeValidator {
         let callableContainerMap = event.scope.getCallableContainerMap();
 
         event.scope.enumerateBrsFiles((file) => {
-            diagnostics.push(...this.diagnosticDetectInvalidFunctionCalls(event.scope, file, callableContainerMap));
+            diagnostics.push(...this.detectInvalidFunctionCallsForFile(event.scope, file, callableContainerMap));
         });
         event.scope.addDiagnostics(diagnostics);
     }
@@ -376,7 +376,7 @@ export class ScopeValidator {
     /**
     * Find functions with either the wrong type of parameters, or the wrong number of parameters
     */
-    private diagnosticDetectInvalidFunctionCalls(scope: Scope, file: BscFile, callableContainersByLowerName: CallableContainerMap) {
+    private detectInvalidFunctionCallsForFile(scope: Scope, file: BscFile, callableContainersByLowerName: CallableContainerMap) {
         const diagnostics: BsDiagnostic[] = [];
         const specialCaseGlobalFunctions = ['val']; //  Global callables with multiple definitions
         if (isBrsFile(file)) {

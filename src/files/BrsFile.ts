@@ -868,7 +868,7 @@ export class BrsFile {
         let startsWithNamespace = '';
         let namespaceContainer: NamespaceContainer;
         let tokenChain = [...originalTokenChain];
-        while (tokenChain[0] && (tokenChain[0].usage === TokenUsage.Direct)) {
+        while (tokenChain[0] && tokenChain[0].usage === TokenUsage.Direct) {
             const namespaceNameToCheck = `${startsWithNamespace}${startsWithNamespace.length > 0 ? '.' : ''}${tokenChain[0].token.text}`.toLowerCase();
             const foundNamespace = scope.namespaceLookup.get(namespaceNameToCheck);
 

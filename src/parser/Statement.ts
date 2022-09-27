@@ -1141,7 +1141,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     ) {
         super();
         this.name = this.nameExpression.getName(ParseMode.BrighterScript);
-        this.symbolTable = new SymbolTable(parentSymbolTable, `Namespace ${keyword.text}`);
+        this.symbolTable = new SymbolTable(parentSymbolTable, `Namespace ${this.name}`);
     }
 
     public symbolTable: SymbolTable;
@@ -1297,7 +1297,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider, Me
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
             }
         }
-        this.memberTable.identifier = `Interface (members) ${name?.text}`;
+        this.memberTable.name = `Interface ${name?.text} (members)`;
     }
 
     public tokens = {} as {
@@ -1559,8 +1559,8 @@ export class ClassStatement extends Statement implements TypedefProvider, Member
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
             }
         }
-        this.symbolTable.identifier = `Class (symbols) ${name?.text}`;
-        this.memberTable.identifier = `Class (members) ${name?.text}`;
+        this.symbolTable.name = `Class ${name?.text} (symbols)`;
+        this.memberTable.name = `Class ${name?.text} (members)`;
     }
 
     public getName(parseMode: ParseMode) {
@@ -2349,7 +2349,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
         ) ?? interpolatedRange;
         this.body = this.body ?? [];
 
-        this.symbolTable.identifier = `Enum ${tokens?.name?.text}`;
+        this.symbolTable.name = `Enum ${tokens?.name?.text}`;
     }
 
     public readonly range: Range;
