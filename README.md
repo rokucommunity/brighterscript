@@ -63,6 +63,9 @@ BrighterScript adds several new features to the BrightScript language such as Na
 ## Who uses Brighterscript?
 <br/>
 <p align="center">
+    <a href="https://www.fubo.tv/">
+        <img height="34" src="https://user-images.githubusercontent.com/2544493/192530108-eb470b85-e687-4575-af69-254aab13428c.png">
+    </a>&nbsp;&nbsp;&nbsp;
     <a href="https://www.applicaster.com/">
         <img src="https://user-images.githubusercontent.com/2544493/96571912-377af280-129a-11eb-8295-49eb12e54aeb.png">
     </a>&nbsp;&nbsp;&nbsp;
