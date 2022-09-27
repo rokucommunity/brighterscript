@@ -1,14 +1,14 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, SymbolInformation } from 'vscode-languageserver';
-import { Location, CompletionItemKind } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, SymbolInformation } from 'vscode-languageserver';
+import { CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, BeforeFileParseEvent } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, BeforeFileParseEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -206,9 +206,16 @@ export class Program {
             file: xmlFile,
             scope: scope
         });
-        this.components[key].sort(
-            (x, y) => x.file.pkgPath.toLowerCase().localeCompare(y.file.pkgPath.toLowerCase())
-        );
+        this.components[key].sort((a, b) => {
+            const pathA = a.file.pkgPath.toLowerCase();
+            const pathB = b.file.pkgPath.toLowerCase();
+            if (pathA < pathB) {
+                return -1;
+            } else if (pathA > pathB) {
+                return 1;
+            }
+            return 0;
+        });
         this.syncComponentDependencyGraph(this.components[key]);
     }
 
@@ -647,18 +654,10 @@ export class Program {
                 for (let scope of Object.values(this.scopes)) {
                     //only validate unvalidated scopes
                     if (!scope.isValidated) {
-                        this.plugins.emit('beforeScopeValidate', {
-                            program: this,
-                            scope: scope
-                        });
-
+                        scope.linkSymbolTable();
                         scope.validate();
+                        scope.unlinkSymbolTable();
                         scope.isValidated = true;
-
-                        this.plugins.emit('afterScopeValidate', {
-                            program: this,
-                            scope: scope
-                        });
                     }
                 }
             });
@@ -702,8 +701,8 @@ export class Program {
                         file: xmlFile,
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
-                                location: Location.create(
-                                    URI.file(xmlFile.srcPath).toString(),
+                                location: util.createLocation(
+                                    URI.file(xmlFile.srcPath ?? xmlFile.srcPath).toString(),
                                     x.componentName.range
                                 ),
                                 message: 'Also defined here'
@@ -761,13 +760,18 @@ export class Program {
      * Get a list of all scopes the file is loaded into
      * @param file
      */
-    public getScopesForFile(file: XmlFile | BrsFile) {
+    public getScopesForFile(file: XmlFile | BrsFile | string) {
+        if (typeof file === 'string') {
+            file = this.getFile(file);
+        }
         let result = [] as Scope[];
-        for (let key in this.scopes) {
-            let scope = this.scopes[key];
+        if (file) {
+            for (let key in this.scopes) {
+                let scope = this.scopes[key];
 
-            if (scope.hasFile(file)) {
-                result.push(scope);
+                if (scope.hasFile(file)) {
+                    result.push(scope);
+                }
             }
         }
         return result;
@@ -860,48 +864,28 @@ export class Program {
         if (!file) {
             return [];
         }
-        let result = [] as CompletionItem[];
 
-        if (isBrsFile(file) && file.parser.isPositionNextToTokenKind(position, TokenKind.Callfunc)) {
-            // is next to a @. callfunc invocation - must be an interface method
-            for (const scope of this.getScopes().filter((s) => isXmlScope(s))) {
-                let fileLinks = this.getStatementsForXmlFile(scope as XmlScope);
-                for (let fileLink of fileLinks) {
-
-                    result.push(scope.createCompletionFromFunctionStatement(fileLink.item));
-                }
-            }
-            //no other result is possible in this case
-            return result;
-
-        }
         //find the scopes for this file
         let scopes = this.getScopesForFile(file);
 
         //if there are no scopes, include the global scope so we at least get the built-in functions
         scopes = scopes.length > 0 ? scopes : [this.globalScope];
 
-        //get the completions from all scopes for this file
-        let allCompletions = util.flatMap(
-            scopes.map(ctx => {
-                ctx.linkSymbolTable();
-                const completions = file.getCompletions(position, ctx);
-                ctx.unlinkSymbolTable();
-                return completions;
-            }),
-            c => c
-        );
+        const event: ProvideCompletionsEvent = {
+            program: this,
+            file: file,
+            scopes: scopes,
+            position: position,
+            completions: []
+        };
 
-        //only keep completions common to every scope for this file
-        let keyCounts = {} as Record<string, number>;
-        for (let completion of allCompletions) {
-            let key = `${completion.label}-${completion.kind}`;
-            keyCounts[key] = keyCounts[key] ? keyCounts[key] + 1 : 1;
-            if (keyCounts[key] === scopes.length) {
-                result.push(completion);
-            }
-        }
-        return result;
+        this.plugins.emit('beforeProvideCompletions', event);
+
+        this.plugins.emit('provideCompletions', event);
+
+        this.plugins.emit('afterProvideCompletions', event);
+
+        return event.completions;
     }
 
     /**
@@ -944,17 +928,27 @@ export class Program {
     }
 
     /**
+     * Get hover information for a file and position
      * @param srcPath The absolute path to the source file on disk
      */
-    public getHover(srcPath: string, position: Position) {
-        //find the file
+    public getHover(srcPath: string, position: Position): Hover[] {
         let file = this.getFile(srcPath);
-        if (!file) {
-            return null;
+        let result: Hover[];
+        if (file) {
+            const event = {
+                program: this,
+                file: file,
+                position: position,
+                scopes: this.getScopesForFile(file),
+                hovers: []
+            } as ProvideHoverEvent;
+            this.plugins.emit('beforeProvideHover', event);
+            this.plugins.emit('provideHover', event);
+            this.plugins.emit('afterProvideHover', event);
+            result = event.hovers;
         }
-        const hover = file.getHover(position);
 
-        return Promise.resolve(hover);
+        return result ?? [];
     }
 
     /**
@@ -971,7 +965,7 @@ export class Program {
                 //only keep diagnostics related to this file
                 .filter(x => x.file === file)
                 //only keep diagnostics that touch this range
-                .filter(x => util.rangesIntersect(x.range, range));
+                .filter(x => util.rangesIntersectOrTouch(x.range, range));
 
             const scopes = this.getScopesForFile(file);
 
@@ -1532,6 +1526,42 @@ export class Program {
                 //TODO handle namespace-relative classes
                 //if the file has a function with this name
                 if (file.parser.references.classStatementLookup.get(lowerClassName) !== undefined) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
+    }
+
+    public findFilesForNamespace(name: string) {
+        const files = [] as BscFile[];
+        const lowerName = name.toLowerCase();
+        //find every file with this class defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                if (file.parser.references.namespaceStatements.find((x) => {
+                    const namespaceName = x.name.toLowerCase();
+                    return (
+                        //the namespace name matches exactly
+                        namespaceName === lowerName ||
+                        //the full namespace starts with the name (honoring the part boundary)
+                        namespaceName.startsWith(lowerName + '.')
+                    );
+                })) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
+    }
+
+    public findFilesForEnum(name: string) {
+        const files = [] as BscFile[];
+        const lowerName = name.toLowerCase();
+        //find every file with this class defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                if (file.parser.references.enumStatementLookup.get(lowerName)) {
                     files.push(file);
                 }
             }

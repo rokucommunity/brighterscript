@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
-import { standardizePath as s, util } from './util';
+import util, { standardizePath as s } from './util';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
@@ -44,6 +44,44 @@ describe('Scope', () => {
         `);
 
         program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('builds symbol table with namespace-relative entries', () => {
+        const file = program.setFile<BrsFile>('source/alpha.bs', `
+            namespace alpha
+                class Beta
+                end class
+            end namespace
+            namespace alpha
+                class Charlie extends Beta
+                end class
+                function createBeta()
+                    return new Beta()
+                end function
+            end namespace
+        `);
+        program.setFile('source/main.bs', `
+            function main()
+                alpha.createBeta()
+                thing = new alpha.Beta()
+            end function
+        `);
+        program.validate();
+        const scope = program.getScopesForFile('source/alpha.bs')[0];
+        scope.linkSymbolTable();
+        const symbolTable = file.parser.references.namespaceStatements[1].symbolTable;
+        //the symbol table should contain the relative names for all items in this namespace across files
+        expect(
+            symbolTable.hasSymbol('Beta')
+        ).to.be.true;
+        expect(
+            symbolTable.hasSymbol('Charlie')
+        ).to.be.true;
+        expect(
+            symbolTable.hasSymbol('createBeta')
+        ).to.be.true;
+
         expectZeroDiagnostics(program);
     });
 
@@ -165,6 +203,234 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
+        it('diagnostics are assigned to correct child scope', () => {
+            program.options.autoImportComponentScript = true;
+            program.setFile('components/constants.bs', `
+                namespace constants.alpha.beta
+                    const charlie = "charlie"
+                end namespace
+            `);
+
+            program.setFile('components/ButtonBase.xml', `<component name="ButtonBase" extends="Scene" />`);
+
+            const buttonPrimary = program.setFile('components/ButtonPrimary.bs', `
+                import "constants.bs"
+                sub init()
+                    print constants.alpha.delta.charlie
+                end sub
+            `);
+            program.setFile('components/ButtonPrimary.xml', `<component name="ButtonPrimary" extends="ButtonBase" />`);
+
+            const buttonSecondary = program.setFile('components/ButtonSecondary.bs', `
+                import "constants.bs"
+                sub init()
+                    print constants.alpha.delta.charlie
+                end sub
+            `);
+            program.setFile('components/ButtonSecondary.xml', `<component name="ButtonSecondary" extends="ButtonBase" />`);
+
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    message: DiagnosticMessages.cannotFindName('delta').message,
+                    file: {
+                        srcPath: buttonPrimary.srcPath
+                    },
+                    relatedInformation: [{
+                        message: `Not defined in scope 'pkg:/components/ButtonPrimary.xml'`
+                    }]
+                }, {
+                    message: DiagnosticMessages.cannotFindName('delta').message,
+                    file: {
+                        srcPath: buttonSecondary.srcPath
+                    },
+                    relatedInformation: [{
+                        message: `Not defined in scope 'pkg:/components/ButtonSecondary.xml'`
+                    }]
+                }
+            ]);
+        });
+
+        it('recognizes dimmed vars', () => {
+            program.setFile(`source/file.brs`, `
+                function buildArray(numItems)
+                    dim result[3]
+                    for i = 0 to numItems
+                        result.push(i)
+                    end for
+                    return result
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('detects unknown namespace names', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    Name1.thing()
+                    Name2.thing()
+                end sub
+                namespace Name1
+                    sub thing()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('Name2')
+            ]);
+        });
+
+        it('accepts namespace names in their transpiled form on .brs files', () => {
+            program.setFile('source/ns.bs', `
+                namespace MyNamespace
+                    sub foo()
+                    end sub
+                end namespace
+
+                namespace A.B.C
+                    sub ga()
+                    end sub
+                end namespace
+            `);
+            program.setFile('source/main.brs', `
+                sub main()
+                    MyNamespace_foo()
+                    A_B_C_ga()
+                end sub
+            `);
+            program.setFile('source/main.xml', `
+                <?xml version="1.0" encoding="UTF-8"?>
+                    <component name="MyComponent" extends="Group">
+                    <script type="text/brightscript" uri="main.brs"/>
+                    <script type="text/brightscript" uri="ns.bs"/>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('Validates NOT too deep nested files', () => {
+            program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/main.brs', ``);
+            program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/main2.bs', ``);
+            program.setFile('components/folder2/folder3/folder4/folder5/folder6/folder7/ButtonSecondary.xml', `<component name="ButtonSecondary" extends="ButtonBase" />`);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('Validates too deep nested files', () => {
+            program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/folder8/main.brs', ``);
+            program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/folder8/main2.bs', ``);
+            program.setFile('components/folder2/folder3/folder4/folder5/folder6/folder7/folder8/ButtonSecondary.xml', `<component name="ButtonSecondary" extends="ButtonBase" />`);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.detectedTooDeepFileSource(8),
+                DiagnosticMessages.detectedTooDeepFileSource(8),
+                DiagnosticMessages.detectedTooDeepFileSource(8)
+            ]);
+        });
+
+        it('detects unknown namespace sub-names', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    Name1.subname.thing()
+                end sub
+                namespace Name1
+                    sub thing()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('subname', 'Name1.subname')
+            ]);
+        });
+
+        it('detects unknown enum names', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print Direction.up
+                    print up.Direction
+                end sub
+                enum Direction
+                    up
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('up')
+            ]);
+        });
+
+        it('detects unknown function names', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print go.toStr()
+                    print go2.toStr()
+                end sub
+
+                function go()
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('go2')
+            ]);
+        });
+
+        it('detects unknown const in assignment operator', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    value = ""
+                    value += constants.API_KEY
+                    value += API_URL
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('constants'),
+                DiagnosticMessages.cannotFindName('API_URL')
+            ]);
+        });
+
+        it('detects unknown local var names', () => {
+            program.setFile('source/lib.bs', `
+                sub libFunc(param1)
+                    print param1
+                    print param2
+                    name1 = "bob"
+                    print name1
+                    print name2
+                    for each item1 in param1
+                        print item1
+                        print item2
+                    end for
+                    for idx1 = 0 to 10
+                        print idx1
+                        print idx2
+                    end for
+                    try
+                        print 1
+                    catch ex1
+                        print ex1
+                        print ex2
+                    end try
+                end sub
+
+                function go()
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('param2'),
+                DiagnosticMessages.cannotFindName('name2'),
+                DiagnosticMessages.cannotFindName('item2'),
+                DiagnosticMessages.cannotFindName('idx2'),
+                DiagnosticMessages.cannotFindName('ex2')
+            ]);
+        });
+
         describe('createObject', () => {
             it('recognizes various scenegraph nodes', () => {
                 program.setFile(`source/file.brs`, `
@@ -468,7 +734,7 @@ describe('Scope', () => {
             });
 
             it('flags scope function with same name (but different case) as built-in function', () => {
-                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile('source/main.brs', `
                     sub main()
                         print str(12345) ' prints 12345 (i.e. our str() function below is ignored)
                     end sub
@@ -514,7 +780,7 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.callToUnknownFunction('DoB', 'source')
+                DiagnosticMessages.cannotFindName('DoB')
             ]);
         });
 
@@ -571,7 +837,7 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.callToUnknownFunction('DoC', 'source')
+                DiagnosticMessages.cannotFindName('DoC')
             ]);
         });
 
@@ -1849,8 +2115,8 @@ describe('Scope', () => {
             const sourceSymbols = sourceScope.symbolTable;
 
             expect((sourceSymbols.getSymbolType('funcInt') as TypedFunctionType).returnType.toString()).to.equal('integer');
-            expect((sourceSymbols.getSymbolType('Name.Space.nsFunc1') as TypedFunctionType).returnType.toString()).to.equal('integer');
-            expect((sourceSymbols.getSymbolType('Name.Space.nsFunc2') as TypedFunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('Name_Space_nsFunc1') as TypedFunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('Name_Space_nsFunc2') as TypedFunctionType).returnType.toString()).to.equal('integer');
 
         });
 
@@ -1881,8 +2147,8 @@ describe('Scope', () => {
             expect(mergedNsSymbolTable).not.to.be.undefined;
             expect((mergedNsSymbolTable.getSymbolType('nsFunc1') as TypedFunctionType).returnType.toString()).to.equal('integer');
             expect((mergedNsSymbolTable.getSymbolType('nsFunc2') as TypedFunctionType).returnType.toString()).to.equal('integer');
-            expect((mergedNsSymbolTable.getSymbolType('Name.Space.nsFunc2') as TypedFunctionType).returnType.toString()).to.equal('integer');
-            expect((mergedNsSymbolTable.getSymbolType('Name.outerNsFunc') as TypedFunctionType).returnType.toString()).to.equal('string');
+            expect((mergedNsSymbolTable.getSymbolType('Name_Space_nsFunc2') as TypedFunctionType).returnType.toString()).to.equal('integer');
+            expect((mergedNsSymbolTable.getSymbolType('Name_outerNsFunc') as TypedFunctionType).returnType.toString()).to.equal('string');
         });
 
         describe('lazytypes and scope', () => {

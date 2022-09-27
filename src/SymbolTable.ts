@@ -1,8 +1,7 @@
 import type { Position, Range } from 'vscode-languageserver';
+import type { BscType, TypeContext } from './types/BscType';
 import { getTypeFromContext } from './types/BscType';
 import { DynamicType } from './types/DynamicType';
-import type { BscType, TypeContext } from './types/BscType';
-
 
 /**
  * Stores the types associated with variables and functions in the Brighterscript code
@@ -10,8 +9,11 @@ import type { BscType, TypeContext } from './types/BscType';
  */
 export class SymbolTable {
     constructor(
-        private parent?: SymbolTable | undefined
-    ) { }
+        parent?: SymbolTable | undefined,
+        public name = ''
+    ) {
+        this.pushParent(parent);
+    }
 
     /**
      * The map of symbols declared directly in this SymbolTable (excludes parent SymbolTable).
@@ -20,8 +22,8 @@ export class SymbolTable {
     private symbolMap = new Map<string, BscSymbol[]>();
 
     /**
-     * Get list of symbols declared directly in this SymbolTable (excludes parent SymbolTable).
-     */
+    * Get list of symbols declared directly in this SymbolTable (excludes parent SymbolTable).
+    */
     public getOwnSymbols(): BscSymbol[] {
         return [].concat(...this.symbolMap.values());
     }
@@ -37,13 +39,28 @@ export class SymbolTable {
         return symbols;
     }
 
+    public get parent() {
+        return this.parentStack[0];
+    }
+
     /**
-     * Sets the parent table for lookups
+     * Sets the parent table for lookups. There can only be one parent at a time, but sometimes you
+     * want to temporarily change the parent, and then restore it later. This allows that.
      *
      * @param [parent]
      */
-    setParent(parent?: SymbolTable) {
-        this.parent = parent;
+    private parentStack: SymbolTable[] = [];
+
+    public pushParent(parent?: SymbolTable) {
+        this.parentStack.unshift(parent);
+        return parent;
+    }
+
+    /**
+     * Remove the current parent, restoring the previous parent (if there was one)
+     */
+    public popParent() {
+        return this.parentStack.shift();
     }
 
     /**
@@ -172,15 +189,31 @@ export class SymbolTable {
     clear() {
         this.symbolMap.clear();
     }
-}
 
+    /**
+     * Serialize this SymbolTable to JSON (useful for debugging reasons)
+     */
+    private toJSON() {
+        return {
+            name: this.name,
+            parent: this.parent?.toJSON(),
+            parentStack: this.parentStack.map(p => p?.toJSON()),
+            symbols: [
+                ...new Set(
+                    [...this.symbolMap.entries()].map(([key, symbols]) => {
+                        return symbols.map(x => x.name);
+                    }).flat().sort()
+                )
+            ]
+        };
+    }
+}
 
 export interface BscSymbol {
     name: string;
     range: Range;
     type: BscType;
 }
-
 
 function isPositionBefore(pos1: Position, pos2: Position): boolean {
     if (pos1?.line < pos2?.line) {

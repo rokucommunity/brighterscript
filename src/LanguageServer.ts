@@ -6,7 +6,6 @@ import type {
     CompletionItem,
     Connection,
     DidChangeWatchedFilesParams,
-    Hover,
     InitializeParams,
     ServerCapabilities,
     TextDocumentPositionParams,
@@ -21,7 +20,8 @@ import type {
     SemanticTokensOptions,
     SemanticTokens,
     SemanticTokensParams,
-    TextDocumentChangeEvent
+    TextDocumentChangeEvent,
+    Hover
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -230,14 +230,18 @@ export class LanguageServer {
     /**
      * Ask the client for the list of `files.exclude` patterns. Useful when determining if we should process a file
      */
-    private async getWorkspaceExcludeGlobs(workspaceFolder: string) {
-        //get any `files.exclude` globs to use to filter
-        let config = await this.connection.workspace.getConfiguration({
-            scopeUri: workspaceFolder,
-            section: 'files'
-        }) as {
-            exclude: Record<string, boolean>;
+    private async getWorkspaceExcludeGlobs(workspaceFolder: string): Promise<string[]> {
+        let config = {
+            exclude: {} as Record<string, boolean>
         };
+        //if supported, ask vscode for the `files.exclude` configuration
+        if (this.hasConfigurationCapability) {
+            //get any `files.exclude` globs to use to filter
+            config = await this.connection.workspace.getConfiguration({
+                scopeUri: workspaceFolder,
+                section: 'files'
+            });
+        }
         return Object
             .keys(config?.exclude ?? {})
             .filter(x => config?.exclude?.[x])
@@ -270,10 +274,34 @@ export class LanguageServer {
         //if we found at least one bsconfig.json, then ALL projects must have a bsconfig.json.
         if (files.length > 0) {
             return files.map(file => s`${path.dirname(file.src)}`);
-        } else {
-            //treat the workspace folder as a brightscript project itself
-            return [workspaceFolder];
         }
+
+        //look for roku project folders
+        const rokuLikeDirs = (await Promise.all(
+            //find all folders containing a `manifest` file
+            (await rokuDeploy.getFilePaths([
+                '**/manifest',
+                ...excludes
+
+                //is there at least one .bs|.brs file under the `/source` folder?
+            ], workspaceFolder)).map(async manifestEntry => {
+                const manifestDir = path.dirname(manifestEntry.src);
+                const files = await rokuDeploy.getFilePaths([
+                    'source/**/*.{brs,bs}',
+                    ...excludes
+                ], manifestDir);
+                if (files.length > 0) {
+                    return manifestDir;
+                }
+            })
+            //throw out nulls
+        )).filter(x => !!x);
+        if (rokuLikeDirs.length > 0) {
+            return rokuLikeDirs;
+        }
+
+        //treat the workspace folder as a brightscript project itself
+        return [workspaceFolder];
     }
 
     /**
@@ -420,11 +448,16 @@ export class LanguageServer {
         } else {
             scopeUri = URI.file(workspacePath).toString();
         }
-        //look for config group called "brightscript"
-        let config = await this.connection.workspace.getConfiguration({
-            scopeUri: scopeUri,
-            section: 'brightscript'
-        });
+        let config = {
+            configFile: undefined
+        };
+        //if the client supports configuration, look for config group called "brightscript"
+        if (this.hasConfigurationCapability) {
+            await this.connection.workspace.getConfiguration({
+                scopeUri: scopeUri,
+                section: 'brightscript'
+            });
+        }
         let configFilePath: string;
 
         //if there's a setting, we need to find the file or show error if it can't be found
@@ -670,7 +703,7 @@ export class LanguageServer {
         //clone the diagnostics for each code action, since certain diagnostics can have circular reference properties that kill the language server if serialized
         for (const codeAction of codeActions) {
             if (codeAction.diagnostics) {
-                codeAction.diagnostics = codeAction.diagnostics.map(x => util.toDiagnostic(x));
+                codeAction.diagnostics = codeAction.diagnostics.map(x => util.toDiagnostic(x, params.textDocument.uri));
             }
         }
         return codeActions;
@@ -979,15 +1012,33 @@ export class LanguageServer {
 
         const srcPath = util.uriToPath(params.textDocument.uri);
         let projects = this.getProjects();
-        let hovers = await Promise.all(
-            Array.prototype.concat.call([],
-                projects.map(async (x) => x.builder.program.getHover(srcPath, params.position))
-            )
-        ) as Hover[];
+        let hovers = projects
+            //get hovers from all projects
+            .map((x) => x.builder.program.getHover(srcPath, params.position))
+            //flatten to a single list
+            .flat();
 
-        //return the first non-falsey hover. TODO is there a way to handle multiple hover results?
-        let hover = hovers.filter((x) => !!x)[0];
-        return hover;
+        const contents = [
+            ...(hovers ?? [])
+                //pull all hover contents out into a flag array of strings
+                .map(x => {
+                    return Array.isArray(x?.contents) ? x?.contents : [x?.contents];
+                }).flat()
+                //remove nulls
+                .filter(x => !!x)
+                //dedupe hovers across all projects
+                .reduce((set, content) => set.add(content), new Set<string>()).values()
+        ];
+
+        if (contents.length > 0) {
+            let hover: Hover = {
+                //use the range from the first hover
+                range: hovers[0]?.range,
+                //the contents of all hovers
+                contents: contents
+            };
+            return hover;
+        }
     }
 
     @AddStackToErrorMessage
@@ -1189,10 +1240,11 @@ export class LanguageServer {
             const patch = this.diagnosticCollection.getPatch(this.projects);
 
             for (let filePath in patch) {
-                const diagnostics = patch[filePath].map(d => util.toDiagnostic(d));
+                const uri = URI.file(filePath).toString();
+                const diagnostics = patch[filePath].map(d => util.toDiagnostic(d, uri));
 
                 this.connection.sendDiagnostics({
-                    uri: URI.file(filePath).toString(),
+                    uri: uri,
                     diagnostics: diagnostics
                 });
             }

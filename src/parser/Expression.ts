@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Block, CommentStatement, FunctionStatement, LabelStatement } from './Statement';
+import type { Block, CommentStatement, FunctionStatement, LabelStatement, Statement } from './Statement';
 import type { Range } from 'vscode-languageserver';
 import util, { MAX_PARAM_COUNT } from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
@@ -15,9 +15,9 @@ import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType, SymbolContainer } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
-import { TypedFunctionType } from '../types/TypedFunctionType';
-import { ObjectType } from '../types/ObjectType';
 import { ArrayType } from '../types/ArrayType';
+import { ObjectType } from '../types/ObjectType';
+import { TypedFunctionType } from '../types/TypedFunctionType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -35,6 +35,17 @@ export abstract class Expression {
     public visitMode = InternalWalkMode.visitExpressions;
 
     public abstract walk(visitor: WalkVisitor, options: WalkOptions);
+    /**
+     * The parent node for this expression. This is set dynamically during `onFileValidate`, and should not be set directly.
+     */
+    public parent?: Statement | Expression;
+
+    /**
+     * Get the closest symbol table for this node. Should be overridden in children that directly contain a symbol table
+     */
+    public getSymbolTable(): SymbolTable {
+        return this.parent?.getSymbolTable();
+    }
 }
 
 export class BinaryExpression extends Expression {
@@ -149,10 +160,16 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         } else {
             this._returnType = new DynamicType();
         }
-        this.symbolTable = new SymbolTable(parentSymbolTable);
+        this.symbolTable = new SymbolTable(parentSymbolTable, `Function`);
         for (let param of parameters) {
             this.symbolTable.addSymbol(param.name.text, param.name.range, param.getType());
         }
+    }
+
+    public symbolTable: SymbolTable;
+
+    public getSymbolTable() {
+        return this.symbolTable;
     }
 
     public get range() {
@@ -179,10 +196,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     }
     private _range: Range;
 
-    public readonly symbolTable: SymbolTable;
-
     public labelStatements = [] as LabelStatement[];
-
 
     private _returnType: BscType;
     /**
@@ -717,6 +731,8 @@ export class AALiteralExpression extends Expression implements SymbolContainer {
     readonly memberTable: SymbolTable = new SymbolTable();
 
     public buildSymbolTable() {
+        this.symbolTable.name = `AALiteral (symbols)`;
+        this.memberTable.name = `AALiteral (members)`;
         this.symbolTable.clear();
         this.symbolTable.addSymbol('m', { start: this.open.range.start, end: this.close.range.end }, new ObjectType('object', this.memberTable));
         for (const element of this.elements) {
@@ -839,7 +855,7 @@ export class VariableExpression extends Expression {
     public readonly range: Range;
 
     public getName(parseMode: ParseMode) {
-        return parseMode === ParseMode.BrightScript ? this.name.text : this.name.text;
+        return this.name.text;
     }
 
     transpile(state: BrsTranspileState) {

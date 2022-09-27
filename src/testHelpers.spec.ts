@@ -1,7 +1,7 @@
 import type { BscFile, BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { CompletionItem, Diagnostic, Range } from 'vscode-languageserver';
+import type { CodeDescription, CompletionItem, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from 'chai';
 import type { CodeActionShorthand } from './CodeActionUtil';
@@ -43,13 +43,39 @@ function sortDiagnostics(diagnostics: BsDiagnostic[]) {
     );
 }
 
+function cloneObject<TOriginal, TTemplate>(original: TOriginal, template: TTemplate, defaultKeys: Array<keyof TOriginal>) {
+    const clone = {} as Partial<TOriginal>;
+    let keys = Object.keys(template ?? {}) as Array<keyof TOriginal>;
+    //if there were no keys provided, use some sane defaults
+    keys = keys.length > 0 ? keys : defaultKeys;
+
+    //copy only compare the specified keys from actualDiagnostic
+    for (const key of keys) {
+        clone[key] = original[key];
+    }
+    return clone;
+}
+
+interface PartialDiagnostic {
+    range?: Range;
+    severity?: DiagnosticSeverity;
+    code?: integer | string;
+    codeDescription?: Partial<CodeDescription>;
+    source?: string;
+    message?: string;
+    tags?: Partial<DiagnosticTag>[];
+    relatedInformation?: Partial<DiagnosticRelatedInformation>[];
+    data?: unknown;
+    file?: Partial<BscFile>;
+}
+
 /**
  * Ensure the DiagnosticCollection exactly contains the data from expected list.
  * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
  * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
-export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Partial<Diagnostic> | string | number>) {
-    const diagnostics = sortDiagnostics(
+export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<PartialDiagnostic | string | number>) {
+    const actualDiagnostics = sortDiagnostics(
         getDiagnostics(arg)
     );
     const expectedDiagnostics = sortDiagnostics(
@@ -60,23 +86,37 @@ export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Par
             } else if (typeof x === 'number') {
                 result = { code: x };
             }
-            return result as BsDiagnostic;
+            return result as unknown as BsDiagnostic;
         })
     );
 
     const actual = [] as BsDiagnostic[];
-    for (let i = 0; i < diagnostics.length; i++) {
-        const actualDiagnostic = diagnostics[i];
-        const clone = {} as BsDiagnostic;
-        let keys = Object.keys(expectedDiagnostics[i] ?? {}) as Array<keyof BsDiagnostic>;
-        //if there were no keys provided, use some sane defaults
-        keys = keys.length > 0 ? keys : ['message', 'code', 'range', 'severity'];
-
-        //copy only compare the specified keys from actualDiagnostic
-        for (const key of keys) {
-            clone[key] = actualDiagnostic[key];
+    for (let i = 0; i < actualDiagnostics.length; i++) {
+        const expectedDiagnostic = expectedDiagnostics[i];
+        const actualDiagnostic = cloneObject(
+            actualDiagnostics[i],
+            expectedDiagnostic,
+            ['message', 'code', 'range', 'severity', 'relatedInformation']
+        );
+        //deep clone relatedInformation if available
+        if (actualDiagnostic.relatedInformation) {
+            for (let j = 0; j < actualDiagnostic.relatedInformation.length; j++) {
+                actualDiagnostic.relatedInformation[j] = cloneObject(
+                    actualDiagnostic.relatedInformation[j],
+                    expectedDiagnostic?.relatedInformation[j],
+                    ['location', 'message']
+                ) as any;
+            }
         }
-        actual.push(clone);
+        //deep clone file info if available
+        if (actualDiagnostic.file) {
+            actualDiagnostic.file = cloneObject(
+                actualDiagnostic.file,
+                expectedDiagnostic?.file,
+                ['srcPath', 'pkgPath']
+            ) as any;
+        }
+        actual.push(actualDiagnostic as any);
     }
 
     expect(actual).to.eql(expectedDiagnostics);

@@ -1,7 +1,7 @@
 import { expect, assert } from 'chai';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
-import type { Expression } from './Expression';
+import type { AAMemberExpression, Expression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode, getBscTypeFromExpression, TokenUsage } from './Parser';
 import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
@@ -14,17 +14,18 @@ import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
 import { BrsFile } from '../files/BrsFile';
 import { Program } from '../Program';
+import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { SymbolTable } from '../SymbolTable';
-import { TypedFunctionType } from '../types/TypedFunctionType';
-import { LazyType } from '../types/LazyType';
-import { IntegerType } from '../types/IntegerType';
-import { StringType } from '../types/StringType';
-import { ObjectType } from '../types/ObjectType';
-import { CustomType } from '../types/CustomType';
-import { VoidType } from '../types/VoidType';
-import { DynamicType } from '../types/DynamicType';
-import { util } from '../util';
 import { ArrayType } from '../types/ArrayType';
+import { CustomType } from '../types/CustomType';
+import { DynamicType } from '../types/DynamicType';
+import { IntegerType } from '../types/IntegerType';
+import { LazyType } from '../types/LazyType';
+import { ObjectType } from '../types/ObjectType';
+import { StringType } from '../types/StringType';
+import { TypedFunctionType } from '../types/TypedFunctionType';
+import { VoidType } from '../types/VoidType';
+import { util } from '../util';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -130,6 +131,7 @@ describe('parser', () => {
 
         it('works for references.expressions', () => {
             const parser = Parser.parse(`
+                b += "plus-equal"
                 a += 1 + 2
                 b += getValue1() + getValue2()
                 increment++
@@ -154,6 +156,9 @@ describe('parser', () => {
                 end function
             `);
             const expected = [
+                '"plus-equal"',
+                'b',
+                'b += "plus-equal"',
                 '1',
                 '2',
                 'a',
@@ -539,7 +544,7 @@ describe('parser', () => {
                 expect(strFunctionType.returnType.toString()).to.equal('string');
             });
 
-            it('adds a fully qualified name of a function in a namespace to the parsers symbol table', () => {
+            it('adds a transpiled name of a function in a namespace to the parsers symbol table', () => {
                 let parser = parse(`
                     namespace Name.Space
                         function funcInt() as integer
@@ -552,8 +557,8 @@ describe('parser', () => {
                     end namespace
                 `, ParseMode.BrighterScript);
 
-                expect(parser.symbolTable.getSymbolType('Name.Space.funcInt')).to.be.instanceof(TypedFunctionType);
-                expect(parser.symbolTable.getSymbolType('Name.Space.funcStr')).to.be.instanceof(TypedFunctionType);
+                expect(parser.symbolTable.getSymbolType('Name_Space_funcInt')).to.be.instanceof(TypedFunctionType);
+                expect(parser.symbolTable.getSymbolType('Name_Space_funcStr')).to.be.instanceof(TypedFunctionType);
             });
 
         });
@@ -952,7 +957,47 @@ describe('parser', () => {
                 `);
                 expect(diagnostics[0]?.message).not.to.exist;
             });
+
+            it('allows `mod` as an AA literal property', () => {
+                const parser = parse(`
+                    sub main()
+                        person = {
+                            mod: true
+                        }
+                        person.mod = false
+                        print person.mod
+                    end sub
+                `);
+                expectZeroDiagnostics(parser);
+            });
+
+            it('converts aa literal property TokenKind to Identifier', () => {
+                const parser = parse(`
+                    sub main()
+                        person = {
+                            mod: true
+                            and: true
+                        }
+                    end sub
+                `);
+                expectZeroDiagnostics(parser);
+                const elements = [] as AAMemberExpression[];
+                parser.ast.walk(createVisitor({
+                    AAMemberExpression: (node) => {
+                        elements.push(node as any);
+                    }
+                }), {
+                    walkMode: WalkMode.visitAllRecursive
+                });
+
+                expect(
+                    elements.map(x => x.keyToken.kind)
+                ).to.eql(
+                    [TokenKind.Identifier, TokenKind.Identifier]
+                );
+            });
         });
+
         it('"end" is not allowed as a local identifier', () => {
             let { diagnostics } = parse(`
                 sub main()
@@ -1629,24 +1674,24 @@ describe('parser', () => {
     describe('tokenChain', () => {
         it('can find a chain of tokens', () => {
             const parser = parse(`
-            sub someFunc()
-                print m.field.childField
-            end sub
-            `, ParseMode.BrighterScript);
-            const childFieldToken = parser.getTokenAt(Position.create(2, 38));
+                sub someFunc(var)
+                    print var.field.childField
+                end sub
+            `);
+            const childFieldToken = parser.getTokenAt(Position.create(2, 42));
             const tokenChain = parser.getTokenChain(childFieldToken).chain;
             const tokenChainTokens = tokenChain.map(tcm => tcm.token);
             expect(tokenChain.length).to.equal(3);
-            expect(tokenChainTokens.map(token => token.text)).to.eql(['m', 'field', 'childField']);
+            expect(tokenChainTokens.map(token => token.text)).to.eql(['var', 'field', 'childField']);
             expect(tokenChain.map(tcm => tcm.usage)).to.eql([TokenUsage.Direct, TokenUsage.Direct, TokenUsage.Direct]);
         });
 
         it('can find a chain of tokens with function call with no args in the middle', () => {
             const parser = parse(`
-            sub someFunc()
-                print var.field.funcCall().childField
-            end sub
-            `, ParseMode.BrighterScript);
+                sub someFunc(var)
+                    print var.field.funcCall().childField
+                end sub
+            `);
             const childFieldToken = parser.getTokenAt(Position.create(2, 49));
             const tokenChain = parser.getTokenChain(childFieldToken).chain;
             const tokenChainTokens = tokenChain.map(tcm => tcm.token);
@@ -1657,10 +1702,10 @@ describe('parser', () => {
 
         it('can find a chain of tokens with function call with multiple args in the middle', () => {
             const parser = parse(`
-            sub someFunc()
-                print var.field.funcCall(1, "string", {key: value}).childField
-            end sub
-            `, ParseMode.BrighterScript);
+                sub someFunc(var)
+                    print var.field.funcCall(1, "string", {key: value}).childField
+                end sub
+            `);
             const childFieldToken = parser.getTokenAt(Position.create(2, 75));
             const tokenChain = parser.getTokenChain(childFieldToken).chain;
             const tokenChainTokens = tokenChain.map(tcm => tcm.token);
@@ -1671,10 +1716,10 @@ describe('parser', () => {
 
         it('can find a chain of tokens with function call with function call inside', () => {
             const parser = parse(`
-            sub someFunc()
-                print var.field.funcCall(a(), b(), otherFunc2(c(), {d: func3(e)})).childField
-            end sub
-            `, ParseMode.BrighterScript);
+                sub someFunc(var)
+                    print var.field.funcCall(a(), b(), otherFunc2(c(), {d: func3(e)})).childField
+                end sub
+            `);
             const childFieldToken = parser.getTokenAt(Position.create(2, 90));
             const tokenChain = parser.getTokenChain(childFieldToken).chain;
             const tokenChainTokens = tokenChain.map(tcm => tcm.token);
@@ -1685,10 +1730,10 @@ describe('parser', () => {
 
         it('can find a chain of tokens with array references inside', () => {
             const parser = parse(`
-            sub someFunc()
-                print var.field.myArray[0].childField
-            end sub
-            `, ParseMode.BrighterScript);
+                sub someFunc(var)
+                    print var.field.myArray[0].childField
+                end sub
+            `);
             const childFieldToken = parser.getTokenAt(Position.create(2, 50));
             const tokenChain = parser.getTokenChain(childFieldToken).chain;
             const tokenChainTokens = tokenChain.map(tcm => tcm.token);
@@ -1699,111 +1744,154 @@ describe('parser', () => {
 
         it('includes unknown when an expression in brackets is part of the chain', () => {
             const parser = parse(`
-            sub someFunc()
-                print (1 + 1).toStr()
-            end sub
-            `, ParseMode.BrighterScript);
-            const toStrToken = parser.getTokenAt(Position.create(2, 34));
+                sub someFunc()
+                    print (1 + 1).toStr()
+                end sub
+            `);
+            const toStrToken = parser.getTokenAt(Position.create(2, 38));
             const tokenChainResponse = parser.getTokenChain(toStrToken);
             expect(tokenChainResponse.includesUnknowableTokenType).to.be.true;
         });
 
         it('includes unknown when an expression in double brackets is part of the chain', () => {
             const parser = parse(`
-            sub someFunc()
-                print ((2 + 1)*3).toStr()
-            end sub
-            `, ParseMode.BrighterScript);
-            const toStrToken = parser.getTokenAt(Position.create(2, 38));
+                sub someFunc()
+                    print ((2 + 1)*3).toStr()
+                end sub
+            `);
+            const toStrToken = parser.getTokenAt(Position.create(2, 42));
             const tokenChainResponse = parser.getTokenChain(toStrToken);
             expect(tokenChainResponse.includesUnknowableTokenType).to.be.true;
         });
 
         it('includes unknown when a complicated expression in brackets is part of the chain', () => {
             const parser = parse(`
-            sub someFunc(currentDate, lastUpdate)
-                print (INT((currentDate.asSeconds() - lastUpdate) / 86400)).toStr()
-            end sub
-            `, ParseMode.BrighterScript);
+                sub someFunc(currentDate, lastUpdate)
+                    print (INT((currentDate.asSeconds() - lastUpdate) / 86400)).toStr()
+                end sub
+            `);
             const toStrToken = parser.getTokenAt(Position.create(2, 81));
             const tokenChainResponse = parser.getTokenChain(toStrToken);
             expect(tokenChainResponse.includesUnknowableTokenType).to.be.true;
         });
+        it('indicates IndexedGet when referenced via brackets', () => {
+            const parser = parse(`
+                sub someFunc()
+                    complexObj = {prop: "hello", subObj: {prop: "foo", grandChildObj:{prop:"bar"}}}
+                    print complexObj.subObj.prop
+                    print complexObj["subObj"].prop
+                    print complexObj["subObj"]["grandChildObj"].prop
+                end sub
+            `);
+            const propAsChainToken = parser.getTokenAt(Position.create(3, 48)); // complexObj.subObj.prop
+            const propAsAsBracketToken = parser.getTokenAt(Position.create(4, 51)); // complexObj["subObj"].prop
+            const propAsAsDoubleBracketToken = parser.getTokenAt(Position.create(5, 68)); // complexObj["subObj"]["grandChildObj"].prop
 
-    });
+            let tokenChainResponse = parser.getTokenChain(propAsChainToken);
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
+            expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['complexObj', 'subObj', 'prop']);
 
-    it('includes unknown when property is referenced via brackets', () => {
-        const parser = parse(`
-            sub someFunc()
-                complexObj = {prop: "hello", subObj: {prop: "foo", grandChildObj:{prop:"bar"}}}
-                print complexObj.subObj.prop
-                print complexObj["subObj"].prop
-                print complexObj["subObj"]["grandChildObj"].prop
-            end sub
-            `, ParseMode.BrighterScript);
-        const propAsChainToken = parser.getTokenAt(Position.create(3, 44)); // complexObj.subObj.prop
-        const propAsAsBracketToken = parser.getTokenAt(Position.create(4, 47)); // complexObj["subObj"].prop
-        const propAsAsDoubleBracketToken = parser.getTokenAt(Position.create(5, 64)); // complexObj["subObj"]["grandChildObj"].prop
+            tokenChainResponse = parser.getTokenChain(propAsAsBracketToken);
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
+            expect(tokenChainResponse.chain[0].usage).to.eql(TokenUsage.ArrayReference);
+            tokenChainResponse = parser.getTokenChain(propAsAsDoubleBracketToken);
+            expect(tokenChainResponse.chain[0].usage).to.equal(TokenUsage.Direct);
+        });
 
-        let tokenChainResponse = parser.getTokenChain(propAsChainToken);
-        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-        expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['complexObj', 'subObj', 'prop']);
+        it('allows token kinds from AllowedLocalIdentifiers as start of a chain', () => {
+            const parser = parse(`
+                sub testLocalIdentifiers(override, string, float)
+                    override.someProp.someFunc()
+                    string.someProp.someFunc()
+                    float.someProp.someFunc()
+                end sub
+            `);
+            const overrideFuncToken = parser.getTokenAt(Position.create(2, 40)); // override.someProp.someFunc()
+            const stringFuncToken = parser.getTokenAt(Position.create(3, 40)); // string.someProp.someFunc()
+            const floatFuncToken = parser.getTokenAt(Position.create(4, 38)); // float.someProp.someFunc()
 
-        tokenChainResponse = parser.getTokenChain(propAsAsBracketToken);
-        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-        expect(tokenChainResponse.chain[0].usage).to.eql(TokenUsage.ArrayReference);
-        tokenChainResponse = parser.getTokenChain(propAsAsDoubleBracketToken);
-        expect(tokenChainResponse.includesUnknowableTokenType).to.be.true;
-    });
+            let tokenChainResponse = parser.getTokenChain(overrideFuncToken);
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
+            expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['override', 'someProp', 'someFunc']);
 
-    it('allows token kinds from AllowedLocalIdentifiers as start of a chain', () => {
-        const parser = parse(`
-            sub testLocalIdentifiers(override, string, float)
-                override.someProp.someFunc()
-                string.someProp.someFunc()
-                float.someProp.someFunc()
-            end sub
-            `, ParseMode.BrightScript);
-        const overrideFuncToken = parser.getTokenAt(Position.create(2, 40)); // override.someProp.someFunc()
-        const stringFuncToken = parser.getTokenAt(Position.create(3, 40)); // string.someProp.someFunc()
-        const floatFuncToken = parser.getTokenAt(Position.create(4, 38)); // float.someProp.someFunc()
+            tokenChainResponse = parser.getTokenChain(stringFuncToken);
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
+            expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['string', 'someProp', 'someFunc']);
 
-        let tokenChainResponse = parser.getTokenChain(overrideFuncToken);
-        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-        expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['override', 'someProp', 'someFunc']);
+            tokenChainResponse = parser.getTokenChain(floatFuncToken);
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
+            expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['float', 'someProp', 'someFunc']);
+        });
 
-        tokenChainResponse = parser.getTokenChain(stringFuncToken);
-        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-        expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['string', 'someProp', 'someFunc']);
+        it('allows token kinds from AllowedProperties in middle of a chain', () => {
+            const parser = parse(`
+                sub testAllowedProperties(someObj)
+                    someObj.override.someFunc()
+                    someObj.string.someFunc()
+                    someObj.float.someFunc()
+                end sub
+            `);
+            const overrideFuncToken = parser.getTokenAt(Position.create(2, 40)); // someObj.override.someFunc()
+            const stringFuncToken = parser.getTokenAt(Position.create(3, 40)); // someObj.string.someFunc()
+            const floatFuncToken = parser.getTokenAt(Position.create(4, 40)); // someObj.float.someFunc()
 
-        tokenChainResponse = parser.getTokenChain(floatFuncToken);
-        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-        expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['float', 'someProp', 'someFunc']);
-    });
+            let tokenChainResponse = parser.getTokenChain(overrideFuncToken);
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
+            expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['someObj', 'override', 'someFunc']);
 
-    it('allows token kinds from AllowedProperties in middle of a chain', () => {
-        const parser = parse(`
-            sub testAllowedProperties(someObj)
-                someObj.override.someFunc()
-                someObj.string.someFunc()
-                someObj.float.someFunc()
-            end sub
-            `, ParseMode.BrightScript);
-        const overrideFuncToken = parser.getTokenAt(Position.create(2, 36)); // someObj.override.someFunc()
-        const stringFuncToken = parser.getTokenAt(Position.create(3, 36)); // someObj.string.someFunc()
-        const floatFuncToken = parser.getTokenAt(Position.create(4, 36)); // someObj.float.someFunc()
+            tokenChainResponse = parser.getTokenChain(stringFuncToken);
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
+            expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['someObj', 'string', 'someFunc']);
 
-        let tokenChainResponse = parser.getTokenChain(overrideFuncToken);
-        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-        expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['someObj', 'override', 'someFunc']);
+            tokenChainResponse = parser.getTokenChain(floatFuncToken);
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
+            expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['someObj', 'float', 'someFunc']);
+        });
 
-        tokenChainResponse = parser.getTokenChain(stringFuncToken);
-        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-        expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['someObj', 'string', 'someFunc']);
+        it('finds tokens in the middle of a chain', () => {
+            const parser = parse(`
+                sub testMiddleOfChain()
+                    print m.nodes[8].label.text
+                    print alpha.bravo(charlie.delta)
+                    print m.otherFunc().name
+                end sub
+            `);
 
-        tokenChainResponse = parser.getTokenChain(floatFuncToken);
-        expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
-        expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['someObj', 'float', 'someFunc']);
+            const labelToken = parser.getTokenAt(Position.create(2, 40)); // 'label'
+            const nodesToken = parser.getTokenAt(Position.create(2, 31)); // 'nodes'
+            const bravoToken = parser.getTokenAt(Position.create(3, 35)); // 'bravo'
+
+            let tokenChainResponse = parser.getTokenChain(labelToken);
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
+            expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['m', 'nodes', 'label']);
+            expect(tokenChainResponse.chain.map(tcm => tcm.usage)).to.eql([TokenUsage.Direct, TokenUsage.ArrayReference, TokenUsage.Direct]);
+
+            tokenChainResponse = parser.getTokenChain(nodesToken);
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
+            expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['m', 'nodes']);
+            expect(tokenChainResponse.chain.map(tcm => tcm.usage)).to.eql([TokenUsage.Direct, TokenUsage.Direct]);
+            tokenChainResponse = parser.getTokenChain(bravoToken);
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
+            expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['alpha', 'bravo']);
+            expect(tokenChainResponse.chain.map(tcm => tcm.usage)).to.eql([TokenUsage.Direct, TokenUsage.Direct]);
+        });
+
+        it('gets chain from ending dot', () => {
+            const parser = parse(`
+                sub testDotAtEndOfChain()
+                   m.someFunc().data[0].param.
+                end sub
+            `);
+
+            const endDotToken = parser.getTokenAt(Position.create(2, 46)); // dot of 'param.'
+
+            let tokenChainResponse = parser.getTokenChain(endDotToken);
+            expect(tokenChainResponse.includesUnknowableTokenType).to.be.false;
+            expect(tokenChainResponse.chain.map(tcm => tcm.token).map(token => token.text)).to.eql(['m', 'someFunc', 'data', 'param']);
+            expect(tokenChainResponse.chain.map(tcm => tcm.usage)).to.eql([TokenUsage.Direct, TokenUsage.Call, TokenUsage.ArrayReference, TokenUsage.Direct]);
+        });
+
+
     });
 });
 

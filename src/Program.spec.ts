@@ -1,7 +1,7 @@
 import { assert, expect } from 'chai';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
-import { CompletionItemKind, Position, Range, Location } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticCodeMap, DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
@@ -28,6 +28,7 @@ let stagingFolderPath = s`${tmpPath}/staging`;
 
 describe('Program', () => {
     let program: Program;
+
     beforeEach(() => {
         fsExtra.ensureDirSync(tmpPath);
         fsExtra.emptyDirSync(tmpPath);
@@ -42,6 +43,19 @@ describe('Program', () => {
         fsExtra.ensureDirSync(tmpPath);
         fsExtra.emptyDirSync(tmpPath);
         program.dispose();
+    });
+
+    it('Does not crazy for file not referenced by any other scope', async () => {
+        program.setFile('tests/testFile.spec.bs', `
+            function main(args as object) as object
+                return roca(args).describe("test suite", sub()
+                    m.pass()
+                end sub)
+            end function
+        `);
+        program.validate();
+        //test passes if this line does not throw
+        await program.getTranspiledFileContents('tests/testFile.spec.bs');
     });
 
     describe('global scope', () => {
@@ -78,6 +92,22 @@ describe('Program', () => {
                 dest: 'source/main.brs'
             }, `class Animalpublic name as stringpublic function walk()end functionend class`);
             //if the program didn't get stuck in an infinite loop, this test passes
+        });
+
+        it('flags unsupported statements at root of file', () => {
+            program.setFile('source/main.brs', `
+                result = true
+                print true
+                createObject("roSGNode", "Rectangle")
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.unexpectedStatementOutsideFunction()
+            }, {
+                ...DiagnosticMessages.unexpectedStatementOutsideFunction()
+            }, {
+                ...DiagnosticMessages.unexpectedStatementOutsideFunction()
+            }]);
         });
 
         it('only parses xml files as components when file is found within the "components" folder', () => {
@@ -237,7 +267,7 @@ describe('Program', () => {
                 ...DiagnosticMessages.duplicateComponentName('Component1'),
                 range: Range.create(1, 17, 1, 27),
                 relatedInformation: [{
-                    location: Location.create(
+                    location: util.createLocation(
                         URI.file(s`${rootDir}/components/component1.xml`).toString(),
                         Range.create(1, 17, 1, 27)
                     ),
@@ -247,7 +277,7 @@ describe('Program', () => {
                 ...DiagnosticMessages.duplicateComponentName('Component1'),
                 range: Range.create(1, 17, 1, 27),
                 relatedInformation: [{
-                    location: Location.create(
+                    location: util.createLocation(
                         URI.file(s`${rootDir}/components/component2.xml`).toString(),
                         Range.create(1, 17, 1, 27)
                     ),
@@ -499,7 +529,7 @@ describe('Program', () => {
 
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.callToUnknownFunction('DoSomething', 'source')
+                DiagnosticMessages.cannotFindName('DoSomething')
             ]);
         });
 
@@ -1265,6 +1295,40 @@ describe('Program', () => {
         ).to.eql(['sayHello', 'sayHello2', 'sayHello3', 'sayHello4']);
     });
 
+    it('gets completions for callfunc invocation with multiple nodes and validates single code completion results', () => {
+        program.setFile('source/main.bs', `
+            function main()
+                ParentNode@.sayHello(arg1)
+            end function
+        `);
+        program.setFile('components/ParentNode.bs', `
+            function sayHello(text, text2)
+            end function
+        `);
+        program.setFile<XmlFile>('components/ParentNode.xml',
+            trim`<?xml version="1.0" encoding="utf-8" ?>
+            <component name="ParentNode" extends="Scene">
+                <script type="text/brightscript" uri="pkg:/components/ParentNode.bs" />
+                <interface>
+                    <function name="sayHello"/>
+                </interface>
+            </component>`);
+        program.setFile('components/ChildNode.bs', `
+            function sayHello(text, text2)
+            end function
+        `);
+        program.setFile<XmlFile>('components/ChildNode.xml',
+            trim`<?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildNode" extends="ParentNode">
+                <script type="text/brightscript" uri="pkg:/components/ChildNode.bs" />
+            </component>`);
+        program.validate();
+
+        expect(
+            (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
+        ).to.eql(['sayHello']);
+    });
+
     it('gets completions for extended nodes with callfunc invocation - ensure overridden methods included', () => {
         program.setFile('source/main.bs', `
             function main()
@@ -1307,7 +1371,7 @@ describe('Program', () => {
 
         expect(
             (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
-        ).to.eql(['sayHello', 'sayHello2', 'sayHello2', 'sayHello3', 'sayHello4']);
+        ).to.eql(['sayHello', 'sayHello2', 'sayHello3', 'sayHello4']);
     });
 
     describe('xml inheritance', () => {
@@ -1365,7 +1429,7 @@ describe('Program', () => {
 
             //there should be an error when calling DoParentThing, since it doesn't exist on child or parent
             expectDiagnostics(program, [
-                DiagnosticMessages.callToUnknownFunction('DoParentThing', '').code
+                DiagnosticMessages.cannotFindName('DoParentThing')
             ]);
 
             //add the script into the parent
@@ -1525,14 +1589,14 @@ describe('Program', () => {
 
             expectDiagnostics(program, [
                 DiagnosticMessages.argumentTypeMismatch('integer', 'string'),
-                DiagnosticMessages.callToUnknownFunction('C', 'source')
+                DiagnosticMessages.cannotFindName('C')
             ]);
         });
     });
 
     describe('getCompletions', () => {
         it('returns all functions in scope', () => {
-            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile('source/main.brs', `
                 sub Main()
 
                 end sub
@@ -1549,7 +1613,7 @@ describe('Program', () => {
 
             let completions = program
                 //get completions
-                .getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10))
+                .getCompletions(`${rootDir}/source/main.brs`, util.createPosition(2, 10))
                 //only keep the label property for this test
                 .map(x => pick(x, 'label'));
 
@@ -1559,7 +1623,7 @@ describe('Program', () => {
         });
 
         it('returns all variables in scope', () => {
-            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile('source/main.brs', `
                 sub Main()
                     name = "bob"
                     age = 20
@@ -1575,7 +1639,7 @@ describe('Program', () => {
 
             program.validate();
 
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, util.createPosition(2, 10));
             let labels = completions.map(x => pick(x, 'label'));
 
             expect(labels).to.deep.include({ label: 'Main' });
@@ -1598,7 +1662,7 @@ describe('Program', () => {
         });
 
         it('finds parameters', () => {
-            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile('source/main.brs', `
                 sub Main(count = 1)
                     firstName = "bob"
                     age = 21
@@ -2192,7 +2256,8 @@ describe('Program', () => {
         it('gets signature help for callfunc method', () => {
             program.setFile('source/main.bs', `
                 function main()
-                    myNode@.sayHello(arg1)
+                    myNode = createObject("roSGNode", "Component1")
+                    myNode@.sayHello(1)
                 end function
             `);
             program.setFile('components/MyNode.bs', `
@@ -2209,7 +2274,7 @@ describe('Program', () => {
                 </component>`);
             program.validate();
 
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(3, 36)));
             expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
         });
@@ -2217,8 +2282,8 @@ describe('Program', () => {
         it('does not get signature help for callfunc method, referenced by dot', () => {
             program.setFile('source/main.bs', `
                 function main()
-                    myNode = CreateObject("roSGScreen").CreateScene("Component1")
-                    myNode.sayHello(arg1)
+                    myNode = createObject("roSGNode", "Component1")
+                    myNode.sayHello(1, 2)
                 end function
             `);
             program.setFile('components/MyNode.bs', `
@@ -2537,6 +2602,28 @@ describe('Program', () => {
             expect(plugin.beforeFileValidate.callCount).to.equal(1);
             expect(plugin.onFileValidate.callCount).to.equal(1);
             expect(plugin.afterFileValidate.callCount).to.equal(1);
+        });
+    });
+
+    describe('getScopesForFile', () => {
+        it('returns empty array when no scopes were found', () => {
+            expect(program.getScopesForFile('does/not/exist')).to.eql([]);
+        });
+    });
+
+    describe('findFilesForEnum', () => {
+        it('finds files', () => {
+            const file = program.setFile('source/main.bs', `
+                enum Direction
+                    up
+                    down
+                end enum
+            `);
+            expect(
+                program.findFilesForEnum('Direction').map(x => x.srcPath)
+            ).to.eql([
+                file.srcPath
+            ]);
         });
     });
 });

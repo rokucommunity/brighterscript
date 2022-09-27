@@ -13,11 +13,17 @@ export let DiagnosticMessages = {
         code: 1000,
         severity: DiagnosticSeverity.Error
     }),
-    callToUnknownFunction: (name: string, scopeName: string) => ({
-        message: `Cannot find function with name '${name}' when this file is included in scope '${scopeName}'`,
+    /**
+     *
+     * @param name for local vars, it's the var name. for namespaced parts, it's the specific part that's unknown (`alpha.beta.charlie` would result in "cannot find name 'charlie')
+     * @param fullName if a namespaced name, this is the full name `alpha.beta.charlie`, otherwise it's the same as `name`
+     */
+    cannotFindName: (name: string, fullName?: string) => ({
+        message: `Cannot find name '${name}'`,
         code: 1001,
         data: {
-            functionName: name
+            name: name,
+            fullName: fullName ?? name
         },
         severity: DiagnosticSeverity.Error
     }),
@@ -684,24 +690,34 @@ export let DiagnosticMessages = {
         code: 1132,
         severity: DiagnosticSeverity.Error
     }),
+    unexpectedStatementOutsideFunction: () => ({
+        message: `Unexpected statement found outside of function body`,
+        code: 1133,
+        severity: DiagnosticSeverity.Error
+    }),
+    detectedTooDeepFileSource: (numberOfParentDirectories: number) => ({
+        message: `Expected directory depth no larger than 7, but found ${numberOfParentDirectories}.`,
+        code: 1134,
+        severity: DiagnosticSeverity.Error
+    }),
     argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string) => ({
         message: `Argument of type '${actualTypeString}' is not assignable to parameter of type '${expectedTypeString}'`,
-        code: 1133,
+        code: 1135,
         severity: DiagnosticSeverity.Error
     }),
     duplicateInterfaceDeclaration: (scopeName: string, ifaceName: string) => ({
         message: `Scope '${scopeName}' already contains an interface with name '${ifaceName}'`,
-        code: 1134,
+        code: 1136,
         severity: DiagnosticSeverity.Error
     }),
     namespacedInterfaceCannotShareNameWithNonNamespacedInterface: (nonNamespacedInterfaceName: string) => ({
         message: `Namespaced interface cannot have the same name as a non-namespaced interface '${nonNamespacedInterfaceName}'`,
-        code: 1135,
+        code: 1137,
         severity: DiagnosticSeverity.Error
     }),
     classCannotShareNamewithInterface: (className: string) => ({
         message: `Class cannot have the same name as interface '${className}'`,
-        code: 1136,
+        code: 1138,
         severity: DiagnosticSeverity.Error
     })
 };

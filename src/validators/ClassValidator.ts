@@ -1,12 +1,13 @@
 import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import type { CallExpression, NamespacedVariableNameExpression } from '../parser/Expression';
+import type { CallExpression } from '../parser/Expression';
+import { ParseMode } from '../parser/Parser';
 import type { ClassStatement, FieldStatement, InterfaceStatement, MemberFieldStatement, MemberMethodStatement, MethodStatement, Statement } from '../parser/Statement';
-import { CancellationTokenSource, Location } from 'vscode-languageserver';
 import type { DiagnosticSeverity } from 'vscode-languageserver';
+import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
-import { isCallExpression, isClassStatement, isCustomType, isFieldStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isInterfaceType, isMethodStatement } from '../astUtils/reflection';
+import { isCallExpression, isCustomType, isFieldStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceType, isMethodStatement } from '../astUtils/reflection';
 import type { BscFile, BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
@@ -16,7 +17,6 @@ import type { BscType, TypeContext } from '../types/BscType';
 import { getTypeFromContext } from '../types/BscType';
 import type { Identifier } from '../lexer/Token';
 import type { References } from '../parser/Parser';
-import { ParseMode } from '../parser/Parser';
 
 
 export class BsClassValidator implements BsClassValidator {
@@ -41,7 +41,8 @@ export class BsClassValidator implements BsClassValidator {
         this.findClasses();
         this.findInterfaces();
         this.findNamespaceNonNamespaceCollisions();
-        this.linkClassesWithParents();
+        this.linkWithParents(this.classes);
+        this.linkWithParents(this.interfaces);
         this.detectCircularReferences();
         this.validateMemberCollisions();
         this.verifyChildConstructor();
@@ -103,13 +104,8 @@ export class BsClassValidator implements BsClassValidator {
                             range: newExpression.className.range
                         });
 
-                        //could not find a class with this name
                     } else {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.classCouldNotBeFound(className, this.scope.name),
-                            file: file,
-                            range: newExpression.className.range
-                        });
+                        //could not find a class with this name (handled by ScopeValidator)
                     }
                 }
             }
@@ -128,7 +124,7 @@ export class BsClassValidator implements BsClassValidator {
                     file: classStatement.file,
                     range: classStatement.name.range,
                     relatedInformation: [{
-                        location: Location.create(
+                        location: util.createLocation(
                             URI.file(nonNamespaceClass.file.srcPath).toString(),
                             nonNamespaceClass.name.range
                         ),
@@ -148,7 +144,7 @@ export class BsClassValidator implements BsClassValidator {
                     file: ifaceStatement.file,
                     range: ifaceStatement.tokens.name.range,
                     relatedInformation: [{
-                        location: Location.create(
+                        location: util.createLocation(
                             URI.file(nonNamespaceInterface.file.srcPath).toString(),
                             nonNamespaceInterface.tokens.name.range
                         ),
@@ -167,7 +163,7 @@ export class BsClassValidator implements BsClassValidator {
                 //this class has a "new method"
                 newMethod &&
                 //this class has a parent class
-                classStatement.parent
+                classStatement.parentClass
             ) {
                 //prevent use of `m.` anywhere before the `super()` call
                 const cancellationToken = new CancellationTokenSource();
@@ -224,7 +220,7 @@ export class BsClassValidator implements BsClassValidator {
                     break;
                 }
                 names.set(lowerClassName, className);
-                cls = cls.parent;
+                cls = cls.parentClass;
             } while (cls);
         }
     }
@@ -414,7 +410,7 @@ export class BsClassValidator implements BsClassValidator {
      */
     private getAncestorMember(classStatement: AugmentedClassStatement | AugmentedInterfaceStatement, memberName: string) {
         let lowerMemberName = memberName.toLowerCase();
-        let ancestor = classStatement.parent;
+        let ancestor = classStatement.parentClass;
         while (ancestor) {
             let member = ancestor.memberMap[lowerMemberName];
             if (member) {
@@ -423,19 +419,19 @@ export class BsClassValidator implements BsClassValidator {
                     ancestorStatement: ancestor
                 };
             }
-            ancestor = ancestor.parent !== ancestor ? ancestor.parent : null;
+            ancestor = ancestor.parentClass !== ancestor ? ancestor.parentClass : null;
         }
     }
 
     private cleanUp() {
         //unlink all classes from their parents so it doesn't mess up the next scope
         for (const [, classStatement] of this.classes) {
-            delete classStatement.parent;
+            delete classStatement.parentClass;
             delete classStatement.file;
         }
         //unlink all interfaces from their parents so it doesn't mess up the next scope
         for (const [, interfaceStatement] of this.interfaces) {
-            delete interfaceStatement.parent;
+            delete interfaceStatement.parentClass;
             delete interfaceStatement.file;
         }
     }
@@ -468,7 +464,7 @@ export class BsClassValidator implements BsClassValidator {
                         file: file,
                         range: classStatement.name.range,
                         relatedInformation: [{
-                            location: Location.create(
+                            location: util.createLocation(
                                 URI.file(alreadyDefinedClass.file.srcPath).toString(),
                                 map.get(lowerName).range
                             ),
@@ -483,14 +479,14 @@ export class BsClassValidator implements BsClassValidator {
 
     private findClasses() {
         this.classes = this.findStatements(
-            (references) => references.classStatements,
+            (references) => references.classStatements as any,
             DiagnosticMessages.duplicateClassDeclaration
         );
     }
 
     private findInterfaces() {
         this.interfaces = this.findStatements(
-            (references) => references.interfaceStatements,
+            (references) => references.interfaceStatements as any,
             DiagnosticMessages.duplicateInterfaceDeclaration
         );
     }
@@ -508,40 +504,24 @@ export class BsClassValidator implements BsClassValidator {
                     }
                 }
                 if (parentClass) {
-                    classStatement.parent = parentClass;
+                    classStatement.parentClass = parentClass;
                 } else {
-
-                    let parentExpression: NamespacedVariableNameExpression;
-                    if (isClassStatement(classStatement)) {
-                        parentExpression = classStatement.parentClassName;
-                    } else if (isInterfaceStatement(classStatement)) {
-                        parentExpression = classStatement.parentInterfaceName;
-                    }
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.classCouldNotBeFound(parentExpression.getName(ParseMode.BrighterScript), this.scope.name),
-                        file: classStatement.file,
-                        range: parentExpression?.range
-                    });
+                    //couldn't find the parent class (validated in ScopeValidator)
                 }
-
             }
         }
     }
-
-    private linkClassesWithParents() {
-        this.linkWithParents(this.classes);
-        this.linkWithParents(this.interfaces);
-    }
 }
+
 type AugmentedClassStatement = ClassStatement & {
     file?: BscFile;
-    parent?: AugmentedClassStatement;
+    parentClass?: AugmentedClassStatement;
 };
 
 
 type AugmentedInterfaceStatement = InterfaceStatement & {
     file?: BscFile;
-    parent?: AugmentedInterfaceStatement;
+    parentClass?: AugmentedInterfaceStatement;
 };
 
 interface MemberFieldOrMethod {
