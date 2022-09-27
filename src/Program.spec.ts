@@ -528,6 +528,21 @@ describe('Program', () => {
             ]);
         });
 
+        it('supports using vars defined in nested if statements', () => {
+            //call a function that doesn't exist
+            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main()
+                    if true
+                        name = "bob"
+                    end if
+                    print name
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('detects methods from another file in a subdirectory', () => {
             program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
