@@ -161,6 +161,7 @@ export enum TokenKind {
     Import = 'Import',
     EndInterface = 'EndInterface',
     Const = 'Const',
+    Continue = 'Continue',
 
     //brighterscript source literals
     LineNumLiteral = 'LineNumLiteral',
@@ -238,6 +239,7 @@ export const ReservedWords = new Set([
 export const Keywords: Record<string, TokenKind> = {
     as: TokenKind.As,
     and: TokenKind.And,
+    continue: TokenKind.Continue,
     dim: TokenKind.Dim,
     end: TokenKind.End,
     then: TokenKind.Then,
@@ -441,7 +443,8 @@ export const AllowedProperties = [
     TokenKind.EndTry,
     TokenKind.Throw,
     TokenKind.EndInterface,
-    TokenKind.Const
+    TokenKind.Const,
+    TokenKind.Continue
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */
@@ -474,7 +477,8 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Try,
     TokenKind.Catch,
     TokenKind.EndTry,
-    TokenKind.Const
+    TokenKind.Const,
+    TokenKind.Continue
 ];
 
 export const BrighterScriptSourceLiterals = [

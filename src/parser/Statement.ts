@@ -2509,3 +2509,29 @@ export class ConstStatement extends Statement implements TypedefProvider {
         }
     }
 }
+
+export class ContinueStatement extends Statement {
+    constructor(
+        public tokens: {
+            continue: Token;
+            loopType: Token;
+        }
+    ) {
+        super();
+    }
+
+    public get range() {
+        return this.tokens.continue.range;
+    }
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.sourceNode(this.tokens.continue, this.tokens.continue?.text ?? 'continue'),
+            this.tokens.loopType?.leadingWhitespace ?? ' ',
+            state.sourceNode(this.tokens.continue, this.tokens.loopType?.text)
+        ];
+    }
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+}
