@@ -210,6 +210,8 @@ These are the options available in the `bsconfig.json` file.
 
  - **rootDir**: `string` - The root directory of your roku project. Defaults to current directory
 
+ - **stagingFolderPath**: `string` - the folder where the transpiled files are placed. Defaults to `./out/.roku-deploy-staging`
+
  - **files**: ` (string | string[] | { src: string | string[]; dest?: string })[]` - The list file globs used to find all files for the project. If using the {src;dest;} format, you can specify a different destination directory for the matched files in src.
 
  - **outFile**: `string` -  The path (including filename) where the output file should be placed (defaults to `"./out/[WORKSPACE_FOLDER_NAME].zip"`).

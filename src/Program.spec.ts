@@ -552,6 +552,47 @@ describe('Program', () => {
         });
     });
 
+    describe('getPaths', () => {
+        function getPaths(...args: any[]) {
+            return (program as any).getPaths(...args);
+        }
+        it('works for dest', () => {
+            expect(
+                getPaths('source/main.brs', rootDir)
+            ).to.eql({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`source/main.brs`
+            });
+        });
+
+        it('works for absolute src', () => {
+            expect(
+                getPaths(`${rootDir}/source\\main.brs`, rootDir)
+            ).to.eql({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`source/main.brs`
+            });
+        });
+
+        it('works for missing src', () => {
+            expect(
+                getPaths({ dest: 'source/main.brs' }, rootDir)
+            ).to.eql({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`source/main.brs`
+            });
+        });
+
+        it('works for missing dest', () => {
+            expect(
+                getPaths({ src: `${rootDir}/source/main.brs` }, rootDir)
+            ).to.eql({
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`source/main.brs`
+            });
+        });
+    });
+
     describe('setFile', () => {
         it('links xml scopes based on xml parent-child relationships', () => {
             program.setFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
@@ -2291,7 +2332,8 @@ describe('Program', () => {
                     <interface>
                         <function name="sayHello"/>
                     </interface>
-                </component>`);
+                </component>
+            `);
             program.validate();
 
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(3, 36)));
@@ -2311,6 +2353,7 @@ describe('Program', () => {
                     end function
                 end class
             `);
+            program.validate();
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
             expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('Person(arg1, arg2)');
@@ -2329,6 +2372,7 @@ describe('Program', () => {
                 class Roger extends Person
                 end class
             `);
+            program.validate();
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
             expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('Roger(arg1, arg2)');
@@ -2345,6 +2389,7 @@ describe('Program', () => {
                     end function
                 end class
             `);
+            program.validate();
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
             expectZeroDiagnostics(program);
             expect(signatureHelp[0].index).to.equal(0);
@@ -2357,7 +2402,7 @@ describe('Program', () => {
         it('gets signature help for namespaced constructor with args', () => {
             program.setFile('source/main.bs', `
                 function main()
-                    p = new people.coders.Person(arg1, arg2)
+                    p = new people.coders.Person(1, 2)
                 end function
                 namespace people.coders
                     class Person
@@ -2365,7 +2410,8 @@ describe('Program', () => {
                         end function
                     end class
                 end namespace
-                    `);
+            `);
+            program.validate();
             let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 47)));
             expectZeroDiagnostics(program);
             expect(signatureHelp[0].signature.label).to.equal('people.coders.Person(arg1, arg2)');
@@ -2445,6 +2491,7 @@ describe('Program', () => {
                 function test(arg1, arg2, arg3)
                 end function
             `);
+            program.validate();
             for (let col = 21; col < 27; col++) {
                 let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);

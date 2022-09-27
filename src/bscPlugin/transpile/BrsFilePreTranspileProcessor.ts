@@ -3,7 +3,7 @@ import { isBrsFile, isDottedGetExpression, isLiteralExpression, isVariableExpres
 import type { BrsFile } from '../../files/BrsFile';
 import type { BeforeFileTranspileEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
-import type { Expression } from '../../parser/Expression';
+import type { Expression } from '../../parser/AstNode';
 import { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { Scope } from '../../Scope';

@@ -13,8 +13,8 @@ import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
-import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
-import type { ClassStatement, FunctionStatement, NamespaceStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement, MethodStatement, FieldStatement } from '../parser/Statement';
+import type { FunctionExpression, VariableExpression } from '../parser/Expression';
+import type { ClassStatement, FunctionStatement, NamespaceStatement, AssignmentStatement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program, SignatureInfoObj } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
@@ -24,12 +24,13 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
+import { isCallExpression, isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
+import type { AstNode, Expression, Statement } from '../parser/AstNode';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -97,7 +98,10 @@ export class BrsFile {
      */
     public extension: string;
 
-    private diagnostics = [] as BsDiagnostic[];
+    /**
+     * A collection of diagnostics related to this file
+     */
+    public diagnostics = [] as BsDiagnostic[];
 
     public getDiagnostics() {
         return [...this.diagnostics];
@@ -189,7 +193,7 @@ export class BrsFile {
      */
     public getClosestExpression(position: Position) {
         const handle = new CancellationTokenSource();
-        let containingNode: Expression | Statement;
+        let containingNode: AstNode;
         this.ast.walk((node) => {
             const latestContainer = containingNode;
             //bsc walks depth-first
@@ -361,53 +365,11 @@ export class BrsFile {
         }
     }
 
+    /**
+     * @deprecated logic has moved into BrsFileValidator, this is now an empty function
+     */
     public validate() {
-        util.validateTooDeepFile(this);
-        //only validate the file if it was actually parsed (skip files containing typedefs)
-        if (!this.hasTypedef) {
-            this.validateImportStatements();
-        }
-    }
 
-    private validateImportStatements() {
-        let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement>;
-        for (let stmt of this.ast.statements) {
-            //skip comments
-            if (isCommentStatement(stmt)) {
-                continue;
-            }
-            //if we found a non-library statement, this statement is not at the top of the file
-            if (isLibraryStatement(stmt) || isImportStatement(stmt)) {
-                topOfFileIncludeStatements.push(stmt);
-            } else {
-                //break out of the loop, we found all of our library statements
-                break;
-            }
-        }
-
-        let statements = [
-            ...this._parser.references.libraryStatements,
-            ...this._parser.references.importStatements
-        ];
-        for (let result of statements) {
-            //if this statement is not one of the top-of-file statements,
-            //then add a diagnostic explaining that it is invalid
-            if (!topOfFileIncludeStatements.includes(result)) {
-                if (isLibraryStatement(result)) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile(),
-                        range: result.range,
-                        file: this
-                    });
-                } else if (isImportStatement(result)) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile(),
-                        range: result.range,
-                        file: this
-                    });
-                }
-            }
-        }
     }
 
     /**
@@ -643,7 +605,7 @@ export class BrsFile {
                 range: statement.func.range,
                 type: functionType,
                 getName: statement.getName.bind(statement),
-                hasNamespace: !!statement.namespaceName,
+                hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
                 functionStatement: statement
             });
         }
@@ -730,7 +692,7 @@ export class BrsFile {
                     }
                 }
                 let functionCall: FunctionCall = {
-                    range: util.createRangeFromPositions(expression.range.start, expression.closingParen.range.end),
+                    range: expression.range,
                     functionScope: this.getFunctionScopeAtPosition(callee.range.start),
                     file: this,
                     name: functionName,
@@ -970,7 +932,7 @@ export class BrsFile {
                     if (!results.has(member.name.text.toLowerCase())) {
                         results.set(member.name.text.toLowerCase(), {
                             label: member.name.text,
-                            kind: isClassFieldStatement(member) ? CompletionItemKind.Field : CompletionItemKind.Function
+                            kind: isFieldStatement(member) ? CompletionItemKind.Field : CompletionItemKind.Function
                         });
                     }
                 }
@@ -984,7 +946,7 @@ export class BrsFile {
         if (previousToken?.kind === TokenKind.Dot) {
             previousToken = this.getPreviousToken(previousToken);
         }
-        if (previousToken?.kind === TokenKind.Identifier && previousToken?.text.toLowerCase() === 'm' && isClassMethodStatement(functionScope.func.functionStatement)) {
+        if (previousToken?.kind === TokenKind.Identifier && previousToken?.text.toLowerCase() === 'm' && isMethodStatement(functionScope.func.functionStatement)) {
             return { item: this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, position)), file: this };
         }
         return undefined;
@@ -1387,9 +1349,9 @@ export class BrsFile {
 
         if (isFunctionStatement(statement)) {
             symbolKind = SymbolKind.Function;
-        } else if (isClassMethodStatement(statement)) {
+        } else if (isMethodStatement(statement)) {
             symbolKind = SymbolKind.Method;
-        } else if (isClassFieldStatement(statement)) {
+        } else if (isFieldStatement(statement)) {
             symbolKind = SymbolKind.Field;
         } else if (isNamespaceStatement(statement)) {
             symbolKind = SymbolKind.Namespace;
@@ -1411,7 +1373,7 @@ export class BrsFile {
             return;
         }
 
-        const name = isClassFieldStatement(statement) ? statement.name.text : statement.getName(ParseMode.BrighterScript);
+        const name = isFieldStatement(statement) ? statement.name.text : statement.getName(ParseMode.BrighterScript);
         return DocumentSymbol.create(name, '', symbolKind, statement.range, statement.range, children);
     }
 
@@ -1424,7 +1386,7 @@ export class BrsFile {
 
         if (isFunctionStatement(statement)) {
             symbolKind = SymbolKind.Function;
-        } else if (isClassMethodStatement(statement)) {
+        } else if (isMethodStatement(statement)) {
             symbolKind = SymbolKind.Method;
         } else if (isNamespaceStatement(statement)) {
             symbolKind = SymbolKind.Namespace;
@@ -1641,7 +1603,7 @@ export class BrsFile {
     }
 
     public getSignatureHelpForStatement(statement: Statement): SignatureInfoObj {
-        if (!isFunctionStatement(statement) && !isClassMethodStatement(statement)) {
+        if (!isFunctionStatement(statement) && !isMethodStatement(statement)) {
             return undefined;
         }
         const func = statement.func;

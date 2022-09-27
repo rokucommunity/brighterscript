@@ -181,7 +181,7 @@ describe('EnumStatement', () => {
     });
 
     it('allows enum in namespace', () => {
-        const parser = Parser.parse(`
+        const file = program.setFile<BrsFile>('source/types.bs', `
             namespace entities
                 enum Person
                     name
@@ -191,10 +191,11 @@ describe('EnumStatement', () => {
             enum Direction
                 up
             end enum
-        `, { mode: ParseMode.BrighterScript });
+        `);
+        program.validate();
 
-        expectZeroDiagnostics(parser);
-        expect(parser.references.enumStatements.map(x => x.fullName)).to.eql([
+        expectZeroDiagnostics(program);
+        expect(file.parser.references.enumStatements.map(x => x.fullName)).to.eql([
             'entities.Person',
             'Direction'
         ]);
@@ -754,6 +755,7 @@ describe('EnumStatement', () => {
                     end enum
                 end namespace
             `);
+            program.validate();
             //      enums.direction.|down
             expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 36)), [{
                 label: 'up',
@@ -792,6 +794,7 @@ describe('EnumStatement', () => {
                     end enum
                 end namespace
             `);
+            program.validate();
             //should NOT find Direction because it's not directly available at the top level (you need to go through `enums.` to get at it)
             //      dire|ction.down
             expectCompletionsExcludes(program.getCompletions('source/main.bs', util.createPosition(2, 24)), [{

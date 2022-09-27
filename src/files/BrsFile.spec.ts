@@ -1311,6 +1311,32 @@ describe('BrsFile', () => {
             expect(file.functionCalls[1].nameRange).to.eql(Range.create(5, 20, 5, 23));
         });
 
+        it('finds function calls that are unfinished', () => {
+            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            file.parse(`
+                function DoA()
+                    DoB("a"
+                end function
+                function DoB(a as string)
+                    DoC(
+                end function
+            `);
+            expectDiagnostics(file.parser.diagnostics, [
+                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.expectedNewlineOrColon(),
+                DiagnosticMessages.unexpectedToken('end function'),
+                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.expectedNewlineOrColon()
+            ]);
+            expect(file.functionCalls.length).to.equal(2);
+
+            expect(file.functionCalls[0].range).to.eql(Range.create(2, 20, 2, 27));
+            expect(file.functionCalls[0].nameRange).to.eql(Range.create(2, 20, 2, 23));
+
+            expect(file.functionCalls[1].range).to.eql(Range.create(5, 20, 5, 24));
+            expect(file.functionCalls[1].nameRange).to.eql(Range.create(5, 20, 5, 23));
+        });
+
         it('sanitizes brs errors', () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
             file.parse(`
@@ -2787,12 +2813,14 @@ describe('BrsFile', () => {
             it('sets invalid on empty callfunc', () => {
                 testTranspile(`
                     sub main()
+                        node = invalid
                         node@.doSomething()
                         m.top.node@.doSomething()
                         m.top.node@.doSomething(1)
                     end sub
                 `, `
                     sub main()
+                        node = invalid
                         node.callfunc("doSomething", invalid)
                         m.top.node.callfunc("doSomething", invalid)
                         m.top.node.callfunc("doSomething", 1)
@@ -2803,10 +2831,12 @@ describe('BrsFile', () => {
             it('includes original arguments', () => {
                 testTranspile(`
                     sub main()
+                        node = invalid
                         node@.doSomething(1, true, m.top.someVal)
                     end sub
                 `, `
                     sub main()
+                        node = invalid
                         node.callfunc("doSomething", 1, true, m.top.someVal)
                     end sub
                 `);
@@ -2957,6 +2987,7 @@ describe('BrsFile', () => {
     describe('getTypedef', () => {
         function testTypedef(original: string, expected: string) {
             let file = program.setFile<BrsFile>('source/main.brs', original);
+            program.validate();
             expect(file.getTypedef().trimEnd()).to.eql(expected);
         }
 
@@ -3339,6 +3370,7 @@ describe('BrsFile', () => {
                     const CHARLIE = true
                 end namespace
             `);
+            program.validate();
             //print alpha.beta.char|lie
             expect(program.getDefinition(file.srcPath, Position.create(2, 41))).to.eql([{
                 uri: URI.file(file.srcPath).toString(),

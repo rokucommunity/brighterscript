@@ -65,8 +65,8 @@ describe('Scope', () => {
         program.validate();
         const scope = program.getScopesForFile('source/alpha.bs')[0];
         scope.linkSymbolTable();
-        const symbolTable = file.parser.references.namespaceStatements[1].symbolTable;
-        //the symbol table should contain the relative names for all items in this namespace across files
+        const symbolTable = file.parser.references.namespaceStatements[1].getSymbolTable();
+        //the symbol table should contain the relative names for all items in this namespace across the entire scope
         expect(
             symbolTable.hasSymbol('Beta')
         ).to.be.true;
@@ -277,7 +277,7 @@ describe('Scope', () => {
             ]);
         });
 
-        it('accepts namespace names in their transpiled form on .brs files', () => {
+        it('accepts namespace names in their transpiled form in .brs files', () => {
             program.setFile('source/ns.bs', `
                 namespace MyNamespace
                     sub foo()
@@ -1386,6 +1386,7 @@ describe('Scope', () => {
                 end namespace
             `);
             delete ((file.ast.statements[0] as NamespaceStatement).body.statements[0] as FunctionStatement).name;
+            program.validate();
             program['scopes']['source'].buildNamespaceLookup();
         });
     });
@@ -1418,7 +1419,7 @@ describe('Scope', () => {
                     bar3_2
                 end enum
             `);
-            // program.validate();
+            program.validate();
 
             expect(
                 [...sourceScope.getEnumMap().keys()]

@@ -12,6 +12,7 @@ export * from './lexer/TokenKind';
 export * from './lexer/Token';
 export { Lexer } from './lexer/Lexer';
 export * from './parser/Parser';
+export * from './parser/AstNode';
 export * from './parser/Expression';
 export * from './parser/Statement';
 export * from './BsConfig';

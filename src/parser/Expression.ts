@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Block, CommentStatement, FunctionStatement, Statement } from './Statement';
+import type { Block, CommentStatement, FunctionStatement, NamespaceStatement } from './Statement';
 import type { Range } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
@@ -9,42 +9,15 @@ import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
-import { SymbolTable } from '../SymbolTable';
+import { Expression } from './AstNode';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
-
-/** A BrightScript expression */
-export abstract class Expression {
-    /**
-     * The starting and ending location of the expression.
-     */
-    public abstract range: Range;
-
-    public abstract transpile(state: BrsTranspileState): TranspileResult;
-    /**
-     * When being considered by the walk visitor, this describes what type of element the current class is.
-     */
-    public visitMode = InternalWalkMode.visitExpressions;
-
-    public abstract walk(visitor: WalkVisitor, options: WalkOptions);
-    /**
-     * The parent node for this expression. This is set dynamically during `onFileValidate`, and should not be set directly.
-     */
-    public parent?: Statement | Expression;
-
-    /**
-     * Get the closest symbol table for this node. Should be overridden in children that directly contain a symbol table
-     */
-    public getSymbolTable(): SymbolTable {
-        return this.parent?.getSymbolTable();
-    }
-}
 
 export class BinaryExpression extends Expression {
     constructor(
@@ -86,14 +59,10 @@ export class CallExpression extends Expression {
          */
         readonly openingParen: Token,
         readonly closingParen: Token,
-        readonly args: Expression[],
-        /**
-         * The namespace that currently wraps this call expression. This is NOT the namespace of the callee...that will be represented in the callee expression itself.
-         */
-        readonly namespaceName: NamespacedVariableNameExpression
+        readonly args: Expression[]
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.callee.range.start, this.closingParen.range.end);
+        this.range = util.createBoundingRange(this.callee, this.openingParen, ...args, this.closingParen);
     }
 
     public readonly range: Range;
@@ -119,9 +88,11 @@ export class CallExpression extends Expression {
             let arg = this.args[i];
             result.push(...arg.transpile(state));
         }
-        result.push(
-            state.transpileToken(this.closingParen)
-        );
+        if (this.closingParen) {
+            result.push(
+                state.transpileToken(this.closingParen)
+            );
+        }
         return result;
     }
 
@@ -146,9 +117,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         /**
          * If this function is enclosed within another function, this will reference that parent function
          */
-        readonly parentFunction?: FunctionExpression,
-        readonly namespaceName?: NamespacedVariableNameExpression,
-        readonly parentSymbolTable?: SymbolTable
+        readonly parentFunction?: FunctionExpression
     ) {
         super();
         if (this.returnTypeToken) {
@@ -158,16 +127,6 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         } else {
             this.returnType = DynamicType.instance;
         }
-        this.symbolTable = new SymbolTable(parentSymbolTable);
-        for (let param of parameters) {
-            this.symbolTable.addSymbol(param.name.text, param.name.range, DynamicType.instance);
-        }
-    }
-
-    public symbolTable: SymbolTable;
-
-    public getSymbolTable() {
-        return this.symbolTable;
     }
 
     /**
@@ -289,8 +248,7 @@ export class FunctionParameterExpression extends Expression {
         public name: Identifier,
         public typeToken?: Token,
         public defaultValue?: Expression,
-        public asToken?: Token,
-        readonly namespaceName?: NamespacedVariableNameExpression
+        public asToken?: Token
     ) {
         super();
         if (typeToken) {
@@ -473,8 +431,8 @@ export class IndexedGetExpression extends Expression {
             ...this.obj.transpile(state),
             this.questionDotToken ? state.transpileToken(this.questionDotToken) : '',
             state.transpileToken(this.openingSquare),
-            ...this.index.transpile(state),
-            state.transpileToken(this.closingSquare)
+            ...(this.index?.transpile(state) ?? []),
+            this.closingSquare ? state.transpileToken(this.closingSquare) : ''
         ];
     }
 
@@ -590,7 +548,7 @@ export class ArrayLiteralExpression extends Expression {
         readonly hasSpread = false
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.open.range.start, this.close.range.end);
+        this.range = util.createBoundingRange(this.open, ...this.elements, this.close);
     }
 
     public readonly range: Range;
@@ -635,10 +593,11 @@ export class ArrayLiteralExpression extends Expression {
             result.push('\n');
             result.push(state.indent());
         }
-
-        result.push(
-            state.transpileToken(this.close)
-        );
+        if (this.close) {
+            result.push(
+                state.transpileToken(this.close)
+            );
+        }
         return result;
     }
 
@@ -681,7 +640,7 @@ export class AALiteralExpression extends Expression {
         readonly close: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.open.range.start, this.close.range.end);
+        this.range = util.createBoundingRange(this.open, ...this.elements, this.close);
     }
 
     public readonly range: Range;
@@ -748,9 +707,11 @@ export class AALiteralExpression extends Expression {
             result.push(state.indent());
         }
         //close curly
-        result.push(
-            state.transpileToken(this.close)
-        );
+        if (this.close) {
+            result.push(
+                state.transpileToken(this.close)
+            );
+        }
         return result;
     }
 
@@ -789,8 +750,7 @@ export class UnaryExpression extends Expression {
 
 export class VariableExpression extends Expression {
     constructor(
-        readonly name: Identifier,
-        readonly namespaceName: NamespacedVariableNameExpression
+        readonly name: Identifier
     ) {
         super();
         this.range = this.name.range;
@@ -804,11 +764,12 @@ export class VariableExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         let result = [];
+        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
         //if the callee is the name of a known namespace function
-        if (state.file.calleeIsKnownNamespaceFunction(this, this.namespaceName?.getName(ParseMode.BrighterScript))) {
+        if (state.file.calleeIsKnownNamespaceFunction(this, namespace?.getName(ParseMode.BrighterScript))) {
             result.push(
                 state.sourceNode(this, [
-                    this.namespaceName.getName(ParseMode.BrightScript),
+                    namespace.getName(ParseMode.BrightScript),
                     '_',
                     this.getName(ParseMode.BrightScript)
                 ])
@@ -927,16 +888,13 @@ export class NewExpression extends Expression {
         return this.call.callee as NamespacedVariableNameExpression;
     }
 
-    public get namespaceName() {
-        return this.call.namespaceName;
-    }
-
     public readonly range: Range;
 
     public transpile(state: BrsTranspileState) {
+        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
         const cls = state.file.getClassFileLink(
             this.className.getName(ParseMode.BrighterScript),
-            this.namespaceName?.getName(ParseMode.BrighterScript)
+            namespace?.getName(ParseMode.BrighterScript)
         )?.item;
         //new statements within a namespace block can omit the leading namespace if the class resides in that same namespace.
         //So we need to figure out if this is a namespace-omitted class, or if this class exists without a namespace.

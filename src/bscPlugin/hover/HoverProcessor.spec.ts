@@ -135,6 +135,7 @@ describe('HoverProcessor', () => {
 
                 end sub
             `);
+            program.validate();
 
             let hover = program.getHover(mainFile.pathAbsolute, util.createPosition(2, 25))[0];
             expect(hover?.range).to.eql(util.createRange(2, 20, 2, 29));
@@ -148,6 +149,7 @@ describe('HoverProcessor', () => {
                 end sub
                 const SOME_VALUE = true
             `);
+            program.validate();
             // print SOM|E_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(2, 29))[0];
             expect(hover?.range).to.eql(util.createRange(2, 26, 2, 36));
@@ -162,6 +164,7 @@ describe('HoverProcessor', () => {
                 end sub
                 const SOME_VALUE = "value"
             `);
+            program.validate();
             // value += SOME|_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(3, 33))[0];
             expect(hover?.range).to.eql(util.createRange(3, 29, 3, 39));
@@ -178,6 +181,7 @@ describe('HoverProcessor', () => {
                     const SOME_VALUE = "value"
                 end namespace
             `);
+            program.validate();
             // value += SOME|_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(3, 47))[0];
             expect(hover?.range).to.eql(util.createRange(3, 43, 3, 53));
@@ -193,6 +197,7 @@ describe('HoverProcessor', () => {
                     const SOME_VALUE = true
                 end namespace
             `);
+            program.validate();
             // print name.SOM|E_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(2, 34))[0];
             expect(hover?.range).to.eql(util.createRange(2, 31, 2, 41));
@@ -208,6 +213,7 @@ describe('HoverProcessor', () => {
                     const SOME_VALUE = true
                 end namespace
             `);
+            program.validate();
             // print name.sp.a.c.e.SOM|E_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(2, 43))[0];
             expect(hover?.range).to.eql(util.createRange(2, 40, 2, 50));

@@ -1,18 +1,18 @@
 import { URI } from 'vscode-uri';
-import { isBrsFile, isCallExpression, isLiteralExpression, isNewExpression, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isLiteralExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
-import type { Expression } from '../../parser/Expression';
 import type { EnumStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
-import type { SymbolTable } from '../../SymbolTable';
-import type { DiagnosticRelatedInformation, Position } from 'vscode-languageserver';
+import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
+import type { Expression } from '../../parser/AstNode';
+import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -27,181 +27,133 @@ const platformComponentNames = new Set(Object.values(components).map(x => x.name
  */
 export class ScopeValidator {
 
-    private events: OnScopeValidateEvent[] = [];
+    /**
+     * The event currently being processed. This will change multiple times throughout the lifetime of this validator
+     */
+    private event: OnScopeValidateEvent;
 
     public processEvent(event: OnScopeValidateEvent) {
-        this.events.push(event);
-        event.scope.linkSymbolTable();
-        this.detectDuplicateEnums(event);
-        this.validateCreateObjectCalls(event);
-        this.iterateExpressions(event);
-        event.scope.unlinkSymbolTable();
+        this.event = event;
+        this.walkFiles();
+        this.detectDuplicateEnums();
     }
 
     public reset() {
+        this.event = undefined;
         this.onceCache.clear();
         this.multiScopeCache.clear();
-        this.events = [];
     }
 
-    /**
-     * Adds a diagnostic to the first scope for this key. Prevents duplicate diagnostics
-     * for diagnostics where scope isn't important. (i.e. CreateObject validations)
-     */
-    private addDiagnosticOnce(event: OnScopeValidateEvent, diagnostic: BsDiagnostic) {
-        this.onceCache.getOrAdd(`${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`, () => {
-            event.scope.addDiagnostics([diagnostic]);
-            return true;
-        });
-    }
-    private onceCache = new Cache<string, boolean>();
-
-    private addDiagnostic(event: OnScopeValidateEvent, diagnostic: BsDiagnostic) {
-        event.scope.addDiagnostics([diagnostic]);
-    }
-
-    /**
-     * Add a diagnostic (to the first scope) that will have `relatedInformation` for each affected scope
-     */
-    private addMultiScopeDiagnostic(event: OnScopeValidateEvent, diagnostic: BsDiagnostic, message = 'Not defined in scope') {
-        diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.file?.srcPath}-${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`, () => {
-            if (!diagnostic.relatedInformation) {
-                diagnostic.relatedInformation = [];
-            }
-            this.addDiagnostic(event, diagnostic);
-            return diagnostic;
-        });
-        const info = {
-            message: `${message} '${event.scope.name}'`
-        } as DiagnosticRelatedInformation;
-        if (isXmlScope(event.scope) && event.scope.xmlFile?.srcPath) {
-            info.location = util.createLocation(
-                URI.file(event.scope.xmlFile.srcPath).toString(),
-                util.createRange(0, 0, 0, 10)
-            );
-        } else {
-            info.location = util.createLocation(
-                URI.file(diagnostic.file.srcPath).toString(),
-                diagnostic.range
-            );
-        }
-        diagnostic.relatedInformation.push(info);
-    }
-
-    /**
-     * Find the closest symbol table for the given position
-     */
-    private getSymbolTable(scope: Scope, file: BrsFile, position: Position) {
-        let symbolTable: SymbolTable;
-        symbolTable = file.getFunctionScopeAtPosition(position)?.func.symbolTable;
-        if (!symbolTable) {
-            symbolTable = file.getNamespaceStatementForPosition(position)?.symbolTable;
-        }
-        if (!symbolTable) {
-            symbolTable = scope.symbolTable;
-        }
-        return symbolTable;
-    }
-
-    private multiScopeCache = new Cache<string, BsDiagnostic>();
-
-    private iterateExpressions(event: OnScopeValidateEvent) {
-        const { scope } = event;
-        event.scope.enumerateOwnFiles((file) => {
+    private walkFiles() {
+        this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
-                const expressions = [
-                    ...file.parser.references.expressions,
-                    //all class "extends <whatever>" expressions
-                    ...file.parser.references.classStatements.map(x => x.parentClassName?.expression),
-                    //all interface "extends <whatever>" expressions
-                    ...file.parser.references.interfaceStatements.map(x => x.parentInterfaceName?.expression)
-                ];
-                outer:
-                for (let referenceExpression of expressions) {
-                    if (!referenceExpression) {
-                        continue;
-                    }
-                    let expression: Expression;
-                    //lift the callee from call expressions to handle namespaced function calls
-                    if (isCallExpression(referenceExpression)) {
-                        expression = referenceExpression.callee;
-                    } else if (isNewExpression(referenceExpression)) {
-                        expression = referenceExpression.call.callee;
-                    } else {
-                        expression = referenceExpression;
-                    }
-                    const tokens = util.getAllDottedGetParts(expression);
-                    if (tokens?.length > 0) {
-                        const symbolTable = this.getSymbolTable(scope, file, tokens[0].range.start); //flag all unknown left-most variables
-                        if (!symbolTable.hasSymbol(tokens[0]?.text)) {
-                            this.addMultiScopeDiagnostic(event, {
-                                file: file as BscFile,
-                                ...DiagnosticMessages.cannotFindName(tokens[0].text),
-                                range: tokens[0].range
-                            });
-                            //skip to the next expression
-                            continue;
-                        }
-                        //at this point, we know the first item is a known symbol. find unknown namespace parts after the first part
-                        if (tokens.length > 1) {
-                            const firstNamespacePart = tokens.shift().text;
-                            const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
-                            const namespaceContainer = scope.namespaceLookup.get(firstNamespacePartLower);
-                            const enumStatement = scope.getEnum(firstNamespacePartLower);
-                            //if this isn't a namespace, skip it
-                            if (!namespaceContainer && !enumStatement) {
-                                continue;
-                            }
-                            //catch unknown namespace items
-                            const processedNames: string[] = [firstNamespacePart];
-                            for (const token of tokens ?? []) {
-                                processedNames.push(token.text);
-                                const entityName = processedNames.join('.');
-                                const entityNameLower = entityName.toLowerCase();
+                this.iterateFileExpressions(file);
+                this.validateCreateObjectCalls(file);
+            }
+        });
+    }
 
-                                //if this is an enum member, stop validating here to prevent errors further down the chain
-                                if (scope.getEnumMemberMap().has(entityNameLower)) {
-                                    break;
-                                }
+    private expressionsByFile = new Cache<BrsFile, Readonly<ExpressionInfo>[]>();
+    private iterateFileExpressions(file: BrsFile) {
+        const { scope } = this.event;
+        //build an expression collection ONCE per file
+        const expressionInfos = this.expressionsByFile.getOrAdd(file, () => {
+            const result: DeepWriteable<ExpressionInfo[]> = [];
+            const expressions = [
+                ...file.parser.references.expressions,
+                //all class "extends <whatever>" expressions
+                ...file.parser.references.classStatements.map(x => x.parentClassName?.expression),
+                //all interface "extends <whatever>" expressions
+                ...file.parser.references.interfaceStatements.map(x => x.parentInterfaceName?.expression)
+            ];
+            for (let expression of expressions) {
+                if (!expression) {
+                    continue;
+                }
 
-                                if (
-                                    !scope.getEnumMap().has(entityNameLower) &&
-                                    !scope.getClassMap().has(entityNameLower) &&
-                                    !scope.getConstMap().has(entityNameLower) &&
-                                    !scope.getCallableByName(entityNameLower) &&
-                                    !scope.namespaceLookup.has(entityNameLower)
-                                ) {
-                                    //if this looks like an enum, provide a nicer error message
-                                    const theEnum = this.getEnum(scope, entityNameLower)?.item;
-                                    if (theEnum) {
-                                        this.addMultiScopeDiagnostic(event, {
-                                            file: file,
-                                            ...DiagnosticMessages.unknownEnumValue(token.text?.split('.').pop(), theEnum.fullName),
-                                            range: tokens[tokens.length - 1].range,
-                                            relatedInformation: [{
-                                                message: 'Enum declared here',
-                                                location: util.createLocation(
-                                                    URI.file(file.srcPath).toString(),
-                                                    theEnum.tokens.name.range
-                                                )
-                                            }]
-                                        });
-                                    } else {
-                                        this.addMultiScopeDiagnostic(event, {
-                                            ...DiagnosticMessages.cannotFindName(token.text, entityName),
-                                            range: token.range,
-                                            file: file
-                                        });
-                                    }
-                                    //no need to add another diagnostic for future unknown items
-                                    continue outer;
-                                }
-                            }
-                        }
-                    }
+                //walk left-to-right on every expression, only keep the ones that start with VariableExpression, and then keep subsequent DottedGet parts
+                const parts = util.getDottedGetPath(expression);
+
+                if (parts.length > 0) {
+                    result.push({
+                        parts: parts,
+                        expression: expression
+                    });
                 }
             }
+            return result as unknown as Readonly<ExpressionInfo>[];
         });
+
+        outer:
+        for (const info of expressionInfos) {
+            const symbolTable = info.expression.getSymbolTable();
+            const firstPart = info.parts[0];
+            //flag all unknown left-most variables
+            if (!symbolTable.hasSymbol(firstPart.name?.text)) {
+                this.addMultiScopeDiagnostic({
+                    file: file as BscFile,
+                    ...DiagnosticMessages.cannotFindName(firstPart.name?.text),
+                    range: firstPart.name.range
+                });
+                //skip to the next expression
+                continue;
+            }
+
+            const firstNamespacePart = info.parts[0].name.text;
+            const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
+            const namespaceContainer = scope.namespaceLookup.get(firstNamespacePartLower);
+            const enumStatement = scope.getEnum(firstNamespacePartLower);
+            //if this isn't a namespace, skip it
+            if (!namespaceContainer && !enumStatement) {
+                continue;
+            }
+            //catch unknown namespace items
+            const processedNames: string[] = [firstNamespacePart];
+            for (let i = 1; i < info.parts.length; i++) {
+                const part = info.parts[i];
+                processedNames.push(part.name.text);
+                const entityName = processedNames.join('.');
+                const entityNameLower = entityName.toLowerCase();
+
+                //if this is an enum member, stop validating here to prevent errors further down the chain
+                if (scope.getEnumMemberMap().has(entityNameLower)) {
+                    break;
+                }
+
+                if (
+                    !scope.getEnumMap().has(entityNameLower) &&
+                    !scope.getClassMap().has(entityNameLower) &&
+                    !scope.getConstMap().has(entityNameLower) &&
+                    !scope.getCallableByName(entityNameLower) &&
+                    !scope.namespaceLookup.has(entityNameLower)
+                ) {
+                    //if this looks like an enum, provide a nicer error message
+                    const theEnum = this.getEnum(scope, entityNameLower)?.item;
+                    if (theEnum) {
+                        this.addMultiScopeDiagnostic({
+                            file: file,
+                            ...DiagnosticMessages.unknownEnumValue(part.name.text?.split('.').pop(), theEnum.fullName),
+                            range: part.name.range,
+                            relatedInformation: [{
+                                message: 'Enum declared here',
+                                location: util.createLocation(
+                                    URI.file(file.srcPath).toString(),
+                                    theEnum.tokens.name.range
+                                )
+                            }]
+                        });
+                    } else {
+                        this.addMultiScopeDiagnostic({
+                            ...DiagnosticMessages.cannotFindName(part.name.text, entityName),
+                            range: part.name.range,
+                            file: file
+                        });
+                    }
+                    //no need to add another diagnostic for future unknown items
+                    continue outer;
+                }
+            }
+        }
     }
 
     /**
@@ -224,10 +176,10 @@ export class ScopeValidator {
     /**
      * Flag duplicate enums
      */
-    private detectDuplicateEnums(event: OnScopeValidateEvent) {
+    private detectDuplicateEnums() {
         const diagnostics: BsDiagnostic[] = [];
         const enumLocationsByName = new Cache<string, Array<{ file: BrsFile; statement: EnumStatement }>>();
-        event.scope.enumerateBrsFiles((file) => {
+        this.event.scope.enumerateBrsFiles((file) => {
             for (const enumStatement of file.parser.references.enumStatements) {
                 const fullName = enumStatement.fullName;
                 const nameLower = fullName?.toLowerCase();
@@ -257,7 +209,7 @@ export class ScopeValidator {
             const fullName = primaryEnum.statement.fullName;
             for (const duplicateEnumInfo of enumLocations) {
                 diagnostics.push({
-                    ...DiagnosticMessages.duplicateEnumDeclaration(event.scope.name, fullName),
+                    ...DiagnosticMessages.duplicateEnumDeclaration(this.event.scope.name, fullName),
                     file: duplicateEnumInfo.file,
                     range: duplicateEnumInfo.statement.tokens.name.range,
                     relatedInformation: [{
@@ -270,7 +222,7 @@ export class ScopeValidator {
                 });
             }
         }
-        event.scope.addDiagnostics(diagnostics);
+        this.event.scope.addDiagnostics(diagnostics);
     }
 
     /**
@@ -279,76 +231,126 @@ export class ScopeValidator {
      * what these calls are supposed to look like, and this is a very common thing for brs devs to do, so just
      * do this manually for now.
      */
-    protected validateCreateObjectCalls(event: OnScopeValidateEvent) {
+    protected validateCreateObjectCalls(file: BrsFile) {
         const diagnostics: BsDiagnostic[] = [];
 
-        event.scope.enumerateBrsFiles((file) => {
-            for (const call of file.functionCalls) {
-                //skip non CreateObject function calls
-                if (call.name?.toLowerCase() !== 'createobject' || !isLiteralExpression(call?.args[0]?.expression)) {
+        for (const call of file.functionCalls) {
+            //skip non CreateObject function calls
+            if (call.name?.toLowerCase() !== 'createobject' || !isLiteralExpression(call?.args[0]?.expression)) {
+                continue;
+            }
+            const firstParamToken = (call?.args[0]?.expression as any)?.token;
+            const firstParamStringValue = firstParamToken?.text?.replace(/"/g, '');
+            //if this is a `createObject('roSGNode'` call, only support known sg node types
+            if (firstParamStringValue?.toLowerCase() === 'rosgnode' && isLiteralExpression(call?.args[1]?.expression)) {
+                const componentName: Token = (call?.args[1]?.expression as any)?.token;
+                //don't validate any components with a colon in their name (probably component libraries, but regular components can have them too).
+                if (componentName?.text?.includes(':')) {
                     continue;
                 }
-                const firstParamToken = (call?.args[0]?.expression as any)?.token;
-                const firstParamStringValue = firstParamToken?.text?.replace(/"/g, '');
-                //if this is a `createObject('roSGNode'` call, only support known sg node types
-                if (firstParamStringValue?.toLowerCase() === 'rosgnode' && isLiteralExpression(call?.args[1]?.expression)) {
-                    const componentName: Token = (call?.args[1]?.expression as any)?.token;
-                    //don't validate any components with a colon in their name (probably component libraries, but regular components can have them too).
-                    if (componentName?.text?.includes(':')) {
-                        continue;
-                    }
-                    //add diagnostic for unknown components
-                    const unquotedComponentName = componentName?.text?.replace(/"/g, '');
-                    if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !event.program.getComponent(unquotedComponentName)) {
-                        this.addDiagnosticOnce(event, {
-                            file: file as BscFile,
-                            ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
-                            range: componentName.range
-                        });
-                    } else if (call?.args.length !== 2) {
-                        // roSgNode should only ever have 2 args in `createObject`
-                        this.addDiagnosticOnce(event, {
-                            file: file as BscFile,
-                            ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, [2], call?.args.length),
-                            range: call.range
-                        });
-                    }
-                } else if (!platformComponentNames.has(firstParamStringValue.toLowerCase())) {
-                    this.addDiagnosticOnce(event, {
+                //add diagnostic for unknown components
+                const unquotedComponentName = componentName?.text?.replace(/"/g, '');
+                if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !this.event.program.getComponent(unquotedComponentName)) {
+                    this.addDiagnosticOnce({
                         file: file as BscFile,
-                        ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
-                        range: firstParamToken.range
+                        ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
+                        range: componentName.range
                     });
-                } else {
-                    // This is valid brightscript component
-                    // Test for invalid arg counts
-                    const brightScriptComponent: BRSComponentData = components[firstParamStringValue.toLowerCase()];
-                    // Valid arg counts for createObject are 1+ number of args for constructor
-                    let validArgCounts = brightScriptComponent.constructors.map(cnstr => cnstr.params.length + 1);
-                    if (validArgCounts.length === 0) {
-                        // no constructors for this component, so createObject only takes 1 arg
-                        validArgCounts = [1];
-                    }
-                    if (!validArgCounts.includes(call?.args.length)) {
-                        // Incorrect number of arguments included in `createObject()`
-                        this.addDiagnosticOnce(event, {
-                            file: file as BscFile,
-                            ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, validArgCounts, call?.args.length),
-                            range: call.range
-                        });
-                    }
+                } else if (call?.args.length !== 2) {
+                    // roSgNode should only ever have 2 args in `createObject`
+                    this.addDiagnosticOnce({
+                        file: file as BscFile,
+                        ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, [2], call?.args.length),
+                        range: call.range
+                    });
+                }
+            } else if (!platformComponentNames.has(firstParamStringValue.toLowerCase())) {
+                this.addDiagnosticOnce({
+                    file: file as BscFile,
+                    ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
+                    range: firstParamToken.range
+                });
+            } else {
+                // This is valid brightscript component
+                // Test for invalid arg counts
+                const brightScriptComponent: BRSComponentData = components[firstParamStringValue.toLowerCase()];
+                // Valid arg counts for createObject are 1+ number of args for constructor
+                let validArgCounts = brightScriptComponent.constructors.map(cnstr => cnstr.params.length + 1);
+                if (validArgCounts.length === 0) {
+                    // no constructors for this component, so createObject only takes 1 arg
+                    validArgCounts = [1];
+                }
+                if (!validArgCounts.includes(call?.args.length)) {
+                    // Incorrect number of arguments included in `createObject()`
+                    this.addDiagnosticOnce({
+                        file: file as BscFile,
+                        ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, validArgCounts, call?.args.length),
+                        range: call.range
+                    });
+                }
 
-                    // Test for deprecation
-                    if (brightScriptComponent.isDeprecated) {
-                        this.addDiagnosticOnce(event, {
-                            file: file as BscFile,
-                            ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),
-                            range: call.range
-                        });
-                    }
+                // Test for deprecation
+                if (brightScriptComponent.isDeprecated) {
+                    this.addDiagnosticOnce({
+                        file: file as BscFile,
+                        ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),
+                        range: call.range
+                    });
                 }
             }
-        });
-        event.scope.addDiagnostics(diagnostics);
+        }
+        this.event.scope.addDiagnostics(diagnostics);
     }
+
+    /**
+     * Adds a diagnostic to the first scope for this key. Prevents duplicate diagnostics
+     * for diagnostics where scope isn't important. (i.e. CreateObject validations)
+     */
+    private addDiagnosticOnce(diagnostic: BsDiagnostic) {
+        this.onceCache.getOrAdd(`${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`, () => {
+            this.event.scope.addDiagnostics([diagnostic]);
+            return true;
+        });
+    }
+    private onceCache = new Cache<string, boolean>();
+
+    private addDiagnostic(diagnostic: BsDiagnostic) {
+        this.event.scope.addDiagnostics([diagnostic]);
+    }
+
+    /**
+     * Add a diagnostic (to the first scope) that will have `relatedInformation` for each affected scope
+     */
+    private addMultiScopeDiagnostic(diagnostic: BsDiagnostic, message = 'Not defined in scope') {
+        diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.file?.srcPath}-${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`, () => {
+            if (!diagnostic.relatedInformation) {
+                diagnostic.relatedInformation = [];
+            }
+            this.addDiagnostic(diagnostic);
+            return diagnostic;
+        });
+        const info = {
+            message: `${message} '${this.event.scope.name}'`
+        } as DiagnosticRelatedInformation;
+        if (isXmlScope(this.event.scope) && this.event.scope.xmlFile?.srcPath) {
+            info.location = util.createLocation(
+                URI.file(this.event.scope.xmlFile.srcPath).toString(),
+                util.createRange(0, 0, 0, 10)
+            );
+        } else {
+            info.location = util.createLocation(
+                URI.file(diagnostic.file.srcPath).toString(),
+                diagnostic.range
+            );
+        }
+        diagnostic.relatedInformation.push(info);
+    }
+
+    private multiScopeCache = new Cache<string, BsDiagnostic>();
 }
+
+interface ExpressionInfo {
+    parts: Readonly<[VariableExpression, ...DottedGetExpression[]]>;
+    expression: Readonly<Expression>;
+}
+type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };

@@ -2,7 +2,7 @@ import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
-import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
+import { DiagnosticCodeMap, diagnosticCodes } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, File, FileReference, FunctionCall, CommentFlag } from '../interfaces';
 import type { Program } from '../Program';
@@ -11,7 +11,7 @@ import SGParser, { rangeFromTokenValue } from '../parser/SGParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import type { DependencyGraph } from '../DependencyGraph';
-import type { SGAst, SGToken } from '../parser/SGTypes';
+import type { SGToken } from '../parser/SGTypes';
 import { SGScript } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
@@ -50,7 +50,7 @@ export class XmlFile {
     /**
      * The list of possible autoImport codebehind pkg paths.
      */
-    private possibleCodebehindPkgPaths: string[];
+    public possibleCodebehindPkgPaths: string[];
 
     /**
      * An unsubscribe function for the dependencyGraph subscription
@@ -150,6 +150,9 @@ export class XmlFile {
      */
     public fileRange: Range;
 
+    /**
+     * A collection of diagnostics related to this file
+     */
     public diagnostics = [] as BsDiagnostic[];
 
     public parser = new SGParser();
@@ -216,14 +219,11 @@ export class XmlFile {
         );
     }
 
-
+    /**
+     * @deprecated logic has moved into XmlFileValidator, this is now an empty function
+     */
     public validate() {
-        util.validateTooDeepFile(this);
-        if (this.parser.ast.root) {
-            this.validateComponent(this.parser.ast);
-        } else {
-            //skip empty XML
-        }
+
     }
 
     /**
@@ -244,49 +244,6 @@ export class XmlFile {
         }
         this.commentFlags.push(...processor.commentFlags);
         this.diagnostics.push(...processor.diagnostics);
-    }
-
-    private validateComponent(ast: SGAst) {
-        const { root, component } = ast;
-        if (!component) {
-            //not a SG component
-            this.diagnostics.push({
-                ...DiagnosticMessages.xmlComponentMissingComponentDeclaration(),
-                range: root.range,
-                file: this
-            });
-            return;
-        }
-
-        //component name/extends
-        if (!component.name) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
-                range: component.tag.range,
-                file: this
-            });
-        }
-        if (!component.extends) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
-                range: component.tag.range,
-                file: this
-            });
-        }
-
-
-        //catch script imports with same path as the auto-imported codebehind file
-        const scriptTagImports = this.parser.references.scriptTagImports;
-        let explicitCodebehindScriptTag = this.program.options.autoImportComponentScript === true
-            ? scriptTagImports.find(x => this.possibleCodebehindPkgPaths.includes(x.pkgPath))
-            : undefined;
-        if (explicitCodebehindScriptTag) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.unnecessaryCodebehindScriptImport(),
-                file: this,
-                range: explicitCodebehindScriptTag.filePathRange
-            });
-        }
     }
 
     private dependencyGraph: DependencyGraph;
