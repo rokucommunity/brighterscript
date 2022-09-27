@@ -572,8 +572,8 @@ export let DiagnosticMessages = {
         code: 1108,
         severity: DiagnosticSeverity.Error
     }),
-    expectedToken: (tokenKind: string) => ({
-        message: `Expected '${tokenKind}'`,
+    expectedToken: (...tokenKinds: string[]) => ({
+        message: `Expected token '${tokenKinds.join(`' or '`)}'`,
         code: 1109,
         severity: DiagnosticSeverity.Error
     }),
@@ -698,6 +698,11 @@ export let DiagnosticMessages = {
     detectedTooDeepFileSource: (numberOfParentDirectories: number) => ({
         message: `Expected directory depth no larger than 7, but found ${numberOfParentDirectories}.`,
         code: 1134,
+        severity: DiagnosticSeverity.Error
+    }),
+    illegalContinueStatement: () => ({
+        message: `Continue statement must be contained within a loop statement`,
+        code: 1135,
         severity: DiagnosticSeverity.Error
     })
 };

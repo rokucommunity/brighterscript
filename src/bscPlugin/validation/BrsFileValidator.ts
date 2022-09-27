@@ -1,13 +1,14 @@
-import { isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isEnumStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespacedVariableNameExpression, isNamespaceStatement } from '../../astUtils/reflection';
+import { isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespacedVariableNameExpression, isNamespaceStatement, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnFileValidateEvent } from '../../interfaces';
+import { Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode } from '../../parser/AstNode';
 import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { EnumMemberStatement, EnumStatement, ImportStatement, LibraryStatement } from '../../parser/Statement';
+import { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 
@@ -146,6 +147,9 @@ export class BrsFileValidator {
                 if (node.identifier) {
                     node.parent.getSymbolTable().addSymbol(node.identifier.text, node.identifier.range, DynamicType.instance);
                 }
+            },
+            ContinueStatement: (node) => {
+                this.validateContinueStatement(node);
             }
         });
 
@@ -297,6 +301,41 @@ export class BrsFileValidator {
                     });
                 }
             }
+        }
+    }
+
+    private validateContinueStatement(statement: ContinueStatement) {
+        const validateLoopTypeMatch = (loopType: TokenKind) => {
+            //coerce ForEach to For
+            loopType = loopType === TokenKind.ForEach ? TokenKind.For : loopType;
+
+            if (loopType?.toLowerCase() !== statement.tokens.loopType.text?.toLowerCase()) {
+                this.event.file.addDiagnostic({
+                    range: statement.tokens.loopType.range,
+                    ...DiagnosticMessages.expectedToken(loopType)
+                });
+            }
+        };
+
+        //find the parent loop statement
+        const parent = statement.findAncestor<WhileStatement | ForStatement | ForEachStatement>((node) => {
+            if (isWhileStatement(node)) {
+                validateLoopTypeMatch(node.tokens.while.kind);
+                return true;
+            } else if (isForStatement(node)) {
+                validateLoopTypeMatch(node.forToken.kind);
+                return true;
+            } else if (isForEachStatement(node)) {
+                validateLoopTypeMatch(node.tokens.forEach.kind);
+                return true;
+            }
+        });
+        //flag continue statements found outside of a loop
+        if (!parent) {
+            this.event.file.addDiagnostic({
+                range: statement.range,
+                ...DiagnosticMessages.illegalContinueStatement()
+            });
         }
     }
 }
