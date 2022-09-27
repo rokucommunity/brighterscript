@@ -71,7 +71,7 @@ BrighterScript adds several new features to the BrightScript language such as Na
     </a>&nbsp;&nbsp;&nbsp;
     <a href="https://www.miraclechannel.ca/corcoplus">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192593254-f2a32cd4-0482-40de-830d-c1d09690c46b.png">
-    </a>&nbsp;&nbsp;&nbsp;
+    </a>&nbsp;&nbsp;&nbsp;<br/><br/>
     <a href="https://www.nba.com/">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192593641-aca51992-2bd1-45c2-b087-602b496fca36.png">
     </a>&nbsp;&nbsp;&nbsp;
@@ -87,7 +87,7 @@ BrighterScript adds several new features to the BrightScript language such as Na
 
 The BrighterScript project is used to power the popular [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=rokucommunity.brightscript) VSCode extension, the [maestro framework](https://github.com/georgejecook/maestro/blob/master/docs/index.md), and more.
 
-[Contact us](https://github.com/rokucommunity/brighterscript/issues/new) if you use BrighterScript on your project and would like your logo listed above. More projects are adopting BrighterScript all the time, from using the new BrighterScript language features to simply using the compiler in their build pipeline.
+[Contact us](https://github.com/rokucommunity/brighterscript/issues/new) if you use BrighterScript in your project and would like your logo listed above. More projects are adopting BrighterScript all the time, from using the new BrighterScript language features to simply using the compiler in their build pipeline.
 
 ## What's with the name?
 The name BrighterScript is a compliment to everything that is great about Roku's awesome BrightScript language. Naming things is hard, and discoverability and recognizability are both very important. Here are the reasons we chose this name:
