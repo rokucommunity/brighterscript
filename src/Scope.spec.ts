@@ -237,7 +237,7 @@ describe('Scope', () => {
                         srcPath: buttonPrimary.srcPath
                     },
                     relatedInformation: [{
-                        message: `Not defined in scope '${s('pkg:/components/ButtonPrimary.xml')}'`
+                        message: `Not defined in scope 'pkg:/components/ButtonPrimary.xml'`
                     }]
                 }, {
                     message: DiagnosticMessages.cannotFindName('delta').message,
@@ -245,7 +245,7 @@ describe('Scope', () => {
                         srcPath: buttonSecondary.srcPath
                     },
                     relatedInformation: [{
-                        message: `Not defined in scope '${s('pkg:/components/ButtonSecondary.xml')}'`
+                        message: `Not defined in scope 'pkg:/components/ButtonSecondary.xml'`
                     }]
                 }
             ]);
