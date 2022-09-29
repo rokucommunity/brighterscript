@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.24](https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha23...v1.0.0-alpha.24) - 2022-09-29
+### Changed
+- all changes from [v0.57.1](#0571---2022-09-07)
+- all changes from [v0.57.0](#0570---2022-09-02)
+- all changes from [v0.56.0](#0560---2022-08-23)
+- all changes from [v0.55.2](#0552---2022-08-15)
+- all changes from [v0.55.1](#0551---2022-08-07)
+- all changes from [v0.55.0](#0550---2022-08-03)
+- all changes from [v0.54.1](#0541---2022-07-22)
+- all changes from [v0.54.0](#0540---2022-07-22)
+- all changes from [v0.53.1](#0531---2022-07-15)
+- all changes from [v0.53.0](#0530---2022-07-14)
+
+
+
 ## [0.57.1](https://github.com/rokucommunity/brighterscript/compare/v0.57.0...0.57.1) - 2022-09-07
 ### Fixed
  - fix(parser): consider namespace function transpiled names ([#685](https://github.com/rokucommunity/brighterscript/pull/685))
