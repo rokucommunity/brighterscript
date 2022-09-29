@@ -408,7 +408,7 @@ export class Program {
     public setFile<T extends File>(fileEntry: FileObj, fileData: FileData): T;
     public setFile<T extends File>(fileParam: FileObj | string, fileData: FileData): T {
         //normalize the file paths
-        const { src: srcPath, dest: destPath } = this.getPaths(fileParam, this.options.rootDir);
+        const { srcPath, pkgPath } = this.getPaths(fileParam, this.options.rootDir);
 
         let file = this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
             //if the file is already loaded, remove it
@@ -416,7 +416,7 @@ export class Program {
                 this.removeFile(srcPath);
             }
 
-            const event = this.createProvideFileEvent(srcPath, destPath, fileData);
+            const event = this.createProvideFileEvent(srcPath, pkgPath, fileData);
 
             this.plugins.emit('beforeProvideFile', event);
             this.plugins.emit('provideFile', event);
@@ -425,7 +425,7 @@ export class Program {
             //if no files were provided, create a AssetFile to represent it.
             if (event.files.length === 0) {
                 event.files.push(
-                    new AssetFile(event.srcPath, event.destPath)
+                    new AssetFile(event.srcPath, event.pkgPath)
                 );
             }
 
@@ -445,9 +445,9 @@ export class Program {
 
             for (const file of event.files) {
                 //sanitize the file paths
-                const paths = this.getPaths({ src: file.srcPath, dest: file.pkgPath }, this.options.rootDir);
-                file.srcPath = paths.src;
-                file.pkgPath = paths.dest;
+                const paths = this.getPaths(file, this.options.rootDir);
+                file.srcPath = paths.srcPath;
+                file.pkgPath = paths.pkgPath;
 
                 //add a dependency graph key if missing
                 file.dependencyGraphKey ??= file.pkgPath.toLowerCase();
@@ -494,7 +494,7 @@ export class Program {
         const result = {
             srcExtension: path.extname(srcPath)?.toLowerCase() ?? '',
             srcPath: srcPath,
-            destPath: destPath,
+            pkgPath: destPath,
             program: this,
             _fileData: undefined as Buffer,
             getFileData: function getFileData() {
@@ -525,46 +525,63 @@ export class Program {
      * Given a srcPath, a pkgPath, or both, resolve whichever is missing, relative to rootDir.
      * @param rootDir must be a pre-normalized path
      */
-    private getPaths(fileParam: string | FileObj, rootDir: string) {
-        let src: string;
-        let dest: string;
+    private getPaths(fileParam: string | FileObj | { srcPath?: string; pkgPath?: string }, rootDir: string) {
+        let srcPath: string;
+        let pkgPath: string;
 
         assert.ok(fileParam, 'fileParam is required');
+
         //lift the srcPath and pkgPath vars from the incoming param
         if (typeof fileParam === 'string') {
-            src = s`${path.resolve(rootDir, fileParam)}`;
-            dest = s`${util.replaceCaseInsensitive(src, rootDir, '')}`;
+            fileParam = this.removePkgPrefix(fileParam);
+            srcPath = s`${path.resolve(rootDir, fileParam)}`;
+            pkgPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
         } else {
-            if (fileParam.src) {
-                src = s`${fileParam.src}`;
+            let param: any = fileParam;
+
+            if (param.src) {
+                srcPath = s`${param.src}`;
             }
-            if (fileParam.dest) {
-                dest = s`${fileParam.dest}`;
+            if (param.srcPath) {
+                srcPath = s`${param.srcPath}`;
+            }
+            if (param.dest) {
+                pkgPath = s`${this.removePkgPrefix(param.dest)}`;
+            }
+            if (param.pkgPath) {
+                pkgPath = s`${this.removePkgPrefix(param.pkgPath)}`;
             }
         }
 
         //if there's no srcPath, use the pkgPath to build an absolute srcPath
-        if (!src) {
-            src = s`${rootDir}/${dest}`;
+        if (!srcPath) {
+            srcPath = s`${rootDir}/${pkgPath}`;
         }
         //coerce srcPath to an absolute path
-        if (!path.isAbsolute(src)) {
-            src = util.standardizePath(src);
+        if (!path.isAbsolute(srcPath)) {
+            srcPath = util.standardizePath(srcPath);
         }
 
         //if there's no pkgPath, compute relative path from rootDir
-        if (!dest) {
-            dest = s`${util.replaceCaseInsensitive(src, rootDir, '')}`;
+        if (!pkgPath) {
+            pkgPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
         }
 
-        assert.ok(src, 'fileEntry.src is required');
-        assert.ok(dest, 'fileEntry.dest is required');
+        assert.ok(srcPath, 'fileEntry.src is required');
+        assert.ok(pkgPath, 'fileEntry.dest is required');
 
         return {
-            src: src,
+            srcPath: srcPath,
             //remove leading slash from pkgPath
-            dest: dest.replace(/^[\/\\]+/, '')
+            pkgPath: pkgPath.replace(/^[\/\\]+/, '')
         };
+    }
+
+    /**
+     * Remove any leading `pkg:/` found in the path
+     */
+    private removePkgPrefix(path: string) {
+        return path.replace(/^pkg:\//i, '');
     }
 
     /**

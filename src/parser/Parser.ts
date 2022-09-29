@@ -21,6 +21,7 @@ import {
     Block,
     Body,
     CatchStatement,
+    ContinueStatement,
     ClassStatement,
     ConstStatement,
     CommentStatement,
@@ -1109,6 +1110,10 @@ export class Parser {
             return this.gotoStatement();
         }
 
+        if (this.check(TokenKind.Continue)) {
+            return this.continueStatement();
+        }
+
         //does this line look like a label? (i.e.  `someIdentifier:` )
         if (this.check(TokenKind.Identifier) && this.checkNext(TokenKind.Colon) && this.checkPrevious(TokenKind.Newline)) {
             try {
@@ -2098,6 +2103,19 @@ export class Parser {
     }
 
     /**
+     * Parses a `continue` statement
+     */
+    private continueStatement() {
+        return new ContinueStatement({
+            continue: this.advance(),
+            loopType: this.tryConsume(
+                DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For),
+                TokenKind.While, TokenKind.For
+            )
+        });
+    }
+
+    /**
      * Parses a `goto` statement
      * @returns an AST representation of an `goto` statement.
      */
@@ -2357,12 +2375,17 @@ export class Parser {
     private indexedGet(expr: Expression) {
         let openingSquare = this.previous();
         let questionDotToken = this.getMatchingTokenAtOffset(-2, TokenKind.QuestionDot);
+        let index: Expression;
+        let closingSquare: Token;
         while (this.match(TokenKind.Newline)) { }
-
-        let index = this.expression();
+        try {
+            index = this.expression();
+        } catch (error) {
+            this.rethrowNonDiagnosticError(error);
+        }
 
         while (this.match(TokenKind.Newline)) { }
-        let closingSquare = this.consume(
+        closingSquare = this.tryConsume(
             DiagnosticMessages.expectedRightSquareBraceAfterArrayOrObjectIndex(),
             TokenKind.RightSquareBracket
         );
@@ -2429,11 +2452,14 @@ export class Parser {
                     expr = this.indexedGet(expr);
                 } else {
                     let dot = this.previous();
-                    let name = this.consume(
+                    let name = this.tryConsume(
                         DiagnosticMessages.expectedPropertyNameAfterPeriod(),
                         TokenKind.Identifier,
                         ...AllowedProperties
                     );
+                    if (!name) {
+                        break;
+                    }
 
                     // force it into an identifier so the AST makes some sense
                     name.kind = TokenKind.Identifier;
@@ -2444,7 +2470,7 @@ export class Parser {
 
             } else if (this.checkAny(TokenKind.At, TokenKind.QuestionAt)) {
                 let dot = this.advance();
-                let name = this.consume(
+                let name = this.tryConsume(
                     DiagnosticMessages.expectedAttributeNameAfterAtSymbol(),
                     TokenKind.Identifier,
                     ...AllowedProperties
@@ -2452,7 +2478,9 @@ export class Parser {
 
                 // force it into an identifier so the AST makes some sense
                 name.kind = TokenKind.Identifier;
-
+                if (!name) {
+                    break;
+                }
                 expr = new XmlAttributeGetExpression(expr, name as Identifier, dot);
                 //only allow a single `@` expression
                 break;
@@ -2483,13 +2511,19 @@ export class Parser {
                     });
                     throw this.lastDiagnosticAsError();
                 }
-                args.push(this.expression());
+                try {
+                    args.push(this.expression());
+                } catch (error) {
+                    this.rethrowNonDiagnosticError(error);
+                    // we were unable to get an expression, so don't continue
+                    break;
+                }
             } while (this.match(TokenKind.Comma));
         }
 
         while (this.match(TokenKind.Newline)) { }
 
-        const closingParen = this.consume(
+        const closingParen = this.tryConsume(
             DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
             TokenKind.RightParen
         );
@@ -2614,33 +2648,38 @@ export class Parser {
 
         while (this.match(TokenKind.Newline)) {
         }
+        let closingSquare: Token;
 
         if (!this.match(TokenKind.RightSquareBracket)) {
-            elements.push(this.expression());
-
-            while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Comment)) {
-                if (this.checkPrevious(TokenKind.Comment) || this.check(TokenKind.Comment)) {
-                    let comment = this.check(TokenKind.Comment) ? this.advance() : this.previous();
-                    elements.push(new CommentStatement([comment]));
-                }
-                while (this.match(TokenKind.Newline)) {
-
-                }
-
-                if (this.check(TokenKind.RightSquareBracket)) {
-                    break;
-                }
-
+            try {
                 elements.push(this.expression());
+
+                while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Comment)) {
+                    if (this.checkPrevious(TokenKind.Comment) || this.check(TokenKind.Comment)) {
+                        let comment = this.check(TokenKind.Comment) ? this.advance() : this.previous();
+                        elements.push(new CommentStatement([comment]));
+                    }
+                    while (this.match(TokenKind.Newline)) {
+
+                    }
+
+                    if (this.check(TokenKind.RightSquareBracket)) {
+                        break;
+                    }
+
+                    elements.push(this.expression());
+                }
+            } catch (error: any) {
+                this.rethrowNonDiagnosticError(error);
             }
 
-            this.consume(
+            closingSquare = this.tryConsume(
                 DiagnosticMessages.unmatchedLeftSquareBraceAfterArrayLiteral(),
                 TokenKind.RightSquareBracket
             );
+        } else {
+            closingSquare = this.previous();
         }
-
-        let closingSquare = this.previous();
 
         //this.consume("Expected newline or ':' after array literal", TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
         return new ArrayLiteralExpression(elements, openingSquare, closingSquare);
@@ -2677,47 +2716,14 @@ export class Parser {
         };
 
         while (this.match(TokenKind.Newline)) { }
-
+        let closingBrace: Token;
         if (!this.match(TokenKind.RightCurlyBrace)) {
             let lastAAMember: AAMemberExpression;
-            if (this.check(TokenKind.Comment)) {
-                lastAAMember = null;
-                members.push(new CommentStatement([this.advance()]));
-            } else {
-                let k = key();
-                let expr = this.expression();
-                lastAAMember = new AAMemberExpression(
-                    k.keyToken,
-                    k.colonToken,
-                    expr
-                );
-                members.push(lastAAMember);
-            }
-
-            while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
-                // collect comma at end of expression
-                if (lastAAMember && this.checkPrevious(TokenKind.Comma)) {
-                    lastAAMember.commaToken = this.previous();
-                }
-
-                //check for comment at the end of the current line
-                if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
-                    let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
-                    members.push(new CommentStatement([token]));
+            try {
+                if (this.check(TokenKind.Comment)) {
+                    lastAAMember = null;
+                    members.push(new CommentStatement([this.advance()]));
                 } else {
-                    this.consumeStatementSeparators(true);
-
-                    //check for a comment on its own line
-                    if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
-                        let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
-                        lastAAMember = null;
-                        members.push(new CommentStatement([token]));
-                        continue;
-                    }
-
-                    if (this.check(TokenKind.RightCurlyBrace)) {
-                        break;
-                    }
                     let k = key();
                     let expr = this.expression();
                     lastAAMember = new AAMemberExpression(
@@ -2727,15 +2733,52 @@ export class Parser {
                     );
                     members.push(lastAAMember);
                 }
+
+                while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
+                    // collect comma at end of expression
+                    if (lastAAMember && this.checkPrevious(TokenKind.Comma)) {
+                        lastAAMember.commaToken = this.previous();
+                    }
+
+                    //check for comment at the end of the current line
+                    if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
+                        let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
+                        members.push(new CommentStatement([token]));
+                    } else {
+                        this.consumeStatementSeparators(true);
+
+                        //check for a comment on its own line
+                        if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
+                            let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
+                            lastAAMember = null;
+                            members.push(new CommentStatement([token]));
+                            continue;
+                        }
+
+                        if (this.check(TokenKind.RightCurlyBrace)) {
+                            break;
+                        }
+                        let k = key();
+                        let expr = this.expression();
+                        lastAAMember = new AAMemberExpression(
+                            k.keyToken,
+                            k.colonToken,
+                            expr
+                        );
+                        members.push(lastAAMember);
+                    }
+                }
+            } catch (error: any) {
+                this.rethrowNonDiagnosticError(error);
             }
 
-            this.consume(
+            closingBrace = this.tryConsume(
                 DiagnosticMessages.unmatchedLeftCurlyAfterAALiteral(),
                 TokenKind.RightCurlyBrace
             );
+        } else {
+            closingBrace = this.previous();
         }
-
-        let closingBrace = this.previous();
 
         const aaExpr = new AALiteralExpression(members, openingBrace, closingBrace);
         this.addPropertyHints(aaExpr);
@@ -2909,6 +2952,19 @@ export class Parser {
 
     private previous(): Token {
         return this.tokens[this.current - 1];
+    }
+
+    /**
+     * Sometimes we catch an error that is a diagnostic.
+     * If that's the case, we want to continue parsing.
+     * Otherwise, re-throw the error
+     *
+     * @param error error caught in a try/catch
+     */
+    private rethrowNonDiagnosticError(error) {
+        if (!error.isDiagnostic) {
+            throw error;
+        }
     }
 
     /**

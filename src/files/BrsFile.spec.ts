@@ -1309,6 +1309,32 @@ describe('BrsFile', () => {
             expect(file.functionCalls[1].nameRange).to.eql(Range.create(5, 20, 5, 23));
         });
 
+        it('finds function calls that are unfinished', () => {
+            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            file.parse(`
+                function DoA()
+                    DoB("a"
+                end function
+                function DoB(a as string)
+                    DoC(
+                end function
+            `);
+            expectDiagnostics(file.parser.diagnostics, [
+                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.expectedNewlineOrColon(),
+                DiagnosticMessages.unexpectedToken('end function'),
+                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.expectedNewlineOrColon()
+            ]);
+            expect(file.functionCalls.length).to.equal(2);
+
+            expect(file.functionCalls[0].range).to.eql(Range.create(2, 20, 2, 27));
+            expect(file.functionCalls[0].nameRange).to.eql(Range.create(2, 20, 2, 23));
+
+            expect(file.functionCalls[1].range).to.eql(Range.create(5, 20, 5, 24));
+            expect(file.functionCalls[1].nameRange).to.eql(Range.create(5, 20, 5, 23));
+        });
+
         it('sanitizes brs errors', () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
             file.parse(`
