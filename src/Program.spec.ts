@@ -575,8 +575,8 @@ describe('Program', () => {
             expect(
                 getPaths('source/main.brs', rootDir)
             ).to.eql({
-                src: s`${rootDir}/source/main.brs`,
-                dest: s`source/main.brs`
+                srcPath: s`${rootDir}/source/main.brs`,
+                pkgPath: s`source/main.brs`
             });
         });
 
@@ -584,8 +584,8 @@ describe('Program', () => {
             expect(
                 getPaths(`${rootDir}/source\\main.brs`, rootDir)
             ).to.eql({
-                src: s`${rootDir}/source/main.brs`,
-                dest: s`source/main.brs`
+                srcPath: s`${rootDir}/source/main.brs`,
+                pkgPath: s`source/main.brs`
             });
         });
 
@@ -593,8 +593,8 @@ describe('Program', () => {
             expect(
                 getPaths({ dest: 'source/main.brs' }, rootDir)
             ).to.eql({
-                src: s`${rootDir}/source/main.brs`,
-                dest: s`source/main.brs`
+                srcPath: s`${rootDir}/source/main.brs`,
+                pkgPath: s`source/main.brs`
             });
         });
 
@@ -602,8 +602,35 @@ describe('Program', () => {
             expect(
                 getPaths({ src: `${rootDir}/source/main.brs` }, rootDir)
             ).to.eql({
-                src: s`${rootDir}/source/main.brs`,
-                dest: s`source/main.brs`
+                srcPath: s`${rootDir}/source/main.brs`,
+                pkgPath: s`source/main.brs`
+            });
+        });
+
+        it('works for pkg string', () => {
+            expect(
+                getPaths('pkg:/source/main.brs', rootDir)
+            ).to.eql({
+                srcPath: s`${rootDir}/source/main.brs`,
+                pkgPath: s`source/main.brs`
+            });
+        });
+
+        it('favors pkgPath over destPath', () => {
+            expect(
+                getPaths({ srcPath: `${rootDir}/source/main.brs`, destPath: 'source/DontUse.brs', pkgPath: `pkg:/source/main.brs` })
+            ).to.eql({
+                srcPath: s`${rootDir}/source/main.brs`,
+                pkgPath: s`source/main.brs`
+            });
+        });
+
+        it('works when given a file', () => {
+            expect(
+                getPaths({ srcPath: `${rootDir}/source/main.brs`, pkgPath: `source/main.brs` })
+            ).to.eql({
+                srcPath: s`${rootDir}/source/main.brs`,
+                pkgPath: s`source/main.brs`
             });
         });
     });
