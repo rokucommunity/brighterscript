@@ -1,6 +1,6 @@
 import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers, Position, CompletionItem } from 'vscode-languageserver';
 import type { Scope } from './Scope';
-import { BrsFile } from './files/BrsFile';
+import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { FunctionScope } from './FunctionScope';
 import type { FunctionType } from './types/FunctionType';
@@ -421,9 +421,9 @@ export interface ProvideFileEvent<TFile extends File = File> {
      */
     srcPath: string;
     /**
-     * The dest path for the file (i.e. the pkgPath without leading `pkg:/` )
+     * The pkgPath for the file. This must be prefixed with `pkg:/` and use only forward slashes. (i.e. `pkg:/source/main.brs`)
      */
-    destPath: string;
+    pkgPath: string;
     /**
      * A function that returns the data for this file. This is a function to allow lazy-loading of the data
      * (for situations like images where you may never need to actually load the file).

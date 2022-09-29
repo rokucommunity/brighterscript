@@ -46,7 +46,6 @@ export class BrsFile implements File {
     ) {
         this.srcPath = s`${this.srcPath}`;
         this.pkgPath = s`${this.pkgPath}`;
-        this.dependencyGraphKey = this.pkgPath.toLowerCase();
 
         this.extension = util.getExtension(this.srcPath);
 
@@ -85,7 +84,7 @@ export class BrsFile implements File {
     public parseMode = ParseMode.BrightScript;
 
     /**
-     * The key used to identify this file in the dependency graph
+     * The key used to identify this file in the dependency graph. This is set by the BrighterScript program and should not be set by plugins
      */
     public dependencyGraphKey: string;
 

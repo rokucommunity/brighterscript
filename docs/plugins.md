@@ -450,7 +450,7 @@ export default function plugin() {
                 const file = new BrsFile(
                     event.srcPath,
                     //rename the .js extension to .brs
-                    event.destPath.replace(/\.js$/, '.brs'),
+                    event.pkgPath.replace(/\.js$/, '.brs'),
                     event.program
                 );
                 //parse the generated brs code
@@ -486,12 +486,7 @@ export default function plugin() {
                 const code = event.getFileData().toString();
 
                 //create a new BrsFile
-                const brsFile = new BrsFile(
-                    event.srcPath,
-                    //rename the .js extension to .brs
-                    event.destPath,
-                    event.program
-                );
+                const brsFile = new BrsFile(event.srcPath, event.pkgPath, event.program);
                 //parse the generated brs code
                 brsFile.parse(code);
 
@@ -499,11 +494,11 @@ export default function plugin() {
                 event.files.push(brsFile);
 
                 //create an XmlFile component
-                const xmlFile = new XmlFile(event.srcPath, event.destPath, event.program);
+                const xmlFile = new XmlFile(event.srcPath, event.pkgPath, event.program);
                 xmlFile.parse(trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="${componentName}">
-                        <script uri="pkg:/${event.destPath}" />
+                        <script uri="${event.pkgPath}" />
                     </component>
                 `);
                 //add this brs file to the event, which is how you "provide" the file

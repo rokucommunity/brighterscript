@@ -31,8 +31,6 @@ import type { Statement } from './parser/AstNode';
 import type { File } from './files/File';
 import { AssetFile } from './files/AssetFile';
 
-const startOfSourcePkgPath = `source${path.sep}`;
-const startOfComponentsPkgPath = `components${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
 
@@ -449,8 +447,8 @@ export class Program {
                 file.srcPath = paths.srcPath;
                 file.pkgPath = paths.pkgPath;
 
-                //add a dependency graph key if missing
-                file.dependencyGraphKey ??= file.pkgPath.toLowerCase();
+                //set the dependencyGraph key for every file to its pkgPath
+                file.dependencyGraphKey = file.pkgPath.toLowerCase();
 
                 this.assignFile(file);
 
@@ -466,13 +464,13 @@ export class Program {
                 this.dependencyGraph.addOrReplace(file.dependencyGraphKey, file.dependencies ?? []);
 
                 //if this is a `source` file, add it to the source scope's dependency list
-                if (file.pkgPath.startsWith(startOfSourcePkgPath)) {
+                if (this.isSourceBrsFile(file)) {
                     this.createSourceScope();
                     this.dependencyGraph.addDependency('scope:source', file.dependencyGraphKey);
                 }
 
                 //if this is an xml file in the components folder, register it as a component
-                if (isXmlFile(file) && file.pkgPath.startsWith(startOfComponentsPkgPath)) {
+                if (this.isComponentsXmlFile(file)) {
                     //create a new scope for this xml file
                     let scope = new XmlScope(file, this);
                     this.addScope(scope);
@@ -490,11 +488,11 @@ export class Program {
     /**
      * Creates a new `ProvideFile` event instance, with built-in file data resolving
      */
-    private createProvideFileEvent(srcPath: string, destPath: string, data: FileData): ProvideFileEvent {
+    private createProvideFileEvent(srcPath: string, pkgPath: string, data: FileData): ProvideFileEvent {
         const result = {
             srcExtension: path.extname(srcPath)?.toLowerCase() ?? '',
             srcPath: srcPath,
-            pkgPath: destPath,
+            pkgPath: pkgPath,
             program: this,
             _fileData: undefined as Buffer,
             getFileData: function getFileData() {
@@ -566,14 +564,15 @@ export class Program {
         if (!pkgPath) {
             pkgPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
         }
+        //remove leading slashes from pkgPath
+        pkgPath = pkgPath.replace(/^[\/\\]+/, '');
 
         assert.ok(srcPath, 'fileEntry.src is required');
         assert.ok(pkgPath, 'fileEntry.dest is required');
 
         return {
             srcPath: srcPath,
-            //remove leading slash from pkgPath
-            pkgPath: pkgPath.replace(/^[\/\\]+/, '')
+            pkgPath: pkgPath
         };
     }
 
@@ -582,6 +581,20 @@ export class Program {
      */
     private removePkgPrefix(path: string) {
         return path.replace(/^pkg:\//i, '');
+    }
+
+    /**
+     * Is this file a .brs file found somewhere within the `pkg:/source/` folder?
+     */
+    private isSourceBrsFile(file: File) {
+        return !!/^(pkg:\/)?source[\/\\]/.exec(file.pkgPath);
+    }
+
+    /**
+     * Is this file a .brs file found somewhere within the `pkg:/source/` folder?
+     */
+    private isComponentsXmlFile(file: File): file is XmlFile {
+        return isXmlFile(file) && !!/^(pkg:\/)?components[\/\\]/.exec(file.pkgPath);
     }
 
     /**
@@ -652,7 +665,7 @@ export class Program {
         this.logger.debug('Program.removeFile()', filePath);
         const paths = this.getPaths(filePath, this.options.rootDir);
         //there can be one or more File entries for a single srcPath, so get all of them and remove them all
-        const files = this.fileClusters.get(paths.src?.toLowerCase()) ?? [];
+        const files = this.fileClusters.get(paths.srcPath?.toLowerCase()) ?? [];
         for (const file of files) {
             this.plugins.emit('beforeFileDispose', file);
 
@@ -672,7 +685,7 @@ export class Program {
             this.dependencyGraph.remove(file.dependencyGraphKey);
 
             //if this is a pkg:/source file, notify the `source` scope that it has changed
-            if (file.pkgPath.startsWith(startOfSourcePkgPath)) {
+            if (this.isSourceBrsFile(file)) {
                 this.dependencyGraph.removeDependency('scope:source', file.dependencyGraphKey);
             }
 

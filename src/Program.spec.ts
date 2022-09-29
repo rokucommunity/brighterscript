@@ -2711,16 +2711,16 @@ describe('Program', () => {
                 expect(
                     plugin.beforeProvideFile.getCalls().map(x => ({
                         srcPath: x.args[0].srcPath,
-                        destPath: x.args[0].destPath,
+                        pkgPath: x.args[0].pkgPath,
                         fileData: x.args[0].getFileData().toString()
                     }))
                 ).to.eql([{
                     srcPath: s`${rootDir}/source/main.brs`,
-                    destPath: s`source/main.brs`,
+                    pkgPath: s`source/main.brs`,
                     fileData: `'main`
                 }, {
                     srcPath: s`${rootDir}/source/lib.brs`,
-                    destPath: s`source/lib.brs`,
+                    pkgPath: s`source/lib.brs`,
                     fileData: `'lib`
                 }]);
             }
@@ -2773,19 +2773,19 @@ describe('Program', () => {
             const plugin = {
                 name: 'test',
                 beforeProvideFile: (e: BeforeProvideFileEvent) => {
-                    events.push(`beforeProvideFile:${e.destPath}`);
+                    events.push(`beforeProvideFile:${e.pkgPath}`);
                     e.files.push(
-                        new AssetFile(e.srcPath, e.destPath)
+                        new AssetFile(e.srcPath, e.pkgPath)
                     );
                     e.files.push(
-                        new AssetFile(e.srcPath + '.two', e.destPath + '.two')
+                        new AssetFile(e.srcPath + '.two', e.pkgPath + '.two')
                     );
                 },
                 provideFile: (e: ProvideFileEvent) => {
-                    events.push(`provideFile:${e.destPath}`);
+                    events.push(`provideFile:${e.pkgPath}`);
                 },
                 afterProvideFile: (e: AfterProvideFileEvent) => {
-                    events.push(`afterProvideFile:${e.destPath}`);
+                    events.push(`afterProvideFile:${e.pkgPath}`);
                 },
                 beforeFileAdd: (e: BeforeFileAddEvent) => {
                     events.push(`beforeFileAdd:${e.file.pkgPath}`);

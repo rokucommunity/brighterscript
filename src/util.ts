@@ -88,12 +88,10 @@ export class Util {
      * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
      */
     public sanitizePkgPath(pkgPath: string) {
-        pkgPath = pkgPath.replace(/\\/g, '/');
-        //if there's no protocol, assume it's supposed to start with `pkg:/`
-        if (!this.startsWithProtocol(pkgPath)) {
-            pkgPath = 'pkg:/' + pkgPath;
-        }
-        return pkgPath;
+        //convert all slashes to forwardslash
+        pkgPath = pkgPath.replace(/[\/\\]+/g, '/');
+        //ensure every path has the leading pkg:/
+        return 'pkg:/' + pkgPath.replace(/^pkg:\//i, '');
     }
 
     /**
@@ -105,10 +103,10 @@ export class Util {
 
     /**
      * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
+     * @deprecated use `sanitizePkgPath instead. Will be removed in v1
      */
     public getRokuPkgPath(pkgPath: string) {
-        pkgPath = pkgPath.replace(/\\/g, '/');
-        return 'pkg:/' + pkgPath;
+        return this.sanitizePkgPath(pkgPath);
     }
 
     /**

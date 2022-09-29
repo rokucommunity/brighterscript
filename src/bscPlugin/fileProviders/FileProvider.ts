@@ -1,5 +1,4 @@
 import type { BeforeFileParseEvent, ProvideFileEvent } from '../../interfaces';
-import * as path from 'path';
 import { BrsFile } from '../../files/BrsFile';
 import chalk from 'chalk';
 import { LogLevel } from '../../Logger';
@@ -33,7 +32,7 @@ export class FileProvider {
     }
 
     private handleBrsFile() {
-        const file = new BrsFile(this.event.srcPath, this.event.destPath, this.event.program);
+        const file = new BrsFile(this.event.srcPath, this.event.pkgPath, this.event.program);
         const text = this.event.getFileData().toString();
 
         let parseEvent: BeforeFileParseEvent = {
@@ -56,12 +55,12 @@ export class FileProvider {
 
     private handleXmlFile() {
         //only process files from the components folder (Roku will only parse xml files in the components folder)
-        if (!this.event.destPath.toLowerCase().startsWith(util.pathSepNormalize(`components/`))) {
+        if (!/^(pkg:\/)?components[\/\\]/i.exec(this.event.pkgPath)) {
             return;
         }
         const text = this.event.getFileData().toString();
         //add the file to the program
-        const file = new XmlFile(this.event.srcPath, this.event.destPath, this.event.program);
+        const file = new XmlFile(this.event.srcPath, this.event.pkgPath, this.event.program);
 
         let beforeFileParseEvent: BeforeFileParseEvent = {
             //TODO remove `pathAbsolute` in v1

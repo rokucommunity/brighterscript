@@ -37,9 +37,9 @@ describe('util', () => {
         });
     });
 
-    describe('getRokuPkgPath', () => {
+    describe('sanitizePkgPath', () => {
         it('replaces more than one windows slash in a path', () => {
-            expect(util.getRokuPkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
+            expect(util.sanitizePkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
         });
     });
 

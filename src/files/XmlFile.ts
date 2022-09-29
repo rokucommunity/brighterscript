@@ -326,6 +326,10 @@ export class XmlFile implements File {
         return key;
     }
 
+    public set dependencyGraphKey(value) {
+        //do nothing, we override this value in the getter
+    }
+
     /**
      * The key used in the dependency graph for this component's parent.
      * If we have aparent, we will use that. If we don't, this will return undefined
@@ -474,7 +478,7 @@ export class XmlFile implements File {
 
         const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
             const script = new SGScript();
-            script.uri = util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'));
+            script.uri = util.sanitizePkgPath(uri.replace(/\.bs$/, '.brs'));
             return script;
         });
 
