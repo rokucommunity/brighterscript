@@ -15,6 +15,7 @@ import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
 import type { Token } from './lexer/Token';
 import type { File } from './files/File';
+import type { FileFactory } from './files/Factory';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
@@ -443,6 +444,12 @@ export interface ProvideFileEvent<TFile extends File = File> {
      * The program for this event
      */
     program: Program;
+    /**
+     * A factory used to create new instances of the BrighterScript built-in file types. This mitigates the issue
+     * of a plugin's version of a File not being the same as the LanguageServer or CLI version of BrighterScript
+     * (due to npm installing multiple versions of brighterscript)
+     */
+    fileFactory: FileFactory;
 }
 export type AfterProvideFileEvent<TFile extends File = File> = ProvideFileEvent<TFile>;
 

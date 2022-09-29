@@ -58,7 +58,7 @@ export interface File {
     dispose?(): void;
     /**
      * Should this file be included or excluded when generating the project output (i.e. transpiling the project)
-     * This affects setting affects whether the file is transpiled, or copied, or completely excluded.
+     * This affects whether the file is transpiled, or copied, or completely excluded.
      * `true` means exclude, all other values mean include.
      */
     excludeFromOutput?: boolean;

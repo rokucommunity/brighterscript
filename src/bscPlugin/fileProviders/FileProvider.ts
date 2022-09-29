@@ -1,9 +1,6 @@
 import type { BeforeFileParseEvent, ProvideFileEvent } from '../../interfaces';
-import { BrsFile } from '../../files/BrsFile';
 import chalk from 'chalk';
 import { LogLevel } from '../../Logger';
-import { XmlFile } from '../../files/XmlFile';
-import { util } from '../../util';
 
 export class FileProvider {
     constructor(
@@ -32,7 +29,7 @@ export class FileProvider {
     }
 
     private handleBrsFile() {
-        const file = new BrsFile(this.event.srcPath, this.event.pkgPath, this.event.program);
+        const file = this.event.fileFactory.BrsFile(this.event.srcPath, this.event.pkgPath);
         const text = this.event.getFileData().toString();
 
         let parseEvent: BeforeFileParseEvent = {
@@ -60,7 +57,7 @@ export class FileProvider {
         }
         const text = this.event.getFileData().toString();
         //add the file to the program
-        const file = new XmlFile(this.event.srcPath, this.event.pkgPath, this.event.program);
+        const file = this.event.fileFactory.XmlFile(this.event.srcPath, this.event.pkgPath);
 
         let beforeFileParseEvent: BeforeFileParseEvent = {
             //TODO remove `pathAbsolute` in v1

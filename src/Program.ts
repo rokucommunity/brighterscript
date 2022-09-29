@@ -30,6 +30,7 @@ import { rokuDeploy } from 'roku-deploy';
 import type { Statement } from './parser/AstNode';
 import type { File } from './files/File';
 import { AssetFile } from './files/AssetFile';
+import { FileFactory } from './files/Factory';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -72,9 +73,16 @@ export class Program {
         this.options.rootDir = util.getRootDir(this.options);
 
         this.createGlobalScope();
+
+        this.fileFactory = new FileFactory(this);
     }
 
     public logger: Logger;
+
+    /**
+     * A factory that creates `File` instances
+     */
+    private fileFactory: FileFactory;
 
     private createGlobalScope() {
         //create the 'global' scope
@@ -414,7 +422,7 @@ export class Program {
                 this.removeFile(srcPath);
             }
 
-            const event = this.createProvideFileEvent(srcPath, pkgPath, fileData);
+            const event = new ProvideFileEventInternal(this, srcPath, pkgPath, fileData, this.fileFactory);
 
             this.plugins.emit('beforeProvideFile', event);
             this.plugins.emit('provideFile', event);
@@ -485,40 +493,6 @@ export class Program {
         return file as T;
     }
 
-    /**
-     * Creates a new `ProvideFile` event instance, with built-in file data resolving
-     */
-    private createProvideFileEvent(srcPath: string, pkgPath: string, data: FileData): ProvideFileEvent {
-        const result = {
-            srcExtension: path.extname(srcPath)?.toLowerCase() ?? '',
-            srcPath: srcPath,
-            pkgPath: pkgPath,
-            program: this,
-            _fileData: undefined as Buffer,
-            getFileData: function getFileData() {
-                if (!this._fileData) {
-                    let result: any;
-                    if (typeof data === 'string') {
-                        result = Buffer.from(data);
-                    } else if (typeof data === 'function') {
-                        result = data();
-                        if (typeof result === 'string') {
-                            result = Buffer.from(result);
-                        }
-                    }
-                    this._fileData = result;
-                }
-                return this._fileData;
-            },
-            setFileData: function setFileData(fileData: FileData) {
-                //override the outer data object, and delete any cache so it'll get re-resolved next time `getFileData` is called
-                data = fileData;
-                delete this._fileData;
-            },
-            files: []
-        };
-        return result;
-    }
     /**
      * Given a srcPath, a pkgPath, or both, resolve whichever is missing, relative to rootDir.
      * @param rootDir must be a pre-normalized path
@@ -1682,3 +1656,42 @@ export interface FileTranspileResult {
 }
 
 export type FileData = string | Buffer | (() => Buffer | string);
+
+class ProvideFileEventInternal<TFile extends File = File> implements ProvideFileEvent<TFile> {
+    constructor(
+        public program: Program,
+        public srcPath: string,
+        public pkgPath: string,
+        private initialData: FileData,
+        public fileFactory: FileFactory
+    ) {
+        this.srcExtension = path.extname(srcPath)?.toLowerCase();
+    }
+
+    public srcExtension: string;
+
+    public files = [];
+
+    public getFileData() {
+        if (!this._fileData) {
+            let result: any;
+            if (typeof this.initialData === 'string') {
+                result = Buffer.from(this.initialData);
+            } else if (typeof this.initialData === 'function') {
+                result = this.initialData();
+                if (typeof result === 'string') {
+                    result = Buffer.from(result);
+                }
+            }
+            this._fileData = result;
+        }
+        return this._fileData;
+    }
+
+    public setFileData(fileData: FileData) {
+        //override the outer data object, and delete any cache so it'll get re-resolved next time `getFileData` is called
+        this.initialData = fileData;
+        delete this._fileData;
+    }
+    private _fileData: Buffer;
+}
