@@ -12,27 +12,24 @@ import * as fsExtra from 'fs-extra';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { doesNotThrow } from 'assert';
 import type { MethodStatement } from '../parser/Statement';
+import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 
 describe('BrsFile BrighterScript classes', () => {
-    let tmpPath = s`${process.cwd()}/.tmp`;
-    let rootDir = s`${tmpPath}/rootDir`;
-    const stagingDir = s`${tmpPath}/staging`;
-
     let program: Program;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
         fsExtra.ensureDirSync(rootDir);
-        fsExtra.emptyDirSync(tmpPath);
+        fsExtra.emptyDirSync(tempDir);
         program = new Program({ rootDir: rootDir, stagingFolderPath: stagingDir });
     });
     afterEach(() => {
         sinon.restore();
         program.dispose();
-        fsExtra.ensureDirSync(tmpPath);
-        fsExtra.emptyDirSync(tmpPath);
+        fsExtra.ensureDirSync(tempDir);
+        fsExtra.emptyDirSync(tempDir);
     });
 
     function addFile(relativePath: string, text: string) {

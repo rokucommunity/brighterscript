@@ -4,10 +4,8 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { Program } from '../../../Program';
-import { standardizePath as s } from '../../../util';
+import { rootDir } from '../../../testHelpers.spec';
 import { getTestTranspile } from '../../../testHelpers.spec';
-
-const rootDir = s`${process.cwd()}/.tmp/rootDir`;
 
 describe('parser print statements', () => {
 

@@ -1,10 +1,10 @@
 import { expect } from 'chai';
 import { Program } from '../../Program';
-import util, { standardizePath as s } from '../../util';
+import { util } from '../../util';
 import { createSandbox } from 'sinon';
+import { rootDir } from '../../testHelpers.spec';
 let sinon = createSandbox();
 
-let rootDir = s`${process.cwd()}/.tmp/rootDir`;
 const fence = (code: string) => util.mdFence(code, 'brightscript');
 
 describe('HoverProcessor', () => {
