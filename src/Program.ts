@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileReference, FileObj, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideCompletionsEvent, ProvideHoverEvent, ProvideFileEvent, BeforeFileAddEvent } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideCompletionsEvent, ProvideHoverEvent, ProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -638,10 +638,20 @@ export class Program {
     public removeFile(filePath: string, normalizePath = true) {
         this.logger.debug('Program.removeFile()', filePath);
         const paths = this.getPaths(filePath, this.options.rootDir);
+
         //there can be one or more File entries for a single srcPath, so get all of them and remove them all
-        const files = this.fileClusters.get(paths.srcPath?.toLowerCase()) ?? [];
+        const files = this.fileClusters.get(paths.srcPath?.toLowerCase()) ?? [this.getFile(filePath, normalizePath)];
+
         for (const file of files) {
+            //if a file has already been removed, nothing more needs to be done here
+            if (!file || !this.hasFile(file.srcPath)) {
+                continue;
+            }
+            //deprecated. remove in v1
             this.plugins.emit('beforeFileDispose', file);
+
+            const event: BeforeFileRemoveEvent = { file: file, program: this };
+            this.plugins.emit('beforeFileRemove', event);
 
             //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
             let scope = this.scopes[file.pkgPath];
@@ -673,6 +683,10 @@ export class Program {
             }
             //dispose file
             file?.dispose?.();
+
+            this.plugins.emit('afterFileRemove', event);
+
+            //deprecated. remove in v1
             this.plugins.emit('afterFileDispose', file);
         }
     }
@@ -808,7 +822,8 @@ export class Program {
     public getFile<T extends File>(filePath: string, normalizePath = true) {
         if (typeof filePath !== 'string') {
             return undefined;
-        } else if (path.isAbsolute(filePath)) {
+            //is the path absolute (or the `virtual:` prefix)
+        } else if (/^(?:(?:virtual:[\/\\])|(?:\w:)|(?:[\/\\]))/gmi.exec(filePath)) {
             return this.files[
                 (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase()
             ] as T;

@@ -260,6 +260,15 @@ export interface CompilerPlugin {
     afterFileAdd?: PluginHandler<AfterFileAddEvent>;
 
     /**
+     * Called before a file is removed from the program. This includes physical and virtual files
+     */
+    beforeFileRemove?: PluginHandler<BeforeFileRemoveEvent>;
+    /**
+     * Called after a file has been removed from the program. This includes physical and virtual files
+     */
+    afterFileRemove?: PluginHandler<AfterFileRemoveEvent>;
+
+    /**
      * Called before parsing a file. This is an opportunity to manipulate or replace the source code before the file is parsed.
      * NOTE: this only applies to .brs, .bs, .d.bs files, or .xml files located within the pkg:/components folder
      * @deprecated To override file contents, use the `setData()` method in the `beforeProvideFile` event instead
@@ -287,7 +296,15 @@ export interface CompilerPlugin {
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
 
+    /**
+     * Called before a file is removed from the program.
+     * @deprecated use `beforeFileRemove` instead
+     */
     beforeFileDispose?: (file: File) => void;
+    /**
+     * Called after a file is removed.
+     * @deprecated use `afterFileRemove` instead
+     */
     afterFileDispose?: (file: File) => void;
 }
 export type PluginHandler<T, R = void> = (event: T) => R;
@@ -458,6 +475,12 @@ export interface BeforeFileAddEvent<TFile extends File = File> {
     program: Program;
 }
 export type AfterFileAddEvent<TFile extends File = File> = BeforeFileAddEvent<TFile>;
+
+export interface BeforeFileRemoveEvent<TFile extends File = File> {
+    file: TFile;
+    program: Program;
+}
+export type AfterFileRemoveEvent<TFile extends File = File> = BeforeFileRemoveEvent<TFile>;
 
 export interface BeforeFileParseEvent {
     srcPath: string;

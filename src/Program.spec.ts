@@ -20,7 +20,7 @@ import { isBrsFile } from './astUtils/reflection';
 import { TokenKind } from './lexer/TokenKind';
 import type { LiteralExpression } from './parser/Expression';
 import type { AstEditor } from './astUtils/AstEditor';
-import type { AfterFileAddEvent, AfterProvideFileEvent, BeforeFileAddEvent, BeforeFileParseEvent, BeforeProvideFileEvent, ProvideFileEvent } from './interfaces';
+import type { AfterFileAddEvent, AfterFileRemoveEvent, AfterProvideFileEvent, BeforeFileAddEvent, BeforeFileParseEvent, BeforeFileRemoveEvent, BeforeProvideFileEvent, ProvideFileEvent } from './interfaces';
 import * as path from 'path';
 import { AssetFile } from './files/AssetFile';
 
@@ -734,7 +734,7 @@ describe('Program', () => {
                 program.plugins.add({
                     name: 'test',
                     provideFile: (event: ProvideFileEvent) => {
-                        //every .test file also produces a secondary file
+                        //every .component file also produces a secondary file
                         if (event.srcPath.endsWith('.component')) {
                             const fileName = path.parse(event.srcPath).name;
                             event.files.push({
@@ -749,6 +749,11 @@ describe('Program', () => {
                         }
                     }
                 });
+            });
+
+            it('allows finding files by `virtual:/` srcPath', () => {
+                program.setFile('components/ButtonPrimary.component', ``);
+                expect(program.hasFile('virtual:/ButtonPrimary.brs')).to.be.true;
             });
 
             it('supports virtual file contributions', () => {
@@ -2792,11 +2797,18 @@ describe('Program', () => {
                 },
                 afterFileAdd: (e: AfterFileAddEvent) => {
                     events.push(`afterFileAdd:${e.file.pkgPath}`);
+                },
+                beforeFileRemove: (e: BeforeFileRemoveEvent) => {
+                    events.push(`beforeFileRemove:${e.file.pkgPath}`);
+                },
+                afterFileRemove: (e: AfterFileRemoveEvent) => {
+                    events.push(`afterFileRemove:${e.file.pkgPath}`);
                 }
             };
             program.plugins.add(plugin);
 
             program.setFile('source/buttons.component.bs', '');
+            program.removeFile('source/buttons.component.bs');
 
             expect(events).to.eql([
                 'beforeProvideFile:' + s('source/buttons.component.bs'),
@@ -2805,7 +2817,48 @@ describe('Program', () => {
                 'beforeFileAdd:' + s('source/buttons.component.bs'),
                 'afterFileAdd:' + s('source/buttons.component.bs'),
                 'beforeFileAdd:' + s('source/buttons.component.bs.two'),
-                'afterFileAdd:' + s('source/buttons.component.bs.two')
+                'afterFileAdd:' + s('source/buttons.component.bs.two'),
+                'beforeFileRemove:' + s('source/buttons.component.bs'),
+                'afterFileRemove:' + s('source/buttons.component.bs'),
+                'beforeFileRemove:' + s('source/buttons.component.bs.two'),
+                'afterFileRemove:' + s('source/buttons.component.bs.two')
+            ]);
+        });
+
+        it('does not emit duplicate events for virtual files that get removed', () => {
+            const events: string[] = [];
+            const plugin = {
+                name: 'test',
+                beforeProvideFile: (e: BeforeProvideFileEvent) => {
+                    e.files.push(
+                        new AssetFile(e.srcPath, e.pkgPath)
+                    );
+                    e.files.push(
+                        new AssetFile(e.srcPath + '.two', e.pkgPath + '.two')
+                    );
+                },
+                beforeFileRemove: (e: BeforeFileRemoveEvent) => {
+                    events.push(`beforeFileRemove:${e.file.pkgPath}`);
+                },
+                afterFileRemove: (e: AfterFileRemoveEvent) => {
+                    events.push(`afterFileRemove:${e.file.pkgPath}`);
+                }
+            };
+            program.plugins.add(plugin);
+
+            program.setFile('source/buttons.component.bs', '');
+
+            //remove the virtual file first
+            program.removeFile('source/buttons.component.bs.two');
+            //now remove the physical file
+            program.removeFile('source/buttons.component.bs');
+
+            //we should only have one set of events per file
+            expect(events).to.eql([
+                'beforeFileRemove:' + s('source/buttons.component.bs.two'),
+                'afterFileRemove:' + s('source/buttons.component.bs.two'),
+                'beforeFileRemove:' + s('source/buttons.component.bs'),
+                'afterFileRemove:' + s('source/buttons.component.bs')
             ]);
         });
 
