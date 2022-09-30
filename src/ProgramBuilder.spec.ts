@@ -9,11 +9,10 @@ import { Logger, LogLevel } from './Logger';
 import * as diagnosticUtils from './diagnosticUtils';
 import { DiagnosticSeverity, Range } from 'vscode-languageserver';
 import { BrsFile } from './files/BrsFile';
-import { expectDiagnostics, expectZeroDiagnostics } from './testHelpers.spec';
+import { expectZeroDiagnostics } from './testHelpers.spec';
 import type { BsConfig } from './BsConfig';
 import type { File } from './files/File';
 import type { BsDiagnostic } from './interfaces';
-import { AssetFile } from './files/AssetFile';
 
 describe('ProgramBuilder', () => {
 
