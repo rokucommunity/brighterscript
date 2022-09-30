@@ -23,7 +23,7 @@ describe('BrsFile BrighterScript classes', () => {
     beforeEach(() => {
         fsExtra.ensureDirSync(rootDir);
         fsExtra.emptyDirSync(tempDir);
-        program = new Program({ rootDir: rootDir, stagingFolderPath: stagingDir });
+        program = new Program({ rootDir: rootDir, stagingDir: stagingDir });
     });
     afterEach(() => {
         sinon.restore();

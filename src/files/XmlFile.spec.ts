@@ -619,8 +619,8 @@ describe('XmlFile', () => {
             const builder = new ProgramBuilder();
             await builder.run({
                 cwd: rootDir,
-                retainStagingFolder: true,
-                stagingFolderPath: stagingDir,
+                retainStagingDir: true,
+                stagingDir: stagingDir,
                 logLevel: LogLevel.off
             });
             expect(

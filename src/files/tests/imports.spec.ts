@@ -20,7 +20,7 @@ describe('import statements', () => {
         fsExtra.emptyDirSync(tempDir);
         program = new Program({
             rootDir: rootDir,
-            stagingFolderPath: stagingDir
+            stagingDir: stagingDir
         });
     });
     afterEach(() => {

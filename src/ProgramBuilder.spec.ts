@@ -164,13 +164,13 @@ describe('ProgramBuilder', () => {
             builder1.run({
                 logLevel: LogLevel.info,
                 rootDir: rootDir,
-                stagingFolderPath: stagingDir,
+                stagingDir: stagingDir,
                 watch: false
             }),
             builder2.run({
                 logLevel: LogLevel.error,
                 rootDir: rootDir,
-                stagingFolderPath: stagingDir,
+                stagingDir: stagingDir,
                 watch: false
             })
         ]);
@@ -180,10 +180,10 @@ describe('ProgramBuilder', () => {
         expect(builder2.logger.logLevel).to.equal(LogLevel.error);
     });
 
-    it('does not error when loading stagingFolderPath from bsconfig.json', async () => {
+    it('does not error when loading stagingDir from bsconfig.json', async () => {
         fsExtra.ensureDirSync(rootDir);
         fsExtra.writeFileSync(`${rootDir}/bsconfig.json`, `{
-            "stagingFolderPath": "./out"
+            "stagingDir": "./out"
         }`);
         let builder = new ProgramBuilder();
         await builder.run({
