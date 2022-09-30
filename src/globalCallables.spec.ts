@@ -9,7 +9,7 @@ describe('globalCallables', () => {
     beforeEach(() => {
         program = new Program({
             rootDir: rootDir,
-            stagingFolderPath: stagingDir
+            stagingDir: stagingDir
         });
     });
     afterEach(() => {

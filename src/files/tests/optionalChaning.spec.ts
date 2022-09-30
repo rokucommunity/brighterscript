@@ -15,7 +15,7 @@ describe('optional chaining', () => {
         fsExtra.emptyDirSync(tempDir);
         program = new Program({
             rootDir: rootDir,
-            stagingFolderPath: stagingDir
+            stagingDir: stagingDir
         });
     });
     afterEach(() => {

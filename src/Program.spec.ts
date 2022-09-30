@@ -34,7 +34,7 @@ describe('Program', () => {
         fsExtra.emptyDirSync(tempDir);
         program = new Program({
             rootDir: rootDir,
-            stagingFolderPath: stagingDir
+            stagingDir: stagingDir
         });
         program.createSourceScope(); //ensure source scope is created
     });
@@ -1710,19 +1710,19 @@ describe('Program', () => {
     });
 
     it('does not create map by default', async () => {
-        fsExtra.ensureDirSync(program.options.stagingFolderPath);
+        fsExtra.ensureDirSync(program.options.stagingDir);
         program.setFile('source/main.brs', `
             sub main()
             end sub
         `);
         program.validate();
-        await program.transpile([], program.options.stagingFolderPath);
+        await program.transpile([], program.options.stagingDir);
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.false;
     });
 
     it('creates sourcemap for brs and xml files', async () => {
-        fsExtra.ensureDirSync(program.options.stagingFolderPath);
+        fsExtra.ensureDirSync(program.options.stagingDir);
         program.setFile('source/main.brs', `
             sub main()
             end sub
@@ -1745,17 +1745,17 @@ describe('Program', () => {
             dest: s`components/comp1.xml`
         }];
         program.options.sourceMap = true;
-        await program.transpile(filePaths, program.options.stagingFolderPath);
+        await program.transpile(filePaths, program.options.stagingDir);
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/components/comp1.xml.map`)).is.true;
     });
 
     it('copies the bslib.brs file', async () => {
-        fsExtra.ensureDirSync(program.options.stagingFolderPath);
+        fsExtra.ensureDirSync(program.options.stagingDir);
         program.validate();
 
-        await program.transpile([], program.options.stagingFolderPath);
+        await program.transpile([], program.options.stagingDir);
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/bslib.brs`)).is.true;
     });
@@ -1981,7 +1981,7 @@ describe('Program', () => {
                     print SOURCE_LINE_NUM
                 end sub
             `);
-            await program.transpile([], program.options.stagingFolderPath);
+            await program.transpile([], program.options.stagingDir);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/source/logger.brs`).toString()
             )).to.eql(trim`
@@ -1997,7 +1997,7 @@ describe('Program', () => {
                     print "logInfo"
                 end sub
             `);
-            await program.transpile([], program.options.stagingFolderPath);
+            await program.transpile([], program.options.stagingDir);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/source/logger.brs`).toString()
             )).to.eql(trim`
@@ -2013,7 +2013,7 @@ describe('Program', () => {
                 <component name="Component1" extends="Scene">
                 </component>
             `);
-            await program.transpile([], program.options.stagingFolderPath);
+            await program.transpile([], program.options.stagingDir);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/components/Component1.xml`).toString()
             )).to.eql(trim`
@@ -2028,7 +2028,7 @@ describe('Program', () => {
             let sourceRoot = s`${tempDir}/sourceRootFolder`;
             program = new Program({
                 rootDir: rootDir,
-                stagingFolderPath: stagingDir,
+                stagingDir: stagingDir,
                 sourceRoot: sourceRoot,
                 sourceMap: true
             });
@@ -2054,7 +2054,7 @@ describe('Program', () => {
             let sourceRoot = s`${tempDir}/sourceRootFolder`;
             program = new Program({
                 rootDir: rootDir,
-                stagingFolderPath: stagingDir,
+                stagingDir: stagingDir,
                 sourceRoot: sourceRoot,
                 sourceMap: true
             });

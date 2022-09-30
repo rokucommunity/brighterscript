@@ -14,7 +14,7 @@ describe('Program', () => {
         fsExtra.emptyDirSync(tempDir);
         program = new Program({
             rootDir: rootDir,
-            stagingFolderPath: stagingDir
+            stagingDir: stagingDir
         });
         program.createSourceScope(); //ensure source scope is created
     });

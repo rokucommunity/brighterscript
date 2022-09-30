@@ -1337,7 +1337,7 @@ export class Program {
                 filteredFileMap.push(fileEntry);
             }
         }
-        const { entries, astEditor } = this.beforeProgramTranspile(fileMap, this.options.stagingFolderPath);
+        const { entries, astEditor } = this.beforeProgramTranspile(fileMap, this.options.stagingDir);
         const result = this._getTranspiledFileContents(
             this.getFile(filePath)
         );
@@ -1397,7 +1397,7 @@ export class Program {
         };
     }
 
-    private beforeProgramTranspile(fileEntries: FileObj[], stagingFolderPath: string) {
+    private beforeProgramTranspile(fileEntries: FileObj[], stagingDir: string) {
         // map fileEntries using their path as key, to avoid excessive "find()" operations
         const mappedFileEntries = fileEntries.reduce<Record<string, FileObj>>((collection, entry) => {
             collection[s`${entry.src}`] = entry;
@@ -1417,7 +1417,7 @@ export class Program {
             //replace the file extension
             let outputPath = filePathObj.dest.replace(/\.bs$/gi, '.brs');
             //prepend the staging folder path
-            outputPath = s`${stagingFolderPath}/${outputPath}`;
+            outputPath = s`${stagingDir}/${outputPath}`;
             return outputPath;
         };
 
@@ -1438,8 +1438,8 @@ export class Program {
         };
     }
 
-    public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
-        const { entries, getOutputPath, astEditor } = this.beforeProgramTranspile(fileEntries, stagingFolderPath);
+    public async transpile(fileEntries: FileObj[], stagingDir: string) {
+        const { entries, getOutputPath, astEditor } = this.beforeProgramTranspile(fileEntries, stagingDir);
 
         const processedFiles = new Set<string>();
 
@@ -1480,7 +1480,7 @@ export class Program {
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
         if (!this.getFile(bslibAliasedRokuModulesPkgPath) && !this.getFile(s`source/bslib.brs`)) {
-            promises.push(util.copyBslibToStaging(stagingFolderPath));
+            promises.push(util.copyBslibToStaging(stagingDir));
         }
         await Promise.all(promises);
 
