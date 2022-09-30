@@ -177,19 +177,19 @@ describe('import statements', () => {
 
     it('adds brs imports to xml file during transpile', () => {
         //create child component
-        let component = program.setFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, trim`
+        let component = program.setFile('components/ChildScene.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brightscript" uri="pkg:/source/lib.bs" />
             </component>
         `);
-        program.setFile({ src: s`${rootDir}/source/lib.bs`, dest: 'source/lib.bs' }, `
+        program.setFile('source/lib.bs', `
             import "stringOps.brs"
             function toLower(strVal as string)
                 return StringToLower(strVal)
             end function
         `);
-        program.setFile({ src: s`${rootDir}/source/stringOps.brs`, dest: 'source/stringOps.brs' }, `
+        program.setFile('source/stringOps.brs', `
             function StringToLower(strVal as string)
                 return isInt(strVal)
             end function
