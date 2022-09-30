@@ -13,21 +13,18 @@ import { expectZeroDiagnostics } from './testHelpers.spec';
 import type { BsConfig } from './BsConfig';
 import type { File } from './files/File';
 import type { BsDiagnostic } from './interfaces';
+import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
 
 describe('ProgramBuilder', () => {
 
-    let tmpPath = s`${process.cwd()}/.tmp`;
-    let rootDir = s`${tmpPath}/rootDir`;
-    let stagingFolderPath = s`${tmpPath}/staging`;
-
     beforeEach(() => {
         fsExtra.ensureDirSync(rootDir);
-        fsExtra.emptyDirSync(tmpPath);
+        fsExtra.emptyDirSync(tempDir);
     });
     afterEach(() => {
         sinon.restore();
-        fsExtra.ensureDirSync(tmpPath);
-        fsExtra.emptyDirSync(tmpPath);
+        fsExtra.ensureDirSync(tempDir);
+        fsExtra.emptyDirSync(tempDir);
     });
 
     let builder: ProgramBuilder;
@@ -167,13 +164,13 @@ describe('ProgramBuilder', () => {
             builder1.run({
                 logLevel: LogLevel.info,
                 rootDir: rootDir,
-                stagingFolderPath: stagingFolderPath,
+                stagingDir: stagingDir,
                 watch: false
             }),
             builder2.run({
                 logLevel: LogLevel.error,
                 rootDir: rootDir,
-                stagingFolderPath: stagingFolderPath,
+                stagingDir: stagingDir,
                 watch: false
             })
         ]);
@@ -183,10 +180,10 @@ describe('ProgramBuilder', () => {
         expect(builder2.logger.logLevel).to.equal(LogLevel.error);
     });
 
-    it('does not error when loading stagingFolderPath from bsconfig.json', async () => {
+    it('does not error when loading stagingDir from bsconfig.json', async () => {
         fsExtra.ensureDirSync(rootDir);
         fsExtra.writeFileSync(`${rootDir}/bsconfig.json`, `{
-            "stagingFolderPath": "./out"
+            "stagingDir": "./out"
         }`);
         let builder = new ProgramBuilder();
         await builder.run({
@@ -284,9 +281,9 @@ describe('ProgramBuilder', () => {
 
     describe('require', () => {
         it('loads relative and absolute items', async () => {
-            const workingDir = s`${tmpPath}/require-test`;
-            const relativeOutputPath = `${tmpPath}/relative.txt`.replace(/\\+/g, '/');
-            const moduleOutputPath = `${tmpPath}/brighterscript-require-test.txt`.replace(/\\+/g, '/');
+            const workingDir = s`${tempDir}/require-test`;
+            const relativeOutputPath = `${tempDir}/relative.txt`.replace(/\\+/g, '/');
+            const moduleOutputPath = `${tempDir}/brighterscript-require-test.txt`.replace(/\\+/g, '/');
 
             //create roku project files
             fsExtra.outputFileSync(s`${workingDir}/src/manifest`, '');

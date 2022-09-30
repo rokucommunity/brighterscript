@@ -105,13 +105,24 @@
             "description": " The password to use when deploying to a Roku device",
             "type": "string"
         },
-        "retainStagingFolder": {
+        "retainStagingDir": {
             "type": "boolean",
             "description": "Prevent the staging folder from being deleted after the deployment package is created.  This is helpful for troubleshooting why your package isn't being created the way you expected.",
             "default": false
         },
+        "retainStagingFolder": {
+            "type": "boolean",
+            "deprecated": true,
+            "description": "Prevent the staging folder from being deleted after the deployment package is created.  This is helpful for troubleshooting why your package isn't being created the way you expected.",
+            "default": false
+        },
+        "stagingDir": {
+            "type": "string",
+            "description": "The path to the staging folder (where all files are copied before creating the zip package)"
+        },
         "stagingFolderPath": {
             "type": "string",
+            "deprecated": true,
             "description": "The path to the staging folder (where all files are copied before creating the zip package)"
         },
         "ignoreErrorCodes": {

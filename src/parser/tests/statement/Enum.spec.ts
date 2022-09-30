@@ -12,11 +12,11 @@ import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserv
 import { WalkMode } from '../../../astUtils/visitors';
 import { isEnumStatement } from '../../../astUtils/reflection';
 import { URI } from 'vscode-uri';
+import { rootDir } from '../../../testHelpers.spec';
 
 const sinon = createSandbox();
 
 describe('EnumStatement', () => {
-    let rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 

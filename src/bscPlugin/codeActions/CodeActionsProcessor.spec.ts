@@ -5,8 +5,8 @@ import { Program } from '../../Program';
 import { expectCodeActions, trim } from '../../testHelpers.spec';
 import { standardizePath as s, util } from '../../util';
 import type { File } from '../../files/File';
+import { rootDir } from '../../testHelpers.spec';
 
-const rootDir = s`${process.cwd()}/.tmp/rootDir`;
 describe('CodeActionsProcessor', () => {
     let program: Program;
     beforeEach(() => {

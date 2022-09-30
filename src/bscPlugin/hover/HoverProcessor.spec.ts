@@ -1,10 +1,10 @@
 import { expect } from 'chai';
 import { Program } from '../../Program';
-import util, { standardizePath as s } from '../../util';
+import { util } from '../../util';
 import { createSandbox } from 'sinon';
+import { rootDir } from '../../testHelpers.spec';
 let sinon = createSandbox();
 
-let rootDir = s`${process.cwd()}/.tmp/rootDir`;
 const fence = (code: string) => util.mdFence(code, 'brightscript');
 
 describe('HoverProcessor', () => {
@@ -57,7 +57,7 @@ describe('HoverProcessor', () => {
 
         //ignore this for now...it's not a huge deal
         it('does not match on keywords or data types', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 sub Main(name as string)
                 end sub
                 sub as()
@@ -70,7 +70,7 @@ describe('HoverProcessor', () => {
         });
 
         it('finds declared function', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 function Main(count = 1)
                     firstName = "bob"
                     age = 21
@@ -86,7 +86,7 @@ describe('HoverProcessor', () => {
         });
 
         it('finds variable function hover in same scope', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 sub Main()
                     sayMyName = sub(name as string)
                     end sub
@@ -102,7 +102,7 @@ describe('HoverProcessor', () => {
         });
 
         it('finds function hover in file scope', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 sub Main()
                     sayMyName()
                 end sub
@@ -124,13 +124,13 @@ describe('HoverProcessor', () => {
                 rootDir: rootDir
             });
 
-            let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let mainFile = program.setFile('source/main.brs', `
                 sub Main()
                     sayMyName()
                 end sub
             `);
 
-            program.setFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+            program.setFile('source/lib.brs', `
                 sub sayMyName(name as string)
 
                 end sub

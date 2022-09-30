@@ -426,7 +426,7 @@ export class ProgramBuilder {
 
         await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
             //transpile any brighterscript files
-            await this.program.transpile(fileMap, options.stagingFolderPath);
+            await this.program.transpile(fileMap, options.stagingDir);
         });
 
         this.plugins.emit('afterPublish', this, fileMap);

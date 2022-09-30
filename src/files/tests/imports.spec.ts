@@ -7,28 +7,26 @@ import { standardizePath as s } from '../../util';
 import type { XmlFile } from '../XmlFile';
 import type { BrsFile } from '../BrsFile';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../../testHelpers.spec';
+import { tempDir, rootDir, stagingDir } from '../../testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
-let tmpPath = s`${process.cwd()}/.tmp`;
-let rootDir = s`${tmpPath}/rootDir`;
-let stagingFolderPath = s`${tmpPath}/staging`;
 
 describe('import statements', () => {
     let program: Program;
     const testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
-        fsExtra.ensureDirSync(tmpPath);
-        fsExtra.emptyDirSync(tmpPath);
+        fsExtra.ensureDirSync(tempDir);
+        fsExtra.emptyDirSync(tempDir);
         program = new Program({
             rootDir: rootDir,
-            stagingFolderPath: stagingFolderPath
+            stagingDir: stagingDir
         });
     });
     afterEach(() => {
         sinon.restore();
-        fsExtra.ensureDirSync(tmpPath);
-        fsExtra.emptyDirSync(tmpPath);
+        fsExtra.ensureDirSync(tempDir);
+        fsExtra.emptyDirSync(tempDir);
         program.dispose();
     });
 
@@ -59,9 +57,9 @@ describe('import statements', () => {
                 dest: x.pkgPath
             };
         });
-        await program.transpile(files, stagingFolderPath);
+        await program.transpile(files, stagingDir);
         expect(
-            trimMap(fsExtra.readFileSync(`${stagingFolderPath}/components/ChildScene.xml`).toString())
+            trimMap(fsExtra.readFileSync(`${stagingDir}/components/ChildScene.xml`).toString())
         ).to.equal(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="Scene">
@@ -183,13 +181,13 @@ describe('import statements', () => {
                 <script type="text/brightscript" uri="pkg:/source/lib.bs" />
             </component>
         `);
-        program.setFile({ src: s`${rootDir}/source/lib.bs`, dest: 'source/lib.bs' }, `
+        program.setFile('source/lib.bs', `
             import "stringOps.brs"
             function toLower(strVal as string)
                 return StringToLower(strVal)
             end function
         `);
-        program.setFile({ src: s`${rootDir}/source/stringOps.brs`, dest: 'source/stringOps.brs' }, `
+        program.setFile('source/stringOps.brs', `
             function StringToLower(strVal as string)
                 return isInt(strVal)
             end function

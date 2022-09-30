@@ -10,7 +10,7 @@ import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
 import type { NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
-import { standardizePath as s, util } from './util';
+import { util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
@@ -362,16 +362,26 @@ export class Scope {
     }
 
     /**
-     * Get the file with the specified pkgPath
+     * Get the file from this scope with the given path.
+     * @param filePath can be a srcPath or pkgPath
+     * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
-    public getFile(getFile: string) {
-        getFile = s`${getFile}`;
-        let files = this.getAllFiles();
-        for (let file of files) {
-            if (file.srcPath === getFile) {
-                return file;
-            }
+    public getFile<TFile extends File>(filePath: string, normalizePath = true) {
+        if (typeof filePath !== 'string') {
+            return undefined;
         }
+
+        const key = path.isAbsolute(filePath) ? 'srcPath' : 'pkgPath';
+        let map = this.cache.getOrAdd('fileMaps-srcPath', () => {
+            const result = new Map<string, File>();
+            for (const file of this.getAllFiles()) {
+                result.set(file[key].toLowerCase(), file);
+            }
+            return result;
+        });
+        return map.get(
+            (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase()
+        ) as TFile;
     }
 
     /**
