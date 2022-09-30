@@ -63,7 +63,10 @@ export interface File {
      */
     excludeFromOutput?: boolean;
 }
-//included for backwards compatibility reasons
+/**
+ * @deprecated use `File` instead
+ */
+//included for backwards compatibility reasons. Remove in v1
 export type BscFile = File;
 
 export function createFile(props: Partial<File>) {
