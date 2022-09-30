@@ -423,7 +423,7 @@ export default function plugin() {
 ```
 
 ## File API
-By default, BrighterScript only parses files that it knows how to handle. Generally this includes `.xml` files in the compontents folder, `.brs`, `.bs` and `.d.bs` files. In the future, `manifest`, `.ts` files may also be handled. All other files are loaded into the program as `AssetFile` types and have no special handling or processing.
+By default, BrighterScript only parses files that it knows how to handle. Generally this includes `.xml` files in the compontents folder, `.brs`, `.bs` and `.d.bs` files. Other files may be handled in the future, such as `manifest` and `.ts`. All other files are loaded into the program as `AssetFile` types and have no special handling or processing.
 
 BrighterScript will perform all of its file providing at the very start of the `provideFile` event. If you need to handle files before brighterscript does, you should do this in the `beforeProvideFile` event.
 
@@ -447,11 +447,10 @@ export default function plugin() {
                 const brsCode = convertJsToBrsUsingMagic(jsCode);
 
                 //create a new BrsFile which will hold the final brs code after the js file was parsed
-                const file = new BrsFile(
+                const file = event.fileFactory.BrsFile(
                     event.srcPath,
                     //rename the .js extension to .brs
-                    event.pkgPath.replace(/\.js$/, '.brs'),
-                    event.program
+                    event.pkgPath.replace(/\.js$/, '.brs')
                 );
                 //parse the generated brs code
                 file.parse(brsCode);
@@ -486,25 +485,35 @@ export default function plugin() {
                 const code = event.getFileData().toString();
 
                 //create a new BrsFile
-                const brsFile = new BrsFile(event.srcPath, event.pkgPath, event.program);
+                const brsFile =event.factory.BrsFile(
+                    event.srcPath.replace(/\.component$/, '.brs'),
+                    event.pkgPath.replace(/\.component$/, '.brs')
+                );
                 //parse the generated brs code
                 brsFile.parse(code);
-
                 //add this brs file to the event, which is how you "provide" the file
                 event.files.push(brsFile);
 
                 //create an XmlFile component
-                const xmlFile = new XmlFile(event.srcPath, event.pkgPath, event.program);
+                const xmlFile = event.fileFactory.XmlFile(
+                    event.srcPath.replace(/\.component$/, '.xml'),
+                    event.pkgPath.replace(/\.component$/, '.xml')
+                );
                 xmlFile.parse(trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="${componentName}">
                         <script uri="${event.pkgPath}" />
                     </component>
                 `);
-                //add this brs file to the event, which is how you "provide" the file
+                //add this file to the event, which is how you "provide" the file
                 event.files.push(xmlFile);
             }
         }
     } as CompilerPlugin;
 }
 ```
+
+### File Factory
+When you build a BrighterScript plugin, you will need to `npm install` a version of brighterscript. When your plugin is loaded (either by the brighterscript cli or through an editor like vscode), it's possible your plugin will be referencing a different version of brighterscript than the runner.
+
+To mitigate this, the provideFile events supply a fileFactory, which exposes the versions of the brighterscript file classes directly from the runner version of brighterscript. When possible, use the file factories found in `event.fileFactory` instead of class constructors. (i.e. use `event.fileFactory.BrsFile` instead of `new BrsFile()`) You can see examples of this in the previous code snippets above.
