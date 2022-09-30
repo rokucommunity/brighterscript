@@ -14,11 +14,9 @@ import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimM
 import { ProgramBuilder } from '../ProgramBuilder';
 import { LogLevel } from '../Logger';
 import { isXmlFile } from '../astUtils/reflection';
+import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
 
 describe('XmlFile', () => {
-    const tempDir = s`${process.cwd()}/.tmp`;
-    const rootDir = s`${tempDir}/rootDir`;
-    const stagingDir = s`${tempDir}/stagingDir`;
 
     let program: Program;
     let sinon = sinonImport.createSandbox();
@@ -26,7 +24,6 @@ describe('XmlFile', () => {
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
-        fsExtra.ensureDirSync(tempDir);
         fsExtra.emptyDirSync(tempDir);
         fsExtra.ensureDirSync(rootDir);
         fsExtra.ensureDirSync(stagingDir);

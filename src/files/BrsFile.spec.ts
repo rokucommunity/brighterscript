@@ -24,12 +24,11 @@ import { createToken } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
 import { URI } from 'vscode-uri';
 import undent from 'undent';
+import { tempDir, rootDir } from '../testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 
 describe('BrsFile', () => {
-    let tempDir = s`${process.cwd()}/.tmp`;
-    let rootDir = s`${tempDir}/rootDir`;
     let program: Program;
     let srcPath = s`${rootDir}/source/main.brs`;
     let destPath = 'source/main.brs';

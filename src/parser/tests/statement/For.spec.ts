@@ -1,13 +1,11 @@
-
-import { standardizePath as s } from '../../../util';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
 import { getTestTranspile } from '../../../testHelpers.spec';
+import { rootDir } from '../../../testHelpers.spec';
 
 const sinon = createSandbox();
 
 describe('ForStatement', () => {
-    let rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 

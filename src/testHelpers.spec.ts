@@ -14,6 +14,10 @@ import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
 
+export const tempDir = s`${__dirname}/../.tmp`;
+export const rootDir = s`${tempDir}/rootDir`;
+export const stagingDir = s`${tempDir}/stagingDir`;
+
 export const trim = undent;
 
 type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[];

@@ -5,11 +5,10 @@ import { ParseMode, Parser } from './Parser';
 import { WalkMode } from '../astUtils/visitors';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { Program } from '../Program';
-import * as path from 'path';
 import { trim } from '../testHelpers.spec';
 import type { BrsFile } from '../files/BrsFile';
+import { tempDir } from '../testHelpers.spec';
 
-const tempDir = path.join(process.cwd(), '.tmp');
 describe('Statement', () => {
     let program: Program;
     beforeEach(() => {
