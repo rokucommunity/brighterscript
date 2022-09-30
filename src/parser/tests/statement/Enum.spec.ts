@@ -362,6 +362,17 @@ describe('EnumStatement', () => {
             }]);
         });
 
+        it('considers -1 to be an integer', () => {
+            program.setFile('source/main.bs', `
+                enum AppConfig
+                    alpha = 1
+                    beta = -1
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('flags missing value for string enum where string is not first item', () => {
             program.setFile('source/main.bs', `
                 enum Direction
@@ -499,6 +510,21 @@ describe('EnumStatement', () => {
     });
 
     describe('transpile', () => {
+        it('transpiles negative number', () => {
+            testTranspile(`
+                sub main()
+                    print Direction.up
+                end sub
+                enum Direction
+                    up = -1
+                end enum
+            `, `
+                sub main()
+                    print -1
+                end sub
+            `, undefined, undefined, false);
+        });
+
         it('includes original value when no value could be computed', () => {
             testTranspile(`
                 sub main()

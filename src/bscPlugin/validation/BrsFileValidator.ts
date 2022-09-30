@@ -1,10 +1,10 @@
-import { isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespacedVariableNameExpression, isNamespaceStatement, isWhileStatement } from '../../astUtils/reflection';
+import { isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespacedVariableNameExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
-import type { AstNode } from '../../parser/AstNode';
+import type { AstNode, Expression } from '../../parser/AstNode';
 import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
@@ -187,19 +187,27 @@ export class BrsFileValidator {
     }
 
     private validateEnumValueTypes(member: EnumMemberStatement, enumValueKind: TokenKind) {
-        const memberValueKind = (member.value as LiteralExpression)?.token?.kind;
-
+        let memberValueKind: TokenKind;
+        let memberValue: Expression;
+        if (isUnaryExpression(member.value)) {
+            memberValueKind = (member.value?.right as LiteralExpression)?.token?.kind;
+            memberValue = member.value?.right;
+        } else {
+            memberValueKind = (member.value as LiteralExpression)?.token?.kind;
+            memberValue = member.value;
+        }
+        const range = (memberValue ?? member)?.range;
         if (
             //is integer enum, has value, that value type is not integer
             (enumValueKind === TokenKind.IntegerLiteral && memberValueKind && memberValueKind !== enumValueKind) ||
             //has value, that value is not a literal
-            (member.value && !isLiteralExpression(member.value))
+            (memberValue && !isLiteralExpression(memberValue))
         ) {
             this.event.file.addDiagnostic({
                 ...DiagnosticMessages.enumValueMustBeType(
                     enumValueKind.replace(/literal$/i, '').toLowerCase()
                 ),
-                range: (member.value ?? member)?.range
+                range: range
             });
         }
 
@@ -213,7 +221,7 @@ export class BrsFileValidator {
                         ...DiagnosticMessages.enumValueMustBeType(
                             enumValueKind.replace(/literal$/i, '').toLowerCase()
                         ),
-                        range: (member.value ?? member)?.range
+                        range: range
                     });
                 }
 
@@ -224,7 +232,7 @@ export class BrsFileValidator {
                     ...DiagnosticMessages.enumValueIsRequired(
                         enumValueKind.replace(/literal$/i, '').toLowerCase()
                     ),
-                    range: (member.value ?? member)?.range
+                    range: range
                 });
             }
         }
