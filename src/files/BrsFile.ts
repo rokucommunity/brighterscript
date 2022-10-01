@@ -2,7 +2,7 @@ import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Position, Location, Diagnostic } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
-import { CompletionItemKind, SymbolKind, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
+import { CompletionItemKind, SymbolKind, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import type { Scope } from '../Scope';
@@ -15,7 +15,7 @@ import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind
 import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression, VariableExpression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, AssignmentStatement, MethodStatement, FieldStatement } from '../parser/Statement';
-import type { Program, SignatureInfoObj } from '../Program';
+import type { Program } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { VoidType } from '../types/VoidType';
@@ -1574,92 +1574,7 @@ export class BrsFile {
         return results;
     }
 
-    public getSignatureHelpForNamespaceMethods(callableName: string, dottedGetText: string, scope: Scope): { key: string; signature: SignatureInformation }[] {
-        if (!dottedGetText) {
-            return [];
-        }
-        let resultsMap = new Map<string, SignatureInfoObj>();
-        for (let [, namespace] of scope.namespaceLookup) {
-            //completionName = "NameA."
-            //completionName = "NameA.Na
-            //NameA
-            //NameA.NameB
-            //NameA.NameB.NameC
-            if (namespace.fullName.toLowerCase() === dottedGetText.toLowerCase()) {
-                //add function and class statement completions
-                for (let stmt of namespace.statements) {
-                    if (isFunctionStatement(stmt) && stmt.name.text.toLowerCase() === callableName.toLowerCase()) {
-                        const result = (namespace.file as BrsFile)?.getSignatureHelpForStatement(stmt);
-                        if (!resultsMap.has(result.key)) {
-                            resultsMap.set(result.key, result);
-                        }
-                    }
-                }
-
-            }
-        }
-
-        return [...resultsMap.values()];
-    }
-
-    public getSignatureHelpForStatement(statement: Statement): SignatureInfoObj {
-        if (!isFunctionStatement(statement) && !isMethodStatement(statement)) {
-            return undefined;
-        }
-        const func = statement.func;
-        const funcStartPosition = func.range.start;
-
-        // Get function comments in reverse order
-        let currentToken = this.getTokenAt(funcStartPosition);
-        let functionComments = [] as string[];
-        while (currentToken) {
-            currentToken = this.getPreviousToken(currentToken);
-
-            if (!currentToken) {
-                break;
-            }
-            if (currentToken.range.start.line + 1 < funcStartPosition.line) {
-                if (functionComments.length === 0) {
-                    break;
-                }
-            }
-
-            const kind = currentToken.kind;
-            if (kind === TokenKind.Comment) {
-                // Strip off common leading characters to make it easier to read
-                const commentText = currentToken.text.replace(/^[' *\/]+/, '');
-                functionComments.unshift(commentText);
-            } else if (kind === TokenKind.Newline) {
-                if (functionComments.length === 0) {
-                    continue;
-                }
-                // if we already had a new line as the last token then exit out
-                if (functionComments[0] === currentToken.text) {
-                    break;
-                }
-                functionComments.unshift(currentToken.text);
-            } else {
-                break;
-            }
-        }
-
-        const documentation = functionComments.join('').trim();
-
-        const lines = util.splitIntoLines(this.fileContents);
-        let key = statement.name.text + documentation;
-        const params = [] as ParameterInformation[];
-        for (const param of func.parameters) {
-            params.push(ParameterInformation.create(param.name.text));
-            key += param.name.text;
-        }
-
-        const label = util.getTextForRange(lines, util.createRangeFromPositions(func.functionType.range.start, func.body.range.start)).trim();
-        const signature = SignatureInformation.create(label, documentation, ...params);
-        const index = 1;
-        return { key: key, signature: signature, index: index };
-    }
-
-    private getClassMethod(classStatement: ClassStatement, name: string, walkParents = true): MethodStatement | undefined {
+    public getClassMethod(classStatement: ClassStatement, name: string, walkParents = true): MethodStatement | undefined {
         //TODO - would like to write this with getClassHieararchy; but got stuck on working out the scopes to use... :(
         let statement;
         const statementHandler = (e) => {
@@ -1685,16 +1600,6 @@ export class BrsFile {
 
         }
         return statement;
-    }
-
-    public getClassSignatureHelp(classStatement: ClassStatement): SignatureInfoObj | undefined {
-        const classConstructor = this.getClassMethod(classStatement, 'new');
-        let sigHelp = classConstructor ? this.getSignatureHelpForStatement(classConstructor) : undefined;
-        if (sigHelp) {
-            sigHelp.key = classStatement.getName(ParseMode.BrighterScript);
-            sigHelp.signature.label = sigHelp.signature.label.replace(/(function|sub) new/, sigHelp.key);
-        }
-        return sigHelp;
     }
 
     public getReferences(position: Position) {

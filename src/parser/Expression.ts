@@ -377,6 +377,21 @@ export class DottedGetExpression extends Expression {
             walk(this, 'obj', visitor, options);
         }
     }
+
+    getNameParts() {
+        let parts = [] as string[];
+        let expression = this as DottedGetExpression;
+        while (!isVariableExpression(expression.obj)) {
+            expression = expression.obj as DottedGetExpression;
+            parts.unshift(expression.name.text);
+        }
+        if (isVariableExpression(expression.obj)) {
+            parts.unshift(expression.obj.name.text);
+        }
+
+        return parts;
+    }
+
 }
 
 export class XmlAttributeGetExpression extends Expression {
