@@ -944,7 +944,6 @@ describe('Program', () => {
                     class MyClassA
                     end class
                 end namespace
-                namespace NameA.NameB
                 namespace NameA.NoClassA
                 end namespace
                 namespace NameA.NoClassB

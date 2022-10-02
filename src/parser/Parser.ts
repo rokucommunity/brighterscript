@@ -93,6 +93,7 @@ import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCal
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
+import { NamespaceScope, ClassScope, FunctionScope, ParserScope } from './ParserScope';
 import type { Expression, Statement } from './AstNode';
 
 export class Parser {
@@ -172,6 +173,12 @@ export class Parser {
     private namespaceAndFunctionDepth: number;
 
     /**
+     * A stack representing how deep we currently are in terms of scope-modifying statements. Serves a similar
+     * purpose to, and may eventually replace, `namespaceAndFunctionDepth`.
+     */
+    private parserScopeStack: Array<ParserScope>;
+
+    /**
      * The options used to parse the file
      */
     public options: ParseOptions;
@@ -233,6 +240,7 @@ export class Parser {
         this.current = 0;
         this.diagnostics = [];
         this.namespaceAndFunctionDepth = 0;
+        this.parserScopeStack = [];
         this.pendingAnnotations = [];
 
         this.ast = this.body();
@@ -617,6 +625,8 @@ export class Parser {
         //ensure statement separator
         this.consumeStatementSeparators();
 
+        this.parserScopeStack.push(new ClassScope(className));
+
         //gather up all class members (Fields, Methods)
         let body = [] as Statement[];
         while (this.checkAny(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
@@ -701,6 +711,8 @@ export class Parser {
                 range: endingKeyword.range
             });
         }
+
+        this.parserScopeStack.pop();
 
         const result = new ClassStatement(
             classKeyword,
@@ -899,12 +911,15 @@ export class Parser {
             let previousFunctionExpression = this.currentFunctionExpression;
             this.currentFunctionExpression = func;
 
+            this.parserScopeStack.push(new FunctionScope(func));
+
             //make sure to restore the currentFunctionExpression even if the body block fails to parse
             try {
                 //support ending the function with `end sub` OR `end function`
                 func.body = this.block();
             } finally {
                 this.currentFunctionExpression = previousFunctionExpression;
+                this.parserScopeStack.pop();
             }
 
             if (!func.body) {
@@ -1313,17 +1328,24 @@ export class Parser {
         this.warnIfNotBrighterScriptMode('namespace');
         let keyword = this.advance();
 
-        if (!this.isAtRootLevel()) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.keywordMustBeDeclaredAtRootLevel('namespace'),
-                range: keyword.range
-            });
+        const parentNamespaces: NamespaceStatement[] = [];
+
+        for (const scope of this.parserScopeStack) {
+            if (scope instanceof NamespaceScope) {
+                parentNamespaces.push(scope.namespaceStatement);
+            } else {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('namespace'),
+                    range: keyword.range
+                });
+            }
         }
-        this.namespaceAndFunctionDepth++;
 
         let name = this.getNamespacedVariableNameExpression();
-        //set the current namespace name
-        let result = new NamespaceStatement(keyword, name, null, null);
+        let result = new NamespaceStatement(keyword, name, parentNamespaces.map(parent => parent.nameExpression), null, null);
+
+        this.parserScopeStack.push(new NamespaceScope(result));
+        this.namespaceAndFunctionDepth++;
 
         this.globalTerminators.push([TokenKind.EndNamespace]);
         let body = this.body();
@@ -1340,7 +1362,9 @@ export class Parser {
             });
         }
 
+        this.parserScopeStack.pop();
         this.namespaceAndFunctionDepth--;
+
         result.body = body;
         result.endKeyword = endKeyword;
         this._references.namespaceStatements.push(result);

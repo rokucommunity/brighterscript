@@ -365,16 +365,35 @@ describe('parser', () => {
                 end sub
             `, ParseMode.BrighterScript).diagnostics[0]?.message).not.to.exist;
         });
+
         describe('namespace', () => {
-            it('catches namespaces declared not at root level', () => {
+            it('catches namespaces declared inside a function', () => {
                 expect(parse(`
                     sub main()
                         namespace Name.Space
                         end namespace
                     end sub
                 `, ParseMode.BrighterScript).diagnostics[0]?.message).to.equal(
-                    DiagnosticMessages.keywordMustBeDeclaredAtRootLevel('namespace').message
+                    DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('namespace').message
                 );
+            });
+            it('allows namespaces declared inside other namespaces', () => {
+                const parser = parse(`
+                    namespace Level1
+                        namespace Level2
+                            namespace Level3
+                                sub main()
+                                end sub
+                            end namespace
+                        end namespace
+                    end namespace
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(parser);
+                expect(parser.references.namespaceStatements.map(statement => statement.getName(ParseMode.BrighterScript))).to.deep.equal([
+                    'Level1.Level2.Level3',
+                    'Level1.Level2',
+                    'Level1'
+                ]);
             });
             it('parses empty namespace', () => {
                 let { statements, diagnostics } =
