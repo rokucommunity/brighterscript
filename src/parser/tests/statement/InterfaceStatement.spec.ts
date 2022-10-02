@@ -1,8 +1,6 @@
 import { expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
-import { standardizePath as s } from '../../../util';
+import { rootDir } from '../../../testHelpers.spec';
 import { Program } from '../../../Program';
-
-const rootDir = s`${process.cwd()}/.tmp/rootDir`;
 
 describe('InterfaceStatement', () => {
     let program: Program;

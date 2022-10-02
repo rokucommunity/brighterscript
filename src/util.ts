@@ -335,7 +335,8 @@ export class Util {
         config.username = config.username ?? 'rokudev';
         config.watch = config.watch === true ? true : false;
         config.emitFullPaths = config.emitFullPaths === true ? true : false;
-        config.retainStagingFolder = config.retainStagingFolder === true ? true : false;
+        config.retainStagingDir = (config.retainStagingDir ?? config.retainStagingFolder) === true ? true : false;
+        config.retainStagingFolder = config.retainStagingDir;
         config.copyToStaging = config.copyToStaging === false ? false : true;
         config.ignoreErrorCodes = config.ignoreErrorCodes ?? [];
         config.diagnosticFilters = config.diagnosticFilters ?? [];
