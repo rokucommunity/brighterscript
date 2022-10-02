@@ -1,14 +1,11 @@
-import { standardizePath as s, util } from '../util';
+import { util } from '../util';
 import * as fsExtra from 'fs-extra';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
 import { expect } from 'chai';
 import type { DottedGetExpression } from './Expression';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
-
-let tempDir = s`${process.cwd()}/.tmp`;
-let rootDir = s`${tempDir}/rootDir`;
-let stagingDir = s`${tempDir}/staging`;
+import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
 
 describe('Program', () => {
     let program: Program;
@@ -17,7 +14,7 @@ describe('Program', () => {
         fsExtra.emptyDirSync(tempDir);
         program = new Program({
             rootDir: rootDir,
-            stagingFolderPath: stagingDir
+            stagingDir: stagingDir
         });
         program.createSourceScope(); //ensure source scope is created
     });

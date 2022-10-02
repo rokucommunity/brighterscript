@@ -28,10 +28,7 @@ describe('Scope', () => {
     });
 
     it('does not mark namespace functions as collisions with stdlib', () => {
-        program.setFile({
-            src: `${rootDir}/source/main.bs`,
-            dest: `source/main.bs`
-        }, `
+        program.setFile(`source/main.bs`, `
             namespace a
                 function constructor()
                 end function
@@ -139,7 +136,7 @@ describe('Scope', () => {
         it('detects callables from all loaded files', () => {
             const sourceScope = program.getScopeByName('source');
 
-            program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+            program.setFile(`source/main.brs`, `
                 sub Main()
 
                 end sub
@@ -147,7 +144,7 @@ describe('Scope', () => {
                 sub ActionA()
                 end sub
             `);
-            program.setFile({ src: s`${rootDir}/source/lib.brs`, dest: s`source/lib.brs` }, `
+            program.setFile(`source/lib.brs`, `
                 sub ActionB()
                 end sub
             `);
@@ -605,18 +602,18 @@ describe('Scope', () => {
         });
 
         it('marks the scope as validated after validation has occurred', () => {
-            program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+            program.setFile(`source/main.bs`, `
                sub main()
                end sub
             `);
-            let lib = program.setFile({ src: s`${rootDir}/source/lib.bs`, dest: s`source/lib.bs` }, `
+            let lib = program.setFile(`source/lib.bs`, `
                sub libFunc()
                end sub
             `);
             expect(program.getScopesForFile(lib)[0].isValidated).to.be.false;
             program.validate();
             expect(program.getScopesForFile(lib)[0].isValidated).to.be.true;
-            lib = program.setFile({ src: s`${rootDir}/source/lib.bs`, dest: s`source/lib.bs` }, `
+            lib = program.setFile(`source/lib.bs`, `
                 sub libFunc()
                 end sub
             `);
@@ -627,7 +624,7 @@ describe('Scope', () => {
         });
 
         it('does not mark same-named-functions in different namespaces as an error', () => {
-            program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+            program.setFile(`source/main.bs`, `
                 namespace NameA
                     sub alert()
                     end sub
@@ -641,7 +638,7 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
         it('resolves local-variable function calls', () => {
-            program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+            program.setFile(`source/main.brs`, `
                 sub DoSomething()
                     sayMyName = function(name as string)
                     end function
@@ -655,7 +652,7 @@ describe('Scope', () => {
 
         describe('function shadowing', () => {
             it('warns when local var function has same name as stdlib function', () => {
-                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile(`source/main.brs`, `
                     sub main()
                         str = function(p)
                             return "override"
@@ -671,7 +668,7 @@ describe('Scope', () => {
             });
 
             it('warns when local var has same name as built-in function', () => {
-                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile(`source/main.brs`, `
                     sub main()
                         str = 12345
                         print str ' prints "12345" (i.e. our local variable is allowed to shadow the built-in function name)
@@ -682,7 +679,7 @@ describe('Scope', () => {
             });
 
             it('warns when local var has same name as built-in function', () => {
-                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile(`source/main.brs`, `
                     sub main()
                         str = 6789
                         print str(12345) ' prints "12345" (i.e. our local variable did not override the callable global function)
@@ -693,7 +690,7 @@ describe('Scope', () => {
             });
 
             it('detects local function with same name as scope function', () => {
-                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile(`source/main.brs`, `
                     sub main()
                         getHello = function()
                             return "override"
@@ -713,7 +710,7 @@ describe('Scope', () => {
             });
 
             it('detects local function with same name as scope function', () => {
-                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile(`source/main.brs`, `
                     sub main()
                         getHello = "override"
                         print getHello ' prints <Function: gethello> (i.e. local variable override does NOT work for same-scope-defined methods)
@@ -984,7 +981,7 @@ describe('Scope', () => {
 
         describe('custom types', () => {
             it('detects an unknown function return type', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     function a()
                         return invalid
                     end function
@@ -1015,7 +1012,7 @@ describe('Scope', () => {
             });
 
             it('detects an unknown function parameter type', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     sub a(num as integer)
                     end sub
 
@@ -1038,7 +1035,7 @@ describe('Scope', () => {
             });
 
             it('detects an unknown field parameter type', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     class myClass
                         foo as unknownType 'error
                     end class
@@ -1057,7 +1054,7 @@ describe('Scope', () => {
             });
 
             it('supports enums and interfaces as types', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
 
                     interface MyInterface
                         title as string
@@ -1076,7 +1073,7 @@ describe('Scope', () => {
             });
 
             it('finds interface types', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     namespace MyNamespace
                         interface MyInterface
                           title as string
@@ -1094,7 +1091,7 @@ describe('Scope', () => {
             });
 
             it('finds non-namespaced interface types', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     interface MyInterface
                         title as string
                     end interface
@@ -1112,7 +1109,7 @@ describe('Scope', () => {
             });
 
             it('finds enum types', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     namespace MyNamespace
                         enum MyEnum
                           title = "t"
@@ -1130,7 +1127,7 @@ describe('Scope', () => {
             });
 
             it('finds non-namespaced enum types', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     enum MyEnum
                         title = "t"
                     end enum
@@ -1148,7 +1145,7 @@ describe('Scope', () => {
             });
 
             it('finds custom types inside namespaces', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -1168,7 +1165,7 @@ describe('Scope', () => {
             });
 
             it('finds custom types from other namespaces', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -1183,7 +1180,7 @@ describe('Scope', () => {
             });
 
             it('detects missing custom types from current namespaces', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -1200,11 +1197,11 @@ describe('Scope', () => {
             });
 
             it('finds custom types from other other files', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     function foo(param as MyClass) as MyClass
                     end function
                 `);
-                program.setFile({ src: s`${rootDir}/source/MyClass.bs`, dest: s`source/MyClass.bs` }, `
+                program.setFile(`source/MyClass.bs`, `
                     class MyClass
                     end class
                 `);
@@ -1214,11 +1211,11 @@ describe('Scope', () => {
             });
 
             it('finds custom types from other other files', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     function foo(param as MyNameSpace.MyClass) as MyNameSpace.MyClass
                     end function
                 `);
-                program.setFile({ src: s`${rootDir}/source/MyNameSpace.bs`, dest: s`source/MyNameSpace.bs` }, `
+                program.setFile(`source/MyNameSpace.bs`, `
                     namespace MyNameSpace
                       class MyClass
                       end class
@@ -1230,7 +1227,7 @@ describe('Scope', () => {
             });
 
             it('detects missing custom types from another namespaces', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -1351,7 +1348,7 @@ describe('Scope', () => {
 
     describe('getDefinition', () => {
         it('returns empty list when there are no files', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
+            let file = program.setFile('source/main.brs', '');
             let scope = program.getScopeByName('source');
             expect(scope.getDefinition(file, Position.create(0, 0))).to.be.lengthOf(0);
         });

@@ -15,11 +15,10 @@ import * as assert from 'assert';
 import { expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { isBrsFile, isLiteralString } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
+import { tempDir, rootDir } from './testHelpers.spec';
 
 const sinon = createSandbox();
 
-const tempDir = s`${__dirname}/../.tmp`;
-const rootDir = s`${tempDir}/TestApp`;
 const workspacePath = rootDir;
 
 describe('LanguageServer', () => {
@@ -138,7 +137,7 @@ describe('LanguageServer', () => {
 
     describe('createStandaloneFileProject', () => {
         it('never returns undefined', async () => {
-            let filePath = `${rootDir}/.tmp/main.brs`;
+            let filePath = `${rootDir}/main.brs`;
             writeToFs(filePath, `sub main(): return: end sub`);
             let firstProject = await server['createStandaloneFileProject'](filePath);
             let secondProject = await server['createStandaloneFileProject'](filePath);
@@ -146,7 +145,7 @@ describe('LanguageServer', () => {
         });
 
         it('filters out certain diagnostics', async () => {
-            let filePath = `${rootDir}/.tmp/main.brs`;
+            let filePath = `${rootDir}/main.brs`;
             writeToFs(filePath, `sub main(): return: end sub`);
             let firstProject: Project = await server['createStandaloneFileProject'](filePath);
             expectZeroDiagnostics(firstProject.builder.program);

@@ -6,9 +6,10 @@ import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
+import { tempDir, rootDir } from './testHelpers.spec';
+
 const sinon = createSandbox();
-let tempDir = s`${process.cwd()}/.tmp`;
-let rootDir = s`${tempDir}/rootDir`;
+
 let cwd = process.cwd();
 
 describe('util', () => {

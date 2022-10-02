@@ -4,9 +4,9 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, SemanticToken } from '../../interfaces';
 import { Program } from '../../Program';
 import { expectZeroDiagnostics } from '../../testHelpers.spec';
-import { standardizePath as s, util } from '../../util';
+import { util } from '../../util';
+import { rootDir } from '../../testHelpers.spec';
 
-const rootDir = s`${process.cwd()}/.tmp/rootDir`;
 
 describe('BrsFileSemanticTokensProcessor', () => {
     let program: Program;
