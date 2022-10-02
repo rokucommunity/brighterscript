@@ -1,10 +1,11 @@
 import type { Expression } from '../parser/AstNode';
-import type { CallExpression, CallfuncExpression } from '../parser/Expression';
+import type { CallExpression, CallfuncExpression, NewExpression } from '../parser/Expression';
 import type { ClassStatement, NamespaceStatement } from '../parser/Statement';
-import { isCallExpression, isCallfuncExpression, isVariableExpression, isDottedGetExpression, isClassStatement } from '../astUtils/reflection';
+import { isCallExpression, isCallfuncExpression, isVariableExpression, isDottedGetExpression, isClassStatement, isNewExpression } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
 import type { Position } from 'vscode-languageserver-protocol';
 import { util } from '../util';
+import { ParseMode } from '../parser/Parser';
 
 
 export enum CallExpressionType {
@@ -32,6 +33,7 @@ export class CallExpressionInfo {
     dotPart: string;
     name: string;
     isCallingMethodOnMyClass: boolean;
+    newExpression: NewExpression;
 
     //the index of expression, when considered as a param fo callExpression
     parameterIndex: number;
@@ -59,6 +61,10 @@ export class CallExpressionInfo {
         }
         this.isCallingMethodOnMyClass = false;
 
+        if (isNewExpression(callExpression.parent)) {
+            this.name = callExpression.parent.className.getName(ParseMode.BrighterScript);
+            this.newExpression = callExpression.parent;
+        }
         if (isCallfuncExpression(callExpression)) {
             this.name = callExpression.methodName.text;
         } else if (isVariableExpression(callExpression.callee)) {
@@ -114,7 +120,9 @@ export class CallExpressionInfo {
     ascertainType(): CallExpressionType {
         if (this.name) {
             //General case, for function calls
-            if (this.isCallingMethodOnMyClass && this.myClass) {
+            if (this.newExpression) {
+                return CallExpressionType.constructorCall;
+            } else if (this.isCallingMethodOnMyClass && this.myClass) {
                 return CallExpressionType.myClassCall;
             } else if (!this.namespace && isDottedGetExpression(this.callExpression)) {
                 return CallExpressionType.otherClassCall;

@@ -48,8 +48,10 @@ export class SignatureHelpUtil {
                 break;
             case CallExpressionType.constructorCall:
                 let classItem = file.getClassFileLink(dotPart ? `${dotPart}.${name}` : name);
-
-                signatureHelpItems = [this.getClassSignatureHelp(classItem)];
+                let constructorSignatureHelp = this.getClassSignatureHelp(classItem);
+                if (constructorSignatureHelp) {
+                    signatureHelpItems.push(constructorSignatureHelp);
+                }
                 break;
             default:
         }
@@ -134,9 +136,16 @@ export class SignatureHelpUtil {
 
         const classConstructor = file.getClassMethod(classStatement, 'new');
         let sigHelp = classConstructor ? this.getSignatureHelpForStatement({ item: classConstructor, file: file }) : undefined;
+        let className = classStatement.getName(ParseMode.BrighterScript);
         if (sigHelp) {
-            sigHelp.key = classStatement.getName(ParseMode.BrighterScript);
+            sigHelp.key = className;
             sigHelp.signature.label = sigHelp.signature.label.replace(/(function|sub) new/, sigHelp.key);
+        } else {
+            sigHelp = {
+                key: className,
+                signature: SignatureInformation.create(`${className}()`, ''),
+                index: 0
+            };
         }
         return sigHelp;
     }
