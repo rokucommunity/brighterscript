@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.59.0](https://github.com/rokucommunity/brighterscript/compare/v0.58.0...0.59.0) - 2022-10-03
+### Added
+ - `isThrowStatement` reflection function ([#709](https://github.com/rokucommunity/brighterscript/pull/709))
+ - Support `pkg:/` paths for `setFile` ([#701](https://github.com/rokucommunity/brighterscript/pull/701))
+ - Syntax and transpile support for continue statement ([#697](https://github.com/rokucommunity/brighterscript/pull/697))
+### Changed
+ - Migrate to `stagingDir` away from `stagingFolder` ([#706](https://github.com/rokucommunity/brighterscript/pull/706))
+### Fixed
+ - Fix enum error for negative values ([#703](https://github.com/rokucommunity/brighterscript/pull/703))
+
+
+
 ## [0.58.0](https://github.com/rokucommunity/brighterscript/compare/v0.57.2...0.58.0) - 2022-09-23
 ### Added
  - AST child searching functionality. ([#695](https://github.com/rokucommunity/brighterscript/pull/695))
