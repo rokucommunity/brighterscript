@@ -367,31 +367,20 @@ describe('parser', () => {
         });
 
         describe('namespace', () => {
-            it('catches namespaces declared inside a function', () => {
-                expect(parse(`
-                    sub main()
-                        namespace Name.Space
-                        end namespace
-                    end sub
-                `, ParseMode.BrighterScript).diagnostics[0]?.message).to.equal(
-                    DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('namespace').message
-                );
-            });
             it('allows namespaces declared inside other namespaces', () => {
                 const parser = parse(`
                     namespace Level1
-                        namespace Level2
-                            namespace Level3
-                                sub main()
-                                end sub
-                            end namespace
+                        namespace Level2.Level3
+                            sub main()
+                            end sub
                         end namespace
                     end namespace
                 `, ParseMode.BrighterScript);
                 expectZeroDiagnostics(parser);
+                // We expect these names to be "as given" in this context, because we aren't
+                // evaluating a full program.
                 expect(parser.references.namespaceStatements.map(statement => statement.getName(ParseMode.BrighterScript))).to.deep.equal([
-                    'Level1.Level2.Level3',
-                    'Level1.Level2',
+                    'Level2.Level3',
                     'Level1'
                 ]);
             });

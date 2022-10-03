@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression } from '../../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
+import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Program } from '../../Program';
 
 describe('BrsFileValidator', () => {
@@ -53,5 +54,35 @@ describe('BrsFileValidator', () => {
 
         const alpha = bravo.obj as DottedGetExpression;
         expect(alpha.parent).to.equal(bravo);
+    });
+
+    describe('namespace validation', () => {
+        it('succeeds if namespaces are defined inside other namespaces', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                namespace alpha
+                    ' random comment
+                    namespace bravo
+                        ' random comment
+                        sub main()
+                        end sub
+                    end namespace
+                end namespace
+            `);
+            program.validate();
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+        it('fails if namespaces are defined inside a function', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                function f()
+                    namespace alpha
+                    end namespace
+                end function
+            `);
+            program.validate();
+            const diagnostics = program.getDiagnostics().map(diag => diag.message);
+            expect(diagnostics).to.include(
+                DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('namespace').message
+            );
+        });
     });
 });

@@ -1,4 +1,4 @@
-import { isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespacedVariableNameExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespacedVariableNameExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -7,7 +7,7 @@ import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression } from '../../parser/AstNode';
 import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
+import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, NamespaceStatement, WhileStatement } from '../../parser/Statement';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 
@@ -101,6 +101,8 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable()?.addSymbol(node.item.text, node.item.range, DynamicType.instance);
             },
             NamespaceStatement: (node) => {
+                this.validateNamespaceStatement(node);
+
                 node.parent.getSymbolTable().addSymbol(
                     node.name.split('.')[0],
                     node.nameExpression.range,
@@ -235,6 +237,22 @@ export class BrsFileValidator {
                     range: range
                 });
             }
+        }
+    }
+
+    private validateNamespaceStatement(stmt: NamespaceStatement) {
+        let parentNode = stmt.parent;
+
+        while (parentNode) {
+            if (!isNamespaceStatement(parentNode) && !isBody(parentNode)) {
+                this.event.file.addDiagnostic({
+                    ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('namespace'),
+                    range: stmt.range
+                });
+                break;
+            }
+
+            parentNode = parentNode.parent;
         }
     }
 

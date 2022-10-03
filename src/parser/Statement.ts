@@ -1079,8 +1079,6 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         public keyword: Token,
         // this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
         public nameExpression: NamespacedVariableNameExpression,
-        // a list of name expressions in enclosing namespace blocks
-        public parentNameExpressions: NamespacedVariableNameExpression[],
         public body: Body,
         public endKeyword: Token
     ) {
@@ -1115,13 +1113,15 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     public getName(parseMode: ParseMode) {
-        const fullyQualifiedNames = [
-            ...this.parentNameExpressions,
-            this.nameExpression
-        ].map(expression => expression.getName(parseMode));
-        const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
+        const parentNamespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        let name = this.nameExpression.getName(parseMode);
 
-        return fullyQualifiedNames.join(sep);
+        if (parentNamespace) {
+            const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
+            name = parentNamespace.getName(parseMode) + sep + name;
+        }
+
+        return name;
     }
 
     transpile(state: BrsTranspileState) {
