@@ -63,17 +63,23 @@ BrighterScript adds several new features to the BrightScript language such as Na
 ## Who uses Brighterscript?
 <br/>
 <p align="center">
+    <a href="https://www.fubo.tv/">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/192530108-eb470b85-e687-4575-af69-254aab13428c.png">
+    </a>&nbsp;&nbsp;&nbsp;
     <a href="https://www.applicaster.com/">
-        <img src="https://user-images.githubusercontent.com/2544493/96571912-377af280-129a-11eb-8295-49eb12e54aeb.png">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/192591901-20441fc8-3c6c-45ea-8851-b22430e6fb8e.png">
     </a>&nbsp;&nbsp;&nbsp;
     <a href="https://www.miraclechannel.ca/corcoplus">
-        <img src="https://user-images.githubusercontent.com/2544493/157429644-ba0d574a-d3c3-425f-8e68-98103fb8f707.png">
-    </a>&nbsp;&nbsp;&nbsp;
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/192593254-f2a32cd4-0482-40de-830d-c1d09690c46b.png">
+    </a>&nbsp;&nbsp;&nbsp;<br/><br/>
     <a href="https://www.nba.com/">
-        <img src="https://user-images.githubusercontent.com/2544493/157430017-a27b62d0-63de-4e87-a6df-8448007bd24d.png">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/192593641-aca51992-2bd1-45c2-b087-602b496fca36.png">
     </a>&nbsp;&nbsp;&nbsp;
     <a href="https://channelstore.roku.com/details/222212/phototv">
-        <img height="34" src="https://user-images.githubusercontent.com/2544493/169118062-81d94da5-2323-4e31-b19d-7db3f9c88dff.png">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/169118062-81d94da5-2323-4e31-b19d-7db3f9c88dff.png">
+    </a>&nbsp;&nbsp;&nbsp;
+    <a href="https://www.haystack.tv/">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/192610056-d1b5a382-edf4-47b9-a6a5-d2d3ee9094cb.png">
     </a>&nbsp;&nbsp;&nbsp;
 </p>
 <br/>
@@ -81,7 +87,7 @@ BrighterScript adds several new features to the BrightScript language such as Na
 
 The BrighterScript project is used to power the popular [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=rokucommunity.brightscript) VSCode extension, the [maestro framework](https://github.com/georgejecook/maestro/blob/master/docs/index.md), and more.
 
-[Contact us](https://github.com/rokucommunity/brighterscript/issues/new) if you use BrighterScript on your project and would like your logo listed above. More projects are adopting BrighterScript all the time, from using the new BrighterScript language features to simply using the compiler in their build pipeline.
+[Contact us](https://github.com/rokucommunity/brighterscript/issues/new) if you use BrighterScript in your project and would like your logo listed above. More projects are adopting BrighterScript all the time, from using the new BrighterScript language features to simply using the compiler in their build pipeline.
 
 ## What's with the name?
 The name BrighterScript is a compliment to everything that is great about Roku's awesome BrightScript language. Naming things is hard, and discoverability and recognizability are both very important. Here are the reasons we chose this name:
@@ -207,7 +213,9 @@ These are the options available in the `bsconfig.json` file.
 
  - **rootDir**: `string` - The root directory of your roku project. Defaults to current directory
 
- - **stagingFolderPath**: `string` - the folder where the transpiled files are placed. Defaults to `./out/.roku-deploy-staging`
+ - **stagingDir**: `string` - the folder where the transpiled files are placed. Defaults to `./out/.roku-deploy-staging`
+
+ - **retainStagingDir**: `boolean` - Prevent the staging folder from being deleted after creating the package. Defaults to `false` meaning the dir is deleted every time.
 
  - **files**: ` (string | string[] | { src: string | string[]; dest?: string })[]` - The list file globs used to find all files for the project. If using the {src;dest;} format, you can specify a different destination directory for the matched files in src.
 

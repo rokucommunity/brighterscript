@@ -21,6 +21,7 @@ import {
     Block,
     Body,
     CatchStatement,
+    ContinueStatement,
     ClassStatement,
     ConstStatement,
     CommentStatement,
@@ -1109,6 +1110,10 @@ export class Parser {
             return this.gotoStatement();
         }
 
+        if (this.check(TokenKind.Continue)) {
+            return this.continueStatement();
+        }
+
         //does this line look like a label? (i.e.  `someIdentifier:` )
         if (this.check(TokenKind.Identifier) && this.checkNext(TokenKind.Colon) && this.checkPrevious(TokenKind.Newline)) {
             try {
@@ -2095,6 +2100,19 @@ export class Parser {
         }
 
         return new LabelStatement(tokens);
+    }
+
+    /**
+     * Parses a `continue` statement
+     */
+    private continueStatement() {
+        return new ContinueStatement({
+            continue: this.advance(),
+            loopType: this.tryConsume(
+                DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For),
+                TokenKind.While, TokenKind.For
+            )
+        });
     }
 
     /**

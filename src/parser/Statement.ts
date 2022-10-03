@@ -10,7 +10,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isVoidType } from '../astUtils/reflection';
+import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
@@ -2312,6 +2312,10 @@ export class EnumStatement extends Statement implements TypedefProvider {
                 }
                 result.set(member.name?.toLowerCase(), member.value.token.text);
 
+                //simple unary expressions (like `-1`)
+            } else if (isUnaryExpression(member.value) && isLiteralExpression(member.value.right)) {
+                result.set(member.name?.toLowerCase(), member.value.operator.text + member.value.right.token.text);
+
                 //all other values
             } else {
                 result.set(member.name?.toLowerCase(), (member.value as LiteralExpression)?.token?.text ?? 'invalid');
@@ -2509,5 +2513,31 @@ export class ConstStatement extends Statement implements TypedefProvider {
         if (this.value && options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'value', visitor, options);
         }
+    }
+}
+
+export class ContinueStatement extends Statement {
+    constructor(
+        public tokens: {
+            continue: Token;
+            loopType: Token;
+        }
+    ) {
+        super();
+    }
+
+    public get range() {
+        return this.tokens.continue.range;
+    }
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.sourceNode(this.tokens.continue, this.tokens.continue?.text ?? 'continue'),
+            this.tokens.loopType?.leadingWhitespace ?? ' ',
+            state.sourceNode(this.tokens.continue, this.tokens.loopType?.text)
+        ];
+    }
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
     }
 }

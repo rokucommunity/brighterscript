@@ -398,7 +398,7 @@ export class Program {
     public setFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
     public setFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
         //normalize the file paths
-        const { src: srcPath, dest: pkgPath } = this.getPaths(fileParam, this.options.rootDir);
+        const { srcPath, pkgPath } = this.getPaths(fileParam, this.options.rootDir);
 
         let file = this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
             //if the file is already loaded, remove it
@@ -492,46 +492,63 @@ export class Program {
      * Given a srcPath, a pkgPath, or both, resolve whichever is missing, relative to rootDir.
      * @param rootDir must be a pre-normalized path
      */
-    private getPaths(fileParam: string | FileObj, rootDir: string) {
-        let src: string;
-        let dest: string;
+    private getPaths(fileParam: string | FileObj | { srcPath?: string; pkgPath?: string }, rootDir: string) {
+        let srcPath: string;
+        let pkgPath: string;
 
         assert.ok(fileParam, 'fileParam is required');
+
         //lift the srcPath and pkgPath vars from the incoming param
         if (typeof fileParam === 'string') {
-            src = s`${path.resolve(rootDir, fileParam)}`;
-            dest = s`${util.replaceCaseInsensitive(src, rootDir, '')}`;
+            fileParam = this.removePkgPrefix(fileParam);
+            srcPath = s`${path.resolve(rootDir, fileParam)}`;
+            pkgPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
         } else {
-            if (fileParam.src) {
-                src = s`${fileParam.src}`;
+            let param: any = fileParam;
+
+            if (param.src) {
+                srcPath = s`${param.src}`;
             }
-            if (fileParam.dest) {
-                dest = s`${fileParam.dest}`;
+            if (param.srcPath) {
+                srcPath = s`${param.srcPath}`;
+            }
+            if (param.dest) {
+                pkgPath = s`${this.removePkgPrefix(param.dest)}`;
+            }
+            if (param.pkgPath) {
+                pkgPath = s`${this.removePkgPrefix(param.pkgPath)}`;
             }
         }
 
         //if there's no srcPath, use the pkgPath to build an absolute srcPath
-        if (!src) {
-            src = s`${rootDir}/${dest}`;
+        if (!srcPath) {
+            srcPath = s`${rootDir}/${pkgPath}`;
         }
         //coerce srcPath to an absolute path
-        if (!path.isAbsolute(src)) {
-            src = util.standardizePath(src);
+        if (!path.isAbsolute(srcPath)) {
+            srcPath = util.standardizePath(srcPath);
         }
 
         //if there's no pkgPath, compute relative path from rootDir
-        if (!dest) {
-            dest = s`${util.replaceCaseInsensitive(src, rootDir, '')}`;
+        if (!pkgPath) {
+            pkgPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
         }
 
-        assert.ok(src, 'fileEntry.src is required');
-        assert.ok(dest, 'fileEntry.dest is required');
+        assert.ok(srcPath, 'fileEntry.src is required');
+        assert.ok(pkgPath, 'fileEntry.dest is required');
 
         return {
-            src: src,
+            srcPath: srcPath,
             //remove leading slash from pkgPath
-            dest: dest.replace(/^[\/\\]+/, '')
+            pkgPath: pkgPath.replace(/^[\/\\]+/, '')
         };
+    }
+
+    /**
+     * Remove any leading `pkg:/` found in the path
+     */
+    private removePkgPrefix(path: string) {
+        return path.replace(/^pkg:\//i, '');
     }
 
     /**
@@ -1320,7 +1337,7 @@ export class Program {
                 filteredFileMap.push(fileEntry);
             }
         }
-        const { entries, astEditor } = this.beforeProgramTranspile(fileMap, this.options.stagingFolderPath);
+        const { entries, astEditor } = this.beforeProgramTranspile(fileMap, this.options.stagingDir);
         const result = this._getTranspiledFileContents(
             this.getFile(filePath)
         );
@@ -1380,7 +1397,7 @@ export class Program {
         };
     }
 
-    private beforeProgramTranspile(fileEntries: FileObj[], stagingFolderPath: string) {
+    private beforeProgramTranspile(fileEntries: FileObj[], stagingDir: string) {
         // map fileEntries using their path as key, to avoid excessive "find()" operations
         const mappedFileEntries = fileEntries.reduce<Record<string, FileObj>>((collection, entry) => {
             collection[s`${entry.src}`] = entry;
@@ -1400,7 +1417,7 @@ export class Program {
             //replace the file extension
             let outputPath = filePathObj.dest.replace(/\.bs$/gi, '.brs');
             //prepend the staging folder path
-            outputPath = s`${stagingFolderPath}/${outputPath}`;
+            outputPath = s`${stagingDir}/${outputPath}`;
             return outputPath;
         };
 
@@ -1421,8 +1438,8 @@ export class Program {
         };
     }
 
-    public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
-        const { entries, getOutputPath, astEditor } = this.beforeProgramTranspile(fileEntries, stagingFolderPath);
+    public async transpile(fileEntries: FileObj[], stagingDir: string) {
+        const { entries, getOutputPath, astEditor } = this.beforeProgramTranspile(fileEntries, stagingDir);
 
         const processedFiles = new Set<string>();
 
@@ -1463,7 +1480,7 @@ export class Program {
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
         if (!this.getFile(bslibAliasedRokuModulesPkgPath) && !this.getFile(s`source/bslib.brs`)) {
-            promises.push(util.copyBslibToStaging(stagingFolderPath));
+            promises.push(util.copyBslibToStaging(stagingDir));
         }
         await Promise.all(promises);
 

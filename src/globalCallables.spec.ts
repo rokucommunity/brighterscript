@@ -1,19 +1,15 @@
-import util, { standardizePath as s } from './util';
+import { util } from './util';
 import { Program } from './Program';
-import { expectDiagnostics, expectZeroDiagnostics } from './testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, rootDir, stagingDir } from './testHelpers.spec';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { expect } from 'chai';
-
-let tmpPath = s`${process.cwd()}/.tmp`;
-let rootDir = s`${tmpPath}/rootDir`;
-let stagingFolderPath = s`${tmpPath}/staging`;
 
 describe('globalCallables', () => {
     let program: Program;
     beforeEach(() => {
         program = new Program({
             rootDir: rootDir,
-            stagingFolderPath: stagingFolderPath
+            stagingDir: stagingDir
         });
     });
     afterEach(() => {
