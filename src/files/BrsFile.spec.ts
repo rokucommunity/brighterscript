@@ -2604,6 +2604,19 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('handles else block with a leading comment', () => {
+            testTranspile(`
+                sub main()
+                    if true then
+                        print "if"
+                    else
+                        ' leading comment
+                        print "else"
+                    end if
+                end sub
+            `);
+        });
+
         it('works for function parameters', () => {
             testTranspile(`
                 function DoSomething(name, age as integer, text as string)

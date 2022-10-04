@@ -454,7 +454,7 @@ export class IfStatement extends Statement {
 
             } else {
                 //else body
-                state.lineage.unshift(this.elseBranch);
+                state.lineage.unshift(this.tokens.else);
                 let body = this.elseBranch.transpile(state);
                 state.lineage.shift();
 
