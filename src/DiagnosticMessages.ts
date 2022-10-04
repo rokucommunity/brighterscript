@@ -704,6 +704,11 @@ export let DiagnosticMessages = {
         message: `Continue statement must be contained within a loop statement`,
         code: 1135,
         severity: DiagnosticSeverity.Error
+    }),
+    keywordMustBeDeclaredAtNamespaceLevel: (keyword: string) => ({
+        message: `${keyword} must be declared at the root level or within a namespace`,
+        code: 1136,
+        severity: DiagnosticSeverity.Error
     })
 };
 
