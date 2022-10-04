@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
 import util, { standardizePath as s } from './util';

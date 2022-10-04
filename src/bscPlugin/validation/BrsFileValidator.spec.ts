@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../../chai-config.spec';
 import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression } from '../../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';

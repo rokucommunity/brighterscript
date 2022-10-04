@@ -1,5 +1,5 @@
 import { SymbolTable } from './SymbolTable';
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import { StringType } from './types/StringType';
 import { IntegerType } from './types/IntegerType';
 

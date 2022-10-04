@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import { Range } from 'vscode-languageserver';
 import { CommentFlagProcessor } from './CommentFlagProcessor';
 import { Lexer } from './lexer/Lexer';

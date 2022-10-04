@@ -2,7 +2,7 @@ import * as sinonImport from 'sinon';
 
 import { Program } from '../Program';
 import type { BrsFile } from './BrsFile';
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { Range } from 'vscode-languageserver';
 import { ParseMode } from '../parser/Parser';

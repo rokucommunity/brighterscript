@@ -1,4 +1,4 @@
-import { expect, assert } from 'chai';
+import { expect, assert } from '../chai-config.spec';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression } from './Expression';

@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import { Logger, LogLevel, noop } from './Logger';
 import chalk from 'chalk';
 import { createSandbox } from 'sinon';

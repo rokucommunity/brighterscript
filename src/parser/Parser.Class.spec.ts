@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { TokenKind, AllowedLocalIdentifiers, AllowedProperties } from '../lexer/TokenKind';
 import { Lexer } from '../lexer/Lexer';
