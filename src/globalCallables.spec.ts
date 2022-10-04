@@ -2,7 +2,7 @@ import { util } from './util';
 import { Program } from './Program';
 import { expectDiagnostics, expectZeroDiagnostics, rootDir, stagingDir } from './testHelpers.spec';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 
 describe('globalCallables', () => {
     let program: Program;

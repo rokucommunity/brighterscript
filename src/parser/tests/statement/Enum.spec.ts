@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../../../chai-config.spec';
 import { LiteralExpression } from '../../Expression';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectInstanceOf, expectZeroDiagnostics, getTestTranspile, trim } from '../../../testHelpers.spec';

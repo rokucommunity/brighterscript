@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { AstEditor } from './AstEditor';
 import { util } from '../util';

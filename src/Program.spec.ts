@@ -1,4 +1,4 @@
-import { assert, expect } from 'chai';
+import { assert, expect } from './chai-config.spec';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
@@ -944,7 +944,6 @@ describe('Program', () => {
                     class MyClassA
                     end class
                 end namespace
-                namespace NameA.NameB
                 namespace NameA.NoClassA
                 end namespace
                 namespace NameA.NoClassB

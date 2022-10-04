@@ -3,7 +3,7 @@ import * as assert from 'assert';
 import chalk from 'chalk';
 import type { CodeDescription, CompletionItem, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import type { CodeActionShorthand } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import type { BrsFile } from './files/BrsFile';

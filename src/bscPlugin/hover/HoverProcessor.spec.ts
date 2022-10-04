@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../../chai-config.spec';
 import { Program } from '../../Program';
 import { util } from '../../util';
 import { createSandbox } from 'sinon';

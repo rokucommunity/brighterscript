@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 const sinon = createSandbox();
@@ -357,4 +357,3 @@ function createDiagnostic(
     };
     return diagnostic;
 }
-

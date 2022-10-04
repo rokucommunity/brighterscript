@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import type { BsDiagnostic } from './interfaces';
 import { standardizePath as s } from './util';
