@@ -3,7 +3,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression } from '../../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
-import { expectDiagnostics, expectZeroDiagnostics, trim } from '../../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics } from '../../testHelpers.spec';
 import { Program } from '../../Program';
 
 describe('BrsFileValidator', () => {

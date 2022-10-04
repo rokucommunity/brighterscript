@@ -58,7 +58,7 @@ describe('Statement', () => {
                 end namespace
             `);
             program.validate();
-            let node = program.getFile('source/main.brs').ast.findChild<NamespaceStatement>(isNamespaceStatement);
+            let node = program.getFile<BrsFile>('source/main.brs').ast.findChild<NamespaceStatement>(isNamespaceStatement);
             while (node.findChild(isNamespaceStatement)) {
                 node = node.findChild<NamespaceStatement>(isNamespaceStatement);
             }
