@@ -10,7 +10,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isVoidType } from '../astUtils/reflection';
+import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
@@ -454,7 +454,7 @@ export class IfStatement extends Statement {
 
             } else {
                 //else body
-                state.lineage.unshift(this.elseBranch);
+                state.lineage.unshift(this.tokens.else);
                 let body = this.elseBranch.transpile(state);
                 state.lineage.shift();
 
@@ -1077,7 +1077,7 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 export class NamespaceStatement extends Statement implements TypedefProvider {
     constructor(
         public keyword: Token,
-        //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
+        // this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
         public nameExpression: NamespacedVariableNameExpression,
         public body: Body,
         public endKeyword: Token
@@ -1113,7 +1113,15 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     public getName(parseMode: ParseMode) {
-        return this.nameExpression.getName(parseMode);
+        const parentNamespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        let name = this.nameExpression.getName(parseMode);
+
+        if (parentNamespace) {
+            const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
+            name = parentNamespace.getName(parseMode) + sep + name;
+        }
+
+        return name;
     }
 
     transpile(state: BrsTranspileState) {
@@ -2311,6 +2319,10 @@ export class EnumStatement extends Statement implements TypedefProvider {
                     currentIntValue++;
                 }
                 result.set(member.name?.toLowerCase(), member.value.token.text);
+
+                //simple unary expressions (like `-1`)
+            } else if (isUnaryExpression(member.value) && isLiteralExpression(member.value.right)) {
+                result.set(member.name?.toLowerCase(), member.value.operator.text + member.value.right.token.text);
 
                 //all other values
             } else {

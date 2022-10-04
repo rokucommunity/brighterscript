@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import * as sinon from 'sinon';
 import { Logger } from './Logger';
 import PluginInterface from './PluginInterface';

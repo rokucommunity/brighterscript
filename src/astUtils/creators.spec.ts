@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import { interpolatedRange } from '..';
 import { TranspileState } from '../parser/TranspileState';
 import { createStringLiteral } from './creators';

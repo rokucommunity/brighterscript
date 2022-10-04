@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 
 import { FunctionScope } from './FunctionScope';
 import { Program } from './Program';
@@ -23,7 +23,7 @@ describe('FunctionScope', () => {
         });
 
         it('returns variables defined above the specified line number', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 sub main()
                     var1 = 1
                     var2 = 2

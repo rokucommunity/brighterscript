@@ -132,3 +132,32 @@ sub Vertibrates_Birds_Quack() ' this will result in a compile error.
 end sub
 ```
 </details>
+
+## Nesting namespaces
+
+In the above examples, nested namespaces are formed by specifying a _dotted identifier_ (`NameA.NameB`). You can also declare namespaces within other namespaces to form a dotted namespace identifier which contains its parent namespaces.
+
+```BrighterScript
+namespace Vertibrates
+    namespace Birds
+        sub Quack()
+        end sub
+    end namespace
+
+    namespace Reptiles
+        sub Hiss()
+        end sub
+    end
+end namespace
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+```BrightScript
+sub Vertibrates_Birds_Quack()
+end sub
+sub Vertibrates_Reptiles_Hiss()
+end sub
+```
+</details>

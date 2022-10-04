@@ -1,4 +1,4 @@
-import { assert, expect } from 'chai';
+import { assert, expect } from '../chai-config.spec';
 import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import type { Callable, CommentFlag, VariableDeclaration } from '../interfaces';
@@ -24,12 +24,11 @@ import { createToken } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
 import { URI } from 'vscode-uri';
 import undent from 'undent';
+import { tempDir, rootDir } from '../testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 
 describe('BrsFile', () => {
-    let tempDir = s`${process.cwd()}/.tmp`;
-    let rootDir = s`${tempDir}/rootDir`;
     let program: Program;
     let srcPath = s`${rootDir}/source/main.brs`;
     let destPath = 'source/main.brs';
@@ -288,7 +287,7 @@ describe('BrsFile', () => {
 
         it('always includes `m`', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile('source/main.brs', `
                 sub Main()
 
                 end sub
@@ -309,7 +308,7 @@ describe('BrsFile', () => {
 
         it('includes all keywords`', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile('source/main.brs', `
                 sub Main()
 
                 end sub
@@ -334,7 +333,7 @@ describe('BrsFile', () => {
 
         it('does not provide completions within a comment', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile('source/main.brs', `
                 sub Main()
                     'some comment
                 end sub
@@ -347,7 +346,7 @@ describe('BrsFile', () => {
 
         it('does not provide duplicate entries for variables', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile('source/main.brs', `
                 sub Main()
                     name = "bob"
                     age = 12
@@ -365,7 +364,7 @@ describe('BrsFile', () => {
 
         it('does not include `as` and `string` text options when used in function params', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile('source/main.brs', `
                 sub Main(name as string)
 
                 end sub
@@ -378,7 +377,7 @@ describe('BrsFile', () => {
 
         it('does not provide intellisense results when inside a comment', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile('source/main.brs', `
                 sub Main(name as string)
                     'this is a comment
                 end sub
@@ -390,7 +389,7 @@ describe('BrsFile', () => {
 
         it('does provide intellisence for labels only after a goto keyword', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.setFile('source/main.brs', `
                 sub Main(name as string)
                     something:
                     goto \nend sub
@@ -502,7 +501,7 @@ describe('BrsFile', () => {
             });
 
             it('adds diagnostics for unknown numeric diagnostic codes', () => {
-                program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                program.setFile('source/main.brs', `
                     sub main()
                         print "hi" 'bs:disable-line: 123456 999999   aaaab
                     end sub
@@ -539,7 +538,7 @@ describe('BrsFile', () => {
             });
 
             it('works for specific codes', () => {
-                program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                program.setFile('source/main.brs', `
                     sub main()
                         'should not have any errors
                         DoSomething(1) 'bs:disable-line:1002
@@ -561,7 +560,7 @@ describe('BrsFile', () => {
                 //the current version of BRS causes parse errors after the `parse` keyword, showing error in comments
                 //the program should ignore all diagnostics found in brs:* comment lines EXCEPT
                 //for the diagnostics about using unknown error codes
-                program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                program.setFile('source/main.brs', `
                     sub main()
                         stop 'bs:disable-line
                         print "need a valid line to fix stop error"
@@ -642,7 +641,7 @@ describe('BrsFile', () => {
         });
 
         it('supports labels and goto statements', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 sub Main()
                     'multiple goto statements on one line
                     goto myLabel : goto myLabel
@@ -653,7 +652,7 @@ describe('BrsFile', () => {
         });
 
         it('supports empty print statements', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 sub main()
                    print
                 end sub
@@ -684,7 +683,7 @@ describe('BrsFile', () => {
             });
 
             it('works for upper case keywords', () => {
-                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile('source/main.brs', `
                     sub main()
                         #CONST someFlag = true
                         #IF someFlag
@@ -700,7 +699,7 @@ describe('BrsFile', () => {
             });
 
             it('supports single-word #elseif and #endif', () => {
-                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile('source/main.brs', `
                     sub main()
                         #const someFlag = true
                         #if someFlag
@@ -714,7 +713,7 @@ describe('BrsFile', () => {
             });
 
             it('supports multi-word #else if and #end if', () => {
-                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile('source/main.brs', `
                     sub main()
                         #const someFlag = true
                         #if someFlag
@@ -728,7 +727,7 @@ describe('BrsFile', () => {
             });
 
             it('does not choke on invalid code inside a false conditional compile', () => {
-                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile('source/main.brs', `
                     sub main()
                         #if false
                             non-commented code here should not cause parse errors
@@ -739,7 +738,7 @@ describe('BrsFile', () => {
             });
 
             it('detects syntax error in #if', () => {
-                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile('source/main.brs', `
                     sub main()
                         #if true1
                             print "true"
@@ -752,7 +751,7 @@ describe('BrsFile', () => {
             });
 
             it('detects syntax error in #const', () => {
-                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile('source/main.brs', `
                     sub main()
                         #if %
                             print "true"
@@ -766,7 +765,7 @@ describe('BrsFile', () => {
             });
 
             it('detects #const name using reserved word', () => {
-                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile('source/main.brs', `
                     sub main()
                         #const function = true
                     end sub
@@ -778,7 +777,7 @@ describe('BrsFile', () => {
             });
 
             it('detects syntax error in #const', () => {
-                let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = program.setFile('source/main.brs', `
                     sub main()
                         #const someConst = 123
                     end sub
@@ -790,7 +789,7 @@ describe('BrsFile', () => {
         });
 
         it('supports stop statement', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 sub main()
                    stop
                 end sub
@@ -799,7 +798,7 @@ describe('BrsFile', () => {
         });
 
         it('supports single-line if statements', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 sub main()
                     if 1 < 2: return true: end if
                     if 1 < 2: return true
@@ -1709,7 +1708,7 @@ describe('BrsFile', () => {
     });
 
     it('handles mixed case `then` partions of conditionals', () => {
-        let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        let mainFile = program.setFile('source/main.brs', `
             sub Main()
                 if true then
                     print "works"
@@ -1718,7 +1717,7 @@ describe('BrsFile', () => {
         `);
 
         expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
-        mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        mainFile = program.setFile('source/main.brs', `
             sub Main()
                 if true Then
                     print "works"
@@ -1727,7 +1726,7 @@ describe('BrsFile', () => {
         `);
         expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
 
-        mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        mainFile = program.setFile('source/main.brs', `
             sub Main()
                 if true THEN
                     print "works"
@@ -1739,7 +1738,7 @@ describe('BrsFile', () => {
 
     describe('getHover', () => {
         it('works for param types', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 sub DoSomething(name as string)
                     name = 1
                     sayMyName = function(name as string)
@@ -1760,7 +1759,7 @@ describe('BrsFile', () => {
 
         //ignore this for now...it's not a huge deal
         it('does not match on keywords or data types', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 sub Main(name as string)
                 end sub
                 sub as()
@@ -1773,7 +1772,7 @@ describe('BrsFile', () => {
         });
 
         it('finds declared function', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 function Main(count = 1)
                     firstName = "bob"
                     age = 21
@@ -1793,7 +1792,7 @@ describe('BrsFile', () => {
         });
 
         it('finds declared namespace function', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
             namespace mySpace
                 function Main(count = 1)
                     firstName = "bob"
@@ -1815,7 +1814,7 @@ describe('BrsFile', () => {
         });
 
         it('finds variable function hover in same scope', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 sub Main()
                     sayMyName = sub(name as string)
                     end sub
@@ -1868,7 +1867,7 @@ describe('BrsFile', () => {
         });
 
         it('finds function hover in file scope', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 sub Main()
                     sayMyName()
                 end sub
@@ -1889,7 +1888,7 @@ describe('BrsFile', () => {
         });
 
         it('finds namespace function hover in file scope', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 namespace mySpace
                 sub Main()
                     sayMyName()
@@ -1917,13 +1916,13 @@ describe('BrsFile', () => {
                 rootDir: rootDir
             });
 
-            let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let mainFile = program.setFile('source/main.brs', `
                 sub Main()
                     sayMyName()
                 end sub
             `);
 
-            program.setFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+            program.setFile('source/lib.brs', `
                 sub sayMyName(name as string)
 
                 end sub
@@ -1946,13 +1945,13 @@ describe('BrsFile', () => {
                 rootDir: rootDir
             });
 
-            let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let mainFile = program.setFile('source/main.brs', `
                 sub Main()
                     mySpace.sayMyName()
                 end sub
             `);
 
-            program.setFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+            program.setFile('source/lib.brs', `
                 namespace mySpace
                     sub sayMyName(name as string)
                     end sub
@@ -2024,7 +2023,7 @@ describe('BrsFile', () => {
         });
 
         it('handles mixed case `then` partions of conditionals', () => {
-            let mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let mainFile = program.setFile('source/main.brs', `
                 sub Main()
                     if true then
                         print "works"
@@ -2033,7 +2032,7 @@ describe('BrsFile', () => {
             `);
 
             expectZeroDiagnostics(mainFile);
-            mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            mainFile = program.setFile('source/main.brs', `
                 sub Main()
                     if true Then
                         print "works"
@@ -2042,7 +2041,7 @@ describe('BrsFile', () => {
             `);
             expectZeroDiagnostics(mainFile);
 
-            mainFile = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            mainFile = program.setFile('source/main.brs', `
                 sub Main()
                     if true THEN
                         print "works"
@@ -2054,7 +2053,7 @@ describe('BrsFile', () => {
     });
 
     it('does not throw when encountering incomplete import statement', () => {
-        program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        program.setFile('source/main.brs', `
             import
             sub main()
             end sub
@@ -2605,6 +2604,19 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('handles else block with a leading comment', () => {
+            testTranspile(`
+                sub main()
+                    if true then
+                        print "if"
+                    else
+                        ' leading comment
+                        print "else"
+                    end if
+                end sub
+            `);
+        });
+
         it('works for function parameters', () => {
             testTranspile(`
                 function DoSomething(name, age as integer, text as string)
@@ -2854,7 +2866,7 @@ describe('BrsFile', () => {
                 name: 'transform callback',
                 afterFileParse: onParsed
             });
-            file = program.setFile({ src: `absolute_path/file${ext}`, dest: `relative_path/file${ext}` }, `
+            file = program.setFile(`source/file${ext}`, `
                 sub Sum()
                     print "hello world"
                 end sub

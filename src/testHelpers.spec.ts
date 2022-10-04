@@ -3,7 +3,7 @@ import * as assert from 'assert';
 import chalk from 'chalk';
 import type { CodeDescription, CompletionItem, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import type { CodeActionShorthand } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import type { BrsFile } from './files/BrsFile';
@@ -13,6 +13,10 @@ import type { CodeWithSourceMap } from 'source-map';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
+
+export const tempDir = s`${__dirname}/../.tmp`;
+export const rootDir = s`${tempDir}/rootDir`;
+export const stagingDir = s`${tempDir}/stagingDir`;
 
 export const trim = undent;
 

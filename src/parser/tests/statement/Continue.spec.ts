@@ -1,16 +1,15 @@
-import { expect } from 'chai';
+import { expect } from '../../../chai-config.spec';
 import { createSandbox } from 'sinon';
 import { isContinueStatement } from '../../../astUtils/reflection';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { Program } from '../../../Program';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
-import { standardizePath as s } from '../../../util';
+import { rootDir } from '../../../testHelpers.spec';
 import type { BrsFile } from '../../../files/BrsFile';
 const sinon = createSandbox();
 
 describe('parser continue statements', () => {
-    let rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
