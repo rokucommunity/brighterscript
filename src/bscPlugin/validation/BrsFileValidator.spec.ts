@@ -3,6 +3,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression } from '../../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
+import { expectDiagnostics, expectZeroDiagnostics, trim } from '../../testHelpers.spec';
 import { Program } from '../../Program';
 
 describe('BrsFileValidator', () => {
@@ -69,7 +70,7 @@ describe('BrsFileValidator', () => {
                 end namespace
             `);
             program.validate();
-            expect(program.getDiagnostics().length).to.equal(0);
+            expectZeroDiagnostics(program);
         });
         it('fails if namespaces are defined inside a function', () => {
             program.setFile<BrsFile>('source/main.bs', `
@@ -79,10 +80,9 @@ describe('BrsFileValidator', () => {
                 end function
             `);
             program.validate();
-            const diagnostics = program.getDiagnostics().map(diag => diag.message);
-            expect(diagnostics).to.include(
-                DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('namespace').message
-            );
+            expectDiagnostics(program, [
+                DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('namespace')
+            ]);
         });
     });
 });
