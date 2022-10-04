@@ -3,7 +3,7 @@ import { util } from '../../../util';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
 import { ParseMode, Parser } from '../../Parser';
-import { expect } from 'chai';
+import { expect } from '../../../chai-config.spec';
 import type { ConstStatement } from '../../Statement';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { LiteralExpression } from '../../Expression';

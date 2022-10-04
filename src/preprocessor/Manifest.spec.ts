@@ -1,5 +1,5 @@
 import * as fsExtra from 'fs';
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import { getManifest, getBsConst, parseManifest } from './Manifest';
 import { createSandbox } from 'sinon';
 import { expectThrows, mapToObject, objectToMap, trim } from '../testHelpers.spec';

@@ -1,4 +1,4 @@
-import { assert, expect } from 'chai';
+import { assert, expect } from '../chai-config.spec';
 import * as path from 'path';
 import * as sinonImport from 'sinon';
 import type { CompletionItem } from 'vscode-languageserver';

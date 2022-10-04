@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../../../chai-config.spec';
 import { createSandbox } from 'sinon';
 import { isContinueStatement } from '../../../astUtils/reflection';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';

@@ -1,5 +1,5 @@
 import { Cache } from './Cache';
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 
 describe('Cache', () => {
     let cache: Cache;

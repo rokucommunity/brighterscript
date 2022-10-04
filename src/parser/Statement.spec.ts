@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import type { NamespaceStatement } from './Statement';
 import { Body, CommentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
