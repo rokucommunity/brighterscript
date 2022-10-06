@@ -77,7 +77,9 @@ export class CallExpressionInfo {
                 this.isCallingMethodOnMyClass = callExpression.callee.obj.name.text === 'm';
 
             } else {
-                this.dotPart = callExpression.callee.getNameParts().join('.');
+                let parts = util.getAllDottedGetParts(callExpression.callee);
+                parts.splice(parts?.length - 1, 1);
+                this.dotPart = parts.map(x => x.text).join('.');
                 this.namespace = this.getNamespace(this.dotPart, this.file);
             }
         }
@@ -159,3 +161,4 @@ export class CallExpressionInfo {
     }
 
 }
+
