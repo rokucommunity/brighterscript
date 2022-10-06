@@ -2129,7 +2129,7 @@ describe('Program', () => {
     describe.only('getSignatureHelp', () => {
         function getSignatureHelp(line: number, column: number) {
             return program.getSignatureHelp(
-                `${rootDir}/source/main.bs`,
+                'source/main.bs',
                 util.createPosition(line, column)
             );
         }
@@ -2155,179 +2155,228 @@ describe('Program', () => {
         });
 
         describe('gets signature info for regular function call', () => {
-
-            beforeEach(() => {
+            it('does not get help when on method name', () => {
                 program.setFile('source/main.bs', `
-                sub main()
-                    sayHello("name", 12)
-                end sub
+                    sub main()
+                        sayHello("name", 12)
+                    end sub
 
-                sub sayHello(name as string, age as integer)
-                end sub
-            `);
+                    sub sayHello(name as string, age as integer)
+                    end sub
+                `);
                 program.validate();
                 expectZeroDiagnostics(program);
-            });
-
-            it('does not get help when on method name', () => {
-                for (let i = 20; i < 29; i++) {
-                    let signatureHelp = getSignatureHelp(2, 22);
+                for (let i = 24; i < 33; i++) {
+                    let signatureHelp = getSignatureHelp(2, i);
                     expect(signatureHelp).is.empty;
                 }
             });
 
             it('gets help when on first param', () => {
-                for (let i = 29; i < 35; i++) {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello("name", 12)
+                    end sub
 
+                    sub sayHello(name as string, age as integer)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                for (let i = 33; i < 40; i++) {
                     assertSignatureHelp(2, i, 'sub sayHello(name as string, age as integer)', 0);
                 }
             });
 
-            it('gets help when on first param', () => {
+            it('gets help when on second param', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello("name", 12)
+                    end sub
 
-                assertSignatureHelp(2, 39, 'sub sayHello(name as string, age as integer)', 1);
+                    sub sayHello(name as string, age as integer)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                for (let i = 41; i < 44; i++) {
+                    assertSignatureHelp(2, i, 'sub sayHello(name as string, age as integer)', 1);
+                }
             });
         });
 
         describe('does not crash for unknown function info for regular function call', () => {
-
-            beforeEach(() => {
-                program.setFile('source/main.bs', `
-                sub main()
-                    cryHello("name", 12)
-                end sub
-
-                sub sayHello(name as string, age as integer)
-                end sub
-            `);
-                program.validate();
-            });
-
             it('gets help when on method name', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        cryHello("name", 12)
+                    end sub
 
-                let signatureHelp = getSignatureHelp(2, 22);
+                    sub sayHello(name as string, age as integer)
+                    end sub
+                `);
+                program.validate();
+                let signatureHelp = getSignatureHelp(2, 26);
                 expect(signatureHelp).to.be.empty;
-                signatureHelp = getSignatureHelp(2, 30);
+                signatureHelp = getSignatureHelp(2, 34);
                 expect(signatureHelp).to.be.empty;
-                signatureHelp = getSignatureHelp(2, 39);
+                signatureHelp = getSignatureHelp(2, 43);
                 expect(signatureHelp).to.be.empty;
             });
         });
+
         describe('gets signature info for class function call', () => {
-
-            beforeEach(() => {
+            it('gets help when on method name', () => {
                 program.setFile('source/main.bs', `
-                sub main()
-                    william = new Greeter()
-                    william.sayHello("name", 12)
-                end sub
-                class Greeter
-                    sub sayHello(name as string, age as integer)
+                    sub main()
+                        william = new Greeter()
+                        william.sayHello("name", 12)
                     end sub
-                end class
-            `);
+                    class Greeter
+                        sub sayHello(name as string, age as integer)
+                        end sub
+                    end class
+                `);
                 program.validate();
                 expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 42, 'sub sayHello(name as string, age as integer)', 0);
             });
 
-            it('gets help when on method name', () => {
-
-                assertSignatureHelp(3, 38, 'sub sayHello(name as string, age as integer)', 0);
-            });
             it('gets help when on first param', () => {
-
-                assertSignatureHelp(3, 47, 'sub sayHello(name as string, age as integer)', 1);
+                program.setFile('source/main.bs', `
+                    sub main()
+                        william = new Greeter()
+                        william.sayHello("name", 12)
+                    end sub
+                    class Greeter
+                        sub sayHello(name as string, age as integer)
+                        end sub
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 51, 'sub sayHello(name as string, age as integer)', 1);
             });
         });
+
         describe('gets signature info for class function call on this class', () => {
-
-            beforeEach(() => {
+            it('gets help when on method name', () => {
                 program.setFile('source/main.bs', `
-                class Greeter
-                    sub greet()
-                        m.sayHello("name", 12)
-                    end sub
-                    sub sayHello(name as string, age as integer)
-                    end sub
-
-                end class
-            `);
+                    class Greeter
+                        sub greet()
+                            m.sayHello("name", 12)
+                        end sub
+                        sub sayHello(name as string, age as integer)
+                        end sub
+                    end class
+                `);
                 program.validate();
                 expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 42, 'sub sayHello(name as string, age as integer)', 0);
             });
 
-            it('gets help when on method name', () => {
-
-                assertSignatureHelp(3, 38, 'sub sayHello(name as string, age as integer)', 0);
-            });
             it('gets help when on second param', () => {
-
-                assertSignatureHelp(3, 45, 'sub sayHello(name as string, age as integer)', 1);
+                program.setFile('source/main.bs', `
+                    class Greeter
+                        sub greet()
+                            m.sayHello("name", 12)
+                        end sub
+                        sub sayHello(name as string, age as integer)
+                        end sub
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 49, 'sub sayHello(name as string, age as integer)', 1);
             });
 
         });
         describe('gets signature info for overridden class function call', () => {
-
-            beforeEach(() => {
+            it('gets help when on first param', () => {
                 program.setFile('source/main.bs', `
-                class Greeter extends Person
-                    sub greet()
-                        m.sayHello("name", 12)
-                    end sub
-                    override sub sayHello(name as string, age as integer)
-                    end sub
-
-                    end class
-                    class Person
-                        sub sayHello(name as string, age as integer)
+                    class Greeter extends Person
+                        sub greet()
+                            m.sayHello("name", 12)
                         end sub
-                    end class
-            `);
+                        override sub sayHello(name as string, age as integer)
+                        end sub
+
+                        end class
+                        class Person
+                            sub sayHello(name as string, age as integer)
+                            end sub
+                        end class
+                `);
                 program.validate();
                 expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 43, 'sub sayHello(name as string, age as integer)', 0);
             });
-            it('gets help when on first param', () => {
 
-                assertSignatureHelp(3, 39, 'sub sayHello(name as string, age as integer)', 0);
-            });
             it('gets help when on second param', () => {
+                program.setFile('source/main.bs', `
+                    class Greeter extends Person
+                        sub greet()
+                            m.sayHello("name", 12)
+                        end sub
+                        override sub sayHello(name as string, age as integer)
+                        end sub
 
-                assertSignatureHelp(3, 45, 'sub sayHello(name as string, age as integer)', 1);
+                        end class
+                        class Person
+                            sub sayHello(name as string, age as integer)
+                            end sub
+                        end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 49, 'sub sayHello(name as string, age as integer)', 1);
             });
         });
+
         describe('gets signature info for overridden super method function call', () => {
-
-            beforeEach(() => {
+            it('gets help when on first param', () => {
                 program.setFile('source/main.bs', `
-                class Greeter extends Person
-                    sub greet()
-                        m.sayHello("name", 12)
-                    end sub
-                    override sub sayHello(name as string, age as integer)
-                    end sub
-
-                    end class
-                    class Person
-                        sub sayHello(name as string, age as integer)
+                    class Greeter extends Person
+                        sub greet()
+                            m.sayHello("name", 12)
                         end sub
-                    end class
-            `);
+                        override sub sayHello(name as string, age as integer)
+                        end sub
+
+                        end class
+                        class Person
+                            sub sayHello(name as string, age as integer)
+                            end sub
+                        end class
+                `);
                 program.validate();
                 expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 43, 'sub sayHello(name as string, age as integer)', 0);
             });
-            it('gets help when on first param', () => {
 
-                assertSignatureHelp(3, 39, 'sub sayHello(name as string, age as integer)', 0);
-            });
             it('gets help when on first param', () => {
+                program.setFile('source/main.bs', `
+                    class Greeter extends Person
+                        sub greet()
+                            m.sayHello("name", 12)
+                        end sub
+                        override sub sayHello(name as string, age as integer)
+                        end sub
 
-                assertSignatureHelp(3, 45, 'sub sayHello(name as string, age as integer)', 1);
+                        end class
+                        class Person
+                            sub sayHello(name as string, age as integer)
+                            end sub
+                        end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 49, 'sub sayHello(name as string, age as integer)', 1);
             });
         });
 
         describe('gets signature info for nested function call', () => {
-
-            beforeEach(() => {
+            it('gets signature info for the outer function - index 0', () => {
                 program.setFile('source/main.bs', `
                     sub main()
                         outer([inner(["apple"], 100)], 12)
@@ -2341,26 +2390,74 @@ describe('Program', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-
-            });
-
-            it('gets signature info for the outer function - index 0', () => {
                 assertSignatureHelp(2, 36, 'sub outer(name as string, age as integer)', 0);
             });
 
             it('gets signature info for the outer function - index 1', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        outer([inner(["apple"], 100)], 12)
+                    end sub
+
+                    sub outer(name as string, age as integer)
+                    end sub
+
+                    sub inner(fruits as object, age as integer)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
                 assertSignatureHelp(2, 57, 'sub outer(name as string, age as integer)', 1);
             });
 
             it('gets signature info for the inner function - name', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        outer([inner(["apple"], 100)], 12)
+                    end sub
+
+                    sub outer(name as string, age as integer)
+                    end sub
+
+                    sub inner(fruits as object, age as integer)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
                 assertSignatureHelp(2, 43, 'sub inner(fruits as object, age as integer)', 0);
             });
 
             it('gets signature info for the inner function - param 0', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        outer([inner(["apple"], 100)], 12)
+                    end sub
+
+                    sub outer(name as string, age as integer)
+                    end sub
+
+                    sub inner(fruits as object, age as integer)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
                 assertSignatureHelp(2, 51, 'sub inner(fruits as object, age as integer)', 1);
             });
 
             it('gets signature info for the inner function - param 1', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        outer([inner(["apple"], 100)], 12)
+                    end sub
+
+                    sub outer(name as string, age as integer)
+                    end sub
+
+                    sub inner(fruits as object, age as integer)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
                 assertSignatureHelp(2, 48, 'sub inner(fruits as object, age as integer)', 1);
             });
         });
@@ -2389,6 +2486,7 @@ describe('Program', () => {
                     assertSignatureHelp(2, i, 'Person(name as string, age as integer, n2 as string)', 2);
                 }
             });
+
             it('gives signature help for class with no constructor', () => {
                 program.setFile('source/main.bs', `
                     sub test()
@@ -2402,6 +2500,7 @@ describe('Program', () => {
 
                 assertSignatureHelp(2, 40, 'Person()', 0);
             });
+
             it('gives signature help for base constructor', () => {
                 program.setFile('source/main.bs', `
                     sub test()
@@ -2427,6 +2526,7 @@ describe('Program', () => {
                     assertSignatureHelp(2, i, 'Person(name as string, age as integer, n2 as string)', 2);
                 }
             });
+
             it('gives signature help in constructors in namespaced class', () => {
                 program.setFile('source/main.bs', `
                     sub test()
@@ -2453,6 +2553,7 @@ describe('Program', () => {
                 }
             });
         });
+
         describe('edge cases', () => {
             it('still gives signature help on commas', () => {
                 program.setFile('source/main.bs', `
@@ -2479,6 +2580,7 @@ describe('Program', () => {
                     assertSignatureHelp(6, i, 'function yes(a as string)', 0);
                 }
             });
+
             it('still gives signature help on spaces', () => {
                 program.setFile('source/main.bs', `
                     class Person
@@ -2510,83 +2612,182 @@ describe('Program', () => {
         });
 
         describe('gets signature info for function calls that go over a line', () => {
-
-            beforeEach(() => {
+            it('gets signature info for the outer function - index 0', () => {
                 program.setFile('source/main.bs', `
-                sub main()
-                sayHello([getName([
-                    "apple"
-                    "pear"
-                ], function()
-                    return 10
-                end function
-                )], 12)
-                end sub
+                    sub main()
+                        sayHello([getName([
+                            "apple"
+                            "pear"
+                        ], function()
+                            return 10
+                        end function
+                        )], 12)
+                    end sub
 
-                sub sayHello(name as string, age as integer)
-                end sub
+                    sub sayHello(name as string, age as integer)
+                    end sub
 
-            sub getName(fruits as object, age as function)
-            end sub
-        `);
+                    sub getName(fruits as object, age as function)
+                    end sub
+                `);
                 program.validate();
                 expectZeroDiagnostics(program);
-
-            });
-
-            it('gets signature info for the outer function - index 0', () => {
-                for (let i = 26; i < 34; i++) {
+                for (let i = 34; i < 42; i++) {
                     assertSignatureHelp(2, i, 'sub sayHello(name as string, age as integer)', 0);
                 }
             });
 
             it('gets signature info for the outer function - end of index 0', () => {
-                assertSignatureHelp(8, 17, 'sub sayHello(name as string, age as integer)', 0);
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello([getName([
+                            "apple"
+                            "pear"
+                        ], function()
+                            return 10
+                        end function
+                        )], 12)
+                    end sub
+
+                    sub sayHello(name as string, age as integer)
+                    end sub
+
+                    sub getName(fruits as object, age as function)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(8, 25, 'sub sayHello(name as string, age as integer)', 0);
             });
+
             it('gets signature info for the outer function - index 1', () => {
-                assertSignatureHelp(8, 22, 'sub sayHello(name as string, age as integer)', 1);
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello([getName([
+                            "apple"
+                            "pear"
+                        ], function()
+                            return 10
+                        end function
+                        )], 12)
+                    end sub
+
+                    sub sayHello(name as string, age as integer)
+                    end sub
+
+                    sub getName(fruits as object, age as function)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(8, 30, 'sub sayHello(name as string, age as integer)', 1);
             });
 
             it('gets signature info for the inner function - param 0', () => {
-                assertSignatureHelp(3, 23, 'sub getName(fruits as object, age as function)', 0);
-                assertSignatureHelp(4, 23, 'sub getName(fruits as object, age as function)', 0);
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello([getName([
+                            "apple"
+                            "pear"
+                        ], function()
+                            return 10
+                        end function
+                        )], 12)
+                    end sub
+
+                    sub sayHello(name as string, age as integer)
+                    end sub
+
+                    sub getName(fruits as object, age as function)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 31, 'sub getName(fruits as object, age as function)', 0);
+                assertSignatureHelp(4, 31, 'sub getName(fruits as object, age as function)', 0);
             });
 
             it('gets signature info for the inner function - param 1 - function declartion', () => {
-                assertSignatureHelp(5, 23, 'sub getName(fruits as object, age as function)', 1);
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello([getName([
+                            "apple"
+                            "pear"
+                        ], function()
+                            return 10
+                        end function
+                        )], 12)
+                    end sub
+
+                    sub sayHello(name as string, age as integer)
+                    end sub
+
+                    sub getName(fruits as object, age as function)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(5, 31, 'sub getName(fruits as object, age as function)', 1);
             });
+
             it('gets signature info for the inner function - param 1 - in anon function', () => {
-                assertSignatureHelp(6, 23, 'sub getName(fruits as object, age as function)', 1);
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello([getName([
+                            "apple"
+                            "pear"
+                        ], function()
+                            return 10
+                        end function
+                        )], 12)
+                    end sub
+
+                    sub sayHello(name as string, age as integer)
+                    end sub
+
+                    sub getName(fruits as object, age as function)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(6, 31, 'sub getName(fruits as object, age as function)', 1);
             });
         });
 
         describe('gets signature info for namespace function call', () => {
-
-            beforeEach(() => {
+            it('gets signature info function - index 0', () => {
                 program.setFile('source/main.bs', `
-                sub main()
-                    person.greeter.sayHello("hey", 12)
-                end sub
-                sub sayHello(notThisOne = true)
-                end sub
-                namespace person.greeter
-                    sub sayHello(name as string, age as integer)
+                    sub main()
+                        person.greeter.sayHello("hey", 12)
                     end sub
-                end namespace
-        `);
+                    sub sayHello(notThisOne = true)
+                    end sub
+                    namespace person.greeter
+                        sub sayHello(name as string, age as integer)
+                        end sub
+                    end namespace
+                `);
                 program.validate();
                 expectZeroDiagnostics(program);
-
-            });
-
-            it('gets signature info function - index 0', () => {
-                assertSignatureHelp(2, 45, 'sub person.greeter.sayHello(name as string, age as integer)', 0);
+                assertSignatureHelp(2, 49, 'sub person.greeter.sayHello(name as string, age as integer)', 0);
             });
 
             it('gets signature info for the outer function - index 1', () => {
-                assertSignatureHelp(2, 53, 'sub person.greeter.sayHello(name as string, age as integer)', 1);
+                program.setFile('source/main.bs', `
+                    sub main()
+                        person.greeter.sayHello("hey", 12)
+                    end sub
+                    sub sayHello(notThisOne = true)
+                    end sub
+                    namespace person.greeter
+                        sub sayHello(name as string, age as integer)
+                        end sub
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(2, 57, 'sub person.greeter.sayHello(name as string, age as integer)', 1);
             });
-
         });
 
         it.skip('gets signature help for partially typed line', () => {
