@@ -2790,10 +2790,10 @@ describe('Program', () => {
             });
         });
 
-        it.skip('gets signature help for partially typed line', () => {
+        it('gets signature help for partially typed line', () => {
             program.setFile('source/main.bs', `
                 function main()
-                    thing@.test(a1, a2,
+                    thing@.test(a1
                 end function
                 function test(arg1, arg2, arg3)
                 end function
@@ -2812,20 +2812,10 @@ describe('Program', () => {
             </component>`);
             program.validate();
 
-            for (let col = 28; col < 34; col++) {
+            for (let col = 32; col < 33; col++) {
                 let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
-            }
-            for (let col = 35; col < 38; col++) {
-                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
-                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
-                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
-            }
-            for (let col = 38; col < 42; col++) {
-                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
-                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
-                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
             }
         });
     });
