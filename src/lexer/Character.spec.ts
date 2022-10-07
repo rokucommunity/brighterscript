@@ -1,4 +1,4 @@
-import { assert } from 'chai';
+import { assert } from '../chai-config.spec';
 
 import * as Characters from './Characters';
 

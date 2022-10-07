@@ -1,4 +1,4 @@
-import { assert, expect } from 'chai';
+import { assert, expect } from '../chai-config.spec';
 import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import type { Callable, CommentFlag, VariableDeclaration } from '../interfaces';
@@ -2599,6 +2599,19 @@ describe('BrsFile', () => {
                     else if true then
                         print "elseif"
                     else
+                    end if
+                end sub
+            `);
+        });
+
+        it('handles else block with a leading comment', () => {
+            testTranspile(`
+                sub main()
+                    if true then
+                        print "if"
+                    else
+                        ' leading comment
+                        print "else"
                     end if
                 end sub
             `);

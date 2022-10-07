@@ -1313,12 +1313,6 @@ export class Parser {
         this.warnIfNotBrighterScriptMode('namespace');
         let keyword = this.advance();
 
-        if (!this.isAtRootLevel()) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.keywordMustBeDeclaredAtRootLevel('namespace'),
-                range: keyword.range
-            });
-        }
         this.namespaceAndFunctionDepth++;
 
         let name = this.getNamespacedVariableNameExpression();
@@ -1341,6 +1335,7 @@ export class Parser {
         }
 
         this.namespaceAndFunctionDepth--;
+
         result.body = body;
         result.endKeyword = endKeyword;
         this._references.namespaceStatements.push(result);

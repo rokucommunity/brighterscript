@@ -1,4 +1,4 @@
-import { expect, assert } from 'chai';
+import { expect, assert } from '../chai-config.spec';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression } from './Expression';
@@ -365,16 +365,24 @@ describe('parser', () => {
                 end sub
             `, ParseMode.BrighterScript).diagnostics[0]?.message).not.to.exist;
         });
+
         describe('namespace', () => {
-            it('catches namespaces declared not at root level', () => {
-                expect(parse(`
-                    sub main()
-                        namespace Name.Space
+            it('allows namespaces declared inside other namespaces', () => {
+                const parser = parse(`
+                    namespace Level1
+                        namespace Level2.Level3
+                            sub main()
+                            end sub
                         end namespace
-                    end sub
-                `, ParseMode.BrighterScript).diagnostics[0]?.message).to.equal(
-                    DiagnosticMessages.keywordMustBeDeclaredAtRootLevel('namespace').message
-                );
+                    end namespace
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(parser);
+                // We expect these names to be "as given" in this context, because we aren't
+                // evaluating a full program.
+                expect(parser.references.namespaceStatements.map(statement => statement.getName(ParseMode.BrighterScript))).to.deep.equal([
+                    'Level2.Level3',
+                    'Level1'
+                ]);
             });
             it('parses empty namespace', () => {
                 let { statements, diagnostics } =

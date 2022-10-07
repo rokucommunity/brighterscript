@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-for-in-array */
 /* eslint no-template-curly-in-string: 0 */
 
-import { expect } from 'chai';
+import { expect } from '../../../chai-config.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Lexer } from '../../../lexer/Lexer';
 import { Parser, ParseMode } from '../../Parser';

@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import type { DidChangeWatchedFilesParams, Location } from 'vscode-languageserver';

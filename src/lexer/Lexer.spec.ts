@@ -1,5 +1,5 @@
 /* eslint no-template-curly-in-string: 0 */
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 
 import { TokenKind } from './TokenKind';
 import { Lexer } from './Lexer';

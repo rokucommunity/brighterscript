@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../../chai-config.spec';
 import { URI } from 'vscode-uri';
 import type { Range } from 'vscode-languageserver';
 import type { BscFile } from '../../interfaces';

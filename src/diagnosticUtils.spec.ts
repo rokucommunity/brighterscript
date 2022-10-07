@@ -1,5 +1,5 @@
 
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import * as diagnosticUtils from './diagnosticUtils';
 import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 import { util } from './util';

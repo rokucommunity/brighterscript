@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 
 import { FunctionScope } from './FunctionScope';
 import { Program } from './Program';
