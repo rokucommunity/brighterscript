@@ -16,10 +16,8 @@ import { EmptyStatement } from './parser/Statement';
 import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { Logger } from './Logger';
-import { createToken } from './astUtils/creators';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
-import { TokenKind } from './lexer/TokenKind';
 import type { LiteralExpression } from './parser/Expression';
 import type { AstEditor } from './astUtils/AstEditor';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
@@ -2126,455 +2124,673 @@ describe('Program', () => {
     });
 
     describe('getSignatureHelp', () => {
-        it('does not crash when second previousToken is undefined', () => {
-            const file = program.setFile<BrsFile>('source/main.brs', ` `);
-            sinon.stub(file, 'getPreviousToken').returns(undefined);
-            //should not crash
-            expect(
-                file['getClassFromMReference'](util.createPosition(2, 3), createToken(TokenKind.Dot, '.'), null)
-            ).to.be.undefined;
-        });
-
-        it('works with no leading whitespace when the cursor is after the open paren', () => {
-            program.setFile('source/main.brs', `sub main()\nsayHello()\nend sub\nsub sayHello(name)\nend sub`);
-            let signatureHelp = program.getSignatureHelp(
-                `${rootDir}/source/main.brs`,
-                //sayHello(|)
-                util.createPosition(1, 9)
+        function getSignatureHelp(line: number, column: number) {
+            return program.getSignatureHelp(
+                'source/main.bs',
+                util.createPosition(line, column)
             );
+        }
+
+        function assertSignatureHelp(line: number, col: number, text: string, index: number) {
+            let signatureHelp = getSignatureHelp(line, col);
+            expect(signatureHelp?.[0]?.signature?.label, `wrong label for ${line},${col} - got: "${signatureHelp?.[0]?.signature?.label}" expected "${text}"`).to.equal(text);
+            expect(signatureHelp?.[0]?.index, `wrong index for ${line},${col} - got ${signatureHelp?.[0]?.index} expected ${index}`).to.equal(index);
+        }
+
+        it('does not crash when there is no file', () => {
+            let signatureHelp = getSignatureHelp(1, 9);
             expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('sub sayHello(name)');
+            expect(signatureHelp[0]?.signature).to.not.exist;
         });
 
-        it('ignores comments and invalid ranges', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    ' new func(((
-                end function
-            `);
-            for (let col = 0; col < 40; col++) {
-                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+        it('does not crash when there is no expression at location', () => {
+            program.validate();
+            let signatureHelp = getSignatureHelp(1, 9);
+
+            expectZeroDiagnostics(program);
+            expect(signatureHelp[0]?.signature).to.not.exist;
+        });
+
+        describe('gets signature info for regular function call', () => {
+            it('does not get help when on method name', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello("name", 12)
+                    end sub
+
+                    sub sayHello(name as string, age as integer)
+                    end sub
+                `);
+                program.validate();
                 expectZeroDiagnostics(program);
-                expect(signatureHelp[0]?.signature).to.not.exist;
-            }
+                for (let i = 24; i < 33; i++) {
+                    let signatureHelp = getSignatureHelp(2, i);
+                    expect(signatureHelp).is.empty;
+                }
+            });
+
+            it('gets help when on first param', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello("name", 12)
+                    end sub
+
+                    sub sayHello(name as string, age as integer)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                for (let i = 33; i < 40; i++) {
+                    assertSignatureHelp(2, i, 'sub sayHello(name as string, age as integer)', 0);
+                }
+            });
+
+            it('gets help when on second param', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello("name", 12)
+                    end sub
+
+                    sub sayHello(name as string, age as integer)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                for (let i = 41; i < 44; i++) {
+                    assertSignatureHelp(2, i, 'sub sayHello(name as string, age as integer)', 1);
+                }
+            });
         });
 
-        it('does not crash on callfunc operator', () => {
-            //there needs to be at least one xml component WITHOUT an interface
-            program.setFile<XmlFile>('components/MyNode.xml', trim`<?xml version="1.0" encoding="utf-8" ?>
-                <component name="Component1" extends="Scene">
-                    <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
-                </component>
-            `);
-            const file = program.setFile('source/main.bs', `
-                sub main()
-                    someFunc()@.
-                end sub
-            `);
-            program.getCompletions(file.srcPath, util.createPosition(2, 32));
+        describe('does not crash for unknown function info for regular function call', () => {
+            it('gets help when on method name', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        cryHello("name", 12)
+                    end sub
+
+                    sub sayHello(name as string, age as integer)
+                    end sub
+                `);
+                program.validate();
+                let signatureHelp = getSignatureHelp(2, 26);
+                expect(signatureHelp).to.be.empty;
+                signatureHelp = getSignatureHelp(2, 34);
+                expect(signatureHelp).to.be.empty;
+                signatureHelp = getSignatureHelp(2, 43);
+                expect(signatureHelp).to.be.empty;
+            });
         });
 
-        it('gets signature help for constructor with no args', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    p = new Person()
-                end function
+        describe('gets signature info for class function call', () => {
+            it('gets help when on method name', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        william = new Greeter()
+                        william.sayHello("name", 12)
+                    end sub
+                    class Greeter
+                        sub sayHello(name as string, age as integer)
+                        end sub
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 42, 'sub sayHello(name as string, age as integer)', 0);
+            });
 
-                class Person
-                    function new()
-                    end function
-
-                    function sayHello()
-                    end function
-                end class
-            `);
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 31)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('Person()');
+            it('gets help when on first param', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        william = new Greeter()
+                        william.sayHello("name", 12)
+                    end sub
+                    class Greeter
+                        sub sayHello(name as string, age as integer)
+                        end sub
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 51, 'sub sayHello(name as string, age as integer)', 1);
+            });
         });
 
-        it('gets signature help for class function on dotted get with params', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    p.sayHello("there")
-                end function
+        describe('gets signature info for class function call on this class', () => {
+            it('gets help when on method name', () => {
+                program.setFile('source/main.bs', `
+                    class Greeter
+                        sub greet()
+                            m.sayHello("name", 12)
+                        end sub
+                        sub sayHello(name as string, age as integer)
+                        end sub
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 42, 'sub sayHello(name as string, age as integer)', 0);
+            });
 
-                class Person
-                    function new()
-                    end function
+            it('gets help when on second param', () => {
+                program.setFile('source/main.bs', `
+                    class Greeter
+                        sub greet()
+                            m.sayHello("name", 12)
+                        end sub
+                        sub sayHello(name as string, age as integer)
+                        end sub
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 49, 'sub sayHello(name as string, age as integer)', 1);
+            });
 
-                    function sayHello(text)
-                    end function
-                end class
-            `);
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 32)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
+        });
+        describe('gets signature info for overridden class function call', () => {
+            it('gets help when on first param', () => {
+                program.setFile('source/main.bs', `
+                    class Greeter extends Person
+                        sub greet()
+                            m.sayHello("name", 12)
+                        end sub
+                        override sub sayHello(name as string, age as integer)
+                        end sub
 
-            signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
+                        end class
+                        class Person
+                            sub sayHello(name as string, age as integer)
+                            end sub
+                        end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 43, 'sub sayHello(name as string, age as integer)', 0);
+            });
 
-            signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 27)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
+            it('gets help when on second param', () => {
+                program.setFile('source/main.bs', `
+                    class Greeter extends Person
+                        sub greet()
+                            m.sayHello("name", 12)
+                        end sub
+                        override sub sayHello(name as string, age as integer)
+                        end sub
 
-            signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 23)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
+                        end class
+                        class Person
+                            sub sayHello(name as string, age as integer)
+                            end sub
+                        end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 49, 'sub sayHello(name as string, age as integer)', 1);
+            });
         });
 
-        it('gets signature help for namespaced class function', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    person.sayHello("there")
-                end function
-                namespace player
+        describe('gets signature info for overridden super method function call', () => {
+            it('gets help when on first param', () => {
+                program.setFile('source/main.bs', `
+                    class Greeter extends Person
+                        sub greet()
+                            m.sayHello("name", 12)
+                        end sub
+                        override sub sayHello(name as string, age as integer)
+                        end sub
+
+                        end class
+                        class Person
+                            sub sayHello(name as string, age as integer)
+                            end sub
+                        end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 43, 'sub sayHello(name as string, age as integer)', 0);
+            });
+
+            it('gets help when on first param', () => {
+                program.setFile('source/main.bs', `
+                    class Greeter extends Person
+                        sub greet()
+                            m.sayHello("name", 12)
+                        end sub
+                        override sub sayHello(name as string, age as integer)
+                        end sub
+
+                        end class
+                        class Person
+                            sub sayHello(name as string, age as integer)
+                            end sub
+                        end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 49, 'sub sayHello(name as string, age as integer)', 1);
+            });
+        });
+
+        describe('gets signature info for nested function call', () => {
+            it('gets signature info for the outer function - index 0', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        outer([inner(["apple"], 100)], 12)
+                    end sub
+
+                    sub outer(name as string, age as integer)
+                    end sub
+
+                    sub inner(fruits as object, age as integer)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(2, 36, 'sub outer(name as string, age as integer)', 0);
+            });
+
+            it('gets signature info for the outer function - index 1', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        outer([inner(["apple"], 100)], 12)
+                    end sub
+
+                    sub outer(name as string, age as integer)
+                    end sub
+
+                    sub inner(fruits as object, age as integer)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(2, 57, 'sub outer(name as string, age as integer)', 1);
+            });
+
+            it('gets signature info for the inner function - name', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        outer([inner(["apple"], 100)], 12)
+                    end sub
+
+                    sub outer(name as string, age as integer)
+                    end sub
+
+                    sub inner(fruits as object, age as integer)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(2, 43, 'sub inner(fruits as object, age as integer)', 0);
+            });
+
+            it('gets signature info for the inner function - param 0', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        outer([inner(["apple"], 100)], 12)
+                    end sub
+
+                    sub outer(name as string, age as integer)
+                    end sub
+
+                    sub inner(fruits as object, age as integer)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(2, 51, 'sub inner(fruits as object, age as integer)', 1);
+            });
+
+            it('gets signature info for the inner function - param 1', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        outer([inner(["apple"], 100)], 12)
+                    end sub
+
+                    sub outer(name as string, age as integer)
+                    end sub
+
+                    sub inner(fruits as object, age as integer)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(2, 48, 'sub inner(fruits as object, age as integer)', 1);
+            });
+        });
+
+        describe('classes', () => {
+            it('gives signature help in constructors', () => {
+                program.setFile('source/main.bs', `
+                    sub test()
+                        p = new Person("george", 20, "text")
+                    end sub
                     class Person
-                        function new()
-                        end function
-
-                        function sayHello(text)
+                        function new(name as string, age as integer, n2 as string)
                         end function
                     end class
-                end namespace
-            `);
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 40)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
 
-            signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 30)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
-        });
+                for (let i = 40; i < 48; i++) {
+                    assertSignatureHelp(2, i, 'Person(name as string, age as integer, n2 as string)', 0);
+                }
+                for (let i = 48; i < 52; i++) {
+                    assertSignatureHelp(2, i, 'Person(name as string, age as integer, n2 as string)', 1);
+                }
+                for (let i = 52; i < 60; i++) {
+                    assertSignatureHelp(2, i, 'Person(name as string, age as integer, n2 as string)', 2);
+                }
+            });
 
-        it('gets signature help for namespace function', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    person.sayHello("hey", "you")
-                end function
-
-                namespace person
-                    function sayHello(text, text2)
-                    end function
-                end namespace
-            `);
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
-        });
-
-        it('gets signature help for nested namespace function', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    person.roger.sayHello("hi", "there")
-                end function
-
-                namespace person.roger
-                ' comment 1
-                ' comment 2
-
-                'comment 3
-                'comment 4
-                    function sayHello(text, text2)
-                    end function
-                end namespace
-            `);
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 41)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
-        });
-
-        it('gets signature help for callfunc method', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    myNode = createObject("roSGNode", "Component1")
-                    myNode@.sayHello(1)
-                end function
-            `);
-            program.setFile('components/MyNode.bs', `
-                function sayHello(text, text2)
-                end function
-            `);
-            program.setFile<XmlFile>('components/MyNode.xml',
-                trim`<?xml version="1.0" encoding="utf-8" ?>
-                <component name="Component1" extends="Scene">
-                    <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
-                    <interface>
-                        <function name="sayHello"/>
-                    </interface>
-                </component>`);
-            program.validate();
-
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(3, 36)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
-        });
-
-        it('does not get signature help for callfunc method, referenced by dot', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    myNode = createObject("roSGNode", "Component1")
-                    myNode.sayHello(1, 2)
-                end function
-            `);
-            program.setFile('components/MyNode.bs', `
-                function sayHello(text, text2)
-                end function
-            `);
-            program.setFile<XmlFile>('components/MyNode.xml',
-                trim`<?xml version="1.0" encoding="utf-8" ?>
-                <component name="Component1" extends="Scene">
-                    <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
-                    <interface>
-                        <function name="sayHello"/>
-                    </interface>
-                </component>
-            `);
-            program.validate();
-
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(3, 36)));
-            expectZeroDiagnostics(program);
-            //note - callfunc completions and signatures are not yet correctly identifying methods that are exposed in an interace - waiting on the new xml branch for that
-            expect(signatureHelp).to.be.empty;
-        });
-
-        it('gets signature help for constructor with args', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    p = new Person(arg1, arg2)
-                end function
-
-                class Person
-                    function new(arg1, arg2)
-                    end function
-                end class
-            `);
-            program.validate();
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('Person(arg1, arg2)');
-        });
-
-        it('gets signature help for constructor with args, defined in super class', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    p = new Roger(arg1, arg2)
-                end function
-
-                class Person
-                    function new(arg1, arg2)
-                    end function
-                end class
-                class Roger extends Person
-                end class
-            `);
-            program.validate();
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('Roger(arg1, arg2)');
-        });
-
-        it('identifies arg index', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    p = new Person(arg1, arg2)
-                end function
-
-                class Person
-                    function new(arg1, arg2)
-                    end function
-                end class
-            `);
-            program.validate();
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].index).to.equal(0);
-
-            signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 40)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].index).to.equal(1);
-        });
-
-        it('gets signature help for namespaced constructor with args', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    p = new people.coders.Person(1, 2)
-                end function
-                namespace people.coders
+            it('gives signature help for class with no constructor', () => {
+                program.setFile('source/main.bs', `
+                    sub test()
+                        p = new Person()
+                    end sub
                     class Person
-                        function new(arg1, arg2)
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+
+                assertSignatureHelp(2, 40, 'Person()', 0);
+            });
+
+            it('gives signature help for base constructor', () => {
+                program.setFile('source/main.bs', `
+                    sub test()
+                        p = new Person("george", 20, "text")
+                    end sub
+                    class Person extends Being
+                    end class
+                    class Being
+                        function new(name as string, age as integer, n2 as string)
                         end function
                     end class
-                end namespace
-            `);
-            program.validate();
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 47)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('people.coders.Person(arg1, arg2)');
-            expect(signatureHelp[0].index).to.equal(0);
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+
+                for (let i = 40; i < 48; i++) {
+                    assertSignatureHelp(2, i, 'Person(name as string, age as integer, n2 as string)', 0);
+                }
+                for (let i = 48; i < 52; i++) {
+                    assertSignatureHelp(2, i, 'Person(name as string, age as integer, n2 as string)', 1);
+                }
+                for (let i = 52; i < 60; i++) {
+                    assertSignatureHelp(2, i, 'Person(name as string, age as integer, n2 as string)', 2);
+                }
+            });
+
+            it('gives signature help in constructors in namespaced class', () => {
+                program.setFile('source/main.bs', `
+                    sub test()
+                        p = new being.human.Person("george", 20, "text")
+                    end sub
+                    namespace being.human
+                        class Person
+                            function new(name as string, age as integer, n2 as string)
+                            end function
+                        end class
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+
+                for (let i = 52; i < 60; i++) {
+                    assertSignatureHelp(2, i, 'being.human.Person(name as string, age as integer, n2 as string)', 0);
+                }
+                for (let i = 60; i < 64; i++) {
+                    assertSignatureHelp(2, i, 'being.human.Person(name as string, age as integer, n2 as string)', 1);
+                }
+                for (let i = 64; i < 72; i++) {
+                    assertSignatureHelp(2, i, 'being.human.Person(name as string, age as integer, n2 as string)', 2);
+                }
+            });
         });
 
-        it('gets signature help for regular method call', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    test(arg1, a2)
-                end function
-                function test(arg1, arg2)
-                end function
-            `);
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 27)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('function test(arg1, arg2)');
-            expect(signatureHelp[0].index).to.equal(0);
-            signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 32)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('function test(arg1, arg2)');
-            expect(signatureHelp[0].index).to.equal(1);
+        describe('edge cases', () => {
+            it('still gives signature help on commas', () => {
+                program.setFile('source/main.bs', `
+                    class Person
+                        function sayHello(name as string, age as integer, n2 as string)
+                        end function
+
+                        function yes(a as string)
+                            m.sayHello("george",m.yes("a"),
+                            m.yes(""))
+                        end function
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+
+                for (let i = 42; i < 48; i++) {
+                    assertSignatureHelp(6, i, 'function sayHello(name as string, age as integer, n2 as string)', 0);
+                }
+                for (let i = 48; i < 54; i++) {
+                    assertSignatureHelp(6, i, 'function sayHello(name as string, age as integer, n2 as string)', 1);
+                }
+                for (let i = 54; i < 58; i++) {
+                    assertSignatureHelp(6, i, 'function yes(a as string)', 0);
+                }
+            });
+
+            it('still gives signature help on spaces', () => {
+                program.setFile('source/main.bs', `
+                    class Person
+                        function sayHello(name as string, age as integer, n2 as string)
+                        end function
+
+                        function yes(a as string)
+                            m.sayHello("george", m.yes("a"),
+                            m.yes(""))
+                        end function
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+
+                for (let i = 42; i < 48; i++) {
+                    assertSignatureHelp(6, i, 'function sayHello(name as string, age as integer, n2 as string)', 0);
+                }
+                for (let i = 48; i < 55; i++) {
+                    assertSignatureHelp(6, i, 'function sayHello(name as string, age as integer, n2 as string)', 1);
+                }
+                for (let i = 55; i < 58; i++) {
+                    assertSignatureHelp(6, i, 'function yes(a as string)', 0);
+                }
+                for (let i = 0; i < 33; i++) {
+                    assertSignatureHelp(7, i, 'function sayHello(name as string, age as integer, n2 as string)', 2);
+                }
+            });
         });
 
-        it('gets signature help for dotted method call, with method in in-scope class', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    p.test(arg1)
-                end function
-                class Person
-                    function new(arg1, arg2)
-                    end function
-                    function test(arg)
-                    end function
-                end class
-            `);
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 25)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
+        describe('gets signature info for function calls that go over a line', () => {
+            it('gets signature info for the outer function - index 0', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello([getName([
+                            "apple"
+                            "pear"
+                        ], function()
+                            return 10
+                        end function
+                        )], 12)
+                    end sub
+
+                    sub sayHello(name as string, age as integer)
+                    end sub
+
+                    sub getName(fruits as object, age as function)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                for (let i = 34; i < 42; i++) {
+                    assertSignatureHelp(2, i, 'sub sayHello(name as string, age as integer)', 0);
+                }
+            });
+
+            it('gets signature info for the outer function - end of index 0', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello([getName([
+                            "apple"
+                            "pear"
+                        ], function()
+                            return 10
+                        end function
+                        )], 12)
+                    end sub
+
+                    sub sayHello(name as string, age as integer)
+                    end sub
+
+                    sub getName(fruits as object, age as function)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(8, 25, 'sub sayHello(name as string, age as integer)', 0);
+            });
+
+            it('gets signature info for the outer function - index 1', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello([getName([
+                            "apple"
+                            "pear"
+                        ], function()
+                            return 10
+                        end function
+                        )], 12)
+                    end sub
+
+                    sub sayHello(name as string, age as integer)
+                    end sub
+
+                    sub getName(fruits as object, age as function)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(8, 30, 'sub sayHello(name as string, age as integer)', 1);
+            });
+
+            it('gets signature info for the inner function - param 0', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello([getName([
+                            "apple"
+                            "pear"
+                        ], function()
+                            return 10
+                        end function
+                        )], 12)
+                    end sub
+
+                    sub sayHello(name as string, age as integer)
+                    end sub
+
+                    sub getName(fruits as object, age as function)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(3, 31, 'sub getName(fruits as object, age as function)', 0);
+                assertSignatureHelp(4, 31, 'sub getName(fruits as object, age as function)', 0);
+            });
+
+            it('gets signature info for the inner function - param 1 - function declartion', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello([getName([
+                            "apple"
+                            "pear"
+                        ], function()
+                            return 10
+                        end function
+                        )], 12)
+                    end sub
+
+                    sub sayHello(name as string, age as integer)
+                    end sub
+
+                    sub getName(fruits as object, age as function)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(5, 31, 'sub getName(fruits as object, age as function)', 1);
+            });
+
+            it('gets signature info for the inner function - param 1 - in anon function', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        sayHello([getName([
+                            "apple"
+                            "pear"
+                        ], function()
+                            return 10
+                        end function
+                        )], 12)
+                    end sub
+
+                    sub sayHello(name as string, age as integer)
+                    end sub
+
+                    sub getName(fruits as object, age as function)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(6, 31, 'sub getName(fruits as object, age as function)', 1);
+            });
         });
 
-        it('gets signature help for namespaced method call', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    Person.test(arg1)
-                end function
-                namespace Person
-                    function test(arg)
-                    end function
-                end namespace
-            `);
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 31)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
-        });
+        describe('gets signature info for namespace function call', () => {
+            it('gets signature info function - index 0', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        person.greeter.sayHello("hey", 12)
+                    end sub
+                    sub sayHello(notThisOne = true)
+                    end sub
+                    namespace person.greeter
+                        sub sayHello(name as string, age as integer)
+                        end sub
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(2, 49, 'sub person.greeter.sayHello(name as string, age as integer)', 0);
+            });
 
-        it('gets signature help for namespaced method call', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    Person.roger.test(arg1)
-                end function
-                namespace Person.roger
-                    function test(arg)
-                    end function
-                end namespace
-            `);
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 38)));
-            expectZeroDiagnostics(program);
-            expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
-        });
-
-        it('gets signature help for regular method call on various index points', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    test(a1, a2, a3)
-                end function
-                function test(arg1, arg2, arg3)
-                end function
-            `);
-            program.validate();
-            for (let col = 21; col < 27; col++) {
-                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
-                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
-                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
-            }
-            for (let col = 27; col < 31; col++) {
-                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
-                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
-                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
-            }
-            for (let col = 31; col < 35; col++) {
-                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
-                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
-                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
-            }
-        });
-
-        it('gets signature help for callfunc method call on various index points', () => {
-            program.setFile('components/MyNode.bs', `
-                function test(arg1, arg2, arg3)
-                end function
-            `);
-            program.setFile('source/main.bs', `
-                function main()
-                    thing@.test(a1, a2, a3)
-                end function
-            `);
-
-            program.setFile<XmlFile>('components/MyNode.xml',
-                trim`<?xml version="1.0" encoding="utf-8" ?>
-                <component name="Component1" extends="Scene">
-                    <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
-                    <interface>
-                        <function name="test"/>
-                    </interface>
-                </component>`);
-            program.validate();
-
-            for (let col = 29; col < 34; col++) {
-                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
-                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
-                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
-            }
-            for (let col = 34; col < 38; col++) {
-                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
-                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
-                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
-            }
-            for (let col = 38; col < 41; col++) {
-                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
-                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
-                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
-            }
-        });
-
-        it('gets signature help for constructor method call on various index points', () => {
-            program.setFile('source/main.bs', `
-                function main()
-                    a = new Person(a1, a2, a3)
-                end function
-                class Person
-                    function new(arg1, arg2, arg3)
-                    end function
-                end class
-            `);
-            for (let col = 29; col < 37; col++) {
-                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
-                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
-                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
-            }
-            for (let col = 37; col < 41; col++) {
-                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
-                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
-                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
-            }
-            for (let col = 41; col < 45; col++) {
-                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
-                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
-                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
-            }
+            it('gets signature info for the outer function - index 1', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        person.greeter.sayHello("hey", 12)
+                    end sub
+                    sub sayHello(notThisOne = true)
+                    end sub
+                    namespace person.greeter
+                        sub sayHello(name as string, age as integer)
+                        end sub
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                assertSignatureHelp(2, 57, 'sub person.greeter.sayHello(name as string, age as integer)', 1);
+            });
         });
 
         it('gets signature help for partially typed line', () => {
             program.setFile('source/main.bs', `
                 function main()
-                    thing@.test(a1, a2,
+                    thing@.test(a1
                 end function
                 function test(arg1, arg2, arg3)
                 end function
@@ -2593,20 +2809,10 @@ describe('Program', () => {
             </component>`);
             program.validate();
 
-            for (let col = 28; col < 34; col++) {
+            for (let col = 32; col < 33; col++) {
                 let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
-            }
-            for (let col = 35; col < 38; col++) {
-                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
-                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
-                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
-            }
-            for (let col = 38; col < 42; col++) {
-                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
-                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
-                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
             }
         });
     });
