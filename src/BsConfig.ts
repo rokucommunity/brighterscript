@@ -7,12 +7,12 @@ export interface BsConfigFileEntry {
 
 export type BsConfigFileEntryOrShortcut = string | BsConfigFileEntry;
 
-export interface DiagnosticFilter {
+export interface BsConfigDiagnosticFilter {
     src?: string;
     codes?: Array<number | string>;
 }
 
-export type DiagnosticFilterOrShortcut = string | number | DiagnosticFilter;
+export type BsConfigDiagnosticFilterOrShortcut = string | number | BsConfigDiagnosticFilter;
 
 export interface BsConfig {
     /**
