@@ -1,5 +1,19 @@
 import type { LogLevel } from './logging';
 
+export interface BsConfigFileEntry {
+    src: string | string[];
+    dest?: string;
+}
+
+export type BsConfigFileEntryOrShortcut = string | BsConfigFileEntry;
+
+export interface DiagnosticFilter {
+    src?: string;
+    codes?: Array<number | string>;
+}
+
+export type DiagnosticFilterOrShortcut = string | number | DiagnosticFilter;
+
 export interface BsConfig {
     /**
      * The inheritance tree for all parent configs used to generate this config. Do not set this, it is computed.
@@ -46,7 +60,7 @@ export interface BsConfig {
      * If using the {src;dest;} format, you can specify a different destination directory
      * for the matched files in src.
      */
-    files?: Array<string | { src: string | string[]; dest?: string }>;
+    files?: Array<BsConfigFileEntryOrShortcut>;
 
     /**
      * If true, the files are not copied to outDir.
