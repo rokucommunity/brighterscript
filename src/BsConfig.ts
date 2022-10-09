@@ -7,12 +7,12 @@ export interface BsConfigFileEntry {
 
 export type BsConfigFileEntryOrShortcut = string | BsConfigFileEntry;
 
-export interface DiagnosticFilter {
+export interface BsConfigDiagnosticFilter {
     src?: string;
     codes?: Array<number | string>;
 }
 
-export type DiagnosticFilterOrShortcut = string | number | DiagnosticFilter;
+export type BsConfigDiagnosticFilterOrShortcut = string | number | BsConfigDiagnosticFilter;
 
 export interface BsConfig {
     /**
@@ -134,7 +134,7 @@ export interface BsConfig {
     /**
      * A list of filters used to exclude diagnostics from the output
      */
-    diagnosticFilters?: Array<DiagnosticFilterOrShortcut>;
+    diagnosticFilters?: Array<BsConfigDiagnosticFilterOrShortcut>;
 
     /**
      * Specify what diagnostic types should be printed to the console. Defaults to 'warn'
