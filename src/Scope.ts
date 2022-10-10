@@ -142,10 +142,10 @@ export class Scope {
     }
 
     /**
- * Get an Enum and its containing file by the Enum name
- * @param enumName - The Enum name, including the namespace of the enum if possible
- * @param containingNamespace - The namespace used to resolve relative enum names. (i.e. the namespace around the current statement trying to find a enum)
- */
+     * Get an Enum and its containing file by the Enum name
+     * @param enumName - The Enum name, including the namespace of the enum if possible
+     * @param containingNamespace - The namespace used to resolve relative enum names. (i.e. the namespace around the current statement trying to find a enum)
+     */
     public getEnumMemberFileLink(enumMemberName: string, containingNamespace?: string): FileLink<EnumMemberStatement> {
         let lowerNameParts = enumMemberName?.split('.');
         let memberName = lowerNameParts.splice(lowerNameParts.length - 1, 1)?.[0];
