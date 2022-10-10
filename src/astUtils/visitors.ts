@@ -68,6 +68,10 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
 
 /**
  * Helper for AST elements to walk arrays when visitors might change the array size (to delete/insert items).
+ * @param array the array to walk
+ * @param visitor the visitor function to call on match
+ * @param options the walk optoins
+ * @param parent the parent AstNode of each item in the array
  * @param filter a function used to filter items from the array. return true if that item should be walked
  */
 export function walkArray<T>(array: Array<T>, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode, filter?: <T>(element: T) => boolean) {

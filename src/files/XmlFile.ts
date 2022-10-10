@@ -200,7 +200,7 @@ export class XmlFile {
 
     /**
      * Calculate the AST for this file
-     * @param fileContents
+     * @param fileContents the xml source code to parse
      */
     public parse(fileContents: string) {
         this.fileContents = fileContents;
@@ -335,7 +335,6 @@ export class XmlFile {
 
     /**
      * Determines if this xml file has a reference to the specified file (or if it's itself)
-     * @param file
      */
     public doesReferenceFile(file: File) {
         return this.cache.getOrAdd(`doesReferenceFile: ${file.pkgPath}`, () => {
@@ -361,8 +360,6 @@ export class XmlFile {
 
     /**
      * Get all available completions for the specified position
-     * @param lineIndex
-     * @param columnIndex
      */
     public getCompletions(position: Position): CompletionItem[] {
         let scriptImport = util.getScriptImportAtPosition(this.scriptTagImports, position);
