@@ -3389,5 +3389,41 @@ describe('BrsFile', () => {
                 range: util.createRange(5, 26, 5, 33)
             }]);
         });
+        it('returns enum locations', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    print alpha.beta.people.charlie
+                end sub
+                namespace alpha.beta
+                    enum people
+                        charlie = "charles"
+                    end enum
+                end namespace
+            `);
+            program.validate();
+            //print alpha.beta.char|lie
+            expect(program.getDefinition(file.srcPath, Position.create(2, 40))).to.eql([{
+                uri: URI.file(file.srcPath).toString(),
+                range: util.createRange(5, 25, 5, 31)
+            }]);
+        });
+        it('returns enum member locations', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    print alpha.beta.people.charlie
+                end sub
+                namespace alpha.beta
+                    enum people
+                        charlie = "charles"
+                    end enum
+                end namespace
+            `);
+            program.validate();
+            //print alpha.beta.char|lie
+            expect(program.getDefinition(file.srcPath, Position.create(2, 48))).to.eql([{
+                uri: URI.file(file.srcPath).toString(),
+                range: util.createRange(6, 24, 6, 31)
+            }]);
+        });
     });
 });

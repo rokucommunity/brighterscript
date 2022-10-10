@@ -17,7 +17,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isNamespaceStatement } from './astUtils/reflection';
+import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isNamespaceStatement, isEnumMemberStatement } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
 
@@ -137,6 +137,31 @@ export class Scope {
         //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
         if (!enumeration) {
             enumeration = enumMap.get(lowerName);
+        }
+        return enumeration;
+    }
+
+    /**
+     * Get an Enum and its containing file by the Enum name
+     * @param enumMemberName - The Enum name, including the namespace of the enum if possible
+     * @param containingNamespace - The namespace used to resolve relative enum names. (i.e. the namespace around the current statement trying to find a enum)
+     */
+    public getEnumMemberFileLink(enumMemberName: string, containingNamespace?: string): FileLink<EnumMemberStatement> {
+        let lowerNameParts = enumMemberName?.split('.');
+        let memberName = lowerNameParts.splice(lowerNameParts.length - 1, 1)?.[0];
+        let lowerName = lowerNameParts.join('.').toLowerCase();
+        const enumMap = this.getEnumMap();
+
+        let enumeration = enumMap.get(
+            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
+        );
+        //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
+        if (!enumeration) {
+            enumeration = enumMap.get(lowerName);
+        }
+        if (enumeration) {
+            let member = enumeration.item.findChild<EnumMemberStatement>((child) => isEnumMemberStatement(child) && child.name === memberName);
+            return member ? { item: member, file: enumeration.file } : undefined;
         }
         return enumeration;
     }

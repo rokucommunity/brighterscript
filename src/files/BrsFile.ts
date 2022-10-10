@@ -1436,7 +1436,7 @@ export class BrsFile {
 
         const expression = this.getClosestExpression(position);
         if (expression) {
-            let containingNamespace = this.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
+            let containingNamespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
             const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
             //find a constant with this name
@@ -1449,6 +1449,29 @@ export class BrsFile {
                     )
                 );
                 return results;
+            }
+            if (isDottedGetExpression(expression)) {
+
+                const enumLink = scope.getEnumFileLink(fullName, containingNamespace);
+                if (enumLink) {
+                    results.push(
+                        util.createLocation(
+                            URI.file(enumLink.file.srcPath).toString(),
+                            enumLink.item.tokens.name.range
+                        )
+                    );
+                    return results;
+                }
+                const enumMemberLink = scope.getEnumMemberFileLink(fullName, containingNamespace);
+                if (enumMemberLink) {
+                    results.push(
+                        util.createLocation(
+                            URI.file(enumMemberLink.file.srcPath).toString(),
+                            enumMemberLink.item.tokens.name.range
+                        )
+                    );
+                    return results;
+                }
             }
         }
 
