@@ -299,7 +299,7 @@ export class Program {
 
     /**
      * Determine if the specified file is loaded in this program right now.
-     * @param filePath
+     * @param filePath the absolute or relative path to the file
      * @param normalizePath should the provided path be normalized before use
      */
     public hasFile(filePath: string, normalizePath = true) {
@@ -312,7 +312,6 @@ export class Program {
 
     /**
      * roku filesystem is case INsensitive, so find the scope by key case insensitive
-     * @param scopeName
      */
     public getScopeByName(scopeName: string) {
         if (!scopeName) {
@@ -483,6 +482,7 @@ export class Program {
 
     /**
      * Given a srcPath, a pkgPath, or both, resolve whichever is missing, relative to rootDir.
+     * @param fileParam an object representing file paths
      * @param rootDir must be a pre-normalized path
      */
     private getPaths(fileParam: string | FileObj | { srcPath?: string; pkgPath?: string }, rootDir: string) {
@@ -560,7 +560,7 @@ export class Program {
      * Find the file by its absolute path. This is case INSENSITIVE, since
      * Roku is a case insensitive file system. It is an error to have multiple files
      * with the same path with only case being different.
-     * @param srcPath
+     * @param srcPath the absolute path to the file
      * @deprecated use `getFile` instead, which auto-detects the path type
      */
     public getFileByPathAbsolute<T extends BrsFile | XmlFile>(srcPath: string) {
@@ -594,7 +594,7 @@ export class Program {
 
     /**
      * Remove a set of files from the program
-     * @param filePaths can be an array of srcPath or destPath strings
+     * @param srcPaths can be an array of srcPath or destPath strings
      * @param normalizePath should this function repair and standardize the filePaths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
      */
     public removeFiles(srcPaths: string[], normalizePath = true) {
@@ -789,7 +789,7 @@ export class Program {
 
     /**
      * Get a list of all scopes the file is loaded into
-     * @param file
+     * @param file the file
      */
     public getScopesForFile(file: XmlFile | BrsFile | string) {
         if (typeof file === 'string') {

@@ -413,7 +413,6 @@ export class Lexer {
 
     /**
      * Reads and returns the next character from `string` while **moving the current position forward**.
-     * @returns the new "current" character.
      */
     private advance(): void {
         this.current++;
@@ -656,7 +655,6 @@ export class Lexer {
      * to the `tokens` array. Also responsible for BrightScript's integer literal vs. float
      * literal rules.
      * @param hasSeenDecimal `true` if decimal point has already been found, otherwise `false`
-     *
      * @see https://sdkdocs.roku.com/display/sdkdoc/Expressions%2C+Variables%2C+and+Types#Expressions,Variables,andTypes-NumericLiterals
      */
     private decimalNumber(hasSeenDecimal: boolean) {
@@ -863,7 +861,6 @@ export class Lexer {
 
     /**
      * Check that the previous token was of the specified type
-     * @param kind
      */
     private checkPreviousToken(kind: TokenKind) {
         let previous = this.tokens[this.tokens.length - 1];
@@ -1037,7 +1034,6 @@ export class Lexer {
     /**
      * Creates a `Token` and adds it to the `tokens` array.
      * @param kind the type of token to produce.
-     * @param literal an optional literal value to include in the token.
      */
     private addToken(kind: TokenKind) {
         let text = this.source.slice(this.start, this.current);
@@ -1065,7 +1061,6 @@ export class Lexer {
 
     /**
      * Creates a `TokenLocation` at the lexer's current position for the provided `text`.
-     * @param text the text to create a range for
      * @returns the range of `text` as a `TokenLocation`
      */
     private rangeOf(): Range {
