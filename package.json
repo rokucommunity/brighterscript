@@ -95,6 +95,7 @@
         "deepmerge": "^4.2.2",
         "eslint": "^8.16.0",
         "eslint-plugin-github": "4.3.6",
+        "eslint-plugin-jsdoc": "^39.3.6",
         "eslint-plugin-no-only-tests": "2.6.0",
         "he": "^1.2.0",
         "madge": "^4.0.2",

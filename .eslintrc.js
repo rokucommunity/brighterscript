@@ -13,11 +13,12 @@ module.exports = {
     plugins: [
         '@typescript-eslint',
         'no-only-tests',
-        'github'
+        'jsdoc'
     ],
     extends: [
         'eslint:all',
-        'plugin:@typescript-eslint/all'
+        'plugin:@typescript-eslint/all',
+        'plugin:jsdoc/recommended'
     ],
     rules: {
         '@typescript-eslint/array-type': 'off',
@@ -67,7 +68,7 @@ module.exports = {
         '@typescript-eslint/no-unused-vars': 'off',
         '@typescript-eslint/no-unused-vars-experimental': 'off',
         '@typescript-eslint/no-use-before-define': 'off',
-        '@typescript-eslint/prefer-for-of': 'off',
+        '@typescript-eslint/prefer-for-of': 'error',
         '@typescript-eslint/prefer-readonly': 'off',
         '@typescript-eslint/prefer-readonly-parameter-types': 'off',
         '@typescript-eslint/promise-function-async': 'off',
@@ -88,6 +89,12 @@ module.exports = {
         '@typescript-eslint/typedef': 'off',
         '@typescript-eslint/unbound-method': 'off',
         '@typescript-eslint/unified-signatures': 'off',
+        'jsdoc/require-param': 'off',
+        'jsdoc/require-returns': 'off',
+        'jsdoc/require-param-type': 'off',
+        'jsdoc/newline-after-description': 'off',
+        'jsdoc/require-jsdoc': 'off',
+        'jsdoc/require-returns-type': 'off',
         'array-bracket-newline': 'off',
         'array-element-newline': 'off',
         'array-type': 'off',
@@ -107,7 +114,6 @@ module.exports = {
         'function-call-argument-newline': 'off',
         'function-paren-newline': 'off',
         'getter-return': 'off',
-        'github/array-foreach': 'error',
         'guard-for-in': 'off',
         'id-length': 'off',
         'indent': 'off',
@@ -202,7 +208,6 @@ module.exports = {
             '@typescript-eslint/no-unused-vars-experimental': 'off',
             '@typescript-eslint/dot-notation': 'off',
             '@typescript-eslint/no-unsafe-argument': 'off',
-            'github/array-foreach': 'off',
             'new-cap': 'off',
             'no-shadow': 'off',
             'no-void': 'off'
