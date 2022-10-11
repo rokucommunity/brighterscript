@@ -1,18 +1,18 @@
 import { expectCompletionsIncludes, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
-import util, { standardizePath as s } from '../../../util';
+import { util } from '../../../util';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
 import { ParseMode, Parser } from '../../Parser';
-import { expect } from 'chai';
+import { expect } from '../../../chai-config.spec';
 import type { ConstStatement } from '../../Statement';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { LiteralExpression } from '../../Expression';
 import { CompletionItemKind } from 'vscode-languageserver-protocol';
+import { rootDir } from '../../../testHelpers.spec';
 
 const sinon = createSandbox();
 
 describe('ConstStatement', () => {
-    let rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
     let parser: Parser;
     let testTranspile = getTestTranspile(() => [program, rootDir]);

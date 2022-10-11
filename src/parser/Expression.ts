@@ -383,6 +383,7 @@ export class DottedGetExpression extends Expression {
             walk(this, 'obj', visitor, options);
         }
     }
+
 }
 
 export class XmlAttributeGetExpression extends Expression {

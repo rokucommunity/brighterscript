@@ -1316,12 +1316,6 @@ export class Parser {
         this.warnIfNotBrighterScriptMode('namespace');
         let keyword = this.advance();
 
-        if (!this.isAtRootLevel()) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.keywordMustBeDeclaredAtRootLevel('namespace'),
-                range: keyword.range
-            });
-        }
         this.namespaceAndFunctionDepth++;
 
         let name = this.getNamespacedVariableNameExpression();
@@ -1344,6 +1338,7 @@ export class Parser {
         }
 
         this.namespaceAndFunctionDepth--;
+
         result.body = body;
         result.endKeyword = endKeyword;
         this._references.namespaceStatements.push(result);
@@ -1413,8 +1408,8 @@ export class Parser {
 
     /**
      * Consume tokens until one of the `stopTokenKinds` is encountered
-     * @param tokenKinds
-     * @return - the list of tokens consumed, EXCLUDING the `stopTokenKind` (you can use `this.peek()` to see which one it was)
+     * @param stopTokenKinds a list of tokenKinds where any tokenKind in this list will result in a match
+     * @returns - the list of tokens consumed, EXCLUDING the `stopTokenKind` (you can use `this.peek()` to see which one it was)
      */
     private consumeUntil(...stopTokenKinds: TokenKind[]) {
         let result = [] as Token[];
@@ -2801,7 +2796,7 @@ export class Parser {
 
     /**
      * Pop token if we encounter a token in the specified list
-     * @param tokenKinds
+     * @param tokenKinds a list of tokenKinds where any tokenKind in this list will result in a match
      */
     private matchAny(...tokenKinds: TokenKind[]) {
         for (let tokenKind of tokenKinds) {
@@ -2815,7 +2810,7 @@ export class Parser {
 
     /**
      * If the next series of tokens matches the given set of tokens, pop them all
-     * @param tokenKinds
+     * @param tokenKinds a list of tokenKinds used to match the next set of tokens
      */
     private matchSequence(...tokenKinds: TokenKind[]) {
         const endIndex = this.current + tokenKinds.length;

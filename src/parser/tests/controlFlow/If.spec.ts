@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../../../chai-config.spec';
 import * as assert from 'assert';
 import { Parser } from '../../Parser';
 import { Lexer } from '../../../lexer/Lexer';

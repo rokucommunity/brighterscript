@@ -81,10 +81,23 @@ export interface BsConfig {
      * Prevent the staging folder from being deleted after creating the package
      * @default false
      */
+    retainStagingDir?: boolean;
+
+    /**
+     * Prevent the staging folder from being deleted after creating the package
+     * @default false
+     * @deprecated use `retainStagingDir` instead
+     */
     retainStagingFolder?: boolean;
 
     /**
+     * The path to the staging directory (wehre the output files are copied immediately before creating the zip)
+     */
+    stagingDir?: string;
+
+    /**
      * The path to the staging folder (where all files are copied to right before creating the zip package)
+     * @deprecated use `stagingDir` instead
      */
     stagingFolderPath?: string;
 

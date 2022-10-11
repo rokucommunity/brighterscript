@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.60.0](https://github.com/rokucommunity/brighterscript/compare/v0.59.0...0.60.0) - 2022-10-10
+### Added
+ - goto definition for enum statements and enum members ([#715](https://github.com/rokucommunity/brighterscript/pull/715))
+ - nested namespace support ([#708](https://github.com/rokucommunity/brighterscript/pull/708))
+### Changed
+ - upgrade to [roku-deploy@3.9.2](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#392---2022-10-03). Notable changes since 3.9.1:
+     - Replace minimatch with picomatch ([roku-deploy#101](https://github.com/rokucommunity/roku-deploy/pull/101))
+### Fixed
+ - fixes signature help resolution for callexpressions ([#707](https://github.com/rokucommunity/brighterscript/pull/707))
+ - Fix transpilation of simple else block with leading comment ([#712](https://github.com/rokucommunity/brighterscript/pull/712))
+
+
+
+## [0.59.0](https://github.com/rokucommunity/brighterscript/compare/v0.58.0...0.59.0) - 2022-10-03
+### Added
+ - `isThrowStatement` reflection function ([#709](https://github.com/rokucommunity/brighterscript/pull/709))
+ - Support `pkg:/` paths for `setFile` ([#701](https://github.com/rokucommunity/brighterscript/pull/701))
+ - Syntax and transpile support for continue statement ([#697](https://github.com/rokucommunity/brighterscript/pull/697))
+### Changed
+ - Migrate to `stagingDir` away from `stagingFolder` ([#706](https://github.com/rokucommunity/brighterscript/pull/706))
+### Fixed
+ - Fix enum error for negative values ([#703](https://github.com/rokucommunity/brighterscript/pull/703))
+
+
+
 ## [0.58.0](https://github.com/rokucommunity/brighterscript/compare/v0.57.2...0.58.0) - 2022-09-23
 ### Added
  - AST child searching functionality. ([#695](https://github.com/rokucommunity/brighterscript/pull/695))

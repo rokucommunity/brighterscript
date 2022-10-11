@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import * as path from 'path';
 import util, { standardizePath as s } from './util';
 import { Position, Range } from 'vscode-languageserver';
@@ -6,9 +6,10 @@ import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
+import { tempDir, rootDir } from './testHelpers.spec';
+
 const sinon = createSandbox();
-let tempDir = s`${process.cwd()}/.tmp`;
-let rootDir = s`${tempDir}/rootDir`;
+
 let cwd = process.cwd();
 
 describe('util', () => {
@@ -337,17 +338,6 @@ describe('util', () => {
             expect(util.areArraysEqual(['cat', 'dog'], ['cat', 'dog', 'mouse'])).to.be.false;
             expect(util.areArraysEqual(['cat', 'dog'], ['dog', 'cat'])).to.be.false;
         });
-    });
-
-    describe('stringFormat', () => {
-        it('handles out-of-order replacements', () => {
-            expect(util.stringFormat('{1}{0}', 'b', 'a')).to.equal('ab');
-        });
-
-        it('does not fail on arguments not provided', () => {
-            expect(util.stringFormat('{0}{1}', 'a')).to.equal('a{1}');
-        });
-
     });
 
     describe('getPkgPathFromTarget', () => {

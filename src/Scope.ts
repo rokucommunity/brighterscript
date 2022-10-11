@@ -10,14 +10,14 @@ import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
 import type { NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
-import { standardizePath as s, util } from './util';
+import { util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isNamespaceStatement } from './astUtils/reflection';
+import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isNamespaceStatement, isEnumMemberStatement } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
 
@@ -104,10 +104,10 @@ export class Scope {
 
 
     /**
-   * Get an interface and its containing file by the interface name
-   * @param ifaceName - The interface name, including the namespace of the interface if possible
-   * @param containingNamespace - The namespace used to resolve relative interface names. (i.e. the namespace around the current statement trying to find a interface)
-   */
+     * Get an interface and its containing file by the interface name
+     * @param ifaceName - The interface name, including the namespace of the interface if possible
+     * @param containingNamespace - The namespace used to resolve relative interface names. (i.e. the namespace around the current statement trying to find a interface)
+     */
     public getInterfaceFileLink(ifaceName: string, containingNamespace?: string): FileLink<InterfaceStatement> {
         const lowerName = ifaceName?.toLowerCase();
         const ifaceMap = this.getInterfaceMap();
@@ -137,6 +137,31 @@ export class Scope {
         //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
         if (!enumeration) {
             enumeration = enumMap.get(lowerName);
+        }
+        return enumeration;
+    }
+
+    /**
+     * Get an Enum and its containing file by the Enum name
+     * @param enumMemberName - The Enum name, including the namespace of the enum if possible
+     * @param containingNamespace - The namespace used to resolve relative enum names. (i.e. the namespace around the current statement trying to find a enum)
+     */
+    public getEnumMemberFileLink(enumMemberName: string, containingNamespace?: string): FileLink<EnumMemberStatement> {
+        let lowerNameParts = enumMemberName?.split('.');
+        let memberName = lowerNameParts.splice(lowerNameParts.length - 1, 1)?.[0];
+        let lowerName = lowerNameParts.join('.').toLowerCase();
+        const enumMap = this.getEnumMap();
+
+        let enumeration = enumMap.get(
+            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
+        );
+        //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
+        if (!enumeration) {
+            enumeration = enumMap.get(lowerName);
+        }
+        if (enumeration) {
+            let member = enumeration.item.findChild<EnumMemberStatement>((child) => isEnumMemberStatement(child) && child.name === memberName);
+            return member ? { item: member, file: enumeration.file } : undefined;
         }
         return enumeration;
     }
@@ -178,28 +203,28 @@ export class Scope {
     }
 
     /**
-    * Tests if a class exists with the specified name
-    * @param className - the all-lower-case namespace-included class name
-    * @param containingNamespace - The namespace used to resolve relative class names. (i.e. the namespace around the current statement trying to find a class)
-    */
+     * Tests if a class exists with the specified name
+     * @param className - the all-lower-case namespace-included class name
+     * @param namespaceName - The namespace used to resolve relative class names. (i.e. the namespace around the current statement trying to find a class)
+     */
     public hasClass(className: string, namespaceName?: string): boolean {
         return !!this.getClass(className, namespaceName);
     }
 
     /**
-    * Tests if an interface exists with the specified name
-    * @param ifaceName - the all-lower-case namespace-included interface name
-    * @param namespaceName - the current namespace name
-    */
+     * Tests if an interface exists with the specified name
+     * @param ifaceName - the all-lower-case namespace-included interface name
+     * @param namespaceName - the current namespace name
+     */
     public hasInterface(ifaceName: string, namespaceName?: string): boolean {
         return !!this.getInterface(ifaceName, namespaceName);
     }
 
     /**
-    * Tests if an enum exists with the specified name
-    * @param enumName - the all-lower-case namespace-included enum name
-    * @param namespaceName - the current namespace name
-    */
+     * Tests if an enum exists with the specified name
+     * @param enumName - the all-lower-case namespace-included enum name
+     * @param namespaceName - the current namespace name
+     */
     public hasEnum(enumName: string, namespaceName?: string): boolean {
         return !!this.getEnum(enumName, namespaceName);
     }
@@ -227,9 +252,9 @@ export class Scope {
     }
 
     /**
-    * A dictionary of all Interfaces in this scope. This includes namespaced Interfaces always with their full name.
-    * The key is stored in lower case
-    */
+     * A dictionary of all Interfaces in this scope. This includes namespaced Interfaces always with their full name.
+     * The key is stored in lower case
+     */
     public getInterfaceMap(): Map<string, FileLink<InterfaceStatement>> {
         return this.cache.getOrAdd('interfaceMap', () => {
             const map = new Map<string, FileLink<InterfaceStatement>>();
@@ -361,16 +386,26 @@ export class Scope {
     }
 
     /**
-     * Get the file with the specified pkgPath
+     * Get the file from this scope with the given path.
+     * @param filePath can be a srcPath or pkgPath
+     * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
-    public getFile(getFile: string) {
-        getFile = s`${getFile}`;
-        let files = this.getAllFiles();
-        for (let file of files) {
-            if (file.srcPath === getFile) {
-                return file;
-            }
+    public getFile<TFile extends BscFile>(filePath: string, normalizePath = true) {
+        if (typeof filePath !== 'string') {
+            return undefined;
         }
+
+        const key = path.isAbsolute(filePath) ? 'srcPath' : 'pkgPath';
+        let map = this.cache.getOrAdd('fileMaps-srcPath', () => {
+            const result = new Map<string, BscFile>();
+            for (const file of this.getAllFiles()) {
+                result.set(file[key].toLowerCase(), file);
+            }
+            return result;
+        });
+        return map.get(
+            (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase()
+        ) as TFile;
     }
 
     /**
@@ -398,7 +433,7 @@ export class Scope {
                         result.push(comp.file);
                     }
                 } else {
-                    let file = this.program.getFileByPkgPath(dependency);
+                    let file = this.program.getFile(dependency);
                     if (file) {
                         result.push(file);
                     }
@@ -451,7 +486,6 @@ export class Scope {
     /**
      * Get the callable with the specified name.
      * If there are overridden callables with the same name, the closest callable to this scope is returned
-     * @param name
      */
     public getCallableByName(name: string) {
         let lowerName = name.toLowerCase();
@@ -698,10 +732,10 @@ export class Scope {
     }
 
     /**
-    * Builds the current symbol table for the scope, by merging the tables for all the files in this scope.
-    * Also links all file symbols tables to this new table
-    * This will only rebuilt if the symbol table has not been built before
-    */
+     * Builds the current symbol table for the scope, by merging the tables for all the files in this scope.
+     * Also links all file symbols tables to this new table
+     * This will only rebuilt if the symbol table has not been built before
+     */
     public linkSymbolTable() {
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
@@ -805,8 +839,8 @@ export class Scope {
     }
 
     /**
-    * Find function parameters and function return types that are neither built-in types or known Class references
-    */
+     * Find function parameters and function return types that are neither built-in types or known Class references
+     */
     private diagnosticDetectInvalidFunctionExpressionTypes(file: BrsFile) {
         for (let func of file.parser.references.functionExpressions) {
             if (isCustomType(func.returnType) && func.returnTypeToken) {
@@ -859,8 +893,6 @@ export class Scope {
 
     /**
      * Detect calls to functions with the incorrect number of parameters
-     * @param file
-     * @param callableContainersByLowerName
      */
     private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
         //validate all function calls
@@ -898,8 +930,6 @@ export class Scope {
 
     /**
      * Detect local variables (function scope) that have the same name as scope calls
-     * @param file
-     * @param callableContainerMap
      */
     private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: CallableContainerMap) {
         const classMap = this.getClassMap();
@@ -964,7 +994,6 @@ export class Scope {
 
     /**
      * Create diagnostics for any duplicate function declarations
-     * @param callablesByLowerName
      */
     private diagnosticFindDuplicateFunctionDeclarations(callableContainersByLowerName: CallableContainerMap) {
         //for each list of callables with the same name
@@ -1088,7 +1117,6 @@ export class Scope {
 
     /**
      * Find the file with the specified relative path
-     * @param relativePath
      */
     protected getFileByRelativePath(relativePath: string) {
         if (!relativePath) {
@@ -1104,7 +1132,6 @@ export class Scope {
 
     /**
      * Determine if this file is included in this scope (excluding parent scopes)
-     * @param file
      */
     public hasFile(file: BscFile) {
         let files = this.getOwnFiles();

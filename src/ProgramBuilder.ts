@@ -318,7 +318,6 @@ export class ProgramBuilder {
     /**
      * Run the process once, allowing cancelability.
      * NOTE: This should only be called by `runOnce`.
-     * @param cancellationToken
      */
     private async _runOnce(cancellationToken: { isCanceled: any }) {
         let wereDiagnosticsPrinted = false;
@@ -424,7 +423,7 @@ export class ProgramBuilder {
 
         await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
             //transpile any brighterscript files
-            await this.program.transpile(fileMap, options.stagingFolderPath);
+            await this.program.transpile(fileMap, options.stagingDir);
         });
 
         this.plugins.emit('afterPublish', this, fileMap);

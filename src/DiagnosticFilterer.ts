@@ -125,8 +125,7 @@ export class DiagnosticFilterer {
 
         let result = [];
 
-        for (let i = 0; i < diagnosticFilters.length; i++) {
-            let filter: any = diagnosticFilters[i];
+        for (let filter of diagnosticFilters as any[]) {
             if (typeof filter === 'number') {
                 globalIgnoreCodes.push(filter);
                 continue;

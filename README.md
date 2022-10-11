@@ -66,14 +66,15 @@ BrighterScript adds several new features to the BrightScript language such as Na
     <a href="https://www.fubo.tv/">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192530108-eb470b85-e687-4575-af69-254aab13428c.png">
     </a>&nbsp;&nbsp;&nbsp;
+    <a href="https://www.nba.com/">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/192593641-aca51992-2bd1-45c2-b087-602b496fca36.png">
+    </a>&nbsp;&nbsp;&nbsp;
     <a href="https://www.applicaster.com/">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192591901-20441fc8-3c6c-45ea-8851-b22430e6fb8e.png">
     </a>&nbsp;&nbsp;&nbsp;
-    <a href="https://www.miraclechannel.ca/corcoplus">
+    <br/><br/>
+        <a href="https://www.miraclechannel.ca/corcoplus">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192593254-f2a32cd4-0482-40de-830d-c1d09690c46b.png">
-    </a>&nbsp;&nbsp;&nbsp;<br/><br/>
-    <a href="https://www.nba.com/">
-      <img height="38" src="https://user-images.githubusercontent.com/2544493/192593641-aca51992-2bd1-45c2-b087-602b496fca36.png">
     </a>&nbsp;&nbsp;&nbsp;
     <a href="https://channelstore.roku.com/details/222212/phototv">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/169118062-81d94da5-2323-4e31-b19d-7db3f9c88dff.png">
@@ -213,7 +214,9 @@ These are the options available in the `bsconfig.json` file.
 
  - **rootDir**: `string` - The root directory of your roku project. Defaults to current directory
 
- - **stagingFolderPath**: `string` - the folder where the transpiled files are placed. Defaults to `./out/.roku-deploy-staging`
+ - **stagingDir**: `string` - the folder where the transpiled files are placed. Defaults to `./out/.roku-deploy-staging`
+
+ - **retainStagingDir**: `boolean` - Prevent the staging folder from being deleted after creating the package. Defaults to `false` meaning the dir is deleted every time.
 
  - **files**: ` (string | string[] | { src: string | string[]; dest?: string })[]` - The list file globs used to find all files for the project. If using the {src;dest;} format, you can specify a different destination directory for the matched files in src.
 

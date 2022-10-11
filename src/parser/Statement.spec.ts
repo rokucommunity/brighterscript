@@ -1,15 +1,15 @@
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import type { NamespaceStatement } from './Statement';
 import { Body, CommentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import { WalkMode } from '../astUtils/visitors';
+import { isNamespaceStatement } from '../astUtils/reflection';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { Program } from '../Program';
-import * as path from 'path';
 import { trim } from '../testHelpers.spec';
 import type { BrsFile } from '../files/BrsFile';
+import { tempDir } from '../testHelpers.spec';
 
-const tempDir = path.join(process.cwd(), '.tmp');
 describe('Statement', () => {
     let program: Program;
     beforeEach(() => {
@@ -46,6 +46,24 @@ describe('Statement', () => {
             const statement = parser.ast.statements[0] as NamespaceStatement;
             expect(statement.getName(ParseMode.BrighterScript)).to.equal('NameA.NameB');
             expect(statement.getName(ParseMode.BrightScript)).to.equal('NameA_NameB');
+        });
+
+        it('getName() works', () => {
+            program.setFile<BrsFile>('source/main.brs', `
+                namespace NameA
+                    namespace NameB
+                        sub main()
+                        end sub
+                    end namespace
+                end namespace
+            `);
+            program.validate();
+            let node = program.getFile<BrsFile>('source/main.brs').ast.findChild<NamespaceStatement>(isNamespaceStatement);
+            while (node.findChild(isNamespaceStatement)) {
+                node = node.findChild<NamespaceStatement>(isNamespaceStatement);
+            }
+            expect(node.getName(ParseMode.BrighterScript)).to.equal('NameA.NameB');
+            expect(node.getName(ParseMode.BrightScript)).to.equal('NameA_NameB');
         });
     });
 

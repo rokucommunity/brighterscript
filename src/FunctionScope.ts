@@ -28,7 +28,7 @@ export class FunctionScope {
 
     /**
      * Find all variable declarations above the given line index
-     * @param lineIndex
+     * @param lineIndex the 0-based line number
      */
     public getVariablesAbove(lineIndex: number) {
         let results = [] as VariableDeclaration[];

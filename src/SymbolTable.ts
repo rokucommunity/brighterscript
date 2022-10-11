@@ -78,8 +78,6 @@ export class SymbolTable {
 
     /**
      * Adds a new symbol to the table
-     * @param name
-     * @param  type
      */
     addSymbol(name: string, range: Range, type: BscType) {
         const key = name.toLowerCase();
@@ -96,7 +94,6 @@ export class SymbolTable {
     /**
      * Adds all the symbols from another table to this one
      * It will overwrite any existing symbols in this table
-     * @param symbolTable
      */
     mergeSymbolTable(symbolTable: SymbolTable) {
         for (let [, value] of symbolTable.symbolMap) {

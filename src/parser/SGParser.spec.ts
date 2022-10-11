@@ -1,17 +1,16 @@
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { expectZeroDiagnostics, trim } from '../testHelpers.spec';
 import SGParser from './SGParser';
-import { standardizePath as s } from '../util';
 import { createSandbox } from 'sinon';
 import { Program } from '../Program';
 import type { XmlFile } from '../files/XmlFile';
+import { rootDir } from '../testHelpers.spec';
 
 let sinon = createSandbox();
 describe('SGParser', () => {
 
-    let rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
 
     beforeEach(() => {

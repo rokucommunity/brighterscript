@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-for-in-array */
-import { expect } from 'chai';
+import { expect } from '../../../chai-config.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { Parser, ParseMode } from '../../Parser';
