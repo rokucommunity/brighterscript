@@ -531,8 +531,9 @@ export interface PrintSeparatorSpace extends Token {
 export class PrintStatement extends Statement {
     /**
      * Creates a new internal representation of a BrightScript `print` statement.
-     * @param expressions an array of expressions or `PrintSeparator`s to be
-     *                    evaluated and printed.
+     * @param tokens the tokens for this statement
+     * @param tokens.print a print token
+     * @param expressions an array of expressions or `PrintSeparator`s to be evaluated and printed.
      */
     constructor(
         readonly tokens: {

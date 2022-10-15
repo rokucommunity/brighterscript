@@ -22,7 +22,7 @@ export class PreprocessorParser {
      * Parses an array of tokens into an array of "chunks" - conditional compilation directives and their
      * associated BrightScript.
      *
-     * @param toParse the array of tokens to parse
+     * @param tokens the array of tokens to parse
      */
     public parse(tokens: Token[]) {
         this.tokens = tokens;

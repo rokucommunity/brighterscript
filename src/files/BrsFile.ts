@@ -178,7 +178,6 @@ export class BrsFile {
 
     /**
      * Get the token at the specified position
-     * @param position
      */
     public getTokenAt(position: Position) {
         for (let token of this.parser.tokens) {
@@ -289,7 +288,7 @@ export class BrsFile {
 
     /**
      * Calculate the AST for this file
-     * @param fileContents
+     * @param fileContents the raw source code to parse
      */
     public parse(fileContents: string) {
         try {
@@ -417,7 +416,7 @@ export class BrsFile {
 
     /**
      * Find all comment flags in the source code. These enable or disable diagnostic messages.
-     * @param lines - the lines of the program
+     * @param tokens - an array of tokens of which to find `TokenKind.Comment` from
      */
     public getCommentFlags(tokens: Token[]) {
         const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
@@ -707,8 +706,7 @@ export class BrsFile {
 
     /**
      * Find the function scope at the given position.
-     * @param position
-     * @param functionScopes
+     * @param position the position used to find the deepest scope that contains it
      */
     public getFunctionScopeAtPosition(position: Position): FunctionScope {
         return this.cache.getOrAdd(`functionScope-${position.line}:${position.character}`, () => {
@@ -735,8 +733,6 @@ export class BrsFile {
 
     /**
      * Find the NamespaceStatement enclosing the given position
-     * @param position
-     * @param functionScopes
      */
     public getNamespaceStatementForPosition(position: Position): NamespaceStatement {
         if (position) {
@@ -1280,8 +1276,6 @@ export class BrsFile {
 
     /**
      * Get the token closest to the position. if no token is found, the previous token is returned
-     * @param position
-     * @param tokens
      */
     public getClosestToken(position: Position) {
         let tokens = this.parser.tokens;
@@ -1442,7 +1436,7 @@ export class BrsFile {
 
         const expression = this.getClosestExpression(position);
         if (expression) {
-            let containingNamespace = this.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
+            let containingNamespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
             const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
             //find a constant with this name
@@ -1455,6 +1449,29 @@ export class BrsFile {
                     )
                 );
                 return results;
+            }
+            if (isDottedGetExpression(expression)) {
+
+                const enumLink = scope.getEnumFileLink(fullName, containingNamespace);
+                if (enumLink) {
+                    results.push(
+                        util.createLocation(
+                            URI.file(enumLink.file.srcPath).toString(),
+                            enumLink.item.tokens.name.range
+                        )
+                    );
+                    return results;
+                }
+                const enumMemberLink = scope.getEnumMemberFileLink(fullName, containingNamespace);
+                if (enumMemberLink) {
+                    results.push(
+                        util.createLocation(
+                            URI.file(enumMemberLink.file.srcPath).toString(),
+                            enumMemberLink.item.tokens.name.range
+                        )
+                    );
+                    return results;
+                }
             }
         }
 
