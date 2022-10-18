@@ -164,8 +164,6 @@ export class Block extends Statement {
 
     public readonly range: Range;
 
-    public symbolTable = new SymbolTable();
-
     transpile(state: BrsTranspileState) {
         state.blockDepth++;
         let results = [] as TranspileResult;

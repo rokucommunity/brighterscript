@@ -94,6 +94,7 @@ import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
 import type { Expression, Statement } from './AstNode';
+import { SymbolTable } from '../SymbolTable';
 
 export class Parser {
     /**
@@ -903,6 +904,8 @@ export class Parser {
             try {
                 //support ending the function with `end sub` OR `end function`
                 func.body = this.block();
+                //attach a new SymbolTable for this function body
+                func.body.symbolTable = new SymbolTable();
             } finally {
                 this.currentFunctionExpression = previousFunctionExpression;
             }

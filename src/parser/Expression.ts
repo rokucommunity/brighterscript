@@ -16,6 +16,7 @@ import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
 import { Expression } from './AstNode';
+import { SymbolTable } from '../SymbolTable';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -126,6 +127,11 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             this.returnType = new VoidType();
         } else {
             this.returnType = DynamicType.instance;
+        }
+
+        //if there's a body, and it doesn't have a SymbolTable, assign one
+        if (this.body && !this.body.symbolTable) {
+            this.body.symbolTable = new SymbolTable();
         }
     }
 
