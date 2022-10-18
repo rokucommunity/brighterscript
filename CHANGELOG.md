@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.60.1](https://github.com/rokucommunity/brighterscript/compare/v0.60.0...0.60.1) - 2022-10-18
+### Fixed
+ - Beter location for bs1042 ([#719](https://github.com/rokucommunity/brighterscript/pull/719))
+
+
+
 ## [0.60.0](https://github.com/rokucommunity/brighterscript/compare/v0.59.0...0.60.0) - 2022-10-10
 ### Added
  - goto definition for enum statements and enum members ([#715](https://github.com/rokucommunity/brighterscript/pull/715))
