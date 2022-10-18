@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.60.2](https://github.com/rokucommunity/brighterscript/compare/v0.60.1...0.60.2) - 2022-10-18
+### Fixed
+ - if statement block var bug ([#698](https://github.com/rokucommunity/brighterscript/pull/698))
+
+
+
 ## [0.60.1](https://github.com/rokucommunity/brighterscript/compare/v0.60.0...0.60.1) - 2022-10-18
 ### Fixed
  - Beter location for bs1042 ([#719](https://github.com/rokucommunity/brighterscript/pull/719))
