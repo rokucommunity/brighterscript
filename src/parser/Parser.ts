@@ -927,7 +927,7 @@ export class Parser {
             if (func.end.kind !== expectedEndKind) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.mismatchedEndCallableKeyword(functionTypeText, func.end.text),
-                    range: this.peek().range
+                    range: func.end.range
                 });
             }
             func.callExpressions = this.callExpressions;
