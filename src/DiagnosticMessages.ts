@@ -232,7 +232,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     mismatchedEndCallableKeyword: (expectedCallableType: string, actualCallableType: string) => ({
-        message: `Expected 'end ${expectedCallableType}' to terminate ${expectedCallableType} block but found 'end ${actualCallableType}' instead.`,
+        message: `Expected 'end ${expectedCallableType?.replace(/^end\s*/, '')}' to terminate ${expectedCallableType} block but found 'end ${actualCallableType?.replace(/^end\s*/, '')}' instead.`,
         code: 1042,
         severity: DiagnosticSeverity.Error
     }),
