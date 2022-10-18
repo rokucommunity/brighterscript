@@ -1017,6 +1017,26 @@ describe('BrsFile BrighterScript classes', () => {
         ]);
     });
 
+    it('allows child fields to be more specific classes', () => {
+        program.setFile('source/main.bs', `
+            class Bird
+            end class
+
+            class Duck extends Bird
+            end class
+
+            class Lake
+              birdie as Bird
+            end class
+
+            class Pond extends Lake
+              birdie as Duck
+            end class
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     it('detects overridden methods without override keyword', () => {
         program.setFile('source/main.bs', `
             class Animal
@@ -1431,6 +1451,77 @@ describe('BrsFile BrighterScript classes', () => {
         doesNotThrow(() => {
             file.parser.references.classStatements[0]['getParentClassIndex'](new BrsTranspileState(file));
         });
+    });
+
+    it('allows overriding fields with subclasses, with sourcemaps', () => {
+        program.options.sourceMap = true;
+        const transpileResult = testTranspile(`
+            class Bird
+            end class
+
+            class Duck extends Bird
+            end class
+
+            class Lake
+            birdie as Bird
+            end class
+
+            class Pond extends Lake
+            birdie as Duck
+            end class`, `
+            function __Bird_builder()
+                instance = {}
+                instance.new = sub()
+                end sub
+                return instance
+            end function
+            function Bird()
+                instance = __Bird_builder()
+                instance.new()
+                return instance
+            end function
+            function __Duck_builder()
+                instance = __Bird_builder()
+                instance.super0_new = instance.new
+                instance.new = sub()
+                    m.super0_new()
+                end sub
+                return instance
+            end function
+            function Duck()
+                instance = __Duck_builder()
+                instance.new()
+                return instance
+            end function
+            function __Lake_builder()
+                instance = {}
+                instance.new = sub()
+                    m.birdie = invalid
+                end sub
+                return instance
+            end function
+            function Lake()
+                instance = __Lake_builder()
+                instance.new()
+                return instance
+            end function
+            function __Pond_builder()
+                instance = __Lake_builder()
+                instance.super0_new = instance.new
+                instance.new = sub()
+                    m.super0_new()
+                    m.birdie = invalid
+                end sub
+                return instance
+            end function
+            function Pond()
+                instance = __Pond_builder()
+                instance.new()
+                return instance
+            end function
+            `, 'trim');
+
+        expect(transpileResult.map).to.not.be.undefined;
     });
 
     describe('getHover', () => {
