@@ -981,7 +981,6 @@ export class Parser {
                     ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, typeToken.text),
                     range: typeToken.range
                 });
-                throw this.lastDiagnosticAsError();
             }
         }
         return new FunctionParameterExpression(
@@ -2536,7 +2535,7 @@ export class Parser {
     /**
      * Tries to get the next token as a type
      * Allows for built-in types (double, string, etc.) or namespaced custom types in Brighterscript mode
-     * Will  return a token of whatever is next to be parsed (unless `advanceIfUnknown` is false, in which case undefined will be returned instead
+     * Will return a token of whatever is next to be parsed
      */
     private typeToken(): Token {
         let typeToken: Token;
