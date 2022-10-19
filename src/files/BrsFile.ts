@@ -1440,7 +1440,7 @@ export class BrsFile {
             const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
             //find a constant with this name
-            const constant = scope.getConstFileLink(fullName, containingNamespace);
+            const constant = scope?.getConstFileLink(fullName, containingNamespace);
             if (constant) {
                 results.push(
                     util.createLocation(
