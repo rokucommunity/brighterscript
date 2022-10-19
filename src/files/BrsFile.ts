@@ -1432,15 +1432,15 @@ export class BrsFile {
 
         const scopesForFile = this.program.getScopesForFile(this);
         const [scope] = scopesForFile;
-        scope.linkSymbolTable();
 
         const expression = this.getClosestExpression(position);
-        if (expression) {
+        if (scope && expression) {
+            scope.linkSymbolTable();
             let containingNamespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
             const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
             //find a constant with this name
-            const constant = scope.getConstFileLink(fullName, containingNamespace);
+            const constant = scope?.getConstFileLink(fullName, containingNamespace);
             if (constant) {
                 results.push(
                     util.createLocation(
