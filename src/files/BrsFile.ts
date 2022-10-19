@@ -1432,10 +1432,10 @@ export class BrsFile {
 
         const scopesForFile = this.program.getScopesForFile(this);
         const [scope] = scopesForFile;
-        scope.linkSymbolTable();
 
         const expression = this.getClosestExpression(position);
-        if (expression) {
+        if (scope && expression) {
+            scope.linkSymbolTable();
             let containingNamespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
             const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
