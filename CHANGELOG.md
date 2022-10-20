@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.60.3](https://github.com/rokucommunity/brighterscript/compare/v0.60.2...0.60.3) - 2022-10-20
+### Changed
+ - better parse recovery for unknown function parameter types ([#722](https://github.com/rokucommunity/brighterscript/pull/722))
+
+
+
 ## [0.60.2](https://github.com/rokucommunity/brighterscript/compare/v0.60.1...0.60.2) - 2022-10-18
 ### Fixed
  - if statement block var bug ([#698](https://github.com/rokucommunity/brighterscript/pull/698))
