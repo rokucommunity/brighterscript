@@ -94,6 +94,7 @@ import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
 import type { Expression, Statement } from './AstNode';
+import { SymbolTable } from '../SymbolTable';
 
 export class Parser {
     /**
@@ -903,6 +904,8 @@ export class Parser {
             try {
                 //support ending the function with `end sub` OR `end function`
                 func.body = this.block();
+                //attach a new SymbolTable for this function body
+                func.body.symbolTable = new SymbolTable();
             } finally {
                 this.currentFunctionExpression = previousFunctionExpression;
             }
@@ -924,7 +927,7 @@ export class Parser {
             if (func.end.kind !== expectedEndKind) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.mismatchedEndCallableKeyword(functionTypeText, func.end.text),
-                    range: this.peek().range
+                    range: func.end.range
                 });
             }
             func.callExpressions = this.callExpressions;
@@ -978,7 +981,6 @@ export class Parser {
                     ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, typeToken.text),
                     range: typeToken.range
                 });
-                throw this.lastDiagnosticAsError();
             }
         }
         return new FunctionParameterExpression(
@@ -2533,7 +2535,7 @@ export class Parser {
     /**
      * Tries to get the next token as a type
      * Allows for built-in types (double, string, etc.) or namespaced custom types in Brighterscript mode
-     * Will  return a token of whatever is next to be parsed (unless `advanceIfUnknown` is false, in which case undefined will be returned instead
+     * Will return a token of whatever is next to be parsed
      */
     private typeToken(): Token {
         let typeToken: Token;

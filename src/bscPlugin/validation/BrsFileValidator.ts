@@ -1,3 +1,4 @@
+import { interpolatedRange } from '../../astUtils/creators';
 import { isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespacedVariableNameExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
@@ -8,6 +9,7 @@ import type { AstNode, Expression } from '../../parser/AstNode';
 import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, NamespaceStatement, WhileStatement } from '../../parser/Statement';
+import { SymbolTable } from '../../SymbolTable';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 
@@ -95,6 +97,9 @@ export class BrsFileValidator {
             },
             FunctionParameterExpression: (node) => {
                 node.getSymbolTable()?.addSymbol(node.name.text, node.name.range, node.type);
+                //define a symbolTable for each FunctionParameterExpression that contains `m`. TODO, add previous parameter names to this list
+                node.symbolTable = new SymbolTable(node.getSymbolTable());
+                node.symbolTable.addSymbol('m', interpolatedRange, DynamicType.instance);
             },
             ForEachStatement: (node) => {
                 //register the for loop variable

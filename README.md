@@ -535,9 +535,9 @@ sub Main()
     DoSomething( 'bs:disable-line
 
     'disable errors about wrong parameter count
-    DoSomething(1,2,3) 'bs:disable-next-line
+    DoSomething(1,2,3) 'bs:disable-line
 
-    DoSomething(1,2,3) 'bs:disable-next-line:1002
+    DoSomething(1,2,3) 'bs:disable-line:1002
 end sub
 
 sub DoSomething()

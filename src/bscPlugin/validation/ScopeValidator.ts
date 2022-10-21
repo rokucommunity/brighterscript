@@ -89,7 +89,7 @@ export class ScopeValidator {
             const symbolTable = info.expression.getSymbolTable();
             const firstPart = info.parts[0];
             //flag all unknown left-most variables
-            if (!symbolTable.hasSymbol(firstPart.name?.text)) {
+            if (!symbolTable?.hasSymbol(firstPart.name?.text)) {
                 this.addMultiScopeDiagnostic({
                     file: file as BscFile,
                     ...DiagnosticMessages.cannotFindName(firstPart.name?.text),

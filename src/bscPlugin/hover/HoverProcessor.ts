@@ -65,7 +65,7 @@ export class HoverProcessor {
             const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
             //find a constant with this name
-            const constant = scope.getConstFileLink(fullName, containingNamespace);
+            const constant = scope?.getConstFileLink(fullName, containingNamespace);
             if (constant) {
                 const constantValue = new SourceNode(null, null, null, constant.item.value.transpile(new BrsTranspileState(file))).toString();
                 return {

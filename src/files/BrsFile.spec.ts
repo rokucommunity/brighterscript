@@ -3426,4 +3426,21 @@ describe('BrsFile', () => {
             }]);
         });
     });
+
+    it('catches mismatched `end` keywords for functions', () => {
+        program.setFile('source/main.brs', `
+            function speak()
+            end sub
+            sub walk()
+            end function
+        `);
+        program.validate();
+        expectDiagnostics(program, [{
+            ...DiagnosticMessages.mismatchedEndCallableKeyword('function', 'sub'),
+            range: util.createRange(2, 12, 2, 19)
+        }, {
+            ...DiagnosticMessages.mismatchedEndCallableKeyword('sub', 'function'),
+            range: util.createRange(4, 12, 4, 24)
+        }]);
+    });
 });
