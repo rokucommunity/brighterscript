@@ -139,6 +139,16 @@
                 ]
             }
         },
+        "severityOverride": {
+            "description": "A map of error codes with their severity level override (error|warn|info)",
+            "type": "object",
+            "patternProperties": {
+                ".{1,}": {
+                    "type": ["number", "string"],
+                    "enum": ["error", "warn", "info", "hint"]
+                }
+            }
+        },
         "emitFullPaths": {
             "description": "Emit full paths to files when printing diagnostics to the console.",
             "type": "boolean",

@@ -107,6 +107,11 @@ export interface BsConfig {
     ignoreErrorCodes?: (number | string)[];
 
     /**
+     * A map of error codes with their severity level override (error|warn|info)
+     */
+    severityOverride?: Record<number | string, 'error' | 'warn' | 'info' | 'hint'>;
+
+    /**
      * Emit full paths to files when printing diagnostics to the console. Defaults to false
      */
     emitFullPaths?: boolean;

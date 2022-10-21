@@ -28,6 +28,7 @@ import { rokuDeploy } from 'roku-deploy';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
+import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
@@ -101,6 +102,8 @@ export class Program {
     private dependencyGraph = new DependencyGraph();
 
     private diagnosticFilterer = new DiagnosticFilterer();
+
+    private diagnosticAdjuster = new DiagnosticSeverityAdjuster();
 
     /**
      * A scope that contains all built-in global functions.
@@ -286,6 +289,10 @@ export class Program {
                     rootDir: this.options.rootDir
                 }, diagnostics);
                 return finalDiagnostics;
+            });
+
+            this.logger.time(LogLevel.debug, ['adjust diagnostics severity'], () => {
+                this.diagnosticAdjuster.adjust(this.options, diagnostics);
             });
 
             this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
