@@ -221,17 +221,19 @@ Type: `string`
 
 Relative or absolute path to another `bsconfig.json` file that this `bsconfig.json` file should import and then override. Prefix with a question mark (?) to prevent throwing an exception when the file does not exist. Defaults to `undefined`.
 
+Note: child config properties completely replace parent config properties. For example: if a parent and child bsconfigs both specify an array for `plugins`, or `files`, or `diagnosticFilters`, etc., then the parent's setting will be completely ignored and the child's setting will be used instead.
+
 #### `cwd`
 
 Type: `string`
 
-If present, overrides the current working directory when invoking `bsc`. Defaults to `undefined`.
+If present, overrides the current working directory when invoking `bsc`. Defaults to `process.cwd()`.
 
 #### `rootDir`
 
 Type: `string`
 
-The root directory of your roku project. Defaults to the directory which contains the `bsconfig.json` file.
+The root directory of your roku project. Defaults to `process.cwd()`.
 
 #### `stagingDir`
 
@@ -430,7 +432,7 @@ If `true`, the server will keep running and will watch and recompile on every fi
 
 Type: `boolean`
 
-If `true`, after a successful build, the project will be deployed to the Roku specified in host. Defaults to `false`. If this field is set to `true`, then the `host`, `username`, and `password` fields must be set as well.
+If `true`, after a successful build, the project will be deployed to the Roku specified in host. Defaults to `false`. If this field is set to `true`, then the `host` and `password` fields must be set as well.
 
 #### `host`
 
@@ -473,6 +475,8 @@ A list of filters used to hide diagnostics.
 
 Defaults to `undefined`.
 
+If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify `diagnosticFilters`, the parent bsconfig's `diagnosticFilters` field will be completely overwritten.
+
 #### `diagnosticLevel`
 
 Type: `"hint" | "info" | "warn" | "error"`
@@ -504,6 +508,8 @@ If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify a
 Type: `Array<string>`
 
 List of node scripts or npm modules to load during the startup sequence. Useful for running things like `ts-node/require`. Defaults to `undefined`.
+
+If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify a `require` field, the child's `require` field will completely overwrite the parent's `require` field.
 
 #### `allowBrighterScriptInBrightScript`
 
