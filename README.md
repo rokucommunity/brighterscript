@@ -243,12 +243,23 @@ These are the options available in the `bsconfig.json` file.
    - A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed.
    - A `number` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project.
    - An object can also be provided to filter specific diagnostic codes for a file pattern. For example,
+
         ```jsonc
         "diagnosticFilters": [{
             "src": "vendor/**/*",
             "codes": [1000, 1011] //ignore these specific codes from vendor libraries
         }]
         ```
+
+ - **severityOverride**: `Record<string | number, 'hint' | 'info' | 'warn' | 'error'>` - A map of error codes and severity levels, to override some diagnostics' severity; when a diagnostic generator doesn't offer enough control on an error's severity, this is a tool to work around blocking errors, or raise the level of other errors.
+
+      ```jsonc
+      "severityOverride": {
+        1011: "error",       //raise a warning to an error
+        "BSLINT1001": "warn" //oops we have lots of those to fix... later
+      }
+      ```
+
  - **diagnosticLevel**: `'hint' | 'info' | 'warn' | 'error'` - Specify what diagnostic levels are printed to the console. This has no effect on what diagnostics are reported in the LanguageServer. Defaults to 'warn'
 
  - **autoImportComponentScript**: `bool` - BrighterScript only: will automatically import a script at transpile-time for a component with the same name if it exists.
