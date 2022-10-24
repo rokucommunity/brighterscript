@@ -574,9 +574,11 @@ export class BrsFile {
     }
 
     public getFunctionExpressionAtPosition(position: Position) {
-        return this.cache.getOrAdd(`functionExpressionAtPosition-${position.line}:${position.character}`, () => {
-            return this._getFunctionExpressionAtPosition(position, this.parser.references.functionExpressions);
-        });
+        if (position) {
+            return this.cache.getOrAdd(`functionExpressionAtPosition-${position.line}:${position.character}`, () => {
+                return this._getFunctionExpressionAtPosition(position, this.parser.references.functionExpressions);
+            });
+        }
     }
 
     /**

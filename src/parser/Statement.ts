@@ -2199,7 +2199,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
                 ' ',
                 this.name?.text,
                 ' as ',
-                type.toTypeString()
+                type.toTypeString(state.typeContext)
             );
         }
         return result;

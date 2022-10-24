@@ -350,7 +350,7 @@ export class Scope {
     }
 
     public getAncestorTypeList(className: string, functionExpression?: FunctionExpression): InheritableType[] {
-        const lowerNamespaceName = functionExpression.namespaceName?.getName().toLowerCase();
+        const lowerNamespaceName = functionExpression?.namespaceName?.getName().toLowerCase();
         const ancestors: InheritableType[] = [];
         let currentClassOrIFace = this.getInheritableFileLink(className, lowerNamespaceName)?.item;
         if (currentClassOrIFace) {
