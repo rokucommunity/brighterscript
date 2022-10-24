@@ -574,7 +574,7 @@ export class Scope {
                             enumStatements: new Map(),
                             constStatements: new Map(),
                             statements: [],
-                            symbolTable: new SymbolTable(this.symbolTable)
+                            symbolTable: new SymbolTable(this.symbolTable, `Namespace ${loopName}`)
                         });
                     }
                 }
@@ -721,7 +721,7 @@ export class Scope {
 
     public get symbolTable() {
         return this.cache.getOrAdd('symbolTable', () => {
-            const result = new SymbolTable(this.getParentScope()?.symbolTable);
+            const result = new SymbolTable(this.getParentScope()?.symbolTable, `Scope ${this.name}`);
             for (let file of this.getOwnFiles()) {
                 if (isBrsFile(file)) {
                     result.mergeSymbolTable(file.parser?.symbolTable);
