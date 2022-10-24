@@ -905,7 +905,7 @@ export class Parser {
                 //support ending the function with `end sub` OR `end function`
                 func.body = this.block();
                 //attach a new SymbolTable for this function body
-                func.body.symbolTable = new SymbolTable();
+                func.body.symbolTable = new SymbolTable(undefined, `Function Body ${name?.text ?? ''}`);
             } finally {
                 this.currentFunctionExpression = previousFunctionExpression;
             }

@@ -7,7 +7,8 @@ import type { BscType } from './types/BscType';
  */
 export class SymbolTable {
     constructor(
-        parent?: SymbolTable | undefined
+        parent?: SymbolTable | undefined,
+        public name = ''
     ) {
         this.pushParent(parent);
     }
@@ -112,7 +113,9 @@ export class SymbolTable {
      */
     private toJSON() {
         return {
+            name: this.name,
             parent: this.parent?.toJSON(),
+            parentStack: this.parentStack.map(p => p?.toJSON()),
             symbols: [
                 ...new Set(
                     [...this.symbolMap.entries()].map(([key, symbols]) => {
