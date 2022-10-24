@@ -1207,7 +1207,7 @@ export class LanguageServer {
     private async onFullSemanticTokens(params: SemanticTokensParams) {
         await this.waitAllProjectFirstRuns();
         await Promise.all([
-            //wait for the file to settle (in case there are multiple file changes in quick succession
+            //wait for the file to settle (in case there are multiple file changes in quick succession)
             this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true),
             // wait for the validation to finish before providing semantic tokens. program.validate() populates and then caches AstNode.parent properties.
             // If we don't wait, then fetching semantic tokens can cause some invalid cache
