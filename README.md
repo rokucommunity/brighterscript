@@ -66,8 +66,8 @@ BrighterScript adds several new features to the BrightScript language such as Na
     <a href="https://www.fubo.tv/">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192530108-eb470b85-e687-4575-af69-254aab13428c.png">
     </a>&nbsp;&nbsp;&nbsp;
-    <a href="https://www.nba.com/">
-      <img height="38" src="https://user-images.githubusercontent.com/2544493/192593641-aca51992-2bd1-45c2-b087-602b496fca36.png">
+    <a href="mailto:chris@inverted-solutions.com">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/197794500-2bac4903-ed00-463a-b243-24c68fba7962.png">
     </a>&nbsp;&nbsp;&nbsp;
     <a href="https://www.applicaster.com/">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192591901-20441fc8-3c6c-45ea-8851-b22430e6fb8e.png">
@@ -76,6 +76,9 @@ BrighterScript adds several new features to the BrightScript language such as Na
       <img height="38" src="https://user-images.githubusercontent.com/2544493/195908446-8d9652f8-9877-426f-b3c6-09119d788fd8.png">
     </a>&nbsp;&nbsp;&nbsp;
     <br/><br/>
+      <a href="https://tantawowa.com/">
+        <img height="38" src="https://user-images.githubusercontent.com/2544493/197795138-2ec870db-71fe-49e3-a014-692a3f31e6aa.png">
+      </a>&nbsp;&nbsp;&nbsp;
      <a href="https://www.miraclechannel.ca/corcoplus">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192593254-f2a32cd4-0482-40de-830d-c1d09690c46b.png">
     </a>&nbsp;&nbsp;&nbsp;
