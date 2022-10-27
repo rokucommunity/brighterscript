@@ -1112,7 +1112,8 @@ export class Parser {
             return this.gotoStatement();
         }
 
-        if (this.check(TokenKind.Continue)) {
+        //the continue keyword (followed by `for`, `while`, or a statement separator)
+        if (this.check(TokenKind.Continue) && this.checkAnyNext(TokenKind.While, TokenKind.For, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
             return this.continueStatement();
         }
 
