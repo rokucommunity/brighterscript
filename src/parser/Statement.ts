@@ -49,7 +49,7 @@ export class Body extends Statement implements TypedefProvider {
         super();
     }
 
-    public symbolTable = new SymbolTable(undefined, 'Body');
+    public symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable())
 
     public get range() {
         return util.createRangeFromPositions(
@@ -1148,9 +1148,9 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkMode & InternalWalkMode.walkExpressions) {
-            walk(this, 'nameExpression', visitor, options);
-        }
+        //visitor-less walk function to do parent linking
+        walk(this, 'nameExpression', null, options);
+
         if (this.body.statements.length > 0 && options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'body', visitor, options);
         }
@@ -1349,9 +1349,11 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
+        //visitor-less walk function to do parent linking
+        walk(this, 'parentInterfaceName', null, options);
+
         if (options.walkMode & InternalWalkMode.walkStatements) {
             walkArray(this.body, visitor, options, this);
-
         }
     }
 }
@@ -1871,6 +1873,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
+        //visitor-less walk function to do parent linking
+        walk(this, 'parentClassName', null, options);
+
         if (options.walkMode & InternalWalkMode.walkStatements) {
             walkArray(this.body, visitor, options, this);
         }

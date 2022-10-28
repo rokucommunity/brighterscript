@@ -131,7 +131,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
         //if there's a body, and it doesn't have a SymbolTable, assign one
         if (this.body && !this.body.symbolTable) {
-            this.body.symbolTable = new SymbolTable(undefined, `Function Body`);
+            this.body.symbolTable = new SymbolTable(`Function Body`);
         }
     }
 
@@ -262,7 +262,10 @@ export class FunctionParameterExpression extends Expression {
         } else {
             this.type = new DynamicType();
         }
+        this.symbolTable = new SymbolTable(`FunctionParameterExpression: ${this.name?.text}`, () => this.parent?.getSymbolTable());
     }
+
+    public symbolTable: SymbolTable;
 
     public type: BscType;
 
@@ -344,6 +347,7 @@ export class NamespacedVariableNameExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
+        this.expression?.linkParents();
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'expression', visitor, options);
         }

@@ -238,6 +238,8 @@ export class Parser {
 
         this.ast = this.body();
 
+        //now that we've built the AST, link every node to its parent
+        this.ast.linkParents();
         return this;
     }
 
@@ -904,8 +906,7 @@ export class Parser {
             try {
                 //support ending the function with `end sub` OR `end function`
                 func.body = this.block();
-                //attach a new SymbolTable for this function body
-                func.body.symbolTable = new SymbolTable(undefined, `Function Body ${name?.text ?? ''}`);
+                func.body.symbolTable = new SymbolTable(`Block: Function ${name?.text ?? ''}`, () => func.getSymbolTable());
             } finally {
                 this.currentFunctionExpression = previousFunctionExpression;
             }
