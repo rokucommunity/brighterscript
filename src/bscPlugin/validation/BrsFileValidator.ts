@@ -96,9 +96,10 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
             },
             FunctionParameterExpression: (node) => {
-                node.getSymbolTable()?.addSymbol(node.name.text, node.name.range, node.type);
+                const paramName = node.name?.text;
+                node.getSymbolTable()?.addSymbol(paramName, node.name.range, node.type);
                 //define a symbolTable for each FunctionParameterExpression that contains `m`. TODO, add previous parameter names to this list
-                node.symbolTable = new SymbolTable(node.getSymbolTable());
+                node.symbolTable = new SymbolTable(node.getSymbolTable(), `FunctionParameterExpression ${paramName}`);
                 node.symbolTable.addSymbol('m', interpolatedRange, DynamicType.instance);
             },
             ForEachStatement: (node) => {

@@ -905,7 +905,7 @@ export class Parser {
                 //support ending the function with `end sub` OR `end function`
                 func.body = this.block();
                 //attach a new SymbolTable for this function body
-                func.body.symbolTable = new SymbolTable();
+                func.body.symbolTable = new SymbolTable(undefined, `Function Body ${name?.text ?? ''}`);
             } finally {
                 this.currentFunctionExpression = previousFunctionExpression;
             }
@@ -1112,7 +1112,8 @@ export class Parser {
             return this.gotoStatement();
         }
 
-        if (this.check(TokenKind.Continue)) {
+        //the continue keyword (followed by `for`, `while`, or a statement separator)
+        if (this.check(TokenKind.Continue) && this.checkAnyNext(TokenKind.While, TokenKind.For, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
             return this.continueStatement();
         }
 

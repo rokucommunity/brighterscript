@@ -131,7 +131,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
         //if there's a body, and it doesn't have a SymbolTable, assign one
         if (this.body && !this.body.symbolTable) {
-            this.body.symbolTable = new SymbolTable();
+            this.body.symbolTable = new SymbolTable(undefined, `Function Body`);
         }
     }
 

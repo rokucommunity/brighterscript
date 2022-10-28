@@ -49,7 +49,7 @@ export class Body extends Statement implements TypedefProvider {
         super();
     }
 
-    public symbolTable = new SymbolTable();
+    public symbolTable = new SymbolTable(undefined, 'Body');
 
     public get range() {
         return util.createRangeFromPositions(
