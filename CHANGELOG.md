@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.60.4](https://github.com/rokucommunity/brighterscript/compare/v0.60.3...0.60.4) - 2022-10-28
+### Changed
+ - Add `name` to symbol table ([#728](https://github.com/rokucommunity/brighterscript/pull/728))
+### Fixed
+ - Allow `continue` as local var ([#730](https://github.com/rokucommunity/brighterscript/pull/730))
+ - language server semanticToken request now waits until validate finishes ([#727](https://github.com/rokucommunity/brighterscript/pull/727))
+
+
+
 ## [0.60.3](https://github.com/rokucommunity/brighterscript/compare/v0.60.2...0.60.3) - 2022-10-20
 ### Changed
  - better parse recovery for unknown function parameter types ([#722](https://github.com/rokucommunity/brighterscript/pull/722))
