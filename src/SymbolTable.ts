@@ -115,7 +115,6 @@ export class SymbolTable {
         return {
             name: this.name,
             parent: this.parent?.toJSON(),
-            parentStack: this.parentStack.map(p => p?.toJSON()),
             symbols: [
                 ...new Set(
                     [...this.symbolMap.entries()].map(([key, symbols]) => {
