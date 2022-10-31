@@ -1,4 +1,3 @@
-import { interpolatedRange } from '../../astUtils/creators';
 import { isBody, isClassStatement, isCommentStatement, isConstStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
@@ -89,8 +88,8 @@ export class BrsFileValidator {
                 }
             },
             FunctionExpression: (node) => {
-                if (!node.body.symbolTable.hasSymbol('m')) {
-                    node.body.symbolTable.addSymbol('m', undefined, DynamicType.instance);
+                if (!node.symbolTable.hasSymbol('m')) {
+                    node.symbolTable.addSymbol('m', undefined, DynamicType.instance);
                 }
             },
             FunctionParameterExpression: (node) => {
