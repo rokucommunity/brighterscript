@@ -180,13 +180,6 @@ export class Parser {
     private globalTerminators = [] as TokenKind[][];
 
     /**
-     * When a FunctionExpression has been started, this gets set. When it's done, this gets unset.
-     * It's useful for passing the function into statements and expressions that need to be located
-     * by function later on.
-     */
-    private currentFunctionExpression: FunctionExpression;
-
-    /**
      * A list of identifiers that are permitted to be used as local variables. We store this in a property because we augment the list in the constructor
      * based on the parse mode
      */
@@ -883,13 +876,8 @@ export class Parser {
                 leftParen,
                 rightParen,
                 asToken,
-                typeToken,
-                this.currentFunctionExpression
+                typeToken
             );
-            //if there is a parent function, register this function with the parent
-            if (this.currentFunctionExpression) {
-                this.currentFunctionExpression.childFunctionExpressions.push(func);
-            }
 
             // add the function to the relevant symbol tables
             if (!onlyCallableAsMember && name) {
@@ -899,17 +887,12 @@ export class Parser {
 
             this._references.functionExpressions.push(func);
 
-            let previousFunctionExpression = this.currentFunctionExpression;
-            this.currentFunctionExpression = func;
-
             //make sure to restore the currentFunctionExpression even if the body block fails to parse
             try {
                 //support ending the function with `end sub` OR `end function`
                 func.body = this.block();
                 func.body.symbolTable = new SymbolTable(`Block: Function '${name?.text ?? ''}'`, () => func.getSymbolTable());
-            } finally {
-                this.currentFunctionExpression = previousFunctionExpression;
-            }
+            } finally { }
 
             if (!func.body) {
                 this.diagnostics.push({
@@ -1010,14 +993,13 @@ export class Parser {
 
         let result: AssignmentStatement;
         if (operator.kind === TokenKind.Equal) {
-            result = new AssignmentStatement(operator, name, value, this.currentFunctionExpression);
+            result = new AssignmentStatement(operator, name, value);
         } else {
             const nameExpression = new VariableExpression(name);
             result = new AssignmentStatement(
                 operator,
                 name,
-                new BinaryExpression(nameExpression, operator, value),
-                this.currentFunctionExpression
+                new BinaryExpression(nameExpression, operator, value)
             );
             this.addExpressionsToReferences(nameExpression);
             if (isBinaryExpression(value)) {
