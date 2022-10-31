@@ -1145,8 +1145,9 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        //visitor-less walk function to do parent linking
-        walk(this, 'nameExpression', null, options);
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'nameExpression', visitor, options);
+        }
 
         if (this.body.statements.length > 0 && options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'body', visitor, options);

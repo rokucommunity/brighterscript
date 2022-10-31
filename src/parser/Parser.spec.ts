@@ -390,10 +390,9 @@ describe('parser', () => {
                     end namespace
                 `, ParseMode.BrighterScript);
                 expectZeroDiagnostics(parser);
-                // We expect these names to be "as given" in this context, because we aren't
-                // evaluating a full program.
+                // We expect these names to be "as given" in this context, because we aren't evaluating a full program.
                 expect(parser.references.namespaceStatements.map(statement => statement.getName(ParseMode.BrighterScript))).to.deep.equal([
-                    'Level2.Level3',
+                    'Level1.Level2.Level3',
                     'Level1'
                 ]);
             });
