@@ -239,7 +239,7 @@ export class Parser {
         this.ast = this.body();
 
         //now that we've built the AST, link every node to its parent
-        this.ast.linkParents();
+        this.ast.link();
         return this;
     }
 
