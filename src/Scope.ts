@@ -574,7 +574,7 @@ export class Scope {
                             enumStatements: new Map(),
                             constStatements: new Map(),
                             statements: [],
-                            symbolTable: new SymbolTable(`Namespace ${loopName}`, () => this.symbolTable)
+                            symbolTable: new SymbolTable(`Namespace Aggregate: '${loopName}'`, () => this.symbolTable)
                         });
                     }
                 }
@@ -593,7 +593,7 @@ export class Scope {
                 }
                 // Merges all the symbol tables of the namespace statements into the new symbol table created above.
                 // Set those symbol tables to have this new merged table as a parent
-                ns.symbolTable.mergeSymbolTable(namespaceStatement.getSymbolTable());
+                ns.symbolTable.mergeSymbolTable(namespaceStatement.body.getSymbolTable());
             }
 
             //associate child namespaces with their parents

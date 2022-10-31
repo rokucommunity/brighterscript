@@ -39,7 +39,7 @@ describe('Scope', () => {
         expectZeroDiagnostics(program);
     });
 
-    it.only('builds symbol table with namespace-relative entries', () => {
+    it('builds symbol table with namespace-relative entries', () => {
         const file = program.setFile<BrsFile>('source/alpha.bs', `
             namespace alpha
                 class Beta
