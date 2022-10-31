@@ -148,8 +148,8 @@ export class Scope {
      */
     public getEnumMemberFileLink(enumMemberName: string, containingNamespace?: string): FileLink<EnumMemberStatement> {
         let lowerNameParts = enumMemberName?.split('.');
-        let memberName = lowerNameParts.splice(lowerNameParts.length - 1, 1)?.[0];
-        let lowerName = lowerNameParts.join('.').toLowerCase();
+        let memberName = lowerNameParts?.splice(lowerNameParts.length - 1, 1)?.[0];
+        let lowerName = lowerNameParts?.join('.').toLowerCase();
         const enumMap = this.getEnumMap();
 
         let enumeration = enumMap.get(
