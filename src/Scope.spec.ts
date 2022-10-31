@@ -27,6 +27,13 @@ describe('Scope', () => {
         program.dispose();
     });
 
+    it('getEnumMemberFileLink does not crash on undefined name', () => {
+        program.setFile('source/main.bs', ``);
+        const scope = program.getScopesForFile('source/main.bs')[0];
+        scope.getEnumMemberFileLink(null);
+        //test passes if this doesn't explode
+    });
+
     it('does not mark namespace functions as collisions with stdlib', () => {
         program.setFile(`source/main.bs`, `
             namespace a
