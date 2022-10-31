@@ -906,7 +906,7 @@ export class Parser {
             try {
                 //support ending the function with `end sub` OR `end function`
                 func.body = this.block();
-                func.body.symbolTable = new SymbolTable(`Block: Function ${name?.text ?? ''}`, () => func.getSymbolTable());
+                func.body.symbolTable = new SymbolTable(`Block: Function '${name?.text ?? ''}'`, () => func.getSymbolTable());
             } finally {
                 this.currentFunctionExpression = previousFunctionExpression;
             }
@@ -937,6 +937,7 @@ export class Parser {
                 return func;
             } else {
                 let result = new FunctionStatement(name, func);
+                func.symbolTable.name += `: '${name?.text}'`;
                 func.functionStatement = result;
                 this._references.functionStatements.push(result);
 
@@ -1345,7 +1346,7 @@ export class Parser {
         this._references.namespaceStatements.push(result);
         //cache the range property so that plugins can't affect it
         result.cacheRange();
-
+        result.body.symbolTable.name += `: namespace '${result.name}'`;
         return result;
     }
 

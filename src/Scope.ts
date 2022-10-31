@@ -721,7 +721,7 @@ export class Scope {
 
     public get symbolTable(): SymbolTable {
         return this.cache.getOrAdd('symbolTable', () => {
-            const result = new SymbolTable(`Scope ${this.name}`, () => this.getParentScope()?.symbolTable);
+            const result = new SymbolTable(`Scope: '${this.name}'`, () => this.getParentScope()?.symbolTable);
             for (let file of this.getOwnFiles()) {
                 if (isBrsFile(file)) {
                     result.mergeSymbolTable(file.parser?.symbolTable);

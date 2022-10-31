@@ -296,7 +296,7 @@ describe('CodeActionsProcessor', () => {
         });
     });
 
-    it.only('suggests imports at very start and very end of diagnostic', () => {
+    it('suggests imports at very start and very end of diagnostic', () => {
         program.setFile('source/first.bs', `
             namespace alpha
                 function firstAction()

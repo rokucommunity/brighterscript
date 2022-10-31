@@ -133,6 +133,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         if (this.body && !this.body.symbolTable) {
             this.body.symbolTable = new SymbolTable(`Function Body`);
         }
+        this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
     }
 
     /**
@@ -262,10 +263,7 @@ export class FunctionParameterExpression extends Expression {
         } else {
             this.type = new DynamicType();
         }
-        this.symbolTable = new SymbolTable(`FunctionParameterExpression: ${this.name?.text}`, () => this.parent?.getSymbolTable());
     }
-
-    public symbolTable: SymbolTable;
 
     public type: BscType;
 

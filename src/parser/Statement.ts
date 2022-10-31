@@ -49,7 +49,7 @@ export class Body extends Statement implements TypedefProvider {
         super();
     }
 
-    public symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable())
+    public symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
 
     public get range() {
         return util.createRangeFromPositions(
@@ -1083,10 +1083,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     ) {
         super();
         this.name = this.getName(ParseMode.BrighterScript);
-    }
-
-    public getSymbolTable() {
-        return this.body.symbolTable;
+        this.symbolTable = new SymbolTable(`NamespaceStatement: '${this.name}'`, () => this.parent?.getSymbolTable());
     }
 
     /**

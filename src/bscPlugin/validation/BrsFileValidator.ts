@@ -51,15 +51,6 @@ export class BrsFileValidator {
                 //register this variable
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
             },
-            FunctionParameterExpression: (node) => {
-                const paramName = node.name?.text;
-                const symbolTable = node.getSymbolTable();
-                symbolTable?.addSymbol(paramName, node.name.range, node.type);
-                //define a symbolTable for each FunctionParameterExpression that contains `m`. TODO, add previous parameter names to this list
-                if (!symbolTable.hasSymbol('m')) {
-                    node.symbolTable.addSymbol('m', interpolatedRange, DynamicType.instance);
-                }
-            },
             ForEachStatement: (node) => {
                 //register the for loop variable
                 node.parent.getSymbolTable()?.addSymbol(node.item.text, node.item.range, DynamicType.instance);
@@ -101,6 +92,11 @@ export class BrsFileValidator {
                 if (!node.body.symbolTable.hasSymbol('m')) {
                     node.body.symbolTable.addSymbol('m', undefined, DynamicType.instance);
                 }
+            },
+            FunctionParameterExpression: (node) => {
+                const paramName = node.name?.text;
+                const symbolTable = node.getSymbolTable();
+                symbolTable?.addSymbol(paramName, node.name.range, node.type);
             },
             ConstStatement: (node) => {
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);

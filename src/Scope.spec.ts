@@ -39,7 +39,7 @@ describe('Scope', () => {
         expectZeroDiagnostics(program);
     });
 
-    it('builds symbol table with namespace-relative entries', () => {
+    it.only('builds symbol table with namespace-relative entries', () => {
         const file = program.setFile<BrsFile>('source/alpha.bs', `
             namespace alpha
                 class Beta
@@ -62,7 +62,7 @@ describe('Scope', () => {
         program.validate();
         const scope = program.getScopesForFile('source/alpha.bs')[0];
         scope.linkSymbolTable();
-        const symbolTable = file.parser.references.namespaceStatements[1].getSymbolTable();
+        const symbolTable = file.parser.references.namespaceStatements[1].body.getSymbolTable();
         //the symbol table should contain the relative names for all items in this namespace across the entire scope
         expect(
             symbolTable.hasSymbol('Beta')
