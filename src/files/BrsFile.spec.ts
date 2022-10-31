@@ -3407,6 +3407,19 @@ describe('BrsFile', () => {
                 range: util.createRange(5, 25, 5, 31)
             }]);
         });
+
+        it('does not crash on nulls', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    print alpha.beta
+                end sub
+            `);
+            program.validate();
+            sinon.stub(util, 'getAllDottedGetParts').returns(null);
+            // print alpha.be|ta
+            expect(program.getDefinition(file.srcPath, Position.create(2, 34))).to.eql([]);
+        });
+
         it('returns enum member locations', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 sub main()
