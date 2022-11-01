@@ -967,6 +967,14 @@ export class CallfuncExpression extends Expression {
 
     public readonly range: Range;
 
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
+     */
+    public get namespaceName() {
+        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+    }
+
     public transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
