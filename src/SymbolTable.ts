@@ -7,10 +7,12 @@ import type { BscType } from './types/BscType';
  */
 export class SymbolTable {
     constructor(
-        parent?: SymbolTable | undefined,
-        public name = ''
+        public name: string,
+        parentProvider?: SymbolTableProvider
     ) {
-        this.pushParent(parent);
+        if (parentProvider) {
+            this.pushParentProvider(parentProvider);
+        }
     }
 
     /**
@@ -19,28 +21,43 @@ export class SymbolTable {
      */
     private symbolMap = new Map<string, BscSymbol[]>();
 
+    private parentProviders = [] as SymbolTableProvider[];
+
+    /**
+     * Push a function that will provide a parent SymbolTable when requested
+     */
+    public pushParentProvider(provider: SymbolTableProvider) {
+        this.parentProviders.push(provider);
+    }
+
+    /**
+     * Pop the current parentProvider
+     */
+    public popParentProvider() {
+        this.parentProviders.pop();
+    }
+
+    /**
+     * The parent SymbolTable (if there is one)
+     */
     public get parent() {
-        return this.parentStack[0];
+        return this.parentProviders[this.parentProviders.length - 1]?.();
+    }
+
+    private siblings = new Set<SymbolTable>();
+
+    /**
+     * Add a sibling symbol table (which will be inspected first before walking upward to the parent
+     */
+    public addSibling(sibling: SymbolTable) {
+        this.siblings.add(sibling);
     }
 
     /**
-     * Sets the parent table for lookups. There can only be one parent at a time, but sometimes you
-     * want to temporarily change the parent, and then restore it later. This allows that.
-     *
-     * @param [parent]
+     * Remove a sibling symbol table
      */
-    private parentStack: SymbolTable[] = [];
-
-    public pushParent(parent?: SymbolTable) {
-        this.parentStack.unshift(parent);
-        return parent;
-    }
-
-    /**
-     * Remove the current parent, restoring the previous parent (if there was one)
-     */
-    public popParent() {
-        return this.parentStack.shift();
+    public removeSibling(sibling: SymbolTable) {
+        this.siblings.delete(sibling);
     }
 
     /**
@@ -52,12 +69,7 @@ export class SymbolTable {
      * @returns true if this symbol is in the symbol table
      */
     hasSymbol(name: string, searchParent = true): boolean {
-        const key = name.toLowerCase();
-        let result = this.symbolMap.has(key);
-        if (!result && searchParent) {
-            result = !!this.parent?.hasSymbol(key);
-        }
-        return result;
+        return !!this.getSymbol(name, searchParent);
     }
 
     /**
@@ -70,11 +82,21 @@ export class SymbolTable {
      */
     getSymbol(name: string, searchParent = true): BscSymbol[] {
         const key = name.toLowerCase();
-        let result = this.symbolMap.get(key);
-        if (!result && searchParent) {
-            result = this.parent?.getSymbol(key);
+        let result: BscSymbol[];
+        // look in our map first
+        if ((result = this.symbolMap.get(key))) {
+            return result;
         }
-        return result;
+        //look through any sibling maps next
+        for (let sibling of this.siblings) {
+            if ((result = sibling.symbolMap.get(key))) {
+                return result;
+            }
+        }
+        // ask our parent for a symbol
+        if (searchParent && (result = this.parent?.getSymbol(key))) {
+            return result;
+        }
     }
 
     /**
@@ -131,3 +153,8 @@ export interface BscSymbol {
     range: Range;
     type: BscType;
 }
+
+/**
+ * A function that returns a symbol table.
+ */
+export type SymbolTableProvider = () => SymbolTable;

@@ -19,5 +19,6 @@
     "editor.insertSpaces": true,
     "typescript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
     "typescript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets": false,
-    "files.trimTrailingWhitespace": true
+    "files.trimTrailingWhitespace": true,
+    "typescript.tsdk": "node_modules\\typescript\\lib"
 }

@@ -38,9 +38,12 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
         return;
     }
 
+    //link this node to its parent
+    element.parent = parent ?? owner as unknown as AstNode;
+
     //notify the visitor of this element
     if (element.visitMode & options.walkMode) {
-        const result = visitor(element, parent ?? owner as any, owner, key);
+        const result = visitor?.(element, element.parent as any, owner, key);
 
         //replace the value on the parent if the visitor returned a Statement or Expression (this is how visitors can edit AST)
         if (result && (isExpression(result) || isStatement(result))) {
@@ -74,7 +77,7 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
  * @param parent the parent AstNode of each item in the array
  * @param filter a function used to filter items from the array. return true if that item should be walked
  */
-export function walkArray<T>(array: Array<T>, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode, filter?: <T>(element: T) => boolean) {
+export function walkArray<T = AstNode>(array: Array<T>, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode, filter?: <T>(element: T) => boolean) {
     for (let i = 0; i < array.length; i++) {
         if (!filter || filter(array[i])) {
             const startLength = array.length;

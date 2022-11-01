@@ -94,6 +94,16 @@ export abstract class AstNode {
             }
         }, options);
     }
+
+    /**
+     * Links all child nodes to their parent AstNode, and the same with symbol tables. This performs a full AST walk, so you should use this sparingly
+     */
+    public link() {
+        //the act of walking causes the nodes to be linked
+        this.walk(() => { }, {
+            walkMode: WalkMode.visitAllRecursive
+        });
+    }
 }
 
 export abstract class Statement extends AstNode {

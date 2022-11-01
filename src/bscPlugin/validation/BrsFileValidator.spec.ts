@@ -5,6 +5,7 @@ import type { ClassStatement, FunctionStatement, NamespaceStatement, PrintStatem
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { expectDiagnostics, expectZeroDiagnostics } from '../../testHelpers.spec';
 import { Program } from '../../Program';
+import { isClassStatement, isNamespaceStatement } from '../../astUtils/reflection';
 
 describe('BrsFileValidator', () => {
     let program: Program;
@@ -34,7 +35,7 @@ describe('BrsFileValidator', () => {
     });
 
     it('links NamespacedVariableNameExpression dotted get parents', () => {
-        const file = program.setFile<BrsFile>('source/main.bs', `
+        const { ast } = program.setFile<BrsFile>('source/main.bs', `
             namespace alpha.bravo
                 class Delta extends alpha.bravo.Charlie
                 end class
@@ -42,9 +43,8 @@ describe('BrsFileValidator', () => {
                 end class
             end namespace
         `);
-        program.validate();
-        const namespace = (file.parser.ast.statements[0] as NamespaceStatement);
-        const deltaClass = namespace.body.statements[0] as ClassStatement;
+        const namespace = ast.findChild<NamespaceStatement>(isNamespaceStatement);
+        const deltaClass = namespace.findChild<ClassStatement>(isClassStatement);
         expect(deltaClass.parent).to.equal(namespace.body);
 
         const charlie = (deltaClass.parentClassName.expression as DottedGetExpression);
