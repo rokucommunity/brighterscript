@@ -68,6 +68,37 @@ describe('BrsFile', () => {
         });
     });
 
+    it('flags namespaces used as variables', () => {
+        program.setFile('source/main.bs', `
+            sub main()
+                alpha.beta.charlie.test()
+                print alpha
+                print alpha.beta
+                print alpha.beta.charlie
+            end sub
+
+            namespace alpha
+                namespace beta
+                    namespace charlie
+                        sub test()
+                        end sub
+                    end namespace
+                end namespace
+            end namespace
+        `);
+        program.validate();
+        expectDiagnostics(program, [{
+            ...DiagnosticMessages.namespaceCannotBeReferencedDirectly(),
+            range: util.createRange(3, 22, 3, 27)
+        }, {
+            ...DiagnosticMessages.namespaceCannotBeReferencedDirectly(),
+            range: util.createRange(4, 22, 4, 32)
+        }, {
+            ...DiagnosticMessages.namespaceCannotBeReferencedDirectly(),
+            range: util.createRange(5, 22, 5, 40)
+        }]);
+    });
+
     it('supports the third parameter in CreateObject', () => {
         program.setFile('source/main.brs', `
             sub main()
