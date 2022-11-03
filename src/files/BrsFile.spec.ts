@@ -2011,14 +2011,14 @@ describe('BrsFile', () => {
                 ' The main function
                 '
                 sub main()
-                    log("hello")
+                    writeToLog("hello")
                 end sub
 
                 '
                 ' Prints a message to the log.
                 ' Works with *markdown* **content**
                 '
-                sub log(message as string)
+                sub writeToLog(message as string)
                     print message
                 end sub
             `);
@@ -2028,7 +2028,7 @@ describe('BrsFile', () => {
                 program.getHover(file.srcPath, Position.create(5, 22))[0].contents
             ).to.equal([
                 '```brightscript',
-                'sub log(message as string) as void',
+                'sub writeToLog(message as string) as void',
                 '```',
                 '***',
                 '',
