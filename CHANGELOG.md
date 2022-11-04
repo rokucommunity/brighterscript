@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.60.5](https://github.com/rokucommunity/brighterscript/compare/v0.60.4...0.60.5) - 2022-11-03
+### Changed
+ - Refactor SymbolTable and AST parent logic so that SymbolTables get their parent symbol table from its own (AstNode) ([#732](https://github.com/rokucommunity/brighterscript/pull/732))
+### Fixed
+ - Significant performance boost in `validate()` by caching `getCallableByName` ([#739](https://github.com/rokucommunity/brighterscript/pull/739))
+ - Add diagnostic when using namespaces as variables ([#738](https://github.com/rokucommunity/brighterscript/pull/738))
+ - Fix crash in `getDefinition` ([#734](https://github.com/rokucommunity/brighterscript/pull/734))
+
+
+
 ## [0.60.4](https://github.com/rokucommunity/brighterscript/compare/v0.60.3...0.60.4) - 2022-10-28
 ### Changed
  - Add `name` to symbol table ([#728](https://github.com/rokucommunity/brighterscript/pull/728))

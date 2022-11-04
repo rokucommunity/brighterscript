@@ -696,7 +696,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     detectedTooDeepFileSource: (numberOfParentDirectories: number) => ({
-        message: `Expected directory depth no larger than 7, but found ${numberOfParentDirectories}.`,
+        message: `Expected directory depth no larger than 7, but found ${numberOfParentDirectories}`,
         code: 1134,
         severity: DiagnosticSeverity.Error
     }),
@@ -708,6 +708,11 @@ export let DiagnosticMessages = {
     keywordMustBeDeclaredAtNamespaceLevel: (keyword: string) => ({
         message: `${keyword} must be declared at the root level or within a namespace`,
         code: 1136,
+        severity: DiagnosticSeverity.Error
+    }),
+    namespaceCannotBeReferencedDirectly: () => ({
+        message: `Namespace cannot be referenced directly`,
+        code: 1137,
         severity: DiagnosticSeverity.Error
     })
 };

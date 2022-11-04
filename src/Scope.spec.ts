@@ -119,7 +119,8 @@ describe('Scope', () => {
         program.validate();
         expectDiagnostics(program, [
             DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea'),
-            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA')
+            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA'),
+            DiagnosticMessages.namespaceCannotBeReferencedDirectly()
         ]);
     });
 
