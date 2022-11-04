@@ -6,7 +6,7 @@
 import * as phin from 'phin';
 import * as fsExtra from 'fs-extra';
 import { standardizePath as s } from '../src/util';
-import { Parser } from '../src/parser/Parser';
+import { ParseMode, Parser } from '../src/parser/Parser';
 import type { CallExpression, LiteralExpression } from '../src/parser/Expression';
 import type { ExpressionStatement, FunctionStatement } from '../src/parser/Statement';
 import TurndownService = require('turndown');
@@ -15,6 +15,7 @@ import { marked } from 'marked';
 import * as he from 'he';
 import * as deepmerge from 'deepmerge';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
+import { isVariableExpression } from '../src/astUtils/reflection';
 
 type Token = marked.Token;
 
@@ -273,7 +274,7 @@ class Runner {
             if (/this object is created with no parameters/.exec(manager.html)) {
                 component.constructors.push({
                     params: [],
-                    returnType: name,
+                    returnType: component.name,
                     returnDescription: undefined
                 });
             } else {
@@ -282,20 +283,25 @@ class Runner {
                 const regexp = /CreateObject\((.*?)\)/g;
                 let match;
                 while (match = regexp.exec(manager.markdown)) {
+
                     const { statements, diagnostics } = Parser.parse(match[0]);
-                    if (statements.length > 0) {
+                    if (diagnostics.length === 0) {
                         const signature = {
                             params: [],
-                            returnType: name
+                            returnType: component.name
                         } as Signature;
                         const call = (statements[0] as ExpressionStatement).expression as CallExpression;
                         //only scan createObject calls for our own name
-                        if ((call.args[0] as LiteralExpression)?.token?.text === `"${name}"`) {
+                        if ((call.args[0] as LiteralExpression)?.token?.text === `"${component.name}"`) {
                             //skip the first arg because that's the name of the component
                             for (let i = 1; i < call.args.length; i++) {
                                 const arg = call.args[i];
+                                let paramName = `param${i}`;
+                                if (isVariableExpression(arg)) {
+                                    paramName = arg.getName(ParseMode.BrightScript)
+                                }
                                 signature.params.push({
-                                    name: `param${i}`,
+                                    name: paramName,
                                     default: undefined,
                                     isRequired: true,
                                     type: (arg as any).type?.toString() ?? 'dynamic',
@@ -305,18 +311,9 @@ class Runner {
                             component.constructors.push(signature);
                         }
                     } else if (match[1]) {
-                        const foundParamTexts = match[1].split(',').map(x => x.replace(/['"]+/g, '').trim());
+                        const signature = this.getConstructorSignature(name, match[1])
 
-                        if (foundParamTexts[0].toLowerCase() === component.name.toLowerCase()) {
-                            const signature = {
-                                params: [],
-                                returnType: name
-                            } as Signature;
-
-                            for (let i = 1; i < foundParamTexts.length; i++) {
-                                const foundParam = foundParamTexts[i];
-                                signature.params.push(this.getParamFromMarkdown(foundParam, `param${i}`));
-                            }
+                        if (signature) {
                             component.constructors.push(signature);
                         }
                     }
@@ -330,7 +327,31 @@ class Runner {
                 this[name](component, manager);
             }
 
-            this.result.components[name?.toLowerCase()] = component;
+            this.result.components[component?.name?.toLowerCase()] = component;
+        }
+    }
+
+    private getConstructorSignature(componentName: string, sourceCode: string) {
+        const foundParamTexts = this.findParamTexts(sourceCode)
+
+        if (foundParamTexts && foundParamTexts[0].toLowerCase() === componentName.toLowerCase()) {
+            const signature = {
+                params: [],
+                returnType: componentName
+            } as Signature;
+
+            for (let i = 1; i < foundParamTexts.length; i++) {
+                const foundParam = foundParamTexts[i];
+                signature.params.push(this.getParamFromMarkdown(foundParam, `param${i}`));
+            }
+            return signature;
+        }
+    }
+
+
+    private findParamTexts(sourceCode: string): string[] {
+        if (!sourceCode.includes('{') && !sourceCode.includes('}')) {
+            return sourceCode.split(',').map(x => x.replace(/['"]+/g, '').trim());
         }
     }
 
