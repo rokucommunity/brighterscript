@@ -340,17 +340,6 @@ describe('util', () => {
         });
     });
 
-    describe('stringFormat', () => {
-        it('handles out-of-order replacements', () => {
-            expect(util.stringFormat('{1}{0}', 'b', 'a')).to.equal('ab');
-        });
-
-        it('does not fail on arguments not provided', () => {
-            expect(util.stringFormat('{0}{1}', 'a')).to.equal('a{1}');
-        });
-
-    });
-
     describe('getPkgPathFromTarget', () => {
         it('works with both types of separators', () => {
             expect(util.getPkgPathFromTarget('components/component1.xml', '../lib.brs')).to.equal('lib.brs');

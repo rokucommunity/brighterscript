@@ -68,6 +68,37 @@ describe('BrsFile', () => {
         });
     });
 
+    it('flags namespaces used as variables', () => {
+        program.setFile('source/main.bs', `
+            sub main()
+                alpha.beta.charlie.test()
+                print alpha
+                print alpha.beta
+                print alpha.beta.charlie
+            end sub
+
+            namespace alpha
+                namespace beta
+                    namespace charlie
+                        sub test()
+                        end sub
+                    end namespace
+                end namespace
+            end namespace
+        `);
+        program.validate();
+        expectDiagnostics(program, [{
+            ...DiagnosticMessages.namespaceCannotBeReferencedDirectly(),
+            range: util.createRange(3, 22, 3, 27)
+        }, {
+            ...DiagnosticMessages.namespaceCannotBeReferencedDirectly(),
+            range: util.createRange(4, 22, 4, 32)
+        }, {
+            ...DiagnosticMessages.namespaceCannotBeReferencedDirectly(),
+            range: util.createRange(5, 22, 5, 40)
+        }]);
+    });
+
     it('supports the third parameter in CreateObject', () => {
         program.setFile('source/main.brs', `
             sub main()
@@ -1980,14 +2011,14 @@ describe('BrsFile', () => {
                 ' The main function
                 '
                 sub main()
-                    log("hello")
+                    writeToLog("hello")
                 end sub
 
                 '
                 ' Prints a message to the log.
                 ' Works with *markdown* **content**
                 '
-                sub log(message as string)
+                sub writeToLog(message as string)
                     print message
                 end sub
             `);
@@ -1997,7 +2028,7 @@ describe('BrsFile', () => {
                 program.getHover(file.srcPath, Position.create(5, 22))[0].contents
             ).to.equal([
                 '```brightscript',
-                'sub log(message as string) as void',
+                'sub writeToLog(message as string) as void',
                 '```',
                 '***',
                 '',
@@ -3389,5 +3420,71 @@ describe('BrsFile', () => {
                 range: util.createRange(5, 26, 5, 33)
             }]);
         });
+        it('returns enum locations', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    print alpha.beta.people.charlie
+                end sub
+                namespace alpha.beta
+                    enum people
+                        charlie = "charles"
+                    end enum
+                end namespace
+            `);
+            program.validate();
+            //print alpha.beta.char|lie
+            expect(program.getDefinition(file.srcPath, Position.create(2, 40))).to.eql([{
+                uri: URI.file(file.srcPath).toString(),
+                range: util.createRange(5, 25, 5, 31)
+            }]);
+        });
+
+        it('does not crash on nulls', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    print alpha.beta
+                end sub
+            `);
+            program.validate();
+            sinon.stub(util, 'getAllDottedGetParts').returns(null);
+            // print alpha.be|ta
+            expect(program.getDefinition(file.srcPath, Position.create(2, 34))).to.eql([]);
+        });
+
+        it('returns enum member locations', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    print alpha.beta.people.charlie
+                end sub
+                namespace alpha.beta
+                    enum people
+                        charlie = "charles"
+                    end enum
+                end namespace
+            `);
+            program.validate();
+            //print alpha.beta.char|lie
+            expect(program.getDefinition(file.srcPath, Position.create(2, 48))).to.eql([{
+                uri: URI.file(file.srcPath).toString(),
+                range: util.createRange(6, 24, 6, 31)
+            }]);
+        });
+    });
+
+    it('catches mismatched `end` keywords for functions', () => {
+        program.setFile('source/main.brs', `
+            function speak()
+            end sub
+            sub walk()
+            end function
+        `);
+        program.validate();
+        expectDiagnostics(program, [{
+            ...DiagnosticMessages.mismatchedEndCallableKeyword('function', 'sub'),
+            range: util.createRange(2, 12, 2, 19)
+        }, {
+            ...DiagnosticMessages.mismatchedEndCallableKeyword('sub', 'function'),
+            range: util.createRange(4, 12, 4, 24)
+        }]);
     });
 });

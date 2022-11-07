@@ -8,14 +8,16 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
+import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
 import { Expression } from './AstNode';
+import { SymbolTable } from '../SymbolTable';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -67,6 +69,14 @@ export class CallExpression extends Expression {
 
     public readonly range: Range;
 
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
+     */
+    public get namespaceName() {
+        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+    }
+
     transpile(state: BrsTranspileState, nameOverride?: string) {
         let result = [];
 
@@ -113,11 +123,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly leftParen: Token,
         readonly rightParen: Token,
         readonly asToken?: Token,
-        readonly returnTypeToken?: Token,
-        /**
-         * If this function is enclosed within another function, this will reference that parent function
-         */
-        readonly parentFunction?: FunctionExpression
+        readonly returnTypeToken?: Token
     ) {
         super();
         if (this.returnTypeToken) {
@@ -127,12 +133,34 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         } else {
             this.returnType = DynamicType.instance;
         }
+
+        //if there's a body, and it doesn't have a SymbolTable, assign one
+        if (this.body && !this.body.symbolTable) {
+            this.body.symbolTable = new SymbolTable(`Function Body`);
+        }
+        this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
     }
 
     /**
      * The type this function returns
      */
     public returnType: BscType;
+
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
+     */
+    public get namespaceName() {
+        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+    }
+
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isFunctionExpression)` instead.
+     */
+    public get parentFunction() {
+        return this.findAncestor<FunctionExpression>(isFunctionExpression);
+    }
 
     /**
      * The list of function calls that are declared within this function scope. This excludes CallExpressions
@@ -147,8 +175,19 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
     /**
      * A list of all child functions declared directly within this function
+     * @deprecated use `.walk(createVisitor({ FunctionExpression: ()=>{}), { walkMode: WalkMode.visitAllRecursive })` instead
      */
-    public childFunctionExpressions = [] as FunctionExpression[];
+    public get childFunctionExpressions() {
+        const expressions = [] as FunctionExpression[];
+        this.walk(createVisitor({
+            FunctionExpression: (expression) => {
+                expressions.push(expression);
+            }
+        }), {
+            walkMode: WalkMode.visitAllRecursive
+        });
+        return expressions;
+    }
 
     /**
      * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
@@ -338,6 +377,7 @@ export class NamespacedVariableNameExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
+        this.expression?.link();
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'expression', visitor, options);
         }
@@ -926,6 +966,14 @@ export class CallfuncExpression extends Expression {
     }
 
     public readonly range: Range;
+
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
+     */
+    public get namespaceName() {
+        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+    }
 
     public transpile(state: BrsTranspileState) {
         let result = [];

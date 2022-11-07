@@ -21,8 +21,8 @@ export class Preprocessor implements CC.Visitor {
 
     /**
      * Filters the tokens contained within a set of chunks based on a set of constants.
-     * @param chunks the chunks from which to retrieve tokens
-     * @param bsConst the set of constants defined in a BrightScript `manifest` file's `bs_const` property
+     * @param tokens the tokens
+     * @param manifest a manifest used to extract bs_const properties from
      * @returns an object containing an array of `errors` and an array of `processedTokens` filtered by conditional
      *          compilation directives included within
      */

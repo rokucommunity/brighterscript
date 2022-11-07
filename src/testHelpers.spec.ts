@@ -188,10 +188,11 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
 
 /**
  * Test if the arg has any diagnostics. This just checks the count, nothing more.
+ * @param diagnosticsCollection a collection of diagnostics
  * @param length if specified, checks the diagnostic count is exactly that amount. If omitted, the collection is just verified as non-empty
  */
-export function expectHasDiagnostics(arg: DiagnosticCollection, length: number = null) {
-    const diagnostics = getDiagnostics(arg);
+export function expectHasDiagnostics(diagnosticsCollection: DiagnosticCollection, length: number = null) {
+    const diagnostics = getDiagnostics(diagnosticsCollection);
     if (length) {
         expect(diagnostics).lengthOf(length);
     } else {

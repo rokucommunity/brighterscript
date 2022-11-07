@@ -179,7 +179,6 @@ export class LanguageServer {
 
     /**
      * Called when the client starts initialization
-     * @param params
      */
     @AddStackToErrorMessage
     public onInitialize(params: InitializeParams) {
@@ -363,7 +362,6 @@ export class LanguageServer {
 
     /**
      * Called when the client has finished initializing
-     * @param params
      */
     @AddStackToErrorMessage
     private async onInitialized() {
@@ -645,7 +643,6 @@ export class LanguageServer {
 
     /**
      * Provide a list of completion items based on the current cursor position
-     * @param textDocumentPosition
      */
     @AddStackToErrorMessage
     private async onCompletion(params: TextDocumentPositionParams) {
@@ -670,7 +667,6 @@ export class LanguageServer {
 
     /**
      * Provide a full completion item from the selection
-     * @param item
      */
     @AddStackToErrorMessage
     private onCompletionResolve(item: CompletionItem): CompletionItem {
@@ -828,7 +824,6 @@ export class LanguageServer {
      * The CLIENT is in charge of what files to watch, so all client
      * implementations should ensure that all valid project
      * file types are watched (.brs,.bs,.xml,manifest, and any json/text/image files)
-     * @param params
      */
     @AddStackToErrorMessage
     private async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
@@ -926,7 +921,6 @@ export class LanguageServer {
     /**
      * This only operates on files that match the specified files globs, so it is safe to throw
      * any file changes you receive with no unexpected side-effects
-     * @param changes
      */
     public async handleFileChanges(project: Project, changes: { type: FileChangeType; srcPath: string }[]) {
         //this loop assumes paths are both file paths and folder paths, which eliminates the need to detect.
@@ -946,7 +940,6 @@ export class LanguageServer {
     /**
      * This only operates on files that match the specified files globs, so it is safe to throw
      * any file changes you receive with no unexpected side-effects
-     * @param changes
      */
     private async handleFileChange(project: Project, change: { type: FileChangeType; srcPath: string }) {
         const { program, options, rootDir } = project.builder;
@@ -1087,7 +1080,7 @@ export class LanguageServer {
             // validate all projects
             await this.validateAllThrottled();
         } catch (e: any) {
-            this.sendCriticalFailure(`Critical error parsing / validating ${filePath}: ${e.message}`);
+            this.sendCriticalFailure(`Critical error parsing/validating ${filePath}: ${e.message}`);
         }
     }
 
@@ -1213,7 +1206,13 @@ export class LanguageServer {
     @AddStackToErrorMessage
     private async onFullSemanticTokens(params: SemanticTokensParams) {
         await this.waitAllProjectFirstRuns();
-        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+        await Promise.all([
+            //wait for the file to settle (in case there are multiple file changes in quick succession)
+            this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true),
+            // wait for the validation to finish before providing semantic tokens. program.validate() populates and then caches AstNode.parent properties.
+            // If we don't wait, then fetching semantic tokens can cause some invalid cache
+            this.validateThrottler.onIdleOnce(false)
+        ]);
 
         const srcPath = util.uriToPath(params.textDocument.uri);
         for (const project of this.projects) {

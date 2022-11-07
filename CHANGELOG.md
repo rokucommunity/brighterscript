@@ -6,6 +6,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.60.5](https://github.com/rokucommunity/brighterscript/compare/v0.60.4...0.60.5) - 2022-11-03
+### Changed
+ - Refactor SymbolTable and AST parent logic so that SymbolTables get their parent symbol table from its own (AstNode) ([#732](https://github.com/rokucommunity/brighterscript/pull/732))
+### Fixed
+ - Significant performance boost in `validate()` by caching `getCallableByName` ([#739](https://github.com/rokucommunity/brighterscript/pull/739))
+ - Add diagnostic when using namespaces as variables ([#738](https://github.com/rokucommunity/brighterscript/pull/738))
+ - Fix crash in `getDefinition` ([#734](https://github.com/rokucommunity/brighterscript/pull/734))
+
+
+
+## [0.60.4](https://github.com/rokucommunity/brighterscript/compare/v0.60.3...0.60.4) - 2022-10-28
+### Changed
+ - Add `name` to symbol table ([#728](https://github.com/rokucommunity/brighterscript/pull/728))
+### Fixed
+ - Allow `continue` as local var ([#730](https://github.com/rokucommunity/brighterscript/pull/730))
+ - language server semanticToken request now waits until validate finishes ([#727](https://github.com/rokucommunity/brighterscript/pull/727))
+
+
+
+## [0.60.3](https://github.com/rokucommunity/brighterscript/compare/v0.60.2...0.60.3) - 2022-10-20
+### Changed
+ - better parse recovery for unknown function parameter types ([#722](https://github.com/rokucommunity/brighterscript/pull/722))
+
+
+
+## [0.60.2](https://github.com/rokucommunity/brighterscript/compare/v0.60.1...0.60.2) - 2022-10-18
+### Fixed
+ - if statement block var bug ([#698](https://github.com/rokucommunity/brighterscript/pull/698))
+
+
+
+## [0.60.1](https://github.com/rokucommunity/brighterscript/compare/v0.60.0...0.60.1) - 2022-10-18
+### Fixed
+ - Beter location for bs1042 ([#719](https://github.com/rokucommunity/brighterscript/pull/719))
+
+
+
+## [0.60.0](https://github.com/rokucommunity/brighterscript/compare/v0.59.0...0.60.0) - 2022-10-10
+### Added
+ - goto definition for enum statements and enum members ([#715](https://github.com/rokucommunity/brighterscript/pull/715))
+ - nested namespace support ([#708](https://github.com/rokucommunity/brighterscript/pull/708))
+### Changed
+ - upgrade to [roku-deploy@3.9.2](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#392---2022-10-03). Notable changes since 3.9.1:
+     - Replace minimatch with picomatch ([roku-deploy#101](https://github.com/rokucommunity/roku-deploy/pull/101))
+### Fixed
+ - fixes signature help resolution for callexpressions ([#707](https://github.com/rokucommunity/brighterscript/pull/707))
+ - Fix transpilation of simple else block with leading comment ([#712](https://github.com/rokucommunity/brighterscript/pull/712))
+
+
+
 ## [0.59.0](https://github.com/rokucommunity/brighterscript/compare/v0.58.0...0.59.0) - 2022-10-03
 ### Added
  - `isThrowStatement` reflection function ([#709](https://github.com/rokucommunity/brighterscript/pull/709))
