@@ -2019,8 +2019,9 @@ export class MethodStatement extends FunctionStatement {
             return;
         }
 
+        //find the first non-comment statement
+        let firstStatement = this.func.body.statements.find(x => !isCommentStatement(x));
         //if the first statement is a call to super, quit here
-        let firstStatement = this.func.body.statements[0];
         if (
             //is a call statement
             isExpressionStatement(firstStatement) && isCallExpression(firstStatement.expression) &&

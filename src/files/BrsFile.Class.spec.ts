@@ -259,6 +259,45 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
+        it('allows comments as first line of constructor', () => {
+            testTranspile(`
+                class Animal
+                end class
+                class Duck extends Animal
+                    sub new()
+                        'comment should not cause double super call
+                        super()
+                    end sub
+                end class
+            `, `
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = sub()
+                    end sub
+                    return instance
+                end function
+                function Animal()
+                    instance = __Animal_builder()
+                    instance.new()
+                    return instance
+                end function
+                function __Duck_builder()
+                    instance = __Animal_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub()
+                        'comment should not cause double super call
+                        m.super0_new()
+                    end sub
+                    return instance
+                end function
+                function Duck()
+                    instance = __Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+            `);
+        });
+
         it('handles class inheritance inferred constructor calls', () => {
             testTranspile(`
                 class Animal
