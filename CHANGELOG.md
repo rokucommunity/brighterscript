@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.60.6](https://github.com/rokucommunity/brighterscript/compare/v0.60.5...0.60.6) - 2022-11-08
+### Fixed
+ - double `super` call transpile in subclasses ([#740](https://github.com/rokucommunity/brighterscript/pull/740))
+ - issues with Roku doc scraper and adds missing components ([#736](https://github.com/rokucommunity/brighterscript/pull/736))
+
+
+
 ## [0.60.5](https://github.com/rokucommunity/brighterscript/compare/v0.60.4...0.60.5) - 2022-11-03
 ### Changed
  - Refactor SymbolTable and AST parent logic so that SymbolTables get their parent symbol table from its own (AstNode) ([#732](https://github.com/rokucommunity/brighterscript/pull/732))
