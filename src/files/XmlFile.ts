@@ -6,7 +6,7 @@ import { DiagnosticCodeMap, diagnosticCodes } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag } from '../interfaces';
 import type { Program } from '../Program';
-import util from '../util';
+import { util, standardizePath as s } from '../util';
 import SGParser, { rangeFromTokenValue } from '../parser/SGParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
@@ -19,14 +19,32 @@ import { TranspileState } from '../parser/TranspileState';
 import type { File } from './File';
 
 export class XmlFile implements File {
-    constructor(
-        public srcPath: string,
-        /**
-         * The absolute path to the file, relative to the pkg
-         */
-        public pkgPath: string,
-        public program: Program
-    ) {
+    /**
+     * @deprecated use the object pattern
+     */
+    constructor(srcPath: string, destPath: string, program: Program);
+    /**
+     * Create a new instance of BrsFile
+     */
+    constructor(options: {
+        srcPath: string;
+        destPath: string;
+        pkgPath?: string;
+        program: Program;
+    });
+    constructor(...args: any[]) {
+        //legacy constructor params. deprecate in v1
+        if (typeof args[0] === 'string') {
+            [this.srcPath, this.pkgPath, this.program] = args;
+        } else {
+            //spread the constructor args onto this object
+            Object.assign(this, args);
+        }
+
+        this.srcPath = s`${this.srcPath}`;
+        this.pkgPath = s`${this.pkgPath}`;
+        this.destPath = s`${this.destPath ?? this.pkgPath}`;
+
         this.extension = path.extname(this.srcPath).toLowerCase();
 
         this.possibleCodebehindPkgPaths = [
@@ -36,6 +54,12 @@ export class XmlFile implements File {
     }
 
     public type = 'XmlFile';
+
+    public srcPath: string;
+    public destPath: string;
+    public pkgPath: string;
+
+    public program: Program;
 
     /**
      * The absolute path to the source location for this file

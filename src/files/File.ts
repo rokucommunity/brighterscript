@@ -6,13 +6,38 @@ export interface File {
      */
     type: string;
     /**
-     * The pkgPath to the file (without the `pkg:` prefix)
-     */
-    pkgPath: string;
-    /**
-     * The absolute path to the source file
+     * The absolute path to the source file.
+     * @example "C:\projects\YourRokuApp\source\main.bs" or "/mnt/projects/YourRokuApp/source/main.bs"
      */
     srcPath: string;
+    /**
+     * The path where the file exists within the context of a brightscript program, relative ot the root of the package/zip.
+     * This is the path that you will reference within your code.
+     * Generally this is the same as `pkgPath`, but can be different (as shown in the example below):
+     *
+     * **NOTE:** This should _not_ containing a leading slash or `pkg:/` scheme
+     * @example
+     * {
+     *    //given this srcPath:
+     *    srcPath: "C:/projects/YourRokuApp/source/main.bs",
+     *    //destPath should be:
+     *    destPath: "source/main.bs"
+     * }
+     */
+    destPath: string; // "images\\profile.png"
+    /**
+     * The path to the file within the package, relative to the root of the package/zip.
+     *
+     * **NOTE:** This should _not_ containing a leading slash or `pkg:/` scheme
+     * @example
+     * {
+     *    //given this srcPath:
+     *    srcPath: "C:/projects/YourRokuApp/source/main.bs",
+     *    //pkgPath should be:
+     *    pkgPath: "source/main.brs" //(note the `.brs` file extension)
+     * }
+     */
+    pkgPath?: string; // "images\\profile.jpg"   file.bs   file.brs
     /**
      * The key used to identify this file in the dependency graph.
      * If omitted, the pkgPath is used.

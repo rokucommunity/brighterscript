@@ -620,6 +620,7 @@ describe('XmlFile', () => {
             await builder.run({
                 cwd: rootDir,
                 retainStagingDir: true,
+                createPackage: false,
                 stagingDir: stagingDir,
                 logLevel: LogLevel.off
             });

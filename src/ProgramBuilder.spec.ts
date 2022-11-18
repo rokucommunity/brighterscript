@@ -316,7 +316,8 @@ describe('ProgramBuilder', () => {
 
             builder = new ProgramBuilder();
             await builder.run({
-                cwd: workingDir
+                cwd: workingDir,
+                createPackage: false
             });
             expect(
                 fsExtra.pathExistsSync(relativeOutputPath)

@@ -431,7 +431,7 @@ export interface AfterFileTranspileEvent<TFile extends File = File> {
 export type BeforeProvideFileEvent<TFile extends File = File> = ProvideFileEvent<TFile>;
 export interface ProvideFileEvent<TFile extends File = File> {
     /**
-     * The lower-case file extension for the srcPath. (i.e. ".brs" or ".xml")
+     * The lower-case file extension for the srcPath. (i.e. ".brs", ".xml")
      */
     srcExtension: string;
     /**

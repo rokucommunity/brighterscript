@@ -36,21 +36,35 @@ import type { File } from './File';
  * Holds all details about this file within the scope of the whole program
  */
 export class BrsFile implements File {
-    constructor(
-        public srcPath: string,
-        /**
-         * The full pkg path to this file
-         */
-        public pkgPath: string,
-        public program: Program
-    ) {
+    /**
+     * @deprecated use the object pattern
+     */
+    constructor(srcPath: string, destPath: string, program: Program);
+    /**
+     * Create a new instance of BrsFile
+     */
+    constructor(options: {
+        srcPath: string;
+        destPath: string;
+        pkgPath?: string;
+        program: Program;
+    });
+    constructor(...args: any[]) {
+        //legacy constructor params. deprecate in v1
+        if (typeof args[0] === 'string') {
+            [this.srcPath, this.pkgPath, this.program] = args;
+        } else {
+            //spread the constructor args onto this object
+            Object.assign(this, args);
+        }
         this.srcPath = s`${this.srcPath}`;
         this.pkgPath = s`${this.pkgPath}`;
+        this.destPath = s`${this.destPath ?? this.pkgPath}`;
 
         this.extension = util.getExtension(this.srcPath);
 
         //all BrighterScript files need to be transpiled
-        if (this.extension?.endsWith('.bs') || program?.options?.allowBrighterScriptInBrightScript) {
+        if (this.extension?.endsWith('.bs') || this.program?.options?.allowBrighterScriptInBrightScript) {
             this.needsTranspiled = true;
             this.parseMode = ParseMode.BrighterScript;
         }
@@ -66,6 +80,13 @@ export class BrsFile implements File {
     }
 
     public type = 'BrsFile';
+
+    public srcPath: string;
+    public destPath: string;
+    public pkgPath: string;
+
+    public program: Program;
+
 
     /**
      * The absolute path to the source location for this file

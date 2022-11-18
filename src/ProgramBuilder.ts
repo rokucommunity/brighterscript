@@ -401,7 +401,12 @@ export class ProgramBuilder {
         });
 
         //get every file referenced by the files array
-        let fileMap = await rokuDeploy.getFilePaths(options.files, options.rootDir);
+        let fileMap = Object.values(this.program.files).map(x => {
+            return {
+                src: x.srcPath,
+                dest: x.destPath
+            };
+        });
 
         //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
         let filteredFileMap = [] as FileObj[];
@@ -413,21 +418,15 @@ export class ProgramBuilder {
 
         this.plugins.emit('beforePrepublish', this, filteredFileMap);
 
-        await this.logger.time(LogLevel.log, ['Copying to staging directory'], async () => {
-            //prepublish all non-program-loaded files to staging
-            await rokuDeploy.prepublishToStaging({
-                ...options,
-                files: filteredFileMap
-            });
-        });
 
-        this.plugins.emit('afterPrepublish', this, filteredFileMap);
         this.plugins.emit('beforePublish', this, fileMap);
 
         await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
             //transpile any brighterscript files
             await this.program.transpile(fileMap, options.stagingDir);
         });
+
+        this.plugins.emit('afterPrepublish', this, filteredFileMap);
 
         this.plugins.emit('afterPublish', this, fileMap);
     }
