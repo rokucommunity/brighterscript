@@ -494,11 +494,12 @@ export class Program {
     }
 
     /**
-     * Given a srcPath, a pkgPath, or both, resolve whichever is missing, relative to rootDir.
+     * Given any combination of srcPath, destPath, or pkgPath, resolve whichever is missing, relative to rootDir.
      * @param rootDir must be a pre-normalized path
      */
-    private getPaths(fileParam: string | FileObj | { srcPath?: string; pkgPath?: string }, rootDir: string) {
+    private getPaths(fileParam: string | FileObj | { srcPath?: string; destPath?: string; pkgPath?: string }, rootDir: string) {
         let srcPath: string;
+        let destPath: string;
         let pkgPath: string;
 
         assert.ok(fileParam, 'fileParam is required');
@@ -508,21 +509,26 @@ export class Program {
             fileParam = this.removePkgPrefix(fileParam);
             srcPath = s`${path.resolve(rootDir, fileParam)}`;
             pkgPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
+            destPath = pkgPath;
         } else {
             let param: any = fileParam;
 
-            if (param.src) {
-                srcPath = s`${param.src}`;
+            if (param.src ?? param.srcPath) {
+                srcPath = s`${param.srcPath ?? param.src}`;
             }
-            if (param.srcPath) {
-                srcPath = s`${param.srcPath}`;
-            }
-            if (param.dest) {
-                pkgPath = s`${this.removePkgPrefix(param.dest)}`;
+            if (param.dest ?? param.destPath) {
+                destPath = s`${this.removePkgPrefix(param.destPath ?? param.dest)}`;
             }
             if (param.pkgPath) {
                 pkgPath = s`${this.removePkgPrefix(param.pkgPath)}`;
             }
+        }
+
+        //sync destPath and pkgPath if we have one but not both
+        if (destPath && !pkgPath) {
+            pkgPath = destPath;
+        } else if (!destPath && pkgPath) {
+            destPath = pkgPath;
         }
 
         //if there's no srcPath, use the pkgPath to build an absolute srcPath
@@ -534,10 +540,20 @@ export class Program {
             srcPath = util.standardizePath(srcPath);
         }
 
-        //if there's no pkgPath, compute relative path from rootDir
-        if (!pkgPath) {
+        //if there's no pkgPath or destPath, compute relative path from rootDir
+        if (!pkgPath && !destPath) {
             pkgPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
         }
+
+        //sync destPath and pkgPath if we have one but not both
+        if (destPath && !pkgPath) {
+            pkgPath = destPath;
+        } else if (!destPath && pkgPath) {
+            destPath = pkgPath;
+        }
+
+        //remove leading slashes from destPath
+        destPath = destPath.replace(/^[\/\\]+/, '');
         //remove leading slashes from pkgPath
         pkgPath = pkgPath.replace(/^[\/\\]+/, '');
 
@@ -546,6 +562,7 @@ export class Program {
 
         return {
             srcPath: srcPath,
+            destPath: destPath,
             pkgPath: pkgPath
         };
     }

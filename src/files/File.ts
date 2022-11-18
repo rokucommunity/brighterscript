@@ -24,7 +24,7 @@ export interface File {
      *    destPath: "source/main.bs"
      * }
      */
-    destPath: string; // "images\\profile.png"
+    destPath?: string; // "images\\profile.png"
     /**
      * The path to the file within the package, relative to the root of the package/zip.
      *
@@ -37,7 +37,7 @@ export interface File {
      *    pkgPath: "source/main.brs" //(note the `.brs` file extension)
      * }
      */
-    pkgPath?: string; // "images\\profile.jpg"   file.bs   file.brs
+    pkgPath: string; // "images\\profile.jpg"   file.bs   file.brs
     /**
      * The key used to identify this file in the dependency graph.
      * If omitted, the pkgPath is used.

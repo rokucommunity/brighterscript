@@ -560,6 +560,7 @@ describe('Program', () => {
                 getPaths('source/main.brs', rootDir)
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
+                destPath: s`source/main.brs`,
                 pkgPath: s`source/main.brs`
             });
         });
@@ -569,6 +570,7 @@ describe('Program', () => {
                 getPaths(`${rootDir}/source\\main.brs`, rootDir)
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
+                destPath: s`source/main.brs`,
                 pkgPath: s`source/main.brs`
             });
         });
@@ -578,6 +580,7 @@ describe('Program', () => {
                 getPaths({ dest: 'source/main.brs' }, rootDir)
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
+                destPath: s`source/main.brs`,
                 pkgPath: s`source/main.brs`
             });
         });
@@ -587,6 +590,7 @@ describe('Program', () => {
                 getPaths({ src: `${rootDir}/source/main.brs` }, rootDir)
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
+                destPath: s`source/main.brs`,
                 pkgPath: s`source/main.brs`
             });
         });
@@ -596,16 +600,18 @@ describe('Program', () => {
                 getPaths('pkg:/source/main.brs', rootDir)
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
+                destPath: s`source/main.brs`,
                 pkgPath: s`source/main.brs`
             });
         });
 
         it('favors pkgPath over destPath', () => {
             expect(
-                getPaths({ srcPath: `${rootDir}/source/main.brs`, destPath: 'source/DontUse.brs', pkgPath: `pkg:/source/main.brs` })
+                getPaths({ srcPath: `${rootDir}/source/main.src.brs`, destPath: 'source/main.dest.brs', pkgPath: `pkg:/source/main.pkg.brs` })
             ).to.eql({
-                srcPath: s`${rootDir}/source/main.brs`,
-                pkgPath: s`source/main.brs`
+                srcPath: s`${rootDir}/source/main.src.brs`,
+                destPath: s`source/main.dest.brs`,
+                pkgPath: s`source/main.pkg.brs`
             });
         });
 
@@ -614,6 +620,7 @@ describe('Program', () => {
                 getPaths({ srcPath: `${rootDir}/source/main.brs`, pkgPath: `source/main.brs` })
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
+                destPath: s`source/main.brs`,
                 pkgPath: s`source/main.brs`
             });
         });
