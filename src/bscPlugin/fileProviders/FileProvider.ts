@@ -29,7 +29,7 @@ export class FileProvider {
     }
 
     private handleBrsFile() {
-        const file = this.event.fileFactory.BrsFile(this.event.srcPath, this.event.pkgPath);
+        const file = this.event.fileFactory.BrsFile(this.event);
         const text = this.event.getFileData().toString();
 
         let parseEvent: BeforeFileParseEvent = {
@@ -57,7 +57,7 @@ export class FileProvider {
         }
         const text = this.event.getFileData().toString();
         //add the file to the program
-        const file = this.event.fileFactory.XmlFile(this.event.srcPath, this.event.pkgPath);
+        const file = this.event.fileFactory.XmlFile(this.event);
 
         let beforeFileParseEvent: BeforeFileParseEvent = {
             //TODO remove `pathAbsolute` in v1

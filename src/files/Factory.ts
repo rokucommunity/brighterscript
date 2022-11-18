@@ -10,15 +10,15 @@ export class FileFactory {
     ) {
     }
 
-    BrsFile(srcPath: string, pkgPath: string) {
-        return new BrsFile(srcPath, pkgPath, this.program);
+    BrsFile(options: { srcPath: string; destPath: string; pkgPath?: string }) {
+        return new BrsFile({ ...options, program: this.program });
     }
 
-    XmlFile(srcPath: string, pkgPath: string) {
-        return new XmlFile(srcPath, pkgPath, this.program);
+    XmlFile(options: { srcPath: string; destPath: string; pkgPath?: string }) {
+        return new XmlFile({ ...options, program: this.program });
     }
 
-    AssetFile(srcPath: string, pkgPath: string) {
-        return new AssetFile(srcPath, pkgPath);
+    AssetFile(options: { srcPath: string; destPath: string; pkgPath?: string }) {
+        return new AssetFile(options);
     }
 }

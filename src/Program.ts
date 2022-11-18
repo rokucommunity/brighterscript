@@ -29,7 +29,6 @@ import type { SourceMapGenerator } from 'source-map';
 import { rokuDeploy } from 'roku-deploy';
 import type { Statement } from './parser/AstNode';
 import type { File } from './files/File';
-import { AssetFile } from './files/AssetFile';
 import { FileFactory } from './files/Factory';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
@@ -414,7 +413,7 @@ export class Program {
     public setFile<T extends File>(fileEntry: FileObj, fileData: FileData): T;
     public setFile<T extends File>(fileParam: FileObj | string, fileData: FileData): T {
         //normalize the file paths
-        const { srcPath, pkgPath } = this.getPaths(fileParam, this.options.rootDir);
+        const { srcPath, destPath, pkgPath } = this.getPaths(fileParam, this.options.rootDir);
 
         let file = this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
             //if the file is already loaded, remove it
@@ -422,7 +421,7 @@ export class Program {
                 this.removeFile(srcPath);
             }
 
-            const event = new ProvideFileEventInternal(this, srcPath, pkgPath, fileData, this.fileFactory);
+            const event = new ProvideFileEventInternal(this, srcPath, pkgPath, destPath, fileData, this.fileFactory);
 
             this.plugins.emit('beforeProvideFile', event);
             this.plugins.emit('provideFile', event);
@@ -431,7 +430,11 @@ export class Program {
             //if no files were provided, create a AssetFile to represent it.
             if (event.files.length === 0) {
                 event.files.push(
-                    new AssetFile(event.srcPath, event.pkgPath)
+                    this.fileFactory.AssetFile({
+                        srcPath: event.srcPath,
+                        destPath: event.destPath,
+                        pkgPath: event.pkgPath
+                    })
                 );
             }
 
@@ -1693,6 +1696,7 @@ class ProvideFileEventInternal<TFile extends File = File> implements ProvideFile
     constructor(
         public program: Program,
         public srcPath: string,
+        public destPath: string,
         public pkgPath: string,
         private initialData: FileData,
         public fileFactory: FileFactory

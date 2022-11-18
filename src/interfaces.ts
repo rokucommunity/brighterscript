@@ -435,11 +435,15 @@ export interface ProvideFileEvent<TFile extends File = File> {
      */
     srcExtension: string;
     /**
-     * The srcPath for the file
+     * The srcPath for the file. (i.e. `/user/bob/projects/VideoApp/source/main.bs`)
      */
     srcPath: string;
     /**
-     * The pkgPath for the file. This must be prefixed with `pkg:/` and use only forward slashes. (i.e. `pkg:/source/main.brs`)
+     * The destPath for the file. (i.e. for `/user/bob/projects/VideoApp/source/main.bs`, destPath would be `source/main.bs`)
+     */
+    destPath: string;
+    /**
+     * The pkgPath for the file. (i.e. for `/user/bob/projects/VideoApp/source/main.bs`, pkgPath would be `source/main.brs`)
      */
     pkgPath: string;
     /**

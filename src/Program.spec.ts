@@ -2758,10 +2758,13 @@ describe('Program', () => {
                 beforeProvideFile: (e: BeforeProvideFileEvent) => {
                     events.push(`beforeProvideFile:${e.pkgPath}`);
                     e.files.push(
-                        new AssetFile(e.srcPath, e.pkgPath)
+                        new AssetFile(e)
                     );
                     e.files.push(
-                        new AssetFile(e.srcPath + '.two', e.pkgPath + '.two')
+                        new AssetFile({
+                            srcPath: e.srcPath + '.two',
+                            destPath: e.destPath + '.two'
+                        })
                     );
                 },
                 provideFile: (e: ProvideFileEvent) => {
@@ -2809,10 +2812,13 @@ describe('Program', () => {
                 name: 'test',
                 beforeProvideFile: (e: BeforeProvideFileEvent) => {
                     e.files.push(
-                        new AssetFile(e.srcPath, e.pkgPath)
+                        new AssetFile(e)
                     );
                     e.files.push(
-                        new AssetFile(e.srcPath + '.two', e.pkgPath + '.two')
+                        new AssetFile({
+                            srcPath: e.srcPath + '.two',
+                            destPath: e.destPath + '.two'
+                        })
                     );
                 },
                 beforeFileRemove: (e: BeforeFileRemoveEvent) => {

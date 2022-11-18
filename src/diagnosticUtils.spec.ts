@@ -19,7 +19,7 @@ describe('diagnosticUtils', () => {
                 message: 'Bad thing happened',
                 range: null, //important...this needs to be null for the test to pass,
                 code: 1234,
-                file: new AssetFile('src', 'dest')
+                file: new AssetFile({ srcPath: 'src', destPath: 'dest' })
             } as any);
         });
         it('does not crash when range is undefined', () => {

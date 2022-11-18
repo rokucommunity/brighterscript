@@ -55,11 +55,11 @@ export class BrsFile implements File {
             [this.srcPath, this.pkgPath, this.program] = args;
         } else {
             //spread the constructor args onto this object
-            Object.assign(this, args);
+            Object.assign(this, args[0]);
         }
         this.srcPath = s`${this.srcPath}`;
-        this.pkgPath = s`${this.pkgPath}`;
-        this.destPath = s`${this.destPath ?? this.pkgPath}`;
+        this.destPath = s`${this.destPath}`;
+        this.pkgPath = s`${this.pkgPath ?? this.destPath}`;
 
         this.extension = util.getExtension(this.srcPath);
 
