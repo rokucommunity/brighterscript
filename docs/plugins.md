@@ -518,6 +518,20 @@ When you build a BrighterScript plugin, you will need to `npm install` a version
 
 To mitigate this, the `provideFile` events supply a `fileFactory`, which exposes the file classes from the runner's brighterscript version. When possible, use the file factories found in `event.fileFactory` instead of direct class constructors. (i.e. use `event.fileFactory.BrsFile` instead of `new BrsFile()`) You can see examples of this in the previous code snippets above.
 
+### Program changes
+Historically, only `.brs`, `.bs`, and `.xml` files would be present in the `Program`. As a result of the File API being introduced, now every single file referenced in your `files` array will be present in the program. Unhandled files will be loaded as generic `AssetFile` instances. This may impact plugins that aren't properly guarding against specific file types. Consider this plugin code:
+```typescript
+onFileValidate(event){
+    if (isXmlFile(event.file) {
+        //do XmlFile work
+    } else{
+        //assume it's a BrsFile (bad!!!)
+    }
+}
+```
+
+If a plugin has code like this, it may start failing due to receiving an `AssetFile` or `JpegFile` that it didn't expect. We recommend that plugin authors always guard their code with file-specific conditional checks.
+
 ### srcPath, destPath, and pkgPath
 The file api introduces a breaking change related to file paths. Previously there were only `srcPath` and `pkgPath`. `pkgPath` historically contained the file path as you would reference it in your project, such as `source/main.bs`. However, there was no property to represent the file path when it was actually placed in the zip (i.e. `source/main.brs`).
 
