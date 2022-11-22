@@ -109,14 +109,14 @@ export class XmlScope extends Scope {
             let lookup = {} as Record<string, FileReference>;
             for (let parentScriptImport of parentScriptImports) {
                 //keep the first occurance of a pkgPath. Parent imports are first in the array
-                if (!lookup[parentScriptImport.pkgPath]) {
-                    lookup[parentScriptImport.pkgPath] = parentScriptImport;
+                if (!lookup[parentScriptImport.destPath]) {
+                    lookup[parentScriptImport.destPath] = parentScriptImport;
                 }
             }
 
             //add warning for every script tag that this file shares with an ancestor
             for (let scriptImport of this.xmlFile.scriptTagImports) {
-                let ancestorScriptImport = lookup[scriptImport.pkgPath];
+                let ancestorScriptImport = lookup[scriptImport.destPath];
                 if (ancestorScriptImport) {
                     let ancestorComponent = ancestorScriptImport.sourceFile as XmlFile;
                     let ancestorComponentName = ancestorComponent.componentName?.text ?? ancestorComponent.destPath;
@@ -147,9 +147,9 @@ export class XmlScope extends Scope {
             let result = [
                 this.xmlFile
             ] as File[];
-            let scriptPkgPaths = this.xmlFile.getOwnDependencies();
-            for (let scriptPkgPath of scriptPkgPaths) {
-                let file = this.program.getFileByPkgPath(scriptPkgPath);
+            let scriptDestPaths = this.xmlFile.getOwnDependencies();
+            for (let destPath of scriptDestPaths) {
+                let file = this.program.getFile(destPath, false);
                 if (file) {
                     result.push(file);
                 }

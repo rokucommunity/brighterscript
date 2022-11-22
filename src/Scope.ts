@@ -1067,11 +1067,11 @@ export class Scope {
         let scriptImports = this.getOwnScriptImports();
         //verify every script import
         for (let scriptImport of scriptImports) {
-            let referencedFile = this.getFileByRelativePath(scriptImport.pkgPath);
+            let referencedFile = this.getFileByRelativePath(scriptImport.destPath);
             //if we can't find the file
             if (!referencedFile) {
                 //skip the default bslib file, it will exist at transpile time but should not show up in the program during validation cycle
-                if (scriptImport.pkgPath === `source${path.sep}bslib.brs`) {
+                if (scriptImport.destPath === this.program.bslibPkgPath) {
                     continue;
                 }
                 let dInfo: DiagnosticInfo;
@@ -1087,7 +1087,7 @@ export class Scope {
                     file: scriptImport.sourceFile
                 });
                 //if the character casing of the script import path does not match that of the actual path
-            } else if (scriptImport.pkgPath !== referencedFile.destPath) {
+            } else if (scriptImport.destPath !== referencedFile.destPath) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.destPath),
                     range: scriptImport.filePathRange,

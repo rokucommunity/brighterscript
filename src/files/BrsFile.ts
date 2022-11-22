@@ -177,7 +177,7 @@ export class BrsFile implements File {
                 if (isImportStatement(statement) && statement.filePathToken) {
                     result.push({
                         filePathRange: statement.filePathToken.range,
-                        pkgPath: util.getPkgPathFromTarget(this.destPath, statement.filePath),
+                        destPath: util.getPkgPathFromTarget(this.destPath, statement.filePath),
                         sourceFile: this,
                         text: statement.filePathToken?.text
                     });
@@ -302,7 +302,7 @@ export class BrsFile implements File {
      * The list of files that this file depends on
      */
     public get dependencies() {
-        const result = this.ownScriptImports.filter(x => !!x.pkgPath).map(x => x.pkgPath.toLowerCase());
+        const result = this.ownScriptImports.filter(x => !!x.destPath).map(x => x.destPath.toLowerCase());
 
         //if this is a .brs file, watch for typedef changes
         if (this.extension === '.brs') {
@@ -795,9 +795,9 @@ export class BrsFile implements File {
                 const [, openingQuote, fileProtocol] = match;
                 //include every absolute file path from this scope
                 for (const file of scope.getAllFiles()) {
-                    const pkgPath = `${fileProtocol}:/${file.destPath.replace(/\\/g, '/')}`;
+                    const destPath = `${fileProtocol}:/${file.destPath.replace(/\\/g, '/')}`;
                     result.push({
-                        label: pkgPath,
+                        label: destPath,
                         textEdit: TextEdit.replace(
                             util.createRange(
                                 currentToken.range.start.line,
@@ -807,7 +807,7 @@ export class BrsFile implements File {
                                 //-1 to exclude the closing quotemark (or the end character if there is no closing quotemark)
                                 currentToken.range.end.character + (currentToken.text.endsWith('"') ? -1 : 0)
                             ),
-                            pkgPath
+                            destPath
                         ),
                         kind: CompletionItemKind.File
                     });

@@ -90,7 +90,7 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="ChildScene.bs" />
                 </component>
             `);
-            expect(file.scriptTagImports.map(x => x.pkgPath)[0]).to.equal(
+            expect(file.scriptTagImports.map(x => x.destPath)[0]).to.equal(
                 s`components/ChildScene.bs`
             );
         });
@@ -105,7 +105,7 @@ describe('XmlFile', () => {
                 </component>
             `);
             expect(
-                file.scriptTagImports?.[0]?.pkgPath
+                file.scriptTagImports?.[0]?.destPath
             ).to.eql(
                 s`components/ChildScene.brs`
             );
@@ -241,7 +241,7 @@ describe('XmlFile', () => {
             expect(file.scriptTagImports[0]).to.deep.include(<FileReference>{
                 sourceFile: file,
                 text: 'pkg:/components/cmp1.brs',
-                pkgPath: `components${path.sep}cmp1.brs`,
+                destPath: `components${path.sep}cmp1.brs`,
                 filePathRange: Range.create(2, 42, 2, 66)
             });
         });
@@ -267,7 +267,7 @@ describe('XmlFile', () => {
             expect(file.scriptTagImports.length).to.equal(1);
             expect(file.scriptTagImports[0]).to.deep.include(<FileReference>{
                 text: 'cmp1.brs',
-                pkgPath: `components${path.sep}cmp1.brs`
+                destPath: `components${path.sep}cmp1.brs`
             });
         });
 
@@ -360,7 +360,7 @@ describe('XmlFile', () => {
 
             const xmlFile = program.setFile<XmlFile>('components/component1/component1.xml', ``);
             xmlFile.parser.references.scriptTagImports.push({
-                pkgPath: s`components/component1/component1.brs`,
+                destPath: s`components/component1/component1.brs`,
                 text: 'component1.brs',
                 filePathRange: Range.create(1, 1, 1, 1)
             });

@@ -260,6 +260,6 @@ describe('import statements', () => {
             import "pkg:/"
         `);
         expect(brsFile.ownScriptImports.length).to.equal(5);
-        expect(brsFile.ownScriptImports.filter(p => !!p.pkgPath).length).to.equal(3);
+        expect(brsFile.ownScriptImports.filter(p => !!p.destPath).length).to.equal(3);
     });
 });

@@ -47,10 +47,10 @@ export class CodeActionsProcessor {
 
         //find all files that reference this function
         for (const file of files) {
-            const pkgPath = util.sanitizePkgPath(file.destPath);
+            const destPath = util.sanitizePkgPath(file.destPath);
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
-                    title: `import "${pkgPath}"`,
+                    title: `import "${destPath}"`,
                     diagnostics: [diagnostic],
                     isPreferred: false,
                     kind: CodeActionKind.QuickFix,
@@ -58,7 +58,7 @@ export class CodeActionsProcessor {
                         type: 'insert',
                         filePath: this.event.file.srcPath,
                         position: insertPosition,
-                        newText: `import "${pkgPath}"\n`
+                        newText: `import "${destPath}"\n`
                     }]
                 })
             );

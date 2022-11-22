@@ -51,7 +51,7 @@ export class XmlFileValidator {
         //catch script imports with same path as the auto-imported codebehind file
         const scriptTagImports = this.event.file.parser.references.scriptTagImports;
         let explicitCodebehindScriptTag = this.event.file.program.options.autoImportComponentScript === true
-            ? scriptTagImports.find(x => this.event.file.possibleCodebehindPkgPaths.includes(x.pkgPath))
+            ? scriptTagImports.find(x => this.event.file.possibleCodebehindDestPaths.includes(x.destPath))
             : undefined;
         if (explicitCodebehindScriptTag) {
             this.event.file.diagnostics.push({

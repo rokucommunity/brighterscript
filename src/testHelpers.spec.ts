@@ -253,10 +253,10 @@ function getTestFileAction(
     action: (file: File) => CodeWithSourceMap,
     scopeGetter: () => [program: Program, rootDir: string]
 ) {
-    return function testFileAction(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) {
+    return function testFileAction(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
-        let file = program.setFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
+        let file = program.setFile<BrsFile>({ src: s`${rootDir}/${destPath}`, dest: destPath }, source);
         program.validate();
         if (failOnDiagnostic !== false) {
             expectZeroDiagnostics(program);

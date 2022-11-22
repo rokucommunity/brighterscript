@@ -607,23 +607,23 @@ export class Program {
     }
 
     /**
-     * Get a list of files for the given (platform-normalized) pkgPath array.
+     * Get a list of files for the given (platform-normalized) destPath array.
      * Missing files are just ignored.
      * @deprecated use `getFiles` instead, which auto-detects the path types
      */
-    public getFilesByPkgPaths<T extends File[]>(pkgPaths: string[]) {
-        return pkgPaths
-            .map(pkgPath => this.getFileByPkgPath(pkgPath))
+    public getFilesByPkgPaths<T extends File[]>(destPaths: string[]) {
+        return destPaths
+            .map(destpath => this.getFileByPkgPath(destpath))
             .filter(file => file !== undefined) as T;
     }
 
     /**
-     * Get a file with the specified (platform-normalized) pkg path.
+     * Get a file with the specified (platform-normalized) destPath.
      * If not found, return undefined
      * @deprecated use `getFile` instead, which auto-detects the path type
      */
-    public getFileByPkgPath<T extends File>(pkgPath: string) {
-        return this.destMap.get(pkgPath.toLowerCase()) as T;
+    public getFileByPkgPath<T extends File>(destPath: string) {
+        return this.destMap.get(destPath.toLowerCase()) as T;
     }
 
     /**
@@ -639,7 +639,7 @@ export class Program {
 
     /**
      * Remove a file from the program
-     * @param filePath can be a srcPath, a pkgPath, or a destPath (same as pkgPath but without `pkg:/`)
+     * @param filePath can be a srcPath, a destPath, or a destPath with leading `pkg:/`
      * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
     public removeFile(filePath: string, normalizePath = true) {
@@ -1318,13 +1318,13 @@ export class Program {
      */
 
     public getScriptImportCompletions(sourceDestPath: string, scriptImport: FileReference) {
-        let lowerSourcePkgPath = sourceDestPath.toLowerCase();
+        let lowerSourceDestPath = sourceDestPath.toLowerCase();
 
         let result = [] as CompletionItem[];
         /**
          * hashtable to prevent duplicate results
          */
-        let resultPkgPaths = {} as Record<string, boolean>;
+        let resultDestPaths = {} as Record<string, boolean>;
 
         //restrict to only .brs files
         for (let key in this.files) {
@@ -1334,14 +1334,14 @@ export class Program {
                 //is a BrightScript or BrighterScript file
                 (fileExtension === '.bs' || fileExtension === '.brs') &&
                 //this file is not the current file
-                lowerSourcePkgPath !== file.destPath.toLowerCase()
+                lowerSourceDestPath !== file.destPath.toLowerCase()
             ) {
                 //add the relative path
                 const relativePath = util.getRelativePath(sourceDestPath, file.destPath).replace(/\\/g, '/');
-                let filePkgPath = util.sanitizePkgPath(file.destPath);
-                let lowerFilePkgPath = filePkgPath.toLowerCase();
-                if (!resultPkgPaths[lowerFilePkgPath]) {
-                    resultPkgPaths[lowerFilePkgPath] = true;
+                let fileDestPath = util.sanitizePkgPath(file.destPath);
+                let fileDestPathLower = fileDestPath.toLowerCase();
+                if (!resultDestPaths[fileDestPathLower]) {
+                    resultDestPaths[fileDestPathLower] = true;
 
                     result.push({
                         label: relativePath,
@@ -1355,11 +1355,11 @@ export class Program {
 
                     //add the absolute path
                     result.push({
-                        label: filePkgPath,
+                        label: fileDestPath,
                         detail: file.srcPath,
                         kind: CompletionItemKind.File,
                         textEdit: {
-                            newText: filePkgPath,
+                            newText: fileDestPath,
                             range: scriptImport.filePathRange
                         }
                     });

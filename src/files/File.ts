@@ -11,7 +11,7 @@ export interface File {
      */
     srcPath: string;
     /**
-     * The path where the file exists within the context of a brightscript program, relative ot the root of the package/zip.
+     * The path where the file exists within the context of a brightscript program, relative to the root of the package/zip.
      * This is the path that you will reference within your code.
      * Generally this is the same as `pkgPath`, but can be different (as shown in the example below):
      *
@@ -27,6 +27,7 @@ export interface File {
     destPath?: string; // "images\\profile.png"
     /**
      * The path to the file within the package, relative to the root of the package/zip.
+     * This is different than `destPath` in that it's the final file name that is used when creating the zip.
      *
      * **NOTE:** This should _not_ containing a leading slash or `pkg:/` scheme
      * @example
@@ -94,6 +95,9 @@ export interface File {
 //included for backwards compatibility reasons. Remove in v1
 export type BscFile = File;
 
+/**
+ * Create a basic `File` object.
+ */
 export function createFile(props: Partial<File>) {
     props.diagnostics ??= [];
     props.dependencies ??= [];

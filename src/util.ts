@@ -1478,8 +1478,8 @@ export class Util {
 
     public validateTooDeepFile(file: (BrsFile | XmlFile)) {
         //find any files nested too deep
-        let pkgPath = file.destPath ?? file.destPath.toString();
-        let rootFolder = pkgPath.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
+        let destPath = file?.destPath?.toString();
+        let rootFolder = destPath?.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
 
         if (isBrsFile(file) && rootFolder !== 'source') {
             return;
@@ -1489,7 +1489,7 @@ export class Util {
             return;
         }
 
-        let fileDepth = this.getParentDirectoryCount(pkgPath);
+        let fileDepth = this.getParentDirectoryCount(destPath);
         if (fileDepth >= 8) {
             file.addDiagnostics([{
                 ...DiagnosticMessages.detectedTooDeepFileSource(fileDepth),

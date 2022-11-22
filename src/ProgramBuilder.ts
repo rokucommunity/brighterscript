@@ -14,7 +14,7 @@ import * as fsExtra from 'fs-extra';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { File } from './files/File';
-import { createFile } from './files/File';
+import { AssetFile } from './files/AssetFile';
 
 /**
  * A runner class that handles
@@ -71,14 +71,16 @@ export class ProgramBuilder {
     public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
         let file: File = this.program.getFile(srcPath);
         if (!file) {
-            file = createFile({
-                type: 'BrsFile',
-                pkgPath: this.program.getPkgPath(srcPath),
-                pathAbsolute: srcPath, //keep this for backwards-compatibility. TODO remove in v1
-                srcPath: srcPath,
-                diagnostics: diagnostic
-            } as any);
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            const paths = this.program['getPaths'](srcPath, this.program.options.rootDir ?? this.options.rootDir);
+            file = new AssetFile(paths);
+            //keep this for backwards-compatibility. TODO remove in v1
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            file['pathAbsolute'] = file.srcPath;
+            diagnostic.file = file;
+            file.diagnostics = [diagnostic as any];
         }
+
         diagnostic.file = file;
         this.staticDiagnostics.push(<any>diagnostic);
     }

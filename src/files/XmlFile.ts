@@ -47,7 +47,7 @@ export class XmlFile implements File {
 
         this.extension = path.extname(this.srcPath).toLowerCase();
 
-        this.possibleCodebehindPkgPaths = [
+        this.possibleCodebehindDestPaths = [
             this.pkgPath.replace(/\.xml$/, '.bs'),
             this.pkgPath.replace(/\.xml$/, '.brs')
         ];
@@ -76,8 +76,19 @@ export class XmlFile implements File {
 
     /**
      * The list of possible autoImport codebehind pkg paths.
+     * @deprecated use `possibleCodebehindDestPaths` instead.
      */
-    public possibleCodebehindPkgPaths: string[];
+    public get possibleCodebehindPkgPaths() {
+        return this.possibleCodebehindDestPaths;
+    }
+    public set possibleCodebehindPkgPaths(value) {
+        this.possibleCodebehindDestPaths = value;
+    }
+
+    /**
+     * The list of possible autoImport codebehind destPath values
+     */
+    public possibleCodebehindDestPaths: string[];
 
     /**
      * An unsubscribe function for the dependencyGraph subscription
@@ -110,7 +121,7 @@ export class XmlFile implements File {
     }
 
     /**
-     * List of all pkgPaths to scripts that this XmlFile depends, regardless of whether they are loaded in the program or not.
+     * List of all `destPath` values pointing to scripts that this XmlFile depends on, regardless of whether they are loaded in the program or not.
      * This includes own dependencies and all parent compoent dependencies
      * coming from:
      *  - script tags
@@ -125,7 +136,7 @@ export class XmlFile implements File {
     }
 
     /**
-     * List of all pkgPaths to scripts that this XmlFile depends on directly, regardless of whether they are loaded in the program or not.
+     * List of all destPaths to scripts that this XmlFile depends on directly, regardless of whether they are loaded in the program or not.
      * This does not account for parent component scripts
      * coming from:
      *  - script tags
@@ -140,7 +151,7 @@ export class XmlFile implements File {
     }
 
     /**
-     * List of all pkgPaths to scripts that this XmlFile depends on that are actually loaded into the program.
+     * List of all destPaths to scripts that this XmlFile depends on that are actually loaded into the program.
      * This does not account for parent component scripts.
      * coming from:
      *  - script tags
@@ -294,7 +305,7 @@ export class XmlFile implements File {
      */
     public get dependencies() {
         const dependencies = [
-            ...this.scriptTagImports.map(x => x.pkgPath.toLowerCase())
+            ...this.scriptTagImports.map(x => x.destPath.toLowerCase())
         ];
         //if autoImportComponentScript is enabled, add the .bs and .brs files with the same name
         if (this.program.options.autoImportComponentScript) {
@@ -333,7 +344,7 @@ export class XmlFile implements File {
     /**
      * The key used in the dependency graph for this file.
      * If we have a component name, we will use that so we can be discoverable by child components.
-     * If we don't have a component name, use the pkgPath so at least we can self-validate
+     * If we don't have a component name, use the destPath so at least we can self-validate
      */
     public get dependencyGraphKey() {
         let key: string;
@@ -376,8 +387,8 @@ export class XmlFile implements File {
                 return true;
             }
             let allDependencies = this.getOwnDependencies();
-            for (let importPkgPath of allDependencies) {
-                if (importPkgPath.toLowerCase() === file.destPath.toLowerCase()) {
+            for (let destPath of allDependencies) {
+                if (destPath.toLowerCase() === file.destPath.toLowerCase()) {
                     return true;
                 }
             }
@@ -430,7 +441,7 @@ export class XmlFile implements File {
      * Walk up the ancestor chain and aggregate all of the script tag imports
      */
     public getAncestorScriptTagImports() {
-        let result = [];
+        let result: FileReference[] = [];
         let parent = this.parentComponent;
         while (parent) {
             result.push(...parent.scriptTagImports);
@@ -460,14 +471,14 @@ export class XmlFile implements File {
 
         let parentImports = this.parentComponent?.getAvailableScriptImports() ?? [];
 
-        let parentMap = parentImports.reduce((map, pkgPath) => {
-            map[pkgPath.toLowerCase()] = true;
+        let parentMap = parentImports.reduce((map, destPath) => {
+            map[destPath.toLowerCase()] = true;
             return map;
         }, {});
 
         //if the XML already has this import, skip this one
         let alreadyThereScriptImportMap = this.scriptTagImports.reduce((map, fileReference) => {
-            map[fileReference.pkgPath.toLowerCase()] = true;
+            map[fileReference.destPath.toLowerCase()] = true;
             return map;
         }, {});
 
