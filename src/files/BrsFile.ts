@@ -59,7 +59,10 @@ export class BrsFile implements File {
         }
         this.srcPath = s`${this.srcPath}`;
         this.destPath = s`${this.destPath}`;
-        this.pkgPath = s`${this.pkgPath ?? this.destPath}`;
+        //if no pkgPath, leverage destPath
+        if (!this.pkgPath) {
+            this.pkgPath = this.destPath.replace(/\.bs$/i, '.brs');
+        }
 
         this.extension = util.getExtension(this.srcPath);
 
@@ -174,7 +177,7 @@ export class BrsFile implements File {
                 if (isImportStatement(statement) && statement.filePathToken) {
                     result.push({
                         filePathRange: statement.filePathToken.range,
-                        pkgPath: util.getPkgPathFromTarget(this.pkgPath, statement.filePath),
+                        pkgPath: util.getPkgPathFromTarget(this.destPath, statement.filePath),
                         sourceFile: this,
                         text: statement.filePathToken?.text
                     });
@@ -304,7 +307,7 @@ export class BrsFile implements File {
         //if this is a .brs file, watch for typedef changes
         if (this.extension === '.brs') {
             result.push(
-                util.getTypedefPath(this.pkgPath)
+                util.getTypedefPath(this.destPath)
             );
         }
         return result;
@@ -778,7 +781,7 @@ export class BrsFile implements File {
         //handle script import completions
         let scriptImport = util.getScriptImportAtPosition(this.ownScriptImports, position);
         if (scriptImport) {
-            return this.program.getScriptImportCompletions(this.pkgPath, scriptImport);
+            return this.program.getScriptImportCompletions(this.destPath, scriptImport);
         }
 
         //if cursor is within a comment, disable completions
@@ -792,7 +795,7 @@ export class BrsFile implements File {
                 const [, openingQuote, fileProtocol] = match;
                 //include every absolute file path from this scope
                 for (const file of scope.getAllFiles()) {
-                    const pkgPath = `${fileProtocol}:/${file.pkgPath.replace(/\\/g, '/')}`;
+                    const pkgPath = `${fileProtocol}:/${file.destPath.replace(/\\/g, '/')}`;
                     result.push({
                         label: pkgPath,
                         textEdit: TextEdit.replace(

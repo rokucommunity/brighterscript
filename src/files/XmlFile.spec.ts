@@ -7,7 +7,6 @@ import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
-import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
 import { standardizePath as s } from '../util';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
@@ -27,7 +26,7 @@ describe('XmlFile', () => {
         fsExtra.emptyDirSync(tempDir);
         fsExtra.ensureDirSync(rootDir);
         fsExtra.ensureDirSync(stagingDir);
-        program = new Program({ rootDir: rootDir });
+        program = new Program({ rootDir: rootDir, stagingDir: stagingDir });
         file = new XmlFile(`${rootDir}/components/MainComponent.xml`, 'components/MainComponent.xml', program);
     });
     afterEach(() => {
@@ -357,10 +356,9 @@ describe('XmlFile', () => {
 
     describe('getCompletions', () => {
         it('formats completion paths with proper slashes', () => {
-            let scriptPath = s`C:/app/components/component1/component1.brs`;
-            program.files[scriptPath] = new BrsFile(scriptPath, s`components/component1/component1.brs`, program);
+            program.setFile('components/component1/component1.brs', ``);
 
-            let xmlFile = new XmlFile(s`${rootDir}/components/component1/component1.xml`, s`components/component1/component1.xml`, <any>program);
+            const xmlFile = program.setFile<XmlFile>('components/component1/component1.xml', ``);
             xmlFile.parser.references.scriptTagImports.push({
                 pkgPath: s`components/component1/component1.brs`,
                 text: 'component1.brs',
@@ -737,7 +735,7 @@ describe('XmlFile', () => {
                 </component>
             `;
 
-            await program.transpile([], stagingDir);
+            await program.transpile();
             expect(
                 trim(
                     fsExtra.readFileSync(`${stagingDir}/components/SimpleScene.xml`).toString()
@@ -746,7 +744,7 @@ describe('XmlFile', () => {
 
             //clear the output folder
             fsExtra.emptyDirSync(stagingDir);
-            await program.transpile([], stagingDir);
+            await program.transpile();
             expect(
                 trim(
                     fsExtra.readFileSync(`${stagingDir}/components/SimpleScene.xml`).toString()
@@ -1215,7 +1213,7 @@ describe('XmlFile', () => {
                 <component name="comp1">
                 </component>
             `);
-            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
+            expect(program.getComponent('comp1').file.destPath).to.equal(comp2.destPath);
 
             //add comp1. it should become the main component with this name
             const comp1 = program.setFile('components/comp1.xml', trim`
@@ -1223,11 +1221,11 @@ describe('XmlFile', () => {
                 <component name="comp1" extends="Group">
                 </component>
             `);
-            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp1.pkgPath);
+            expect(program.getComponent('comp1').file.destPath).to.equal(comp1.destPath);
 
             //remove comp1, comp2 should be the primary again
             program.removeFile(s`${rootDir}/components/comp1.xml`);
-            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
+            expect(program.getComponent('comp1').file.destPath).to.equal(comp2.destPath);
 
             //add comp3
             program.setFile('components/comp3.xml', trim`
@@ -1236,7 +1234,7 @@ describe('XmlFile', () => {
                 </component>
             `);
             //...the 2nd file should still be main
-            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
+            expect(program.getComponent('comp1').file.destPath).to.equal(comp2.destPath);
         });
     });
 });

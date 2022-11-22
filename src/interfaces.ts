@@ -108,12 +108,12 @@ export interface FileObj {
  */
 export interface FileReference {
     /**
-     * The pkgPath to the referenced file.
+     * The destPath for the referenced file.
      */
-    pkgPath: string;
+    destPath: string;
     text: string;
     /**
-     * The file that is doing the import. Note this is NOT the file the pkgPath points to.
+     * The file that is doing the import. Note this is NOT the file the destPath points to.
      */
     sourceFile: XmlFile | BrsFile;
     /**
@@ -442,10 +442,6 @@ export interface ProvideFileEvent<TFile extends File = File> {
      * The destPath for the file. (i.e. for `/user/bob/projects/VideoApp/source/main.bs`, destPath would be `source/main.bs`)
      */
     destPath: string;
-    /**
-     * The pkgPath for the file. (i.e. for `/user/bob/projects/VideoApp/source/main.bs`, pkgPath would be `source/main.brs`)
-     */
-    pkgPath: string;
     /**
      * A function that returns the data for this file. This is a function to allow lazy-loading of the data
      * (for situations like images where you may never need to actually load the file).

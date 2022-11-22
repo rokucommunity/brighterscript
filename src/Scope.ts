@@ -363,7 +363,7 @@ export class Scope {
 
     /**
      * Get the file from this scope with the given path.
-     * @param filePath can be a srcPath or pkgPath
+     * @param filePath can be a srcPath or destPath
      * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
     public getFile<TFile extends File>(filePath: string, normalizePath = true) {
@@ -371,7 +371,7 @@ export class Scope {
             return undefined;
         }
 
-        const key = path.isAbsolute(filePath) ? 'srcPath' : 'pkgPath';
+        const key: keyof Pick<File, 'srcPath' | 'destPath'> = path.isAbsolute(filePath) ? 'srcPath' : 'destPath';
         let map = this.cache.getOrAdd('fileMaps-srcPath', () => {
             const result = new Map<string, File>();
             for (const file of this.getAllFiles()) {
@@ -415,7 +415,7 @@ export class Scope {
                     }
                 }
             }
-            this.logDebug('getAllFiles', () => result.map(x => x.pkgPath));
+            this.logDebug('getAllFiles', () => result.map(x => x.destPath));
             return result;
         });
     }
@@ -504,7 +504,7 @@ export class Scope {
      */
     public getOwnCallables(): CallableContainer[] {
         let result = [] as CallableContainer[];
-        this.logDebug('getOwnCallables() files: ', () => this.getOwnFiles().map(x => x.pkgPath));
+        this.logDebug('getOwnCallables() files: ', () => this.getOwnFiles().map(x => x.destPath));
 
         //get callables from own files
         this.enumerateOwnFiles((file) => {
@@ -1013,7 +1013,7 @@ export class Scope {
                             ...DiagnosticMessages.overridesAncestorFunction(
                                 container.callable.name,
                                 container.scope.name,
-                                shadowedCallable.callable.file.pkgPath,
+                                shadowedCallable.callable.file.destPath,
                                 //grab the last item in the list, which should be the closest ancestor's version
                                 shadowedCallable.scope.name
                             ),
@@ -1087,9 +1087,9 @@ export class Scope {
                     file: scriptImport.sourceFile
                 });
                 //if the character casing of the script import path does not match that of the actual path
-            } else if (scriptImport.pkgPath !== referencedFile.pkgPath) {
+            } else if (scriptImport.pkgPath !== referencedFile.destPath) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.pkgPath),
+                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.destPath),
                     range: scriptImport.filePathRange,
                     file: scriptImport.sourceFile
                 });
@@ -1107,7 +1107,7 @@ export class Scope {
         }
         let files = this.getAllFiles();
         for (let file of files) {
-            if (file.pkgPath.toLowerCase() === relativePath.toLowerCase()) {
+            if (file.destPath.toLowerCase() === relativePath.toLowerCase()) {
                 return file;
             }
         }

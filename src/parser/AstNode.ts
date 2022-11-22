@@ -104,7 +104,7 @@ export abstract class Statement extends AstNode {
     /**
      * Annotations for this statement
      */
-    public annotations: AnnotationExpression[];
+    public annotations?: AnnotationExpression[];
 }
 
 

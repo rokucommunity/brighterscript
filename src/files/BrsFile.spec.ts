@@ -43,6 +43,37 @@ describe('BrsFile', () => {
         program.dispose();
     });
 
+    describe('constructor', () => {
+        it('calculates correct paths when no pkgPath specified', () => {
+            expect(
+                new BrsFile({
+                    srcPath: s`${rootDir}/source/main.bs`,
+                    destPath: s`source/main.bs`,
+                    program: program
+                })
+            ).to.include({
+                srcPath: s`${rootDir}/source/main.bs`,
+                destPath: s`source/main.bs`,
+                pkgPath: s`source/main.brs`
+            });
+        });
+
+        it('uses supplied pkgPath', () => {
+            expect(
+                new BrsFile({
+                    srcPath: s`${rootDir}/source/main.bs`,
+                    destPath: s`source/main.bs`,
+                    pkgPath: s`source/main.transpiled.brs`,
+                    program: program
+                })
+            ).to.include({
+                srcPath: s`${rootDir}/source/main.bs`,
+                destPath: s`source/main.bs`,
+                pkgPath: s`source/main.transpiled.brs`
+            });
+        });
+    });
+
     describe('allowBrighterScriptInBrightScript', () => {
         it('is false by default', () => {
             program.setFile('source/main.brs', `

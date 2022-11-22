@@ -52,7 +52,7 @@ export class FileProvider {
 
     private handleXmlFile() {
         //only process files from the components folder (Roku will only parse xml files in the components folder)
-        if (!/^(pkg:\/)?components[\/\\]/i.exec(this.event.pkgPath)) {
+        if (!/^(pkg:\/)?components[\/\\]/i.exec(this.event.destPath)) {
             return;
         }
         const text = this.event.getFileData().toString();

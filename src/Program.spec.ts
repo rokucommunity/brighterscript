@@ -1,6 +1,5 @@
 import { assert, expect } from 'chai';
 import * as pick from 'object.pick';
-import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -24,8 +23,10 @@ import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
 import type { ProvideFileEvent, BeforeFileParseEvent, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent } from '.';
 import { AssetFile } from './files/AssetFile';
 import * as path from 'path';
+import type { SinonSpy } from 'sinon';
+import { createSandbox } from 'sinon';
 
-let sinon = sinonImport.createSandbox();
+const sinon = createSandbox();
 
 describe('Program', () => {
     let program: Program;
@@ -86,13 +87,12 @@ describe('Program', () => {
     describe('addFile', () => {
         it('adds various files to `pkgMap`', () => {
             program.setFile('source/main.brs', '');
-            expect(program['pkgMap']).to.have.property(s`source/main.brs`);
-
-            program.setFile('source/main.bs', '');
-            expect(program['pkgMap']).to.have.property(s`source/main.bs`);
+            expect(program.getFile('source/main.brs')).to.exist;
+            expect(program.getFile('source\\main.brs')).to.exist;
 
             program.setFile('components/comp1.xml', '');
-            expect(program['pkgMap']).to.have.property(s`components/comp1.xml`);
+            expect(program.getFile(s`components/comp1.xml`)).to.exist;
+            expect(program.getFile(s`components\\comp1.xml`)).to.exist;
         });
 
         it('does not crash when given a totally bogus file', () => {
@@ -137,7 +137,7 @@ describe('Program', () => {
                 end sub
             `);
             (file.parser.ast.statements[0] as FunctionStatement).func.body.statements[0] = new EmptyStatement();
-            await program.transpile([{ src: file.srcPath, dest: file.pkgPath }], tempDir);
+            await program.transpile([{ src: file.srcPath, dest: file.destPath }], tempDir);
         });
 
         it('works with different cwd', () => {
@@ -560,8 +560,7 @@ describe('Program', () => {
                 getPaths('source/main.brs', rootDir)
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
-                destPath: s`source/main.brs`,
-                pkgPath: s`source/main.brs`
+                destPath: s`source/main.brs`
             });
         });
 
@@ -570,8 +569,7 @@ describe('Program', () => {
                 getPaths(`${rootDir}/source\\main.brs`, rootDir)
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
-                destPath: s`source/main.brs`,
-                pkgPath: s`source/main.brs`
+                destPath: s`source/main.brs`
             });
         });
 
@@ -580,8 +578,7 @@ describe('Program', () => {
                 getPaths({ dest: 'source/main.brs' }, rootDir)
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
-                destPath: s`source/main.brs`,
-                pkgPath: s`source/main.brs`
+                destPath: s`source/main.brs`
             });
         });
 
@@ -590,8 +587,7 @@ describe('Program', () => {
                 getPaths({ src: `${rootDir}/source/main.brs` }, rootDir)
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
-                destPath: s`source/main.brs`,
-                pkgPath: s`source/main.brs`
+                destPath: s`source/main.brs`
             });
         });
 
@@ -600,28 +596,7 @@ describe('Program', () => {
                 getPaths('pkg:/source/main.brs', rootDir)
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
-                destPath: s`source/main.brs`,
-                pkgPath: s`source/main.brs`
-            });
-        });
-
-        it('favors pkgPath over destPath', () => {
-            expect(
-                getPaths({ srcPath: `${rootDir}/source/main.src.brs`, destPath: 'source/main.dest.brs', pkgPath: `pkg:/source/main.pkg.brs` })
-            ).to.eql({
-                srcPath: s`${rootDir}/source/main.src.brs`,
-                destPath: s`source/main.dest.brs`,
-                pkgPath: s`source/main.pkg.brs`
-            });
-        });
-
-        it('works when given a file', () => {
-            expect(
-                getPaths({ srcPath: `${rootDir}/source/main.brs`, pkgPath: `source/main.brs` })
-            ).to.eql({
-                srcPath: s`${rootDir}/source/main.brs`,
-                destPath: s`source/main.brs`,
-                pkgPath: s`source/main.brs`
+                destPath: s`source/main.brs`
             });
         });
     });
@@ -676,8 +651,8 @@ describe('Program', () => {
             program.setFile('components/component1.brs', '');
 
             let scope = program.getScopeByName(`components/component1.xml`);
-            expect(scope.getFile('components/component1.xml').pkgPath).to.equal(s`components/component1.xml`);
-            expect(scope.getFile('components/component1.brs').pkgPath).to.equal(s`components/component1.brs`);
+            expect(scope.getFile('components/component1.xml').destPath).to.equal(s`components/component1.xml`);
+            expect(scope.getFile('components/component1.brs').destPath).to.equal(s`components/component1.brs`);
         });
 
         it('adds xml file to files map', () => {
@@ -726,11 +701,11 @@ describe('Program', () => {
                             event.files.push({
                                 type: 'XmlFile',
                                 srcPath: event.srcPath,
-                                pkgPath: `components/${fileName}.xml`
+                                destPath: `components/${fileName}.xml`
                             }, {
                                 type: 'BrsFile',
                                 srcPath: `virtual:/${fileName}.brs`,
-                                pkgPath: `components/${fileName}.brs`
+                                destPath: `components/${fileName}.brs`
                             });
                         }
                     }
@@ -802,7 +777,7 @@ describe('Program', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(program.getScopeByName(xmlFile.pkgPath).getFile(brsPath)).to.exist;
+            expect(program.getScopeByName(xmlFile.destPath).getFile(brsPath)).to.exist;
         });
 
         it('reloads referenced fles when xml file changes', () => {
@@ -817,7 +792,7 @@ describe('Program', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(program.getScopeByName(xmlFile.pkgPath).getFile('components/component1.brs')).not.to.exist;
+            expect(program.getScopeByName(xmlFile.destPath).getFile('components/component1.brs')).not.to.exist;
 
             //reload the xml file contents, adding a new script reference.
             xmlFile = program.setFile('components/component1.xml', trim`
@@ -827,7 +802,7 @@ describe('Program', () => {
                 </component>
             `);
 
-            expect(program.getScopeByName(xmlFile.pkgPath).getFile('components/component1.brs')).to.exist;
+            expect(program.getScopeByName(xmlFile.destPath).getFile('components/component1.brs')).to.exist;
         });
     });
 
@@ -1599,7 +1574,7 @@ describe('Program', () => {
             `);
 
             //the component scope should only have the xml file
-            expect(program.getScopeByName(xmlFile.pkgPath).getOwnFiles().length).to.equal(1);
+            expect(program.getScopeByName(xmlFile.destPath).getOwnFiles().length).to.equal(1);
 
             //create the lib file
             let libFile = program.setFile('source/lib.brs', `'comment`);
@@ -1611,7 +1586,7 @@ describe('Program', () => {
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
                 </component>
             `);
-            let scope = program.getScopeByName(xmlFile.pkgPath);
+            let scope = program.getScopeByName(xmlFile.destPath);
             //the component scope should have the xml file AND the lib file
             expect(scope.getOwnFiles().length).to.equal(2);
             expect(scope.getFile(xmlFile.srcPath)).to.exist;
@@ -1625,8 +1600,8 @@ describe('Program', () => {
             `);
 
             //the scope should again only have the xml file loaded
-            expect(program.getScopeByName(xmlFile.pkgPath).getOwnFiles().length).to.equal(1);
-            expect(program.getScopeByName(xmlFile.pkgPath)).to.exist;
+            expect(program.getScopeByName(xmlFile.destPath).getOwnFiles().length).to.equal(1);
+            expect(program.getScopeByName(xmlFile.destPath)).to.exist;
         });
     });
 
@@ -2682,28 +2657,28 @@ describe('Program', () => {
         it('emits provideFile events', () => {
             const plugin = {
                 name: 'test',
-                beforeProvideFile: sinon.spy(),
-                provideFile: sinon.spy(),
-                afterProvideFile: sinon.spy()
+                beforeProvideFile: sinon.spy() as SinonSpy<[BeforeProvideFileEvent]>,
+                provideFile: sinon.spy() as SinonSpy<[BeforeProvideFileEvent]>,
+                afterProvideFile: sinon.spy() as SinonSpy<[BeforeProvideFileEvent]>
             };
             program.plugins.add(plugin);
             program.setFile('source/main.brs', `'main`);
             program.setFile('source/lib.brs', `'lib`);
             program.validate();
-            function test(spy: sinonImport.SinonSpy) {
+            function test(spy: SinonSpy<[BeforeProvideFileEvent]>) {
                 expect(
-                    plugin.beforeProvideFile.getCalls().map(x => ({
+                    spy.getCalls().map(x => ({
                         srcPath: x.args[0].srcPath,
-                        pkgPath: x.args[0].pkgPath,
+                        destPath: x.args[0].destPath,
                         fileData: x.args[0].getFileData().toString()
                     }))
                 ).to.eql([{
                     srcPath: s`${rootDir}/source/main.brs`,
-                    pkgPath: s`source/main.brs`,
+                    destPath: s`source/main.brs`,
                     fileData: `'main`
                 }, {
                     srcPath: s`${rootDir}/source/lib.brs`,
-                    pkgPath: s`source/lib.brs`,
+                    destPath: s`source/lib.brs`,
                     fileData: `'lib`
                 }]);
             }
@@ -2756,7 +2731,7 @@ describe('Program', () => {
             const plugin = {
                 name: 'test',
                 beforeProvideFile: (e: BeforeProvideFileEvent) => {
-                    events.push(`beforeProvideFile:${e.pkgPath}`);
+                    events.push(`beforeProvideFile:${e.destPath}`);
                     e.files.push(
                         new AssetFile(e)
                     );
@@ -2768,22 +2743,22 @@ describe('Program', () => {
                     );
                 },
                 provideFile: (e: ProvideFileEvent) => {
-                    events.push(`provideFile:${e.pkgPath}`);
+                    events.push(`provideFile:${e.destPath}`);
                 },
                 afterProvideFile: (e: AfterProvideFileEvent) => {
-                    events.push(`afterProvideFile:${e.pkgPath}`);
+                    events.push(`afterProvideFile:${e.destPath}`);
                 },
                 beforeFileAdd: (e: BeforeFileAddEvent) => {
-                    events.push(`beforeFileAdd:${e.file.pkgPath}`);
+                    events.push(`beforeFileAdd:${e.file.destPath}`);
                 },
                 afterFileAdd: (e: AfterFileAddEvent) => {
-                    events.push(`afterFileAdd:${e.file.pkgPath}`);
+                    events.push(`afterFileAdd:${e.file.destPath}`);
                 },
                 beforeFileRemove: (e: BeforeFileRemoveEvent) => {
-                    events.push(`beforeFileRemove:${e.file.pkgPath}`);
+                    events.push(`beforeFileRemove:${e.file.destPath}`);
                 },
                 afterFileRemove: (e: AfterFileRemoveEvent) => {
-                    events.push(`afterFileRemove:${e.file.pkgPath}`);
+                    events.push(`afterFileRemove:${e.file.destPath}`);
                 }
             };
             program.plugins.add(plugin);
@@ -2822,10 +2797,10 @@ describe('Program', () => {
                     );
                 },
                 beforeFileRemove: (e: BeforeFileRemoveEvent) => {
-                    events.push(`beforeFileRemove:${e.file.pkgPath}`);
+                    events.push(`beforeFileRemove:${e.file.destPath}`);
                 },
                 afterFileRemove: (e: AfterFileRemoveEvent) => {
-                    events.push(`afterFileRemove:${e.file.pkgPath}`);
+                    events.push(`afterFileRemove:${e.file.destPath}`);
                 }
             };
             program.plugins.add(plugin);

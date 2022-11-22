@@ -48,8 +48,8 @@ export class XmlFile implements File {
         this.extension = path.extname(this.srcPath).toLowerCase();
 
         this.possibleCodebehindPkgPaths = [
-            this.pkgPath.replace('.xml', '.bs'),
-            this.pkgPath.replace('.xml', '.brs')
+            this.pkgPath.replace(/\.xml$/, '.bs'),
+            this.pkgPath.replace(/\.xml$/, '.brs')
         ];
     }
 
@@ -157,7 +157,7 @@ export class XmlFile implements File {
             let result = [] as string[];
             let filesInProgram = this.program.getFiles(allDependencies);
             for (let file of filesInProgram) {
-                result.push(file.pkgPath);
+                result.push(file.destPath);
             }
             this.logDebug('computed allAvailableScriptImports', () => result);
             return result;
@@ -232,7 +232,7 @@ export class XmlFile implements File {
     public parse(fileContents: string) {
         this.fileContents = fileContents;
 
-        this.parser.parse(this.pkgPath, fileContents);
+        this.parser.parse(this.destPath, fileContents);
         this.diagnostics = this.parser.diagnostics.map(diagnostic => ({
             ...diagnostic,
             file: this
@@ -301,8 +301,8 @@ export class XmlFile implements File {
             dependencies.push(
                 //add the codebehind file dependencies.
                 //These are kind of optional, so it doesn't hurt to just add both extension versions
-                this.pkgPath.replace(/\.xml$/i, '.bs').toLowerCase(),
-                this.pkgPath.replace(/\.xml$/i, '.brs').toLowerCase()
+                this.destPath.replace(/\.xml$/i, '.bs').toLowerCase(),
+                this.destPath.replace(/\.xml$/i, '.brs').toLowerCase()
             );
         }
         const len = dependencies.length;
@@ -340,7 +340,7 @@ export class XmlFile implements File {
         if (this.componentName) {
             key = `component:${this.componentName.text}`.toLowerCase();
         } else {
-            key = this.pkgPath.toLowerCase();
+            key = this.destPath.toLowerCase();
         }
         //if our index is not zero, then we are not the primary component with that name, and need to
         //append our index to the dependency graph key as to prevent collisions in the program.
@@ -371,19 +371,19 @@ export class XmlFile implements File {
      * @param file
      */
     public doesReferenceFile(file: File) {
-        return this.cache.getOrAdd(`doesReferenceFile: ${file.pkgPath}`, () => {
+        return this.cache.getOrAdd(`doesReferenceFile: ${file.destPath}`, () => {
             if (file === this) {
                 return true;
             }
             let allDependencies = this.getOwnDependencies();
             for (let importPkgPath of allDependencies) {
-                if (importPkgPath.toLowerCase() === file.pkgPath.toLowerCase()) {
+                if (importPkgPath.toLowerCase() === file.destPath.toLowerCase()) {
                     return true;
                 }
             }
 
             //if this is an xml file...do we extend the component it defines?
-            if (path.extname(file.pkgPath).toLowerCase() === '.xml') {
+            if (path.extname(file.destPath).toLowerCase() === '.xml') {
 
                 //didn't find any script imports for this file
                 return false;
@@ -400,7 +400,7 @@ export class XmlFile implements File {
     public getCompletions(position: Position): CompletionItem[] {
         let scriptImport = util.getScriptImportAtPosition(this.scriptTagImports, position);
         if (scriptImport) {
-            return this.program.getScriptImportCompletions(this.pkgPath, scriptImport);
+            return this.program.getScriptImportCompletions(this.destPath, scriptImport);
         } else {
             return [];
         }
@@ -491,7 +491,7 @@ export class XmlFile implements File {
     }
 
     private logDebug(...args) {
-        this.program.logger.debug('XmlFile', chalk.green(this.pkgPath), ...args);
+        this.program.logger.debug('XmlFile', chalk.green(this.destPath), ...args);
     }
 
     /**

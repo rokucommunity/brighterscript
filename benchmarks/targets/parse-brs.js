@@ -13,7 +13,7 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
     });
     //collect all the brs file contents
     const files = Object.values(builder.program.files).filter(x => ['.brs', '.bs', '.d.bs'].includes(x.extension)).map(x => ({
-        pkgPath: x.pkgPath,
+        destPath: x.destPath ?? x.pkgPath,
         fileContents: x.fileContents
     }));
     if (files.length === 0) {
@@ -25,7 +25,7 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
         const setFileFuncName = builder.program.setFile ? 'setFile' : 'addOrReplaceFile';
         for (const file of files) {
             promises.push(
-                builder.program[setFileFuncName](file.pkgPath, file.fileContents)
+                builder.program[setFileFuncName](file.destPath, file.fileContents)
             );
         }
         // eslint-disable-next-line @typescript-eslint/no-floating-promises

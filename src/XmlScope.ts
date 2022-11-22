@@ -15,7 +15,7 @@ export class XmlScope extends Scope {
         public xmlFile: XmlFile,
         public program: Program
     ) {
-        super(xmlFile.pkgPath, program);
+        super(xmlFile.destPath, program);
     }
 
     public get dependencyGraphKey() {
@@ -119,7 +119,7 @@ export class XmlScope extends Scope {
                 let ancestorScriptImport = lookup[scriptImport.pkgPath];
                 if (ancestorScriptImport) {
                     let ancestorComponent = ancestorScriptImport.sourceFile as XmlFile;
-                    let ancestorComponentName = ancestorComponent.componentName?.text ?? ancestorComponent.pkgPath;
+                    let ancestorComponentName = ancestorComponent.componentName?.text ?? ancestorComponent.destPath;
                     this.diagnostics.push({
                         file: this.xmlFile,
                         range: scriptImport.filePathRange,

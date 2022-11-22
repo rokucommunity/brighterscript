@@ -1478,7 +1478,7 @@ export class Util {
 
     public validateTooDeepFile(file: (BrsFile | XmlFile)) {
         //find any files nested too deep
-        let pkgPath = file.pkgPath ?? file.pkgPath.toString();
+        let pkgPath = file.destPath ?? file.destPath.toString();
         let rootFolder = pkgPath.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
 
         if (isBrsFile(file) && rootFolder !== 'source') {

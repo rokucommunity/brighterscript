@@ -54,7 +54,7 @@ describe('import statements', () => {
         let files = Object.keys(program.files).map(x => program.getFile(x)).filter(x => !!x).map(x => {
             return {
                 src: x.srcPath,
-                dest: x.pkgPath
+                dest: x.destPath
             };
         });
         await program.transpile(files, stagingDir);

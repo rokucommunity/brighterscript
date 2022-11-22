@@ -37,7 +37,7 @@ export interface File {
      *    pkgPath: "source/main.brs" //(note the `.brs` file extension)
      * }
      */
-    pkgPath: string; // "images\\profile.jpg"   file.bs   file.brs
+    pkgPath?: string; // "images\\profile.jpg"   file.bs   file.brs
     /**
      * The key used to identify this file in the dependency graph.
      * If omitted, the pkgPath is used.
@@ -97,7 +97,7 @@ export type BscFile = File;
 export function createFile(props: Partial<File>) {
     props.diagnostics ??= [];
     props.dependencies ??= [];
-    props.dependencyGraphKey ??= props.pkgPath;
+    props.dependencyGraphKey ??= props.destPath;
     props.disposables ??= [];
     return props as File;
 }

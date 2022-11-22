@@ -47,7 +47,7 @@ export class CodeActionsProcessor {
 
         //find all files that reference this function
         for (const file of files) {
-            const pkgPath = util.sanitizePkgPath(file.pkgPath);
+            const pkgPath = util.sanitizePkgPath(file.destPath);
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
                     title: `import "${pkgPath}"`,

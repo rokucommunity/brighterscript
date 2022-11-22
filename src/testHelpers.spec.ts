@@ -96,7 +96,7 @@ function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic
         actualDiagnostic.file = cloneObject(
             actualDiagnostic.file,
             expectedDiagnostic?.file,
-            ['srcPath', 'pkgPath']
+            ['srcPath', 'destPath', 'pkgPath']
         ) as any;
     }
     return actualDiagnostic;

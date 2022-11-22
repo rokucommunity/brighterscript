@@ -26,7 +26,7 @@ describe('BrsFile', () => {
                     print a.b
                 end sub
             `);
-            await program.transpile([], s`${tempDir}/out`);
+            await program.transpile({ stagingDir: s`${tempDir}/out` });
         });
     });
 });
