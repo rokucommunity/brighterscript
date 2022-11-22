@@ -423,7 +423,7 @@ export default function plugin() {
 ```
 
 ## File API
-By default, BrighterScript only parses files that it knows how to handle. Generally this includes `.xml` files in the compontents folder, `.brs`, `.bs` and `.d.bs` files. Other files may be handled in the future, such as `manifest` and `.ts`. All other files are loaded into the program as `AssetFile` types and have no special handling or processing.
+By default, BrighterScript only parses files that it knows how to handle. Generally this includes `.xml` files in the compontents folder, `.brs`, `.bs` and `.d.bs` files. Other files may be handled in the future, such as `manifest`, `.ts` and possibly more. All other files are loaded into the program as `AssetFile` types and have no special handling or processing.
 
 BrighterScript will perform all of its file providing at the very start of the `provideFile` event. If you need to handle files before brighterscript does, you should do this in the `beforeProvideFile` event.
 
@@ -485,20 +485,20 @@ export default function plugin() {
                 const code = event.getFileData().toString();
 
                 //create a new BrsFile
-                const brsFile =event.factory.BrsFile(
-                    event.srcPath.replace(/\.component$/, '.brs'),
-                    event.pkgPath.replace(/\.component$/, '.brs')
-                );
+                const brsFile = event.factory.BrsFile({
+                    srcPath: event.srcPath.replace(/\.component$/, '.brs'),
+                    destPath: event.destPath.replace(/\.component$/, '.brs')
+                });
                 //parse the generated brs code
                 brsFile.parse(code);
                 //add this brs file to the event, which is how you "provide" the file
                 event.files.push(brsFile);
 
                 //create an XmlFile component
-                const xmlFile = event.fileFactory.XmlFile(
-                    event.srcPath.replace(/\.component$/, '.xml'),
-                    event.destPath.replace(/\.component$/, '.xml')
-                );
+                const xmlFile = event.fileFactory.XmlFile({
+                    srcPath: event.srcPath.replace(/\.component$/, '.xml'),
+                    destPath: event.destPath.replace(/\.component$/, '.xml')
+                });
                 xmlFile.parse(trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="${componentName}">
@@ -516,4 +516,42 @@ export default function plugin() {
 ### File Factory
 When you build a BrighterScript plugin, you will need to `npm install` a version of brighterscript. When your plugin is loaded (either by the brighterscript cli or through an editor like vscode), it's possible your plugin will be referencing a different version of brighterscript than the runner.
 
-To mitigate this, the provideFile events supply a fileFactory, which exposes the versions of the brighterscript file classes directly from the runner version of brighterscript. When possible, use the file factories found in `event.fileFactory` instead of class constructors. (i.e. use `event.fileFactory.BrsFile` instead of `new BrsFile()`) You can see examples of this in the previous code snippets above.
+To mitigate this, the `provideFile` events supply a `fileFactory`, which exposes the file classes from the runner's brighterscript version. When possible, use the file factories found in `event.fileFactory` instead of direct class constructors. (i.e. use `event.fileFactory.BrsFile` instead of `new BrsFile()`) You can see examples of this in the previous code snippets above.
+
+### srcPath, destPath, and pkgPath
+The file api introduces a breaking change related to file paths. Previously there were only `srcPath` and `pkgPath`. `pkgPath` historically contained the file path as you would reference it in your project, such as `source/main.bs`. However, there was no property to represent the file path when it was actually placed in the zip (i.e. `source/main.brs`).
+
+To mitigate this, and since the file api is already causing a few breaking changes, we decided to change the way file paths work. `srcPath` remains the same. However, `pkgPath` has been renamed to `destPath` to represent the path to the file as it exists in your brighterscript project _before_ transpilation. Then, `pkgPath` will now represent that final path for the file, the path to where the file will reside within the zip and on-device.
+
+Plugin authors will need to refactor their code to use `file.destPath` instead of `file.pkgPath`. In some situations, they're the same value, but in situations like `.bs` -> `.brs` transpiliation, the values will be different.
+
+Here's a description of each path property in BrighterScript now that the file api has been released.
+
+- **srcPath** - the absolute path to the source file. For example, `C:\projects\YourRokuApp\source\main.bs"` or `"/mnt/projects/YourRokuApp/source/main.bs"`
+- **destPath** - The path where the file exists within the context of a brightscript program, relative to the root of the package/zip.
+ This is the path that you will reference within your code.
+ Generally this is the same as `pkgPath`, but can be different (as shown in the example below):
+ <br/><br/>
+ ***NOTE:** This should _not_ containing a leading slash or `pkg:/` scheme. Example:
+
+    ```js
+    {
+        //given this srcPath:
+        srcPath: "C:/projects/YourRokuApp/source/main.bs",
+        //destPath should be:
+        destPath: "source/main.bs"
+    }
+    ```
+- **destPath** - the path to the file within the package, relative to the root of the package/zip.
+    This is different than `destPath` in that it's the final file name that is used when creating the zip.
+    <br/><br/>
+    ***NOTE:** This should _not_ containing a leading slash or `pkg:/` scheme
+
+    ```js
+    {
+        //given this srcPath:
+        srcPath: "C:/projects/YourRokuApp/source/main.bs",
+        //pkgPath should be:
+        pkgPath: "source/main.brs" //(note the `.brs` file extension)
+    }
+    ```
