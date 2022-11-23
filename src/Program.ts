@@ -454,6 +454,7 @@ export class Program {
                 } else {
                     file.pkgPath = file.destPath;
                 }
+                file.excludeFromOutput = file.excludeFromOutput === true;
 
                 //set the dependencyGraph key for every file to its destPath
                 file.dependencyGraphKey = file.destPath.toLowerCase();

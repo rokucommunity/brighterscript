@@ -16,7 +16,7 @@ import { XmlFileValidator } from './validation/XmlFileValidator';
 export class BscPlugin implements CompilerPlugin {
     public name = 'BscPlugin';
 
-    public provideFile(event: ProvideFileEvent) {
+    public afterProvideFile(event: ProvideFileEvent) {
         new FileProvider(event).process();
     }
 

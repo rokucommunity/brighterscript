@@ -49,9 +49,9 @@ Full compiler lifecycle:
     - For each physical file:
         - `beforeProvideFile`
         - `onProvideFile`
+        - `afterProvideFile`
             - `beforeFileParse` (deprecated)
             - `afterFileParse` (deprecated)
-        - `afterProvideFile`
     - For each physical and virtual file
         - `beforeAddFile`
         - `afterAddFile`
