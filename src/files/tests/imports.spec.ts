@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../../chai-config.spec';
 import * as sinonImport from 'sinon';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../../DiagnosticMessages';

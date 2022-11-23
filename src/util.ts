@@ -43,7 +43,6 @@ export class Util {
 
     /**
      * Returns the number of parent directories in the filPath
-     * @param filePath
      */
     public getParentDirectoryCount(filePath: string | undefined) {
         if (!filePath) {
@@ -55,7 +54,6 @@ export class Util {
 
     /**
      * Determine if the file exists
-     * @param filePath
      */
     public async pathExists(filePath: string | undefined) {
         if (!filePath) {
@@ -67,7 +65,6 @@ export class Util {
 
     /**
      * Determine if the file exists
-     * @param filePath
      */
     public pathExistsSync(filePath: string | undefined) {
         if (!filePath) {
@@ -111,7 +108,6 @@ export class Util {
 
     /**
      * Given a path to a file/directory, replace all path separators with the current system's version.
-     * @param filePath
      */
     public pathSepNormalize(filePath: string, separator?: string) {
         if (!filePath) {
@@ -124,7 +120,7 @@ export class Util {
     /**
      * Find the path to the config file.
      * If the config file path doesn't exist
-     * @param configFilePath
+     * @param cwd the current working directory where the search for configs should begin
      */
     public getConfigFilePath(cwd?: string) {
         cwd = cwd ?? process.cwd();
@@ -163,8 +159,8 @@ export class Util {
     /**
      * Load the contents of a config file.
      * If the file extends another config, this will load the base config as well.
-     * @param configFilePath
-     * @param parentProjectPaths
+     * @param configFilePath the relative or absolute path to a brighterscript config json file
+     * @param parentProjectPaths a list of parent config files. This is used by this method to recursively build the config list
      */
     public loadConfigFile(configFilePath: string, parentProjectPaths?: string[], cwd = process.cwd()) {
         if (configFilePath) {
@@ -241,7 +237,8 @@ export class Util {
 
     /**
      * Convert relative paths to absolute paths, relative to the given directory. Also de-dupes the paths. Modifies the array in-place
-     * @param paths the list of paths to be resolved and deduped
+     * @param collection usually a bsconfig.
+     * @param key a key of the config to read paths from (usually this is `'plugins'` or `'require'`)
      * @param relativeDir the path to the folder where the paths should be resolved relative to. This should be an absolute path
      */
     public resolvePathsRelativeTo(collection: any, key: string, relativeDir: string) {
@@ -261,8 +258,8 @@ export class Util {
 
     /**
      * Do work within the scope of a changed current working directory
-     * @param targetCwd
-     * @param callback
+     * @param targetCwd the cwd where the work should be performed
+     * @param callback a function to call when the cwd has been changed to `targetCwd`
      */
     public cwdWork<T>(targetCwd: string | null | undefined, callback: () => T) {
         let originalCwd = process.cwd();
@@ -293,7 +290,7 @@ export class Util {
     /**
      * Given a BsConfig object, start with defaults,
      * merge with bsconfig.json and the provided options.
-     * @param config
+     * @param config a bsconfig object to use as the baseline for the resulting config
      */
     public normalizeAndResolveConfig(config: BsConfig) {
         let result = this.normalizeConfig({});
@@ -318,7 +315,7 @@ export class Util {
 
     /**
      * Set defaults for any missing items
-     * @param config
+     * @param config a bsconfig object to use as the baseline for the resulting config
      */
     public normalizeConfig(config: BsConfig) {
         config = config || {} as BsConfig;
@@ -355,7 +352,7 @@ export class Util {
      * Get the root directory from options.
      * Falls back to options.cwd.
      * Falls back to process.cwd
-     * @param options
+     * @param options a bsconfig object
      */
     public getRootDir(options: BsConfig) {
         if (!options) {
@@ -371,19 +368,7 @@ export class Util {
     }
 
     /**
-     * Format a string with placeholders replaced by argument indexes
-     * @param subject
-     * @param params
-     */
-    public stringFormat(subject: string, ...args) {
-        return subject.replace(/{(\d+)}/g, (match, num) => {
-            return typeof args[num] !== 'undefined' ? args[num] : match;
-        });
-    }
-
-    /**
      * Given a list of callables as a dictionary indexed by their full name (namespace included, transpiled to underscore-separated.
-     * @param callables
      */
     public getCallableContainersByLowerName(callables: CallableContainer[]): CallableContainerMap {
         //find duplicate functions
@@ -405,7 +390,6 @@ export class Util {
 
     /**
      * Split a file by newline characters (LF or CRLF)
-     * @param text
      */
     public getLines(text: string) {
         return text.split(/\r?\n/);
@@ -414,8 +398,6 @@ export class Util {
     /**
      * Given an absolute path to a source file, and a target path,
      * compute the pkg path for the target relative to the source file's location
-     * @param containingFilePathAbsolute
-     * @param targetPath
      */
     public getPkgPathFromTarget(containingFilePathAbsolute: string, targetPath: string) {
         //if the target starts with 'pkg:', it's an absolute path. Return as is
@@ -559,8 +541,6 @@ export class Util {
     /**
      * Test if `position` is in `range`. If the position is at the edges, will return true.
      * Adapted from core vscode
-     * @param range
-     * @param position
      */
     public rangeContains(range: Range, position: Position) {
         return this.comparePositionToRange(position, range) === 0;
@@ -578,7 +558,6 @@ export class Util {
 
     /**
      * Parse an xml file and get back a javascript object containing its results
-     * @param text
      */
     public parseXml(text: string) {
         return new Promise<any>((resolve, reject) => {
@@ -612,7 +591,6 @@ export class Util {
 
     /**
      * Given a URI, convert that to a regular fs path
-     * @param uri
      */
     public uriToPath(uri: string) {
         let parsedPath = URI.parse(uri).fsPath;
@@ -629,7 +607,6 @@ export class Util {
 
     /**
      * Force the drive letter to lower case
-     * @param fullPath
      */
     public driveLetterToLower(fullPath: string) {
         if (fullPath) {
@@ -684,7 +661,6 @@ export class Util {
 
     /**
      * Get the outDir from options, taking into account cwd and absolute outFile paths
-     * @param options
      */
     public getOutDir(options: BsConfig) {
         options = this.normalizeConfig(options);
@@ -724,7 +700,6 @@ export class Util {
 
     /**
      * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
-     * @param diagnostic
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
         const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
@@ -741,8 +716,7 @@ export class Util {
     }
 
     /**
-     * Walks up the chain
-     * @param currentPath
+     * Walks up the chain to find the closest bsconfig.json file
      */
     public async findClosestConfigFile(currentPath: string) {
         //make the path absolute
@@ -773,7 +747,7 @@ export class Util {
 
     /**
      * Set a timeout for the specified milliseconds, and resolve the promise once the timeout is finished.
-     * @param milliseconds
+     * @param milliseconds the minimum number of milliseconds to sleep for
      */
     public sleep(milliseconds: number) {
         return new Promise((resolve) => {
@@ -788,11 +762,11 @@ export class Util {
 
     /**
      * Given an array, map and then flatten
-     * @param arr
-     * @param cb
+     * @param array the array to flatMap over
+     * @param callback a function that is called for every array item
      */
-    public flatMap<T, R>(array: T[], cb: (arg: T) => R) {
-        return Array.prototype.concat.apply([], array.map(cb)) as never as R;
+    public flatMap<T, R>(array: T[], callback: (arg: T) => R) {
+        return Array.prototype.concat.apply([], array.map(callback)) as never as R;
     }
 
     /**
@@ -839,8 +813,6 @@ export class Util {
 
     /**
      * If the two items have lines that touch
-     * @param first
-     * @param second
      */
     public linesTouch(first: { range: Range }, second: { range: Range }) {
         if (first && second && (
@@ -1020,8 +992,7 @@ export class Util {
     public tokensToString(tokens: Token[]) {
         let result = '';
         //skip iterating the final token
-        for (let i = 0; i < tokens.length; i++) {
-            let token = tokens[i];
+        for (let token of tokens) {
             result += token.leadingWhitespace + token.text;
         }
         return result;
@@ -1263,7 +1234,7 @@ export class Util {
      * @param diagnostic the diagnostic to clone
      * @param relatedInformationFallbackLocation a default location to use for all `relatedInformation` entries that are missing a location
      */
-    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic, fileUri: string) {
+    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic, relatedInformationFallbackLocation: string) {
         return {
             severity: diagnostic.severity,
             range: diagnostic.range,
@@ -1274,8 +1245,8 @@ export class Util {
                 const clone = { ...x };
                 if (!clone.location) {
                     // use the fallback location if available
-                    if (fileUri) {
-                        clone.location = util.createLocation(fileUri, diagnostic.range);
+                    if (relatedInformationFallbackLocation) {
+                        clone.location = util.createLocation(relatedInformationFallbackLocation, diagnostic.range);
                     } else {
                         //remove this related information so it doesn't bring crash the language server
                         return undefined;
@@ -1290,9 +1261,10 @@ export class Util {
     }
 
     /**
-    * Get the first locatable item found at the specified position
-    * @param position
-    */
+     * Get the first locatable item found at the specified position
+     * @param locatables an array of items that have a `range` property
+     * @param position the position that the locatable must contain
+     */
     public getFirstLocatableAt(locatables: Locatable[], position: Position) {
         for (let token of locatables) {
             if (util.rangeContains(token.range, position)) {
@@ -1346,8 +1318,7 @@ export class Util {
         const chunks = text.split(separator);
         const result = [] as Array<{ text: string; range: Range }>;
         let offset = 0;
-        for (let i = 0; i < chunks.length; i++) {
-            const chunk = chunks[i];
+        for (let chunk of chunks) {
             //only keep nonzero chunks
             if (chunk.length > 0) {
                 result.push({
@@ -1374,7 +1345,7 @@ export class Util {
 
     /**
      * Gets each part of the dotted get.
-     * @param expression
+     * @param expression any ast expression
      * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
      */
     public getAllDottedGetParts(expression: Expression): Identifier[] | undefined {

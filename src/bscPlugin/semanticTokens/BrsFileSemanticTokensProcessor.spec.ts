@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../../chai-config.spec';
 import { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver-protocol';
 import type { BrsFile } from '../../files/BrsFile';
 import type { File } from '../../files/File';

@@ -1,6 +1,6 @@
 import { DependencyGraph } from './DependencyGraph';
 import * as sinon from 'sinon';
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 
 describe('DependencyGraph', () => {
     let graph: DependencyGraph;

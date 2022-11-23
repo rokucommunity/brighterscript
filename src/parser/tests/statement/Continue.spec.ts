@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../../../chai-config.spec';
 import { createSandbox } from 'sinon';
 import { isContinueStatement } from '../../../astUtils/reflection';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
@@ -80,6 +80,20 @@ describe('parser continue statements', () => {
         expectDiagnostics(program, [
             DiagnosticMessages.illegalContinueStatement().message
         ]);
+    });
+
+    it('allows `continue` to be used as a local variable', () => {
+        program.setFile<BrsFile>('source/main.bs', `
+            sub main()
+                continue = true
+                print continue
+                if not continue then
+                    print continue
+                end if
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
     });
 
     it('transpiles properly', () => {

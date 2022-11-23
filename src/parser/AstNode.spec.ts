@@ -2,7 +2,7 @@ import { util } from '../util';
 import * as fsExtra from 'fs-extra';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import type { DottedGetExpression } from './Expression';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
@@ -43,4 +43,3 @@ describe('Program', () => {
         });
     });
 });
-

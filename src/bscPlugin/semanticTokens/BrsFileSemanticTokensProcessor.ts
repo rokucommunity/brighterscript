@@ -87,6 +87,11 @@ export class BrsFileSemanticTokensProcessor {
     private iterateExpressions() {
         const scope = this.event.scopes[0];
 
+        //if this file has no scopes, there's nothing else we can do about this
+        if (!scope) {
+            return;
+        }
+
         for (let expression of this.event.file.parser.references.expressions) {
             //lift the callee from call expressions to handle namespaced function calls
             if (isCallExpression(expression)) {

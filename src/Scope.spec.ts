@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
 import util, { standardizePath as s } from './util';
@@ -25,6 +25,13 @@ describe('Scope', () => {
     afterEach(() => {
         sinon.restore();
         program.dispose();
+    });
+
+    it('getEnumMemberFileLink does not crash on undefined name', () => {
+        program.setFile('source/main.bs', ``);
+        const scope = program.getScopesForFile('source/main.bs')[0];
+        scope.getEnumMemberFileLink(null);
+        //test passes if this doesn't explode
     });
 
     it('does not mark namespace functions as collisions with stdlib', () => {
@@ -62,7 +69,7 @@ describe('Scope', () => {
         program.validate();
         const scope = program.getScopesForFile('source/alpha.bs')[0];
         scope.linkSymbolTable();
-        const symbolTable = file.parser.references.namespaceStatements[1].getSymbolTable();
+        const symbolTable = file.parser.references.namespaceStatements[1].body.getSymbolTable();
         //the symbol table should contain the relative names for all items in this namespace across the entire scope
         expect(
             symbolTable.hasSymbol('Beta')
@@ -112,7 +119,8 @@ describe('Scope', () => {
         program.validate();
         expectDiagnostics(program, [
             DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea'),
-            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA')
+            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA'),
+            DiagnosticMessages.namespaceCannotBeReferencedDirectly()
         ]);
     });
 
@@ -501,7 +509,7 @@ describe('Scope', () => {
                     DiagnosticMessages.unknownBrightScriptComponent('roDateTime_FAKE'),
                     DiagnosticMessages.mismatchCreateObjectArgumentCount('roDateTime', [1, 1], 2),
                     DiagnosticMessages.unknownRoSGNode('Rectangle_FAKE'),
-                    DiagnosticMessages.deprecatedBrightScriptComponent('roFontMetrics').code
+                    DiagnosticMessages.unknownBrightScriptComponent('roFontMetrics')
                 ]);
             });
 
@@ -586,11 +594,9 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 // only care about code and `roFontMetrics` match
-                const diagnostics = program.getDiagnostics();
-                const expectedDiag = DiagnosticMessages.deprecatedBrightScriptComponent('roFontMetrics');
-                expect(diagnostics.length).to.eql(1);
-                expect(diagnostics[0].code).to.eql(expectedDiag.code);
-                expect(diagnostics[0].message).to.contain(expectedDiag.message);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.unknownBrightScriptComponent('roFontMetrics')
+                ]);
             });
         });
 

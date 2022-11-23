@@ -176,7 +176,7 @@ export class CommentFlagProcessor {
 
     /**
      * Given a string, extract each item split by whitespace
-     * @param text
+     * @param text the text to tokenize
      */
     private tokenizeByWhitespace(text: string) {
         let tokens = [] as Array<{ startIndex: number; text: string }>;

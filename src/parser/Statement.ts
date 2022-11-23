@@ -10,7 +10,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
+import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
@@ -49,7 +49,7 @@ export class Body extends Statement implements TypedefProvider {
         super();
     }
 
-    public symbolTable = new SymbolTable();
+    public symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
 
     public get range() {
         return util.createRangeFromPositions(
@@ -117,14 +117,21 @@ export class AssignmentStatement extends Statement {
     constructor(
         readonly equals: Token,
         readonly name: Identifier,
-        readonly value: Expression,
-        readonly containingFunction: FunctionExpression
+        readonly value: Expression
     ) {
         super();
         this.range = util.createRangeFromPositions(this.name.range.start, this.value.range.end);
     }
 
     public readonly range: Range;
+
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isFunctionExpression)` instead.
+     */
+    public get containingFunction() {
+        return this.findAncestor<FunctionExpression>(isFunctionExpression);
+    }
 
     transpile(state: BrsTranspileState) {
         //if the value is a compound assignment, just transpile the expression itself
@@ -163,8 +170,6 @@ export class Block extends Statement {
     }
 
     public readonly range: Range;
-
-    public symbolTable = new SymbolTable();
 
     transpile(state: BrsTranspileState) {
         state.blockDepth++;
@@ -347,6 +352,14 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         }
     }
 
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
+     */
+    public get namespaceName() {
+        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+    }
+
     transpile(state: BrsTranspileState) {
         //create a fake token using the full transpiled name
         let nameToken = {
@@ -454,7 +467,7 @@ export class IfStatement extends Statement {
 
             } else {
                 //else body
-                state.lineage.unshift(this.elseBranch);
+                state.lineage.unshift(this.tokens.else);
                 let body = this.elseBranch.transpile(state);
                 state.lineage.shift();
 
@@ -531,8 +544,9 @@ export interface PrintSeparatorSpace extends Token {
 export class PrintStatement extends Statement {
     /**
      * Creates a new internal representation of a BrightScript `print` statement.
-     * @param expressions an array of expressions or `PrintSeparator`s to be
-     *                    evaluated and printed.
+     * @param tokens the tokens for this statement
+     * @param tokens.print a print token
+     * @param expressions an array of expressions or `PrintSeparator`s to be evaluated and printed.
      */
     constructor(
         readonly tokens: {
@@ -1077,17 +1091,14 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 export class NamespaceStatement extends Statement implements TypedefProvider {
     constructor(
         public keyword: Token,
-        //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
+        // this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
         public nameExpression: NamespacedVariableNameExpression,
         public body: Body,
         public endKeyword: Token
     ) {
         super();
         this.name = this.getName(ParseMode.BrighterScript);
-    }
-
-    public getSymbolTable() {
-        return this.body.symbolTable;
+        this.symbolTable = new SymbolTable(`NamespaceStatement: '${this.name}'`, () => this.parent?.getSymbolTable());
     }
 
     /**
@@ -1113,7 +1124,15 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     public getName(parseMode: ParseMode) {
-        return this.nameExpression.getName(parseMode);
+        const parentNamespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        let name = this.nameExpression.getName(parseMode);
+
+        if (parentNamespace) {
+            const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
+            name = parentNamespace.getName(parseMode) + sep + name;
+        }
+
+        return name;
     }
 
     transpile(state: BrsTranspileState) {
@@ -1144,6 +1163,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'nameExpression', visitor, options);
         }
+
         if (this.body.statements.length > 0 && options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'body', visitor, options);
         }
@@ -1235,6 +1255,14 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
     };
 
     public range: Range;
+
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
+     */
+    public get namespaceName() {
+        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+    }
 
     public get fields() {
         return this.body.filter(x => isInterfaceFieldStatement(x));
@@ -1342,9 +1370,11 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
+        //visitor-less walk function to do parent linking
+        walk(this, 'parentInterfaceName', null, options);
+
         if (options.walkMode & InternalWalkMode.walkStatements) {
             walkArray(this.body, visitor, options, this);
-
         }
     }
 }
@@ -1531,6 +1561,15 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         this.range = util.createRangeFromPositions(this.classKeyword.range.start, this.end.range.end);
     }
+
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
+     */
+    public get namespaceName() {
+        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+    }
+
 
     public getName(parseMode: ParseMode) {
         const name = this.name?.text;
@@ -1864,6 +1903,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
+        //visitor-less walk function to do parent linking
+        walk(this, 'parentClassName', null, options);
+
         if (options.walkMode & InternalWalkMode.walkStatements) {
             walkArray(this.body, visitor, options, this);
         }
@@ -1977,8 +2019,9 @@ export class MethodStatement extends FunctionStatement {
             return;
         }
 
+        //find the first non-comment statement
+        let firstStatement = this.func.body.statements.find(x => !isCommentStatement(x));
         //if the first statement is a call to super, quit here
-        let firstStatement = this.func.body.statements[0];
         if (
             //is a call statement
             isExpressionStatement(firstStatement) && isCallExpression(firstStatement.expression) &&
@@ -2033,7 +2076,7 @@ export class MethodStatement extends FunctionStatement {
             thisQualifiedName.text = 'm.' + field.name.text;
             if (field.initialValue) {
                 newStatements.push(
-                    new AssignmentStatement(field.equal, thisQualifiedName, field.initialValue, this.func)
+                    new AssignmentStatement(field.equal, thisQualifiedName, field.initialValue)
                 );
             } else {
                 //if there is no initial value, set the initial value to `invalid`
@@ -2041,8 +2084,7 @@ export class MethodStatement extends FunctionStatement {
                     new AssignmentStatement(
                         createToken(TokenKind.Equal, '=', field.name.range),
                         thisQualifiedName,
-                        createInvalidLiteral('invalid', field.name.range),
-                        this.func
+                        createInvalidLiteral('invalid', field.name.range)
                     )
                 );
             }
@@ -2276,6 +2318,14 @@ export class EnumStatement extends Statement implements TypedefProvider {
             this.tokens.enum.range.start ?? Position.create(0, 0),
             (this.tokens.endEnum ?? this.tokens.name ?? this.tokens.enum).range.end
         );
+    }
+
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
+     */
+    public get namespaceName() {
+        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
     }
 
     public getMembers() {

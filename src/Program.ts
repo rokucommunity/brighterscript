@@ -19,17 +19,17 @@ import { globalFile } from './globalCallables';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isMethodStatement, isXmlScope, isNamespaceStatement } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUtils/reflection';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
-import { ParseMode } from './parser/Parser';
-import { TokenKind } from './lexer/TokenKind';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { AstEditor } from './astUtils/AstEditor';
 import type { SourceMapGenerator } from 'source-map';
 import type { Statement } from './parser/AstNode';
-import type { File } from './files/File';
-import { FileFactory } from './files/Factory';
+import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
+import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { rokuDeploy } from 'roku-deploy';
+import { FileFactory } from './files/Factory';
+import type { File } from './files/File';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -43,13 +43,6 @@ export interface SignatureInfoObj {
     index: number;
     key: string;
     signature: SignatureInformation;
-}
-
-interface PartialStatementInfo {
-    commaCount: number;
-    statementType: string;
-    name: string;
-    dotPart: string;
 }
 
 export class Program {
@@ -314,7 +307,7 @@ export class Program {
 
     /**
      * Determine if the specified file is loaded in this program right now.
-     * @param filePath
+     * @param filePath the absolute or relative path to the file
      * @param normalizePath should the provided path be normalized before use
      */
     public hasFile(filePath: string, normalizePath = true) {
@@ -323,7 +316,7 @@ export class Program {
 
     /**
      * roku filesystem is case INsensitive, so find the scope by key case insensitive
-     * @param scopeName xml scope names are their `destPath`. Source scope  and then the `"source"` scope
+     * @param scopeName xml scope names are their `destPath`. Source scope is stored with the key `"source"`
      */
     public getScopeByName(scopeName: string) {
         if (!scopeName) {
@@ -594,7 +587,7 @@ export class Program {
      * Find the file by its absolute path. This is case INSENSITIVE, since
      * Roku is a case insensitive file system. It is an error to have multiple files
      * with the same path with only case being different.
-     * @param srcPath
+     * @param srcPath the absolute path to the file
      * @deprecated use `getFile` instead, which auto-detects the path type
      */
     public getFileByPathAbsolute<T extends File>(srcPath: string) {
@@ -628,7 +621,7 @@ export class Program {
 
     /**
      * Remove a set of files from the program
-     * @param filePaths can be an array of srcPath or destPath strings
+     * @param srcPaths can be an array of srcPath or destPath strings
      * @param normalizePath should this function repair and standardize the filePaths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
      */
     public removeFiles(srcPaths: string[], normalizePath = true) {
@@ -843,7 +836,7 @@ export class Program {
 
     /**
      * Get a list of all scopes the file is loaded into
-     * @param file
+     * @param file the file
      */
     public getScopesForFile(file: File | string) {
         if (typeof file === 'string') {
@@ -891,7 +884,7 @@ export class Program {
 
                 for (const statement of [...file.parser.references.functionStatements, ...file.parser.references.classStatements.flatMap((cs) => cs.methods)]) {
                     let parentNamespaceName = statement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(originFile.parseMode)?.toLowerCase();
-                    if (statement.name.text.toLowerCase() === lowerName && (!parentNamespaceName || parentNamespaceName === lowerNamespaceName)) {
+                    if (statement.name.text.toLowerCase() === lowerName && (!lowerNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                         if (!results.has(statement)) {
                             results.set(statement, { item: statement, file: file });
                         }
@@ -1081,225 +1074,9 @@ export class Program {
         if (!file || !isBrsFile(file)) {
             return [];
         }
-
-        const results = new Map<string, SignatureInfoObj>();
-
-        let functionScope = file.getFunctionScopeAtPosition(position);
-        let identifierInfo = this.getPartialStatementInfo(file, position);
-        if (identifierInfo.statementType === '') {
-            // just general function calls
-            let statements = file.program.getStatementsByName(identifierInfo.name, file);
-            for (let statement of statements) {
-                //TODO better handling of collisions - if it's a namespace, then don't show any other overrides
-                //if we're on m - then limit scope to the current class, if present
-                let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
-                if (sigHelp && !results.has[sigHelp.key]) {
-                    sigHelp.index = identifierInfo.commaCount;
-                    results.set(sigHelp.key, sigHelp);
-                }
-            }
-        } else if (identifierInfo.statementType === '.') {
-            //if m class reference.. then
-            //only get statements from the class I am in..
-            if (functionScope) {
-                let myClass = file.getClassFromMReference(position, file.getTokenAt(position), functionScope);
-                if (myClass) {
-                    for (let scope of this.getScopesForFile(myClass.file)) {
-                        let classes = scope.getClassHierarchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
-                        //and anything from any class in scope to a non m class
-                        for (let statement of [...classes].filter((i) => isMethodStatement(i.item))) {
-                            let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
-                            if (sigHelp && !results.has[sigHelp.key]) {
-
-                                results.set(sigHelp.key, sigHelp);
-                                return;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (identifierInfo.dotPart) {
-                //potential namespaces
-                let statements = file.program.getStatementsByName(identifierInfo.name, file, identifierInfo.dotPart);
-                if (statements.length === 0) {
-                    //was not a namespaced function, it could be any method on any class now
-                    statements = file.program.getStatementsByName(identifierInfo.name, file);
-                }
-                for (let statement of statements) {
-                    //TODO better handling of collisions - if it's a namespace, then don't show any other overrides
-                    //if we're on m - then limit scope to the current class, if present
-                    let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
-                    if (sigHelp && !results.has[sigHelp.key]) {
-                        sigHelp.index = identifierInfo.commaCount;
-                        results.set(sigHelp.key, sigHelp);
-                    }
-                }
-            }
-
-
-        } else if (identifierInfo.statementType === '@.') {
-            for (const scope of this.getScopes().filter((s) => isXmlScope(s))) {
-                let fileLinks = this.getStatementsForXmlFile(scope as XmlScope, identifierInfo.name);
-                for (let fileLink of fileLinks) {
-
-                    let sigHelp = fileLink.file.getSignatureHelpForStatement(fileLink.item);
-                    if (sigHelp && !results.has[sigHelp.key]) {
-                        sigHelp.index = identifierInfo.commaCount;
-                        results.set(sigHelp.key, sigHelp);
-                    }
-                }
-            }
-        } else if (identifierInfo.statementType === 'new') {
-            let classItem = file.getClassFileLink(identifierInfo.dotPart ? `${identifierInfo.dotPart}.${identifierInfo.name}` : identifierInfo.name);
-            let sigHelp = classItem?.file?.getClassSignatureHelp(classItem?.item);
-            if (sigHelp && !results.has(sigHelp.key)) {
-                sigHelp.index = identifierInfo.commaCount;
-                results.set(sigHelp.key, sigHelp);
-            }
-        }
-
-        return [...results.values()];
-    }
-
-    private getPartialStatementInfo(file: BrsFile, position: Position): PartialStatementInfo {
-        let lines = util.splitIntoLines(file.fileContents);
-        let line = lines[position.line];
-        let index = position.character;
-        let itemCounts = this.getPartialItemCounts(line, index);
-        if (!itemCounts.isArgStartFound && line.charAt(index) === ')') {
-            //try previous char, in case we were on a close bracket..
-            index--;
-            itemCounts = this.getPartialItemCounts(line, index);
-        }
-        let argStartIndex = itemCounts.argStartIndex;
-        index = itemCounts.argStartIndex - 1;
-        let statementType = '';
-        let name;
-        let dotPart;
-
-        if (!itemCounts.isArgStartFound) {
-            //try to get sig help based on the name
-            index = position.character;
-            let currentToken = file.getTokenAt(position);
-            if (currentToken && currentToken.kind !== TokenKind.Comment) {
-                name = file.getPartialVariableName(currentToken, [TokenKind.New]);
-                if (!name) {
-                    //try the previous token, incase we're on a bracket
-                    currentToken = file.getPreviousToken(currentToken);
-                    name = file.getPartialVariableName(currentToken, [TokenKind.New]);
-                }
-                if (name?.indexOf('.')) {
-                    let parts = name.split('.');
-                    name = parts[parts.length - 1];
-                }
-
-                index = currentToken.range.start.character;
-                argStartIndex = index;
-            } else {
-                // invalid location
-                index = 0;
-                itemCounts.comma = 0;
-            }
-        }
-        //this loop is quirky. walk to -1 (which will result in the last char being '' thus satisfying the situation where there is no leading whitespace).
-        while (index >= -1) {
-            if (!(/[a-z0-9_\.\@]/i).test(line.charAt(index))) {
-                if (!name) {
-                    name = line.substring(index + 1, argStartIndex);
-                } else {
-                    dotPart = line.substring(index + 1, argStartIndex);
-                    if (dotPart.endsWith('.')) {
-                        dotPart = dotPart.substr(0, dotPart.length - 1);
-                    }
-                }
-                break;
-            }
-            if (line.substr(index - 2, 2) === '@.') {
-                statementType = '@.';
-                name = name || line.substring(index, argStartIndex);
-                break;
-            } else if (line.charAt(index - 1) === '.' && statementType === '') {
-                statementType = '.';
-                name = name || line.substring(index, argStartIndex);
-                argStartIndex = index;
-            }
-            index--;
-        }
-
-        if (line.substring(0, index).trim().endsWith('new')) {
-            statementType = 'new';
-        }
-
-        return {
-            commaCount: itemCounts.comma,
-            statementType: statementType,
-            name: name,
-            dotPart: dotPart
-        };
-    }
-
-    private getPartialItemCounts(line: string, index: number) {
-        let isArgStartFound = false;
-        let itemCounts = {
-            normal: 0,
-            square: 0,
-            curly: 0,
-            comma: 0,
-            endIndex: 0,
-            argStartIndex: index,
-            isArgStartFound: false
-        };
-        while (index >= 0) {
-            const currentChar = line.charAt(index);
-
-            if (currentChar === '\'') { //found comment, invalid index
-                itemCounts.isArgStartFound = false;
-                break;
-            }
-
-            if (isArgStartFound) {
-                if (currentChar !== ' ') {
-                    break;
-                }
-            } else {
-                if (currentChar === ')') {
-                    itemCounts.normal++;
-                }
-
-                if (currentChar === ']') {
-                    itemCounts.square++;
-                }
-
-                if (currentChar === '}') {
-                    itemCounts.curly++;
-                }
-
-                if (currentChar === ',' && itemCounts.normal <= 0 && itemCounts.curly <= 0 && itemCounts.square <= 0) {
-                    itemCounts.comma++;
-                }
-
-                if (currentChar === '(') {
-                    if (itemCounts.normal === 0) {
-                        itemCounts.isArgStartFound = true;
-                        itemCounts.argStartIndex = index;
-                    } else {
-                        itemCounts.normal--;
-                    }
-                }
-
-                if (currentChar === '[') {
-                    itemCounts.square--;
-                }
-
-                if (currentChar === '{') {
-                    itemCounts.curly--;
-                }
-            }
-            index--;
-        }
-        return itemCounts;
-
+        let callExpressionInfo = new CallExpressionInfo(file, position);
+        let signatureHelpUtil = new SignatureHelpUtil();
+        return signatureHelpUtil.getSignatureHelpItems(callExpressionInfo);
     }
 
     public getReferences(srcPath: string, position: Position) {

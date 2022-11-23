@@ -15,7 +15,7 @@ import util from '../util';
 export abstract class AstNode {
     /**
      *  The starting and ending location of the node.
-     **/
+     */
     public abstract range: Range;
 
     public abstract transpile(state: BrsTranspileState): TranspileResult;
@@ -93,6 +93,16 @@ export abstract class AstNode {
                 return node.findChildAtPosition(position, options) ?? node;
             }
         }, options);
+    }
+
+    /**
+     * Links all child nodes to their parent AstNode, and the same with symbol tables. This performs a full AST walk, so you should use this sparingly
+     */
+    public link() {
+        //the act of walking causes the nodes to be linked
+        this.walk(() => { }, {
+            walkMode: WalkMode.visitAllRecursive
+        });
     }
 }
 

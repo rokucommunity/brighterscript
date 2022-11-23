@@ -1,5 +1,5 @@
 /* eslint-disable no-multi-spaces */
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import { PrintStatement, Block, Body, AssignmentStatement, CommentStatement, ExitForStatement, ExitWhileStatement, ExpressionStatement, FunctionStatement, IfStatement, IncrementStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, EmptyStatement, TryCatchStatement, CatchStatement, ThrowStatement } from '../parser/Statement';
 import { FunctionExpression, NamespacedVariableNameExpression, BinaryExpression, CallExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, XmlAttributeGetExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression } from '../parser/Expression';
 import type { Token } from '../lexer/Token';
@@ -29,7 +29,7 @@ describe('reflection', () => {
         const expr = createStringLiteral('', range);
         const token = createToken(TokenKind.StringLiteral, '', range);
         const body = new Body([]);
-        const assignment = new AssignmentStatement(undefined, ident, expr, undefined);
+        const assignment = new AssignmentStatement(undefined, ident, expr);
         const block = new Block([], range);
         const expression = new ExpressionStatement(expr);
         const comment = new CommentStatement([token]);

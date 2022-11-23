@@ -322,7 +322,6 @@ export class ProgramBuilder {
     /**
      * Run the process once, allowing cancelability.
      * NOTE: This should only be called by `runOnce`.
-     * @param cancellationToken
      */
     private async _runOnce(cancellationToken: { isCanceled: any }) {
         let wereDiagnosticsPrinted = false;

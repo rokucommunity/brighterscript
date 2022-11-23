@@ -1,13 +1,13 @@
-import { isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespacedVariableNameExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isBody, isClassStatement, isCommentStatement, isConstStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
-import type { AstNode, Expression } from '../../parser/AstNode';
+import type { Expression } from '../../parser/AstNode';
 import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
+import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, NamespaceStatement, WhileStatement } from '../../parser/Statement';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 
@@ -24,49 +24,6 @@ export class BrsFileValidator {
         //only validate the file if it was actually parsed (skip files containing typedefs)
         if (!this.event.file.hasTypedef) {
             this.validateImportStatements();
-        }
-    }
-
-    /**
-     * Set the parent node on a given AstNode. This handles some edge cases where not every expression is iterated normally,
-     * so it will also reach into nested objects to set their parent values as well
-     */
-    private setParent(node: AstNode, parent: AstNode) {
-        const pairs = [[node, parent]];
-        while (pairs.length > 0) {
-            const [childNode, parentNode] = pairs.pop();
-            //skip this entry if there's already a parent
-            if (childNode?.parent) {
-                continue;
-            }
-            if (isDottedGetExpression(childNode)) {
-                if (!childNode.obj.parent) {
-                    pairs.push([childNode.obj, childNode]);
-                }
-            } else if (isNamespaceStatement(childNode)) {
-                //namespace names shouldn't be walked, but it needs its parent assigned
-                pairs.push([childNode.nameExpression, childNode]);
-            } else if (isClassStatement(childNode)) {
-                //class extends names don't get walked, but it needs its parent
-                if (childNode.parentClassName) {
-                    pairs.push([childNode.parentClassName, childNode]);
-                }
-            } else if (isInterfaceStatement(childNode)) {
-                //class extends names don't get walked, but it needs its parent
-                if (childNode.parentInterfaceName) {
-                    pairs.push([childNode.parentInterfaceName, childNode]);
-                }
-            } else if (isNamespacedVariableNameExpression(childNode)) {
-                pairs.push([childNode.expression, childNode]);
-            }
-            childNode.parent = parentNode;
-            //if the node has a symbol table, link it to its parent's symbol table
-            if (childNode.symbolTable) {
-                const parentSymbolTable = parentNode.getSymbolTable();
-                if (parentSymbolTable) {
-                    childNode.symbolTable.pushParent(parentSymbolTable);
-                }
-            }
         }
     }
 
@@ -93,14 +50,13 @@ export class BrsFileValidator {
                 //register this variable
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
             },
-            FunctionParameterExpression: (node) => {
-                node.getSymbolTable()?.addSymbol(node.name.text, node.name.range, node.type);
-            },
             ForEachStatement: (node) => {
                 //register the for loop variable
                 node.parent.getSymbolTable()?.addSymbol(node.item.text, node.item.range, DynamicType.instance);
             },
             NamespaceStatement: (node) => {
+                this.validateNamespaceStatement(node);
+
                 node.parent.getSymbolTable().addSymbol(
                     node.name.split('.')[0],
                     node.nameExpression.range,
@@ -132,9 +88,14 @@ export class BrsFileValidator {
                 }
             },
             FunctionExpression: (node) => {
-                if (!node.body.symbolTable.hasSymbol('m')) {
-                    node.body.symbolTable.addSymbol('m', undefined, DynamicType.instance);
+                if (!node.symbolTable.hasSymbol('m')) {
+                    node.symbolTable.addSymbol('m', undefined, DynamicType.instance);
                 }
+            },
+            FunctionParameterExpression: (node) => {
+                const paramName = node.name?.text;
+                const symbolTable = node.getSymbolTable();
+                symbolTable?.addSymbol(paramName, node.name.range, node.type);
             },
             ConstStatement: (node) => {
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);
@@ -153,8 +114,6 @@ export class BrsFileValidator {
         });
 
         this.event.file.ast.walk((node, parent) => {
-            // link every child with its parent
-            this.setParent(node, parent);
             visitor(node, parent);
         }, {
             walkMode: WalkMode.visitAllRecursive
@@ -235,6 +194,22 @@ export class BrsFileValidator {
                     range: range
                 });
             }
+        }
+    }
+
+    private validateNamespaceStatement(stmt: NamespaceStatement) {
+        let parentNode = stmt.parent;
+
+        while (parentNode) {
+            if (!isNamespaceStatement(parentNode) && !isBody(parentNode)) {
+                this.event.file.addDiagnostic({
+                    ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('namespace'),
+                    range: stmt.range
+                });
+                break;
+            }
+
+            parentNode = parentNode.parent;
         }
     }
 

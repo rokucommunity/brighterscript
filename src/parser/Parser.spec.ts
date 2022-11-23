@@ -1,4 +1,4 @@
-import { expect, assert } from 'chai';
+import { expect, assert } from '../chai-config.spec';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression } from './Expression';
@@ -9,7 +9,7 @@ import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement 
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isIndexedGetExpression } from '../astUtils/reflection';
-import { expectZeroDiagnostics } from '../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
 import { BrsFile } from '../files/BrsFile';
@@ -365,16 +365,36 @@ describe('parser', () => {
                 end sub
             `, ParseMode.BrighterScript).diagnostics[0]?.message).not.to.exist;
         });
+
+        it('does not scrap the entire function when encountering unknown parameter type', () => {
+            const parser = parse(`
+                sub test(param1 as unknownType)
+                end sub
+            `);
+            expectDiagnostics(parser, [{
+                ...DiagnosticMessages.functionParameterTypeIsInvalid('param1', 'unknownType')
+            }]);
+            expect(
+                isFunctionStatement(parser.ast.statements[0])
+            ).to.be.true;
+        });
+
         describe('namespace', () => {
-            it('catches namespaces declared not at root level', () => {
-                expect(parse(`
-                    sub main()
-                        namespace Name.Space
+            it('allows namespaces declared inside other namespaces', () => {
+                const parser = parse(`
+                    namespace Level1
+                        namespace Level2.Level3
+                            sub main()
+                            end sub
                         end namespace
-                    end sub
-                `, ParseMode.BrighterScript).diagnostics[0]?.message).to.equal(
-                    DiagnosticMessages.keywordMustBeDeclaredAtRootLevel('namespace').message
-                );
+                    end namespace
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(parser);
+                // We expect these names to be "as given" in this context, because we aren't evaluating a full program.
+                expect(parser.references.namespaceStatements.map(statement => statement.getName(ParseMode.BrighterScript))).to.deep.equal([
+                    'Level1.Level2.Level3',
+                    'Level1'
+                ]);
             });
             it('parses empty namespace', () => {
                 let { statements, diagnostics } =

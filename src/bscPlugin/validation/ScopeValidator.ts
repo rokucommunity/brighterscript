@@ -90,7 +90,7 @@ export class ScopeValidator {
             const symbolTable = info.expression.getSymbolTable();
             const firstPart = info.parts[0];
             //flag all unknown left-most variables
-            if (!symbolTable.hasSymbol(firstPart.name?.text)) {
+            if (!symbolTable?.hasSymbol(firstPart.name?.text)) {
                 this.addMultiScopeDiagnostic({
                     file: file as File,
                     ...DiagnosticMessages.cannotFindName(firstPart.name?.text),
@@ -109,12 +109,12 @@ export class ScopeValidator {
                 continue;
             }
             //catch unknown namespace items
-            const processedNames: string[] = [firstNamespacePart];
+            let entityName = firstNamespacePart;
+            let entityNameLower = firstNamespacePart.toLowerCase();
             for (let i = 1; i < info.parts.length; i++) {
                 const part = info.parts[i];
-                processedNames.push(part.name.text);
-                const entityName = processedNames.join('.');
-                const entityNameLower = entityName.toLowerCase();
+                entityName += '.' + part.name.text;
+                entityNameLower += '.' + part.name.text.toLowerCase();
 
                 //if this is an enum member, stop validating here to prevent errors further down the chain
                 if (scope.getEnumMemberMap().has(entityNameLower)) {
@@ -153,6 +153,14 @@ export class ScopeValidator {
                     //no need to add another diagnostic for future unknown items
                     continue outer;
                 }
+            }
+            //if the full expression is a namespace path, this is an illegal statement because namespaces don't exist at runtme
+            if (scope.namespaceLookup.has(entityNameLower)) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.namespaceCannotBeReferencedDirectly(),
+                    range: info.expression.range,
+                    file: file
+                }, 'When used in scope');
             }
         }
     }

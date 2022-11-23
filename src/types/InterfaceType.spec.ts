@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import { assert } from 'sinon';
 import { objectToMap } from '../testHelpers.spec';
 import type { BscType } from './BscType';

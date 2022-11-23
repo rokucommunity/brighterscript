@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';

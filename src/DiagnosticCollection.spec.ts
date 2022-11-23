@@ -4,7 +4,7 @@ import type { Project } from './LanguageServer';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { File } from './files/File';
 import util from './util';
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 
 describe('DiagnosticCollection', () => {
     let collection: DiagnosticCollection;
