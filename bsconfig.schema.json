@@ -149,6 +149,11 @@
             "type": "boolean",
             "default": false
         },
+        "useExplicitTypes": {
+            "description": "Add the explicit type to function's parameters and return (using the `as type` syntax) ",
+            "type": "boolean",
+            "default": true
+        },
         "diagnosticFilters": {
             "description": "A collection of filters used to hide diagnostics for certain files",
             "type": "array",

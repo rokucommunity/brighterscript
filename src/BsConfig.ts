@@ -118,6 +118,12 @@ export interface BsConfig {
     emitDefinitions?: boolean;
 
     /**
+     * If true, adds the explicit type to function's parameters and return (using the `as type` syntax)
+     * @default true
+     */
+    useExplicitTypes?: boolean;
+
+    /**
      * A list of filters used to exclude diagnostics from the output
      */
     diagnosticFilters?: Array<number | string | { src: string; codes: (number | string)[] } | { src: string } | { codes: (number | string)[] }>;

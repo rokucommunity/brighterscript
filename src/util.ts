@@ -343,6 +343,7 @@ export class Util {
         config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
         config.allowBrighterScriptInBrightScript = config.allowBrighterScriptInBrightScript === true ? true : false;
         config.emitDefinitions = config.emitDefinitions === true ? true : false;
+        config.useExplicitTypes = config.useExplicitTypes === false ? false : true;
         if (typeof config.logLevel === 'string') {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
         }
