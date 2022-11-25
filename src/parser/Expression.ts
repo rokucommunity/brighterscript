@@ -232,7 +232,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             state.transpileToken(this.rightParen)
         );
         //as [Type]
-        if (this.asToken) {
+        if (this.asToken && state.options.useExplicitTypes) {
             results.push(
                 ' ',
                 //as
@@ -317,7 +317,7 @@ export class FunctionParameterExpression extends Expression {
             result.push(this.defaultValue.transpile(state));
         }
         //type declaration
-        if (this.asToken) {
+        if (this.asToken && state.options.useExplicitTypes) {
             result.push(' ');
             result.push(state.transpileToken(this.asToken));
             result.push(' ');
