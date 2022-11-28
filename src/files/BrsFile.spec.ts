@@ -2332,8 +2332,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('discard parameter types when useExplicitType is false', () => {
-            program.options.useExplicitTypes = false;
+        it('discard parameter types when removeParameterTypes is true', () => {
+            program.options.removeParameterTypes = true;
             testTranspile(`
                 sub one(a as integer, b = "" as string, c = invalid as dynamic)
                 end sub
@@ -2343,8 +2343,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('discard return type when useExplicitType is false', () => {
-            program.options.useExplicitTypes = false;
+        it('discard return type when removeParameterTypes is true', () => {
+            program.options.removeParameterTypes = true;
             testTranspile(`
                 function one() as string
                     return ""

@@ -250,11 +250,11 @@ Type: `boolean`
 
 Prevent the staging folder from being deleted after creating the package. Defaults to `false`, meaning that the folder is deleted every time.
 
-#### `useExplicitTypes`
+#### `removeParameterTypes`
 
 Type: `boolean`
 
-If true, adds the explicit type to function's parameters and return (using the `as type` syntax); otherwise discard this information.
+If true, removes the explicit type to function's parameters and return (i.e. the `as type` syntax); otherwise keep this information.
 
 #### `files`
 

@@ -149,10 +149,10 @@
             "type": "boolean",
             "default": false
         },
-        "useExplicitTypes": {
-            "description": "Add the explicit type to function's parameters and return (using the `as type` syntax) ",
+        "removeParameterTypes": {
+            "description": "Removes the explicit type to function's parameters and return (i.e. the `as type` syntax) ",
             "type": "boolean",
-            "default": true
+            "default": false
         },
         "diagnosticFilters": {
             "description": "A collection of filters used to hide diagnostics for certain files",

@@ -118,10 +118,10 @@ export interface BsConfig {
     emitDefinitions?: boolean;
 
     /**
-     * If true, adds the explicit type to function's parameters and return (using the `as type` syntax)
-     * @default true
+     * If true, removes the explicit type to function's parameters and return (i.e. the `as type` syntax); otherwise keep this information.
+     * @default false
      */
-    useExplicitTypes?: boolean;
+    removeParameterTypes?: boolean;
 
     /**
      * A list of filters used to exclude diagnostics from the output
