@@ -230,6 +230,8 @@ export class Parser {
         this.pendingAnnotations = [];
 
         this.ast = this.body();
+        //assign the eofToken to body
+        this.ast.eofToken = this.tokens[this.tokens.length - 1];
 
         //now that we've built the AST, link every node to its parent
         this.ast.link();
@@ -782,7 +784,8 @@ export class Parser {
                         start: this.peek().range.start,
                         end: this.peek().range.start
                     },
-                    leadingWhitespace: ''
+                    leadingWhitespace: '',
+                    leadingTrivia: []
                 };
             }
             let isSub = functionType?.kind === TokenKind.Sub;
@@ -828,8 +831,9 @@ export class Parser {
             let params = [] as FunctionParameterExpression[];
             let asToken: Token;
             let typeToken: Token;
+            const paramCommas: Token[] = [];
             if (!this.check(TokenKind.RightParen)) {
-                do {
+                while (true) {
                     if (params.length >= CallExpression.MaximumArguments) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.tooManyCallableParameters(params.length, CallExpression.MaximumArguments),
@@ -838,7 +842,12 @@ export class Parser {
                     }
 
                     params.push(this.functionParameter());
-                } while (this.match(TokenKind.Comma));
+                    if (this.check(TokenKind.Comma)) {
+                        paramCommas.push(this.advance());
+                    } else {
+                        break;
+                    }
+                }
             }
             let rightParen = this.advance();
 
@@ -876,7 +885,8 @@ export class Parser {
                 leftParen,
                 rightParen,
                 asToken,
-                typeToken
+                typeToken,
+                paramCommas
             );
 
             // add the function to the relevant symbol tables
@@ -1531,6 +1541,10 @@ export class Parser {
         let openingBacktick = this.peek();
         this.advance();
         let currentQuasiExpressionParts = [];
+
+        let expressionBeginTokens: Token[] = [];
+        let expressionEndTokens: Token[] = [];
+
         while (!this.isAtEnd() && !this.check(TokenKind.BackTick)) {
             let next = this.peek();
             if (next.kind === TokenKind.TemplateStringQuasi) {
@@ -1552,13 +1566,17 @@ export class Parser {
                 currentQuasiExpressionParts = [];
 
                 if (next.kind === TokenKind.TemplateStringExpressionBegin) {
-                    this.advance();
+                    expressionBeginTokens.push(
+                        this.advance()
+                    );
                 }
                 //now keep this expression
                 expressions.push(this.expression());
                 if (!this.isAtEnd() && this.check(TokenKind.TemplateStringExpressionEnd)) {
                     //TODO is it an error if this is not present?
-                    this.advance();
+                    expressionEndTokens.push(
+                        this.advance()
+                    );
                 } else {
                     this.diagnostics.push({
                         ...DiagnosticMessages.unterminatedTemplateExpression(),
@@ -1585,9 +1603,9 @@ export class Parser {
         } else {
             let closingBacktick = this.advance();
             if (isTagged) {
-                return new TaggedTemplateStringExpression(tagName, openingBacktick, quasis, expressions, closingBacktick);
+                return new TaggedTemplateStringExpression(tagName, openingBacktick, quasis, expressions, closingBacktick, expressionBeginTokens, expressionEndTokens);
             } else {
-                return new TemplateStringExpression(openingBacktick, quasis, expressions, closingBacktick);
+                return new TemplateStringExpression(openingBacktick, quasis, expressions, closingBacktick, expressionBeginTokens, expressionEndTokens);
             }
         }
     }
@@ -2000,7 +2018,8 @@ export class Parser {
                         ? right
                         : new BinaryExpression(left, operator, right),
                     left.openingSquare,
-                    left.closingSquare
+                    left.closingSquare,
+                    operator
                 );
             } else if (isDottedGetExpression(left)) {
                 return new DottedSetStatement(
@@ -2008,7 +2027,9 @@ export class Parser {
                     left.name,
                     operator.kind === TokenKind.Equal
                         ? right
-                        : new BinaryExpression(left, operator, right)
+                        : new BinaryExpression(left, operator, right),
+                    left.dot,
+                    operator
                 );
             }
         }
@@ -2405,7 +2426,7 @@ export class Parser {
         let openParen = this.consume(DiagnosticMessages.expectedOpenParenToFollowCallfuncIdentifier(), TokenKind.LeftParen);
         let call = this.finishCall(openParen, callee, false);
 
-        return new CallfuncExpression(callee, operator, methodName as Identifier, openParen, call.args, call.closingParen);
+        return new CallfuncExpression(callee, operator, methodName as Identifier, openParen, call.args, call.closingParen, call.commas);
     }
 
     private call(): Expression {
@@ -2481,9 +2502,10 @@ export class Parser {
     private finishCall(openingParen: Token, callee: Expression, addToCallExpressionList = true) {
         let args = [] as Expression[];
         while (this.match(TokenKind.Newline)) { }
+        const commas: Token[] = [];
 
         if (!this.check(TokenKind.RightParen)) {
-            do {
+            while (true) {
                 while (this.match(TokenKind.Newline)) { }
 
                 if (args.length >= CallExpression.MaximumArguments) {
@@ -2500,7 +2522,12 @@ export class Parser {
                     // we were unable to get an expression, so don't continue
                     break;
                 }
-            } while (this.match(TokenKind.Comma));
+                if (this.check(TokenKind.Comma)) {
+                    commas.push(this.advance());
+                } else {
+                    break;
+                }
+            }
         }
 
         while (this.match(TokenKind.Newline)) { }
@@ -2510,7 +2537,7 @@ export class Parser {
             TokenKind.RightParen
         );
 
-        let expression = new CallExpression(callee, openingParen, closingParen, args);
+        let expression = new CallExpression(callee, openingParen, closingParen, args, commas);
         if (addToCallExpressionList) {
             this.callExpressions.push(expression);
         }
@@ -2621,6 +2648,7 @@ export class Parser {
 
     private arrayLiteral() {
         let elements: Array<Expression | CommentStatement> = [];
+        let commas: Array<Token | undefined> = [];
         let openingSquare = this.previous();
 
         //add any comment found right after the opening square
@@ -2637,19 +2665,22 @@ export class Parser {
                 elements.push(this.expression());
 
                 while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Comment)) {
+                    const previous = this.previous();
                     if (this.checkPrevious(TokenKind.Comment) || this.check(TokenKind.Comment)) {
                         let comment = this.check(TokenKind.Comment) ? this.advance() : this.previous();
                         elements.push(new CommentStatement([comment]));
                     }
-                    while (this.match(TokenKind.Newline)) {
-
-                    }
+                    while (this.match(TokenKind.Newline)) { }
 
                     if (this.check(TokenKind.RightSquareBracket)) {
                         break;
                     }
 
                     elements.push(this.expression());
+                    commas.push(
+                        previous?.kind === TokenKind.Comma ? previous : undefined
+                    );
+
                 }
             } catch (error: any) {
                 this.rethrowNonDiagnosticError(error);
@@ -2664,7 +2695,7 @@ export class Parser {
         }
 
         //this.consume("Expected newline or ':' after array literal", TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
-        return new ArrayLiteralExpression(elements, openingSquare, closingSquare);
+        return new ArrayLiteralExpression(elements, openingSquare, closingSquare, commas);
     }
 
     private aaLiteral() {

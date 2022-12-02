@@ -2,8 +2,8 @@
 import { expect } from '../chai-config.spec';
 
 import { TokenKind } from './TokenKind';
-import { Lexer } from './Lexer';
-import { isToken } from './Token';
+import { Lexer, triviaKinds } from './Lexer';
+import { isToken, Token } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
 import { Range } from 'vscode-languageserver';
 import util from '../util';
@@ -1376,6 +1376,63 @@ describe('lexer', () => {
             TokenKind.Continue,
             TokenKind.Eof
         ]);
+    });
+
+    describe('trivia', () => {
+        function stringify(tokens: Token[]) {
+            return tokens
+                //exclude the explicit triva tokens since they'll be included in the leading/trailing arrays
+                .filter(x => !triviaKinds.includes(x.kind))
+                .flatMap(x => [...x.leadingTrivia, x])
+                .map(x => x.text)
+                .join('');
+        }
+
+        it('combining token text and trivia can reproduce full input', () => {
+            const input = `
+                function   test(  )
+                    'comment
+                    print   alpha   '  blabla
+                end function 'trailing
+                'trailing2
+            `;
+            expect(
+                stringify(
+                    Lexer.scan(input).tokens
+                )
+            ).to.eql(input);
+        });
+
+        function expectTrivia(text: string, expected: Array<{ text: string; leadingTrivia?: string[]; trailingTrivia?: string[] }>) {
+            const tokens = Lexer.scan(text).tokens.filter(x => !triviaKinds.includes(x.kind));
+            expect(
+                tokens.map(x => {
+                    return {
+                        text: x.text,
+                        leadingTrivia: x.leadingTrivia.map(x => x.text)
+                    };
+                })
+            ).to.eql(
+                expected.map(x => ({
+                    leadingTrivia: [],
+                    ...x
+                }))
+            );
+        }
+
+        it('associates trailing items on same line with the preceeding token', () => {
+            expectTrivia(
+                `'leading\n` +
+                `alpha = true 'trueComment\n` +
+                `'eof`
+                , [
+                    { leadingTrivia: [`'leading`, `\n`], text: `alpha` },
+                    { leadingTrivia: [` `], text: `=` },
+                    { leadingTrivia: [` `], text: `true` },
+                    //EOF
+                    { leadingTrivia: [` `, `'trueComment`, `\n`, `'eof`], text: `` }
+                ]);
+        });
     });
 });
 

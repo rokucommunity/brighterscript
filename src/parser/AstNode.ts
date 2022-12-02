@@ -8,6 +8,8 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import type { TranspileResult } from '../interfaces';
 import type { AnnotationExpression } from './Expression';
 import util from '../util';
+import type { SourceNode } from 'source-map';
+import { TranspileState } from './TranspileState';
 
 /**
  * A BrightScript AST node
@@ -104,6 +106,20 @@ export abstract class AstNode {
             walkMode: WalkMode.visitAllRecursive
         });
     }
+
+    /**
+     * Return the string value of this AstNode
+     */
+    public toString() {
+        return this
+            .toSourceNode(new TranspileState('', {}))
+            .toString();
+    }
+
+    /**
+     * Generate a SourceNode that represents the stringified value of this node (used to generate sourcemaps and transpile the code
+     */
+    public abstract toSourceNode(state: TranspileState): SourceNode;
 }
 
 export abstract class Statement extends AstNode {
