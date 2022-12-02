@@ -187,7 +187,7 @@ describe('Program', () => {
                 beforeFileParse: beforeFileParse,
                 afterFileParse: afterFileParse,
                 afterFileValidate: afterFileValidate
-            }], new Logger());
+            }], { logger: new Logger() });
 
             //add a new source file
             program.setFile('source/main.brs', '');

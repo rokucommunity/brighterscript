@@ -301,14 +301,14 @@ export class BrsFileValidator {
     }
 
     private validateContinueStatement(statement: ContinueStatement) {
-        const validateLoopTypeMatch = (loopType: TokenKind) => {
+        const validateLoopTypeMatch = (expectedLoopType: TokenKind) => {
             //coerce ForEach to For
-            loopType = loopType === TokenKind.ForEach ? TokenKind.For : loopType;
-
-            if (loopType?.toLowerCase() !== statement.tokens.loopType.text?.toLowerCase()) {
+            expectedLoopType = expectedLoopType === TokenKind.ForEach ? TokenKind.For : expectedLoopType;
+            const actualLoopType = statement.tokens.loopType;
+            if (actualLoopType && expectedLoopType?.toLowerCase() !== actualLoopType.text?.toLowerCase()) {
                 this.event.file.addDiagnostic({
                     range: statement.tokens.loopType.range,
-                    ...DiagnosticMessages.expectedToken(loopType)
+                    ...DiagnosticMessages.expectedToken(expectedLoopType)
                 });
             }
         };
