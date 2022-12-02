@@ -2332,6 +2332,30 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('discard parameter types when removeParameterTypes is true', () => {
+            program.options.removeParameterTypes = true;
+            testTranspile(`
+                sub one(a as integer, b = "" as string, c = invalid as dynamic)
+                end sub
+            `, `
+                sub one(a, b = "", c = invalid)
+                end sub
+            `);
+        });
+
+        it('discard return type when removeParameterTypes is true', () => {
+            program.options.removeParameterTypes = true;
+            testTranspile(`
+                function one() as string
+                    return ""
+                end function
+            `, `
+                function one()
+                    return ""
+                end function
+            `);
+        });
+
         it('transpiles local var assignment operators', () => {
             testTranspile(`
                 sub main()
