@@ -2430,7 +2430,7 @@ export class Parser {
         let openParen = this.consume(DiagnosticMessages.expectedOpenParenToFollowCallfuncIdentifier(), TokenKind.LeftParen);
         let call = this.finishCall(openParen, callee, false);
 
-        return new CallfuncExpression(callee, operator, methodName as Identifier, openParen, call.args, call.closingParen, call.commas);
+        return new CallfuncExpression(callee, operator, methodName as Identifier, openParen, call.args, call.closingParen, call.argCommas);
     }
 
     private call(): Expression {

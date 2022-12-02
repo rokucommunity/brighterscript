@@ -1,9 +1,9 @@
 /* eslint no-template-curly-in-string: 0 */
 import { expect } from '../chai-config.spec';
-
 import { TokenKind } from './TokenKind';
 import { Lexer, triviaKinds } from './Lexer';
-import { isToken, Token } from './Token';
+import type { Token } from './Token';
+import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
 import { Range } from 'vscode-languageserver';
 import util from '../util';

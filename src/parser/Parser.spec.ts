@@ -1,6 +1,4 @@
 import { expect, assert } from '../chai-config.spec';
-import * as fastGlob from 'fast-glob';
-import * as fsExtra from 'fs-extra';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression } from './Expression';

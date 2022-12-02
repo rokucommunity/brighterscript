@@ -152,6 +152,7 @@ export class TranspileState {
 
     /**
      * Convert an array of `toSourceNode`-enabled objects to a single SourceNode, applying an optional filter as they are iterated
+     * @param elements the items that have a `toSourceNode()` function
      * @param filter a function to call to EXCLUDE an item. It's an exclude filter so you can pass in things like `isCommentStatement` directly
      */
     public arrayToSourceNodeWithTrivia<TElement extends { toSourceNode: (state: TranspileState) => SourceNode }>(elements: Array<TElement>, filter?: (element: TElement) => boolean) {

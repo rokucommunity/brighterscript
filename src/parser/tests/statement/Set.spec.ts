@@ -218,7 +218,7 @@ describe('parser indexed assignment', () => {
                 range: Range.create(1, 10, 1, 11),
                 leadingWhitespace: ''
             }
-        ]);
+        ] as any[]);
 
         expect(diagnostics).to.be.empty;
         expect(statements).to.be.lengthOf(2);

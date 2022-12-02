@@ -72,7 +72,7 @@ export class CallExpression extends Expression {
         readonly openingParen: Token,
         readonly closingParen: Token,
         readonly args: Expression[],
-        readonly commas: Token[]
+        readonly argCommas: Token[]
     ) {
         super();
         this.range = util.createBoundingRange(this.callee, this.openingParen, ...args, this.closingParen);
@@ -123,7 +123,7 @@ export class CallExpression extends Expression {
             state.tokenToSourceNodeWithTrivia(this.openingParen),
             ...this.args.map((x, i) => ([
                 x.toSourceNode(state),
-                state.tokenToSourceNodeWithTrivia(this.commas[i])
+                state.tokenToSourceNodeWithTrivia(this.argCommas[i])
             ])).flat(),
             state.tokenToSourceNodeWithTrivia(this.closingParen)
         );
