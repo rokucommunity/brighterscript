@@ -3409,7 +3409,7 @@ describe('BrsFile', () => {
                 util.loadPlugins(tempDir, [
                     s`${tempDir}/plugins/${pluginFileName}`
                 ]),
-                new Logger()
+                { logger: new Logger() }
             );
             const file = program.setFile<any>('source/MAIN.brs', '');
             expect(file._customProp).to.exist;
@@ -3420,7 +3420,7 @@ describe('BrsFile', () => {
                 util.loadPlugins(tempDir, [
                     `./plugins/${pluginFileName}`
                 ]),
-                new Logger()
+                { logger: new Logger() }
             );
             const file = program.setFile<any>('source/MAIN.brs', '');
             expect(file._customProp).to.exist;

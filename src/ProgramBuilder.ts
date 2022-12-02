@@ -36,7 +36,7 @@ export class ProgramBuilder {
     private watcher: Watcher;
     public program: Program;
     public logger = new Logger();
-    public plugins: PluginInterface = new PluginInterface([], this.logger);
+    public plugins: PluginInterface = new PluginInterface([], { logger: this.logger });
     private fileResolvers = [] as FileResolver[];
 
     public addFileResolver(fileResolver: FileResolver) {
