@@ -417,7 +417,8 @@ export class FunctionStatement extends Statement implements TypedefProvider {
 
     public toSourceNode(state: TranspileState): SourceNode {
         return state.toSourceNode(
-            state.tokenToSourceNodeWithTrivia(this.name),
+            state.arrayToSourceNodeWithTrivia(this.annotations),
+            //the FunctionExpression looks upwards for its name, so we don't need to include it here
             this.func.toSourceNode(state)
         );
     }
@@ -852,7 +853,7 @@ export class ReturnStatement extends Statement {
     public toSourceNode(state: TranspileState): SourceNode {
         return state.toSourceNode(
             state.tokenToSourceNodeWithTrivia(this.tokens.return),
-            this.value.toSourceNode(state)
+            this.value?.toSourceNode(state)
         );
     }
 
@@ -2313,6 +2314,13 @@ export class MethodStatement extends FunctionStatement {
             statement.walk(visitor, walkOptions);
         }
         return this.func.transpile(state);
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.accessModifier),
+            super.toSourceNode(state)
+        );
     }
 
     getTypedef(state: BrsTranspileState) {

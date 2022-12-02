@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -284,7 +284,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     public toSourceNode(state: TranspileState): SourceNode {
         return state.toSourceNode(
             state.tokenToSourceNodeWithTrivia(this.functionType),
-            state.tokenToSourceNodeWithTrivia((this.parent as FunctionStatement)?.name),
+            //include the name (if we have a parent FunctionStatement)
+            isFunctionStatement(this.parent) ? state.tokenToSourceNodeWithTrivia(this.parent.name) : undefined,
             state.tokenToSourceNodeWithTrivia(this.leftParen),
             ...this.parameters?.map((x, i) => ([
                 x.toSourceNode(state),
@@ -787,7 +788,8 @@ export class AAMemberExpression extends Expression {
         return state.toSourceNode(
             state.tokenToSourceNodeWithTrivia(this.keyToken),
             //colon tokens are technically trivia, so we don't need to include that here
-            this.value?.toSourceNode(state)
+            this.value?.toSourceNode(state),
+            state.tokenToSourceNodeWithTrivia(this.commaToken)
         );
     }
 
@@ -882,7 +884,7 @@ export class AALiteralExpression extends Expression {
     public toSourceNode(state: TranspileState): SourceNode {
         return state.toSourceNode(
             state.tokenToSourceNodeWithTrivia(this.open),
-            ...this.elements?.map(x => x.toSourceNode(state)) ?? [],
+            state.arrayToSourceNodeWithTrivia(this.elements, isCommentStatement),
             state.tokenToSourceNodeWithTrivia(this.close)
         );
     }
@@ -1298,24 +1300,18 @@ export class TemplateStringExpression extends Expression {
     }
 
     public toSourceNode(state: TranspileState): SourceNode {
-        const chunks: Array<SourceNode | undefined> = [
-            state.tokenToSourceNodeWithTrivia(this.openingBacktick)
-        ];
-        const len = Math.max(this.quasis.length, this.expressions.length);
-        for (let i = 0; i < len; i++) {
-            chunks.push(
-                this.quasis[i]?.toSourceNode(state)
-            );
-            if (this.expressions[i]) {
-                chunks.push(
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.openingBacktick),
+            ...this.quasis?.map((x, i) => ([
+                this.quasis[i]?.toSourceNode(state),
+                ...(this.expressions?.[i] ? [
                     state.tokenToSourceNodeWithTrivia(this.expressionBeginTokens[i]),
                     this.expressions[i]?.toSourceNode(state),
                     state.tokenToSourceNodeWithTrivia(this.expressionEndTokens[i])
-                );
-            }
-        }
-
-        return state.toSourceNode(...chunks);
+                ] : [])
+            ])).flat() ?? [],
+            state.tokenToSourceNodeWithTrivia(this.closingBacktick)
+        );
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1393,27 +1389,23 @@ export class TaggedTemplateStringExpression extends Expression {
         );
         return result;
     }
+
     public toSourceNode(state: TranspileState): SourceNode {
-        const chunks: Array<SourceNode | undefined> = [
+        return state.toSourceNode(
             state.tokenToSourceNodeWithTrivia(this.tagName),
-            state.tokenToSourceNodeWithTrivia(this.openingBacktick)
-        ];
-        const len = Math.max(this.quasis.length, this.expressions.length);
-        for (let i = 0; i < len; i++) {
-            chunks.push(
-                this.quasis[i]?.toSourceNode(state)
-            );
-            if (this.expressions[i]) {
-                chunks.push(
+            state.tokenToSourceNodeWithTrivia(this.openingBacktick),
+            ...this.quasis?.map((x, i) => ([
+                this.quasis[i]?.toSourceNode(state),
+                ...(this.expressions?.[i] ? [
                     state.tokenToSourceNodeWithTrivia(this.expressionBeginTokens[i]),
                     this.expressions[i]?.toSourceNode(state),
                     state.tokenToSourceNodeWithTrivia(this.expressionEndTokens[i])
-                );
-            }
-        }
-
-        return state.toSourceNode(...chunks);
+                ] : [])
+            ])).flat() ?? [],
+            state.tokenToSourceNodeWithTrivia(this.closingBacktick)
+        );
     }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //walk the quasis and expressions in left-to-right order
@@ -1561,7 +1553,8 @@ export class TernaryExpression extends Expression {
             this.test?.toSourceNode(state),
             state.tokenToSourceNodeWithTrivia(this.questionMarkToken),
             this.consequent?.toSourceNode(state),
-            state.tokenToSourceNodeWithTrivia(this.colonToken),
+            // don't add the colon because colons are included in leadingTrivia
+            // state.tokenToSourceNodeWithTrivia(this.colonToken),
             this.alternate?.toSourceNode(state)
         );
     }

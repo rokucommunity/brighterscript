@@ -1,7 +1,7 @@
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import type { BsConfig } from '../BsConfig';
-import { Token } from '../lexer/Token';
+import type { Token } from '../lexer/Token';
 
 /**
  * Holds the state of a transpile operation as it works its way through the transpile process
@@ -156,11 +156,13 @@ export class TranspileState {
      */
     public arrayToSourceNodeWithTrivia<TElement extends { toSourceNode: (state: TranspileState) => SourceNode }>(elements: Array<TElement>, filter?: (element: TElement) => boolean) {
         const nodes: Array<SourceNode | string> = [];
-        for (const element of elements) {
-            if (element && !filter?.(element)) {
-                nodes.push(
-                    element?.toSourceNode(this) ?? ''
-                );
+        if (Array.isArray(elements)) {
+            for (const element of elements) {
+                if (element && !filter?.(element)) {
+                    nodes.push(
+                        element?.toSourceNode(this) ?? ''
+                    );
+                }
             }
         }
         return new SourceNode(1, 0, null, nodes);

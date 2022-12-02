@@ -901,7 +901,9 @@ export class Parser {
             try {
                 //support ending the function with `end sub` OR `end function`
                 func.body = this.block();
-                func.body.symbolTable = new SymbolTable(`Block: Function '${name?.text ?? ''}'`, () => func.getSymbolTable());
+                if (func.body) {
+                    func.body.symbolTable = new SymbolTable(`Block: Function '${name?.text ?? ''}'`, () => func.getSymbolTable());
+                }
             } finally { }
 
             if (!func.body) {
@@ -958,9 +960,10 @@ export class Parser {
 
         let typeToken: Token | undefined;
         let defaultValue;
-
+        let equalsToken: Token;
         // parse argument default value
         if (this.match(TokenKind.Equal)) {
+            equalsToken = this.previous();
             // it seems any expression is allowed here -- including ones that operate on other arguments!
             defaultValue = this.expression();
         }
@@ -982,7 +985,8 @@ export class Parser {
             name,
             typeToken,
             defaultValue,
-            asToken
+            asToken,
+            equalsToken
         );
     }
 
@@ -2551,6 +2555,7 @@ export class Parser {
      */
     private typeToken(): Token {
         let typeToken: Token;
+        const leadingTrivia = this.peek()?.leadingTrivia;
 
         if (this.checkAny(...DeclarableTypes)) {
             // Token is a built in type
@@ -2567,6 +2572,9 @@ export class Parser {
         } else {
             // just get whatever's next
             typeToken = this.advance();
+        }
+        if (typeToken) {
+            typeToken.leadingTrivia = leadingTrivia;
         }
         return typeToken;
     }
