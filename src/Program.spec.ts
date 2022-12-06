@@ -1884,8 +1884,7 @@ describe('Program', () => {
     });
 
     describe('transpile', () => {
-
-        it('detects and transpiles files added between beforeProgramTranspile and afterProgramTranspile', async () => {
+        it.skip('detects and transpiles files added between beforeProgramTranspile and afterProgramTranspile', async () => {
             program.setFile('source/main.bs', trim`
                 sub main()
                     print "hello world"
@@ -2144,7 +2143,7 @@ describe('Program', () => {
 
     describe('typedef', () => {
         describe('emitDefinitions', () => {
-            it.only('generates typedef for .bs files', async () => {
+            it('generates typedef for .bs files', async () => {
                 program.setFile<BrsFile>('source/Duck.bs', `
                     class Duck
                     end class
@@ -2158,7 +2157,7 @@ describe('Program', () => {
                 expect(fsExtra.pathExistsSync(s`${stagingDir}/source/Duck.d.brs`)).to.be.false;
             });
 
-            it('does not generate typedef for typedef file', async () => {
+            it.only('does not generate typedef for typedef file', async () => {
                 program.setFile<BrsFile>('source/Duck.d.bs', `
                     class Duck
                     end class

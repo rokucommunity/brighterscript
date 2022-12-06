@@ -17,7 +17,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
     /**
      * Call `event` on plugins
      */
-    public emit<K extends keyof T & string>(event: K, ...args: Arguments<T[K]>) {
+    public emit<K extends keyof T & string>(event: K, ...args: Arguments<T[K]>): Arguments<T[K]>[0] {
         for (let plugin of this.plugins) {
             if ((plugin as any)[event]) {
                 try {
@@ -29,6 +29,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
                 }
             }
         }
+        return args[0];
     }
 
     /**

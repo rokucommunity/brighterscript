@@ -28,34 +28,37 @@ export class FileSerializer {
     private serializeBrsFile(file: BrsFile) {
         const result: SerializedFile[] = [];
         const serialized = file.serialize();
-        if (serialized.code) {
-            result.push({
-                pkgPath: file.pkgPath,
-                data: Buffer.from(serialized.code)
-            });
-        }
-        if (serialized.map) {
-            result.push({
-                pkgPath: file.pkgPath + '.map',
-                data: Buffer.from(serialized.map.toString())
-            });
-        }
-        if (serialized.map) {
-            result.push({
-                pkgPath: file.pkgPath.replace(/\.brs$/i, '.d.bs'),
-                data: Buffer.from(serialized.typedef)
-            });
-        }
 
-        //TODO remove `afterFileTranspile` in v1
-        this.event.program.plugins.emit('afterFileTranspile', {
+        const afterTranspileEvent = {
             program: this.event.program,
             file: file,
             code: serialized.code,
             outputPath: this.event.program['getOutputPath'](file), // eslint-disable-line
             map: serialized.map,
             typedef: serialized.typedef
-        });
+        };
+
+        //TODO remove `afterFileTranspile` in v1
+        this.event.program.plugins.emit('afterFileTranspile', afterTranspileEvent);
+
+        if (afterTranspileEvent.code) {
+            result.push({
+                pkgPath: file.pkgPath,
+                data: Buffer.from(afterTranspileEvent.code)
+            });
+        }
+        if (afterTranspileEvent.map) {
+            result.push({
+                pkgPath: file.pkgPath + '.map',
+                data: Buffer.from(afterTranspileEvent.map.toString())
+            });
+        }
+        if (afterTranspileEvent.typedef) {
+            result.push({
+                pkgPath: file.pkgPath.replace(/\.brs$/i, '.d.bs'),
+                data: Buffer.from(afterTranspileEvent.typedef)
+            });
+        }
 
         this.event.result.set(file, result);
     }

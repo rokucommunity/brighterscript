@@ -214,21 +214,24 @@ export interface CompilerPlugin {
     afterPrepareProgram?: PluginHandler<AfterPrepareProgramEvent>;
 
 
+    /**
+     * @deprecated use `beforeBuildProgram`
+     */
     beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    /**
+     * @deprecated use `afterBuildProgram`
+     */
     afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
 
+
+    /**
+     * Called before the entire program is validated
+     */
     beforeProgramValidate?: (program: Program) => void;
+    /**
+     * Called after the program has been validated
+     */
     afterProgramValidate?: (program: Program) => void;
-
-
-    /**
-     * Called right before the program builds (i.e. generates the code and puts it in the stagingDir
-     */
-    beforeBuildProgram?: PluginHandler<BeforeBuildProgramEvent>;
-    /**
-     * Called right after the program builds (i.e. generates the code and puts it in the stagingDir
-     */
-    afterBuildProgram?: PluginHandler<AfterBuildProgramEvent>;
 
     /**
      * @deprecated use `beforeProgramBuild` instead
@@ -348,6 +351,16 @@ export interface CompilerPlugin {
 
 
     /**
+     * Called right before the program builds (i.e. generates the code and puts it in the stagingDir
+     */
+    beforeBuildProgram?: PluginHandler<BeforeBuildProgramEvent>;
+    /**
+     * Called right after the program builds (i.e. generates the code and puts it in the stagingDir
+     */
+    afterBuildProgram?: PluginHandler<AfterBuildProgramEvent>;
+
+
+    /**
      * Before preparing the file for building
      */
     beforePrepareFile?: PluginHandler<BeforePrepareFileEvent>;
@@ -427,10 +440,9 @@ export interface ProvideCompletionsEvent<TFile extends File = File> {
 export type BeforeProvideCompletionsEvent<TFile extends File = File> = ProvideCompletionsEvent<TFile>;
 export type AfterProvideCompletionsEvent<TFile extends File = File> = ProvideCompletionsEvent<TFile>;
 
-export type BeforeBuildProgramEvent = BuildProgramEvent;
-export interface BuildProgramEvent {
+export interface BeforeBuildProgramEvent {
     program: Program;
-    entries: Map<string, PreparedFile>;
+    files: File[];
     editor: Editor;
 }
 export type AfterBuildProgramEvent = BeforeBuildProgramEvent;

@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileReference, FileObj, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideCompletionsEvent, ProvideHoverEvent, ProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, PreparedFile, SerializedFile, BeforeWriteFileEvent } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideCompletionsEvent, ProvideHoverEvent, ProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, PreparedFile, SerializedFile, BeforeWriteFileEvent, BeforeBuildProgramEvent, Editor } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -1235,7 +1235,7 @@ export class Program {
      * Prepare the program for building
      * @param files the list of files that should be prepared
      */
-    private prepare(files: File[], editor: AstEditor) {
+    private prepare(files: File[], editor: Editor) {
         const programEvent = {
             program: this,
             editor: editor
@@ -1346,6 +1346,11 @@ export class Program {
         const files = options?.files ?? Object.values(this.files);
 
         const editor = new AstEditor();
+        const event = this.plugins.emit('beforeBuildProgram', {
+            program: this,
+            editor: editor,
+            files: files
+        });
 
         //prepare the program (and files) for building
         this.prepare(files, editor);
@@ -1357,6 +1362,8 @@ export class Program {
 
         //undo all edits for the program
         editor.undoAll();
+
+        this.plugins.emit('afterBuildProgram', event);
     }
 
     /**
