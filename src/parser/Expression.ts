@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -18,6 +18,7 @@ import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
 import { Expression } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
+import { SourceNode } from 'source-map';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -257,8 +258,37 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return results;
     }
 
-    getTypedef(state: BrsTranspileState, name?: Identifier) {
-        return this.transpile(state, name, false);
+    getTypedef(state: BrsTranspileState) {
+        let results = [
+            new SourceNode(1, 0, null, [
+                //'function'|'sub'
+                this.functionType?.text,
+                //functionName?
+                ...(isFunctionStatement(this.parent) || isMethodStatement(this.parent) ? [' ', this.parent.name?.text ?? ''] : []),
+                //leftParen
+                '(',
+                //parameters
+                ...(
+                    this.parameters?.map((param, i) => ([
+                        //separating comma
+                        i > 0 ? ', ' : '',
+                        ...param.getTypedef(state)
+                    ])) ?? []
+                ) as any,
+                //right paren
+                ')',
+                //as <ReturnType>
+                ...(this.asToken ? [
+                    ' as ',
+                    this.returnTypeToken?.text
+                ] : []),
+                '\n',
+                state.indent(),
+                //'end sub'|'end function'
+                this.end.text
+            ])
+        ];
+        return results;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -325,6 +355,23 @@ export class FunctionParameterExpression extends Expression {
         }
 
         return result;
+    }
+
+    public getTypedef(state: BrsTranspileState): TranspileResult {
+        return [
+            //name
+            this.name.text,
+            //default value
+            ...(this.defaultValue ? [
+                ' = ',
+                ...this.defaultValue.transpile(state)
+            ] : []),
+            //type declaration
+            ...(this.asToken ? [
+                ' as ',
+                this.typeToken?.text
+            ] : [])
+        ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

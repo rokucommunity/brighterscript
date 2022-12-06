@@ -16,7 +16,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
+import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
 import { ImportStatement } from '../parser/Statement';
@@ -34,6 +34,7 @@ describe('BrsFile', () => {
     let destPath = 'source/main.brs';
     let file: BrsFile;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
+    let testGetTypedef = getTestGetTypedef(() => [program, rootDir]);
 
     beforeEach(() => {
         fsExtra.emptyDirSync(tempDir);
@@ -3018,6 +3019,32 @@ describe('BrsFile', () => {
     });
 
     describe('typedef', () => {
+        it('includes enum and interface types', () => {
+            testGetTypedef(`
+                interface Foo
+                    field as string
+                end interface
+
+                enum Bar
+                    value
+                end enum
+
+                function baz(parameter as Foo) as Bar
+                    return Bar.value
+                end function
+            `, `
+                interface Foo
+                    field as string
+                end interface
+
+                enum Bar
+                    value
+                end enum
+                function baz(parameter as Foo) as Bar
+                end function
+            `);
+        });
+
         it('sets typedef path properly', () => {
             expect((program.setFile<BrsFile>('source/main1.brs', '')).typedefKey).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
             expect((program.setFile<BrsFile>('source/main2.d.bs', '')).typedefKey).to.equal(undefined);
