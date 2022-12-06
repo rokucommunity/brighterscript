@@ -5,7 +5,7 @@ import type { XmlFile } from './files/XmlFile';
 import type { FunctionScope } from './FunctionScope';
 import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
-import type { FileData, Program, TranspileObj } from './Program';
+import type { FileData, Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { FunctionStatement } from './parser/Statement';
 import type { Expression } from './parser/AstNode';
@@ -180,12 +180,39 @@ export type CompilerPluginFactory = () => CompilerPlugin;
 
 export interface CompilerPlugin {
     name: string;
-    //program events
+    /**
+     * Called before a new program is created
+     */
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    /**
+     * Called after a new program is created
+     */
     afterProgramCreate?: (program: Program) => void;
 
+
+    /**
+     * @deprecated use beforePrepareProgram
+     */
     beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    /**
+     * @deprecated use afterProgramBuild
+     */
     afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+
+
+    /**
+     * Called before the program gets prepared for building
+     */
+    beforePrepareProgram?: PluginHandler<BeforePrepareProgramEvent>;
+    /**
+     * Called when the program gets prepared for building
+     */
+    prepareProgram?: PluginHandler<PrepareProgramEvent>;
+    /**
+     * Called after the program gets prepared for building
+     */
+    afterPrepareProgram?: PluginHandler<AfterPrepareProgramEvent>;
+
 
     beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
@@ -193,8 +220,25 @@ export interface CompilerPlugin {
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
 
-    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
-    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+
+    /**
+     * Called right before the program builds (i.e. generates the code and puts it in the stagingDir
+     */
+    beforeBuildProgram?: PluginHandler<BeforeBuildProgramEvent>;
+    /**
+     * Called right after the program builds (i.e. generates the code and puts it in the stagingDir
+     */
+    afterBuildProgram?: PluginHandler<AfterBuildProgramEvent>;
+
+    /**
+     * @deprecated use `beforeProgramBuild` instead
+     */
+    beforeProgramTranspile?: (program: Program, entries: ReadonlyArray<PreparedFile>, editor: Editor) => void;
+    /**
+     * @deprecated use `afterProgramBuild` instead
+     */
+    afterProgramTranspile?: (program: Program, entries: ReadonlyArray<PreparedFile>, editor: Editor) => void;
+
 
     /**
      * Emitted before the program starts collecting completions
@@ -209,6 +253,7 @@ export interface CompilerPlugin {
      */
     afterProvideCompletions?: PluginHandler<AfterProvideCompletionsEvent>;
 
+
     /**
      * Called before the `provideHover` hook. Use this if you need to prepare any of the in-memory objects before the `provideHover` gets called
      */
@@ -222,6 +267,7 @@ export interface CompilerPlugin {
      */
     afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
 
+
     afterScopeCreate?: (scope: Scope) => void;
 
     beforeScopeDispose?: (scope: Scope) => void;
@@ -233,6 +279,7 @@ export interface CompilerPlugin {
 
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
+
 
     /**
      * Called before plugins are asked to provide files to the program. (excludes virtual files produced by `provideFile` events).
@@ -247,6 +294,7 @@ export interface CompilerPlugin {
      * Called after a file was added to the program. (excludes virtual files produced by `provideFile` events)
      */
     afterProvideFile?: PluginHandler<AfterProvideFileEvent>;
+
 
     /**
      * Called before a file is added to the program.
@@ -280,6 +328,7 @@ export interface CompilerPlugin {
      */
     afterFileParse?: (file: File) => void;
 
+
     /**
      * Called before each file is validated
      */
@@ -293,8 +342,58 @@ export interface CompilerPlugin {
      */
     afterFileValidate?: (file: File) => void;
 
+
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
+
+
+    /**
+     * Before preparing the file for building
+     */
+    beforePrepareFile?: PluginHandler<BeforePrepareFileEvent>;
+    /**
+     * Prepare the file for building
+     */
+    prepareFile?: PluginHandler<PrepareFileEvent>;
+    /**
+     * After preparing the file for building
+     */
+    afterPrepareFile?: PluginHandler<AfterPrepareFileEvent>;
+
+
+    /**
+     * Before the program turns all file objects into their final buffers
+     */
+    beforeSerializeProgram?: PluginHandler<BeforeSerializeProgramEvent>;
+    /**
+     * After the program turns all file objects into their final buffers
+     */
+    afterSerializeProgram?: PluginHandler<AfterSerializeProgramEvent>;
+
+
+    /**
+     * Before turning the file into its final contents
+     */
+    beforeSerializeFile?: PluginHandler<BeforeSerializeFileEvent>;
+    /**
+     * Turn the file into its final contents (i.e. transpile a bs file, compress a jpeg, etc)
+     */
+    serializeFile?: PluginHandler<SerializeFileEvent>;
+    /**
+     * After turning the file into its final contents
+     */
+    afterSerializeFile?: PluginHandler<AfterSerializeFileEvent>;
+
+
+    /**
+     * Before a file is written to disk. These are raw files that contain the final output. One `File` may produce several of these
+     */
+    beforeWriteFile?: PluginHandler<BeforeWriteFileEvent>;
+    /**
+     * Before a file is written to disk. These are raw files that contain the final output. One `File` may produce several of these
+     */
+    afterWriteFile?: PluginHandler<AfterWriteFileEvent>;
+
 
     /**
      * Called before a file is removed from the program.
@@ -327,6 +426,14 @@ export interface ProvideCompletionsEvent<TFile extends File = File> {
 }
 export type BeforeProvideCompletionsEvent<TFile extends File = File> = ProvideCompletionsEvent<TFile>;
 export type AfterProvideCompletionsEvent<TFile extends File = File> = ProvideCompletionsEvent<TFile>;
+
+export type BeforeBuildProgramEvent = BuildProgramEvent;
+export interface BuildProgramEvent {
+    program: Program;
+    entries: Map<string, PreparedFile>;
+    editor: Editor;
+}
+export type AfterBuildProgramEvent = BeforeBuildProgramEvent;
 
 export interface ProvideHoverEvent {
     program: Program;
@@ -420,12 +527,6 @@ export interface AfterFileTranspileEvent<TFile extends File = File> {
      * The generated type definition file contents (if emitting type definitions are enabled)
      */
     typedef?: string;
-    /**
-     * An editor that can be used to transform properties or arrays. Once the `afterFileTranspile` event has fired, these changes will be reverted,
-     * restoring the objects to their prior state. This is useful for changing code right before a file gets transpiled, but when you don't want
-     * the changes to persist in the in-memory file.
-     */
-    editor: Editor;
 }
 
 export type BeforeProvideFileEvent<TFile extends File = File> = ProvideFileEvent<TFile>;
@@ -481,6 +582,108 @@ export interface BeforeFileRemoveEvent<TFile extends File = File> {
     program: Program;
 }
 export type AfterFileRemoveEvent<TFile extends File = File> = BeforeFileRemoveEvent<TFile>;
+
+export type BeforePrepareProgramEvent = PrepareProgramEvent;
+/**
+ * Event for when the program prepares itself for building
+ */
+export interface PrepareProgramEvent {
+    program: Program;
+    editor: Editor;
+}
+export type AfterPrepareProgramEvent = PrepareProgramEvent;
+
+
+export interface PreparedFile {
+    file: File;
+    /**
+     * The absolute path to where the file should be written during build. (i.e. somewhere inside the staging dir
+     */
+    outputPath: string;
+}
+
+export type BeforePrepareFileEvent<TFile extends File = File> = PrepareFileEvent<TFile>;
+/**
+ * Prepare the file for building
+ */
+export interface PrepareFileEvent<TFile extends File = File> {
+    program: Program;
+    file: TFile;
+    editor: Editor;
+}
+export type AfterPrepareFileEvent<TFile extends File = File> = PrepareFileEvent<TFile>;
+
+
+/**
+ * A container that holds the code, map, and typedef for serialized code files.
+ */
+export interface SerializedCodeFile {
+    code?: string;
+    map?: SourceMapGenerator;
+    typedef?: string;
+}
+
+export interface BeforeSerializeProgramEvent {
+    program: Program;
+    files: File[];
+    result: Map<File, SerializedFile[]>;
+}
+export type AfterSerializeProgramEvent = BeforeSerializeProgramEvent;
+
+/**
+ * During the `SerializeFile` events, this is how plugins will contribute file data for a specific file
+ */
+export interface SerializedFile {
+    /**
+     * The raw data for this file (i.e. a binary buffer for a .jpeg file, or the transpiled code for a .bs file)
+     */
+    data: Buffer;
+    /**
+     * The pkgPath for this chunk of data.
+     */
+    pkgPath: string;
+}
+
+export type BeforeSerializeFileEvent<TFile extends File = File> = SerializeFileEvent<TFile>;
+export interface SerializeFileEvent<TFile extends File = File> {
+    program: Program;
+    file: TFile;
+    /**
+     * The list of all files created across all the `SerializeFile` events.
+     * The key is the pkgPath of the file, and the
+     */
+    result: Map<TFile, SerializedFile[]>;
+}
+export type AfterSerializeFileEvent<TFile extends File = File> = SerializeFileEvent<TFile>;
+
+
+export interface BeforeWriteFileEvent {
+    program: Program;
+    file: SerializedFile;
+    /**
+     * The full path to where the file was (or will be) written to.
+     */
+    outputPath: string;
+}
+export type AfterWriteFileEvent = BeforeWriteFileEvent;
+
+/**
+ * @deprecated use `PreparedFile` instead
+ */
+export type TranspileObj = PreparedFile;
+
+export type BeforeTransformFileEvent<TFile extends File = File> = TransformFileEvent<TFile>;
+export interface TransformFileEvent<TFile extends File = File> {
+    program: Program;
+    file: Readonly<TFile>;
+    getContents(): Buffer;
+    setContents(buffer: Buffer): void;
+    /**
+     * The sourceMaps for the generated code (if emitting source maps is enabled)
+     */
+    map?: SourceMapGenerator;
+}
+export type AfterTransformFileEvent<TFile extends File = File> = TransformFileEvent<TFile>;
 
 export interface BeforeFileParseEvent {
     srcPath: string;

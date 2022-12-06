@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import type { Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
-import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink } from '../interfaces';
+import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, SerializedCodeFile } from '../interfaces';
 import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
@@ -30,7 +30,7 @@ import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
-import type { File } from './File';
+import type { File, SerializeFileResult } from './File';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -1665,6 +1665,25 @@ export class BrsFile implements File {
             }
         }
         return locations;
+    }
+
+    /**
+     * Generate the code, map, and typedef for this file
+     */
+    public serialize(): SerializedCodeFile {
+        const result: SerializedCodeFile = {};
+
+        const transpiled = this.transpile();
+        if (transpiled.code) {
+            result.code = transpiled.code;
+        }
+        if (transpiled.map) {
+            result.map = transpiled.map;
+        }
+        if (this.program.options.emitDefinitions) {
+            result.typedef = this.getTypedef();
+        }
+        return result;
     }
 
     /**

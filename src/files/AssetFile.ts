@@ -25,9 +25,30 @@ export class AssetFile implements File {
     public pkgPath: string;
 
     public diagnostics: BsDiagnostic[] = [];
-    dependencyGraphKey: string;
+
+    public dependencyGraphKey: string;
+
     //mark this file as validated so it skips all validation checks
-    isValidated = true;
-    //generic files don't need transpiled
-    needsTranspiled = false;
+    public isValidated = true;
+
+    /**
+     * The raw data for this file. It is lazy loaded
+     */
+    public get data(): Buffer {
+        if (!this._data) {
+
+        }
+        return this._data;
+    }
+    public set data(data: Buffer) {
+        this._data = data;
+    }
+    private _data?: Buffer;
+
+    /**
+     * Is the data for this file loaded yet?
+     */
+    public get isDataLoaded() {
+        return !!this._data;
+    }
 }

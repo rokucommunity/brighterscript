@@ -1,3 +1,4 @@
+import { SourceMapGenerator } from 'source-map';
 import type { BsDiagnostic, CommentFlag } from '../interfaces';
 
 export interface File {
@@ -66,11 +67,6 @@ export interface File {
      */
     validate?: () => void;
     /**
-     * Does this file need to be transpiled?
-     * TODO do we need this property?
-     */
-    needsTranspiled?: boolean;
-    /**
      * An array of comment-based flags that can be used to suppress diagnostics
      */
     commentFlags?: CommentFlag[];
@@ -88,6 +84,11 @@ export interface File {
      * `true` means exclude, all other values mean include.
      */
     excludeFromOutput?: boolean;
+}
+
+export interface SerializeFileResult {
+    content: Buffer;
+    map?: SourceMapGenerator;
 }
 /**
  * @deprecated use `File` instead

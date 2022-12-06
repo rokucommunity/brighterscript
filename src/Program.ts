@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileReference, FileObj, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideCompletionsEvent, ProvideHoverEvent, ProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideCompletionsEvent, ProvideHoverEvent, ProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, PreparedFile, SerializedFile, BeforeWriteFileEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -33,11 +33,6 @@ import type { File } from './files/File';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
-
-export interface TranspileObj {
-    file: File;
-    outputPath: string;
-}
 
 export interface SignatureInfoObj {
     index: number;
@@ -1155,12 +1150,12 @@ export class Program {
      * Internal usage should call `_getTranspiledFileContents` instead.
      * @param filePath can be a srcPath or a destPath
      */
-    public async getTranspiledFileContents(filePath: string, stagingDir?: string) { //TODO make this sync in v1
-        const { entries, astEditor } = this.beforeProgramTranspile(stagingDir);
+    public async getTranspiledFileContents(filePath: string, stagingDir?: string) {
+        const { entries, astEditor } = this.beforeProgramBuild(stagingDir);
         const result = this._getTranspiledFileContents(
             this.getFile(filePath)
         );
-        this.afterProgramTranspile(entries, astEditor);
+        this.afterProgramBuild(entries, astEditor);
         return Promise.resolve(result);
     }
 
@@ -1220,11 +1215,11 @@ export class Program {
     /**
      * Get the absolute output path for a file
      */
-    private getOutputPath(file: File, stagingDir = this.stagingDir1) {
+    private getOutputPath(file: { pkgPath?: string }, stagingDir = this.stagingDir) {
         return s`${stagingDir}/${file.pkgPath}`;
     }
 
-    private get stagingDir1() {
+    private get stagingDir() {
         const result = this.options.stagingDir ?? this.options.stagingFolderPath;
         if (result) {
             return result;
@@ -1236,110 +1231,148 @@ export class Program {
     }
     private _stagingDir;
 
-    private beforeProgramTranspile(stagingDir?: string) {
+    /**
+     * Prepare the program for building
+     * @param files the list of files that should be prepared
+     */
+    private prepare(files: File[], editor: AstEditor) {
+        const programEvent = {
+            program: this,
+            editor: editor
+        } as PrepareProgramEvent;
 
-        const entries = Object.values(this.files).map(file => {
-            return {
+        this.plugins.emit('beforePrepareProgram', programEvent);
+        this.plugins.emit('prepareProgram', programEvent);
+
+        //TODO remove in v1. we don't need this once the `beforeProgramTranspile` and `afterProgramTranspile` events are removed
+        const entries: PreparedFile[] = [];
+
+        for (const file of files) {
+            const event = {
+                program: this,
                 file: file,
-                outputPath: this.getOutputPath(file, stagingDir)
-            };
-        });
+                editor: editor,
+                //TODO remove in v1. This is only used for
+                outputPath: this.getOutputPath(file)
+            } as PrepareFileEvent & { outputPath: string };
 
-        const astEditor = new AstEditor();
+            this.plugins.emit('beforePrepareFile', event);
+            this.plugins.emit('prepareFile', event);
+            this.plugins.emit('afterPrepareFile', event);
 
-        this.plugins.emit('beforeProgramTranspile', this, entries, astEditor);
+            //TODO remove these deprecated events
+            this.plugins.emit('beforeFileTranspile', event);
+
+            //TODO remove this in v1
+            entries.push(event);
+        }
+
+        this.plugins.emit('afterPrepareProgram', programEvent);
+
+        //TODO remove the beforeProgramTranspile event in v1
+        this.plugins.emit('beforeProgramTranspile', this, entries, programEvent.editor);
+
         return {
-            entries: entries,
-            astEditor: astEditor
+            editor: programEvent.editor,
+            entries: entries
         };
     }
 
     /**
-     * @deprecated None of these parameters are used anymore
+     * Generate the contents of every file
      */
-    public async transpile(fileEntries: FileObj[], stagingDir: string);
-    /**
-     * Transpile the entire program
-     */
-    public async transpile(options?: { stagingDir?: string });
-    public async transpile(...args: any[]) {
-        //support for legacy function signature and the object signature
-        let stagingDir: string;
-        if (Array.isArray(args[0])) {
-            stagingDir = args[1] ?? this.stagingDir1;
-        } else {
-            stagingDir = args[0]?.stagingDir ?? this.stagingDir1;
-        }
+    private serialize(files: File[]) {
 
-        const { entries, astEditor } = this.beforeProgramTranspile(stagingDir);
+        const allFiles = new Map<File, SerializedFile[]>();
 
-        const processedFiles = new Set<string>();
-
-        const transpileFile = async (srcPath: string, outputPath?: string) => {
-            //find the file in the program
-            const file = this.getFile(srcPath);
-            //mark this file as processed so we don't process it more than once
-            processedFiles.add(outputPath?.toLowerCase());
-
-            //skip transpiling typedef files
-            if (isBrsFile(file) && file.isTypedef) {
-                return;
-            }
-
-            const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
-
-            //make sure the full dir path exists
-            await fsExtra.ensureDir(path.dirname(outputPath));
-
-            if (await fsExtra.pathExists(outputPath)) {
-                throw new Error(`Error while transpiling "${file.srcPath}".A file already exists at "${outputPath}" and will not be overwritten.`);
-            }
-            const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, fileTranspileResult.map.toString()) : null;
-            await Promise.all([
-                fsExtra.writeFile(outputPath, fileTranspileResult.code),
-                writeMapPromise
-            ]);
-
-            if (fileTranspileResult.typedef) {
-                const typedefPath = outputPath.replace(/\.brs$/i, '.d.bs');
-                await fsExtra.writeFile(typedefPath, fileTranspileResult.typedef);
-            }
-        };
-
-        let promises = entries.map(async (entry) => {
-            return transpileFile(entry?.file?.srcPath, entry.outputPath);
+        this.plugins.emit('beforeSerializeProgram', {
+            program: this,
+            files: files,
+            result: allFiles
         });
 
-        //if there's no bslib file already loaded into the program, copy it to the staging directory
-        if (!this.getFile(bslibAliasedRokuModulesPkgPath) && !this.getFile(s`source / bslib.brs`)) {
-            promises.push(util.copyBslibToStaging(stagingDir));
+        // serialize each file
+        for (const file of files) {
+            const event = {
+                program: this,
+                file: file,
+                result: allFiles
+            };
+            this.plugins.emit('beforeSerializeFile', event);
+            this.plugins.emit('serializeFile', event);
+            this.plugins.emit('afterSerializeFile', event);
         }
-        await Promise.all(promises);
-
-        //transpile any new files that plugins added since the start of this transpile process
-        do {
-            promises = [];
-            for (const key in this.files) {
-                const file = this.files[key];
-                //this is a new file
-                const outputPath = this.getOutputPath(file, stagingDir);
-                if (!processedFiles.has(outputPath?.toLowerCase())) {
-                    promises.push(
-                        transpileFile(file?.srcPath, outputPath)
-                    );
-                }
-            }
-            if (promises.length > 0) {
-                this.logger.info(`Transpiling ${promises.length} new files`);
-                await Promise.all(promises);
-            }
-        }
-        while (promises.length > 0);
-        this.afterProgramTranspile(entries, astEditor);
+        //TODO remove the beforeProgramTranspile event in v1. This event has been nerfed anyway, we're not including any files and the editor does nothing
+        this.plugins.emit('afterProgramTranspile', this, [], new AstEditor());
+        return allFiles;
     }
 
-    private afterProgramTranspile(entries: TranspileObj[], astEditor: AstEditor) {
+    /**
+     * Write the entire project to disk
+     */
+    private async write(stagingDir: string, files: Map<File, SerializedFile[]>) {
+        //empty the staging directory
+        fsExtra.emptyDirSync(stagingDir);
+
+        const serializedFiles = [...files]
+            .map(([, serializedFiles]) => serializedFiles)
+            .flat();
+
+        //write all the files to disk (asynchronously)
+        await Promise.all(
+            serializedFiles.map(async (file) => {
+                const event = {
+                    program: this,
+                    file: file,
+                    outputPath: this.getOutputPath(file)
+                } as BeforeWriteFileEvent;
+                this.plugins.emit('beforeWriteFile', event);
+
+                //write the file to disk
+                await fsExtra.outputFile(event.outputPath, file.data);
+
+                this.plugins.emit('afterWriteFile', event);
+            })
+        );
+    }
+
+    /**
+     * Build the project. This transpiles/transforms/copies all files and moves them to the staging directory
+     * @param options the list of options used to build the program
+     */
+    public async build(options: ProgramBuildOptions) {
+        const stagingDir = options?.stagingDir ?? this.stagingDir;
+
+        const files = options?.files ?? Object.values(this.files);
+
+        const editor = new AstEditor();
+
+        //prepare the program (and files) for building
+        this.prepare(files, editor);
+
+        //stage the entire program
+        const serializedFilesByFile = this.serialize(files);
+
+        await this.write(stagingDir, serializedFilesByFile);
+
+        //undo all edits for the program
+        editor.undoAll();
+    }
+
+    /**
+     * @deprecated use `.build()` instead
+     */
+    public async transpile(fileEntries: FileObj[], stagingDir: string) {
+        return this.build({ stagingDir: stagingDir });
+    }
+
+    private afterProgramBuild(entries: PreparedFile[], astEditor: AstEditor) {
         this.plugins.emit('afterProgramTranspile', this, entries, astEditor);
+        this.plugins.emit('afterProgramBuild', {
+            program: this,
+            entries: entries,
+            editor: astEditor
+        });
         astEditor.undoAll();
     }
 
@@ -1499,4 +1532,16 @@ class ProvideFileEventInternal<TFile extends File = File> implements ProvideFile
         delete this._fileData;
     }
     private _fileData: Buffer;
+}
+
+export interface ProgramBuildOptions {
+    /**
+     * The directory where the final built files should be placed. This directory will be cleared before running
+     */
+    stagingDir?: string;
+    /**
+     * An array of files to build. If omitted, the entire list of files from the program will be used instead.
+     * Typically you will want to leave this blank
+     */
+    files?: File[];
 }

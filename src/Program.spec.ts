@@ -2144,7 +2144,7 @@ describe('Program', () => {
 
     describe('typedef', () => {
         describe('emitDefinitions', () => {
-            it('generates typedef for .bs files', async () => {
+            it.only('generates typedef for .bs files', async () => {
                 program.setFile<BrsFile>('source/Duck.bs', `
                     class Duck
                     end class

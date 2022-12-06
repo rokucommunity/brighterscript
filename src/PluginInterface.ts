@@ -32,6 +32,25 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
     }
 
     /**
+     * Call `event` on plugins, but allow the plugins to return promises that we will await before they're done
+     */
+    public async emitAsync<K extends keyof T & string>(event: K, ...args: Arguments<T[K]>) {
+        for (let plugin of this.plugins) {
+            if ((plugin as any)[event]) {
+                try {
+                    await this.logger.time(LogLevel.debug, [plugin.name, event], async () => {
+                        await Promise.resolve(
+                            (plugin as any)[event](...args)
+                        );
+                    });
+                } catch (err) {
+                    this.logger.error(`Error when calling plugin ${plugin.name}.${event}:`, err);
+                }
+            }
+        }
+    }
+
+    /**
      * Add a plugin to the beginning of the list of plugins
      */
     public addFirst<T extends CompilerPlugin = CompilerPlugin>(plugin: T) {

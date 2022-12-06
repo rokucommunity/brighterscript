@@ -21,6 +21,7 @@ import type { InterfaceType } from '../types/InterfaceType';
 import type { ObjectType } from '../types/ObjectType';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import type { File } from '../files/File';
+import type { AssetFile } from '../files/AssetFile';
 
 // File reflection
 
@@ -30,6 +31,10 @@ export function isBrsFile(file: File): file is BrsFile {
 
 export function isXmlFile(file: (File)): file is XmlFile {
     return file?.constructor.name === 'XmlFile';
+}
+
+export function isAssetFile(file: (File)): file is AssetFile {
+    return file?.constructor.name === 'AssetFile';
 }
 
 export function isXmlScope(scope: (Scope)): scope is XmlScope {

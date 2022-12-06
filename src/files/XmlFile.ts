@@ -4,7 +4,7 @@ import { SourceNode } from 'source-map';
 import type { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticCodeMap, diagnosticCodes } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
-import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag } from '../interfaces';
+import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag, SerializedCodeFile } from '../interfaces';
 import type { Program } from '../Program';
 import { util, standardizePath as s } from '../util';
 import SGParser, { rangeFromTokenValue } from '../parser/SGParser';
@@ -16,7 +16,7 @@ import { SGScript } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';
-import type { File } from './File';
+import type { File, SerializeFileResult } from './File';
 
 export class XmlFile implements File {
     /**
@@ -258,11 +258,25 @@ export class XmlFile implements File {
     }
 
     /**
+     * Generate the code, map, and typedef for this file
+     */
+    public serialize(): SerializedCodeFile {
+        const result: SerializedCodeFile = {};
+
+        const transpiled = this.transpile();
+        if (transpiled.code) {
+            result.code = transpiled.code;
+        }
+        if (transpiled.map) {
+            result.map = transpiled.map.toString();
+        }
+        return result;
+    }
+
+    /**
      * @deprecated logic has moved into XmlFileValidator, this is now an empty function
      */
-    public validate() {
-
-    }
+    public validate() { }
 
     /**
      * Collect all bs: comment flags
