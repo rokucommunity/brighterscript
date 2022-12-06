@@ -66,31 +66,36 @@ describe('parser foreach loops', () => {
                 kind: TokenKind.ForEach,
                 text: 'for each',
                 isReserved: true,
-                range: Range.create(0, 0, 0, 8)
+                range: Range.create(0, 0, 0, 8),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
-                range: Range.create(0, 9, 0, 10)
+                range: Range.create(0, 9, 0, 10),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'in',
                 isReserved: true,
-                range: Range.create(0, 11, 0, 13)
+                range: Range.create(0, 11, 0, 13),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'b',
                 isReserved: false,
-                range: Range.create(0, 14, 0, 15)
+                range: Range.create(0, 14, 0, 15),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                range: Range.create(0, 15, 0, 16)
+                range: Range.create(0, 15, 0, 16),
+                leadingTrivia: []
             },
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
@@ -102,7 +107,8 @@ describe('parser foreach loops', () => {
                 kind: TokenKind.EndFor,
                 text: 'end for',
                 isReserved: false,
-                range: Range.create(2, 0, 2, 7)
+                range: Range.create(2, 0, 2, 7),
+                leadingTrivia: []
             },
             EOF
         ]);

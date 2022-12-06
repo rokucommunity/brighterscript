@@ -80,21 +80,24 @@ describe('parser print statements', () => {
                 text: 'print',
                 isReserved: true,
                 range: Range.create(0, 0, 1, 5),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"foo"`,
                 isReserved: false,
                 range: Range.create(0, 6, 0, 11),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
                 range: Range.create(0, 11, 0, 12),
-                leadingWhitespace: ''
+                leadingWhitespace: '',
+                leadingTrivia: []
             }
         ]);
 
