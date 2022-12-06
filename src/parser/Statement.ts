@@ -381,7 +381,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         }
 
         result.push(
-            ...this.func.getTypedef(state, this.name)
+            ...this.func.getTypedef(state)
         );
         return result;
     }
@@ -1636,8 +1636,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let body = this.body;
         //inject an empty "new" method if missing
         if (!this.getConstructorFunction()) {
+            const constructor = createMethodStatement('new', TokenKind.Sub);
+            constructor.parent = this;
+            //walk the constructor to set up parent links
+            constructor.link();
             body = [
-                createMethodStatement('new', TokenKind.Sub),
+                constructor,
                 ...this.body
             ];
         }
@@ -1986,7 +1990,7 @@ export class MethodStatement extends FunctionStatement {
     }
 
     getTypedef(state: BrsTranspileState) {
-        const result = [] as string[];
+        const result = [] as Array<string | SourceNode>;
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
@@ -2004,7 +2008,7 @@ export class MethodStatement extends FunctionStatement {
             result.push('override ');
         }
         result.push(
-            ...this.func.getTypedef(state, this.name)
+            ...this.func.getTypedef(state)
         );
         return result;
     }
