@@ -12,7 +12,7 @@ import { createVisitor, WalkMode, walkStatements } from './visitors';
 import { isPrintStatement } from './reflection';
 import { createCall, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
-import { AstEditor } from './AstEditor';
+import { Editor } from './Editor';
 import { Parser } from '../parser/Parser';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
@@ -244,8 +244,8 @@ describe('astUtils visitors', () => {
             expect(block.statements[0]).to.equal(printStatement2);
         });
 
-        it('uses the AstEditor for replacement when provided', () => {
-            const editor = new AstEditor();
+        it('uses the Editor for replacement when provided', () => {
+            const editor = new Editor();
 
             const printStatement1 = new PrintStatement({
                 print: createToken(TokenKind.Print)

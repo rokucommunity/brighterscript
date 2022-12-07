@@ -12,7 +12,7 @@ import type { Expression } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
-import type { AstEditor } from './astUtils/AstEditor';
+import type { Editor } from './astUtils/Editor';
 import type { Token } from './lexer/Token';
 import type { File } from './files/File';
 import type { FileFactory } from './files/Factory';
@@ -236,11 +236,11 @@ export interface CompilerPlugin {
     /**
      * @deprecated use `beforeProgramBuild` instead
      */
-    beforeProgramTranspile?: (program: Program, entries: ReadonlyArray<PreparedFile>, editor: Editor) => void;
+    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: Editor) => void;
     /**
      * @deprecated use `afterProgramBuild` instead
      */
-    afterProgramTranspile?: (program: Program, entries: ReadonlyArray<PreparedFile>, editor: Editor) => void;
+    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: Editor) => void;
 
 
     /**
@@ -506,7 +506,10 @@ export interface OnScopeValidateEvent {
     scope: Scope;
 }
 
-export type Editor = Pick<AstEditor, 'addToArray' | 'hasChanges' | 'removeFromArray' | 'setArrayValue' | 'setProperty' | 'overrideTranspileResult' | 'arrayPop' | 'arrayPush' | 'arrayShift' | 'arraySplice' | 'arrayUnshift' | 'removeProperty' | 'edit'>;
+/**
+ * @deprecated use `Editor` instead
+ */
+export type AstEditor = Editor;
 
 export interface BeforeFileTranspileEvent<TFile extends File = File> {
     program: Program;
@@ -606,14 +609,6 @@ export interface PrepareProgramEvent {
 export type AfterPrepareProgramEvent = PrepareProgramEvent;
 
 
-export interface PreparedFile {
-    file: File;
-    /**
-     * The absolute path to where the file should be written during build. (i.e. somewhere inside the staging dir
-     */
-    outputPath: string;
-}
-
 export type BeforePrepareFileEvent<TFile extends File = File> = PrepareFileEvent<TFile>;
 /**
  * Prepare the file for building
@@ -679,10 +674,23 @@ export interface BeforeWriteFileEvent {
 }
 export type AfterWriteFileEvent = BeforeWriteFileEvent;
 
-/**
- * @deprecated use `PreparedFile` instead
- */
-export type TranspileObj = PreparedFile;
+
+export interface PreparedEntry {
+    file: File;
+    /**
+     * An editor used to edit the files
+     */
+    editor: Editor;
+}
+
+export interface TranspileObj {
+    file: File;
+    /**
+     * The absolute path to where the file should be written during build. (i.e. somewhere inside the stagingDir)
+     */
+    outputPath: string;
+}
+
 
 export type BeforeTransformFileEvent<TFile extends File = File> = TransformFileEvent<TFile>;
 export interface TransformFileEvent<TFile extends File = File> {

@@ -735,7 +735,7 @@ describe('XmlFile', () => {
                 </component>
             `;
 
-            await program.transpile();
+            await program.build();
             expect(
                 trim(
                     fsExtra.readFileSync(`${stagingDir}/components/SimpleScene.xml`).toString()
@@ -744,7 +744,7 @@ describe('XmlFile', () => {
 
             //clear the output folder
             fsExtra.emptyDirSync(stagingDir);
-            await program.transpile();
+            await program.build();
             expect(
                 trim(
                     fsExtra.readFileSync(`${stagingDir}/components/SimpleScene.xml`).toString()

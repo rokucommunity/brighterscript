@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileReference, FileObj, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideCompletionsEvent, ProvideHoverEvent, ProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, PreparedFile, SerializedFile, BeforeWriteFileEvent, BeforeBuildProgramEvent, Editor } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, SemanticToken, FileLink, ProvideCompletionsEvent, ProvideHoverEvent, ProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, SerializedFile, BeforeWriteFileEvent, PreparedEntry } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -22,7 +22,7 @@ import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUtils/reflection';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
-import { AstEditor } from './astUtils/AstEditor';
+import { Editor } from './astUtils/Editor';
 import type { SourceMapGenerator } from 'source-map';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
@@ -1151,11 +1151,11 @@ export class Program {
      * @param filePath can be a srcPath or a destPath
      */
     public async getTranspiledFileContents(filePath: string, stagingDir?: string) {
-        const { entries, astEditor } = this.beforeProgramBuild(stagingDir);
+        const { entries, editor } = this.beforeProgramBuild(stagingDir);
         const result = this._getTranspiledFileContents(
             this.getFile(filePath)
         );
-        this.afterProgramBuild(entries, astEditor);
+        this.afterProgramBuild(entries, editor);
         return Promise.resolve(result);
     }
 
@@ -1164,7 +1164,7 @@ export class Program {
      * This does not write anything to the file system
      */
     private _getTranspiledFileContents(file: File, outputPath?: string): FileTranspileResult {
-        const editor = new AstEditor();
+        const editor = new Editor();
 
         this.plugins.emit('beforeFileTranspile', {
             program: this,
@@ -1188,7 +1188,7 @@ export class Program {
             typedef = file.getTypedef();
         }
 
-        const event: AfterFileTranspileEvent = {
+        const event = this.plugins.emit('afterFileTranspile', {
             program: this,
             file: file,
             outputPath: outputPath,
@@ -1196,8 +1196,7 @@ export class Program {
             code: result.code,
             map: result.map,
             typedef: typedef
-        };
-        this.plugins.emit('afterFileTranspile', event);
+        });
 
         //undo all `editor` edits that may have been applied to this file.
         editor.undoAll();
@@ -1235,24 +1234,23 @@ export class Program {
      * Prepare the program for building
      * @param files the list of files that should be prepared
      */
-    private prepare(files: File[], editor: Editor) {
+    private prepare(files: File[], programEditor: Editor) {
         const programEvent = {
             program: this,
-            editor: editor
+            editor: programEditor
         } as PrepareProgramEvent;
 
         this.plugins.emit('beforePrepareProgram', programEvent);
         this.plugins.emit('prepareProgram', programEvent);
 
-        //TODO remove in v1. we don't need this once the `beforeProgramTranspile` and `afterProgramTranspile` events are removed
-        const entries: PreparedFile[] = [];
+        const preparedEntries: Array<PreparedEntry & { outputPath: string }> = [];
 
         for (const file of files) {
+            const fileEditor = new Editor();
             const event = {
                 program: this,
                 file: file,
-                editor: editor,
-                //TODO remove in v1. This is only used for
+                editor: fileEditor,
                 outputPath: this.getOutputPath(file)
             } as PrepareFileEvent & { outputPath: string };
 
@@ -1264,18 +1262,15 @@ export class Program {
             this.plugins.emit('beforeFileTranspile', event);
 
             //TODO remove this in v1
-            entries.push(event);
+            preparedEntries.push(event);
         }
 
         this.plugins.emit('afterPrepareProgram', programEvent);
 
         //TODO remove the beforeProgramTranspile event in v1
-        this.plugins.emit('beforeProgramTranspile', this, entries, programEvent.editor);
+        this.plugins.emit('beforeProgramTranspile', this, preparedEntries, programEvent.editor);
 
-        return {
-            editor: programEvent.editor,
-            entries: entries
-        };
+        return preparedEntries as PreparedEntry[];
     }
 
     /**
@@ -1303,7 +1298,7 @@ export class Program {
             this.plugins.emit('afterSerializeFile', event);
         }
         //TODO remove the beforeProgramTranspile event in v1. This event has been nerfed anyway, we're not including any files and the editor does nothing
-        this.plugins.emit('afterProgramTranspile', this, [], new AstEditor());
+        this.plugins.emit('afterProgramTranspile', this, [], new Editor());
         return allFiles;
     }
 
@@ -1340,28 +1335,34 @@ export class Program {
      * Build the project. This transpiles/transforms/copies all files and moves them to the staging directory
      * @param options the list of options used to build the program
      */
-    public async build(options: ProgramBuildOptions) {
+    public async build(options?: ProgramBuildOptions) {
         const stagingDir = options?.stagingDir ?? this.stagingDir;
 
         const files = options?.files ?? Object.values(this.files);
 
-        const editor = new AstEditor();
+        const programEditor = new Editor();
         const event = this.plugins.emit('beforeBuildProgram', {
             program: this,
-            editor: editor,
+            editor: programEditor,
             files: files
         });
 
         //prepare the program (and files) for building
-        this.prepare(files, editor);
+        const preparedEntries = this.prepare(files, programEditor);
 
         //stage the entire program
-        const serializedFilesByFile = this.serialize(files);
+        const serializedFilesByFile = this.serialize(
+            preparedEntries.map(x => x.file)
+        );
 
         await this.write(stagingDir, serializedFilesByFile);
 
         //undo all edits for the program
-        editor.undoAll();
+        programEditor.undoAll();
+        //undo all edits for each file
+        for (const entry of preparedEntries) {
+            (entry.editor as Editor).undoAll();
+        }
 
         this.plugins.emit('afterBuildProgram', event);
     }
@@ -1373,14 +1374,14 @@ export class Program {
         return this.build({ stagingDir: stagingDir });
     }
 
-    private afterProgramBuild(entries: PreparedFile[], astEditor: AstEditor) {
-        this.plugins.emit('afterProgramTranspile', this, entries, astEditor);
+    private afterProgramBuild(entries: PreparedEntry[], editor: Editor) {
+        this.plugins.emit('afterProgramTranspile', this, entries, editor);
         this.plugins.emit('afterProgramBuild', {
             program: this,
             entries: entries,
-            editor: astEditor
+            editor: editor
         });
-        astEditor.undoAll();
+        editor.undoAll();
     }
 
     /**

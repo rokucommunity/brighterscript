@@ -16,7 +16,7 @@ import { SGScript } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';
-import type { File, SerializeFileResult } from './File';
+import type { File } from './File';
 
 export class XmlFile implements File {
     /**
@@ -261,16 +261,7 @@ export class XmlFile implements File {
      * Generate the code, map, and typedef for this file
      */
     public serialize(): SerializedCodeFile {
-        const result: SerializedCodeFile = {};
-
-        const transpiled = this.transpile();
-        if (transpiled.code) {
-            result.code = transpiled.code;
-        }
-        if (transpiled.map) {
-            result.map = transpiled.map.toString();
-        }
-        return result;
+        return this.transpile();
     }
 
     /**

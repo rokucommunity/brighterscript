@@ -1,6 +1,6 @@
 import type { AstNode } from '../parser/AstNode';
 
-export class AstEditor {
+export class Editor {
     private changes: Change[] = [];
 
     /**

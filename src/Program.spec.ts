@@ -5,7 +5,6 @@ import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { TranspileObj } from './Program';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { URI } from 'vscode-uri';
@@ -16,9 +15,9 @@ import { doesNotThrow } from 'assert';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
 import type { LiteralExpression } from './parser/Expression';
-import type { AstEditor } from './astUtils/AstEditor';
+import type { Editor } from './astUtils/Editor';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
-import type { ProvideFileEvent, BeforeFileParseEvent, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent } from '.';
+import type { ProvideFileEvent, BeforeFileParseEvent, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent, TranspileObj, Editor } from '.';
 import { AssetFile } from './files/AssetFile';
 import * as path from 'path';
 import type { SinonSpy } from 'sinon';
@@ -1953,7 +1952,7 @@ describe('Program', () => {
             );
         });
 
-        it('handles AstEditor flow properly', async () => {
+        it('handles Editor flow properly', async () => {
             program.setFile('source/main.bs', `
                 sub main()
                     print "hello world"
@@ -1991,7 +1990,7 @@ describe('Program', () => {
             expect(literalExpression.token.text).to.eql('"hello world"');
         });
 
-        it('handles AstEditor for beforeProgramTranspile', async () => {
+        it('handles Editor for beforeProgramTranspile', async () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 sub main()
                     print "hello world"
@@ -2001,7 +2000,7 @@ describe('Program', () => {
             //replace all strings with "goodbye world"
             program.plugins.add({
                 name: 'TestPlugin',
-                beforeProgramTranspile: (program: Program, entries: TranspileObj[], editor: AstEditor) => {
+                beforeProgramTranspile: (program: Program, entries: TranspileObj[], editor: Editor) => {
                     file.ast.walk(createVisitor({
                         LiteralExpression: (literal) => {
                             literalExpression = literal;

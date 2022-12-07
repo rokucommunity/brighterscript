@@ -166,8 +166,8 @@ export interface CompilerPlugin {
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
 
-    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
-    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: Editor) => void;
+    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: Editor) => void;
 
     /**
      * Emitted before the program starts collecting completions
@@ -353,7 +353,7 @@ export default function () {
 ## Modifying code
 Sometimes plugins will want to modify code before the project is transpiled. While you can technically edit the AST directly at any point in the file's lifecycle, this is not recommended as those changes will remain changed as long as that file exists in memory and could cause issues with file validation if the plugin is used in a language-server context (i.e. inside vscode).
 
-Instead, we provide an instace of an `AstEditor` class in the `beforeFileTranspile` event that allows you to modify AST before the file is transpiled, and then those modifications are undone `afterFileTranspile`.
+Instead, we provide an instace of an `Editor` class in the `beforeFileTranspile` event that allows you to modify AST before the file is transpiled, and then those modifications are undone `afterFileTranspile`.
 
 For example, consider the following brightscript code:
 ```brightscript

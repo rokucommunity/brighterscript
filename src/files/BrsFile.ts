@@ -30,7 +30,7 @@ import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
-import type { File, SerializeFileResult } from './File';
+import type { File } from './File';
 
 /**
  * Holds all details about this file within the scope of the whole program

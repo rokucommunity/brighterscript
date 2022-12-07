@@ -1,20 +1,20 @@
 import { expect } from '../chai-config.spec';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
-import { AstEditor } from './AstEditor';
+import { Editor } from './Editor';
 import { util } from '../util';
-import { createToken } from '../astUtils/creators';
+import { createToken } from './creators';
 import { TokenKind } from '../lexer/TokenKind';
 import { Program } from '../Program';
 import { BrsFile } from '../files/BrsFile';
 import { LiteralExpression } from '../parser/Expression';
 import { SourceNode } from 'source-map';
 
-describe('AstEditor', () => {
-    let editor: AstEditor;
+describe('Editor', () => {
+    let editor: Editor;
     let obj: ReturnType<typeof getTestObject>;
 
     beforeEach(() => {
-        editor = new AstEditor();
+        editor = new Editor();
         obj = getTestObject();
     });
 
