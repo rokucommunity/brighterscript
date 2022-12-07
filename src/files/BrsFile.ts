@@ -59,12 +59,18 @@ export class BrsFile implements File {
         }
         this.srcPath = s`${this.srcPath}`;
         this.destPath = s`${this.destPath}`;
-        //if no pkgPath, leverage destPath
-        if (!this.pkgPath) {
-            this.pkgPath = this.destPath.replace(/\.bs$/i, '.brs');
-        }
 
         this.extension = util.getExtension(this.srcPath);
+
+        //if no pkgPath, leverage destPath
+        if (!this.pkgPath) {
+            //don't rename .d.bs files to .d.brs
+            if (this.extension === '.d.bs') {
+                this.pkgPath = this.destPath;
+            } else {
+                this.pkgPath = this.destPath.replace(/\.bs$/i, '.brs');
+            }
+        }
 
         //all BrighterScript files need to be transpiled
         if (this.extension?.endsWith('.bs') || this.program?.options?.allowBrighterScriptInBrightScript) {

@@ -2155,7 +2155,7 @@ describe('Program', () => {
                 expect(fsExtra.pathExistsSync(s`${stagingDir}/source/Duck.d.brs`)).to.be.false;
             });
 
-            it.only('does not generate typedef for typedef file', async () => {
+            it('does not generate typedef for typedef file', async () => {
                 program.setFile<BrsFile>('source/Duck.d.bs', `
                     class Duck
                     end class

@@ -9,7 +9,6 @@ import { codeActionUtil } from './CodeActionUtil';
 import type { BrsFile } from './files/BrsFile';
 import type { Program } from './Program';
 import { standardizePath as s } from './util';
-import type { CodeWithSourceMap } from 'source-map';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
@@ -237,24 +236,27 @@ export function expectInstanceOf<T>(items: any[], constructors: Array<new (...ar
 
 export function getTestTranspile(scopeGetter: () => [program: Program, rootDir: string]) {
     return getTestFileAction((file) => {
-        return (file as BrsFile).program['_getTranspiledFileContents'](file);
+        return (file as BrsFile).program.getTranspiledFileContents(file.srcPath);
     }, scopeGetter);
 }
 
 export function getTestGetTypedef(scopeGetter: () => [program: Program, rootDir: string]) {
-    return getTestFileAction((file) => {
+    return getTestFileAction(async (file) => {
+        const program = (file as BrsFile).program;
+        program.options.emitDefinitions = true;
+        const result = await program.getTranspiledFileContents(file.srcPath);
         return {
-            code: (file as BrsFile).getTypedef(),
+            code: result.typedef,
             map: undefined
         };
     }, scopeGetter);
 }
 
 function getTestFileAction(
-    action: (file: File) => CodeWithSourceMap,
+    action: (file: File) => Promise<{ code: string; map?: string }>,
     scopeGetter: () => [program: Program, rootDir: string]
 ) {
-    return function testFileAction(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
+    return async function testFileAction(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
         let file = program.setFile<BrsFile>({ src: s`${rootDir}/${destPath}`, dest: destPath }, source);
@@ -262,7 +264,7 @@ function getTestFileAction(
         if (failOnDiagnostic !== false) {
             expectZeroDiagnostics(program);
         }
-        let codeWithMap = action(file);
+        let codeWithMap = await action(file);
 
         let sources = [trimMap(codeWithMap.code), expected];
 
