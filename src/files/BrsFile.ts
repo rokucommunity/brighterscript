@@ -1678,7 +1678,7 @@ export class BrsFile implements File {
             result.code = transpiled.code;
         }
         if (transpiled.map) {
-            result.map = transpiled.map;
+            result.map = transpiled.map.toString();
         }
         //generate the typedef (if this is not a typedef itself, and if enabled)
         if (!this.isTypedef && this.program.options.emitDefinitions) {

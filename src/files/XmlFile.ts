@@ -261,7 +261,11 @@ export class XmlFile implements File {
      * Generate the code, map, and typedef for this file
      */
     public serialize(): SerializedCodeFile {
-        return this.transpile();
+        const result = this.transpile();
+        return {
+            code: result?.code,
+            map: result?.map?.toString()
+        };
     }
 
     /**

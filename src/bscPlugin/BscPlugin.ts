@@ -1,12 +1,13 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
-import type { AfterSerializeFileEvent, BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideFileEvent, ProvideHoverEvent } from '../interfaces';
+import type { AfterSerializeFileEvent, BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideFileEvent, ProvideHoverEvent, WriteFileEvent } from '../interfaces';
 import type { Program } from '../Program';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { FileProvider } from './fileProviders/FileProvider';
 import { FileSerializer } from './FileSerializer';
+import { FileWriter } from './FileWriter';
 import { HoverProcessor } from './hover/HoverProcessor';
 import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
 import { BrsFilePreTranspileProcessor } from './transpile/BrsFilePreTranspileProcessor';
@@ -23,6 +24,10 @@ export class BscPlugin implements CompilerPlugin {
 
     public afterSerializeFile(event: AfterSerializeFileEvent) {
         new FileSerializer(event).process();
+    }
+
+    public async writeFile(event: WriteFileEvent) {
+        await new FileWriter(event).process();
     }
 
     public onGetCodeActions(event: OnGetCodeActionsEvent) {

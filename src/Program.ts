@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileReference, FileObj, SemanticToken, FileLink, ProvideCompletionsEvent, ProvideHoverEvent, ProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, SerializedFile, BeforeWriteFileEvent, PreparedEntry } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, SemanticToken, FileLink, ProvideCompletionsEvent, ProvideHoverEvent, ProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, SerializedFile, PreparedEntry } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -23,13 +23,13 @@ import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUti
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { Editor } from './astUtils/Editor';
-import type { SourceMapGenerator } from 'source-map';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { rokuDeploy } from 'roku-deploy';
 import { FileFactory } from './files/Factory';
 import type { File } from './files/File';
+import { ActionPipeline } from './ActionPipeline';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -1142,6 +1142,7 @@ export class Program {
         return result;
     }
 
+
     /**
      * Transpile a single file and get the result as a string.
      * This does not write anything to the file system.
@@ -1150,66 +1151,54 @@ export class Program {
      * Internal usage should call `_getTranspiledFileContents` instead.
      * @param filePath can be a srcPath or a destPath
      */
-    public async getTranspiledFileContents(filePath: string, stagingDir?: string) {
-        const { entries, editor } = this.beforeProgramBuild(stagingDir);
-        const result = this._getTranspiledFileContents(
-            this.getFile(filePath)
-        );
-        this.afterProgramBuild(entries, editor);
-        return Promise.resolve(result);
-    }
+    public async getTranspiledFileContents(filePath: string): Promise<FileTranspileResult> {
+        const file = this.getFile(filePath);
 
-    /**
-     * Internal function used to transpile files.
-     * This does not write anything to the file system
-     */
-    private _getTranspiledFileContents(file: File, outputPath?: string): FileTranspileResult {
-        const editor = new Editor();
+        return this.getTranspiledFileContentsPipeline.run(async () => {
 
-        this.plugins.emit('beforeFileTranspile', {
-            program: this,
-            file: file,
-            outputPath: outputPath,
-            editor: editor
+            const result = {
+                destPath: file.destPath,
+                pkgPath: file.pkgPath,
+                srcPath: file.srcPath
+            } as FileTranspileResult;
+
+            //add a temporary plugin to tap into the file writing process
+            const plugin = this.plugins.addFirst({
+                name: 'getTranspiledFileContents',
+                beforeWriteFile: (event) => {
+                    const extension = path.extname(event.file.pkgPath).toLowerCase();
+                    //this is the sourcemap
+                    if (extension.endsWith('.map')) {
+                        result.map = event.file.data.toString();
+
+                        //this is the typedef
+                    } else if (extension.endsWith('.d.bs')) {
+                        result.typedef = event.file.data.toString();
+
+                        //this is the actual transpiled file
+                    } else if (event.file.pkgPath?.toLowerCase() === file.pkgPath?.toLowerCase()) {
+                        result.code = event.file.data.toString();
+                    } else {
+                        //no idea what this file is. just ignore it
+                    }
+
+                    //mark this file as processed so it doesn't get written to the output directory
+                    event.processedFiles.add(event.file);
+                }
+            });
+
+            try {
+                //now that the plugin has been registered, run the build with just this file
+                await this.build({
+                    files: [file]
+                });
+            } finally {
+                this.plugins.remove(plugin);
+            }
+            return result;
         });
-
-        //if we have any edits, assume the file needs to be transpiled
-        if (editor.hasChanges) {
-            //use the `editor` because it'll track the previous value for us and revert later on
-            editor.setProperty(file, 'needsTranspiled', true);
-        }
-
-        //transpile the file
-        const result = (file as BrsFile)?.transpile?.();
-
-        //generate the typedef if enabled
-        let typedef: string;
-        if (isBrsFile(file) && this.options.emitDefinitions) {
-            typedef = file.getTypedef();
-        }
-
-        const event = this.plugins.emit('afterFileTranspile', {
-            program: this,
-            file: file,
-            outputPath: outputPath,
-            editor: editor,
-            code: result.code,
-            map: result.map,
-            typedef: typedef
-        });
-
-        //undo all `editor` edits that may have been applied to this file.
-        editor.undoAll();
-
-        return {
-            srcPath: file.srcPath,
-            destPath: file.destPath,
-            pkgPath: file.pkgPath,
-            code: event.code,
-            map: event.map,
-            typedef: event.typedef
-        };
     }
+    private getTranspiledFileContentsPipeline = new ActionPipeline();
 
     /**
      * Get the absolute output path for a file
@@ -1316,55 +1305,66 @@ export class Program {
         //write all the files to disk (asynchronously)
         await Promise.all(
             serializedFiles.map(async (file) => {
-                const event = {
+                const event = await this.plugins.emitAsync('beforeWriteFile', {
                     program: this,
                     file: file,
-                    outputPath: this.getOutputPath(file)
-                } as BeforeWriteFileEvent;
-                this.plugins.emit('beforeWriteFile', event);
+                    outputPath: this.getOutputPath(file),
+                    processedFiles: new Set<SerializedFile>()
+                });
 
-                //write the file to disk
-                await fsExtra.outputFile(event.outputPath, file.data);
+                await this.plugins.emitAsync('writeFile', event);
 
-                this.plugins.emit('afterWriteFile', event);
+                await this.plugins.emitAsync('afterWriteFile', event);
             })
         );
     }
+
+    private buildPipeline = new ActionPipeline();
 
     /**
      * Build the project. This transpiles/transforms/copies all files and moves them to the staging directory
      * @param options the list of options used to build the program
      */
     public async build(options?: ProgramBuildOptions) {
-        const stagingDir = options?.stagingDir ?? this.stagingDir;
+        //run a single build at a time
+        await this.buildPipeline.run(async () => {
+            const stagingDir = options?.stagingDir ?? this.stagingDir;
 
-        const files = options?.files ?? Object.values(this.files);
+            const files = options?.files ?? Object.values(this.files);
 
-        const programEditor = new Editor();
-        const event = this.plugins.emit('beforeBuildProgram', {
-            program: this,
-            editor: programEditor,
-            files: files
+            const programEditor = new Editor();
+            const event = this.plugins.emit('beforeBuildProgram', {
+                program: this,
+                editor: programEditor,
+                files: files
+            });
+
+            //prepare the program (and files) for building
+            const preparedEntries = this.prepare(files, programEditor);
+
+            //stage the entire program
+            const serializedFilesByFile = this.serialize(
+                preparedEntries.map(x => x.file)
+            );
+
+            await this.write(stagingDir, serializedFilesByFile);
+
+            this.plugins.emit('afterBuildProgram', event);
+
+            //undo all edits for the program
+            programEditor.undoAll();
+            //undo all edits for each file
+            for (const entry of preparedEntries) {
+                entry.editor.undoAll();
+            }
+
+            return {
+                files: files,
+                stagingDir: stagingDir,
+                prepared: preparedEntries,
+                serialized: serializedFilesByFile
+            };
         });
-
-        //prepare the program (and files) for building
-        const preparedEntries = this.prepare(files, programEditor);
-
-        //stage the entire program
-        const serializedFilesByFile = this.serialize(
-            preparedEntries.map(x => x.file)
-        );
-
-        await this.write(stagingDir, serializedFilesByFile);
-
-        //undo all edits for the program
-        programEditor.undoAll();
-        //undo all edits for each file
-        for (const entry of preparedEntries) {
-            (entry.editor as Editor).undoAll();
-        }
-
-        this.plugins.emit('afterBuildProgram', event);
     }
 
     /**
@@ -1372,16 +1372,6 @@ export class Program {
      */
     public async transpile(fileEntries: FileObj[], stagingDir: string) {
         return this.build({ stagingDir: stagingDir });
-    }
-
-    private afterProgramBuild(entries: PreparedEntry[], editor: Editor) {
-        this.plugins.emit('afterProgramTranspile', this, entries, editor);
-        this.plugins.emit('afterProgramBuild', {
-            program: this,
-            entries: entries,
-            editor: editor
-        });
-        editor.undoAll();
     }
 
     /**
@@ -1497,7 +1487,7 @@ export interface FileTranspileResult {
     destPath: string;
     pkgPath: string;
     code: string;
-    map: SourceMapGenerator;
+    map: string;
     typedef: string;
 }
 

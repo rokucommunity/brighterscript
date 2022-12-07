@@ -15,7 +15,6 @@ import { doesNotThrow } from 'assert';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
 import type { LiteralExpression } from './parser/Expression';
-import type { Editor } from './astUtils/Editor';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
 import type { ProvideFileEvent, BeforeFileParseEvent, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent, TranspileObj, Editor } from '.';
 import { AssetFile } from './files/AssetFile';

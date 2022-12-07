@@ -10,7 +10,7 @@ import type { ProgramBuilder } from './ProgramBuilder';
 import type { FunctionStatement } from './parser/Statement';
 import type { Expression } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
-import type { SourceMapGenerator, SourceNode } from 'source-map';
+import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { Editor } from './astUtils/Editor';
 import type { Token } from './lexer/Token';
@@ -403,6 +403,11 @@ export interface CompilerPlugin {
      */
     beforeWriteFile?: PluginHandler<BeforeWriteFileEvent>;
     /**
+     * Called when a file should be persisted (usually writing to storage). These are raw files that contain the final output. One `File` may produce several of these.
+     * When a plugin has handled a file, it should be pushed to the `handledFiles` set so future plugins don't write the file multiple times
+     */
+    writeFile?: PluginHandler<WriteFileEvent>;
+    /**
      * Before a file is written to disk. These are raw files that contain the final output. One `File` may produce several of these
      */
     afterWriteFile?: PluginHandler<AfterWriteFileEvent>;
@@ -537,7 +542,7 @@ export interface AfterFileTranspileEvent<TFile extends File = File> {
     /**
      * The sourceMaps for the generated code (if emitting source maps is enabled)
      */
-    map?: SourceMapGenerator;
+    map?: string;
     /**
      * The generated type definition file contents (if emitting type definitions are enabled)
      */
@@ -626,7 +631,7 @@ export type AfterPrepareFileEvent<TFile extends File = File> = PrepareFileEvent<
  */
 export interface SerializedCodeFile {
     code?: string;
-    map?: SourceMapGenerator;
+    map?: string;
     typedef?: string;
 }
 
@@ -664,13 +669,18 @@ export interface SerializeFileEvent<TFile extends File = File> {
 export type AfterSerializeFileEvent<TFile extends File = File> = SerializeFileEvent<TFile>;
 
 
-export interface BeforeWriteFileEvent {
+export type BeforeWriteFileEvent = WriteFileEvent;
+export interface WriteFileEvent {
     program: Program;
     file: SerializedFile;
     /**
      * The full path to where the file was (or will be) written to.
      */
     outputPath: string;
+    /**
+     * A set of all files that have been properly written. Plugins should add any handled files to this list so future plugins don't write then again
+     */
+    processedFiles: Set<SerializedFile>;
 }
 export type AfterWriteFileEvent = BeforeWriteFileEvent;
 
@@ -690,20 +700,6 @@ export interface TranspileObj {
      */
     outputPath: string;
 }
-
-
-export type BeforeTransformFileEvent<TFile extends File = File> = TransformFileEvent<TFile>;
-export interface TransformFileEvent<TFile extends File = File> {
-    program: Program;
-    file: Readonly<TFile>;
-    getContents(): Buffer;
-    setContents(buffer: Buffer): void;
-    /**
-     * The sourceMaps for the generated code (if emitting source maps is enabled)
-     */
-    map?: SourceMapGenerator;
-}
-export type AfterTransformFileEvent<TFile extends File = File> = TransformFileEvent<TFile>;
 
 export interface BeforeFileParseEvent {
     srcPath: string;
