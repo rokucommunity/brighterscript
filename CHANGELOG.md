@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.61.1](https://github.com/rokucommunity/brighterscript/compare/v0.61.0...0.61.1) - 2022-12-07
+### Fixed
+ - Ensure enums and interfaces persist in typedefs ([#757](https://github.com/rokucommunity/brighterscript/pull/757))
+
+
+
 ## [0.61.0](https://github.com/rokucommunity/brighterscript/compare/v0.60.6...0.61.0) - 2022-12-05
 ### Added
  - new `removeParameterTypes` option that removes type information from parameters when transpiling ([#744](https://github.com/rokucommunity/brighterscript/pull/744))
