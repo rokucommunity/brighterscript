@@ -222,7 +222,7 @@ describe('import statements', () => {
         ]);
     });
 
-    it('complicated import graph adds correct script tags', () => {
+    it('complicated import graph adds correct script tags', async () => {
         program.setFile('source/maestro/ioc/IOCMixin.bs', `
             sub DoIocThings()
             end sub
@@ -234,7 +234,7 @@ describe('import statements', () => {
         program.setFile('components/AuthManager.bs', `
             import "pkg:/source/BaseClass.bs"
         `);
-        testTranspile(trim`
+        await testTranspile(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brighterscript" uri="AuthManager.bs" />

@@ -33,7 +33,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
     }
 
     /**
-     * Call `event` on plugins, but allow the plugins to return promises that we will await before they're done
+     * Call `event` on plugins, but allow the plugins to return promises that will be awaited before the next plugin is notified
      */
     public async emitAsync<K extends keyof T & string>(event: K, ...args: Arguments<T[K]>): Promise<Arguments<T[K]>[0]> {
         for (let plugin of this.plugins) {

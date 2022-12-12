@@ -2123,8 +2123,8 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
-        it('excludes trailing commas in array literals', () => {
-            testTranspile(`
+        it('excludes trailing commas in array literals', async () => {
+            await testTranspile(`
                 sub main()
                     arr = [
                         1,
@@ -2153,7 +2153,7 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('transpiles if statement keywords as provided', () => {
+        it('transpiles if statement keywords as provided', async () => {
             const code = `
                 sub main()
                     If True Then
@@ -2167,13 +2167,13 @@ describe('BrsFile', () => {
                     End If
                 end sub
             `;
-            testTranspile(code);
-            testTranspile(code.toLowerCase());
-            testTranspile(code.toUpperCase());
+            await testTranspile(code);
+            await testTranspile(code.toLowerCase());
+            await testTranspile(code.toUpperCase());
         });
 
-        it('does not transpile `then` tokens', () => {
-            testTranspile(`
+        it('does not transpile `then` tokens', async () => {
+            await testTranspile(`
                 sub main()
                     if true
                         print true
@@ -2184,8 +2184,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('honors spacing between multi-word tokens', () => {
-            testTranspile(`
+        it('honors spacing between multi-word tokens', async () => {
+            await testTranspile(`
                 sub main()
                     if true
                         print true
@@ -2196,8 +2196,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('handles when only some of the statements have `then`', () => {
-            testTranspile(`
+        it('handles when only some of the statements have `then`', async () => {
+            await testTranspile(`
                 sub main()
                     if true
                     else if true then
@@ -2211,26 +2211,26 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('retains casing of parameter types', () => {
-            function test(type: string) {
-                testTranspile(`
+        it('retains casing of parameter types', async () => {
+            async function test(type: string) {
+                await testTranspile(`
                     sub one(a as ${type}, b as ${type.toUpperCase()}, c as ${type.toLowerCase()})
                     end sub
                 `);
             }
-            test('Boolean');
-            test('Double');
-            test('Dynamic');
-            test('Float');
-            test('Integer');
-            test('LongInteger');
-            test('Object');
-            test('String');
+            await test('Boolean');
+            await test('Double');
+            await test('Dynamic');
+            await test('Float');
+            await test('Integer');
+            await test('LongInteger');
+            await test('Object');
+            await test('String');
         });
 
-        it('retains casing of return types', () => {
-            function test(type: string) {
-                testTranspile(`
+        it('retains casing of return types', async () => {
+            async function test(type: string) {
+                await testTranspile(`
                     sub one() as ${type}
                     end sub
 
@@ -2241,20 +2241,20 @@ describe('BrsFile', () => {
                     end sub
                 `);
             }
-            test('Boolean');
-            test('Double');
-            test('Dynamic');
-            test('Float');
-            test('Integer');
-            test('LongInteger');
-            test('Object');
-            test('String');
-            test('Void');
+            await test('Boolean');
+            await test('Double');
+            await test('Dynamic');
+            await test('Float');
+            await test('Integer');
+            await test('LongInteger');
+            await test('Object');
+            await test('String');
+            await test('Void');
         });
 
-        it('retains casing of literal types', () => {
-            function test(type: string) {
-                testTranspile(`
+        it('retains casing of literal types', async () => {
+            async function test(type: string) {
+                await testTranspile(`
                     sub main()
                         thing = ${type}
                         thing = ${type.toLowerCase()}
@@ -2262,13 +2262,13 @@ describe('BrsFile', () => {
                     end sub
                 `);
             }
-            test('Invalid');
-            test('True');
-            test('False');
+            await test('Invalid');
+            await test('True');
+            await test('False');
         });
         describe('throwStatement', () => {
-            it('transpiles properly', () => {
-                testTranspile(`
+            it('transpiles properly', async () => {
+                await testTranspile(`
                     sub main()
                         try
                             throw "some message"
@@ -2280,8 +2280,8 @@ describe('BrsFile', () => {
         });
 
         describe('try/catch', () => {
-            it('transpiles properly', () => {
-                testTranspile(`
+            it('transpiles properly', async () => {
+                await testTranspile(`
                     sub main()
                         try
                             print m.b.c
@@ -2294,8 +2294,8 @@ describe('BrsFile', () => {
         });
 
         describe('namespaces', () => {
-            it('properly transpiles namespace functions for assignments', () => {
-                testTranspile(`
+            it('properly transpiles namespace functions for assignments', async () => {
+                await testTranspile(`
                     namespace NameA.NameB
                         sub Speak()
                         end sub
@@ -2317,8 +2317,8 @@ describe('BrsFile', () => {
                 `);
             });
 
-            it('properly transpiles inferred namespace function for assignment', () => {
-                testTranspile(`
+            it('properly transpiles inferred namespace function for assignment', async () => {
+                await testTranspile(`
                     namespace NameA.NameB
                         sub Speak()
                         end sub
@@ -2338,8 +2338,8 @@ describe('BrsFile', () => {
                 `);
             });
         });
-        it('includes all text to end of line for a non-terminated string', () => {
-            testTranspile(
+        it('includes all text to end of line for a non-terminated string', async () => {
+            await testTranspile(
                 'sub main()\n    name = "john \nend sub',
                 'sub main()\n    name = "john "\nend sub',
                 null,
@@ -2347,22 +2347,22 @@ describe('BrsFile', () => {
                 false
             );
         });
-        it('escapes quotes in string literals', () => {
-            testTranspile(`
+        it('escapes quotes in string literals', async () => {
+            await testTranspile(`
                 sub main()
                     expected += chr(10) + " version=""2.0"""
                 end sub
             `);
         });
-        it('keeps function parameter types in proper order', () => {
-            testTranspile(`
+        it('keeps function parameter types in proper order', async () => {
+            await testTranspile(`
                 function CreateTestStatistic(name as string, result = "Success" as string, time = 0 as integer, errorCode = 0 as integer, errorMessage = "" as string) as object
                 end function
             `);
         });
 
-        it('transpiles local var assignment operators', () => {
-            testTranspile(`
+        it('transpiles local var assignment operators', async () => {
+            await testTranspile(`
                 sub main()
                     count = 0
                     count += 1
@@ -2376,8 +2376,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('transpiles AA property assignment operators', () => {
-            testTranspile(`
+        it('transpiles AA property assignment operators', async () => {
+            await testTranspile(`
                 sub main()
                     person = {
                         count: 0
@@ -2387,8 +2387,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('transpiles AA indexed assignment operators', () => {
-            testTranspile(`
+        it('transpiles AA indexed assignment operators', async () => {
+            await testTranspile(`
                 sub main()
                     person = {
                         count: 0
@@ -2398,8 +2398,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('relative-referenced namespaced functions get prefixed', () => {
-            testTranspile(`
+        it('relative-referenced namespaced functions get prefixed', async () => {
+            await testTranspile(`
                 namespace Vertibrates.Birds
                     function GetAllBirds()
                         return [
@@ -2430,8 +2430,8 @@ describe('BrsFile', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('transpiles namespaced functions', () => {
-            testTranspile(`
+        it('transpiles namespaced functions', async () => {
+            await testTranspile(`
                 namespace NameA
                     sub alert()
                     end sub
@@ -2448,9 +2448,9 @@ describe('BrsFile', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('transpiles dim', () => {
-            function doTest(code: string) {
-                testTranspile(`
+        it('transpiles dim', async () => {
+            async function doTest(code: string) {
+                await testTranspile(`
                     sub main()
                         requestList = []
                         ${code}
@@ -2462,20 +2462,20 @@ describe('BrsFile', () => {
                     end sub
                 `);
             }
-            doTest(`Dim c[5]`);
-            doTest(`Dim c[5, 4]`);
-            doTest(`Dim c[5, 4, 6]`);
-            doTest(`Dim requestData[requestList.count()]`);
-            doTest(`Dim requestData[1, requestList.count()]`);
-            doTest(`Dim requestData[1, requestList.count(), 2]`);
-            doTest(`Dim requestData[requestList[2]]`);
-            doTest(`Dim requestData[1, requestList[2]]`);
-            doTest(`Dim requestData[1, requestList[2], 2]`);
-            doTest(`Dim requestData[requestList["2"]]`);
-            doTest(`Dim requestData[1, requestList["2"]]`);
-            doTest(`Dim requestData[1, requestList["2"], 2]`);
-            doTest(`Dim requestData[1, StrToI("1"), 2]`);
-            testTranspile(`
+            await doTest(`Dim c[5]`);
+            await doTest(`Dim c[5, 4]`);
+            await doTest(`Dim c[5, 4, 6]`);
+            await doTest(`Dim requestData[requestList.count()]`);
+            await doTest(`Dim requestData[1, requestList.count()]`);
+            await doTest(`Dim requestData[1, requestList.count(), 2]`);
+            await doTest(`Dim requestData[requestList[2]]`);
+            await doTest(`Dim requestData[1, requestList[2]]`);
+            await doTest(`Dim requestData[1, requestList[2], 2]`);
+            await doTest(`Dim requestData[requestList["2"]]`);
+            await doTest(`Dim requestData[1, requestList["2"]]`);
+            await doTest(`Dim requestData[1, requestList["2"], 2]`);
+            await doTest(`Dim requestData[1, StrToI("1"), 2]`);
+            await testTranspile(`
                 function getValue(param1)
                 end function
 
@@ -2488,8 +2488,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('transpiles calls to fully-qualified namespaced functions', () => {
-            testTranspile(`
+        it('transpiles calls to fully-qualified namespaced functions', async () => {
+            await testTranspile(`
                 namespace NameA
                     sub alert()
                     end sub
@@ -2515,16 +2515,16 @@ describe('BrsFile', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('keeps end-of-line comments with their line', () => {
-            testTranspile(`
+        it('keeps end-of-line comments with their line', async () => {
+            await testTranspile(`
                 function DoSomething() 'comment 1
                     name = "bob" 'comment 2
                 end function 'comment 3
             `);
         });
 
-        it('works for functions', () => {
-            testTranspile(`
+        it('works for functions', async () => {
+            await testTranspile(`
                 function DoSomething()
                     'lots of empty white space
                     'that will be removed during transpile
@@ -2540,8 +2540,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('keeps empty AAs and arrays on same line', () => {
-            testTranspile(`
+        it('keeps empty AAs and arrays on same line', async () => {
+            await testTranspile(`
                 sub a()
                     person = {}
                     stuff = []
@@ -2549,8 +2549,8 @@ describe('BrsFile', () => {
         `, null, 'trim');
         });
 
-        it('does not add leading or trailing newlines', () => {
-            testTranspile(`function abc()\nend function`, undefined, 'none');
+        it('does not add leading or trailing newlines', async () => {
+            await testTranspile(`function abc()\nend function`, undefined, 'none');
         });
 
         it('handles sourcemap edge case', async () => {
@@ -2561,9 +2561,9 @@ describe('BrsFile', () => {
                 '\n' +
                 'end sub';
             program.options.sourceMap = true;
-            let result = testTranspile(source, `sub main()\n    print 1\nend sub`, 'none', 'source/main.bs');
+            let result = await testTranspile(source, `sub main()\n    print 1\nend sub`, 'none', 'source/main.bs');
             //load the source map
-            let location = await SourceMapConsumer.with(result.map.toJSON(), null, (consumer) => {
+            let location = await SourceMapConsumer.with(result.map, null, (consumer) => {
                 return consumer.generatedPositionFor({
                     line: 3,
                     column: 0,
@@ -2582,7 +2582,7 @@ describe('BrsFile', () => {
                 .filter(x => x.kind !== TokenKind.Eof && x.kind !== TokenKind.Newline);
 
             program.options.sourceMap = true;
-            let result = testTranspile(source, source, 'none');
+            let result = await testTranspile(source, source, 'none');
             //load the source map
             await SourceMapConsumer.with(result.map.toString(), null, (consumer) => {
                 let tokenResult = tokens.map(token => ({
@@ -2608,8 +2608,8 @@ describe('BrsFile', () => {
             });
         });
 
-        it('handles empty if block', () => {
-            testTranspile(`
+        it('handles empty if block', async () => {
+            await testTranspile(`
                 sub main()
                     if true then
                     end if
@@ -2631,8 +2631,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('handles empty elseif block', () => {
-            testTranspile(`
+        it('handles empty elseif block', async () => {
+            await testTranspile(`
                 sub main()
                     if true then
                         print "if"
@@ -2647,8 +2647,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('handles empty else block', () => {
-            testTranspile(`
+        it('handles empty else block', async () => {
+            await testTranspile(`
                 sub main()
                     if true then
                         print "if"
@@ -2664,8 +2664,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('handles else block with a leading comment', () => {
-            testTranspile(`
+        it('handles else block with a leading comment', async () => {
+            await testTranspile(`
                 sub main()
                     if true then
                         print "if"
@@ -2677,8 +2677,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('works for function parameters', () => {
-            testTranspile(`
+        it('works for function parameters', async () => {
+            await testTranspile(`
                 function DoSomething(name, age as integer, text as string)
                 end function
             `, `
@@ -2687,8 +2687,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('adds newlines between top-level statements', () => {
-            testTranspile(`
+        it('adds newlines between top-level statements', async () => {
+            await testTranspile(`
                 function a()
                 end function
 
@@ -2697,8 +2697,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('properly indents nested AA literals', () => {
-            testTranspile(`
+        it('properly indents nested AA literals', async () => {
+            await testTranspile(`
                 sub doSomething()
                     grandparent = {
                         parent: {
@@ -2713,8 +2713,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('does not add comma after final object property even when comments are present', () => {
-            testTranspile(`
+        it('does not add comma after final object property even when comments are present', async () => {
+            await testTranspile(`
                 sub doSomething()
                     person = {
                         age: 12 'comment
@@ -2738,8 +2738,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('works for a complex function with comments all over the place', () => {
-            testTranspile(`
+        it('works for a complex function with comments all over the place', async () => {
+            await testTranspile(`
                 'import some library
                 library "v30/bslCore.brs" 'comment
 
@@ -2845,12 +2845,12 @@ describe('BrsFile', () => {
             expect(code.endsWith(`'//# sourceMappingURL=./logger.brs.map`)).to.be.true;
         });
 
-        it('replaces custom types in parameter types and return types', () => {
+        it('replaces custom types in parameter types and return types', async () => {
             program.setFile('source/SomeKlass.bs', `
                 class SomeKlass
                 end class
             `);
-            testTranspile(`
+            await testTranspile(`
                 function foo() as SomeKlass
                     return new SomeKlass()
                 end function
@@ -2882,8 +2882,8 @@ describe('BrsFile', () => {
                 expectZeroDiagnostics(program);
             });
 
-            it('sets invalid on empty callfunc', () => {
-                testTranspile(`
+            it('sets invalid on empty callfunc', async () => {
+                await testTranspile(`
                     sub main()
                         node = invalid
                         node@.doSomething()
@@ -2900,8 +2900,8 @@ describe('BrsFile', () => {
                 `);
             });
 
-            it('includes original arguments', () => {
-                testTranspile(`
+            it('includes original arguments', async () => {
+                await testTranspile(`
                     sub main()
                         node = invalid
                         node@.doSomething(1, true, m.top.someVal)

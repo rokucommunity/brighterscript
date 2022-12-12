@@ -56,8 +56,8 @@ describe('ConstStatement', () => {
         expect(statement.range).to.eql(util.createRange(0, 0, 0, 21));
     });
 
-    it('produces typedef', () => {
-        testGetTypedef(`
+    it('produces typedef', async () => {
+        await testGetTypedef(`
             const API_KEY = "abc"
             const SOME_OBJ = {}
             const SOME_ARR = []
@@ -66,8 +66,8 @@ describe('ConstStatement', () => {
 
     describe('transpile', () => {
 
-        it('transpiles simple consts', () => {
-            testTranspile(`
+        it('transpiles simple consts', async () => {
+            await testTranspile(`
                 const API_KEY = "abc"
                 sub main()
                     print API_KEY
@@ -79,8 +79,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('transpiles arrays', () => {
-            testTranspile(`
+        it('transpiles arrays', async () => {
+            await testTranspile(`
                 const WORDS = [
                     "alpha"
                     "beta"
@@ -98,8 +98,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('transpiles objects', () => {
-            testTranspile(`
+        it('transpiles objects', async () => {
+            await testTranspile(`
                 const DEFAULTS = {
                     alpha: true
                     beta: true
@@ -117,8 +117,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('supports consts inside namespaces', () => {
-            testTranspile(`
+        it('supports consts inside namespaces', async () => {
+            await testTranspile(`
                 namespace network
                     const API_KEY = "abc"
                     sub get()
@@ -139,8 +139,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('supports property access on complex objects', () => {
-            testTranspile(`
+        it('supports property access on complex objects', async () => {
+            await testTranspile(`
                 const DEFAULTS = {
                     enabled: true
                 }
@@ -156,8 +156,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('supports calling methods on consts', () => {
-            testTranspile(`
+        it('supports calling methods on consts', async () => {
+            await testTranspile(`
                 const API_KEY ="ABC"
                 sub main()
                     print API_KEY.toString()
@@ -169,8 +169,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('transpiles within += operator', () => {
-            testTranspile(`
+        it('transpiles within += operator', async () => {
+            await testTranspile(`
                 namespace constants
                     const API_KEY = "test"
                 end namespace

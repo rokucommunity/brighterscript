@@ -104,8 +104,8 @@ describe('parser print statements', () => {
     });
 
     describe('transpile', () => {
-        it('retains comma separators', () => {
-            testTranspile(`
+        it('retains comma separators', async () => {
+            await testTranspile(`
                 sub main()
                     a$ = "string"
                     print a$, a$, a$
@@ -113,8 +113,8 @@ describe('parser print statements', () => {
             `);
         });
 
-        it('retains semicolon separators', () => {
-            testTranspile(`
+        it('retains semicolon separators', async () => {
+            await testTranspile(`
                 sub main()
                     a$ = "string"
                     print a$; a$; a$
@@ -122,8 +122,8 @@ describe('parser print statements', () => {
             `);
         });
 
-        it('supports no space between function calls', () => {
-            testTranspile(`
+        it('supports no space between function calls', async () => {
+            await testTranspile(`
                 function getText()
                     return "text"
                 end function
@@ -134,8 +134,8 @@ describe('parser print statements', () => {
             `);
         });
 
-        it('supports print in loop', () => {
-            testTranspile(`
+        it('supports print in loop', async () => {
+            await testTranspile(`
                 sub main()
                     paramArr = ["This", "is", true, "and", "this", "is", 1]
                     print "This is one line of stuff:";
@@ -164,8 +164,8 @@ describe('parser print statements', () => {
             `);
         });
 
-        it('handles roku documentation examples', () => {
-            testTranspile(`
+        it('handles roku documentation examples', async () => {
+            await testTranspile(`
                 sub main()
                     x=5:print 25; " is equal to"; x^2
                     a$="string":print a$;a$,a$;" ";a$

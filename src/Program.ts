@@ -1265,7 +1265,7 @@ export class Program {
     /**
      * Generate the contents of every file
      */
-    private serialize(files: File[]) {
+    private async serialize(files: File[]) {
 
         const allFiles = new Map<File, SerializedFile[]>();
 
@@ -1282,9 +1282,9 @@ export class Program {
                 file: file,
                 result: allFiles
             };
-            this.plugins.emit('beforeSerializeFile', event);
-            this.plugins.emit('serializeFile', event);
-            this.plugins.emit('afterSerializeFile', event);
+            await this.plugins.emitAsync('beforeSerializeFile', event);
+            await this.plugins.emitAsync('serializeFile', event);
+            await this.plugins.emitAsync('afterSerializeFile', event);
         }
         //TODO remove the beforeProgramTranspile event in v1. This event has been nerfed anyway, we're not including any files and the editor does nothing
         this.plugins.emit('afterProgramTranspile', this, [], new Editor());
@@ -1343,7 +1343,7 @@ export class Program {
             const preparedEntries = this.prepare(files, programEditor);
 
             //stage the entire program
-            const serializedFilesByFile = this.serialize(
+            const serializedFilesByFile = await this.serialize(
                 preparedEntries.map(x => x.file)
             );
 
@@ -1357,13 +1357,6 @@ export class Program {
             for (const entry of preparedEntries) {
                 entry.editor.undoAll();
             }
-
-            return {
-                files: files,
-                stagingDir: stagingDir,
-                prepared: preparedEntries,
-                serialized: serializedFilesByFile
-            };
         });
     }
 

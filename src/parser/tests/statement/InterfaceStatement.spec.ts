@@ -12,8 +12,8 @@ describe('InterfaceStatement', () => {
         });
     });
 
-    it('allows strange keywords as property names', () => {
-        testGetTypedef(`
+    it('allows strange keywords as property names', async () => {
+        await testGetTypedef(`
             interface Person
                 public as string
                 protected as string
@@ -26,8 +26,8 @@ describe('InterfaceStatement', () => {
         `, undefined, undefined, undefined, true);
     });
 
-    it('allows strange keywords as method names', () => {
-        testGetTypedef(`
+    it('allows strange keywords as method names', async () => {
+        await testGetTypedef(`
             interface Person
                 sub public() as string
                 sub protected() as string
@@ -40,8 +40,8 @@ describe('InterfaceStatement', () => {
         `, undefined, undefined, undefined, true);
     });
 
-    it('includes comments', () => {
-        testGetTypedef(`
+    it('includes comments', async () => {
+        await testGetTypedef(`
             interface Person
                 'some comment
                 sub someFunc() as string
@@ -49,8 +49,8 @@ describe('InterfaceStatement', () => {
         `, undefined, undefined, undefined, true);
     });
 
-    it('includes annotations', () => {
-        testGetTypedef(`
+    it('includes annotations', async () => {
+        await testGetTypedef(`
             @IFace
             interface Person
                 @Method
@@ -74,8 +74,8 @@ describe('InterfaceStatement', () => {
         expectZeroDiagnostics(program);
     });
 
-    it('allows comments after an interface', () => {
-        testTranspile(`
+    it('allows comments after an interface', async () => {
+        await testTranspile(`
             interface Iface1
                 name as dynamic
             end interface

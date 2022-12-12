@@ -582,8 +582,8 @@ describe('XmlFile', () => {
     });
 
     describe('transpile', () => {
-        it('handles single quotes properly', () => {
-            testTranspile(trim`
+        it('handles single quotes properly', async () => {
+            await testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="AnimationExample" extends="Scene">
                     <children>
@@ -655,8 +655,8 @@ describe('XmlFile', () => {
             expect(file.needsTranspiled).to.be.true;
         });
 
-        it('includes bslib script', () => {
-            testTranspile(trim`
+        it('includes bslib script', async () => {
+            await testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Comp" extends="Group">
                 </component>
@@ -668,8 +668,8 @@ describe('XmlFile', () => {
             `, 'none', 'components/Comp.xml');
         });
 
-        it('does not include additional bslib script if already there ', () => {
-            testTranspile(trim`
+        it('does not include additional bslib script if already there ', async () => {
+            await testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Comp" extends="Group">
                     <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
@@ -682,11 +682,11 @@ describe('XmlFile', () => {
             `, 'none', 'components/child.xml');
         });
 
-        it('does not include bslib script if already there from ropm', () => {
+        it('does not include bslib script if already there from ropm', async () => {
             program.setFile('source/roku_modules/bslib/bslib.brs', ``);
             program.setFile('source/lib.bs', ``);
             //include a bs file to force transpile for the xml file
-            testTranspile(trim`
+            await testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Comp" extends="Group">
                     <script type="text/brightscript" uri="pkg:/source/lib.bs" />
@@ -752,13 +752,13 @@ describe('XmlFile', () => {
             ).to.eql(expected);
         });
 
-        it('keeps all content of the XML', () => {
+        it('keeps all content of the XML', async () => {
             program.setFile(`components/SimpleScene.bs`, `
                 sub b()
                 end sub
             `);
 
-            testTranspile(trim`
+            await testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component
                     name="SimpleScene" extends="Scene"
@@ -794,13 +794,13 @@ describe('XmlFile', () => {
             `, 'none', 'components/SimpleScene.xml');
         });
 
-        it('changes file extensions from bs to brs', () => {
+        it('changes file extensions from bs to brs', async () => {
             program.setFile(`components/SimpleScene.bs`, `
                 import "pkg:/source/lib.bs"
             `);
             program.setFile('source/lib.bs', ``);
 
-            testTranspile(trim`
+            await testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene">
                     <script type="text/brighterscript" uri="SimpleScene.bs"/>
@@ -815,9 +815,9 @@ describe('XmlFile', () => {
             `, 'none', 'components/SimpleScene.xml');
         });
 
-        it('does not fail on missing script type', () => {
+        it('does not fail on missing script type', async () => {
             program.setFile('components/SimpleScene.brs', '');
-            testTranspile(trim`
+            await testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene">
                     <script uri="SimpleScene.brs"/>
@@ -1024,7 +1024,7 @@ describe('XmlFile', () => {
             expect(program.getScopesForFile(xmlFile)[0].getAllCallables().map(x => x.callable.name)).to.include('logInfo');
         });
 
-        it('does not include `d.bs` script during transpile', () => {
+        it('does not include `d.bs` script during transpile', async () => {
             program.setFile('source/logger.d.bs', `
                 sub logInfo()
                 end sub
@@ -1038,7 +1038,7 @@ describe('XmlFile', () => {
                 sub init()
                 end sub
             `);
-            testTranspile(trim`
+            await testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                     <script type="text/brighterscript" uri="Component1.bs" />

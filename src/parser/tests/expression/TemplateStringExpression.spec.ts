@@ -74,9 +74,9 @@ describe('TemplateStringExpression', () => {
             program.dispose();
         });
 
-        it('uses the proper prefix when aliased package is installed', () => {
+        it('uses the proper prefix when aliased package is installed', async () => {
             program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     a = \`\${LINE_NUM},\${LINE_NUM}\`
                 end sub
@@ -87,8 +87,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('properly transpiles simple template string with no leading text', () => {
-            testTranspile(`
+        it('properly transpiles simple template string with no leading text', async () => {
+            await testTranspile(`
                     sub main()
                         a = \`\${LINE_NUM},\${LINE_NUM}\`
                     end sub
@@ -100,8 +100,8 @@ describe('TemplateStringExpression', () => {
             );
         });
 
-        it('properly transpiles simple template string', () => {
-            testTranspile(`
+        it('properly transpiles simple template string', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`hello world\`
                 end sub
@@ -112,8 +112,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('properly transpiles one line template string with expressions', () => {
-            testTranspile(`
+        it('properly transpiles one line template string with expressions', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`hello \${LINE_NUM.text} world \${"template" + "".getChars()} test\`
                 end sub
@@ -124,8 +124,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('handles escaped characters', () => {
-            testTranspile(`
+        it('handles escaped characters', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`\\r\\n\\\`\\$\`
                 end sub
@@ -136,8 +136,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('handles escaped unicode char codes', () => {
-            testTranspile(`
+        it('handles escaped unicode char codes', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`\\c2\\c987\`
                 end sub
@@ -148,8 +148,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('properly transpiles simple multiline template string', () => {
-            testTranspile(`
+        it('properly transpiles simple multiline template string', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`hello world\nI am multiline\`
                 end sub
@@ -160,8 +160,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('properly handles newlines', () => {
-            testTranspile(`
+        it('properly handles newlines', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`\n\`
                 end sub
@@ -172,8 +172,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('properly handles clrf', () => {
-            testTranspile(`
+        it('properly handles clrf', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`\r\n\`
                 end sub
@@ -184,8 +184,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('properly transpiles more complex multiline template string', () => {
-            testTranspile(`
+        it('properly transpiles more complex multiline template string', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`I am multiline\n\${a.isRunning()}\nmore\`
                 end sub
@@ -196,8 +196,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('properly transpiles complex multiline template string in array def', () => {
-            testTranspile(`
+        it('properly transpiles complex multiline template string in array def', async () => {
+            await testTranspile(`
                 sub main()
                     a = [
                         "one",
@@ -220,8 +220,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('properly transpiles complex multiline template string in array def, with nested template', () => {
-            testTranspile(`
+        it('properly transpiles complex multiline template string in array def, with nested template', async () => {
+            await testTranspile(`
                 sub main()
                     a = [
                         "one",
@@ -250,8 +250,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('properly transpiles two template strings side-by-side', () => {
-            testTranspile(`
+        it('properly transpiles two template strings side-by-side', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`\${"hello"}\${"world"}\`
                 end sub
@@ -262,8 +262,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('skips calling toString on strings', () => {
-            testTranspile(`
+        it('skips calling toString on strings', async () => {
+            await testTranspile(`
                 sub main()
                     text = \`Hello \${"world"}\`
                 end sub
@@ -275,8 +275,8 @@ describe('TemplateStringExpression', () => {
         });
 
         describe('tagged template strings', () => {
-            it('properly transpiles with escaped characters and quasis', () => {
-                testTranspile(`
+            it('properly transpiles with escaped characters and quasis', async () => {
+                await testTranspile(`
                     function zombify(strings, values)
                     end function
                     sub main()
@@ -292,8 +292,8 @@ describe('TemplateStringExpression', () => {
                 `);
             });
 
-            it('handles multiple embedded expressions', () => {
-                testTranspile(`
+            it('handles multiple embedded expressions', async () => {
+                await testTranspile(`
                     function zombify(strings, values)
                     end function
                     sub main()
@@ -309,8 +309,8 @@ describe('TemplateStringExpression', () => {
                 `);
             });
 
-            it('can be concatenated with regular string', () => {
-                testTranspile(`
+            it('can be concatenated with regular string', async () => {
+                await testTranspile(`
                     sub main()
                         thing = "this" + \`that\`
                         otherThing = \`that\` + "this"
