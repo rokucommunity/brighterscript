@@ -1,5 +1,4 @@
 import type { BeforeBuildProgramEvent } from '../../interfaces';
-import { AssetFile } from '../../files/AssetFile';
 import { standardizePath as s } from '../../util';
 import { source as bslibSource } from '@rokucommunity/bslib';
 import { Cache } from '../../Cache';

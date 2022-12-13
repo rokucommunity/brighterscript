@@ -2830,7 +2830,7 @@ describe('BrsFile', () => {
                 sub logInfo()
                 end sub
             `);
-            file.needsTranspiled = false;
+            file['needsTranspiled'] = false;
             const { code } = file.transpile();
             expect(code.endsWith(`'//# sourceMappingURL=./logger.brs.map`)).to.be.true;
         });
@@ -2840,7 +2840,7 @@ describe('BrsFile', () => {
                 sub logInfo()
                 end sub
             `);
-            file.needsTranspiled = true;
+            file['needsTranspiled'] = true;
             const { code } = file.transpile();
             expect(code.endsWith(`'//# sourceMappingURL=./logger.brs.map`)).to.be.true;
         });
