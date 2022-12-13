@@ -1,4 +1,5 @@
-import { SourceMapGenerator } from 'source-map';
+import type { SourceMapGenerator } from 'source-map';
+import type { Editor } from '../astUtils/Editor';
 import type { BsDiagnostic, CommentFlag } from '../interfaces';
 
 export interface File {
@@ -84,6 +85,10 @@ export interface File {
      * `true` means exclude, all other values mean include.
      */
     excludeFromOutput?: boolean;
+    /**
+     * An editor that plugins can use to modify attributes about this file during the build process.
+     */
+    editor?: Editor;
 }
 
 export interface SerializeFileResult {

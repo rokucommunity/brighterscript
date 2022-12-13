@@ -511,18 +511,6 @@ describe('util', () => {
         });
     });
 
-    describe('copyBslibToStaging', () => {
-        it('copies from local bslib dependency', async () => {
-            await util.copyBslibToStaging(tempDir);
-            expect(fsExtra.pathExistsSync(`${tempDir}/source/bslib.brs`)).to.be.true;
-            expect(
-                /^function bslib_toString\(/mg.exec(
-                    fsExtra.readFileSync(`${tempDir}/source/bslib.brs`).toString()
-                )
-            ).not.to.be.null;
-        });
-    });
-
     describe('rangesIntersect', () => {
         it('does not match when ranges do not touch (a < b)', () => {
             // AA BB

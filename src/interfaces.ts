@@ -399,6 +399,16 @@ export interface CompilerPlugin {
 
 
     /**
+     * Called before any files are written
+     */
+    beforeWriteProgram?: PluginHandler<BeforeWriteProgramEvent>;
+    /**
+     * Called after all files are written
+     */
+    afterWriteProgram?: PluginHandler<AfterWriteProgramEvent>;
+
+
+    /**
      * Before a file is written to disk. These are raw files that contain the final output. One `File` may produce several of these
      */
     beforeWriteFile?: PluginHandler<BeforeWriteFileEvent>;
@@ -669,6 +679,14 @@ export interface SerializeFileEvent<TFile extends File = File> {
 export type AfterSerializeFileEvent<TFile extends File = File> = SerializeFileEvent<TFile>;
 
 
+export interface BeforeWriteProgramEvent {
+    program: Program;
+    stagingDir: string;
+    files: Map<File, SerializedFile[]>;
+}
+export type AfterWriteProgramEvent = BeforeWriteProgramEvent;
+
+
 export type BeforeWriteFileEvent = WriteFileEvent;
 export interface WriteFileEvent {
     program: Program;
@@ -683,15 +701,6 @@ export interface WriteFileEvent {
     processedFiles: Set<SerializedFile>;
 }
 export type AfterWriteFileEvent = BeforeWriteFileEvent;
-
-
-export interface PreparedEntry {
-    file: File;
-    /**
-     * An editor used to edit the files
-     */
-    editor: Editor;
-}
 
 export interface TranspileObj {
     file: File;

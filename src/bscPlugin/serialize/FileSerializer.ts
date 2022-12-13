@@ -1,8 +1,8 @@
-import { isAssetFile, isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { AssetFile } from '../files/AssetFile';
-import type { BrsFile } from '../files/BrsFile';
-import type { XmlFile } from '../files/XmlFile';
-import type { SerializedFile, SerializeFileEvent } from '../interfaces';
+import { isAssetFile, isBrsFile, isXmlFile } from '../../astUtils/reflection';
+import type { AssetFile } from '../../files/AssetFile';
+import type { BrsFile } from '../../files/BrsFile';
+import type { XmlFile } from '../../files/XmlFile';
+import type { SerializedFile, SerializeFileEvent } from '../../interfaces';
 
 export class FileSerializer {
     constructor(
@@ -41,7 +41,7 @@ export class FileSerializer {
         //TODO remove `afterFileTranspile` in v1
         this.event.program.plugins.emit('afterFileTranspile', afterTranspileEvent);
 
-        if (afterTranspileEvent.code) {
+        if (typeof afterTranspileEvent.code === 'string') {
             result.push({
                 pkgPath: file.pkgPath,
                 data: Buffer.from(afterTranspileEvent.code)
@@ -53,7 +53,7 @@ export class FileSerializer {
                 data: Buffer.from(afterTranspileEvent.map.toString())
             });
         }
-        if (afterTranspileEvent.typedef) {
+        if (typeof afterTranspileEvent.typedef === 'string') {
             result.push({
                 pkgPath: file.pkgPath.replace(/\.brs$/i, '.d.bs'),
                 data: Buffer.from(afterTranspileEvent.typedef)
@@ -66,7 +66,7 @@ export class FileSerializer {
     private serializeXmlFile(file: XmlFile) {
         const result: SerializedFile[] = [];
         const serialized = file.serialize();
-        if (serialized.code) {
+        if (typeof serialized.code === 'string') {
             result.push({
                 pkgPath: file.pkgPath,
                 data: Buffer.from(serialized.code)

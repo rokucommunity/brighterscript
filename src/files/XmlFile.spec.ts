@@ -642,7 +642,7 @@ describe('XmlFile', () => {
         it(`honors the 'needsTranspiled' flag when set in 'afterFileParse'`, () => {
             program.plugins.add({
                 name: 'test',
-                afterFileParse: (file) => {
+                afterFileParse: (file: any) => {
                     //enable transpile for every file
                     file.needsTranspiled = true;
                 }
@@ -652,7 +652,7 @@ describe('XmlFile', () => {
                 <component name="Comp" extends="Group">
                 </component>
             `);
-            expect(file.needsTranspiled).to.be.true;
+            expect(file['needsTranspiled']).to.be.true;
         });
 
         it('includes bslib script', async () => {
@@ -710,7 +710,7 @@ describe('XmlFile', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(file.needsTranspiled).to.be.false;
+            expect(file['needsTranspiled']).to.be.false;
         });
 
 
@@ -858,7 +858,7 @@ describe('XmlFile', () => {
                 <component name="SimpleScene" extends="Scene" >
                 </component>
             `);
-            expect(file.needsTranspiled).to.be.false;
+            expect(file['needsTranspiled']).to.be.false;
         });
 
         it('needsTranspiled is true if an import is brighterscript', () => {
@@ -869,7 +869,7 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="SimpleScene.bs"/>
                 </component>
             `);
-            expect(file.needsTranspiled).to.be.true;
+            expect(file['needsTranspiled']).to.be.true;
         });
 
         it('simple source mapping includes sourcemap reference', () => {
@@ -894,7 +894,7 @@ describe('XmlFile', () => {
                 <component name="SimpleScene" extends="Scene">
                 </component>
             `);
-            file.needsTranspiled = true;
+            file['needsTranspiled'] = true;
             const code = file.transpile().code;
             expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
         });

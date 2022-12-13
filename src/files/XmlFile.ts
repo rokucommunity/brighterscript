@@ -17,6 +17,7 @@ import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';
 import type { File } from './File';
+import type { Editor } from '../astUtils/Editor';
 
 export class XmlFile implements File {
     /**
@@ -60,6 +61,11 @@ export class XmlFile implements File {
     public pkgPath: string;
 
     public program: Program;
+
+    /**
+     * An editor assigned during the build flow that manages edits that will be undone once the build process is complete.
+     */
+    public editor?: Editor;
 
     /**
      * The absolute path to the source location for this file
@@ -221,8 +227,22 @@ export class XmlFile implements File {
 
     /**
      * Does this file need to be transpiled?
+     * @deprecated use the `.editor` property to push changes to the file, which will force transpilation
      */
-    public needsTranspiled = false;
+    private get needsTranspiled() {
+        if (this._needsTranspiled !== undefined) {
+            return this._needsTranspiled;
+        }
+        return !!(
+            this.editor?.hasChanges || this.ast.component?.scripts?.some(
+                script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
+            )
+        );
+    }
+    private set needsTranspiled(value) {
+        this._needsTranspiled = value;
+    }
+    private _needsTranspiled: boolean;
 
     /**
      * The AST for this file
@@ -250,11 +270,6 @@ export class XmlFile implements File {
         }));
 
         this.getCommentFlags(this.parser.tokens as any[]);
-
-        //needsTranspiled should be true if an import is brighterscript
-        this.needsTranspiled = this.needsTranspiled || this.ast.component?.scripts?.some(
-            script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
-        );
     }
 
     /**

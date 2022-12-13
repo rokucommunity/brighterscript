@@ -78,7 +78,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
 
     public remove<T extends CompilerPlugin = CompilerPlugin>(plugin: T) {
         if (this.has(plugin)) {
-            this.plugins.splice(this.plugins.indexOf(plugin));
+            this.plugins.splice(this.plugins.indexOf(plugin), 1);
         }
         return plugin;
     }

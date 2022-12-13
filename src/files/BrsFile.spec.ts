@@ -150,9 +150,9 @@ describe('BrsFile', () => {
 
     it('sets needsTranspiled to true for .bs files', () => {
         //BrightScript
-        expect(new BrsFile(`${rootDir}/source/main.brs`, 'source/main.brs', program).needsTranspiled).to.be.false;
+        expect(new BrsFile(`${rootDir}/source/main.brs`, 'source/main.brs', program)['needsTranspiled']).to.be.false;
         //BrighterScript
-        expect(new BrsFile(`${rootDir}/source/main.bs`, 'source/main.bs', program).needsTranspiled).to.be.true;
+        expect(new BrsFile(`${rootDir}/source/main.bs`, 'source/main.bs', program)['needsTranspiled']).to.be.true;
     });
 
     it('computes new import statements after clearing parser references', () => {

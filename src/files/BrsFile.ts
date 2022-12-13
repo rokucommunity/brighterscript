@@ -31,6 +31,7 @@ import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import type { File } from './File';
+import { Editor } from '../astUtils/Editor';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -74,7 +75,6 @@ export class BrsFile implements File {
 
         //all BrighterScript files need to be transpiled
         if (this.extension?.endsWith('.bs') || this.program?.options?.allowBrighterScriptInBrightScript) {
-            this.needsTranspiled = true;
             this.parseMode = ParseMode.BrighterScript;
         }
         this.isTypedef = this.extension === '.d.bs';
@@ -96,6 +96,10 @@ export class BrsFile implements File {
 
     public program: Program;
 
+    /**
+     * An editor assigned during the build flow that manages edits that will be undone once the build process is complete.
+     */
+    public editor?: Editor;
 
     /**
      * The absolute path to the source location for this file
@@ -196,8 +200,18 @@ export class BrsFile implements File {
 
     /**
      * Does this file need to be transpiled?
+     * @deprecated use the `.editor` property to push changes to the file, which will force transpilation
      */
-    public needsTranspiled = false;
+    private get needsTranspiled() {
+        if (this._needsTranspiled !== undefined) {
+            return this._needsTranspiled;
+        }
+        return !!(this.extension?.endsWith('.bs') || this.program?.options?.allowBrighterScriptInBrightScript || this.editor?.hasChanges);
+    }
+    private set needsTranspiled(value) {
+        this._needsTranspiled = value;
+    }
+    private _needsTranspiled: boolean;
 
     /**
      * The AST for this file
@@ -1680,7 +1694,7 @@ export class BrsFile implements File {
         const result: SerializedCodeFile = {};
 
         const transpiled = this.transpile();
-        if (transpiled.code) {
+        if (typeof transpiled.code === 'string') {
             result.code = transpiled.code;
         }
         if (transpiled.map) {
@@ -1698,6 +1712,7 @@ export class BrsFile implements File {
      */
     public transpile(): CodeWithSourceMap {
         const state = new BrsTranspileState(this);
+        state.editor = this.editor ?? new Editor();
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled) {
@@ -1709,8 +1724,12 @@ export class BrsFile implements File {
             //simple SourceNode wrapping the entire file to simplify the logic below
             transpileResult = new SourceNode(null, null, state.srcPath, this.fileContents);
         }
-        //undo any AST edits that the transpile cycle has made
-        state.editor.undoAll();
+
+        //if we created an editor for this flow, undo the edits now
+        if (!this.editor) {
+            //undo any AST edits that the transpile cycle has made
+            state.editor.undoAll();
+        }
 
         if (this.program.options.sourceMap) {
             return new SourceNode(null, null, null, [

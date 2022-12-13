@@ -1838,8 +1838,9 @@ describe('Program', () => {
                 },
                 afterFileTranspile: sinon.spy()
             });
+            const result = await program.getTranspiledFileContents(file.srcPath);
             expect(
-                (await program.getTranspiledFileContents(file.srcPath)).code
+                result.code
             ).to.eql(trim`
                 sub main()
                     print "hello there"
@@ -2025,7 +2026,7 @@ describe('Program', () => {
             expect(literalExpression.token.text).to.eql('"hello world"');
         });
 
-        it('copies bslib.brs when no ropm version was found', async () => {
+        it('copies the embedded version of bslib.brs when a version from ropm is not found', async () => {
             await program.transpile([], stagingDir);
             expect(fsExtra.pathExistsSync(`${stagingDir}/source/bslib.brs`)).to.be.true;
         });

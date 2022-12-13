@@ -32,6 +32,7 @@ export class BrsTranspileState extends TranspileState {
 
     /**
      * An AST editor that can be used by the AST nodes to do various transformations to the AST which will be reverted at the end of the transpile cycle
+     * TODO remove this before file_api is merged
      */
     public editor = new Editor();
 }
