@@ -1213,21 +1213,18 @@ export class Program {
     /**
      * Get the absolute output path for a file
      */
-    private getOutputPath(file: { pkgPath?: string }, stagingDir = this.stagingDir) {
+    private getOutputPath(file: { pkgPath?: string }, stagingDir = this.getStagingDir()) {
         return s`${stagingDir}/${file.pkgPath}`;
     }
 
-    private get stagingDir() {
-        const result = this.options.stagingDir ?? this.options.stagingFolderPath;
-        if (result) {
-            return result;
+    private getStagingDir(stagingDir?: string) {
+        let result = stagingDir ?? this.options.stagingDir ?? this.options.stagingFolderPath;
+        if (!result) {
+            result = rokuDeploy.getOptions(this.options as any).stagingDir;
         }
-        if (!this._stagingDir) {
-            this._stagingDir = rokuDeploy.getOptions(this.options as any).stagingDir;
-        }
-        return this._stagingDir;
+        result = s`${path.resolve(this.options.cwd ?? process.cwd(), result ?? '/')}`;
+        return result;
     }
-    private _stagingDir;
 
     /**
      * Prepare the program for building
@@ -1251,6 +1248,8 @@ export class Program {
         this.plugins.emit('beforePrepareProgram', programEvent);
         this.plugins.emit('prepareProgram', programEvent);
 
+        const stagingDir = this.getStagingDir();
+
         const entries: TranspileObj[] = [];
 
         for (const file of files) {
@@ -1262,7 +1261,7 @@ export class Program {
                 program: this,
                 file: file,
                 editor: file.editor,
-                outputPath: this.getOutputPath(file)
+                outputPath: this.getOutputPath(file, stagingDir)
             } as PrepareFileEvent & { outputPath: string };
 
             this.plugins.emit('beforePrepareFile', event);
@@ -1341,7 +1340,7 @@ export class Program {
                 const event = await this.plugins.emitAsync('beforeWriteFile', {
                     program: this,
                     file: file,
-                    outputPath: this.getOutputPath(file),
+                    outputPath: this.getOutputPath(file, stagingDir),
                     processedFiles: new Set<SerializedFile>()
                 });
 
@@ -1363,7 +1362,7 @@ export class Program {
     public async build(options?: ProgramBuildOptions) {
         //run a single build at a time
         await this.buildPipeline.run(async () => {
-            const stagingDir = options?.stagingDir ?? this.stagingDir;
+            const stagingDir = this.getStagingDir(options?.stagingDir);
 
             let files = options?.files ?? Object.values(this.files);
 

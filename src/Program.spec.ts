@@ -21,6 +21,7 @@ import { AssetFile } from './files/AssetFile';
 import * as path from 'path';
 import type { SinonSpy } from 'sinon';
 import { createSandbox } from 'sinon';
+import { Logger } from './Logger';
 
 const sinon = createSandbox();
 
@@ -3114,6 +3115,24 @@ describe('Program', () => {
                     s`${program.options.stagingDir}/${file.pkgPath}`
                 )
             ).to.be.true;
+        });
+
+        it('writes to correct dir', async () => {
+            const cwd = process.cwd();
+            try {
+                fsExtra.ensureDirSync(`${tempDir}/alpha/beta`);
+                process.chdir(s`${tempDir}/alpha/beta`);
+
+                program.options.cwd = s`${tempDir}/rootDir`;
+                program.options.rootDir = s`${tempDir}/rootDir`;
+                program.options.stagingDir = s`../stagingDir`;
+                program.setFile('source/main.brs', '');
+                await program.build();
+            } finally {
+                process.chdir(cwd);
+            }
+            expect(fsExtra.pathExistsSync(`${tempDir}/stagingDir/source/main.brs`)).to.be.true;
+            expect(fsExtra.pathExistsSync(`${tempDir}/alpha/source/main.brs`)).to.be.false;
         });
     });
 });
