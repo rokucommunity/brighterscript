@@ -30,6 +30,8 @@ import { rokuDeploy } from 'roku-deploy';
 import { FileFactory } from './files/Factory';
 import type { File } from './files/File';
 import { ActionPipeline } from './ActionPipeline';
+import type { FileData } from './files/LazyFileData';
+import { LazyFileData } from './files/LazyFileData';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -394,13 +396,13 @@ export class Program {
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
      * @param srcDestOrPkgPath the absolute path, the pkg path (i.e. `pkg:/path/to/file.brs`), or the destPath (i.e. `path/to/file.brs` relative to `pkg:/`)
-     * @param fileData the file contents
+     * @param fileData the file contents. omit or pass `undefined` to prevent loading the data at this time
      */
-    public setFile<T extends File>(srcDestOrPkgPath: string, fileData: FileData): T;
+    public setFile<T extends File>(srcDestOrPkgPath: string, fileData?: FileData): T;
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * @param fileEntry an object that specifies src and dest for the file.
-     * @param fileData the file contents
+     * @param fileData the file contents. omit or pass `undefined` to prevent loading the data at this time
      */
     public setFile<T extends File>(fileEntry: FileObj, fileData: FileData): T;
     public setFile<T extends File>(fileParam: FileObj | string, fileData: FileData): T {
@@ -413,7 +415,9 @@ export class Program {
                 this.removeFile(srcPath);
             }
 
-            const event = new ProvideFileEventInternal(this, srcPath, destPath, fileData, this.fileFactory);
+            const data = new LazyFileData(fileData);
+
+            const event = new ProvideFileEventInternal(this, srcPath, destPath, data, this.fileFactory);
 
             this.plugins.emit('beforeProvideFile', event);
             this.plugins.emit('provideFile', event);
@@ -425,7 +429,8 @@ export class Program {
                     this.fileFactory.AssetFile({
                         srcPath: event.srcPath,
                         destPath: event.destPath,
-                        pkgPath: event.destPath
+                        pkgPath: event.destPath,
+                        data: data
                     })
                 );
             }
@@ -1511,14 +1516,13 @@ export interface FileTranspileResult {
     typedef: string;
 }
 
-export type FileData = string | Buffer | (() => Buffer | string);
 
 class ProvideFileEventInternal<TFile extends File = File> implements ProvideFileEvent<TFile> {
     constructor(
         public program: Program,
         public srcPath: string,
         public destPath: string,
-        private initialData: FileData,
+        public data: LazyFileData,
         public fileFactory: FileFactory
     ) {
         this.srcExtension = path.extname(srcPath)?.toLowerCase();
@@ -1527,29 +1531,6 @@ class ProvideFileEventInternal<TFile extends File = File> implements ProvideFile
     public srcExtension: string;
 
     public files: TFile[] = [];
-
-    public getFileData() {
-        if (!this._fileData) {
-            let result: any;
-            if (typeof this.initialData === 'string') {
-                result = Buffer.from(this.initialData);
-            } else if (typeof this.initialData === 'function') {
-                result = this.initialData();
-                if (typeof result === 'string') {
-                    result = Buffer.from(result);
-                }
-            }
-            this._fileData = result;
-        }
-        return this._fileData;
-    }
-
-    public setFileData(fileData: FileData) {
-        //override the outer data object, and delete any cache so it'll get re-resolved next time `getFileData` is called
-        this.initialData = fileData;
-        delete this._fileData;
-    }
-    private _fileData: Buffer;
 }
 
 export interface ProgramBuildOptions {

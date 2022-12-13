@@ -2,6 +2,7 @@ import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
 import { AssetFile } from './AssetFile';
 import type { Program } from '../Program';
+import type { FileData } from './LazyFileData';
 
 export class FileFactory {
 
@@ -18,7 +19,7 @@ export class FileFactory {
         return new XmlFile({ ...options, program: this.program });
     }
 
-    AssetFile(options: { srcPath: string; destPath: string; pkgPath?: string }) {
+    AssetFile(options: { srcPath: string; destPath: string; pkgPath?: string; data?: FileData }) {
         return new AssetFile(options);
     }
 }

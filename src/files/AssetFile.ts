@@ -1,6 +1,8 @@
 import type { BsDiagnostic } from '../interfaces';
 import type { File } from './File';
 import { standardizePath as s } from '../util';
+import type { FileData } from './LazyFileData';
+import { LazyFileData } from './LazyFileData';
 
 export class AssetFile implements File {
     /**
@@ -10,9 +12,14 @@ export class AssetFile implements File {
         srcPath: string;
         destPath: string;
         pkgPath?: string;
+        /**
+         * The data for this file.
+         */
+        data?: FileData;
     }) {
         //spread the constructor args onto this object
         Object.assign(this, options);
+        this.data = new LazyFileData(options.data);
         this.srcPath = s`${this.srcPath}`;
         this.destPath = s`${this.destPath}`;
         this.pkgPath = s`${this.pkgPath ?? this.destPath}`;
@@ -31,24 +38,5 @@ export class AssetFile implements File {
     //mark this file as validated so it skips all validation checks
     public isValidated = true;
 
-    /**
-     * The raw data for this file. It is lazy loaded
-     */
-    public get data(): Buffer {
-        if (!this._data) {
-
-        }
-        return this._data;
-    }
-    public set data(data: Buffer) {
-        this._data = data;
-    }
-    private _data?: Buffer;
-
-    /**
-     * Is the data for this file loaded yet?
-     */
-    public get isDataLoaded() {
-        return !!this._data;
-    }
+    public data: LazyFileData;
 }

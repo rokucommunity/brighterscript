@@ -2900,7 +2900,7 @@ describe('Program', () => {
                     spy.getCalls().map(x => ({
                         srcPath: x.args[0].srcPath,
                         destPath: x.args[0].destPath,
-                        fileData: x.args[0].getFileData().toString()
+                        fileData: x.args[0].data.value.toString()
                     }))
                 ).to.eql([{
                     srcPath: s`${rootDir}/source/main.brs`,
@@ -2933,7 +2933,7 @@ describe('Program', () => {
             const plugin = {
                 name: 'test',
                 beforeProvideFile: (event: BeforeProvideFileEvent) => {
-                    event.setFileData(`'override`);
+                    event.data.value = `'override`;
                 }
             };
             program.plugins.add(plugin);
@@ -2948,7 +2948,7 @@ describe('Program', () => {
                     event.source = `'beforeFileParse`;
                 },
                 beforeProvideFile: (event: BeforeProvideFileEvent) => {
-                    event.setFileData(`'beforeProvideFile`);
+                    event.data.value = `'beforeProvideFile`;
                 }
             };
             program.plugins.add(plugin);
@@ -3101,6 +3101,19 @@ describe('Program', () => {
             ).to.eql([
                 file.srcPath
             ]);
+        });
+    });
+
+    describe('build', () => {
+        it('copies AssetFile contents', async () => {
+            const file = program.setFile('locale/en_US/translations.xml', Buffer.from(''));
+            program.validate();
+            await program.build();
+            expect(
+                fsExtra.pathExistsSync(
+                    s`${program.options.stagingDir}/${file.pkgPath}`
+                )
+            ).to.be.true;
         });
     });
 });

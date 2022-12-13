@@ -5,7 +5,7 @@ import type { XmlFile } from './files/XmlFile';
 import type { FunctionScope } from './FunctionScope';
 import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
-import type { FileData, Program } from './Program';
+import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { FunctionStatement } from './parser/Statement';
 import type { Expression } from './parser/AstNode';
@@ -16,6 +16,7 @@ import type { Editor } from './astUtils/Editor';
 import type { Token } from './lexer/Token';
 import type { File } from './files/File';
 import type { FileFactory } from './files/Factory';
+import type { LazyFileData } from './files/LazyFileData';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
@@ -573,17 +574,12 @@ export interface ProvideFileEvent<TFile extends File = File> {
      * The destPath for the file. (i.e. for `/user/bob/projects/VideoApp/source/main.bs`, destPath would be `source/main.bs`)
      */
     destPath: string;
+
     /**
-     * A function that returns the data for this file. This is a function to allow lazy-loading of the data
-     * (for situations like images where you may never need to actually load the file).
-     * Data previously set by `setFileData()` will be used if present.
+     * A lazy-loading container for this file's data. Call `.get()` to lazy load the data, and `.set()` to override file contents
      */
-    getFileData: () => Buffer;
-    /**
-     * A function that sets the file data for this file (in memory). This is a way for a plugin to override the data that is used by
-     * future event handlers for this file
-     */
-    setFileData: (data: FileData) => void;
+    data: LazyFileData;
+
     /**
      * An array of files that should be added to the program as a result of this event
      */

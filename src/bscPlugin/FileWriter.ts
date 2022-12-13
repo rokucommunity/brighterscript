@@ -9,9 +9,13 @@ export class FileWriter {
     public async process() {
         //if no plugin has handled this file yet, we will handle it
         if (!this.event.processedFiles.has(this.event.file)) {
-            //write the file to disk
-            await fsExtra.outputFile(this.event.outputPath, this.event.file.data);
-            this.event.processedFiles.add(this.event.file);
+            if (this.event.file.data) {
+                //write the file to disk
+                await fsExtra.outputFile(this.event.outputPath, this.event.file.data);
+                this.event.processedFiles.add(this.event.file);
+            } else {
+                this.event.program.logger.warn(`Missing file data for: "${this.event.file.pkgPath}"`);
+            }
         }
     }
 }

@@ -84,7 +84,7 @@ export class FileSerializer {
     private serializeAssetFile(file: AssetFile) {
         this.event.result.set(file, [{
             pkgPath: file.pkgPath,
-            data: file.data
+            data: file.data.value
         }]);
     }
 }
