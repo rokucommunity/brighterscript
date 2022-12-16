@@ -1172,27 +1172,32 @@ export class Program {
                 srcPath: file.srcPath
             } as FileTranspileResult;
 
+            const expectedPkgPath = file.pkgPath.toLowerCase();
+            const expectedMapPath = `${expectedPkgPath}.map`;
+            const expectedTypedefPkgPath = expectedPkgPath.replace(/\.brs$/i, '.d.bs');
+
             //add a temporary plugin to tap into the file writing process
             const plugin = this.plugins.addFirst({
                 name: 'getTranspiledFileContents',
                 beforeWriteFile: (event) => {
                     const pkgPath = event.file.pkgPath.toLowerCase();
-                    //this is the sourcemap
-                    if (pkgPath.endsWith('.map')) {
-                        result.map = event.file.data.toString();
-
-                        //this is the typedef
-                    } else if (pkgPath.endsWith('.d.bs')) {
-                        result.typedef = event.file.data.toString();
-
+                    switch (pkgPath) {
                         //this is the actual transpiled file
-                    } else if (pkgPath === file.pkgPath?.toLowerCase()) {
-                        result.code = event.file.data.toString();
-                    } else {
+                        case expectedPkgPath:
+                            result.code = event.file.data.toString();
+                            break;
+                        //this is the sourcemap
+                        case expectedMapPath:
+                            result.map = event.file.data.toString();
+                            break;
+                        //this is the typedef
+                        case expectedTypedefPkgPath:
+                            result.typedef = event.file.data.toString();
+                            break;
+                        default:
                         //no idea what this file is. just ignore it
                     }
-
-                    //mark this file as processed so it doesn't get written to the output directory
+                    //mark every file as processed so it they don't get written to the output directory
                     event.processedFiles.add(event.file);
                 }
             });

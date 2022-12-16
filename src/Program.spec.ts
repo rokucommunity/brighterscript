@@ -1953,7 +1953,7 @@ describe('Program', () => {
         });
 
         it('handles Editor flow properly', async () => {
-            program.setFile('source/main.bs', `
+            const file = program.setFile('source/main.bs', `
                 sub main()
                     print "hello world"
                 end sub
@@ -1963,7 +1963,7 @@ describe('Program', () => {
             program.plugins.add({
                 name: 'TestPlugin',
                 beforeFileTranspile: (event) => {
-                    if (isBrsFile(event.file)) {
+                    if (event.file === file && isBrsFile(event.file)) {
                         event.file.ast.walk(createVisitor({
                             LiteralExpression: (literal) => {
                                 literalExpression = literal;
@@ -3144,6 +3144,24 @@ describe('Program', () => {
             expect(
                 data.compare(result)
             ).to.equal(0);
+        });
+
+        it('includes bslib in the outDir', async () => {
+            program.options.autoImportComponentScript = true;
+            program.setFile('manifest', '');
+            program.setFile('components/MainScene.xml', trim`
+                <component name="MainScene" extends="Scene">
+                </component>
+            `);
+            program.setFile('components/MainScene.bs', `
+                sub init()
+                    print 1 > 0 ? 1 : 0
+                end sub
+            `);
+            await program.build();
+            expect(
+                fsExtra.pathExistsSync(`${stagingDir}/source/bslib.brs`)
+            ).to.be.true;
         });
     });
 });

@@ -10,8 +10,9 @@ export class BslibInjector {
     private cache = new Cache();
 
     public process(event: BeforeBuildProgramEvent) {
-        const exists = event.files.find(x => {
-            return /(source[\\\/]bslib.brs)|(source[\\\/]roku_modules[\\\/]bslib[\\\/]bslib.brs)$/i;
+        //has anyone added bslib yet? If not, add it now
+        const exists = !!event.files.find(x => {
+            return /(source[\\\/]bslib.brs)|(source[\\\/]roku_modules[\\\/]bslib[\\\/]bslib.brs)$/i.exec(x.pkgPath);
         });
         if (!exists) {
             const file = this.cache.getOrAdd('bslib', () => {
