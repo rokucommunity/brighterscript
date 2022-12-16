@@ -14,7 +14,7 @@ export class FileWriter {
                 await fsExtra.outputFile(this.event.outputPath, this.event.file.data);
                 this.event.processedFiles.add(this.event.file);
             } else {
-                this.event.program.logger.warn(`Missing file data for: "${this.event.file.pkgPath}"`);
+                console.warn(`Missing file data for: "${this.event.file.pkgPath}"`);
             }
         }
     }

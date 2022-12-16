@@ -24,9 +24,7 @@ export class ProgramBuilder {
     public constructor() {
         //add the default file resolver (used to load source file contents).
         this.addFileResolver((filePath) => {
-            return fsExtra.readFile(filePath).then((value) => {
-                return value.toString();
-            });
+            return fsExtra.readFile(filePath);
         });
     }
     /**
@@ -56,7 +54,7 @@ export class ProgramBuilder {
         let reversedResolvers = [...this.fileResolvers].reverse();
         for (let fileResolver of reversedResolvers) {
             let result = await fileResolver(srcPath);
-            if (typeof result === 'string') {
+            if (typeof result === 'string' || Buffer.isBuffer(result)) {
                 return result;
             }
         }
@@ -127,7 +125,7 @@ export class ProgramBuilder {
         this.program = this.createProgram();
 
         //parse every file in the entire project
-        await this.loadAllFilesAST();
+        await this.loadFiles();
 
         if (this.options.watch) {
             this.logger.log('Starting compilation in watch mode...');
@@ -447,15 +445,15 @@ export class ProgramBuilder {
     }
 
     /**
-     * Parse and load the AST for every file in the project
+     * Load every file into the project
      */
-    private async loadAllFilesAST() {
-        await this.logger.time(LogLevel.log, ['Parsing files'], async () => {
+    private async loadFiles() {
+        await this.logger.time(LogLevel.log, ['load files'], async () => {
             let errorCount = 0;
             let files = await this.logger.time(LogLevel.debug, ['getFilePaths'], async () => {
                 return util.getFilePaths(this.options);
             });
-            this.logger.trace('ProgramBuilder.loadAllFilesAST() files:', files);
+            this.logger.trace('ProgramBuilder.loadFiles() files:', files);
 
             const typedefFiles = [] as FileObj[];
             const nonTypedefFiles = [] as FileObj[];
@@ -483,20 +481,14 @@ export class ProgramBuilder {
                 })
             );
 
-            const acceptableExtensions = ['.bs', '.brs', '.xml'];
-            //parse every file other than the type definitions
+            // load every file other than the type definitions into the program3
             await Promise.all(
                 nonTypedefFiles.map(async (fileObj) => {
                     try {
-                        let fileExtension = path.extname(fileObj.src).toLowerCase();
-
-                        //only process certain file types
-                        if (acceptableExtensions.includes(fileExtension)) {
-                            this.program.setFile(
-                                fileObj,
-                                await this.getFileContents(fileObj.src)
-                            );
-                        }
+                        this.program.setFile(
+                            fileObj,
+                            await this.getFileContents(fileObj.src)
+                        );
                     } catch (e) {
                         //log the error, but don't fail this process because the file might be fixable later
                         this.logger.log(e);

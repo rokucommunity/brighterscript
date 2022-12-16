@@ -733,7 +733,7 @@ export interface TypedefProvider {
 
 export type TranspileResult = Array<(string | SourceNode)>;
 
-export type FileResolver = (srcPath: string) => string | undefined | Thenable<string | undefined> | void;
+export type FileResolver = (srcPath: string) => string | Buffer | undefined | Thenable<string | Buffer | undefined> | void;
 
 export interface ExpressionInfo {
     expressions: Expression[];

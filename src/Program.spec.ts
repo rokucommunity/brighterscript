@@ -21,7 +21,6 @@ import { AssetFile } from './files/AssetFile';
 import * as path from 'path';
 import type { SinonSpy } from 'sinon';
 import { createSandbox } from 'sinon';
-import { Logger } from './Logger';
 
 const sinon = createSandbox();
 
@@ -3133,6 +3132,18 @@ describe('Program', () => {
             }
             expect(fsExtra.pathExistsSync(`${tempDir}/stagingDir/source/main.brs`)).to.be.true;
             expect(fsExtra.pathExistsSync(`${tempDir}/alpha/source/main.brs`)).to.be.false;
+        });
+
+        it('write binary files properly', async () => {
+            const data = Buffer.from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+            program.setFile('assets/logo.png', data);
+            await program.build();
+            const result = fsExtra.readFileSync(`${stagingDir}/assets/logo.png`);
+
+            //the buffers should be identical
+            expect(
+                data.compare(result)
+            ).to.equal(0);
         });
     });
 });

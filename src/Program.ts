@@ -1230,7 +1230,7 @@ export class Program {
      * Prepare the program for building
      * @param files the list of files that should be prepared
      */
-    private prepare(files: File[]) {
+    private async prepare(files: File[]) {
         const programEvent = {
             program: this,
             editor: this.editor,
@@ -1245,8 +1245,8 @@ export class Program {
             }
         }
 
-        this.plugins.emit('beforePrepareProgram', programEvent);
-        this.plugins.emit('prepareProgram', programEvent);
+        await this.plugins.emitAsync('beforePrepareProgram', programEvent);
+        await this.plugins.emitAsync('prepareProgram', programEvent);
 
         const stagingDir = this.getStagingDir();
 
@@ -1264,21 +1264,21 @@ export class Program {
                 outputPath: this.getOutputPath(file, stagingDir)
             } as PrepareFileEvent & { outputPath: string };
 
-            this.plugins.emit('beforePrepareFile', event);
-            this.plugins.emit('prepareFile', event);
-            this.plugins.emit('afterPrepareFile', event);
+            await this.plugins.emitAsync('beforePrepareFile', event);
+            await this.plugins.emitAsync('prepareFile', event);
+            await this.plugins.emitAsync('afterPrepareFile', event);
 
             //TODO remove `beforeFileTranspile` in v1
-            this.plugins.emit('beforeFileTranspile', event);
+            await this.plugins.emitAsync('beforeFileTranspile', event);
 
             //TODO remove this in v1
             entries.push(event);
         }
 
-        this.plugins.emit('afterPrepareProgram', programEvent);
+        await this.plugins.emitAsync('afterPrepareProgram', programEvent);
 
         //TODO remove the beforeProgramTranspile event in v1
-        this.plugins.emit('beforeProgramTranspile', this, entries, programEvent.editor);
+        await this.plugins.emitAsync('beforeProgramTranspile', this, entries, programEvent.editor);
         return files;
     }
 
@@ -1289,7 +1289,7 @@ export class Program {
 
         const allFiles = new Map<File, SerializedFile[]>();
 
-        this.plugins.emit('beforeSerializeProgram', {
+        await this.plugins.emitAsync('beforeSerializeProgram', {
             program: this,
             files: files,
             result: allFiles
@@ -1314,7 +1314,7 @@ export class Program {
         });
 
         //TODO remove the beforeProgramTranspile event in v1. This event has been nerfed anyway, we're not including any files and the editor does nothing
-        this.plugins.emit('afterProgramTranspile', this, [], new Editor());
+        await this.plugins.emitAsync('afterProgramTranspile', this, [], new Editor());
         return allFiles;
     }
 
@@ -1366,21 +1366,21 @@ export class Program {
 
             let files = options?.files ?? Object.values(this.files);
 
-            const event = this.plugins.emit('beforeBuildProgram', {
+            const event = await this.plugins.emitAsync('beforeBuildProgram', {
                 program: this,
                 editor: this.editor,
                 files: files
             });
 
             //prepare the program (and files) for building
-            files = this.prepare(files);
+            files = await this.prepare(files);
 
             //stage the entire program
             const serializedFilesByFile = await this.serialize(files);
 
             await this.write(stagingDir, serializedFilesByFile);
 
-            this.plugins.emit('afterBuildProgram', event);
+            await this.plugins.emitAsync('afterBuildProgram', event);
 
             //undo all edits for the program
             this.editor.undoAll();
