@@ -954,7 +954,7 @@ describe('Scope', () => {
             program.setFile(s`components/comp.brs`, ``);
             const sourceScope = program.getScopeByName('source');
             const compScope = program.getScopeByName('components/comp.xml');
-            program.plugins = new PluginInterface([], new Logger());
+            program.plugins = new PluginInterface([], { logger: new Logger() });
             const plugin = program.plugins.add({
                 name: 'Emits validation events',
                 beforeScopeValidate: sinon.spy(),

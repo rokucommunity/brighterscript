@@ -11,8 +11,25 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
 
     constructor(
         private plugins: CompilerPlugin[],
-        private logger: Logger
-    ) { }
+        options: {
+            logger: Logger;
+            suppressErrors?: boolean;
+        }
+    ) {
+        if (options?.constructor.name === 'Logger') {
+            this.logger = options as unknown as Logger;
+        } else {
+            this.logger = options?.logger;
+            this.suppressErrors = options?.suppressErrors === false ? false : true;
+        }
+    }
+
+    private logger: Logger;
+
+    /**
+     * Should plugin errors cause the program to fail, or should they be caught and simply logged
+     */
+    private suppressErrors: boolean;
 
     /**
      * Call `event` on plugins
@@ -26,6 +43,9 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
                     });
                 } catch (err) {
                     this.logger.error(`Error when calling plugin ${plugin.name}.${event}:`, err);
+                    if (!this.suppressErrors) {
+                        throw err;
+                    }
                 }
             }
         }

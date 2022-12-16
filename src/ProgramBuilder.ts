@@ -12,9 +12,10 @@ import PluginInterface from './PluginInterface';
 import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
 import * as requireRelative from 'require-relative';
-import type { BrsFile } from './files/BrsFile';
-import type { File } from './files/File';
+import { Throttler } from './Throttler';
 import { AssetFile } from './files/AssetFile';
+import type { File } from './files/File';
+import type { BrsFile } from './files/BrsFile';
 
 /**
  * A runner class that handles
@@ -37,7 +38,7 @@ export class ProgramBuilder {
     private watcher: Watcher;
     public program: Program;
     public logger = new Logger();
-    public plugins: PluginInterface = new PluginInterface([], this.logger);
+    public plugins: PluginInterface = new PluginInterface([], { logger: this.logger });
     private fileResolvers = [] as FileResolver[];
 
     public addFileResolver(fileResolver: FileResolver) {
@@ -386,48 +387,41 @@ export class ProgramBuilder {
         }
     }
 
+    private transpileThrottler = new Throttler(0);
     /**
      * Transpiles the entire program into the staging folder
      */
     public async transpile() {
-        let options = util.cwdWork(this.options.cwd, () => {
-            return rokuDeploy.getOptions({
-                ...this.options,
-                logLevel: this.options.logLevel as LogLevel,
-                outDir: util.getOutDir(this.options),
-                outFile: path.basename(this.options.outFile)
+        await this.transpileThrottler.run(async () => {
+            //get every file referenced by the files array
+            let fileMap = Object.values(this.program.files).map(x => {
+                return {
+                    src: x.srcPath,
+                    dest: x.destPath
+                };
             });
-        });
 
-        //get every file referenced by the files array
-        let fileMap = Object.values(this.program.files).map(x => {
-            return {
-                src: x.srcPath,
-                dest: x.destPath
-            };
-        });
-
-        //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
-        let filteredFileMap = [] as FileObj[];
-        for (let fileEntry of fileMap) {
-            if (this.program.hasFile(fileEntry.src) === false) {
-                filteredFileMap.push(fileEntry);
+            //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
+            let filteredFileMap = [] as FileObj[];
+            for (let fileEntry of fileMap) {
+                if (this.program.hasFile(fileEntry.src) === false) {
+                    filteredFileMap.push(fileEntry);
+                }
             }
-        }
 
-        this.plugins.emit('beforePrepublish', this, filteredFileMap);
+            this.plugins.emit('beforePrepublish', this, filteredFileMap);
 
+            this.plugins.emit('beforePublish', this, fileMap);
 
-        this.plugins.emit('beforePublish', this, fileMap);
+            await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
+                //transpile any brighterscript files
+                await this.program.build();
+            });
 
-        await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
-            //transpile any brighterscript files
-            await this.program.transpile(fileMap, options.stagingDir);
+            this.plugins.emit('afterPrepublish', this, filteredFileMap);
+
+            this.plugins.emit('afterPublish', this, fileMap);
         });
-
-        this.plugins.emit('afterPrepublish', this, filteredFileMap);
-
-        this.plugins.emit('afterPublish', this, fileMap);
     }
 
     private async deployPackageIfEnabled() {

@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.61.2](https://github.com/rokucommunity/brighterscript/compare/v0.61.1...0.61.2) - 2022-12-15
+### Changed
+ - Bump qs from 6.5.2 to 6.5.3 ([#758](https://github.com/rokucommunity/brighterscript/pull/758))
+
+
+
+## [0.61.1](https://github.com/rokucommunity/brighterscript/compare/v0.61.0...0.61.1) - 2022-12-07
+### Fixed
+ - Ensure enums and interfaces persist in typedefs ([#757](https://github.com/rokucommunity/brighterscript/pull/757))
+
+
+
+## [0.61.0](https://github.com/rokucommunity/brighterscript/compare/v0.60.6...0.61.0) - 2022-12-05
+### Added
+ - new `removeParameterTypes` option that removes type information from parameters when transpiling ([#744](https://github.com/rokucommunity/brighterscript/pull/744))
+### Fixed
+ - throttle transpiling to prevent crashes ([#755](https://github.com/rokucommunity/brighterscript/pull/755))
+ - exception while validating continue statement ([#752](https://github.com/rokucommunity/brighterscript/pull/752))
+ - add missing visitor params for DottedSetStatement ([#748](https://github.com/rokucommunity/brighterscript/pull/748))
+ - flag incorrectly nested statements ([#747](https://github.com/rokucommunity/brighterscript/pull/747))
+
+
+
 ## [0.60.6](https://github.com/rokucommunity/brighterscript/compare/v0.60.5...0.60.6) - 2022-11-08
 ### Fixed
  - double `super` call transpile in subclasses ([#740](https://github.com/rokucommunity/brighterscript/pull/740))

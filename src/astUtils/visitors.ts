@@ -117,7 +117,7 @@ export function createVisitor(
         ForStatement?: (statement: ForStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         ForEachStatement?: (statement: ForEachStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         WhileStatement?: (statement: WhileStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
-        DottedSetStatement?: (statement: DottedSetStatement, parent?: Statement) => Statement | void;
+        DottedSetStatement?: (statement: DottedSetStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         IndexedSetStatement?: (statement: IndexedSetStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         LibraryStatement?: (statement: LibraryStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         NamespaceStatement?: (statement: NamespaceStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;

@@ -4,12 +4,13 @@ import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
-import type { Expression } from '../../parser/AstNode';
+import type { Expression, Statement } from '../../parser/AstNode';
 import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, NamespaceStatement, WhileStatement } from '../../parser/Statement';
+import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
+import type { Range } from 'vscode-languageserver';
 
 export class BrsFileValidator {
     constructor(
@@ -37,12 +38,16 @@ export class BrsFileValidator {
                 node.func.body.symbolTable.addSymbol('super', undefined, DynamicType.instance);
             },
             EnumStatement: (node) => {
+                this.validateDeclarationLocations(node, 'enum', () => util.createBoundingRange(node.tokens.enum, node.tokens.name));
+
                 this.validateEnumDeclaration(node);
 
                 //register this enum declaration
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);
             },
             ClassStatement: (node) => {
+                this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.classKeyword, node.name));
+
                 //register this class
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
             },
@@ -55,7 +60,7 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable()?.addSymbol(node.item.text, node.item.range, DynamicType.instance);
             },
             NamespaceStatement: (node) => {
-                this.validateNamespaceStatement(node);
+                this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.keyword, node.nameExpression));
 
                 node.parent.getSymbolTable().addSymbol(
                     node.name.split('.')[0],
@@ -64,6 +69,8 @@ export class BrsFileValidator {
                 );
             },
             FunctionStatement: (node) => {
+                this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.functionType, node.name));
+
                 if (node.name?.text) {
                     node.parent.getSymbolTable().addSymbol(
                         node.name.text,
@@ -97,7 +104,12 @@ export class BrsFileValidator {
                 const symbolTable = node.getSymbolTable();
                 symbolTable?.addSymbol(paramName, node.name.range, node.type);
             },
+            InterfaceStatement: (node) => {
+                this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));
+            },
             ConstStatement: (node) => {
+                this.validateDeclarationLocations(node, 'const', () => util.createBoundingRange(node.tokens.const, node.tokens.name));
+
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);
             },
             CatchStatement: (node) => {
@@ -117,6 +129,24 @@ export class BrsFileValidator {
             visitor(node, parent);
         }, {
             walkMode: WalkMode.visitAllRecursive
+        });
+    }
+
+    /**
+     * Validate that a statement is defined in one of these specific locations
+     *  - the root of the AST
+     *  - inside a namespace
+     * This is applicable to things like FunctionStatement, ClassStatement, NamespaceStatement, EnumStatement, InterfaceStatement
+     */
+    private validateDeclarationLocations(statement: Statement, keyword: string, rangeFactory?: () => Range) {
+        //if nested inside a namespace, or defined at the root of the AST (i.e. in a body that has no parent)
+        if (isNamespaceStatement(statement.parent?.parent) || (isBody(statement.parent) && !statement.parent?.parent)) {
+            return;
+        }
+        //the statement was defined in the wrong place. Flag it.
+        this.event.file.addDiagnostic({
+            ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel(keyword),
+            range: rangeFactory?.() ?? statement.range
         });
     }
 
@@ -197,22 +227,6 @@ export class BrsFileValidator {
         }
     }
 
-    private validateNamespaceStatement(stmt: NamespaceStatement) {
-        let parentNode = stmt.parent;
-
-        while (parentNode) {
-            if (!isNamespaceStatement(parentNode) && !isBody(parentNode)) {
-                this.event.file.addDiagnostic({
-                    ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('namespace'),
-                    range: stmt.range
-                });
-                break;
-            }
-
-            parentNode = parentNode.parent;
-        }
-    }
-
     /**
      * Find statements defined at the top level (or inside a namespace body) that are not allowed to be there
      */
@@ -287,14 +301,14 @@ export class BrsFileValidator {
     }
 
     private validateContinueStatement(statement: ContinueStatement) {
-        const validateLoopTypeMatch = (loopType: TokenKind) => {
+        const validateLoopTypeMatch = (expectedLoopType: TokenKind) => {
             //coerce ForEach to For
-            loopType = loopType === TokenKind.ForEach ? TokenKind.For : loopType;
-
-            if (loopType?.toLowerCase() !== statement.tokens.loopType.text?.toLowerCase()) {
+            expectedLoopType = expectedLoopType === TokenKind.ForEach ? TokenKind.For : expectedLoopType;
+            const actualLoopType = statement.tokens.loopType;
+            if (actualLoopType && expectedLoopType?.toLowerCase() !== actualLoopType.text?.toLowerCase()) {
                 this.event.file.addDiagnostic({
                     range: statement.tokens.loopType.range,
-                    ...DiagnosticMessages.expectedToken(loopType)
+                    ...DiagnosticMessages.expectedToken(expectedLoopType)
                 });
             }
         };

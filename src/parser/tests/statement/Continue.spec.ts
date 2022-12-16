@@ -108,4 +108,19 @@ describe('parser continue statements', () => {
             end sub
         `);
     });
+
+    it('does not crash when missing loop type', () => {
+        program.plugins['suppressErrors'] = false;
+        program.setFile('source/main.brs', `
+            sub main()
+                while true
+                    continue
+                end while
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For).message
+        ]);
+    });
 });
