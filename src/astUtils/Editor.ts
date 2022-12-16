@@ -132,6 +132,12 @@ export class Editor {
         this.changes = [];
     }
 }
+/**
+ * @deprecated use `Editor` instead
+ */
+export class AstEditor extends Editor {
+
+}
 
 interface Change {
     apply();

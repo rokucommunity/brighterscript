@@ -522,11 +522,6 @@ export interface OnScopeValidateEvent {
     scope: Scope;
 }
 
-/**
- * @deprecated use `Editor` instead
- */
-export type AstEditor = Editor;
-
 export interface BeforeFileTranspileEvent<TFile extends File = File> {
     program: Program;
     file: TFile;
