@@ -1333,7 +1333,7 @@ export class Program {
             stagingDir: stagingDir
         });
         //empty the staging directory
-        fsExtra.emptyDirSync(stagingDir);
+        await fsExtra.emptyDir(stagingDir);
 
         const serializedFiles = [...files]
             .map(([, serializedFiles]) => serializedFiles)
@@ -1369,19 +1369,17 @@ export class Program {
         await this.buildPipeline.run(async () => {
             const stagingDir = this.getStagingDir(options?.stagingDir);
 
-            let files = options?.files ?? Object.values(this.files);
-
             const event = await this.plugins.emitAsync('beforeBuildProgram', {
                 program: this,
                 editor: this.editor,
-                files: files
+                files: options?.files ?? Object.values(this.files)
             });
 
             //prepare the program (and files) for building
-            files = await this.prepare(files);
+            event.files = await this.prepare(event.files);
 
             //stage the entire program
-            const serializedFilesByFile = await this.serialize(files);
+            const serializedFilesByFile = await this.serialize(event.files);
 
             await this.write(stagingDir, serializedFilesByFile);
 
@@ -1390,7 +1388,7 @@ export class Program {
             //undo all edits for the program
             this.editor.undoAll();
             //undo all edits for each file
-            for (const file of files) {
+            for (const file of event.files) {
                 file.editor.undoAll();
             }
         });

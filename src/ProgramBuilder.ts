@@ -387,12 +387,13 @@ export class ProgramBuilder {
         }
     }
 
-    private transpileThrottler = new Throttler(0);
+    private buildThrottler = new Throttler(0);
+
     /**
-     * Transpiles the entire program into the staging folder
+     * Build the entire project and place the contents into the staging directory
      */
-    public async transpile() {
-        await this.transpileThrottler.run(async () => {
+    public async build() {
+        await this.buildThrottler.run(async () => {
             //get every file referenced by the files array
             let fileMap = Object.values(this.program.files).map(x => {
                 return {
@@ -413,7 +414,7 @@ export class ProgramBuilder {
 
             this.plugins.emit('beforePublish', this, fileMap);
 
-            await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
+            await this.logger.time(LogLevel.log, ['Building'], async () => {
                 //transpile any brighterscript files
                 await this.program.build();
             });
@@ -422,6 +423,14 @@ export class ProgramBuilder {
 
             this.plugins.emit('afterPublish', this, fileMap);
         });
+    }
+
+    /**
+     * Transpiles the entire program into the staging folder
+     * @deprecated use `.build()` instead
+     */
+    public async transpile() {
+        return this.build();
     }
 
     private async deployPackageIfEnabled() {

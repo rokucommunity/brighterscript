@@ -1,7 +1,7 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
-import type { AfterSerializeFileEvent, BeforeBuildProgramEvent, BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideFileEvent, ProvideHoverEvent, WriteFileEvent } from '../interfaces';
+import type { AfterPrepareFileEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideFileEvent, ProvideHoverEvent, WriteFileEvent } from '../interfaces';
 import type { Program } from '../Program';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
@@ -10,30 +10,17 @@ import { FileSerializer } from './serialize/FileSerializer';
 import { FileWriter } from './FileWriter';
 import { HoverProcessor } from './hover/HoverProcessor';
 import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
-import { BrsFilePreTranspileProcessor } from './transpile/BrsFilePreTranspileProcessor';
+import { BrsFilePreTranspileProcessor as BrsFileTranspileProcessor } from './transpile/BrsFileTranspileProcessor';
 import { BrsFileValidator } from './validation/BrsFileValidator';
 import { ScopeValidator } from './validation/ScopeValidator';
 import { XmlFileValidator } from './validation/XmlFileValidator';
-import { BslibInjector } from './serialize/BslibInjector';
+import { BslibManager } from './serialize/BslibManager';
 
 export class BscPlugin implements CompilerPlugin {
     public name = 'BscPlugin';
 
     public afterProvideFile(event: ProvideFileEvent) {
         new FileProvider(event).process();
-    }
-
-    public afterSerializeFile(event: AfterSerializeFileEvent) {
-        new FileSerializer(event).process();
-    }
-
-    public beforeBuildProgram(event: BeforeBuildProgramEvent) {
-        this.bslibInjector.process(event);
-    }
-    private bslibInjector = new BslibInjector();
-
-    public async writeFile(event: WriteFileEvent) {
-        await new FileWriter(event).process();
     }
 
     public onGetCodeActions(event: OnGetCodeActionsEvent) {
@@ -73,9 +60,26 @@ export class BscPlugin implements CompilerPlugin {
         this.scopeValidator.reset();
     }
 
-    public beforeFileTranspile(event: BeforeFileTranspileEvent) {
+    public beforeBuildProgram(event: BeforeBuildProgramEvent) {
+        this.bslibManager.addBslibFileIfMissing(event);
+    }
+    private bslibManager = new BslibManager();
+
+    /**
+     * Do transpiling-related work after all plugins had a chance to operate on the files
+     */
+    public afterPrepareFile(event: AfterPrepareFileEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFilePreTranspileProcessor(event as any).process();
+            return new BrsFileTranspileProcessor(event as any).process();
         }
     }
+
+    public afterSerializeFile(event: AfterSerializeFileEvent) {
+        new FileSerializer(event).process();
+    }
+
+    public async writeFile(event: WriteFileEvent) {
+        await new FileWriter(event).process();
+    }
+
 }

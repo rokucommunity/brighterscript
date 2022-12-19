@@ -4,15 +4,14 @@ import { source as bslibSource } from '@rokucommunity/bslib';
 import { Cache } from '../../Cache';
 import { BrsFile } from '../../files/BrsFile';
 const bslibSrcPath = s`${require.resolve('@rokucommunity/bslib')}/dist/source/bslib.brs`;
-
-export class BslibInjector {
+export class BslibManager {
 
     private cache = new Cache();
 
-    public process(event: BeforeBuildProgramEvent) {
-        //has anyone added bslib yet? If not, add it now
+    public addBslibFileIfMissing(event: BeforeBuildProgramEvent) {
+        //is bslib present in the program? If not, add it now just for this build cycle
         const exists = !!event.files.find(x => {
-            return /(source[\\\/]bslib.brs)|(source[\\\/]roku_modules[\\\/]bslib[\\\/]bslib.brs)$/i.exec(x.pkgPath);
+            return BslibManager.isBslibPkgPath(x.pkgPath);
         });
         if (!exists) {
             const file = this.cache.getOrAdd('bslib', () => {
@@ -27,5 +26,12 @@ export class BslibInjector {
             });
             event.files.push(file);
         }
+    }
+
+    /**
+     * Is the pkgPath a support path to bslib?
+     */
+    public static isBslibPkgPath(pkgPath: string) {
+        return /(source[\\\/]bslib.brs)|(source[\\\/]roku_modules[\\\/]bslib[\\\/]bslib.brs)$/i.test(pkgPath);
     }
 }

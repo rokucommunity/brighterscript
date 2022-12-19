@@ -5,7 +5,7 @@ import type { BeforeFileTranspileEvent, CompilerPlugin } from '../../interfaces'
 export default function plugin() {
     return {
         name: 'removePrint',
-        beforeFileTranspile: (event: BeforeFileTranspileEvent) => {
+        prepareFile: (event: BeforeFileTranspileEvent) => {
             if (isBrsFile(event.file)) {
                 // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
                 for (const func of event.file.parser.references.functionExpressions) {
