@@ -62,7 +62,8 @@ export class CallExpression extends Expression {
          */
         readonly openingParen: Token,
         readonly closingParen: Token,
-        readonly args: Expression[]
+        readonly args: Expression[],
+        unused?: any
     ) {
         super();
         this.range = util.createBoundingRange(this.callee, this.openingParen, ...args, this.closingParen);
