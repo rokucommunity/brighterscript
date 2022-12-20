@@ -9,18 +9,32 @@ export type Arguments<T> = [T] extends [(...args: infer U) => any]
 
 export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> {
 
+    /**
+     * @deprecated use the `options` parameter pattern instead
+     */
+    constructor(
+        plugins: CompilerPlugin[],
+        logger: Logger
+    );
+    constructor(
+        plugins: CompilerPlugin[],
+        options: {
+            logger: Logger;
+            suppressErrors?: boolean;
+        }
+    );
     constructor(
         private plugins: CompilerPlugin[],
         options: {
             logger: Logger;
             suppressErrors?: boolean;
-        }
+        } | Logger
     ) {
         if (options?.constructor.name === 'Logger') {
             this.logger = options as unknown as Logger;
         } else {
-            this.logger = options?.logger;
-            this.suppressErrors = options?.suppressErrors === false ? false : true;
+            this.logger = (options as any)?.logger;
+            this.suppressErrors = (options as any)?.suppressErrors === false ? false : true;
         }
     }
 

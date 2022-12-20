@@ -37,7 +37,7 @@ const projects: Project[] = [
 
 let bscTarballPath: string;
 
-async function main() {
+function main() {
     console.log('Cleaning temp directory');
     fsExtra.emptyDirSync(tempDir);
 
@@ -55,7 +55,7 @@ async function main() {
     fsExtra.moveSync(initialBscTarballPath, bscTarballPath);
     for (const project of projects) {
         try {
-            await testProject(project);
+            testProject(project);
             project.success = true;
         } catch {
             project.success = false;
@@ -83,7 +83,7 @@ async function main() {
     // fsExtra.emptyDirSync(tempDir);
 }
 
-async function testProject(project: typeof projects[0]) {
+function testProject(project: typeof projects[0]) {
     const projectDir = path.join(tempDir, project.name);
     const options = {
         cwd: path.join(projectDir, project.cwd ?? '.')
@@ -132,4 +132,4 @@ interface Project {
     success?: boolean;
 }
 
-main().catch(e => console.error(e));
+main();
