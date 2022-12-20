@@ -3,14 +3,18 @@ import * as child_process from 'child_process';
 import * as fsExtra from 'fs-extra';
 import { version } from '../package.json';
 import M = require('minimatch');
+import * as os from 'os';
+import chalk from 'chalk';
+const tempDir = path.join(os.tmpdir(), 'brighterscript-tmp');
+const cwd = path.dirname(__dirname);
+
 const projects = [
-    // enable once rooibos tests work on Windows devices
-    // {
-    //     name: 'rooibos',
-    //     url: 'https://github.com/georgejecook/rooibos',
-    //     cwd: './bsc-plugin',
-    //     testCommand: 'npm i && npm run preversion'
-    // },
+    {
+        name: 'rooibos',
+        url: 'https://github.com/georgejecook/rooibos',
+        cwd: './bsc-plugin',
+        testCommand: 'npm run preversion'
+    },
     {
         name: 'roku-log-bsc-plugin',
         url: 'https://github.com/georgejecook/roku-log-bsc-plugin',
@@ -24,8 +28,7 @@ const projects = [
     }
 ];
 
-const cwd = path.dirname(__dirname);
-const tempDir = path.join(cwd, '.tmp');
+
 let bscTarballPath: string;
 
 async function main() {
@@ -64,7 +67,7 @@ async function testProject(project: typeof projects[0]) {
     execSync(`git clone ${project.url} ${projectDir}`);
 
     if (project.branch) {
-        logStep(project.name, `Cloning ${project.name} (${project.url})`);
+        logStep(project.name, `Checkint out branch "${project.branch}"`);
         execSync(`git checkout ${project.branch}`, { cwd: projectDir });
     }
 
@@ -79,6 +82,8 @@ async function testProject(project: typeof projects[0]) {
 
     logStep(project.name, 'Running test command again, this time against local brighterscript');
     execSync(project.testCommand, options);
+
+    logStep(chalk.green(project.name), chalk.green('Tests passed!'));
     await Promise.resolve();
 }
 
