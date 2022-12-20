@@ -25,3 +25,5 @@ export * from './astUtils/reflection';
 export * from './astUtils/creators';
 export * from './astUtils/xml';
 export * from './astUtils/Editor';
+export * from './files/File';
+export * from './parser/BrsTranspileState';
