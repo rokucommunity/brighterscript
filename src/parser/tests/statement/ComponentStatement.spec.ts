@@ -6,7 +6,7 @@ import type { BrsFile } from '../../../files/BrsFile';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { createVisitor, WalkMode } from '../../../astUtils/visitors';
 import * as sinon from 'sinon';
-import { NamespacedVariableNameExpression, VariableExpression } from '../../Expression';
+import { NamespacedVariableNameExpression } from '../../Expression';
 import { ParseMode } from '../../Parser';
 
 describe('ComponentStatement', () => {
