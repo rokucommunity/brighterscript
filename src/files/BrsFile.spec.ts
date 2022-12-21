@@ -3420,7 +3420,7 @@ describe('BrsFile', () => {
             expect(file.parser).to.equal(newParser);
         });
 
-        it('call parse when previously skipped', () => {
+        it.skip('call parse when previously skipped', () => {
             program.setFile<BrsFile>('source/main.d.bs', `'typedef
                 sub main()
                 end sub

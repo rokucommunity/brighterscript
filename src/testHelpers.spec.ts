@@ -256,10 +256,15 @@ function getTestFileAction(
     action: (file: File) => Promise<{ code: string; map?: string }>,
     scopeGetter: () => [program: Program, rootDir: string]
 ) {
-    return async function testFileAction(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
+    return async function testFileAction(source: string | File, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();
-        expected = expected ? expected : source;
-        let file = program.setFile<BrsFile>({ src: s`${rootDir}/${destPath}`, dest: destPath }, source);
+        let file: File;
+        if (typeof source === 'string') {
+            expected = expected ? expected : source;
+            file = program.setFile<BrsFile>({ src: s`${rootDir}/${destPath}`, dest: destPath }, source);
+        } else {
+            file = source;
+        }
         program.validate();
         if (failOnDiagnostic !== false) {
             expectZeroDiagnostics(program);

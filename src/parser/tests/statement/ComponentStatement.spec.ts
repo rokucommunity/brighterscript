@@ -1,6 +1,6 @@
 import util, { standardizePath as s } from '../../../util';
 import { Program } from '../../../Program';
-import { expectDiagnostics, expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, stagingDir, tempDir } from '../../../testHelpers.spec';
 import { expect } from 'chai';
 import type { BrsFile } from '../../../files/BrsFile';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
@@ -8,15 +8,21 @@ import { createVisitor, WalkMode } from '../../../astUtils/visitors';
 import * as sinon from 'sinon';
 import { NamespacedVariableNameExpression } from '../../Expression';
 import { ParseMode } from '../../Parser';
+import * as fsExtra from 'fs-extra';
 
 describe('ComponentStatement', () => {
     const rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
+    let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
-        program = new Program({
-            rootDir: rootDir
-        });
+        fsExtra.emptyDirSync(tempDir);
+        program = new Program({ rootDir: rootDir, stagingDir: stagingDir });
+    });
+
+    afterEach(() => {
+        sinon.restore();
+        program.dispose();
     });
 
     it('supports identifier-style component names', () => {
@@ -158,4 +164,41 @@ describe('ComponentStatement', () => {
             file.parser.references.componentStatements[0].body[1]
         );
     });
+
+    it('moves component statements from pkg:/source into pkg:/components', () => {
+        program.setFile('source/MainScene.bs', `
+            component MainScene
+            end component
+        `);
+
+        expect(
+            program.getFile('components/MainScene.xml')
+        ).to.exist;
+    });
+
+    it('moves component statements from nested source path into pkg:/components', () => {
+        program.setFile('source/nested/path/MainScene.bs', `
+            component MainScene
+            end component
+        `);
+
+        expect(
+            program.getFile('components/nested/path/MainScene.xml')
+        ).to.exist;
+    });
+
+    it('produces xml output when built', async () => {
+        program.setFile('components/MainScene.bs', `
+            component MainScene
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/MainScene.xml'), `
+            <component name="MainScene" extends="Group">
+                <script uri="pkg:/components/MainScene.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+            </component>
+        `);
+    });
+
 });

@@ -1123,7 +1123,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         return this._range;
     }
 
-    public getName(parseMode: ParseMode) {
+    public getName(parseMode = ParseMode.BrighterScript) {
         const parentNamespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
         let name = this.nameExpression.getName(parseMode);
 
@@ -2630,6 +2630,28 @@ export class ComponentStatement extends Statement implements TypedefProvider {
         return this.tokens.name.text;
     }
 
+    /**
+     * Get the fully-qualified name for this component, including any parent namespace parts
+     */
+    public getName(parseMode = ParseMode.BrighterScript) {
+        return [
+            this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(parseMode),
+            this.name.replace(/(^")|("$)/g, '')
+        ].filter(x => !!x).join(
+            parseMode === ParseMode.BrighterScript ? '.' : '_'
+        );
+    }
+
+    public getParentName(parseMode = ParseMode.BrighterScript) {
+        if (!this.parentName) {
+            return;
+        }
+        if (isLiteralExpression(this.parentName)) {
+            return this.parentName.token.text?.replace(/(^")|("$)/g, '');
+        }
+        return this.parentName?.getName(parseMode);
+    }
+
     public getMembers() {
         const result: Array<MethodStatement | FieldStatement> = [];
 
@@ -2643,7 +2665,7 @@ export class ComponentStatement extends Statement implements TypedefProvider {
 
     public range: Range;
     public transpile(state: BrsTranspileState): TranspileResult {
-        throw new Error('Method not implemented.');
+        return [];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
