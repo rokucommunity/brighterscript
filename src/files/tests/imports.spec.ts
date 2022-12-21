@@ -262,4 +262,18 @@ describe('import statements', () => {
         expect(brsFile.ownScriptImports.length).to.equal(5);
         expect(brsFile.ownScriptImports.filter(p => !!p.destPath).length).to.equal(3);
     });
+
+    it.only('keeps the original import path when transpiled', async () => {
+        program.setFile('components/MainScene.xml', `
+            <component name="MainScene" extends="Scene">
+                <script uri="MainScene.bs" />
+            </component>
+        `);
+        program.setFile('components/Lib.bs', '');
+        await testTranspile(`
+            import "Lib.bs"
+        `, `
+            'import "Lib.bs"
+        `, undefined, 'components/MainScene.bs');
+    });
 });
