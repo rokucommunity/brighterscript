@@ -420,7 +420,7 @@ export class SGComponent extends SGTag {
 export interface SGReferences {
     name?: SGToken;
     extends?: SGToken;
-    scriptTagImports: Pick<FileReference, 'pkgPath' | 'text' | 'filePathRange'>[];
+    scriptTagImports: Pick<FileReference, 'destPath' | 'text' | 'filePathRange'>[];
 }
 
 export class SGAst {

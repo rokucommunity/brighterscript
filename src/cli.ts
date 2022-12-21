@@ -4,12 +4,14 @@ import * as path from 'path';
 import { ProgramBuilder } from './ProgramBuilder';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import util from './util';
+import { LanguageServer } from './LanguageServer';
 
 let options = yargs
     .usage('$0', 'BrighterScript, a superset of Roku\'s BrightScript language')
     .help('help', 'View help information about this tool.')
     .option('create-package', { type: 'boolean', defaultDescription: 'true', description: 'Creates a zip package. This setting is ignored when deploy is enabled.' })
     .option('source-map', { type: 'boolean', defaultDescription: 'false', description: 'Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.' })
+    .option('allow-brighterscript-in-brightscript', { alias: 'allow-brighter-script-in-bright-script', type: 'boolean', defaultDescription: 'false', description: 'Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled..' })
     .option('cwd', { type: 'string', description: 'Override the current working directory.' })
     .option('copy-to-staging', { type: 'boolean', defaultDescription: 'true', description: 'Copy project files into the staging folder, ready to be packaged.' })
     .option('diagnostic-level', { type: 'string', defaultDescription: '"warn"', description: 'Specify what diagnostic types should be printed to the console. Value can be "error", "warn", "hint", "info".' })
@@ -30,6 +32,7 @@ let options = yargs
     .option('source-root', { type: 'string', description: 'Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files.' })
     .option('watch', { type: 'boolean', defaultDescription: 'false', description: 'Watch input files.' })
     .option('require', { type: 'array', description: 'A list of modules to require() on startup. Useful for doing things like ts-node registration.' })
+    .option('lsp', { type: 'boolean', defaultDescription: 'false', description: 'Run brighterscript as a language server.' })
     .check(argv => {
         const diagnosticLevel = argv.diagnosticLevel as string;
         //if we have the diagnostic level and it's not a known value, then fail
@@ -45,15 +48,19 @@ let options = yargs
     })
     .argv;
 
-let builder = new ProgramBuilder();
-builder.run(<any>options).then(() => {
-    //if this is a single run (i.e. not watch mode) and there are error diagnostics, return an error code
-    const hasError = !!builder.getDiagnostics().find(x => x.severity === DiagnosticSeverity.Error);
-    if (builder.options.watch === false && hasError) {
+if (options.lsp) {
+    const server = new LanguageServer();
+    server.run();
+} else {
+    let builder = new ProgramBuilder();
+    builder.run(<any>options).then(() => {
+        //if this is a single run (i.e. not watch mode) and there are error diagnostics, return an error code
+        const hasError = !!builder.getDiagnostics().find(x => x.severity === DiagnosticSeverity.Error);
+        if (builder.options.watch === false && hasError) {
+            process.exit(1);
+        }
+    }).catch((error) => {
+        console.error(error);
         process.exit(1);
-    }
-}).catch((error) => {
-    console.error(error);
-    process.exit(1);
-});
-
+    });
+}

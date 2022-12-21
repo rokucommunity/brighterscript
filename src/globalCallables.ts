@@ -994,7 +994,7 @@ This function creates an roBitmap out of the background image file and returns a
             isOptional: false
         }]
     }
-] as Callable[];
+] as unknown as Callable[];
 
 export let globalCallables = [...mathFunctions, ...runtimeFunctions, ...globalUtilityFunctions, ...globalStringFunctions, ...programStatementFunctions];
 for (let callable of globalCallables) {
@@ -1015,6 +1015,9 @@ for (let callable of globalCallables) {
 
 }
 globalFile.callables = globalCallables as Callable[];
+for (const callable of globalCallables) {
+    globalFile.parser.symbolTable.addSymbol(callable.name, undefined, callable.type);
+}
 
 /**
  * A map of all built-in function names. We use this extensively in scope validation

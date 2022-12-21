@@ -4,8 +4,9 @@ import { codeActionUtil } from '../../CodeActionUtil';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
+import type { File } from '../../files/File';
 import type { XmlFile } from '../../files/XmlFile';
-import type { BscFile, OnGetCodeActionsEvent } from '../../interfaces';
+import type { OnGetCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
 
@@ -18,8 +19,8 @@ export class CodeActionsProcessor {
 
     public process() {
         for (const diagnostic of this.event.diagnostics) {
-            if (diagnostic.code === DiagnosticCodeMap.callToUnknownFunction) {
-                this.suggestFunctionImports(diagnostic as any);
+            if (diagnostic.code === DiagnosticCodeMap.cannotFindName) {
+                this.suggestCannotFindName(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
                 this.suggestClassImports(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
@@ -33,7 +34,7 @@ export class CodeActionsProcessor {
     /**
      * Generic import suggestion function. Shouldn't be called directly from the main loop, but instead called by more specific diagnostic handlers
      */
-    private suggestImports(diagnostic: Diagnostic, key: string, files: BscFile[]) {
+    private suggestImports(diagnostic: Diagnostic, key: string, files: File[]) {
         //skip if we already have this suggestion
         if (this.suggestedImports.has(key)) {
             return;
@@ -46,10 +47,10 @@ export class CodeActionsProcessor {
 
         //find all files that reference this function
         for (const file of files) {
-            const pkgPath = util.getRokuPkgPath(file.pkgPath);
+            const destPath = util.sanitizePkgPath(file.destPath);
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
-                    title: `import "${pkgPath}"`,
+                    title: `import "${destPath}"`,
                     diagnostics: [diagnostic],
                     isPreferred: false,
                     kind: CodeActionKind.QuickFix,
@@ -57,23 +58,29 @@ export class CodeActionsProcessor {
                         type: 'insert',
                         filePath: this.event.file.srcPath,
                         position: insertPosition,
-                        newText: `import "${pkgPath}"\n`
+                        newText: `import "${destPath}"\n`
                     }]
                 })
             );
         }
     }
 
-    private suggestFunctionImports(diagnostic: DiagnosticMessageType<'callToUnknownFunction'>) {
+    private suggestCannotFindName(diagnostic: DiagnosticMessageType<'cannotFindName'>) {
         //skip if not a BrighterScript file
         if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
             return;
         }
-        const lowerFunctionName = diagnostic.data.functionName.toLowerCase();
+        const lowerName = (diagnostic.data.fullName ?? diagnostic.data.name).toLowerCase();
+
         this.suggestImports(
             diagnostic,
-            lowerFunctionName,
-            this.event.file.program.findFilesForFunction(lowerFunctionName)
+            lowerName,
+            [
+                ...this.event.program.findFilesForFunction(lowerName),
+                ...this.event.program.findFilesForClass(lowerName),
+                ...this.event.program.findFilesForNamespace(lowerName),
+                ...this.event.program.findFilesForEnum(lowerName)
+            ]
         );
     }
 
@@ -86,7 +93,7 @@ export class CodeActionsProcessor {
         this.suggestImports(
             diagnostic,
             lowerClassName,
-            this.event.file.program.findFilesForClass(lowerClassName)
+            this.event.program.findFilesForClass(lowerClassName)
         );
     }
 

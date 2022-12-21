@@ -1,19 +1,21 @@
-import { expect, assert } from 'chai';
+import { expect, assert } from '../chai-config.spec';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
-import type { Expression } from './Expression';
+import type { AAMemberExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
+import type { AssignmentStatement, ClassStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isIndexedGetExpression } from '../astUtils/reflection';
-import { expectZeroDiagnostics } from '../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
 import { BrsFile } from '../files/BrsFile';
 import { Program } from '../Program';
+import { createVisitor, WalkMode } from '../astUtils/visitors';
+import type { Expression, Statement } from './AstNode';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -57,9 +59,11 @@ describe('parser', () => {
 
         it('works for references.expressions', () => {
             const parser = Parser.parse(`
+                b += "plus-equal"
                 a += 1 + 2
-                a++
-                a--
+                b += getValue1() + getValue2()
+                increment++
+                decrement--
                 some.node@.doCallfunc()
                 bravo(3 + 4).jump(callMe())
                 obj = {
@@ -80,11 +84,23 @@ describe('parser', () => {
                 end function
             `);
             const expected = [
+                '"plus-equal"',
+                'b',
+                'b += "plus-equal"',
+                '1',
+                '2',
+                'a',
                 'a += 1 + 2',
-                'a++',
-                'a--',
+                'getValue1()',
+                'getValue2()',
+                'b',
+                'b += getValue1() + getValue2()',
+                'increment++',
+                'decrement--',
                 //currently the "toString" does a transpile, so that's why this is different.
                 'some.node.callfunc("doCallfunc", invalid)',
+                '3',
+                '4',
                 '3 + 4',
                 'callMe()',
                 'bravo(3 + 4).jump(callMe())',
@@ -99,10 +115,10 @@ describe('parser', () => {
                 'call1().a.b.call2()',
                 '"bob"',
                 'name.space.getSomething()'
-            ].sort();
+            ];
 
             expect(
-                expressionsToStrings(parser.references.expressions).sort()
+                expressionsToStrings(parser.references.expressions)
             ).to.eql(expected);
 
             //tell the parser we modified the AST and need to regenerate references
@@ -110,7 +126,57 @@ describe('parser', () => {
 
             expect(
                 expressionsToStrings(parser.references.expressions).sort()
+            ).to.eql(expected.sort());
+        });
+
+        it('works for references.expressions', () => {
+            const parser = Parser.parse(`
+                value = true or type(true) = "something" or Enums.A.Value = "value" and Enum1.Value = Name.Space.Enum2.Value
+            `);
+            const expected = [
+                'true',
+                'type(true)',
+                '"something"',
+                'true',
+                'Enums.A.Value',
+                '"value"',
+                'Enum1.Value',
+                'Name.Space.Enum2.Value',
+                'true or type(true) = "something" or Enums.A.Value = "value" and Enum1.Value = Name.Space.Enum2.Value'
+            ];
+
+            expect(
+                expressionsToStrings(parser.references.expressions)
             ).to.eql(expected);
+
+            //tell the parser we modified the AST and need to regenerate references
+            parser.invalidateReferences();
+
+            expect(
+                expressionsToStrings(parser.references.expressions).sort()
+            ).to.eql(expected.sort());
+        });
+
+        it('works for logical expression', () => {
+            const parser = Parser.parse(`
+                value = Enums.A.Value = "value"
+            `);
+            const expected = [
+                'Enums.A.Value',
+                '"value"',
+                'Enums.A.Value = "value"'
+            ];
+
+            expect(
+                expressionsToStrings(parser.references.expressions)
+            ).to.eql(expected);
+
+            //tell the parser we modified the AST and need to regenerate references
+            parser.invalidateReferences();
+
+            expect(
+                expressionsToStrings(parser.references.expressions).sort()
+            ).to.eql(expected.sort());
         });
     });
 
@@ -299,16 +365,36 @@ describe('parser', () => {
                 end sub
             `, ParseMode.BrighterScript).diagnostics[0]?.message).not.to.exist;
         });
+
+        it('does not scrap the entire function when encountering unknown parameter type', () => {
+            const parser = parse(`
+                sub test(param1 as unknownType)
+                end sub
+            `);
+            expectDiagnostics(parser, [{
+                ...DiagnosticMessages.functionParameterTypeIsInvalid('param1', 'unknownType')
+            }]);
+            expect(
+                isFunctionStatement(parser.ast.statements[0])
+            ).to.be.true;
+        });
+
         describe('namespace', () => {
-            it('catches namespaces declared not at root level', () => {
-                expect(parse(`
-                    sub main()
-                        namespace Name.Space
+            it('allows namespaces declared inside other namespaces', () => {
+                const parser = parse(`
+                    namespace Level1
+                        namespace Level2.Level3
+                            sub main()
+                            end sub
                         end namespace
-                    end sub
-                `, ParseMode.BrighterScript).diagnostics[0]?.message).to.equal(
-                    DiagnosticMessages.keywordMustBeDeclaredAtRootLevel('namespace').message
-                );
+                    end namespace
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(parser);
+                // We expect these names to be "as given" in this context, because we aren't evaluating a full program.
+                expect(parser.references.namespaceStatements.map(statement => statement.getName(ParseMode.BrighterScript))).to.deep.equal([
+                    'Level1.Level2.Level3',
+                    'Level1'
+                ]);
             });
             it('parses empty namespace', () => {
                 let { statements, diagnostics } =
@@ -779,7 +865,47 @@ describe('parser', () => {
                 `);
                 expect(diagnostics[0]?.message).not.to.exist;
             });
+
+            it('allows `mod` as an AA literal property', () => {
+                const parser = parse(`
+                    sub main()
+                        person = {
+                            mod: true
+                        }
+                        person.mod = false
+                        print person.mod
+                    end sub
+                `);
+                expectZeroDiagnostics(parser);
+            });
+
+            it('converts aa literal property TokenKind to Identifier', () => {
+                const parser = parse(`
+                    sub main()
+                        person = {
+                            mod: true
+                            and: true
+                        }
+                    end sub
+                `);
+                expectZeroDiagnostics(parser);
+                const elements = [] as AAMemberExpression[];
+                parser.ast.walk(createVisitor({
+                    AAMemberExpression: (node) => {
+                        elements.push(node as any);
+                    }
+                }), {
+                    walkMode: WalkMode.visitAllRecursive
+                });
+
+                expect(
+                    elements.map(x => x.keyToken.kind)
+                ).to.eql(
+                    [TokenKind.Identifier, TokenKind.Identifier]
+                );
+            });
         });
+
         it('"end" is not allowed as a local identifier', () => {
             let { diagnostics } = parse(`
                 sub main()

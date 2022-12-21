@@ -1,5 +1,11 @@
 name: build
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+  pull_request:
 
 jobs:
   ci:
@@ -9,12 +15,12 @@ jobs:
       COVERALLS_REPO_TOKEN: "kVPcGJfehOArEQnHb8BT3KS72xbUQCoxI"
     strategy:
       matrix:
-        os: [ubuntu-18.04, macos-10.15, windows-2019]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@master
       - uses: actions/setup-node@master
         with:
-          node-version: "10.19.0"
+          node-version: "14.18.1"
       - run: npm ci
       - run: npm run build
       - run: npm run lint
@@ -25,19 +31,20 @@ jobs:
     #only run this task if a tag starting with 'v' was used to trigger this (i.e. a tagged release)
     if: startsWith(github.ref, 'refs/tags/v')
     needs: ci
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@master
       - uses: actions/setup-node@master
         with:
-          node-version: "10.19.0"
+          node-version: "14.18.1"
       - run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ./.npmrc
       - run: npm ci
       - run: npm run build
       #create npm package
       - run: npm pack
+      - run: npm run test-related-projects
 
       #create GitHub release
       - name: Create GitHub Release
@@ -59,5 +66,7 @@ jobs:
         with:
           asset_paths: '["./*.tgz"]'
 
+      #If there's a dash followed by an alpha character, this is a prerelease and should be tagged "next". Otherwise tag as "latest"
+      - run: if [[ "${{ github.ref }}" =~ -[a-zA-Z] ]]; then echo "DIST_TAG=next" >> $GITHUB_ENV; else echo "DIST_TAG=latest" >> $GITHUB_ENV; fi
       #upload to npm
-      - run: npm publish
+      - run: npm publish --tag ${{env.DIST_TAG}}

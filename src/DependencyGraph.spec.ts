@@ -1,6 +1,6 @@
 import { DependencyGraph } from './DependencyGraph';
 import * as sinon from 'sinon';
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 
 describe('DependencyGraph', () => {
     let graph: DependencyGraph;
@@ -160,6 +160,14 @@ describe('DependencyGraph', () => {
                 'b',
                 'd',
                 'e'
+            ]);
+        });
+
+        it('works with multiple keys', () => {
+            graph.addOrReplace('a', ['b', 'c']);
+            graph.addOrReplace('b', ['c', 'd']);
+            expect(graph.getAllDependencies(['a', 'b']).sort()).to.eql([
+                'b', 'c', 'd'
             ]);
         });
     });

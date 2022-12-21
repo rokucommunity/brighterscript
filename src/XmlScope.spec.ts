@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
@@ -30,7 +30,7 @@ describe('XmlScope', () => {
                 <component name="Parent" extends="Scene">
                 </component>
             `);
-            let scope = program.getScopeByName(parentXmlFile.pkgPath);
+            let scope = program.getScopeByName(parentXmlFile.destPath);
 
             //should default to global scope
             expect(scope.getParentScope()).to.equal(program.globalScope);
@@ -61,12 +61,12 @@ describe('XmlScope', () => {
 
     describe('getDefinition', () => {
         it('finds parent file', () => {
-            let parentXmlFile = program.setFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
+            let parentXmlFile = program.setFile('components/parent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentComponent">
                 </component>
             `);
-            let childXmlFile = program.setFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
+            let childXmlFile = program.setFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildComponent" extends="ParentComponent">
                 </component>

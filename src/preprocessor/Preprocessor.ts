@@ -21,8 +21,8 @@ export class Preprocessor implements CC.Visitor {
 
     /**
      * Filters the tokens contained within a set of chunks based on a set of constants.
-     * @param chunks the chunks from which to retrieve tokens
-     * @param bsConst the set of constants defined in a BrightScript `manifest` file's `bs_const` property
+     * @param tokens the tokens
+     * @param manifest a manifest used to extract bs_const properties from
      * @returns an object containing an array of `errors` and an array of `processedTokens` filtered by conditional
      *          compilation directives included within
      */
@@ -85,7 +85,8 @@ export class Preprocessor implements CC.Visitor {
      * @returns an empty array, since `#const` directives are always removed from the evaluated script.
      */
     public visitDeclaration(chunk: CC.DeclarationChunk) {
-        if (this.constants.has(chunk.name.text)) {
+        const nameLower = chunk.name?.text?.toLocaleLowerCase();
+        if (this.constants.has(nameLower)) {
             this.addError({
                 ...DiagnosticMessages.duplicateConstDeclaration(chunk.name.text),
                 range: chunk.name.range
@@ -101,8 +102,8 @@ export class Preprocessor implements CC.Visitor {
                 value = false;
                 break;
             case TokenKind.Identifier:
-                if (this.constants.has(chunk.value.text)) {
-                    value = this.constants.get(chunk.value.text);
+                if (this.constants.has(nameLower)) {
+                    value = this.constants.get(nameLower);
                     break;
                 }
 
@@ -118,7 +119,7 @@ export class Preprocessor implements CC.Visitor {
                 });
         }
 
-        this.constants.set(chunk.name.text, value);
+        this.constants.set(nameLower, value);
 
         return [];
     }
@@ -179,8 +180,9 @@ export class Preprocessor implements CC.Visitor {
             case TokenKind.False:
                 return false;
             case TokenKind.Identifier:
-                if (this.constants.has(token.text)) {
-                    return !!this.constants.get(token.text);
+                const nameLower = token.text?.toLowerCase();
+                if (this.constants.has(nameLower)) {
+                    return !!this.constants.get(nameLower);
                 }
                 this.addError({
                     ...DiagnosticMessages.referencedConstDoesNotExist(),

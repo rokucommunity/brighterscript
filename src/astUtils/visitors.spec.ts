@@ -1,18 +1,21 @@
 /* eslint-disable no-multi-spaces */
 import type { CancellationToken } from 'vscode-languageserver';
 import { CancellationTokenSource, Range } from 'vscode-languageserver';
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import * as sinon from 'sinon';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
-import type { Statement } from '../parser/Statement';
-import { PrintStatement, Block, ReturnStatement } from '../parser/Statement';
-import type { Expression } from '../parser/Expression';
+import type { FunctionStatement } from '../parser/Statement';
+import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../parser/Statement';
 import { TokenKind } from '../lexer/TokenKind';
 import { createVisitor, WalkMode, walkStatements } from './visitors';
 import { isPrintStatement } from './reflection';
-import { createToken } from './creators';
+import { createCall, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
+import { Editor } from './Editor';
+import { Parser } from '../parser/Parser';
+import type { Statement, Expression, AstNode } from '../parser/AstNode';
+import { expectZeroDiagnostics } from '../testHelpers.spec';
 
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
@@ -240,6 +243,33 @@ describe('astUtils visitors', () => {
             walkStatements(block, visitor);
             expect(block.statements[0]).to.equal(printStatement2);
         });
+
+        it('uses the Editor for replacement when provided', () => {
+            const editor = new Editor();
+
+            const printStatement1 = new PrintStatement({
+                print: createToken(TokenKind.Print)
+            }, []);
+
+            const printStatement2 = new PrintStatement({
+                print: createToken(TokenKind.Print)
+            }, []);
+
+            const block = new Block([
+                printStatement1
+            ], Range.create(0, 0, 0, 0));
+
+
+            block.walk(createVisitor({
+                PrintStatement: () => printStatement2
+            }), {
+                walkMode: WalkMode.visitAll,
+                editor: editor
+            });
+            expect(block.statements[0]).to.equal(printStatement2);
+            editor.undoAll();
+            expect(block.statements[0]).to.equal(printStatement1);
+        });
     });
 
     describe('Expressions', () => {
@@ -249,7 +279,7 @@ describe('astUtils visitors', () => {
             const statementVisitor = createStackedVisitor((statement: Statement, stack: Statement[]) => {
                 curr = { statement: statement, depth: stack.length };
             });
-            function expressionVisitor(expression: Expression, _: Statement | Expression) {
+            function expressionVisitor(expression: Expression, _: AstNode) {
                 const { statement, depth } = curr;
                 actual.push(`${statement.constructor.name}:${depth}:${expression.constructor.name}`);
             }
@@ -324,6 +354,103 @@ describe('astUtils visitors', () => {
             index = 1;
             expect(items.map(x => `${x.constructor.name}:${x._testId}`)).to.eql(expectedConstructors.map(x => `${x}:${index++}`));
         }
+
+        it('links every ast node to its parent when walked', () => {
+            const { ast } = program.setFile<BrsFile>('source/main.bs', `
+                library "v30/bslCore.brs"
+                import "source/main.bs"
+                namespace alpha
+                    namespace beta
+                        sub charlie()
+                            delta = 1
+                            delta++
+                            delta = sub()
+                                'do some printing
+                                print "hello"
+                            end sub
+                            delta()
+                            for i = 0 to 10 step 1
+                                exit for
+                            end for
+                            while false
+                                exit while
+                            end while
+                            if true or false then
+                                print 1.2
+                            else
+                                print 123123123123
+                            end if
+                            dim arr[1, 2]
+                            goto theLabel
+                            theLabel:
+                            return false
+                            end
+                            stop
+                            for each item in [1, 2, 3]
+                                continue for
+                            end for
+                            obj = { name: "bob"}
+                            obj.name = obj.name
+                            obj["name"] = obj["name"]
+                            obj.name = obj@firstName
+                            print (true or false)
+                            print \`true\${false}\\n\`
+                            print not true
+                            print FUNCTION_NAME
+                            print new Person()
+                            print tag\`stuff\${1}\`
+                            print true ? true : false
+                            print true ?? false
+                            print /search stuff/g
+                            try
+                                obj.bob = "carl"
+                                throw "e"
+                            catch e
+                                obj["name"] = "dale"
+                            print e
+                            end try
+                            obj@.doCallfunc(1, 2)
+                        end sub
+                    end namespace
+                end namespace
+                @SomeAnnotation(1, "two")
+                interface IPerson
+                    name as string
+                    function doSomething() as string
+                end interface
+                class Person
+                    name as string = "bob"
+                    function doSomething(value = true) as string
+                    end function
+                end class
+                enum Direction
+                    up = "up"
+                end enum
+                enum Logical
+                    yes = 1
+                    no = 0
+                end enum
+                const CONST_VALUE = 1.2
+            `);
+            expectZeroDiagnostics(program);
+            const nodes: AstNode[] = [];
+            //get every expression and statement in the file
+            ast.walk((node) => {
+                nodes.push(node);
+            }, { walkMode: WalkMode.visitAllRecursive });
+
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+
+                //find the top-most ast node
+                let top = node;
+                while (top.parent) {
+                    top = top.parent;
+                }
+                //should be the same instance. If it doesn't then something is wrong with the .parent linking
+                expect(top === ast || node === ast, `Node ${node.constructor.name} (index ${i}) has broken parent link`).to.be.true;
+            }
+        });
 
         it('Walks through all expressions until cancelled', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
@@ -895,6 +1022,86 @@ describe('astUtils visitors', () => {
                 'LiteralExpression',
                 'LiteralExpression'
             ], WalkMode.visitExpressionsRecursive);
+        });
+
+        it('provides owner and key', () => {
+            const items = [];
+            const { ast } = Parser.parse(`
+                sub main()
+                    log = sub(message)
+                        print "hello " + message
+                    end sub
+                    log("hello" + " world")
+                end sub
+            `);
+            ast.walk((astNode, parent, owner, key) => {
+                items.push(astNode);
+                expect(owner[key]).to.equal(astNode);
+            }, {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            expect(items).to.be.length(17);
+        });
+
+        it('can be used to delete statements', () => {
+            const { ast } = Parser.parse(`
+                sub main()
+                    print 1
+                    print 2
+                    print 3
+                end sub
+            `);
+            let callCount = 0;
+            ast.walk((astNode, parent, owner: Statement[], key) => {
+                if (isPrintStatement(astNode)) {
+                    callCount++;
+                    //delete the print statement (we know owner is an array based on this specific test)
+                    owner.splice(key, 1);
+                }
+            }, {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            //the visitor should have been called for every statement
+            expect(callCount).to.eql(3);
+            expect(
+                (ast.statements[0] as FunctionStatement).func.body.statements
+            ).to.be.lengthOf(0);
+        });
+
+        it('can be used to insert statements', () => {
+            const { ast } = Parser.parse(`
+                sub main()
+                    print 1
+                    print 2
+                    print 3
+                end sub
+            `);
+            let printStatementCount = 0;
+            let callExpressionCount = 0;
+            const calls = [];
+            ast.walk(createVisitor({
+                PrintStatement: (astNode, parent, owner: Statement[], key) => {
+                    printStatementCount++;
+                    //add another expression to the list every time. This should result in 1 the first time, 2 the second, 3 the third.
+                    calls.push(new ExpressionStatement(
+                        createCall(
+                            createVariableExpression('doSomethingBeforePrint')
+                        )
+                    ));
+                    owner.splice(key, 0, ...calls);
+                },
+                CallExpression: () => {
+                    callExpressionCount++;
+                }
+            }), {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            //the visitor should have been called for every statement
+            expect(printStatementCount).to.eql(3);
+            expect(callExpressionCount).to.eql(0);
+            expect(
+                (ast.statements[0] as FunctionStatement).func.body.statements
+            ).to.be.lengthOf(9);
         });
     });
 });

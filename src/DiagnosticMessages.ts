@@ -13,11 +13,17 @@ export let DiagnosticMessages = {
         code: 1000,
         severity: DiagnosticSeverity.Error
     }),
-    callToUnknownFunction: (name: string, scopeName: string) => ({
-        message: `Cannot find function with name '${name}' when this file is included in scope '${scopeName}'`,
+    /**
+     *
+     * @param name for local vars, it's the var name. for namespaced parts, it's the specific part that's unknown (`alpha.beta.charlie` would result in "cannot find name 'charlie')
+     * @param fullName if a namespaced name, this is the full name `alpha.beta.charlie`, otherwise it's the same as `name`
+     */
+    cannotFindName: (name: string, fullName?: string) => ({
+        message: `Cannot find name '${name}'`,
         code: 1001,
         data: {
-            functionName: name
+            name: name,
+            fullName: fullName ?? name
         },
         severity: DiagnosticSeverity.Error
     }),
@@ -226,7 +232,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     mismatchedEndCallableKeyword: (expectedCallableType: string, actualCallableType: string) => ({
-        message: `Expected 'end ${expectedCallableType}' to terminate ${expectedCallableType} block but found 'end ${actualCallableType}' instead.`,
+        message: `Expected 'end ${expectedCallableType?.replace(/^end\s*/, '')}' to terminate ${expectedCallableType} block but found 'end ${actualCallableType?.replace(/^end\s*/, '')}' instead.`,
         code: 1042,
         severity: DiagnosticSeverity.Error
     }),
@@ -566,8 +572,8 @@ export let DiagnosticMessages = {
         code: 1108,
         severity: DiagnosticSeverity.Error
     }),
-    expectedToken: (tokenKind: string) => ({
-        message: `Expected '${tokenKind}'`,
+    expectedToken: (...tokenKinds: string[]) => ({
+        message: `Expected token '${tokenKinds.join(`' or '`)}'`,
         code: 1109,
         severity: DiagnosticSeverity.Error
     }),
@@ -679,9 +685,39 @@ export let DiagnosticMessages = {
         code: 1131,
         severity: DiagnosticSeverity.Error
     }),
+    circularReferenceDetected: (items: string[], scopeName: string) => ({
+        message: `Circular reference detected between ${Array.isArray(items) ? items.join(' -> ') : ''} in scope '${scopeName}'`,
+        code: 1132,
+        severity: DiagnosticSeverity.Error
+    }),
+    unexpectedStatementOutsideFunction: () => ({
+        message: `Unexpected statement found outside of function body`,
+        code: 1133,
+        severity: DiagnosticSeverity.Error
+    }),
+    detectedTooDeepFileSource: (numberOfParentDirectories: number) => ({
+        message: `Expected directory depth no larger than 7, but found ${numberOfParentDirectories}`,
+        code: 1134,
+        severity: DiagnosticSeverity.Error
+    }),
+    illegalContinueStatement: () => ({
+        message: `Continue statement must be contained within a loop statement`,
+        code: 1135,
+        severity: DiagnosticSeverity.Error
+    }),
+    keywordMustBeDeclaredAtNamespaceLevel: (keyword: string) => ({
+        message: `${keyword} must be declared at the root level or within a namespace`,
+        code: 1136,
+        severity: DiagnosticSeverity.Error
+    }),
+    namespaceCannotBeReferencedDirectly: () => ({
+        message: `Namespace cannot be referenced directly`,
+        code: 1137,
+        severity: DiagnosticSeverity.Error
+    }),
     accessModifierIsRequired: () => ({
         message: `Access modifier is required`,
-        code: 1132,
+        code: 1138,
         severity: DiagnosticSeverity.Error
     })
 };

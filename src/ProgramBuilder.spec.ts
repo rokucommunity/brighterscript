@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 const sinon = createSandbox();
@@ -7,27 +7,24 @@ import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { Logger, LogLevel } from './Logger';
 import * as diagnosticUtils from './diagnosticUtils';
-import type { BscFile, BsDiagnostic } from '.';
-import { Range } from '.';
-import { DiagnosticSeverity } from 'vscode-languageserver';
+import { DiagnosticSeverity, Range } from 'vscode-languageserver';
 import { BrsFile } from './files/BrsFile';
 import { expectZeroDiagnostics } from './testHelpers.spec';
 import type { BsConfig } from './BsConfig';
+import type { File } from './files/File';
+import type { BsDiagnostic } from './interfaces';
+import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
 
 describe('ProgramBuilder', () => {
 
-    let tmpPath = s`${process.cwd()}/.tmp`;
-    let rootDir = s`${tmpPath}/rootDir`;
-    let stagingFolderPath = s`${tmpPath}/staging`;
-
     beforeEach(() => {
         fsExtra.ensureDirSync(rootDir);
-        fsExtra.emptyDirSync(tmpPath);
+        fsExtra.emptyDirSync(tempDir);
     });
     afterEach(() => {
         sinon.restore();
-        fsExtra.ensureDirSync(tmpPath);
-        fsExtra.emptyDirSync(tmpPath);
+        fsExtra.ensureDirSync(tempDir);
+        fsExtra.emptyDirSync(tempDir);
     });
 
     let builder: ProgramBuilder;
@@ -44,7 +41,26 @@ describe('ProgramBuilder', () => {
         builder.dispose();
     });
 
-    describe('loadAllFilesAST', () => {
+    it('does not corrupt binary files', async () => {
+        //transparent PNG
+        const data = Buffer.from(
+            new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 9, 112, 72, 89, 115, 0, 0, 11, 19, 0, 0, 11, 19, 1, 0, 154, 156, 24, 0, 0, 0, 13, 73, 68, 65, 84, 8, 153, 99, 248, 255, 255, 63, 3, 0, 8, 252, 2, 254, 133, 205, 171, 52, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130])
+        );
+        fsExtra.outputFileSync(`${rootDir}/assets/image.png`, data);
+        fsExtra.outputFileSync(`${rootDir}/manifest`, '');
+        await builder.run({
+            ...builder.options,
+            stagingDir: stagingDir,
+            retainStagingDir: true,
+            files: ['**/*']
+        });
+        const newData = fsExtra.readFileSync(s`${stagingDir}/assets/image.png`);
+        expect(
+            data.compare(newData)
+        ).to.eql(0);
+    });
+
+    describe('loadFiles', () => {
         it('loads .bs, .brs, .xml files', async () => {
             sinon.stub(util, 'getFilePaths').returns(Promise.resolve([{
                 src: 'file1.brs',
@@ -59,7 +75,7 @@ describe('ProgramBuilder', () => {
 
             let stub = sinon.stub(builder.program, 'setFile');
             sinon.stub(builder, 'getFileContents').returns(Promise.resolve(''));
-            await builder['loadAllFilesAST']();
+            await builder['loadFiles']();
             expect(stub.getCalls()).to.be.lengthOf(3);
         });
 
@@ -73,7 +89,7 @@ describe('ProgramBuilder', () => {
             fsExtra.outputFileSync(s`${rootDir}/source/lib.d.bs`, '');
             fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
             const stub = sinon.stub(builder.program, 'setFile');
-            await builder['loadAllFilesAST']();
+            await builder['loadFiles']();
             const srcPaths = stub.getCalls().map(x => x.args[0].src);
             //the d files should be first
             expect(srcPaths.indexOf(s`${rootDir}/source/main.d.bs`)).within(0, 1);
@@ -89,14 +105,43 @@ describe('ProgramBuilder', () => {
                 requestedFiles.push(s(filePath));
             });
             fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
-            await builder['loadAllFilesAST']();
-            //the d file should not be requested because `loadAllFilesAST` knows it doesn't exist
+            await builder['loadFiles']();
+            //the d file should not be requested because `loadFiles` knows it doesn't exist
             expect(requestedFiles).not.to.include(s`${rootDir}/source/main.d.bs`);
             expect(requestedFiles).to.include(s`${rootDir}/source/main.brs`);
         });
     });
 
     describe('run', () => {
+        afterEach(() => {
+            try {
+                fsExtra.removeSync(`${rootDir}/testProject`);
+            } catch (e) {
+                console.error(e);
+            }
+        });
+
+        it('includes non-code files', async () => {
+            fsExtra.outputFileSync(`${rootDir}/source/main.bs`, '');
+            fsExtra.outputFileSync(`${rootDir}/manifest`, '');
+            fsExtra.outputFileSync(`${rootDir}/assets/images/logo.png`, '');
+            fsExtra.outputFileSync(`${rootDir}/locale/en_US/translations.xml`, '');
+
+            await builder.run({
+                ...builder.options,
+                stagingDir: stagingDir,
+                retainStagingDir: true,
+                files: [
+                    '**/*'
+                ]
+            });
+
+            expect(fsExtra.pathExistsSync(`${stagingDir}/source/main.brs`)).to.be.true;
+            expect(fsExtra.pathExistsSync(`${stagingDir}/manifest`)).to.be.true;
+            expect(fsExtra.pathExistsSync(`${stagingDir}/assets/images/logo.png`)).to.be.true;
+            expect(fsExtra.pathExistsSync(`${stagingDir}/locale/en_US/translations.xml`)).to.be.true;
+        });
+
         it('uses default options when the config file fails to parse', async () => {
             //supress the console log statements for the bsconfig parse errors
             sinon.stub(console, 'log').returns(undefined);
@@ -116,14 +161,6 @@ describe('ProgramBuilder', () => {
                 await builder.run({});
                 expect(true).to.be.false('Should have thrown exception');
             } catch (e) { }
-        });
-
-        afterEach(() => {
-            try {
-                fsExtra.removeSync(`${rootDir}/testProject`);
-            } catch (e) {
-                console.error(e);
-            }
         });
 
         it('only adds the last file with the same pkg path', async () => {
@@ -155,11 +192,11 @@ describe('ProgramBuilder', () => {
     it('uses a unique logger for each builder', async () => {
         let builder1 = new ProgramBuilder();
         sinon.stub(builder1 as any, 'runOnce').returns(Promise.resolve());
-        sinon.stub(builder1 as any, 'loadAllFilesAST').returns(Promise.resolve());
+        sinon.stub(builder1 as any, 'loadFiles').returns(Promise.resolve());
 
         let builder2 = new ProgramBuilder();
         sinon.stub(builder2 as any, 'runOnce').returns(Promise.resolve());
-        sinon.stub(builder2 as any, 'loadAllFilesAST').returns(Promise.resolve());
+        sinon.stub(builder2 as any, 'loadFiles').returns(Promise.resolve());
 
         expect(builder1.logger).not.to.equal(builder2.logger);
 
@@ -167,13 +204,13 @@ describe('ProgramBuilder', () => {
             builder1.run({
                 logLevel: LogLevel.info,
                 rootDir: rootDir,
-                stagingFolderPath: stagingFolderPath,
+                stagingDir: stagingDir,
                 watch: false
             }),
             builder2.run({
                 logLevel: LogLevel.error,
                 rootDir: rootDir,
-                stagingFolderPath: stagingFolderPath,
+                stagingDir: stagingDir,
                 watch: false
             })
         ]);
@@ -183,10 +220,10 @@ describe('ProgramBuilder', () => {
         expect(builder2.logger.logLevel).to.equal(LogLevel.error);
     });
 
-    it('does not error when loading stagingFolderPath from bsconfig.json', async () => {
+    it('does not error when loading stagingDir from bsconfig.json', async () => {
         fsExtra.ensureDirSync(rootDir);
         fsExtra.writeFileSync(`${rootDir}/bsconfig.json`, `{
-            "stagingFolderPath": "./out"
+            "stagingDir": "./out"
         }`);
         let builder = new ProgramBuilder();
         await builder.run({
@@ -284,9 +321,9 @@ describe('ProgramBuilder', () => {
 
     describe('require', () => {
         it('loads relative and absolute items', async () => {
-            const workingDir = s`${tmpPath}/require-test`;
-            const relativeOutputPath = `${tmpPath}/relative.txt`.replace(/\\+/g, '/');
-            const moduleOutputPath = `${tmpPath}/brighterscript-require-test.txt`.replace(/\\+/g, '/');
+            const workingDir = s`${tempDir}/require-test`;
+            const relativeOutputPath = `${tempDir}/relative.txt`.replace(/\\+/g, '/');
+            const moduleOutputPath = `${tempDir}/brighterscript-require-test.txt`.replace(/\\+/g, '/');
 
             //create roku project files
             fsExtra.outputFileSync(s`${workingDir}/src/manifest`, '');
@@ -319,7 +356,8 @@ describe('ProgramBuilder', () => {
 
             builder = new ProgramBuilder();
             await builder.run({
-                cwd: workingDir
+                cwd: workingDir,
+                createPackage: false
             });
             expect(
                 fsExtra.pathExistsSync(relativeOutputPath)
@@ -342,7 +380,7 @@ function createBsDiagnostic(filePath: string, messages: string[]): BsDiagnostic[
     return diagnostics;
 }
 function createDiagnostic(
-    bscFile: BscFile,
+    file: File,
     code: number,
     message: string,
     startLine = 0,
@@ -355,9 +393,8 @@ function createDiagnostic(
         code: code,
         message: message,
         range: Range.create(startLine, startCol, endLine, endCol),
-        file: bscFile,
+        file: file,
         severity: severity
     };
     return diagnostic;
 }
-

@@ -1,19 +1,15 @@
-import util, { standardizePath as s } from './util';
+import { util } from './util';
 import { Program } from './Program';
-import { expectDiagnostics, expectZeroDiagnostics } from './testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, rootDir, stagingDir } from './testHelpers.spec';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { expect } from 'chai';
-
-let tmpPath = s`${process.cwd()}/.tmp`;
-let rootDir = s`${tmpPath}/rootDir`;
-let stagingFolderPath = s`${tmpPath}/staging`;
+import { expect } from './chai-config.spec';
 
 describe('globalCallables', () => {
     let program: Program;
     beforeEach(() => {
         program = new Program({
             rootDir: rootDir,
-            stagingFolderPath: stagingFolderPath
+            stagingDir: stagingDir
         });
     });
     afterEach(() => {
@@ -54,16 +50,16 @@ describe('globalCallables', () => {
         expectZeroDiagnostics(program);
     });
 
-    it('hover shows correct for optional params', async () => {
+    it('hover shows correct for optional params', () => {
         const file = program.setFile('source/main.brs', `
             sub main()
                 print Mid("value1", 1)
             end sub
         `);
         program.validate();
-        const hover = await program.getHover(file.srcPath, util.createPosition(2, 25));
+        const hover = program.getHover(file.srcPath, util.createPosition(2, 25));
         expect(
-            hover.contents.toString().replace('\r\n', '\n')
+            hover[0].contents.toString().replace('\r\n', '\n')
         ).to.eql([
             '```brightscript',
             'function Mid(s as string, p as integer, n? as integer) as string',

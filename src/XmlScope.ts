@@ -2,19 +2,20 @@ import type { Location, Position } from 'vscode-languageserver';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
-import type { BscFile, CallableContainerMap, FileReference } from './interfaces';
+import type { CallableContainerMap, FileReference } from './interfaces';
 import type { Program } from './Program';
 import util from './util';
 import { isXmlFile } from './astUtils/reflection';
 import { SGFieldTypes } from './parser/SGTypes';
 import type { SGTag } from './parser/SGTypes';
+import type { File } from './files/File';
 
 export class XmlScope extends Scope {
     constructor(
         public xmlFile: XmlFile,
         public program: Program
     ) {
-        super(xmlFile.pkgPath, program);
+        super(xmlFile.destPath, program);
     }
 
     public get dependencyGraphKey() {
@@ -108,17 +109,17 @@ export class XmlScope extends Scope {
             let lookup = {} as Record<string, FileReference>;
             for (let parentScriptImport of parentScriptImports) {
                 //keep the first occurance of a pkgPath. Parent imports are first in the array
-                if (!lookup[parentScriptImport.pkgPath]) {
-                    lookup[parentScriptImport.pkgPath] = parentScriptImport;
+                if (!lookup[parentScriptImport.destPath]) {
+                    lookup[parentScriptImport.destPath] = parentScriptImport;
                 }
             }
 
             //add warning for every script tag that this file shares with an ancestor
             for (let scriptImport of this.xmlFile.scriptTagImports) {
-                let ancestorScriptImport = lookup[scriptImport.pkgPath];
+                let ancestorScriptImport = lookup[scriptImport.destPath];
                 if (ancestorScriptImport) {
                     let ancestorComponent = ancestorScriptImport.sourceFile as XmlFile;
-                    let ancestorComponentName = ancestorComponent.componentName?.text ?? ancestorComponent.pkgPath;
+                    let ancestorComponentName = ancestorComponent.componentName?.text ?? ancestorComponent.destPath;
                     this.diagnostics.push({
                         file: this.xmlFile,
                         range: scriptImport.filePathRange,
@@ -145,10 +146,10 @@ export class XmlScope extends Scope {
         return this.cache.getOrAdd('getOwnFiles', () => {
             let result = [
                 this.xmlFile
-            ] as BscFile[];
-            let scriptPkgPaths = this.xmlFile.getOwnDependencies();
-            for (let scriptPkgPath of scriptPkgPaths) {
-                let file = this.program.getFileByPkgPath(scriptPkgPath);
+            ] as File[];
+            let scriptDestPaths = this.xmlFile.getOwnDependencies();
+            for (let destPath of scriptDestPaths) {
+                let file = this.program.getFile(destPath, false);
                 if (file) {
                     result.push(file);
                 }
@@ -160,7 +161,7 @@ export class XmlScope extends Scope {
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
      */
-    public getDefinition(file: BscFile, position: Position): Location[] {
+    public getDefinition(file: File, position: Position): Location[] {
         let results = [] as Location[];
         //if the position is within the file's parent component name
         if (

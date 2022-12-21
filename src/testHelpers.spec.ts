@@ -1,22 +1,26 @@
-import type { BscFile, BsDiagnostic } from './interfaces';
+import type { BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { CompletionItem, Diagnostic } from 'vscode-languageserver';
+import type { CodeDescription, CompletionItem, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import type { CodeActionShorthand } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import type { BrsFile } from './files/BrsFile';
 import type { Program } from './Program';
 import { standardizePath as s } from './util';
-import type { CodeWithSourceMap } from 'source-map';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
+import type { File } from './files/File';
+
+export const tempDir = s`${__dirname}/../.tmp`;
+export const rootDir = s`${tempDir}/rootDir`;
+export const stagingDir = s`${tempDir}/stagingDir`;
 
 export const trim = undent;
 
-type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[];
+type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics?: Diagnostic[] } | Diagnostic[];
 
 function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
     if (Array.isArray(arg)) {
@@ -41,13 +45,70 @@ function sortDiagnostics(diagnostics: BsDiagnostic[]) {
     );
 }
 
+function cloneObject<TOriginal, TTemplate>(original: TOriginal, template: TTemplate, defaultKeys: Array<keyof TOriginal>) {
+    const clone = {} as Partial<TOriginal>;
+    let keys = Object.keys(template ?? {}) as Array<keyof TOriginal>;
+    //if there were no keys provided, use some sane defaults
+    keys = keys.length > 0 ? keys : defaultKeys;
+
+    //copy only compare the specified keys from actualDiagnostic
+    for (const key of keys) {
+        clone[key] = original[key];
+    }
+    return clone;
+}
+
+interface PartialDiagnostic {
+    range?: Range;
+    severity?: DiagnosticSeverity;
+    code?: integer | string;
+    codeDescription?: Partial<CodeDescription>;
+    source?: string;
+    message?: string;
+    tags?: Partial<DiagnosticTag>[];
+    relatedInformation?: Partial<DiagnosticRelatedInformation>[];
+    data?: unknown;
+    file?: Partial<File>;
+}
+
+/**
+ *  Helper function to clone a Diagnostic so it will give partial data that has the same properties as the expected
+ */
+function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic: BsDiagnostic) {
+    const actualDiagnostic = cloneObject(
+        actualDiagnosticInput,
+        expectedDiagnostic,
+        ['message', 'code', 'range', 'severity', 'relatedInformation']
+    );
+    //deep clone relatedInformation if available
+    if (actualDiagnostic.relatedInformation) {
+        for (let j = 0; j < actualDiagnostic.relatedInformation.length; j++) {
+            actualDiagnostic.relatedInformation[j] = cloneObject(
+                actualDiagnostic.relatedInformation[j],
+                expectedDiagnostic?.relatedInformation[j],
+                ['location', 'message']
+            ) as any;
+        }
+    }
+    //deep clone file info if available
+    if (actualDiagnostic.file) {
+        actualDiagnostic.file = cloneObject(
+            actualDiagnostic.file,
+            expectedDiagnostic?.file,
+            ['srcPath', 'destPath', 'pkgPath']
+        ) as any;
+    }
+    return actualDiagnostic;
+}
+
+
 /**
  * Ensure the DiagnosticCollection exactly contains the data from expected list.
  * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
  * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
-export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Partial<Diagnostic> | string | number>) {
-    const diagnostics = sortDiagnostics(
+export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<PartialDiagnostic | string | number>) {
+    const actualDiagnostics = sortDiagnostics(
         getDiagnostics(arg)
     );
     const expectedDiagnostics = sortDiagnostics(
@@ -58,26 +119,50 @@ export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Par
             } else if (typeof x === 'number') {
                 result = { code: x };
             }
-            return result as BsDiagnostic;
+            return result as unknown as BsDiagnostic;
         })
     );
 
     const actual = [] as BsDiagnostic[];
-    for (let i = 0; i < diagnostics.length; i++) {
-        const actualDiagnostic = diagnostics[i];
-        const clone = {} as BsDiagnostic;
-        let keys = Object.keys(expectedDiagnostics[i] ?? {}) as Array<keyof BsDiagnostic>;
-        //if there were no keys provided, use some sane defaults
-        keys = keys.length > 0 ? keys : ['message', 'code', 'range', 'severity'];
-
-        //copy only compare the specified keys from actualDiagnostic
-        for (const key of keys) {
-            clone[key] = actualDiagnostic[key];
-        }
-        actual.push(clone);
+    for (let i = 0; i < actualDiagnostics.length; i++) {
+        const expectedDiagnostic = expectedDiagnostics[i];
+        const actualDiagnostic = cloneDiagnostic(actualDiagnostics[i], expectedDiagnostic);
+        actual.push(actualDiagnostic as any);
     }
-
     expect(actual).to.eql(expectedDiagnostics);
+}
+
+/**
+ * Ensure the DiagnosticCollection includes data from expected list (note - order does not matter).
+ * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
+ * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
+ */
+export function expectDiagnosticsIncludes(arg: DiagnosticCollection, expected: Array<PartialDiagnostic | string | number>) {
+    const actualDiagnostics = getDiagnostics(arg);
+    const expectedDiagnostics =
+        expected.map(x => {
+            let result = x;
+            if (typeof x === 'string') {
+                result = { message: x };
+            } else if (typeof x === 'number') {
+                result = { code: x };
+            }
+            return result as unknown as BsDiagnostic;
+        });
+
+    let expectedFound = 0;
+
+    for (const expectedDiagnostic of expectedDiagnostics) {
+        const foundDiag = actualDiagnostics.find((actualDiag) => {
+            const actualDiagnosticClone = cloneDiagnostic(actualDiag, expectedDiagnostic);
+            return JSON.stringify(actualDiagnosticClone) === JSON.stringify(expectedDiagnostic);
+        });
+        if (foundDiag) {
+            expectedFound++;
+        }
+
+    }
+    expect(expectedFound).to.eql(expectedDiagnostics.length);
 }
 
 /**
@@ -92,7 +177,7 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
             diagnostic.message = diagnostic.message.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
             message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file?.srcPath ?? ''}#(${diagnostic.range.start.line}:${diagnostic.range.start.character})-(${diagnostic.range.end.line}:${diagnostic.range.end.character})`;
             //print the line containing the error (if we can find it)srcPath
-            const line = diagnostic.file?.fileContents?.split(/\r?\n/g)?.[diagnostic.range.start.line];
+            const line = (diagnostic.file as BrsFile)?.fileContents?.split(/\r?\n/g)?.[diagnostic.range.start.line];
             if (line) {
                 message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
             }
@@ -103,10 +188,11 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
 
 /**
  * Test if the arg has any diagnostics. This just checks the count, nothing more.
+ * @param diagnosticsCollection a collection of diagnostics
  * @param length if specified, checks the diagnostic count is exactly that amount. If omitted, the collection is just verified as non-empty
  */
-export function expectHasDiagnostics(arg: DiagnosticCollection, length: number = null) {
-    const diagnostics = getDiagnostics(arg);
+export function expectHasDiagnostics(diagnosticsCollection: DiagnosticCollection, length: number = null) {
+    const diagnostics = getDiagnostics(diagnosticsCollection);
     if (length) {
         expect(diagnostics).lengthOf(length);
     } else {
@@ -148,34 +234,37 @@ export function expectInstanceOf<T>(items: any[], constructors: Array<new (...ar
     }
 }
 
-export function getTestTranspile(scopeGetter: () => [Program, string]) {
+export function getTestTranspile(scopeGetter: () => [program: Program, rootDir: string]) {
     return getTestFileAction((file) => {
-        return file.program['_getTranspiledFileContents'](file);
+        return (file as BrsFile).program.getTranspiledFileContents(file.srcPath);
     }, scopeGetter);
 }
 
-export function getTestGetTypedef(scopeGetter: () => [Program, string]) {
-    return getTestFileAction((file) => {
+export function getTestGetTypedef(scopeGetter: () => [program: Program, rootDir: string]) {
+    return getTestFileAction(async (file) => {
+        const program = (file as BrsFile).program;
+        program.options.emitDefinitions = true;
+        const result = await program.getTranspiledFileContents(file.srcPath);
         return {
-            code: (file as BrsFile).getTypedef(),
+            code: result.typedef,
             map: undefined
         };
     }, scopeGetter);
 }
 
 function getTestFileAction(
-    action: (file: BscFile) => CodeWithSourceMap,
-    scopeGetter: () => [Program, string]
+    action: (file: File) => Promise<{ code: string; map?: string }>,
+    scopeGetter: () => [program: Program, rootDir: string]
 ) {
-    return function testFileAction(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) {
+    return async function testFileAction(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
-        let file = program.setFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
+        let file = program.setFile<BrsFile>({ src: s`${rootDir}/${destPath}`, dest: destPath }, source);
         program.validate();
         if (failOnDiagnostic !== false) {
             expectZeroDiagnostics(program);
         }
-        let codeWithMap = action(file);
+        let codeWithMap = await action(file);
 
         let sources = [trimMap(codeWithMap.code), expected];
 

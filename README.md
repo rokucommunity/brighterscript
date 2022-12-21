@@ -63,25 +63,38 @@ BrighterScript adds several new features to the BrightScript language such as Na
 ## Who uses Brighterscript?
 <br/>
 <p align="center">
+    <a href="https://www.fubo.tv/">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/192530108-eb470b85-e687-4575-af69-254aab13428c.png">
+    </a>&nbsp;&nbsp;&nbsp;
+    <a href="mailto:chris@inverted-solutions.com">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/197794500-2bac4903-ed00-463a-b243-24c68fba7962.png">
+    </a>&nbsp;&nbsp;&nbsp;
     <a href="https://www.applicaster.com/">
-        <img src="https://user-images.githubusercontent.com/2544493/96571912-377af280-129a-11eb-8295-49eb12e54aeb.png">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/192591901-20441fc8-3c6c-45ea-8851-b22430e6fb8e.png">
     </a>&nbsp;&nbsp;&nbsp;
-    <a href="https://www.miraclechannel.ca/corcoplus">
-        <img src="https://user-images.githubusercontent.com/2544493/157429644-ba0d574a-d3c3-425f-8e68-98103fb8f707.png">
+    <a href="https://www.redspace.com/">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/195908446-8d9652f8-9877-426f-b3c6-09119d788fd8.png">
     </a>&nbsp;&nbsp;&nbsp;
-    <a href="https://www.nba.com/">
-        <img src="https://user-images.githubusercontent.com/2544493/157430017-a27b62d0-63de-4e87-a6df-8448007bd24d.png">
+    <br/><br/>
+      <a href="https://tantawowa.com/">
+        <img height="38" src="https://user-images.githubusercontent.com/2544493/197795138-2ec870db-71fe-49e3-a014-692a3f31e6aa.png">
+      </a>&nbsp;&nbsp;&nbsp;
+     <a href="https://www.miraclechannel.ca/corcoplus">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/192593254-f2a32cd4-0482-40de-830d-c1d09690c46b.png">
     </a>&nbsp;&nbsp;&nbsp;
-    <a href="https://github.com/georgejecook/rooibos/blob/master/docs/index.md">
-        <img src="https://user-images.githubusercontent.com/2544493/157430331-20913e84-f3f4-447a-b093-8780cd1241e6.png">
-    </a>
+    <a href="https://channelstore.roku.com/details/222212/phototv">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/169118062-81d94da5-2323-4e31-b19d-7db3f9c88dff.png">
+    </a>&nbsp;&nbsp;&nbsp;
+    <a href="https://www.haystack.tv/">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/192610056-d1b5a382-edf4-47b9-a6a5-d2d3ee9094cb.png">
+    </a>&nbsp;&nbsp;&nbsp;
 </p>
 <br/>
 
 
 The BrighterScript project is used to power the popular [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=rokucommunity.brightscript) VSCode extension, the [maestro framework](https://github.com/georgejecook/maestro/blob/master/docs/index.md), and more.
 
-[Contact us](https://github.com/rokucommunity/brighterscript/issues/new) if you use BrighterScript on your project and would like your logo listed above. More projects are adopting BrighterScript all the time, from using the new BrighterScript language features to simply using the compiler in their build pipeline.
+[Contact us](https://github.com/rokucommunity/brighterscript/issues/new) if you use BrighterScript in your project and would like your logo listed above. More projects are adopting BrighterScript all the time, from using the new BrighterScript language features to simply using the compiler in their build pipeline.
 
 ## What's with the name?
 The name BrighterScript is a compliment to everything that is great about Roku's awesome BrightScript language. Naming things is hard, and discoverability and recognizability are both very important. Here are the reasons we chose this name:
@@ -195,37 +208,270 @@ There are situations where you want to store some compiler settings in a config 
     });
     ```
 
-### bsconfig.json options
+### `bsconfig.json` options
 
 These are the options available in the `bsconfig.json` file.
 
- - **project**: `string` - A path to a project file. This is really only passed in from the command line or the NodeJS API, and should not be present in `bsconfig.json` files. Prefix with a question mark (?) to prevent throwing an exception when the file does not exist.
+#### `project`
 
- - **extends**: `string` - Relative or absolute path to another `bsconfig.json` file that this `bsconfig.json` file should import and then override. Prefix with a question mark (?) to prevent throwing an exception when the file does not exist.
+Type: `string`
 
- - **cwd**: `string` - Override the current working directory
+A path to a project file. This is really only passed in from the command line or the NodeJS API, and should not be present in `bsconfig.json` files. Prefix with a question mark (?) to prevent throwing an exception when the file does not exist.
 
- - **rootDir**: `string` - The root directory of your roku project. Defaults to current directory
+#### `extends`
 
- - **files**: ` (string | string[] | { src: string | string[]; dest?: string })[]` - The list file globs used to find all files for the project. If using the {src;dest;} format, you can specify a different destination directory for the matched files in src.
+Type: `string`
 
- - **outFile**: `string` -  The path (including filename) where the output file should be placed (defaults to `"./out/[WORKSPACE_FOLDER_NAME].zip"`).
+Relative or absolute path to another `bsconfig.json` file that this `bsconfig.json` file should import and then override. Prefix with a question mark (?) to prevent throwing an exception when the file does not exist. Defaults to `undefined`.
 
- - **createPackage**: `boolean` - Creates a zip package. Defaults to true. This setting is ignored when `deploy` is enabled.
+Note: child config properties completely replace parent config properties. For example: if a parent and child bsconfigs both specify an array for `plugins`, or `files`, or `diagnosticFilters`, etc., then the parent's setting will be completely ignored and the child's setting will be used instead.
 
- - **watch**: `boolean` -  If true, the server will keep running and will watch and recompile on every file change.
+#### `cwd`
 
- - **deploy**: `boolean` -  If true, after a successful build, the project will be deployed to the Roku specified in host.
+Type: `string`
 
- - **host**: `string` -  The host of the Roku that this project will deploy to.
+If present, overrides the current working directory when invoking `bsc`. Defaults to `process.cwd()`.
 
- - **username**: `string` - the username to use when deploying to a Roku device.
+#### `rootDir`
 
- - **password**: `string` - The password to use when deploying to a roku device.
+Type: `string`
 
- - **emitFullPaths**: `boolean` -  Emit full paths to files when printing diagnostics to the console. Defaults to false
+The root directory of your roku project. Defaults to `process.cwd()`.
 
- - **diagnosticFilters**: `Array<string | number | {src: string; codes: number[]}` - A list of filters used to hide diagnostics.
+#### `stagingDir`
+
+Type: `string`
+
+The folder where the transpiled files are placed. This folder will be created automatically if it does not exist, and will be deleted after transpilation completes unless `retainStagingDir` is set to `true`. Defaults to `./out/.roku-deploy-staging`.
+
+#### `retainStagingDir`
+
+Type: `boolean`
+
+Prevent the staging folder from being deleted after creating the package. Defaults to `false`, meaning that the folder is deleted every time.
+
+#### `removeParameterTypes`
+
+Type: `boolean`
+
+If true, removes the explicit type to function's parameters and return (i.e. the `as type` syntax); otherwise keep this information.
+
+#### `files`
+
+Type:
+```typescript
+Array<
+  string |
+  string[] |
+  {
+    src: string | string[],
+    dest: string
+  }>
+```
+
+The files array is how you specify what files are included in your project. Any strings found in the files array must be relative to rootDir, and are used as include filters, meaning that if a file matches the pattern, it is included.
+
+For most standard projects, the default files array should work just fine:
+
+```jsonc
+{
+    "files": [
+        "source/**/*",
+        "components/**/*",
+        "images/**/*",
+        "manifest"
+    ]
+}
+```
+
+This will copy all files from the standard roku folders directly into the package while maintaining each file's relative file path within rootDir.
+
+If you want to include additional files, you will need to provide the entire array. For example, if you have a folder with other assets, you could do the following:
+
+```jsonc
+{
+    "files": [
+        "source/**/*",
+        "components/**/*",
+        "images/**/*",
+        "manifest"
+        //your folder with other assets
+        "assets/**/*",
+    ]
+}
+```
+
+If a `bsconfig.json` file specifies a parent config using the `extends` field, and the child specifies a `files` field, then the parent's `files` field will be completely overridden by the child.
+
+##### Excluding files
+
+You can exclude files from the output by prefixing your file patterns with "!". This is useful in cases where you want everything in a folder EXCEPT certain files.
+
+```jsonc
+{
+    "files": [
+        "source/**/*",
+        "!source/some/unwanted/file.brs"
+    ]
+}
+```
+
+The files array is processed from top to bottom, with later patterns overriding previous ones. This means that in order to exclude a file which is included by another pattern, the negative pattern using `!` must occur **after** the positive pattern.
+
+##### File pattern resolution
+
+All patterns will be resolved relative to rootDir, with their relative positions within rootDir maintained.
+
+Patterns may not reference files outside of `rootDir` unless the `{ src, dest }` form is used (see below). For example:
+
+```jsonc
+{
+    "rootDir": "C:/projects/CatVideoPlayer",
+    "files": [
+        "source/main.brs",
+
+        //NOT allowed because it navigates outside the rootDir
+        "../common/promise.brs"
+    ]
+}
+```
+
+Any valid glob pattern is supported. For more information, see the documentation on the underlying [fast-glob](https://github.com/mrmlnc/fast-glob) library.
+
+Empty folders are not copied.
+
+Paths to folders will be ignored. If you want to copy a folder and its contents, use the glob syntax (i.e. `some_folder/**/*`).
+
+##### Specifying file destinations
+
+For more advanced use cases, you may provide an object which contains the source pattern and output path. This allows you to be very specific about what files to copy, and where they are placed in the output folder. This option also supports copying files from outside the `rootDir`.
+
+The object structure is as follows:
+
+```typescript
+{
+    /**
+     * A glob pattern string or file path, or an array of glob pattern strings and/or file paths.
+     * These can be relative paths or absolute paths.
+     * All non-absolute paths are resolved relative to the rootDir
+     */
+    src: Array<string | string[]>;
+    /**
+     * The relative path to the location in the output folder where the files should be placed,
+     * relative to the root of the output folder
+     */
+    dest: string | undefined
+}
+```
+
+If `src` is a non-glob path to a single file, then `dest` should include the filename and extension. For example:
+
+```jsonc
+{ "src": "lib/Promise/promise.brs", "dest": "source/promise.brs" }
+```
+
+If `src` is a glob pattern, then dest should be a path to the folder in the output directory. For example:
+
+```jsonc
+{ "src": "lib/*.brs", "dest": "source/lib" }
+```
+
+If `src` is a path to a folder, it will be ignored. If you want to copy a folder and its contents, use the glob syntax. The following example will copy all files from the lib/vendor folder recursively:
+
+```jsonc
+{ "src": "lib/vendor/**/*", "dest": "vendor" }
+```
+
+If `dest` is not specified it will default to the root of the output folder.
+
+An example of combining regular and advanced file patterns:
+
+```jsonc
+{
+    "rootDir": "C:/projects/CatVideoPlayer",
+    "files": [
+        "source/main.brs",
+        {
+          "src": "../common/promise.brs",
+          "dest": "source/common"
+        }
+    ]
+}
+```
+
+##### File collision handling
+
+Because file entries are processed in order you can override a file by specifying an alternative later in the files array.
+
+For example, if you have a base project and a child project that wants to override specific files, you could do the following:
+
+```jsonc
+{
+    "files": [
+        {
+            //copy all files from the base project
+            "src": "../BaseProject/**/*"
+        },
+        // Override "../BaseProject/themes/theme.brs"
+        // with "${rootDir}/themes/theme.brs"
+        "themes/theme.brs"
+    ]
+}
+```
+
+#### `outFile`
+
+Type: `string`
+
+The path (including filename) where the output file should be placed. Defaults to `"./out/${WORKSPACE_FOLDER_NAME}.zip"`.
+
+#### `createPackage`
+
+Type: `boolean`
+
+Causes the build to create a zip package. Defaults to `true`. This setting is ignored when `deploy` is enabled.
+
+#### `watch`
+
+Type: `boolean`
+
+If `true`, the server will keep running and will watch and recompile on every file change. Defaults to `false`.
+
+#### `deploy`
+
+Type: `boolean`
+
+If `true`, after a successful build, the project will be deployed to the Roku specified in host. Defaults to `false`. If this field is set to `true`, then the `host` and `password` fields must be set as well.
+
+#### `host`
+
+Type: `string`
+
+The host of the Roku that this project will deploy to when the `deploy` field is set to `true`. Defaults to `undefined`.
+
+#### `username`
+
+Type: `string`
+
+The username that will be used to deploy to the Roku device when the `deploy` field is set to `true`. Defaults to `undefined`.
+
+#### `password`
+
+Type: `string`
+
+The password that will be used to deploy to the Roku device when the `deploy` field is set to `true`. Defaults to `undefined`.
+
+#### `emitFullPaths`
+
+Type: `boolean`
+
+Emit full paths to files when printing diagnostics to the console. Defaults to `false`.
+
+#### `diagnosticFilters`
+
+Type: `Array<string | number | {src: string; codes: number[]}`
+
+A list of filters used to hide diagnostics.
    - A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed.
    - A `number` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project.
    - An object can also be provided to filter specific diagnostic codes for a file pattern. For example,
@@ -235,15 +481,50 @@ These are the options available in the `bsconfig.json` file.
             "codes": [1000, 1011] //ignore these specific codes from vendor libraries
         }]
         ```
- - **diagnosticLevel**: `'hint' | 'info' | 'warn' | 'error'` - Specify what diagnostic levels are printed to the console. This has no effect on what diagnostics are reported in the LanguageServer. Defaults to 'warn'
 
- - **autoImportComponentScript**: `bool` - BrighterScript only: will automatically import a script at transpile-time for a component with the same name if it exists.
+Defaults to `undefined`.
 
- - **sourceRoot**: `string` - Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
+If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify `diagnosticFilters`, the parent bsconfig's `diagnosticFilters` field will be completely overwritten.
 
- - **plugins**: `Array<string>` - List of node scripts or npm modules to load as plugins to the BrighterScript compiler.
+#### `diagnosticLevel`
 
- - **require**: `Array<string>` - List of node scripts or npm modules to load during the startup sequence. Useful for running things like `ts-node/require`
+Type: `"hint" | "info" | "warn" | "error"`
+
+Specify what diagnostic levels are printed to the console. This has no effect on what diagnostics are reported in the LanguageServer. Defaults to `"warn"`.
+
+#### `autoImportComponentScript`
+
+Type: `bool`
+
+BrighterScript only: will automatically import a script at transpile-time for a component with the same name if it exists. Defaults to `false`.
+
+#### `sourceRoot`
+
+Type: `string`
+
+Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within `rootDir`. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
+
+#### `plugins`
+
+Type: `Array<string>`
+
+List of node scripts or npm modules to load as plugins to the BrighterScript compiler. Defaults to `undefined`.
+
+If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify a `plugins` field, the child's `plugins` field will completely overwrite the parent's `plugins` field.
+
+#### `require`
+
+Type: `Array<string>`
+
+List of node scripts or npm modules to load during the startup sequence. Useful for running things like `ts-node/require`. Defaults to `undefined`.
+
+If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify a `require` field, the child's `require` field will completely overwrite the parent's `require` field.
+
+#### `allowBrighterScriptInBrightScript`
+
+Type: `boolean`
+
+Allow BrighterScript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
 
 ## Ignore errors and warnings on a per-line basis
 In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:
@@ -263,9 +544,9 @@ sub Main()
     DoSomething( 'bs:disable-line
 
     'disable errors about wrong parameter count
-    DoSomething(1,2,3) 'bs:disable-next-line
+    DoSomething(1,2,3) 'bs:disable-line
 
-    DoSomething(1,2,3) 'bs:disable-next-line:1002
+    DoSomething(1,2,3) 'bs:disable-line:1002
 end sub
 
 sub DoSomething()

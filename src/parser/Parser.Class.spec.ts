@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { TokenKind, AllowedLocalIdentifiers, AllowedProperties } from '../lexer/TokenKind';
 import { Lexer } from '../lexer/Lexer';
@@ -301,7 +301,7 @@ describe('parser class', () => {
             expect(cls.methods[0].accessModifier).to.be.undefined;
         });
 
-        it('supports primative field initializers', () => {
+        it('supports primitive field initializers', () => {
             let { tokens } = Lexer.scan(`
                 class Person
                     name = "Bob"

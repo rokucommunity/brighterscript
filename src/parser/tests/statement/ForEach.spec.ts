@@ -1,5 +1,5 @@
 
-import { standardizePath as s } from '../../../util';
+import { rootDir } from '../../../testHelpers.spec';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
 import { getTestTranspile } from '../../../testHelpers.spec';
@@ -7,7 +7,6 @@ import { getTestTranspile } from '../../../testHelpers.spec';
 const sinon = createSandbox();
 
 describe('ForEachStatement', () => {
-    let rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
@@ -19,8 +18,8 @@ describe('ForEachStatement', () => {
         program.dispose();
     });
 
-    it('transpiles a simple loop', () => {
-        testTranspile(`
+    it('transpiles a simple loop', async () => {
+        await testTranspile(`
             sub doLoop(data)
                 for each i in data
                     print i
@@ -29,8 +28,8 @@ describe('ForEachStatement', () => {
         `);
     });
 
-    it('adds newline to end of empty loop declaration', () => {
-        testTranspile(`
+    it('adds newline to end of empty loop declaration', async () => {
+        await testTranspile(`
             sub doLoop(data)
                 for each i in data
                 end for

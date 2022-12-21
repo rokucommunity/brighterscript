@@ -81,10 +81,23 @@ export interface BsConfig {
      * Prevent the staging folder from being deleted after creating the package
      * @default false
      */
+    retainStagingDir?: boolean;
+
+    /**
+     * Prevent the staging folder from being deleted after creating the package
+     * @default false
+     * @deprecated use `retainStagingDir` instead
+     */
     retainStagingFolder?: boolean;
 
     /**
+     * The path to the staging directory (wehre the output files are copied immediately before creating the zip)
+     */
+    stagingDir?: string;
+
+    /**
      * The path to the staging folder (where all files are copied to right before creating the zip package)
+     * @deprecated use `stagingDir` instead
      */
     stagingFolderPath?: string;
 
@@ -103,6 +116,12 @@ export interface BsConfig {
      * @default true
      */
     emitDefinitions?: boolean;
+
+    /**
+     * If true, removes the explicit type to function's parameters and return (i.e. the `as type` syntax); otherwise keep this information.
+     * @default false
+     */
+    removeParameterTypes?: boolean;
 
     /**
      * A list of filters used to exclude diagnostics from the output
@@ -152,4 +171,10 @@ export interface BsConfig {
      * @default true
      */
     sourceMap?: boolean;
+
+    /**
+     * Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
+     * @default false
+     */
+    allowBrighterScriptInBrightScript?: boolean;
 }

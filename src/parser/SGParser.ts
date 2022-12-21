@@ -21,7 +21,7 @@ export default class SGParser {
      */
     public diagnostics = [] as Diagnostic[];
 
-    private pkgPath: string;
+    private destPath: string;
 
     private _references: SGReferences;
 
@@ -72,14 +72,14 @@ export default class SGParser {
                 this._references.scriptTagImports.push({
                     filePathRange: uriAttr.value.range,
                     text: uri,
-                    pkgPath: util.getPkgPathFromTarget(this.pkgPath, uri)
+                    destPath: util.getPkgPathFromTarget(this.destPath, uri)
                 });
             }
         }
     }
 
-    public parse(pkgPath: string, fileContents: string) {
-        this.pkgPath = pkgPath;
+    public parse(destPath: string, fileContents: string) {
+        this.destPath = destPath;
         this.diagnostics = [];
 
         const { cst, tokenVector, lexErrors, parseErrors } = parser.parse(fileContents);

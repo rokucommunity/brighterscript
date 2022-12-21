@@ -1,7 +1,7 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
-import { standardizePath as s } from './util';
+import util, { standardizePath as s } from './util';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
@@ -27,11 +27,15 @@ describe('Scope', () => {
         program.dispose();
     });
 
+    it('getEnumMemberFileLink does not crash on undefined name', () => {
+        program.setFile('source/main.bs', ``);
+        const scope = program.getScopesForFile('source/main.bs')[0];
+        scope.getEnumMemberFileLink(null);
+        //test passes if this doesn't explode
+    });
+
     it('does not mark namespace functions as collisions with stdlib', () => {
-        program.setFile({
-            src: `${rootDir}/source/main.bs`,
-            dest: `source/main.bs`
-        }, `
+        program.setFile(`source/main.bs`, `
             namespace a
                 function constructor()
                 end function
@@ -39,6 +43,44 @@ describe('Scope', () => {
         `);
 
         program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('builds symbol table with namespace-relative entries', () => {
+        const file = program.setFile<BrsFile>('source/alpha.bs', `
+            namespace alpha
+                class Beta
+                end class
+            end namespace
+            namespace alpha
+                class Charlie extends Beta
+                end class
+                function createBeta()
+                    return new Beta()
+                end function
+            end namespace
+        `);
+        program.setFile('source/main.bs', `
+            function main()
+                alpha.createBeta()
+                thing = new alpha.Beta()
+            end function
+        `);
+        program.validate();
+        const scope = program.getScopesForFile('source/alpha.bs')[0];
+        scope.linkSymbolTable();
+        const symbolTable = file.parser.references.namespaceStatements[1].body.getSymbolTable();
+        //the symbol table should contain the relative names for all items in this namespace across the entire scope
+        expect(
+            symbolTable.hasSymbol('Beta')
+        ).to.be.true;
+        expect(
+            symbolTable.hasSymbol('Charlie')
+        ).to.be.true;
+        expect(
+            symbolTable.hasSymbol('createBeta')
+        ).to.be.true;
+
         expectZeroDiagnostics(program);
     });
 
@@ -77,7 +119,8 @@ describe('Scope', () => {
         program.validate();
         expectDiagnostics(program, [
             DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea'),
-            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA')
+            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA'),
+            DiagnosticMessages.namespaceCannotBeReferencedDirectly()
         ]);
     });
 
@@ -101,7 +144,7 @@ describe('Scope', () => {
         it('detects callables from all loaded files', () => {
             const sourceScope = program.getScopeByName('source');
 
-            program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+            program.setFile(`source/main.brs`, `
                 sub Main()
 
                 end sub
@@ -109,7 +152,7 @@ describe('Scope', () => {
                 sub ActionA()
                 end sub
             `);
-            program.setFile({ src: s`${rootDir}/source/lib.brs`, dest: s`source/lib.brs` }, `
+            program.setFile(`source/lib.brs`, `
                 sub ActionB()
                 end sub
             `);
@@ -160,6 +203,228 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
+        it('diagnostics are assigned to correct child scope', () => {
+            program.options.autoImportComponentScript = true;
+            program.setFile('components/constants.bs', `
+                namespace constants.alpha.beta
+                    const charlie = "charlie"
+                end namespace
+            `);
+
+            program.setFile('components/ButtonBase.xml', `<component name="ButtonBase" extends="Scene" />`);
+
+            const buttonPrimary = program.setFile('components/ButtonPrimary.bs', `
+                import "constants.bs"
+                sub init()
+                    print constants.alpha.delta.charlie
+                end sub
+            `);
+            program.setFile('components/ButtonPrimary.xml', `<component name="ButtonPrimary" extends="ButtonBase" />`);
+
+            const buttonSecondary = program.setFile('components/ButtonSecondary.bs', `
+                import "constants.bs"
+                sub init()
+                    print constants.alpha.delta.charlie
+                end sub
+            `);
+            program.setFile('components/ButtonSecondary.xml', `<component name="ButtonSecondary" extends="ButtonBase" />`);
+
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    message: DiagnosticMessages.cannotFindName('delta').message,
+                    file: {
+                        srcPath: buttonPrimary.srcPath
+                    },
+                    relatedInformation: [{
+                        message: `Not defined in scope '${s('components/ButtonPrimary.xml')}'`
+                    }]
+                }, {
+                    message: DiagnosticMessages.cannotFindName('delta').message,
+                    file: {
+                        srcPath: buttonSecondary.srcPath
+                    },
+                    relatedInformation: [{
+                        message: `Not defined in scope '${s('components/ButtonSecondary.xml')}'`
+                    }]
+                }
+            ]);
+        });
+
+        it('recognizes dimmed vars', () => {
+            program.setFile(`source/file.brs`, `
+                function buildArray(numItems)
+                    dim result[3]
+                    for i = 0 to numItems
+                        result.push(i)
+                    end for
+                    return result
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('detects unknown namespace names', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    Name1.thing()
+                    Name2.thing()
+                end sub
+                namespace Name1
+                    sub thing()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('Name2')
+            ]);
+        });
+
+        it('accepts namespace names in their transpiled form in .brs files', () => {
+            program.setFile('source/ns.bs', `
+                namespace MyNamespace
+                    sub foo()
+                    end sub
+                end namespace
+
+                namespace A.B.C
+                    sub ga()
+                    end sub
+                end namespace
+            `);
+            program.setFile('source/main.brs', `
+                sub main()
+                    MyNamespace_foo()
+                    A_B_C_ga()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('Validates NOT too deep nested files', () => {
+            program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/main.brs', ``);
+            program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/main2.bs', ``);
+            program.setFile('components/folder2/folder3/folder4/folder5/folder6/folder7/ButtonSecondary.xml', `<component name="ButtonSecondary" extends="ButtonBase" />`);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('Validates too deep nested files', () => {
+            program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/folder8/main.brs', ``);
+            program.setFile('source/folder2/folder3/folder4/folder5/folder6/folder7/folder8/main2.bs', ``);
+            program.setFile('components/folder2/folder3/folder4/folder5/folder6/folder7/folder8/ButtonSecondary.xml', `<component name="ButtonSecondary" extends="ButtonBase" />`);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.detectedTooDeepFileSource(8),
+                DiagnosticMessages.detectedTooDeepFileSource(8),
+                DiagnosticMessages.detectedTooDeepFileSource(8)
+            ]);
+        });
+
+        it('detects unknown namespace sub-names', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    Name1.subname.thing()
+                end sub
+                namespace Name1
+                    sub thing()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('subname', 'Name1.subname'),
+                range: util.createRange(2, 26, 2, 33)
+            }]);
+        });
+
+        it('detects unknown enum names', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print Direction.up
+                    print up.Direction
+                end sub
+                enum Direction
+                    up
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('up')
+            ]);
+        });
+
+        it('detects unknown function names', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print go.toStr()
+                    print go2.toStr()
+                end sub
+
+                function go()
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('go2')
+            ]);
+        });
+
+        it('detects unknown const in assignment operator', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    value = ""
+                    value += constants.API_KEY
+                    value += API_URL
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('constants'),
+                DiagnosticMessages.cannotFindName('API_URL')
+            ]);
+        });
+
+        it('detects unknown local var names', () => {
+            program.setFile('source/lib.bs', `
+                sub libFunc(param1)
+                    print param1
+                    print param2
+                    name1 = "bob"
+                    print name1
+                    print name2
+                    for each item1 in param1
+                        print item1
+                        print item2
+                    end for
+                    for idx1 = 0 to 10
+                        print idx1
+                        print idx2
+                    end for
+                    try
+                        print 1
+                    catch ex1
+                        print ex1
+                        print ex2
+                    end try
+                end sub
+
+                function go()
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('param2'),
+                DiagnosticMessages.cannotFindName('name2'),
+                DiagnosticMessages.cannotFindName('item2'),
+                DiagnosticMessages.cannotFindName('idx2'),
+                DiagnosticMessages.cannotFindName('ex2')
+            ]);
+        });
+
         describe('createObject', () => {
             it('recognizes various scenegraph nodes', () => {
                 program.setFile(`source/file.brs`, `
@@ -244,7 +509,7 @@ describe('Scope', () => {
                     DiagnosticMessages.unknownBrightScriptComponent('roDateTime_FAKE'),
                     DiagnosticMessages.mismatchCreateObjectArgumentCount('roDateTime', [1, 1], 2),
                     DiagnosticMessages.unknownRoSGNode('Rectangle_FAKE'),
-                    DiagnosticMessages.deprecatedBrightScriptComponent('roFontMetrics').code
+                    DiagnosticMessages.unknownBrightScriptComponent('roFontMetrics')
                 ]);
             });
 
@@ -329,27 +594,25 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 // only care about code and `roFontMetrics` match
-                const diagnostics = program.getDiagnostics();
-                const expectedDiag = DiagnosticMessages.deprecatedBrightScriptComponent('roFontMetrics');
-                expect(diagnostics.length).to.eql(1);
-                expect(diagnostics[0].code).to.eql(expectedDiag.code);
-                expect(diagnostics[0].message).to.contain(expectedDiag.message);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.unknownBrightScriptComponent('roFontMetrics')
+                ]);
             });
         });
 
         it('marks the scope as validated after validation has occurred', () => {
-            program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+            program.setFile(`source/main.bs`, `
                sub main()
                end sub
             `);
-            let lib = program.setFile({ src: s`${rootDir}/source/lib.bs`, dest: s`source/lib.bs` }, `
+            let lib = program.setFile(`source/lib.bs`, `
                sub libFunc()
                end sub
             `);
             expect(program.getScopesForFile(lib)[0].isValidated).to.be.false;
             program.validate();
             expect(program.getScopesForFile(lib)[0].isValidated).to.be.true;
-            lib = program.setFile({ src: s`${rootDir}/source/lib.bs`, dest: s`source/lib.bs` }, `
+            lib = program.setFile(`source/lib.bs`, `
                 sub libFunc()
                 end sub
             `);
@@ -360,7 +623,7 @@ describe('Scope', () => {
         });
 
         it('does not mark same-named-functions in different namespaces as an error', () => {
-            program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+            program.setFile(`source/main.bs`, `
                 namespace NameA
                     sub alert()
                     end sub
@@ -374,7 +637,7 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
         it('resolves local-variable function calls', () => {
-            program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+            program.setFile(`source/main.brs`, `
                 sub DoSomething()
                     sayMyName = function(name as string)
                     end function
@@ -388,7 +651,7 @@ describe('Scope', () => {
 
         describe('function shadowing', () => {
             it('warns when local var function has same name as stdlib function', () => {
-                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile(`source/main.brs`, `
                     sub main()
                         str = function(p)
                             return "override"
@@ -404,7 +667,7 @@ describe('Scope', () => {
             });
 
             it('warns when local var has same name as built-in function', () => {
-                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile(`source/main.brs`, `
                     sub main()
                         str = 12345
                         print str ' prints "12345" (i.e. our local variable is allowed to shadow the built-in function name)
@@ -415,7 +678,7 @@ describe('Scope', () => {
             });
 
             it('warns when local var has same name as built-in function', () => {
-                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile(`source/main.brs`, `
                     sub main()
                         str = 6789
                         print str(12345) ' prints "12345" (i.e. our local variable did not override the callable global function)
@@ -426,7 +689,7 @@ describe('Scope', () => {
             });
 
             it('detects local function with same name as scope function', () => {
-                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile(`source/main.brs`, `
                     sub main()
                         getHello = function()
                             return "override"
@@ -446,7 +709,7 @@ describe('Scope', () => {
             });
 
             it('detects local function with same name as scope function', () => {
-                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile(`source/main.brs`, `
                     sub main()
                         getHello = "override"
                         print getHello ' prints <Function: gethello> (i.e. local variable override does NOT work for same-scope-defined methods)
@@ -463,7 +726,7 @@ describe('Scope', () => {
             });
 
             it('flags scope function with same name (but different case) as built-in function', () => {
-                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile('source/main.brs', `
                     sub main()
                         print str(12345) ' prints 12345 (i.e. our str() function below is ignored)
                     end sub
@@ -509,7 +772,7 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.callToUnknownFunction('DoB', 'source')
+                DiagnosticMessages.cannotFindName('DoB')
             ]);
         });
 
@@ -525,7 +788,7 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.callToUnknownFunction('DoC', 'source')
+                DiagnosticMessages.cannotFindName('DoC')
             ]);
         });
 
@@ -691,7 +954,7 @@ describe('Scope', () => {
             program.setFile(s`components/comp.brs`, ``);
             const sourceScope = program.getScopeByName('source');
             const compScope = program.getScopeByName('components/comp.xml');
-            program.plugins = new PluginInterface([], new Logger());
+            program.plugins = new PluginInterface([], { logger: new Logger() });
             const plugin = program.plugins.add({
                 name: 'Emits validation events',
                 beforeScopeValidate: sinon.spy(),
@@ -717,7 +980,7 @@ describe('Scope', () => {
 
         describe('custom types', () => {
             it('detects an unknown function return type', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     function a()
                         return invalid
                     end function
@@ -748,7 +1011,7 @@ describe('Scope', () => {
             });
 
             it('detects an unknown function parameter type', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     sub a(num as integer)
                     end sub
 
@@ -771,7 +1034,7 @@ describe('Scope', () => {
             });
 
             it('detects an unknown field parameter type', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     class myClass
                         foo as unknownType 'error
                     end class
@@ -789,8 +1052,99 @@ describe('Scope', () => {
                 ]);
             });
 
+            it('supports enums and interfaces as types', () => {
+                program.setFile(`source/main.bs`, `
+
+                    interface MyInterface
+                        title as string
+                    end interface
+                    enum myEnum
+                        title = "t"
+                    end enum
+
+                    class myClass
+                        foo as myInterface
+                        foo2 as myEnum
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds interface types', () => {
+                program.setFile(`source/main.bs`, `
+                    namespace MyNamespace
+                        interface MyInterface
+                          title as string
+                        end interface
+
+                        function bar(param as MyNamespace.MyInterface) as MyNamespace.MyInterface
+                        end function
+
+                    end namespace
+
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds non-namespaced interface types', () => {
+                program.setFile(`source/main.bs`, `
+                    interface MyInterface
+                        title as string
+                    end interface
+
+                    namespace MyNamespace
+                        function bar(param as MyInterface) as MyInterface
+                        end function
+
+                    end namespace
+
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds enum types', () => {
+                program.setFile(`source/main.bs`, `
+                    namespace MyNamespace
+                        enum MyEnum
+                          title = "t"
+                        end enum
+
+                        function bar(param as MyNamespace.MyEnum) as MyNamespace.MyEnum
+                        end function
+
+                    end namespace
+
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds non-namespaced enum types', () => {
+                program.setFile(`source/main.bs`, `
+                    enum MyEnum
+                        title = "t"
+                    end enum
+
+                    namespace MyNamespace
+                        function bar(param as MyEnum) as MyEnum
+                        end function
+
+                    end namespace
+
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
             it('finds custom types inside namespaces', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -810,7 +1164,7 @@ describe('Scope', () => {
             });
 
             it('finds custom types from other namespaces', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -825,7 +1179,7 @@ describe('Scope', () => {
             });
 
             it('detects missing custom types from current namespaces', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -842,11 +1196,11 @@ describe('Scope', () => {
             });
 
             it('finds custom types from other other files', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     function foo(param as MyClass) as MyClass
                     end function
                 `);
-                program.setFile({ src: s`${rootDir}/source/MyClass.bs`, dest: s`source/MyClass.bs` }, `
+                program.setFile(`source/MyClass.bs`, `
                     class MyClass
                     end class
                 `);
@@ -856,11 +1210,11 @@ describe('Scope', () => {
             });
 
             it('finds custom types from other other files', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     function foo(param as MyNameSpace.MyClass) as MyNameSpace.MyClass
                     end function
                 `);
-                program.setFile({ src: s`${rootDir}/source/MyNameSpace.bs`, dest: s`source/MyNameSpace.bs` }, `
+                program.setFile(`source/MyNameSpace.bs`, `
                     namespace MyNameSpace
                       class MyClass
                       end class
@@ -872,7 +1226,7 @@ describe('Scope', () => {
             });
 
             it('detects missing custom types from another namespaces', () => {
-                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile(`source/main.bs`, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -993,7 +1347,7 @@ describe('Scope', () => {
 
     describe('getDefinition', () => {
         it('returns empty list when there are no files', () => {
-            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
+            let file = program.setFile('source/main.brs', '');
             let scope = program.getScopeByName('source');
             expect(scope.getDefinition(file, Position.create(0, 0))).to.be.lengthOf(0);
         });
@@ -1028,6 +1382,7 @@ describe('Scope', () => {
                 end namespace
             `);
             delete ((file.ast.statements[0] as NamespaceStatement).body.statements[0] as FunctionStatement).name;
+            program.validate();
             program['scopes']['source'].buildNamespaceLookup();
         });
     });
@@ -1060,7 +1415,7 @@ describe('Scope', () => {
                     bar3_2
                 end enum
             `);
-            // program.validate();
+            program.validate();
 
             expect(
                 [...sourceScope.getEnumMap().keys()]

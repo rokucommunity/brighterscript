@@ -1,16 +1,15 @@
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import type { NamespaceStatement } from './Statement';
-import { Body, ClassStatement, CommentStatement, EmptyStatement } from './Statement';
+import { Body, CommentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import { WalkMode } from '../astUtils/visitors';
-import { CancellationTokenSource, Range } from 'vscode-languageserver';
-import { NamespacedVariableNameExpression, VariableExpression } from './Expression';
+import { isNamespaceStatement } from '../astUtils/reflection';
+import { CancellationTokenSource } from 'vscode-languageserver';
 import { Program } from '../Program';
-import * as path from 'path';
 import { trim } from '../testHelpers.spec';
 import type { BrsFile } from '../files/BrsFile';
+import { tempDir } from '../testHelpers.spec';
 
-const tempDir = path.join(process.cwd(), '.tmp');
 describe('Statement', () => {
     let program: Program;
     beforeEach(() => {
@@ -48,6 +47,24 @@ describe('Statement', () => {
             expect(statement.getName(ParseMode.BrighterScript)).to.equal('NameA.NameB');
             expect(statement.getName(ParseMode.BrightScript)).to.equal('NameA_NameB');
         });
+
+        it('getName() works', () => {
+            program.setFile<BrsFile>('source/main.brs', `
+                namespace NameA
+                    namespace NameB
+                        sub main()
+                        end sub
+                    end namespace
+                end namespace
+            `);
+            program.validate();
+            let node = program.getFile<BrsFile>('source/main.brs').ast.findChild<NamespaceStatement>(isNamespaceStatement);
+            while (node.findChild(isNamespaceStatement)) {
+                node = node.findChild<NamespaceStatement>(isNamespaceStatement);
+            }
+            expect(node.getName(ParseMode.BrighterScript)).to.equal('NameA.NameB');
+            expect(node.getName(ParseMode.BrightScript)).to.equal('NameA_NameB');
+        });
     });
 
     describe('CommentStatement', () => {
@@ -64,26 +81,26 @@ describe('Statement', () => {
     });
 
     describe('ClassStatement', () => {
-        function create(name: string, namespaceName?: string) {
-            let stmt = new ClassStatement(
-                <any>{ range: Range.create(0, 0, 0, 0) },
-                <any>{ text: name },
-                null,
-                <any>{ range: Range.create(0, 0, 0, 0) },
-                null,
-                null,
-                namespaceName ? new NamespacedVariableNameExpression(new VariableExpression(<any>{ text: namespaceName }, null)) : null
-            );
-            return stmt;
-        }
         describe('getName', () => {
             it('handles null namespace name', () => {
-                let stmt = create('Animal');
+                const file = program.setFile<BrsFile>('source/lib.bs', `
+                    class Animal
+                    end class
+                `);
+                program.validate();
+                const stmt = file.parser.references.classStatements[0];
                 expect(stmt.getName(ParseMode.BrightScript)).to.equal('Animal');
                 expect(stmt.getName(ParseMode.BrighterScript)).to.equal('Animal');
             });
             it('handles namespaces', () => {
-                let stmt = create('Animal', 'NameA');
+                const file = program.setFile<BrsFile>('source/lib.bs', `
+                    namespace NameA
+                        class Animal
+                        end class
+                    end namespace
+                `);
+                program.validate();
+                const stmt = file.parser.references.classStatements[0];
                 expect(stmt.getName(ParseMode.BrightScript)).to.equal('NameA_Animal');
                 expect(stmt.getName(ParseMode.BrighterScript)).to.equal('NameA.Animal');
             });

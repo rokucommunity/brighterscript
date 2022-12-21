@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-for-in-array */
-import { expect } from 'chai';
+import { expect } from '../../../chai-config.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Lexer } from '../../../lexer/Lexer';
 import { Parser, ParseMode } from '../../Parser';
@@ -189,56 +189,95 @@ describe('NullCoalescingExpression', () => {
             program.dispose();
         });
 
-        it('uses the proper prefix when aliased package is installed', () => {
+        it('uses the proper prefix when aliased package is installed', async () => {
             program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
-            testTranspile(
-                'a = user ?? false',
-                `a = rokucommunity_bslib_coalesce(user, false)`
-            );
-        });
-
-        it('properly transpiles null coalesence assignments - simple', () => {
-            testTranspile(`a = user ?? {"id": "default"}`, 'a = bslib_coalesce(user, {\n    "id": "default"\n})', 'none');
-        });
-
-        it('properly transpiles null coalesence assignments - complex consequent', () => {
-            testTranspile(`a = user.getAccount() ?? {"id": "default"}`, `
-                a = (function(user)
-                        __bsConsequent = user.getAccount()
-                        if __bsConsequent <> invalid then
-                            return __bsConsequent
-                        else
-                            return {
-                                "id": "default"
-                            }
-                        end if
-                    end function)(user)
+            await testTranspile(`
+                sub main()
+                    a = user ?? false
+                end sub
+            `, `
+                sub main()
+                    a = rokucommunity_bslib_coalesce(user, false)
+                end sub
             `);
         });
 
-        it('transpiles null coalesence assignment for variable alternate- complex consequent', () => {
-            testTranspile(`a = obj.link ?? fallback`, `
-                a = (function(fallback, obj)
-                        __bsConsequent = obj.link
-                        if __bsConsequent <> invalid then
-                            return __bsConsequent
-                        else
-                            return fallback
-                        end if
-                    end function)(fallback, obj)
+        it('properly transpiles null coalesence assignments - simple', async () => {
+            await testTranspile(`
+                sub main()
+                    a = user ?? {"id": "default"}
+                end sub
+            `, `
+                sub main()
+                    a = bslib_coalesce(user, {
+                        "id": "default"
+                    })
+                end sub
             `);
         });
 
-        it('properly transpiles null coalesence assignments - complex alternate', () => {
-            testTranspile(`a = user ?? m.defaults.getAccount(settings.name)`, `
-                a = (function(m, settings, user)
-                        __bsConsequent = user
-                        if __bsConsequent <> invalid then
-                            return __bsConsequent
-                        else
-                            return m.defaults.getAccount(settings.name)
-                        end if
-                    end function)(m, settings, user)
+        it('properly transpiles null coalesence assignments - complex consequent', async () => {
+            await testTranspile(`
+                sub main()
+                    user = {}
+                    a = user.getAccount() ?? {"id": "default"}
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    a = (function(user)
+                            __bsConsequent = user.getAccount()
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return {
+                                    "id": "default"
+                                }
+                            end if
+                        end function)(user)
+                end sub
+            `);
+        });
+
+        it('transpiles null coalesence assignment for variable alternate- complex consequent', async () => {
+            await testTranspile(`
+                sub main()
+                    a = obj.link ?? false
+                end sub
+            `, `
+                sub main()
+                    a = (function(obj)
+                            __bsConsequent = obj.link
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return false
+                            end if
+                        end function)(obj)
+                end sub
+            `);
+        });
+
+        it('properly transpiles null coalesence assignments - complex alternate', async () => {
+            await testTranspile(`
+                sub main()
+                    user = {}
+                    settings = {}
+                    a = user ?? m.defaults.getAccount(settings.name)
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    settings = {}
+                    a = (function(m, settings, user)
+                            __bsConsequent = user
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return m.defaults.getAccount(settings.name)
+                            end if
+                        end function)(m, settings, user)
+                end sub
             `);
         });
     });

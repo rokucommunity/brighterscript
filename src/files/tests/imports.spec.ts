@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../../chai-config.spec';
 import * as sinonImport from 'sinon';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
@@ -7,28 +7,26 @@ import { standardizePath as s } from '../../util';
 import type { XmlFile } from '../XmlFile';
 import type { BrsFile } from '../BrsFile';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../../testHelpers.spec';
+import { tempDir, rootDir, stagingDir } from '../../testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
-let tmpPath = s`${process.cwd()}/.tmp`;
-let rootDir = s`${tmpPath}/rootDir`;
-let stagingFolderPath = s`${tmpPath}/staging`;
 
 describe('import statements', () => {
     let program: Program;
     const testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
-        fsExtra.ensureDirSync(tmpPath);
-        fsExtra.emptyDirSync(tmpPath);
+        fsExtra.ensureDirSync(tempDir);
+        fsExtra.emptyDirSync(tempDir);
         program = new Program({
             rootDir: rootDir,
-            stagingFolderPath: stagingFolderPath
+            stagingDir: stagingDir
         });
     });
     afterEach(() => {
         sinon.restore();
-        fsExtra.ensureDirSync(tmpPath);
-        fsExtra.emptyDirSync(tmpPath);
+        fsExtra.ensureDirSync(tempDir);
+        fsExtra.emptyDirSync(tempDir);
         program.dispose();
     });
 
@@ -56,12 +54,12 @@ describe('import statements', () => {
         let files = Object.keys(program.files).map(x => program.getFile(x)).filter(x => !!x).map(x => {
             return {
                 src: x.srcPath,
-                dest: x.pkgPath
+                dest: x.destPath
             };
         });
-        await program.transpile(files, stagingFolderPath);
+        await program.transpile(files, stagingDir);
         expect(
-            trimMap(fsExtra.readFileSync(`${stagingFolderPath}/components/ChildScene.xml`).toString())
+            trimMap(fsExtra.readFileSync(`${stagingDir}/components/ChildScene.xml`).toString())
         ).to.equal(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="Scene">
@@ -158,7 +156,7 @@ describe('import statements', () => {
         program.validate();
 
         expectDiagnostics(program, [
-            DiagnosticMessages.callToUnknownFunction('Waddle', s`components/ChildScene.xml`).message
+            DiagnosticMessages.cannotFindName('Waddle')
         ]);
 
         //add the missing function
@@ -177,19 +175,19 @@ describe('import statements', () => {
 
     it('adds brs imports to xml file during transpile', () => {
         //create child component
-        let component = program.setFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, trim`
+        let component = program.setFile<XmlFile>('components/ChildScene.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brightscript" uri="pkg:/source/lib.bs" />
             </component>
         `);
-        program.setFile({ src: s`${rootDir}/source/lib.bs`, dest: 'source/lib.bs' }, `
+        program.setFile('source/lib.bs', `
             import "stringOps.brs"
             function toLower(strVal as string)
                 return StringToLower(strVal)
             end function
         `);
-        program.setFile({ src: s`${rootDir}/source/stringOps.brs`, dest: 'source/stringOps.brs' }, `
+        program.setFile('source/stringOps.brs', `
             function StringToLower(strVal as string)
                 return isInt(strVal)
             end function
@@ -224,7 +222,7 @@ describe('import statements', () => {
         ]);
     });
 
-    it('complicated import graph adds correct script tags', () => {
+    it('complicated import graph adds correct script tags', async () => {
         program.setFile('source/maestro/ioc/IOCMixin.bs', `
             sub DoIocThings()
             end sub
@@ -236,7 +234,7 @@ describe('import statements', () => {
         program.setFile('components/AuthManager.bs', `
             import "pkg:/source/BaseClass.bs"
         `);
-        testTranspile(trim`
+        await testTranspile(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brighterscript" uri="AuthManager.bs" />
@@ -262,6 +260,20 @@ describe('import statements', () => {
             import "pkg:/"
         `);
         expect(brsFile.ownScriptImports.length).to.equal(5);
-        expect(brsFile.ownScriptImports.filter(p => !!p.pkgPath).length).to.equal(3);
+        expect(brsFile.ownScriptImports.filter(p => !!p.destPath).length).to.equal(3);
+    });
+
+    it('keeps the original import path when transpiled', async () => {
+        program.setFile('components/MainScene.xml', `
+            <component name="MainScene" extends="Scene">
+                <script uri="MainScene.bs" />
+            </component>
+        `);
+        program.setFile('components/Lib.bs', '');
+        await testTranspile(`
+            import "Lib.bs"
+        `, `
+            'import "Lib.bs"
+        `, undefined, 'components/MainScene.bs');
     });
 });

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-for-in-array */
-import { expect } from 'chai';
+import { expect } from '../../../chai-config.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { Parser, ParseMode } from '../../Parser';
@@ -265,89 +265,192 @@ describe('ternary expressions', () => {
             program.dispose();
         });
 
-        it('uses the proper prefix when aliased package is installed', () => {
+        it('uses the proper prefix when aliased package is installed', async () => {
             program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
-            testTranspile(
-                `a = user = invalid ? "no user" : "logged in"`,
-                `a = rokucommunity_bslib_ternary(user = invalid, "no user", "logged in")`
-            );
+            await testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? "no user" : "logged in"
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    a = rokucommunity_bslib_ternary(user = invalid, "no user", "logged in")
+                end sub
+            `);
         });
 
-        it('simple consequents', () => {
-            testTranspile(
-                `a = user = invalid ? "no user" : "logged in"`,
-                `a = bslib_ternary(user = invalid, "no user", "logged in")`
-            );
+        it('simple consequents', async () => {
+            await testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? "no user" : "logged in"
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    a = bslib_ternary(user = invalid, "no user", "logged in")
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? 1 : "logged in"`,
-                `a = bslib_ternary(user = invalid, 1, "logged in")`
-            );
+            await testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? 1 : "logged in"
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    a = bslib_ternary(user = invalid, 1, "logged in")
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? 1.2 : "logged in"`,
-                `a = bslib_ternary(user = invalid, 1.2, "logged in")`
-            );
+            await testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? 1.2 : "logged in"
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    a = bslib_ternary(user = invalid, 1.2, "logged in")
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? {} : "logged in"`,
-                `a = bslib_ternary(user = invalid, {}, "logged in")`
-            );
+            await testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? {} : "logged in"
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    a = bslib_ternary(user = invalid, {}, "logged in")
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? [] : "logged in"`,
-                `a = bslib_ternary(user = invalid, [], "logged in")`
-            );
+            await testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? [] : "logged in"
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    a = bslib_ternary(user = invalid, [], "logged in")
+                end sub
+            `);
         });
 
-        it('simple alternates', () => {
-            testTranspile(
-                `a = user = invalid ? "logged in" : "no user" `,
-                `a = bslib_ternary(user = invalid, "logged in", "no user")`
-            );
+        it('simple alternates', async () => {
+            await testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? "logged in" : "no user"
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    a = bslib_ternary(user = invalid, "logged in", "no user")
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? "logged in" : 1 `,
-                `a = bslib_ternary(user = invalid, "logged in", 1)`
-            );
+            await testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? "logged in" : 1
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    a = bslib_ternary(user = invalid, "logged in", 1)
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? "logged in" : 1.2 `,
-                `a = bslib_ternary(user = invalid, "logged in", 1.2)`
-            );
+            await testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? "logged in" : 1.2
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    a = bslib_ternary(user = invalid, "logged in", 1.2)
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? "logged in" :  [] `,
-                `a = bslib_ternary(user = invalid, "logged in", [])`
-            );
+            await testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? "logged in" :  []
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    a = bslib_ternary(user = invalid, "logged in", [])
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? "logged in" :  {} `,
-                `a = bslib_ternary(user = invalid, "logged in", {})`
-            );
+            await testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? "logged in" :  {}
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    a = bslib_ternary(user = invalid, "logged in", {})
+                end sub
+            `);
         });
 
-        it('complex conditions do not cause scope capture', () => {
-            testTranspile(
-                `a = IsTrue() = true ? true : false `,
-                `a = bslib_ternary(IsTrue() = true, true, false)`
-            );
+        it('complex conditions do not cause scope capture', async () => {
+            await testTranspile(`
+                sub main()
+                    a = str("true") = "true" ? true : false
+                end sub
+            `, `
+                sub main()
+                    a = bslib_ternary(str("true") = "true", true, false)
+                end sub
+            `);
 
-            testTranspile(
-                `a = m.top.service.IsTrue() ? true : false `,
-                `a = bslib_ternary(m.top.service.IsTrue(), true, false)`
-            );
+            await testTranspile(`
+                sub main()
+                    a = m.top.service.IsTrue() ? true : false
+                end sub
+            `, `
+                sub main()
+                    a = bslib_ternary(m.top.service.IsTrue(), true, false)
+                end sub
+            `);
 
-            testTranspile(
-                `a = First(second(third(fourth(m.fifth()[123].truthy(1))))) ? true : false `,
-                `a = bslib_ternary(First(second(third(fourth(m.fifth()[123].truthy(1))))), true, false)`
-            );
+            await testTranspile(`
+                sub test(param1)
+                end sub
+
+                sub main()
+                    a = test(test(test(test(m.fifth()[123].truthy(1))))) ? true : false
+                end sub
+            `, `
+                sub test(param1)
+                end sub
+
+                sub main()
+                    a = bslib_ternary(test(test(test(test(m.fifth()[123].truthy(1))))), true, false)
+                end sub
+            `);
         });
 
-        it('captures scope for function call conseqent', () => {
-            testTranspile(
-                `name = zombie.getName() <> invalid ? zombie.GetName() : "zombie"`,
-                `
+        it('captures scope for function call conseqent', async () => {
+            await testTranspile(`
+                sub main()
+                    zombie = {}
+                    name = zombie.getName() <> invalid ? zombie.GetName() : "zombie"
+                end sub
+            `, `
+                sub main()
+                    zombie = {}
                     name = (function(__bsCondition, zombie)
                             if __bsCondition then
                                 return zombie.GetName()
@@ -355,14 +458,19 @@ describe('ternary expressions', () => {
                                 return "zombie"
                             end if
                         end function)(zombie.getName() <> invalid, zombie)
-                `
-            );
+                end sub
+            `);
         });
 
-        it('captures scope for function call alternate', () => {
-            testTranspile(
-                `name = zombie.getName() = invalid ? "zombie" :  zombie.GetName()`,
-                `
+        it('captures scope for function call alternate', async () => {
+            await testTranspile(`
+                sub main()
+                    zombie = {}
+                    name = zombie.getName() = invalid ? "zombie" :  zombie.GetName()
+                end sub
+            `, `
+                sub main()
+                    zombie = {}
                     name = (function(__bsCondition, zombie)
                             if __bsCondition then
                                 return "zombie"
@@ -370,71 +478,94 @@ describe('ternary expressions', () => {
                                 return zombie.GetName()
                             end if
                         end function)(zombie.getName() = invalid, zombie)
-                `
-            );
+                end sub
+            `);
         });
 
-        it('captures scope for complex consequent', () => {
-            testTranspile(
-                `name = isLoggedIn ? m.defaults.getAccount(settings.name) : "no"`,
-                `
+        it('captures scope for complex consequent', async () => {
+            await testTranspile(`
+                sub main()
+                    settings = {}
+                    name = {} ? m.defaults.getAccount(settings.name) : "no"
+                end sub
+            `, `
+                sub main()
+                    settings = {}
                     name = (function(__bsCondition, m, settings)
                             if __bsCondition then
                                 return m.defaults.getAccount(settings.name)
                             else
                                 return "no"
                             end if
-                        end function)(isLoggedIn, m, settings)
+                        end function)({}, m, settings)
+                end sub
+            `);
+        });
+
+        it('supports scope-captured outer, and simple inner', async () => {
+            await testTranspile(
+                `
+                    sub main()
+                        zombie = {}
+                        human = {}
+                        name = zombie <> invalid ? zombie.Attack(human <> invalid ? human: zombie) : "zombie"
+                    end sub
+                `,
+                `
+                    sub main()
+                        zombie = {}
+                        human = {}
+                        name = (function(__bsCondition, human, zombie)
+                                if __bsCondition then
+                                    return zombie.Attack(bslib_ternary(human <> invalid, human, zombie))
+                                else
+                                    return "zombie"
+                                end if
+                            end function)(zombie <> invalid, human, zombie)
+                    end sub
                 `
             );
         });
 
-        it('supports scope-captured outer, and simple inner', () => {
-            testTranspile(
-                `name = zombie <> invalid ? zombie.Attack(human <> invalid ? human: zombie) : "zombie"`,
+        it('uses scope capture for property access', async () => {
+            await testTranspile(
                 `
-                    name = (function(__bsCondition, human, zombie)
-                            if __bsCondition then
-                                return zombie.Attack(bslib_ternary(human <> invalid, human, zombie))
-                            else
-                                return "zombie"
-                            end if
-                        end function)(zombie <> invalid, human, zombie)
+                    sub main()
+                        person = {}
+                        name = person <> invalid ? person.name : "John Doe"
+                    end sub
+                    `,
                 `
-            );
-        });
-
-        it('uses scope capture for property access', () => {
-            testTranspile(
-                `name = person <> invalid ? person.name : "John Doe"`,
-                `
-                    name = (function(__bsCondition, person)
-                            if __bsCondition then
-                                return person.name
-                            else
-                                return "John Doe"
-                            end if
-                        end function)(person <> invalid, person)
+                    sub main()
+                        person = {}
+                        name = (function(__bsCondition, person)
+                                if __bsCondition then
+                                    return person.name
+                                else
+                                    return "John Doe"
+                                end if
+                            end function)(person <> invalid, person)
+                    end sub
                 `
             );
         });
 
-        it('uses `invalid` in place of missing consequent ', () => {
-            testTranspile(
+        it('uses `invalid` in place of missing consequent ', async () => {
+            await testTranspile(
                 `print name = "bob" ? :"zombie"`,
                 `print bslib_ternary(name = "bob", invalid, "zombie")`
                 , 'none', undefined, false);
         });
 
-        it('uses `invalid` in place of missing alternate ', () => {
-            testTranspile(
+        it('uses `invalid` in place of missing alternate ', async () => {
+            await testTranspile(
                 `print name = "bob" ? "human"`,
                 `print bslib_ternary(name = "bob", "human", invalid)`
                 , 'none', undefined, false);
         });
 
-        it('uses `invalid` in place of missing alternate and consequent ', () => {
-            testTranspile(
+        it('uses `invalid` in place of missing alternate and consequent ', async () => {
+            await testTranspile(
                 `print name = "bob" ?:`,
                 `print bslib_ternary(name = "bob", invalid, invalid)`
                 , 'none', undefined, false);

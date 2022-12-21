@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import * as sinon from 'sinon';
 import { Logger } from './Logger';
 import PluginInterface from './PluginInterface';
@@ -7,7 +7,7 @@ describe('PluginInterface', () => {
     let pluginInterface: PluginInterface;
 
     beforeEach(() => {
-        pluginInterface = new PluginInterface([], new Logger());
+        pluginInterface = new PluginInterface([], { logger: new Logger() });
     });
 
     it('allows adding a plugin', () => {

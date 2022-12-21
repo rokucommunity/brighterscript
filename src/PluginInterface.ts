@@ -9,15 +9,46 @@ export type Arguments<T> = [T] extends [(...args: infer U) => any]
 
 export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> {
 
+    /**
+     * @deprecated use the `options` parameter pattern instead
+     */
+    constructor(
+        plugins: CompilerPlugin[],
+        logger: Logger
+    );
+    constructor(
+        plugins: CompilerPlugin[],
+        options: {
+            logger: Logger;
+            suppressErrors?: boolean;
+        }
+    );
     constructor(
         private plugins: CompilerPlugin[],
-        private logger: Logger
-    ) { }
+        options: {
+            logger: Logger;
+            suppressErrors?: boolean;
+        } | Logger
+    ) {
+        if (options?.constructor.name === 'Logger') {
+            this.logger = options as unknown as Logger;
+        } else {
+            this.logger = (options as any)?.logger;
+            this.suppressErrors = (options as any)?.suppressErrors === false ? false : true;
+        }
+    }
+
+    private logger: Logger;
+
+    /**
+     * Should plugin errors cause the program to fail, or should they be caught and simply logged
+     */
+    private suppressErrors: boolean;
 
     /**
      * Call `event` on plugins
      */
-    public emit<K extends keyof T & string>(event: K, ...args: Arguments<T[K]>) {
+    public emit<K extends keyof T & string>(event: K, ...args: Arguments<T[K]>): Arguments<T[K]>[0] {
         for (let plugin of this.plugins) {
             if ((plugin as any)[event]) {
                 try {
@@ -26,9 +57,33 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
                     });
                 } catch (err) {
                     this.logger.error(`Error when calling plugin ${plugin.name}.${event}:`, err);
+                    if (!this.suppressErrors) {
+                        throw err;
+                    }
                 }
             }
         }
+        return args[0];
+    }
+
+    /**
+     * Call `event` on plugins, but allow the plugins to return promises that will be awaited before the next plugin is notified
+     */
+    public async emitAsync<K extends keyof T & string>(event: K, ...args: Arguments<T[K]>): Promise<Arguments<T[K]>[0]> {
+        for (let plugin of this.plugins) {
+            if ((plugin as any)[event]) {
+                try {
+                    await this.logger.time(LogLevel.debug, [plugin.name, event], async () => {
+                        await Promise.resolve(
+                            (plugin as any)[event](...args)
+                        );
+                    });
+                } catch (err) {
+                    this.logger.error(`Error when calling plugin ${plugin.name}.${event}:`, err);
+                }
+            }
+        }
+        return args[0];
     }
 
     /**
@@ -57,7 +112,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
 
     public remove<T extends CompilerPlugin = CompilerPlugin>(plugin: T) {
         if (this.has(plugin)) {
-            this.plugins.splice(this.plugins.indexOf(plugin));
+            this.plugins.splice(this.plugins.indexOf(plugin), 1);
         }
         return plugin;
     }

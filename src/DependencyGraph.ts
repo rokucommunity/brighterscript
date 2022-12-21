@@ -59,11 +59,22 @@ export class DependencyGraph {
 
     /**
      * Get a list of the dependencies for the given key, recursively.
-     * @param key the key for which to get the dependencies
+     * @param keys the key (or keys) for which to get the dependencies
      * @param exclude a list of keys to exclude from traversal. Anytime one of these nodes is encountered, it is skipped.
      */
-    public getAllDependencies(key: string, exclude?: string[]) {
-        return this.nodes[key]?.getAllDependencies(exclude) ?? [];
+    public getAllDependencies(keys: string | string[], exclude?: string[]) {
+        if (typeof keys === 'string') {
+            return this.nodes[keys]?.getAllDependencies(exclude) ?? [];
+        } else {
+            const set = new Set<string>();
+            for (const key of keys) {
+                const dependencies = this.getAllDependencies(key, exclude);
+                for (const dependency of dependencies) {
+                    set.add(dependency);
+                }
+            }
+            return [...set];
+        }
     }
 
     /**
@@ -88,7 +99,8 @@ export class DependencyGraph {
 
     /**
      * Listen for any changes to dependencies with the given key.
-     * @param emitImmediately if true, the handler will be called once immediately.
+     * @param key the name of the dependency
+     * @param handler a function called anytime changes occur
      */
     public onchange(key: string, handler: (event: DependencyChangedEvent) => void) {
         this.onchangeEmitter.on(key, handler);

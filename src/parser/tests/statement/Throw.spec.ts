@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../../../chai-config.spec';
 import type { TryCatchStatement, ThrowStatement } from '../../Statement';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { LiteralExpression } from '../../Expression';

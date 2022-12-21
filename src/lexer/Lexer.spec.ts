@@ -1,5 +1,5 @@
 /* eslint no-template-curly-in-string: 0 */
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 
 import { TokenKind } from './TokenKind';
 import { Lexer } from './Lexer';
@@ -9,6 +9,13 @@ import { Range } from 'vscode-languageserver';
 import util from '../util';
 
 describe('lexer', () => {
+    it('recognizes the `const` keyword', () => {
+        let { tokens } = Lexer.scan('const');
+        expect(tokens.map(x => x.kind)).to.eql([
+            TokenKind.Const,
+            TokenKind.Eof
+        ]);
+    });
     it('recognizes namespace keywords', () => {
         let { tokens } = Lexer.scan('namespace end namespace endnamespace end   namespace');
         expect(tokens.map(x => x.kind)).to.eql([
@@ -1371,6 +1378,15 @@ describe('lexer', () => {
                 /\\\n/
             );
         });
+    });
+
+    it('detects "continue" as a keyword', () => {
+        expect(
+            Lexer.scan('continue').tokens.map(x => x.kind)
+        ).to.eql([
+            TokenKind.Continue,
+            TokenKind.Eof
+        ]);
     });
 });
 

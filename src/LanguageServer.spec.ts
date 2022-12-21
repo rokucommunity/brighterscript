@@ -1,38 +1,32 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import * as fsExtra from 'fs-extra';
-import * as glob from 'glob';
 import * as path from 'path';
-import type { DidChangeWatchedFilesParams, DocumentSymbol, Location } from 'vscode-languageserver';
+import type { DidChangeWatchedFilesParams, Location } from 'vscode-languageserver';
 import { FileChangeType, Range } from 'vscode-languageserver';
 import { Deferred } from './deferred';
-import type { Workspace } from './LanguageServer';
-import { LanguageServer } from './LanguageServer';
-import type { ProgramBuilder } from './ProgramBuilder';
-import * as sinonImport from 'sinon';
+import type { Project } from './LanguageServer';
+import { CustomCommands, LanguageServer } from './LanguageServer';
+import type { SinonStub } from 'sinon';
+import { createSandbox } from 'sinon';
 import { standardizePath as s, util } from './util';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Program } from './Program';
 import * as assert from 'assert';
-import { expectZeroDiagnostics } from './testHelpers.spec';
+import { expectZeroDiagnostics, trim } from './testHelpers.spec';
+import { isBrsFile, isLiteralString } from './astUtils/reflection';
+import { createVisitor, WalkMode } from './astUtils/visitors';
+import { tempDir, rootDir } from './testHelpers.spec';
+import { URI } from 'vscode-uri';
 
-let sinon: sinonImport.SinonSandbox;
-beforeEach(() => {
-    sinon = sinonImport.createSandbox();
-});
-afterEach(() => {
-    sinon.restore();
-});
+const sinon = createSandbox();
 
-let rootDir = s`${process.cwd()}`;
+const workspacePath = rootDir;
 
 describe('LanguageServer', () => {
     let server: LanguageServer;
-    //an any version of the server for easier private testing
-    let svr: any;
-    let workspaceFolders: Array<{
-        uri: string;
-        name: string;
-    }>;
+    let program: Program;
+
+    let workspaceFolders: string[] = [];
 
     let vfs = {} as Record<string, string>;
     let physicalFilePaths = [] as string[];
@@ -62,7 +56,14 @@ describe('LanguageServer', () => {
         onDidSaveTextDocument: () => null,
         onRequest: () => null,
         workspace: {
-            getWorkspaceFolders: () => workspaceFolders,
+            getWorkspaceFolders: () => {
+                return workspaceFolders.map(
+                    x => ({
+                        uri: getFileProtocolPath(x),
+                        name: path.basename(x)
+                    })
+                );
+            },
             getConfiguration: () => {
                 return {};
             }
@@ -71,31 +72,33 @@ describe('LanguageServer', () => {
             log: () => { }
         }
     };
-    let program: Program;
 
     beforeEach(() => {
+        sinon.restore();
         server = new LanguageServer();
-        svr = server;
-        workspaceFolders = [];
+        workspaceFolders = [workspacePath];
+
         vfs = {};
         physicalFilePaths = [];
 
         //hijack the file resolver so we can inject in-memory files for our tests
-        let originalResolver = svr.documentFileResolver;
-        svr.documentFileResolver = (srcPath: string) => {
+        let originalResolver = server['documentFileResolver'];
+        server['documentFileResolver'] = (srcPath: string) => {
             if (vfs[srcPath]) {
                 return vfs[srcPath];
             } else {
-                return originalResolver.call(svr, srcPath);
+                return originalResolver.call(server, srcPath);
             }
         };
 
         //mock the connection stuff
-        svr.createConnection = () => {
+        (server as any).createConnection = () => {
             return connection;
         };
+        server['hasConfigurationCapability'] = true;
     });
     afterEach(async () => {
+        fsExtra.emptyDirSync(tempDir);
         try {
             await Promise.all(
                 physicalFilePaths.map(srcPath => fsExtra.unlinkSync(srcPath))
@@ -122,7 +125,7 @@ describe('LanguageServer', () => {
         const file = program.setFile(filePath, contents);
         if (file) {
             const document = TextDocument.create(util.pathToUri(file.srcPath), 'brightscript', 1, contents);
-            svr.documents._documents[document.uri] = document;
+            server['documents']['_documents'][document.uri] = document;
             return document;
         }
     }
@@ -133,50 +136,50 @@ describe('LanguageServer', () => {
         fsExtra.writeFileSync(srcPath, contents);
     }
 
-    describe('createStandaloneFileWorkspace', () => {
+    describe('createStandaloneFileProject', () => {
         it('never returns undefined', async () => {
-            let filePath = `${rootDir}/.tmp/main.brs`;
+            let filePath = `${rootDir}/main.brs`;
             writeToFs(filePath, `sub main(): return: end sub`);
-            let firstWorkspace = await svr.createStandaloneFileWorkspace(filePath);
-            let secondWorkspace = await svr.createStandaloneFileWorkspace(filePath);
-            expect(firstWorkspace).to.equal(secondWorkspace);
+            let firstProject = await server['createStandaloneFileProject'](filePath);
+            let secondProject = await server['createStandaloneFileProject'](filePath);
+            expect(firstProject).to.equal(secondProject);
         });
 
         it('filters out certain diagnostics', async () => {
-            let filePath = `${rootDir}/.tmp/main.brs`;
+            let filePath = `${rootDir}/main.brs`;
             writeToFs(filePath, `sub main(): return: end sub`);
-            let firstWorkspace: Workspace = await svr.createStandaloneFileWorkspace(filePath);
-            expectZeroDiagnostics(firstWorkspace.builder.program);
+            let firstProject: Project = await server['createStandaloneFileProject'](filePath);
+            expectZeroDiagnostics(firstProject.builder.program);
         });
     });
 
     describe('sendDiagnostics', () => {
         it('waits for program to finish loading before sending diagnostics', async () => {
-            svr.onInitialize({
+            server.onInitialize({
                 capabilities: {
                     workspace: {
                         workspaceFolders: true
                     }
                 }
-            });
-            expect(svr.clientHasWorkspaceFolderCapability).to.be.true;
+            } as any);
+            expect(server['clientHasWorkspaceFolderCapability']).to.be.true;
             server.run();
             let deferred = new Deferred();
-            let workspace: any = {
+            let project: any = {
                 builder: {
                     getDiagnostics: () => []
                 },
                 firstRunPromise: deferred.promise
             };
-            //make a new not-completed workspace
-            server.workspaces.push(workspace);
+            //make a new not-completed project
+            server.projects.push(project);
 
             //this call should wait for the builder to finish
-            let p = svr.sendDiagnostics();
-            // await s.createWorkspaces(
+            let p = server['sendDiagnostics']();
+
             await util.sleep(50);
             //simulate the program being created
-            workspace.builder.program = {
+            project.builder.program = {
                 files: {}
             };
             deferred.resolve();
@@ -185,7 +188,7 @@ describe('LanguageServer', () => {
         });
 
         it('dedupes diagnostics found at same location from multiple projects', async () => {
-            server.workspaces.push(<any>{
+            server.projects.push(<any>{
                 firstRunPromise: Promise.resolve(),
                 builder: {
                     getDiagnostics: () => {
@@ -212,45 +215,57 @@ describe('LanguageServer', () => {
                     }
                 }
             });
-            svr.connection = connection;
-            let stub = sinon.stub(svr.connection, 'sendDiagnostics');
-            await svr.sendDiagnostics();
+            server['connection'] = connection as any;
+            let stub = sinon.stub(server['connection'], 'sendDiagnostics');
+            await server['sendDiagnostics']();
             expect(stub.getCall(0).args?.[0]?.diagnostics).to.be.lengthOf(1);
+        });
+
+        it('sends diagnostics that were triggered by the program instead of vscode', async () => {
+            server['connection'] = server['createConnection']();
+            await server['createProject'](workspacePath);
+            let stub: SinonStub;
+            const promise = new Promise((resolve) => {
+                stub = sinon.stub(connection, 'sendDiagnostics').callsFake(resolve as any);
+            });
+            const { program } = server.projects[0].builder;
+            program.setFile('source/lib.bs', `
+                sub lib()
+                    functionDoesNotExist()
+                end sub
+            `);
+            program.validate();
+            await promise;
+            expect(stub.called).to.be.true;
         });
     });
 
-    describe('createWorkspace', () => {
+    describe('createProject', () => {
         it('prevents creating package on first run', async () => {
-            svr.connection = svr.createConnection();
-            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
-            expect((svr.workspaces[0].builder as ProgramBuilder).program.options.copyToStaging).to.be.false;
+            server['connection'] = server['createConnection']();
+            await server['createProject'](workspacePath);
+            expect(server['projects'][0].builder.program.options.copyToStaging).to.be.false;
         });
     });
 
     describe('onDidChangeWatchedFiles', () => {
-        let workspacePath = s`${rootDir}/TestRokuApp`;
         let mainPath = s`${workspacePath}/source/main.brs`;
 
         it('picks up new files', async () => {
-            workspaceFolders = [{
-                uri: getFileProtocolPath(workspacePath),
-                name: 'TestProject'
-            }];
-
-            svr.run();
-            svr.onInitialize({
+            server.run();
+            server.onInitialize({
                 capabilities: {
                 }
-            });
+            } as any);
             writeToFs(mainPath, `sub main(): return: end sub`);
-            await svr.onInitialized();
-            expect(server.workspaces[0].builder.program.hasFile(mainPath)).to.be.true;
+            await server['onInitialized']();
+            expect(server.projects[0].builder.program.hasFile(mainPath)).to.be.true;
             //move a file into the directory...the program should detect it
             let libPath = s`${workspacePath}/source/lib.brs`;
             writeToFs(libPath, 'sub lib(): return : end sub');
 
-            server.workspaces[0].configFilePath = `${workspacePath}/bsconfig.json`;
-            await svr.onDidChangeWatchedFiles({
+            server.projects[0].configFilePath = `${workspacePath}/bsconfig.json`;
+            await server['onDidChangeWatchedFiles']({
                 changes: [{
                     uri: getFileProtocolPath(libPath),
                     type: 1 //created
@@ -265,14 +280,14 @@ describe('LanguageServer', () => {
                     // }
                 ]
             });
-            expect(server.workspaces[0].builder.program.hasFile(libPath)).to.be.true;
+            expect(server.projects[0].builder.program.hasFile(libPath)).to.be.true;
         });
     });
 
     describe('handleFileChanges', () => {
         it('only adds files that match the files array', async () => {
             let setFileStub = sinon.stub().returns(Promise.resolve());
-            const workspace = {
+            const project = {
                 builder: {
                     options: {
                         files: [
@@ -285,12 +300,12 @@ describe('LanguageServer', () => {
                         setFile: <any>setFileStub
                     }
                 }
-            } as Workspace;
+            } as Project;
 
             let mainPath = s`${rootDir}/source/main.brs`;
             // setVfsFile(mainPath, 'sub main()\nend sub');
 
-            await server.handleFileChanges(workspace, [{
+            await server.handleFileChanges(project, [{
                 type: FileChangeType.Created,
                 srcPath: mainPath
             }]);
@@ -303,7 +318,7 @@ describe('LanguageServer', () => {
             let libPath = s`${rootDir}/components/lib.brs`;
 
             expect(setFileStub.callCount).to.equal(1);
-            await server.handleFileChanges(workspace, [{
+            await server.handleFileChanges(project, [{
                 type: FileChangeType.Created,
                 srcPath: libPath
             }]);
@@ -312,82 +327,170 @@ describe('LanguageServer', () => {
         });
     });
 
+    describe('syncProjects', () => {
+        it('loads workspace as project', async () => {
+            server.run();
+
+            expect(server.projects).to.be.lengthOf(0);
+
+            fsExtra.ensureDirSync(workspacePath);
+
+            await server['syncProjects']();
+
+            //no child bsconfig.json files, use the workspacePath
+            expect(
+                server.projects.map(x => x.projectPath)
+            ).to.eql([
+                workspacePath
+            ]);
+
+            fsExtra.outputJsonSync(s`${workspacePath}/project1/bsconfig.json`, {});
+            fsExtra.outputJsonSync(s`${workspacePath}/project2/bsconfig.json`, {});
+
+            await server['syncProjects']();
+
+            //2 child bsconfig.json files. Use those folders as projects, and don't use workspacePath
+            expect(
+                server.projects.map(x => x.projectPath).sort()
+            ).to.eql([
+                s`${workspacePath}/project1`,
+                s`${workspacePath}/project2`
+            ]);
+
+            fsExtra.removeSync(s`${workspacePath}/project2/bsconfig.json`);
+            await server['syncProjects']();
+
+            //1 child bsconfig.json file. Still don't use workspacePath
+            expect(
+                server.projects.map(x => x.projectPath)
+            ).to.eql([
+                s`${workspacePath}/project1`
+            ]);
+
+            fsExtra.removeSync(s`${workspacePath}/project1/bsconfig.json`);
+            await server['syncProjects']();
+
+            //back to no child bsconfig.json files. use workspacePath again
+            expect(
+                server.projects.map(x => x.projectPath)
+            ).to.eql([
+                workspacePath
+            ]);
+        });
+
+        it('ignores bsconfig.json files from vscode ignored paths', async () => {
+            server.run();
+            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({
+                exclude: {
+                    '**/vendor': true
+                }
+            }) as any);
+
+            fsExtra.outputJsonSync(s`${workspacePath}/vendor/someProject/bsconfig.json`, {});
+            //it always ignores node_modules
+            fsExtra.outputJsonSync(s`${workspacePath}/node_modules/someProject/bsconfig.json`, {});
+            await server['syncProjects']();
+
+            //no child bsconfig.json files, use the workspacePath
+            expect(
+                server.projects.map(x => x.projectPath)
+            ).to.eql([
+                workspacePath
+            ]);
+        });
+
+        it('does not produce duplicate projects when subdir and parent dir are opened as workspace folders', async () => {
+            fsExtra.outputJsonSync(s`${tempDir}/root/bsconfig.json`, {});
+            fsExtra.outputJsonSync(s`${tempDir}/root/subdir/bsconfig.json`, {});
+
+            workspaceFolders = [
+                s`${tempDir}/root`,
+                s`${tempDir}/root/subdir`
+            ];
+
+            server.run();
+            await server['syncProjects']();
+
+            expect(
+                server.projects.map(x => x.projectPath).sort()
+            ).to.eql([
+                s`${tempDir}/root`,
+                s`${tempDir}/root/subdir`
+            ]);
+        });
+
+        it('finds nested roku-like dirs', async () => {
+            fsExtra.outputFileSync(s`${tempDir}/project1/manifest`, '');
+            fsExtra.outputFileSync(s`${tempDir}/project1/source/main.brs`, '');
+
+            fsExtra.outputFileSync(s`${tempDir}/sub/dir/project2/manifest`, '');
+            fsExtra.outputFileSync(s`${tempDir}/sub/dir/project2/source/main.bs`, '');
+
+            //does not match folder with manifest without a sibling ./source folder
+            fsExtra.outputFileSync(s`${tempDir}/project3/manifest`, '');
+
+            workspaceFolders = [
+                s`${tempDir}/`
+            ];
+
+            server.run();
+            await server['syncProjects']();
+
+            expect(
+                server.projects.map(x => x.projectPath).sort()
+            ).to.eql([
+                s`${tempDir}/project1`,
+                s`${tempDir}/sub/dir/project2`
+            ]);
+        });
+    });
+
     describe('onDidChangeWatchedFiles', () => {
         it('converts folder paths into an array of file paths', async () => {
-            svr.connection = {
-                sendNotification: () => { }
-            };
-            svr.workspaces.push({
-                builder: {
-                    getDiagnostics: () => [],
-                    program: {
-                        validate: () => { }
-                    }
-                }
-            });
+            server.run();
 
-            sinon.stub(util, 'isDirectorySync').returns(true);
-            sinon.stub(glob, 'sync').returns([
-                s`${rootDir}/source/main.brs`,
-                s`${rootDir}/source/lib.brs`
-            ]);
-            const stub = sinon.stub(server, 'handleFileChanges').returns(Promise.resolve());
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
+            await server['syncProjects']();
 
-            let sourcePath = s`${rootDir}/source`;
-            await (server as any).onDidChangeWatchedFiles({
+            const stub2 = sinon.stub(server.projects[0].builder.program, 'setFile');
+
+            await server['onDidChangeWatchedFiles']({
                 changes: [{
                     type: FileChangeType.Created,
-                    uri: getFileProtocolPath(sourcePath)
+                    uri: getFileProtocolPath(s`${rootDir}/source`)
                 }]
             } as DidChangeWatchedFilesParams);
 
-            expect(stub.callCount).to.equal(1);
-
-            expect(stub.getCalls()[0].args[1]).to.eql([{
-                type: FileChangeType.Created,
-                srcPath: s`${rootDir}/source/main.brs`
-            }, {
-                type: FileChangeType.Created,
-                srcPath: s`${rootDir}/source/lib.brs`
-            }]);
+            expect(
+                stub2.getCalls().map(x => x.args[0].src).sort()
+            ).to.eql([
+                s`${rootDir}/source/lib.brs`,
+                s`${rootDir}/source/main.brs`
+            ]);
         });
 
         it('does not trigger revalidates when changes are in files which are not tracked', async () => {
-            svr.connection = {
-                sendNotification: () => { }
-            };
-            svr.workspaces.push({
-                builder: {
-                    getDiagnostics: () => [],
-                    program: {
-                        validate: () => { }
-                    }
-                }
-            });
+            server.run();
+            const externalDir = s`${tempDir}/not_app_dir`;
+            fsExtra.outputJsonSync(s`${externalDir}/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${externalDir}/source/main.brs`, '');
+            fsExtra.outputFileSync(s`${externalDir}/source/lib.brs`, '');
+            await server['syncProjects']();
 
-            sinon.stub(util, 'isDirectorySync').returns(true);
-            sinon.stub(glob, 'sync').returns([
-                s`${rootDir}/source/main.brs`,
-                s`${rootDir}/source/lib.brs`
-            ]);
-            const stub = sinon.stub(server, 'handleFileChanges').returns(Promise.resolve());
+            const stub2 = sinon.stub(server.projects[0].builder.program, 'setFile');
 
-            await (server as any).onDidChangeWatchedFiles({
+            await server['onDidChangeWatchedFiles']({
                 changes: [{
                     type: FileChangeType.Created,
-                    uri: getFileProtocolPath('some/other/folder/maybe/some/vscode/settings')
+                    uri: getFileProtocolPath(externalDir)
                 }]
             } as DidChangeWatchedFilesParams);
 
-            expect(stub.callCount).to.equal(1);
-
-            expect(stub.getCalls()[0].args[1]).to.eql([{
-                type: FileChangeType.Created,
-                srcPath: s`${rootDir}/source/main.brs`
-            }, {
-                type: FileChangeType.Created,
-                srcPath: s`${rootDir}/source/lib.brs`
-            }]);
+            expect(
+                stub2.getCalls()
+            ).to.be.empty;
         });
     });
 
@@ -396,9 +499,9 @@ describe('LanguageServer', () => {
         const functionFileBaseName = 'buildAwesome';
         const funcDefinitionLine = 'function buildAwesome(confirm = true as Boolean)';
         beforeEach(async () => {
-            svr.connection = svr.createConnection();
-            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
-            program = svr.workspaces[0].builder.program;
+            server['connection'] = server['createConnection']();
+            await server['createProject'](workspacePath);
+            program = server.projects[0].builder.program;
 
             const name = `CallComponent`;
             callDocument = addScriptFile(name, `
@@ -428,7 +531,7 @@ describe('LanguageServer', () => {
                 end function
             `, 'bs');
 
-            const result = await svr.onSignatureHelp({
+            const result = await server['onSignatureHelp']({
                 textDocument: {
                     uri: callDocument.uri
                 },
@@ -448,7 +551,7 @@ describe('LanguageServer', () => {
                 end function
             `, 'bs');
 
-            const result = await svr.onSignatureHelp({
+            const result = await server['onSignatureHelp']({
                 textDocument: {
                     uri: callDocument.uri
                 },
@@ -469,7 +572,7 @@ describe('LanguageServer', () => {
                 end class
             `, 'bs');
 
-            const result = await svr.onSignatureHelp({
+            const result = await server['onSignatureHelp']({
                 textDocument: {
                     uri: callDocument.uri
                 },
@@ -487,9 +590,9 @@ describe('LanguageServer', () => {
         let referenceFileUris = [];
 
         beforeEach(async () => {
-            svr.connection = svr.createConnection();
-            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
-            program = svr.workspaces[0].builder.program;
+            server['connection'] = server['createConnection']();
+            await server['createProject'](workspacePath);
+            program = server.projects[0].builder.program;
 
             const functionFileBaseName = 'buildAwesome';
             functionDocument = addScriptFile(functionFileBaseName, `
@@ -515,12 +618,12 @@ describe('LanguageServer', () => {
         });
 
         it('should return the expected results if we entered on an identifier token', async () => {
-            const references = await svr.onReferences({
+            const references = await server['onReferences']({
                 textDocument: {
                     uri: functionDocument.uri
                 },
                 position: util.createPosition(1, 32)
-            });
+            } as any);
 
             expect(references.length).to.equal(referenceFileUris.length);
 
@@ -530,21 +633,21 @@ describe('LanguageServer', () => {
         });
 
         it('should return an empty response if we entered on a token that should not return any results', async () => {
-            let references = await svr.onReferences({
+            let references = await server['onReferences']({
                 textDocument: {
                     uri: functionDocument.uri
                 },
                 position: util.createPosition(1, 20) // function token
-            });
+            } as any);
 
             expect(references).to.be.empty;
 
-            references = await svr.onReferences({
+            references = await server['onReferences']({
                 textDocument: {
                     uri: functionDocument.uri
                 },
-                position: util.createPosition(1, 20) // return token
-            });
+                position: util['createPosition'](1, 20) // return token
+            } as any);
 
             expect(references).to.be.empty;
         });
@@ -555,9 +658,9 @@ describe('LanguageServer', () => {
         let referenceDocument: TextDocument;
 
         beforeEach(async () => {
-            svr.connection = svr.createConnection();
-            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
-            program = svr.workspaces[0].builder.program;
+            server['connection'] = server['createConnection']();
+            await server['createProject'](workspacePath);
+            program = server.projects[0].builder.program;
 
             const functionFileBaseName = 'buildAwesome';
             functionDocument = addScriptFile(functionFileBaseName, `
@@ -586,7 +689,7 @@ describe('LanguageServer', () => {
         });
 
         it('should return the expected location if we entered on an identifier token', async () => {
-            const locations = await svr.onDefinition({
+            const locations = await server['onDefinition']({
                 textDocument: {
                     uri: referenceDocument.uri
                 },
@@ -601,7 +704,7 @@ describe('LanguageServer', () => {
         });
 
         it('should return the expected location if we entered on a StringLiteral token', async () => {
-            const locations = await svr.onDefinition({
+            const locations = await server['onDefinition']({
                 textDocument: {
                     uri: referenceDocument.uri
                 },
@@ -616,7 +719,7 @@ describe('LanguageServer', () => {
         });
 
         it('should return nothing if neither StringLiteral or identifier token entry point', async () => {
-            const locations = await svr.onDefinition({
+            const locations = await server['onDefinition']({
                 textDocument: {
                     uri: referenceDocument.uri
                 },
@@ -627,7 +730,7 @@ describe('LanguageServer', () => {
         });
 
         it('should work on local variables as well', async () => {
-            const locations = await svr.onDefinition({
+            const locations = await server['onDefinition']({
                 textDocument: {
                     uri: referenceDocument.uri
                 },
@@ -662,7 +765,7 @@ describe('LanguageServer', () => {
 
             addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
 
-            const locations = await svr.onDefinition({
+            const locations = await server['onDefinition']({
                 textDocument: {
                     uri: referenceDocument.uri
                 },
@@ -680,9 +783,9 @@ describe('LanguageServer', () => {
 
     describe('onDocumentSymbol', () => {
         beforeEach(async () => {
-            svr.connection = svr.createConnection();
-            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
-            program = svr.workspaces[0].builder.program;
+            server['connection'] = server['createConnection']();
+            await server['createProject'](workspacePath);
+            program = server.projects[0].builder.program;
         });
 
         it('should return the expected symbols even if pulled from cache', async () => {
@@ -698,7 +801,7 @@ describe('LanguageServer', () => {
 
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
-                const symbols = await svr.onDocumentSymbol({
+                const symbols = await server.onDocumentSymbol({
                     textDocument: document
                 });
                 expect(symbols.length).to.equal(2);
@@ -722,9 +825,9 @@ describe('LanguageServer', () => {
 
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
-                const symbols = await svr.onDocumentSymbol({
+                const symbols = await server['onDocumentSymbol']({
                     textDocument: document
-                }) as DocumentSymbol[];
+                });
 
                 expect(symbols.length).to.equal(1);
                 const classSymbol = symbols[0];
@@ -748,12 +851,13 @@ describe('LanguageServer', () => {
                     end function
                 end namespace
             `, 'bs');
+            program.validate();
 
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
-                const symbols = await svr.onDocumentSymbol({
+                const symbols = await server['onDocumentSymbol']({
                     textDocument: document
-                }) as DocumentSymbol[];
+                });
 
                 expect(symbols.length).to.equal(1);
                 const namespaceSymbol = symbols[0];
@@ -768,9 +872,9 @@ describe('LanguageServer', () => {
 
     describe('onWorkspaceSymbol', () => {
         beforeEach(async () => {
-            svr.connection = svr.createConnection();
-            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
-            program = svr.workspaces[0].builder.program;
+            server['connection'] = server['createConnection']();
+            await server['createProject'](workspacePath);
+            program = server.projects[0].builder.program;
         });
 
         it('should return the expected symbols even if pulled from cache', async () => {
@@ -814,7 +918,7 @@ describe('LanguageServer', () => {
 
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
-                const symbols = await svr.onWorkspaceSymbol();
+                const symbols = await server['onWorkspaceSymbol']({} as any);
                 expect(symbols.length).to.equal(8);
                 for (const symbol of symbols) {
                     switch (symbol.name) {
@@ -862,10 +966,11 @@ describe('LanguageServer', () => {
                     end class
                 end namespace
             `, 'bs');
+            program.validate();
 
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
-                const symbols = await svr.onWorkspaceSymbol();
+                const symbols = await server['onWorkspaceSymbol']({} as any);
                 expect(symbols.length).to.equal(4);
                 expect(symbols[0].name).to.equal(`pi`);
                 expect(symbols[0].containerName).to.equal(`${nestedNamespace}.${nestedClassName}`);
@@ -878,12 +983,176 @@ describe('LanguageServer', () => {
         });
     });
 
+    describe('getConfigFilePath', () => {
+        it('honors the hasConfigurationCapability setting', async () => {
+            server.run();
+            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(
+                Promise.reject(
+                    new Error('Client does not support "workspace/configuration"')
+                )
+            );
+            server['hasConfigurationCapability'] = false;
+            fsExtra.outputFileSync(`${workspacePath}/bsconfig.json`, '{}');
+            expect(
+                await server['getConfigFilePath'](workspacePath)
+            ).to.eql(
+                s`${workspacePath}/bsconfig.json`
+            );
+        });
+
+        it('executes the connection.workspace.getConfiguration call when enabled to do so', async () => {
+            server.run();
+            const bsconfigPath = `${tempDir}/bsconfig.test.json`;
+            //add a dummy bsconfig to reference for the test
+            fsExtra.outputFileSync(bsconfigPath, ``);
+
+            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({ configFile: bsconfigPath }) as any);
+            server['hasConfigurationCapability'] = true;
+            fsExtra.outputFileSync(`${workspacePath}/bsconfig.json`, '{}');
+            expect(
+                s`${await server['getConfigFilePath'](workspacePath)}`
+            ).to.eql(
+                s`${bsconfigPath}`
+            );
+        });
+    });
+
+    describe('getWorkspaceExcludeGlobs', () => {
+        it('honors the hasConfigurationCapability setting', async () => {
+            server.run();
+            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(
+                Promise.reject(
+                    new Error('Client does not support "workspace/configuration"')
+                )
+            );
+            server['hasConfigurationCapability'] = false;
+            expect(
+                await server['getWorkspaceExcludeGlobs'](workspaceFolders[0])
+            ).to.eql([
+                '**/node_modules/**/*'
+            ]);
+        });
+    });
+
     describe('CustomCommands', () => {
         describe('TranspileFile', () => {
-            it('returns pathAbsolute to support backwards compatibility', () => {
+            it('returns pathAbsolute to support backwards compatibility', async () => {
+                fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `
+                    sub main()
+                        print \`hello world\`
+                    end sub
+                `);
+                fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '');
+                server.run();
+                await server['syncProjects']();
+                const result = await server.onExecuteCommand({
+                    command: CustomCommands.TranspileFile,
+                    arguments: [s`${rootDir}/source/main.bs`]
+                });
+                expect(
+                    trim(result?.code)
+                ).to.eql(trim`
+                    sub main()
+                        print "hello world"
+                    end sub
+                `);
+                expect(result['pathAbsolute']).to.eql(result.srcPath);
+            });
 
+            it('calls beforeProgramTranspile and afterProgramTranspile plugin events', async () => {
+                fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `
+                    sub main()
+                        print \`hello world\`
+                    end sub
+                `);
+                fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '');
+                server.run();
+                await server['syncProjects']();
+                const afterSpy = sinon.spy();
+                //make a plugin that changes string text
+                server.projects[0].builder.program.plugins.add({
+                    name: 'test-plugin',
+                    beforeProgramTranspile: (program, entries, editor) => {
+                        const file = program.getFile('source/main.bs');
+                        if (isBrsFile(file)) {
+                            file.ast.walk(createVisitor({
+                                LiteralExpression: (expression) => {
+                                    if (isLiteralString(expression)) {
+                                        editor.setProperty(expression.token, 'text', 'hello moon');
+                                    }
+                                }
+                            }), {
+                                walkMode: WalkMode.visitAllRecursive
+                            });
+                        }
+                    },
+                    afterProgramTranspile: afterSpy
+                });
+
+                const result = await server.onExecuteCommand({
+                    command: CustomCommands.TranspileFile,
+                    arguments: [s`${rootDir}/source/main.bs`]
+                });
+                expect(
+                    trim(result?.code)
+                ).to.eql(trim`
+                    sub main()
+                        print "hello moon"
+                    end sub
+                `);
+                expect(afterSpy.called).to.be.true;
             });
         });
+    });
+
+    it('semantic tokens request waits until after validation has finished', async () => {
+        fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `
+            sub main()
+                print \`hello world\`
+            end sub
+        `);
+        let spaceCount = 0;
+        const getContents = () => {
+            return `
+                namespace sgnode
+                    sub speak(message)
+                        print message
+                    end sub
+
+                    sub sayHello()
+                        sgnode.speak("Hello")${' '.repeat(spaceCount++)}
+                    end sub
+                end namespace
+            `;
+        };
+
+        const uri = URI.file(s`${rootDir}/source/sgnode.bs`).toString();
+
+        fsExtra.outputFileSync(s`${rootDir}/source/sgnode.bs`, getContents());
+        server.run();
+        await server['syncProjects']();
+        expectZeroDiagnostics(server.projects[0].builder.program);
+
+        fsExtra.outputFileSync(s`${rootDir}/source/sgnode.bs`, getContents());
+        const changeWatchedFilesPromise = server['onDidChangeWatchedFiles']({
+            changes: [{
+                type: FileChangeType.Changed,
+                uri: uri
+            }]
+        });
+        const document = {
+            getText: () => getContents(),
+            uri: uri
+        } as TextDocument;
+
+        const semanticTokensPromise = server['onFullSemanticTokens']({
+            textDocument: document
+        });
+        await Promise.all([
+            changeWatchedFilesPromise,
+            semanticTokensPromise
+        ]);
+        expectZeroDiagnostics(server.projects[0].builder.program);
     });
 });
 

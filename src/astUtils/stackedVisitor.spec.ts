@@ -1,4 +1,4 @@
-import { expect, assert } from 'chai';
+import { expect, assert } from '../chai-config.spec';
 import { createStackedVisitor } from './stackedVisitor';
 
 describe('createStackedVisitor', () => {

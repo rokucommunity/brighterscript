@@ -1,13 +1,15 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import * as path from 'path';
 import util, { standardizePath as s } from './util';
 import { Position, Range } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
+import { DiagnosticMessages } from './DiagnosticMessages';
+import { tempDir, rootDir } from './testHelpers.spec';
+
 const sinon = createSandbox();
-let tempDir = s`${process.cwd()}/.tmp`;
-let rootDir = s`${tempDir}/rootDir`;
+
 let cwd = process.cwd();
 
 describe('util', () => {
@@ -36,9 +38,9 @@ describe('util', () => {
         });
     });
 
-    describe('getRokuPkgPath', () => {
+    describe('sanitizePkgPath', () => {
         it('replaces more than one windows slash in a path', () => {
-            expect(util.getRokuPkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
+            expect(util.sanitizePkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
         });
     });
 
@@ -338,17 +340,6 @@ describe('util', () => {
         });
     });
 
-    describe('stringFormat', () => {
-        it('handles out-of-order replacements', () => {
-            expect(util.stringFormat('{1}{0}', 'b', 'a')).to.equal('ab');
-        });
-
-        it('does not fail on arguments not provided', () => {
-            expect(util.stringFormat('{0}{1}', 'a')).to.equal('a{1}');
-        });
-
-    });
-
     describe('getPkgPathFromTarget', () => {
         it('works with both types of separators', () => {
             expect(util.getPkgPathFromTarget('components/component1.xml', '../lib.brs')).to.equal('lib.brs');
@@ -520,19 +511,23 @@ describe('util', () => {
         });
     });
 
-    describe('copyBslibToStaging', () => {
-        it('copies from local bslib dependency', async () => {
-            await util.copyBslibToStaging(tempDir);
-            expect(fsExtra.pathExistsSync(`${tempDir}/source/bslib.brs`)).to.be.true;
-            expect(
-                /^function bslib_toString\(/mg.exec(
-                    fsExtra.readFileSync(`${tempDir}/source/bslib.brs`).toString()
-                )
-            ).not.to.be.null;
-        });
-    });
-
     describe('rangesIntersect', () => {
+        it('does not match when ranges do not touch (a < b)', () => {
+            // AA BB
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 0, 0, 1),
+                util.createRange(0, 2, 0, 3)
+            )).to.be.false;
+        });
+
+        it('does not match when ranges do not touch (a < b)', () => {
+            // BB AA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 2, 0, 3),
+                util.createRange(0, 0, 0, 1)
+            )).to.be.false;
+        });
+
         it('does not match when ranges touch at right edge', () => {
             // AABB
             expect(util.rangesIntersect(
@@ -606,6 +601,96 @@ describe('util', () => {
         });
     });
 
+    describe('rangesIntersectOrTouch', () => {
+        it('does not match when ranges do not touch (a < b)', () => {
+            // AA BB
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 0, 0, 1),
+                util.createRange(0, 2, 0, 3)
+            )).to.be.false;
+        });
+
+        it('does not match when ranges do not touch (a < b)', () => {
+            // BB AA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 2, 0, 3),
+                util.createRange(0, 0, 0, 1)
+            )).to.be.false;
+        });
+
+        it('matches when ranges touch at right edge', () => {
+            // AABB
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 0, 0, 1),
+                util.createRange(0, 1, 0, 2)
+            )).to.be.true;
+        });
+
+        it('matches when ranges touch at left edge', () => {
+            // BBAA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 0, 2),
+                util.createRange(0, 0, 0, 1)
+            )).to.be.true;
+        });
+
+        it('matches when range overlaps by single character on the right', () => {
+            // A BA B
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 0, 3),
+                util.createRange(0, 2, 0, 4)
+            )).to.be.true;
+        });
+
+        it('matches when range overlaps by single character on the left', () => {
+            // B AB A
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 2, 0, 4),
+                util.createRange(0, 1, 0, 3)
+            )).to.be.true;
+        });
+
+        it('matches when A is contained by B at the edges', () => {
+            // B AA B
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 2, 0, 3),
+                util.createRange(0, 1, 0, 4)
+            )).to.be.true;
+        });
+
+        it('matches when B is contained by A at the edges', () => {
+            // A BB A
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 0, 4),
+                util.createRange(0, 2, 0, 3)
+            )).to.be.true;
+        });
+
+        it('matches when A and B are identical', () => {
+            // ABBA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 0, 2),
+                util.createRange(0, 1, 0, 2)
+            )).to.be.true;
+        });
+
+        it('matches when A spans multiple lines', () => {
+            // ABBA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 2, 0),
+                util.createRange(0, 1, 0, 3)
+            )).to.be.true;
+        });
+
+        it('matches when B spans multiple lines', () => {
+            // ABBA
+            expect(util.rangesIntersectOrTouch(
+                util.createRange(0, 1, 0, 3),
+                util.createRange(0, 1, 2, 0)
+            )).to.be.true;
+        });
+    });
+
     it('sortByRange', () => {
         const front = {
             range: util.createRange(1, 1, 1, 2)
@@ -660,6 +745,51 @@ describe('util', () => {
             }, {
                 text: 'i',
                 range: util.createRange(2, 21, 2, 22)
+            }]);
+        });
+    });
+
+    describe('toDiagnostic', () => {
+        it('uses a uri on relatedInfo missing location', () => {
+            expect(
+                util.toDiagnostic({
+                    ...DiagnosticMessages.cannotFindName('someVar'),
+                    file: undefined,
+                    range: util.createRange(1, 2, 3, 4),
+                    relatedInformation: [{
+                        message: 'Alpha',
+                        location: undefined
+                    }]
+                }, 'u/r/i').relatedInformation
+            ).to.eql([{
+                message: 'Alpha',
+                location: util.createLocation(
+                    'u/r/i', util.createRange(1, 2, 3, 4)
+                )
+            }]);
+        });
+
+        it('eliminates diagnostics with relatedInformation that are missing a uri', () => {
+            expect(
+                util.toDiagnostic({
+                    ...DiagnosticMessages.cannotFindName('someVar'),
+                    file: undefined,
+                    range: util.createRange(1, 2, 3, 4),
+                    relatedInformation: [{
+                        message: 'Alpha',
+                        location: util.createLocation(
+                            'uri', util.createRange(2, 3, 4, 5)
+                        )
+                    }, {
+                        message: 'Beta',
+                        location: undefined
+                    }]
+                }, undefined).relatedInformation
+            ).to.eql([{
+                message: 'Alpha',
+                location: util.createLocation(
+                    'uri', util.createRange(2, 3, 4, 5)
+                )
             }]);
         });
     });

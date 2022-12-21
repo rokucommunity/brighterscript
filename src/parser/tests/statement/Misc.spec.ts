@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../../../chai-config.spec';
 import { Parser } from '../../Parser';
 import { Lexer } from '../../../lexer/Lexer';
 import { DisallowedLocalIdentifiersText, TokenKind } from '../../../lexer/TokenKind';
