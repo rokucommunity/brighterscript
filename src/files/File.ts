@@ -1,6 +1,8 @@
 import type { SourceMapGenerator } from 'source-map';
 import type { Editor } from '../astUtils/Editor';
 import type { BsDiagnostic, CommentFlag } from '../interfaces';
+import type { BrsFile } from './BrsFile';
+import type { XmlFile } from './XmlFile';
 
 export interface File {
     /**
@@ -99,7 +101,7 @@ export interface SerializeFileResult {
  * @deprecated use `File` instead
  */
 //included for backwards compatibility reasons. Remove in v1
-export type BscFile = File;
+export type BscFile = BrsFile | XmlFile;
 
 /**
  * Create a basic `File` object.

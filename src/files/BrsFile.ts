@@ -202,16 +202,16 @@ export class BrsFile implements File {
      * Does this file need to be transpiled?
      * @deprecated use the `.editor` property to push changes to the file, which will force transpilation
      */
-    private get needsTranspiled() {
+    public get needsTranspiled() {
         if (this._needsTranspiled !== undefined) {
             return this._needsTranspiled;
         }
         return !!(this.extension?.endsWith('.bs') || this.program?.options?.allowBrighterScriptInBrightScript || this.editor?.hasChanges);
     }
-    private set needsTranspiled(value) {
+    public set needsTranspiled(value) {
         this._needsTranspiled = value;
     }
-    private _needsTranspiled: boolean;
+    public _needsTranspiled: boolean;
 
     /**
      * The AST for this file
