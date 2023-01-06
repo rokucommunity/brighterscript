@@ -37,6 +37,14 @@ export class BrsFileValidator {
                 //add the `super` symbol to class methods
                 node.func.body.symbolTable.addSymbol('super', undefined, DynamicType.instance);
             },
+            CallfuncExpression: (node) => {
+                if (node.args.length > 5) {
+                    this.event.file.addDiagnostic({
+                        ...DiagnosticMessages.callFuncHasToManyArgs(node.args.length),
+                        range: node.methodName.range
+                    });
+                }
+            },
             EnumStatement: (node) => {
                 this.validateDeclarationLocations(node, 'enum', () => util.createBoundingRange(node.tokens.enum, node.tokens.name));
 

@@ -714,6 +714,11 @@ export let DiagnosticMessages = {
         message: `Namespace cannot be referenced directly`,
         code: 1137,
         severity: DiagnosticSeverity.Error
+    }),
+    callFuncHasToManyArgs: (numberOfArgs: number) => ({
+        message: `You can not have more than 5 arguments in a callFunc. ${numberOfArgs} found.`,
+        code: 1138,
+        severity: DiagnosticSeverity.Error
     })
 };
 
