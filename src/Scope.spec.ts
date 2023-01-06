@@ -203,7 +203,7 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
-        it.only('Validates not too many callFunc argument count', () => {
+        it('Validates not too many callFunc argument count', () => {
             program.options.autoImportComponentScript = true;
             program.setFile(`components/myComponent.bs`, `
                 function myFunc(a, b, c, d, e)
@@ -233,7 +233,7 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
-        it.only('Validates too many callFunc argument count', () => {
+        it('Validates too many callFunc argument count', () => {
             program.options.autoImportComponentScript = true;
             program.setFile(`components/myComponent.bs`, `
                 function myFunc(a, b, c, d, e, f)
