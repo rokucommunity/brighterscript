@@ -203,7 +203,7 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
-        it('Validates not too many callFunc argument count', () => {
+        it('Validates not too many callfunc argument count', () => {
             program.options.autoImportComponentScript = true;
             program.setFile(`components/myComponent.bs`, `
                 function myFunc(a, b, c, d, e)
