@@ -203,6 +203,68 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
+        it('Validates not too many callfunc argument count', () => {
+            program.options.autoImportComponentScript = true;
+            program.setFile(`components/myComponent.bs`, `
+                function myFunc(a, b, c, d, e)
+                    return true
+                end function
+            `);
+            program.setFile(`components/myComponent.xml`, `
+                <component name="MyComponent" extends="Group">
+                    <interface>
+                        <function name="myFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile(`components/main.bs`, `
+                sub init()
+                    m.mc@.callFunc(1,2,3,4,5)
+                end sub
+            `);
+            program.setFile(`components/main.xml`, `
+                <component name="MainScene" extends="Scene">
+                    <children>
+                        <MyComponent id="mc" />
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('Validates too many callfunc argument count', () => {
+            program.options.autoImportComponentScript = true;
+            program.setFile(`components/myComponent.bs`, `
+                function myFunc(a, b, c, d, e, f)
+                    return true
+                end function
+            `);
+            program.setFile(`components/myComponent.xml`, `
+                <component name="MyComponent" extends="Group">
+                    <interface>
+                        <function name="myFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile(`components/main.bs`, `
+                sub init()
+                    m.mc@.callFunc(1,2,3,4,5,6)
+                end sub
+            `);
+            program.setFile(`components/main.xml`, `
+                <component name="MainScene" extends="Scene">
+                    <children>
+                        <MyComponent id="mc" />
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.callfuncHasToManyArgs(6)
+            ]);
+        });
+
         it('diagnostics are assigned to correct child scope', () => {
             program.options.autoImportComponentScript = true;
             program.setFile('components/constants.bs', `
@@ -643,6 +705,7 @@ describe('Scope', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
         it('resolves local-variable function calls', () => {
             program.setFile(`source/main.brs`, `
                 sub DoSomething()
