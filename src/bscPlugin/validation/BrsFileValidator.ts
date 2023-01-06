@@ -40,7 +40,7 @@ export class BrsFileValidator {
             CallfuncExpression: (node) => {
                 if (node.args.length > 5) {
                     this.event.file.addDiagnostic({
-                        ...DiagnosticMessages.callFuncHasToManyArgs(node.args.length),
+                        ...DiagnosticMessages.callfuncHasToManyArgs(node.args.length),
                         range: node.methodName.range
                     });
                 }

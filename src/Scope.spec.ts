@@ -261,7 +261,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.callFuncHasToManyArgs(6)
+                DiagnosticMessages.callfuncHasToManyArgs(6)
             ]);
         });
 
