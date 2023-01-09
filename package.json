@@ -137,7 +137,7 @@
         "fs-extra": "^8.0.0",
         "jsonc-parser": "^2.3.0",
         "long": "^3.2.0",
-        "luxon": "^1.8.3",
+        "luxon": "^2.5.2",
         "minimatch": "^3.0.4",
         "moment": "^2.23.0",
         "p-settle": "^2.1.0",
