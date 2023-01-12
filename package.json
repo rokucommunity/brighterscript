@@ -143,7 +143,7 @@
         "p-settle": "^2.1.0",
         "parse-ms": "^2.1.0",
         "require-relative": "^0.8.7",
-        "roku-deploy": "^3.9.2",
+        "roku-deploy": "^3.9.3",
         "serialize-error": "^7.0.1",
         "source-map": "^0.7.3",
         "vscode-languageserver": "7.0.0",

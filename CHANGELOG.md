@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.61.3](https://github.com/rokucommunity/brighterscript/compare/v0.61.2...0.61.3) - 2023-01-12
+### Changed
+ - Add diagnostic for passing more than 5 arguments to a callFunc ([#765](https://github.com/rokucommunity/brighterscript/pull/765))
+ - upgrade to [roku-deploy@3.9.3](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#393---2023-01-12)
+
+
+
 ## [0.61.2](https://github.com/rokucommunity/brighterscript/compare/v0.61.1...0.61.2) - 2022-12-15
 ### Changed
  - Bump qs from 6.5.2 to 6.5.3 ([#758](https://github.com/rokucommunity/brighterscript/pull/758))
