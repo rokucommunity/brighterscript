@@ -196,9 +196,59 @@ describe('ComponentStatement', () => {
         await testTranspile(program.getFile('components/MainScene.xml'), `
             <component name="MainScene" extends="Group">
                 <script uri="pkg:/components/MainScene.brs" type="text/brightscript" />
+                <script uri="pkg:/components/MainScene.codebehind.brs" type="text/brightscript" />
                 <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
             </component>
         `);
     });
 
+    it('produces an xml file for each component when built', async () => {
+        program.setFile('components/MainScene.bs', `
+            component MainScene
+            end component
+
+            component AlternateScene
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/MainScene.xml'), `
+            <component name="MainScene" extends="Group">
+                <script uri="pkg:/components/MainScene.brs" type="text/brightscript" />
+                <script uri="pkg:/components/MainScene.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+            </component>
+        `);
+
+        await testTranspile(program.getFile('components/AlternateScene.xml'), `
+            <component name="AlternateScene" extends="Group">
+                <script uri="pkg:/components/MainScene.brs" type="text/brightscript" />
+                <script uri="pkg:/components/AlternateScene.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+            </component>
+        `);
+    });
+
+    it('produces a codebehind file for each component', async () => {
+        program.setFile('components/MainScene.bs', `
+            component MainScene
+                private sub init()
+                    print "MainScene"
+                end sub
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/MainScene.xml'), `
+            <component name="MainScene" extends="Group">
+                <script uri="pkg:/components/MainScene.brs" type="text/brightscript" />
+                <script uri="pkg:/components/MainScene.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+            </component>
+        `);
+
+        await testTranspile(program.getFile('components/MainScene.codebehind.brs'), `
+            sub init()
+                print "MainScene"
+            end sub
+        `);
+    });
 });

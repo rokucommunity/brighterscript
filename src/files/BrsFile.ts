@@ -206,7 +206,17 @@ export class BrsFile implements File {
         if (this._needsTranspiled !== undefined) {
             return this._needsTranspiled;
         }
-        return !!(this.extension?.endsWith('.bs') || this.program?.options?.allowBrighterScriptInBrightScript || this.editor?.hasChanges);
+
+        return (
+            //there's no file contents and there's at least one ast statement
+            (!this.fileContents?.trim() && this.ast?.statements.length > 0) ||
+            //is a .bs file extension
+            this.extension?.endsWith('.bs') === true ||
+            //bsconfig is marked to support bs in brs
+            this.program?.options?.allowBrighterScriptInBrightScript === true ||
+            //there are ASTEditor changes
+            this.editor?.hasChanges === true
+        );
     }
     public set needsTranspiled(value) {
         this._needsTranspiled = value;
@@ -266,7 +276,7 @@ export class BrsFile implements File {
             this.typedefFile = undefined;
 
             //parse the file (it should parse fully since there's no linked typedef
-            this.parse(this.fileContents);
+            this.parse(this.fileContents ?? '');
 
             //re-link the typedef (if it exists...which it should)
             this.resolveTypedef();
