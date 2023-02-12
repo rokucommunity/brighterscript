@@ -4,7 +4,7 @@ import { TokenKind } from '../lexer/TokenKind';
 import type { Expression } from '../parser/AstNode';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../parser/Expression';
 import type { SGAttribute } from '../parser/SGTypes';
-import { Block, MethodStatement } from '../parser/Statement';
+import { AssignmentStatement, Block, FunctionStatement, MethodStatement } from '../parser/Statement';
 
 /**
  * A range that points to the beginning of the file. Used to give non-null ranges to programmatically-added source code.
@@ -137,6 +137,12 @@ export function createInvalidLiteral(value?: string, range?: Range) {
 export function createBooleanLiteral(value: 'true' | 'false', range?: Range) {
     return new LiteralExpression(createToken(value === 'true' ? TokenKind.True : TokenKind.False, value, range));
 }
+export function createFunctionStatement(name: string | Identifier, func: FunctionExpression) {
+    return new FunctionStatement(
+        typeof name === 'string' ? createIdentifier(name) : name,
+        func
+    );
+}
 export function createFunctionExpression(kind: TokenKind.Sub | TokenKind.Function) {
     return new FunctionExpression(
         [],
@@ -185,4 +191,15 @@ export function createSGAttribute(keyName: string, value: string) {
             text: value
         }
     } as SGAttribute;
+}
+
+export function createAssignmentStatement(options: {
+    name: string | Identifier;
+    value: Expression;
+}) {
+    return new AssignmentStatement(
+        createToken(TokenKind.Equal),
+        typeof options?.name === 'string' ? createIdentifier(options.name) : options?.name,
+        options?.value
+    );
 }

@@ -10,7 +10,7 @@ import { NamespacedVariableNameExpression } from '../../Expression';
 import { ParseMode } from '../../Parser';
 import * as fsExtra from 'fs-extra';
 
-describe('ComponentStatement', () => {
+describe.only('ComponentStatement', () => {
     const rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
@@ -196,9 +196,91 @@ describe('ComponentStatement', () => {
         await testTranspile(program.getFile('components/MainScene.xml'), `
             <component name="MainScene" extends="Group">
                 <script uri="pkg:/components/MainScene.brs" type="text/brightscript" />
+                <script uri="pkg:/components/MainScene.codebehind.brs" type="text/brightscript" />
                 <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
             </component>
         `);
     });
 
+    it('produces an xml file for each component when built', async () => {
+        program.setFile('components/MainScene.bs', `
+            component MainScene
+            end component
+
+            component AlternateScene
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/MainScene.xml'), `
+            <component name="MainScene" extends="Group">
+                <script uri="pkg:/components/MainScene.brs" type="text/brightscript" />
+                <script uri="pkg:/components/MainScene.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+            </component>
+        `);
+
+        await testTranspile(program.getFile('components/AlternateScene.xml'), `
+            <component name="AlternateScene" extends="Group">
+                <script uri="pkg:/components/MainScene.brs" type="text/brightscript" />
+                <script uri="pkg:/components/AlternateScene.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+            </component>
+        `);
+    });
+
+    it('produces a codebehind file for each component', async () => {
+        program.setFile('components/MainScene.bs', `
+            component MainScene
+                private sub init()
+                    print "MainScene"
+                end sub
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/MainScene.xml'), `
+            <component name="MainScene" extends="Group">
+                <script uri="pkg:/components/MainScene.brs" type="text/brightscript" />
+                <script uri="pkg:/components/MainScene.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+            </component>
+        `);
+
+        await testTranspile(program.getFile('components/MainScene.codebehind.brs'), `
+            sub init()
+                print "MainScene"
+            end sub
+        `);
+    });
+
+    it.only('adds public fields and methods to the xml interface', async () => {
+        program.setFile('components/ZombieKeyboard.bs', `
+            component ZombieKeyboard
+
+                public isEnabled as boolean
+
+                public sub EnableVoiceMode(isEnabled as boolean)
+                    m.top.voiceModeEnabled = isEnabled
+                end sub
+
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
+            <component name="ZombieKeyboard" extends="Group">
+                <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
+                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                <interface>
+                    <field id="isEnabled" type="boolean" />
+                    <function name="EnableVoiceMode" />
+                </interface>
+            </component>
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.brs'), `
+            sub EnableVoiceMode(isEnabled as boolean)
+                m.top.voiceModeEnabled = isEnabled
+            end sub
+        `);
+    });
 });

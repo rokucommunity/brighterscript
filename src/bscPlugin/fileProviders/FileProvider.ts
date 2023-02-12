@@ -1,19 +1,16 @@
 import type { BeforeFileParseEvent, ProvideFileEvent } from '../../interfaces';
 import chalk from 'chalk';
 import { LogLevel } from '../../Logger';
-import type { BrsFile } from '../../files/BrsFile';
-import { createVisitor, WalkMode } from '../../astUtils/visitors';
-import type { ComponentStatement } from '../../parser/Statement';
-import { ParseMode } from '../../parser/Parser';
-import * as path from 'path';
-import util from '../../util';
-import undent from 'undent';
-import { Cache } from '../../Cache';
+import { ComponentStatementProvider } from './ComponentStatementProvider';
 
 export class FileProvider {
     constructor(
         private event: ProvideFileEvent
-    ) { }
+    ) {
+        this.componentStatementProvider = new ComponentStatementProvider(event);
+    }
+
+    private componentStatementProvider: ComponentStatementProvider;
 
     public process() {
         //if the event already has a file for this path, assume some other plugin has processed this event already
@@ -57,44 +54,10 @@ export class FileProvider {
 
         this.event.files.push(file);
 
-        //emit new files for comonent statements
-        this.handleComponentStatements(file);
+        //emit virtual files for each component statement
+        this.componentStatementProvider.process(file);
     }
 
-    /**
-     * Create virtual files for every component statement found in this physical file
-     */
-    private handleComponentStatements(file: BrsFile) {
-        const cache = new Cache<string, string>();
-        file.ast.walk(createVisitor({
-            ComponentStatement: (node) => {
-                //ensure the component resides within the `pkg:/components` folder
-                const destDir = cache.getOrAdd('', () => {
-                    return path.dirname(file.destPath).replace(/^(.+?)(?=[\/\\]|$)/, (match: string, firstDirName: string) => {
-                        return 'components';
-                    });
-                });
-
-                this.registerComponent(file, node, destDir);
-            }
-        }), {
-            walkMode: WalkMode.visitStatements
-        });
-    }
-
-    private registerComponent(file: BrsFile, statement: ComponentStatement, destDir: string) {
-        let name = statement.getName(ParseMode.BrightScript);
-        const xmlFile = this.event.fileFactory.XmlFile({
-            srcPath: `virtual:/${destDir}/${name}.xml`,
-            destPath: `${destDir}/${name}.xml`
-        });
-        xmlFile.parse(undent`
-            <component name="${name}" extends="${statement.getParentName(ParseMode.BrightScript) ?? 'Group'}">
-                <script uri="${util.sanitizePkgPath(file.destPath)}" />
-            </component>
-        `);
-        this.event.files.push(xmlFile);
-    }
 
     private handleXmlFile() {
         //only process files from the components folder (Roku will only parse xml files in the components folder)
