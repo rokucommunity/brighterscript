@@ -12,6 +12,7 @@ import { HoverProcessor } from './hover/HoverProcessor';
 import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
 import { BrsFilePreTranspileProcessor as BrsFileTranspileProcessor } from './transpile/BrsFileTranspileProcessor';
 import { BrsFileValidator } from './validation/BrsFileValidator';
+import { ProgramValidator } from './validation/ProgramValidator';
 import { ScopeValidator } from './validation/ScopeValidator';
 import { XmlFileValidator } from './validation/XmlFileValidator';
 import { BslibManager } from './serialize/BslibManager';
@@ -56,6 +57,7 @@ export class BscPlugin implements CompilerPlugin {
     }
 
     public afterProgramValidate(program: Program) {
+        new ProgramValidator(program).process();
         //release memory once the validation cycle has finished
         this.scopeValidator.reset();
     }

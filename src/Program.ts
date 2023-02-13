@@ -257,7 +257,8 @@ export class Program {
         let result = [] as File[];
         for (let filePath in this.files) {
             let file = this.files[filePath];
-            if (!this.fileIsIncludedInAnyScope(file)) {
+            //is this file part of a scope
+            if (!this.getFirstScopeForFile(file)) {
                 //no scopes reference this file. add it to the list
                 result.push(file);
             }
@@ -707,18 +708,6 @@ export class Program {
 
             //validate every file
             for (const file of Object.values(this.files)) {
-
-                //find any files NOT loaded into a scope
-                if (!this.fileIsIncludedInAnyScope(file) && (isBrsFile(file) || isXmlFile(file))) {
-                    this.logger.debug('Program.validate(): fileNotReferenced by any scope', () => chalk.green(file?.destPath));
-                    //the file is not loaded in any scope
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.fileNotReferencedByAnyOtherFile(),
-                        file: file,
-                        range: util.createRange(0, 0, 0, Number.MAX_VALUE)
-                    });
-                }
-
                 //for every unvalidated file, validate it
                 if (!file.isValidated) {
                     this.plugins.emit('beforeFileValidate', {
@@ -738,7 +727,6 @@ export class Program {
                     this.plugins.emit('afterFileValidate', file);
                 }
             }
-
 
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
                 for (let scopeName in this.scopes) {
@@ -798,18 +786,6 @@ export class Program {
     }
 
     /**
-     * Determine if the given file is included in at least one scope in this program
-     */
-    private fileIsIncludedInAnyScope(file: File) {
-        for (let scopeName in this.scopes) {
-            if (this.scopes[scopeName].hasFile(file)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
      * Get the files for a list of filePaths
      * @param filePaths can be an array of srcPath or a destPath strings
      * @param normalizePath should this function repair and standardize the paths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
@@ -864,7 +840,7 @@ export class Program {
     /**
      * Get the first found scope for a file.
      */
-    public getFirstScopeForFile(file: XmlFile | BrsFile): Scope {
+    public getFirstScopeForFile(file: File): Scope {
         for (let key in this.scopes) {
             let scope = this.scopes[key];
 
