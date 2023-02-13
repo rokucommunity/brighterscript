@@ -263,7 +263,7 @@ describe('import statements', () => {
         expect(brsFile.ownScriptImports.filter(p => !!p.destPath).length).to.equal(3);
     });
 
-    it.only('keeps the original import path when transpiled', async () => {
+    it('keeps the original import path when transpiled', async () => {
         program.setFile('components/MainScene.xml', `
             <component name="MainScene" extends="Scene">
                 <script uri="MainScene.bs" />
