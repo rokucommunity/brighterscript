@@ -1,3 +1,4 @@
+import { isBrsFile } from '../../astUtils/reflection';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { Program } from '../../Program';
 import util from '../../util';
@@ -16,9 +17,12 @@ export class ProgramValidator {
         for (const key in this.program.files) {
             const file = this.program.files[key];
 
-            //if the file is included in at least one scope, we're all good
-            const scope = this.program.getFirstScopeForFile(file);
-            if (scope) {
+            if (
+                //if this isn't a brs file, skip
+                !isBrsFile(file) ||
+                //if the file is included in at least one scope, skip
+                this.program.getFirstScopeForFile(file)
+            ) {
                 continue;
             }
 
