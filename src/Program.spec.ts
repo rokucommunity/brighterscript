@@ -313,6 +313,7 @@ describe('Program', () => {
                 DiagnosticMessages.fileNotReferencedByAnyOtherFile()
             ]);
         });
+
         it('does not throw errors on shadowed init functions in components', () => {
             program.setFile('lib.brs', `
                 function DoSomething()
