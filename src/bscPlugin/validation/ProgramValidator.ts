@@ -1,4 +1,4 @@
-import { isBrsFile } from '../../astUtils/reflection';
+import { isBrsFile, isComponentStatement } from '../../astUtils/reflection';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { Program } from '../../Program';
 import util from '../../util';
@@ -21,7 +21,9 @@ export class ProgramValidator {
                 //if this isn't a brs file, skip
                 !isBrsFile(file) ||
                 //if the file is included in at least one scope, skip
-                this.program.getFirstScopeForFile(file)
+                this.program.getFirstScopeForFile(file) ||
+                //if the file has at least one ComponentStatement, it produces components and should not be flagged with this diagnostic
+                file.ast.findChild(isComponentStatement)
             ) {
                 continue;
             }

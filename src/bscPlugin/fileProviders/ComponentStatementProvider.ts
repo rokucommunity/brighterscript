@@ -1,6 +1,4 @@
 import undent from 'undent';
-import { createFunctionStatement, ProvideFileEvent, Statement } from '../..';
-import { createAssignmentStatement, isFieldStatement, isMethodStatement } from '../..';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import { ParseMode } from '../../parser/Parser';
@@ -8,6 +6,10 @@ import type { ComponentStatement } from '../../parser/Statement';
 import { Cache } from '../../Cache';
 import * as path from 'path';
 import { util } from '../../util';
+import type { ProvideFileEvent } from '../../interfaces';
+import { isFieldStatement, isMethodStatement } from '../../astUtils/reflection';
+import { createFunctionStatement, createAssignmentStatement } from '../../astUtils/creators';
+import type { Statement } from '../../parser/AstNode';
 
 export class ComponentStatementProvider {
     constructor(
@@ -23,7 +25,7 @@ export class ComponentStatementProvider {
         const cache = new Cache<string, string>();
         file.ast.walk(createVisitor({
             ComponentStatement: (node) => {
-                //ensure the desetPath for the component resides within the `pkg:/components` folder
+                //force the desetPath for this component to be within the `pkg:/components` folder
                 const destDir = cache.getOrAdd(file.srcPath, () => {
                     return path.dirname(file.destPath).replace(/^(.+?)(?=[\/\\]|$)/, (match: string, firstDirName: string) => {
                         return 'components';
@@ -45,24 +47,30 @@ export class ComponentStatementProvider {
             srcPath: `virtual:/${destDir}/${name}.xml`,
             destPath: `${destDir}/${name}.xml`
         });
+        const interfaceMembers = statement.getMembers().map((member) => {
+            //declare interface function
+            if (isMethodStatement(member) && member.accessModifier?.text.toLowerCase() === 'public') {
+                return `<function name="${member.name.text}" />`;
+
+                //declare interface field
+            } else if (isFieldStatement(member) && member.accessModifier?.text.toLowerCase() === 'public') {
+                return `<field id="${member.name.text}" type="${member.type.text}" />`;
+            } else {
+                return '';
+            }
+        }).filter(x => !!x);
+
         xmlFile.parse(undent`
             <component name="${name}" extends="${statement.getParentName(ParseMode.BrightScript) ?? 'Group'}">
                 <script uri="${util.sanitizePkgPath(file.destPath)}" />
                 <script uri="${util.sanitizePkgPath(codebehindFile.destPath)}" />
+                ${interfaceMembers.length > 0 ? '<interface>' : ''}
+                    ${interfaceMembers.join('\n                    ')}
+                ${interfaceMembers.length > 0 ? '</interface>' : ''}
             </component>
         `);
 
-        //create AST from all the fields and methods in the component statement
-        for (const member of statement.getMembers()) {
-            //declare interface function
-            if (isMethodStatement(member) && member.accessModifier?.text.toLowerCase() === 'public') {
-                xmlFile.ast.component.api.setFunction(member.name.text);
 
-                //declare interface field
-            } else if (isFieldStatement(member) && member.accessModifier?.text.toLowerCase() === 'public') {
-                xmlFile.ast.component.api.setField(member.name.text, member.type.text);
-            }
-        }
         this.event.files.push(xmlFile);
     }
 
@@ -91,6 +99,13 @@ export class ComponentStatementProvider {
                 );
             }
         }
+
+        //TODO these are hacks that we need until scope has been refactored to leverate the AST directly
+        file.parser.invalidateReferences();
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        file['findCallables']();
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        file['findFunctionCalls']();
 
         this.event.files.push(file);
         return file;
