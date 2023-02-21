@@ -887,12 +887,13 @@ export class Parser {
 
             this._references.functionExpressions.push(func);
 
-            //make sure to restore the currentFunctionExpression even if the body block fails to parse
-            try {
-                //support ending the function with `end sub` OR `end function`
-                func.body = this.block();
-                func.body.symbolTable = new SymbolTable(`Block: Function '${name?.text ?? ''}'`, () => func.getSymbolTable());
-            } finally { }
+            //support ending the function with `end sub` OR `end function`
+            func.body = this.block();
+            //if the parser was unable to produce a block, make an empty one so the AST makes some sense...
+            if (!func.body) {
+                func.body = new Block([], util.createRangeFromPositions(func.range.start, func.range.start));
+            }
+            func.body.symbolTable = new SymbolTable(`Block: Function '${name?.text ?? ''}'`, () => func.getSymbolTable());
 
             if (!func.body) {
                 this.diagnostics.push({
