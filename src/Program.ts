@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, Reference, ProvideReferencesEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -1006,14 +1006,44 @@ export class Program {
         return signatureHelpUtil.getSignatureHelpItems(callExpressionInfo);
     }
 
-    public getReferences(srcPath: string, position: Position) {
+    /**
+     * @deprecated use the object param type instead
+     */
+    public getReferences(srcPath: string, position: Position);
+    public getReferences(options: GetReferencesOptions);
+    /**
+     * Get all references for the given file and position
+     */
+    public getReferences(...params: any[]) {
+        let options: GetReferencesOptions;
+        //support the old parameter style for backwards compatibility
+        if (typeof params === 'string') {
+            options = {
+                srcPath: params[0],
+                position: params[1]
+            };
+        } else {
+            options = params[0];
+        }
         //find the file
-        let file = this.getFile(srcPath);
-        if (!file) {
-            return null;
+        let file = this.getFile(options.srcPath);
+        let result: Reference[];
+        if (file) {
+            const event = {
+                program: this,
+                file: file,
+                position: options.position,
+                includeDeclaration: options.includeDeclaration ?? true,
+                scopes: this.getScopesForFile(file),
+                references: []
+            } as ProvideReferencesEvent;
+            this.plugins.emit('beforeProvideReferences', event);
+            this.plugins.emit('provideReferences', event);
+            this.plugins.emit('afterProvideReferences', event);
+            result = event.references;
         }
 
-        return file.getReferences(position);
+        return result ?? [];
     }
 
     /**
@@ -1377,4 +1407,10 @@ export interface FileTranspileResult {
     code: string;
     map: SourceMapGenerator;
     typedef: string;
+}
+
+export interface GetReferencesOptions {
+    srcPath: string;
+    position: Position;
+    includeDeclaration?: boolean;
 }
