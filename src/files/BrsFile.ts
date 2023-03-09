@@ -1192,7 +1192,7 @@ export class BrsFile {
         }
     }
 
-    private getTokenBefore(currentToken: Token, tokenKind: TokenKind): Token {
+    getTokenBefore(currentToken: Token, tokenKind: TokenKind): Token {
         const index = this.parser.tokens.indexOf(currentToken);
         for (let i = index - 1; i >= 0; i--) {
             currentToken = this.parser.tokens[i];
