@@ -4,7 +4,7 @@ import type { BsDiagnostic } from './interfaces';
 
 export class DiagnosticSeverityAdjuster {
     public adjust(options: BsConfig, diagnostics: BsDiagnostic[]): void {
-        const map = this.createSeverityMap(options.severityOverride);
+        const map = this.createSeverityMap(options.diagnosticSeverityOverrides);
 
         diagnostics.forEach(diagnostic => {
             const code = String(diagnostic.code);
@@ -14,10 +14,10 @@ export class DiagnosticSeverityAdjuster {
         });
     }
 
-    public createSeverityMap(severityOverride: BsConfig['severityOverride']): Map<string, DiagnosticSeverity> {
+    public createSeverityMap(diagnosticSeverityOverrides: BsConfig['diagnosticSeverityOverrides']): Map<string, DiagnosticSeverity> {
         const map = new Map<string, DiagnosticSeverity>();
-        Object.keys(severityOverride).forEach(key => {
-            const value = severityOverride[key];
+        Object.keys(diagnosticSeverityOverrides).forEach(key => {
+            const value = diagnosticSeverityOverrides[key];
             switch (value) {
                 case 'error':
                     map.set(key, DiagnosticSeverity.Error);

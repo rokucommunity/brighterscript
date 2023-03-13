@@ -251,11 +251,11 @@ These are the options available in the `bsconfig.json` file.
         }]
         ```
 
- - **severityOverride**: `Record<string | number, 'hint' | 'info' | 'warn' | 'error'>` - A map of error codes and severity levels, to override some diagnostics' severity; when a diagnostic generator doesn't offer enough control on an error's severity, this is a tool to work around blocking errors, or raise the level of other errors.
+ - **diagnosticSeverityOverrides**: `Record<string | number, 'hint' | 'info' | 'warn' | 'error'>` - A map of error codes and severity levels, to override some diagnostics' severity; when a diagnostic generator doesn't offer enough control on an error's severity, this is a tool to work around blocking errors, or raise the level of other errors.
 
       ```jsonc
-      "severityOverride": {
-        1011: "error",       //raise a warning to an error
+      "diagnosticSeverityOverrides": {
+        "1011": "error",       //raise a warning to an error
         "BSLINT1001": "warn" //oops we have lots of those to fix... later
       }
       ```

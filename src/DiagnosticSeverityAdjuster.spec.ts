@@ -42,7 +42,7 @@ describe('DiagnosticSeverityAdjuster', () => {
             } as BsDiagnostic
         ];
         adjuster.adjust({
-            severityOverride: {
+            diagnosticSeverityOverrides: {
                 'BSLINT1001': 'warn',
                 1001: 'info'
             }

@@ -139,7 +139,7 @@
                 ]
             }
         },
-        "severityOverride": {
+        "diagnosticSeverityOverrides": {
             "description": "A map of error codes with their severity level override (error|warn|info)",
             "type": "object",
             "patternProperties": {
