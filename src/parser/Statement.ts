@@ -969,7 +969,8 @@ export class DottedSetStatement extends Statement {
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
-        readonly value: Expression
+        readonly value: Expression,
+        readonly dot?: Token
     ) {
         super();
         this.range = util.createRangeFromPositions(this.obj.range.start, this.value.range.end);
@@ -985,7 +986,7 @@ export class DottedSetStatement extends Statement {
             return [
                 //object
                 ...this.obj.transpile(state),
-                '.',
+                this.dot ? state.tokenToSourceNode(this.dot) : '.',
                 //name
                 state.transpileToken(this.name),
                 ' = ',
