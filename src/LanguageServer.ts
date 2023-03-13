@@ -1080,7 +1080,7 @@ export class LanguageServer {
             // validate all projects
             await this.validateAllThrottled();
         } catch (e: any) {
-            this.sendCriticalFailure(`Critical error parsing / validating ${filePath}: ${e.message}`);
+            this.sendCriticalFailure(`Critical error parsing/validating ${filePath}: ${e.message}`);
         }
     }
 
@@ -1206,7 +1206,13 @@ export class LanguageServer {
     @AddStackToErrorMessage
     private async onFullSemanticTokens(params: SemanticTokensParams) {
         await this.waitAllProjectFirstRuns();
-        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+        await Promise.all([
+            //wait for the file to settle (in case there are multiple file changes in quick succession)
+            this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true),
+            // wait for the validation to finish before providing semantic tokens. program.validate() populates and then caches AstNode.parent properties.
+            // If we don't wait, then fetching semantic tokens can cause some invalid cache
+            this.validateThrottler.onIdleOnce(false)
+        ]);
 
         const srcPath = util.uriToPath(params.textDocument.uri);
         for (const project of this.projects) {

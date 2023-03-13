@@ -187,7 +187,7 @@ describe('Program', () => {
                 beforeFileParse: beforeFileParse,
                 afterFileParse: afterFileParse,
                 afterFileValidate: afterFileValidate
-            }], new Logger());
+            }], { logger: new Logger() });
 
             //add a new source file
             program.setFile('source/main.brs', '');
@@ -313,6 +313,7 @@ describe('Program', () => {
                 DiagnosticMessages.fileNotReferencedByAnyOtherFile()
             ]);
         });
+
         it('does not throw errors on shadowed init functions in components', () => {
             program.setFile('lib.brs', `
                 function DoSomething()

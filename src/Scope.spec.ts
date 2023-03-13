@@ -27,6 +27,13 @@ describe('Scope', () => {
         program.dispose();
     });
 
+    it('getEnumMemberFileLink does not crash on undefined name', () => {
+        program.setFile('source/main.bs', ``);
+        const scope = program.getScopesForFile('source/main.bs')[0];
+        scope.getEnumMemberFileLink(null);
+        //test passes if this doesn't explode
+    });
+
     it('does not mark namespace functions as collisions with stdlib', () => {
         program.setFile(`source/main.bs`, `
             namespace a
@@ -62,7 +69,7 @@ describe('Scope', () => {
         program.validate();
         const scope = program.getScopesForFile('source/alpha.bs')[0];
         scope.linkSymbolTable();
-        const symbolTable = file.parser.references.namespaceStatements[1].getSymbolTable();
+        const symbolTable = file.parser.references.namespaceStatements[1].body.getSymbolTable();
         //the symbol table should contain the relative names for all items in this namespace across the entire scope
         expect(
             symbolTable.hasSymbol('Beta')
@@ -112,7 +119,8 @@ describe('Scope', () => {
         program.validate();
         expectDiagnostics(program, [
             DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea'),
-            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA')
+            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA'),
+            DiagnosticMessages.namespaceCannotBeReferencedDirectly()
         ]);
     });
 
@@ -195,6 +203,68 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
+        it('Validates not too many callfunc argument count', () => {
+            program.options.autoImportComponentScript = true;
+            program.setFile(`components/myComponent.bs`, `
+                function myFunc(a, b, c, d, e)
+                    return true
+                end function
+            `);
+            program.setFile(`components/myComponent.xml`, `
+                <component name="MyComponent" extends="Group">
+                    <interface>
+                        <function name="myFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile(`components/main.bs`, `
+                sub init()
+                    m.mc@.callFunc(1,2,3,4,5)
+                end sub
+            `);
+            program.setFile(`components/main.xml`, `
+                <component name="MainScene" extends="Scene">
+                    <children>
+                        <MyComponent id="mc" />
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('Validates too many callfunc argument count', () => {
+            program.options.autoImportComponentScript = true;
+            program.setFile(`components/myComponent.bs`, `
+                function myFunc(a, b, c, d, e, f)
+                    return true
+                end function
+            `);
+            program.setFile(`components/myComponent.xml`, `
+                <component name="MyComponent" extends="Group">
+                    <interface>
+                        <function name="myFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile(`components/main.bs`, `
+                sub init()
+                    m.mc@.callFunc(1,2,3,4,5,6)
+                end sub
+            `);
+            program.setFile(`components/main.xml`, `
+                <component name="MainScene" extends="Scene">
+                    <children>
+                        <MyComponent id="mc" />
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.callfuncHasToManyArgs(6)
+            ]);
+        });
+
         it('diagnostics are assigned to correct child scope', () => {
             program.options.autoImportComponentScript = true;
             program.setFile('components/constants.bs', `
@@ -508,7 +578,7 @@ describe('Scope', () => {
                     DiagnosticMessages.unknownBrightScriptComponent('roDateTime_FAKE'),
                     DiagnosticMessages.mismatchCreateObjectArgumentCount('roDateTime', [1, 1], 2),
                     DiagnosticMessages.unknownRoSGNode('Rectangle_FAKE'),
-                    DiagnosticMessages.deprecatedBrightScriptComponent('roFontMetrics').code
+                    DiagnosticMessages.unknownBrightScriptComponent('roFontMetrics')
                 ]);
             });
 
@@ -593,11 +663,9 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 // only care about code and `roFontMetrics` match
-                const diagnostics = program.getDiagnostics();
-                const expectedDiag = DiagnosticMessages.deprecatedBrightScriptComponent('roFontMetrics');
-                expect(diagnostics.length).to.eql(1);
-                expect(diagnostics[0].code).to.eql(expectedDiag.code);
-                expect(diagnostics[0].message).to.contain(expectedDiag.message);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.unknownBrightScriptComponent('roFontMetrics')
+                ]);
             });
         });
 
@@ -637,6 +705,7 @@ describe('Scope', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
         it('resolves local-variable function calls', () => {
             program.setFile(`source/main.brs`, `
                 sub DoSomething()
@@ -955,7 +1024,7 @@ describe('Scope', () => {
             program.setFile(s`components/comp.brs`, ``);
             const sourceScope = program.getScopeByName('source');
             const compScope = program.getScopeByName('components/comp.xml');
-            program.plugins = new PluginInterface([], new Logger());
+            program.plugins = new PluginInterface([], { logger: new Logger() });
             const plugin = program.plugins.add({
                 name: 'Emits validation events',
                 beforeScopeValidate: sinon.spy(),

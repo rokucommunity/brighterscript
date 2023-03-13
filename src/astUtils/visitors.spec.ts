@@ -15,6 +15,7 @@ import { createStackedVisitor } from './stackedVisitor';
 import { AstEditor } from './AstEditor';
 import { Parser } from '../parser/Parser';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
+import { expectZeroDiagnostics } from '../testHelpers.spec';
 
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
@@ -353,6 +354,103 @@ describe('astUtils visitors', () => {
             index = 1;
             expect(items.map(x => `${x.constructor.name}:${x._testId}`)).to.eql(expectedConstructors.map(x => `${x}:${index++}`));
         }
+
+        it('links every ast node to its parent when walked', () => {
+            const { ast } = program.setFile<BrsFile>('source/main.bs', `
+                library "v30/bslCore.brs"
+                import "source/main.bs"
+                namespace alpha
+                    namespace beta
+                        sub charlie()
+                            delta = 1
+                            delta++
+                            delta = sub()
+                                'do some printing
+                                print "hello"
+                            end sub
+                            delta()
+                            for i = 0 to 10 step 1
+                                exit for
+                            end for
+                            while false
+                                exit while
+                            end while
+                            if true or false then
+                                print 1.2
+                            else
+                                print 123123123123
+                            end if
+                            dim arr[1, 2]
+                            goto theLabel
+                            theLabel:
+                            return false
+                            end
+                            stop
+                            for each item in [1, 2, 3]
+                                continue for
+                            end for
+                            obj = { name: "bob"}
+                            obj.name = obj.name
+                            obj["name"] = obj["name"]
+                            obj.name = obj@firstName
+                            print (true or false)
+                            print \`true\${false}\\n\`
+                            print not true
+                            print FUNCTION_NAME
+                            print new Person()
+                            print tag\`stuff\${1}\`
+                            print true ? true : false
+                            print true ?? false
+                            print /search stuff/g
+                            try
+                                obj.bob = "carl"
+                                throw "e"
+                            catch e
+                                obj["name"] = "dale"
+                            print e
+                            end try
+                            obj@.doCallfunc(1, 2)
+                        end sub
+                    end namespace
+                end namespace
+                @SomeAnnotation(1, "two")
+                interface IPerson
+                    name as string
+                    function doSomething() as string
+                end interface
+                class Person
+                    name as string = "bob"
+                    function doSomething(value = true) as string
+                    end function
+                end class
+                enum Direction
+                    up = "up"
+                end enum
+                enum Logical
+                    yes = 1
+                    no = 0
+                end enum
+                const CONST_VALUE = 1.2
+            `);
+            expectZeroDiagnostics(program);
+            const nodes: AstNode[] = [];
+            //get every expression and statement in the file
+            ast.walk((node) => {
+                nodes.push(node);
+            }, { walkMode: WalkMode.visitAllRecursive });
+
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+
+                //find the top-most ast node
+                let top = node;
+                while (top.parent) {
+                    top = top.parent;
+                }
+                //should be the same instance. If it doesn't then something is wrong with the .parent linking
+                expect(top === ast || node === ast, `Node ${node.constructor.name} (index ${i}) has broken parent link`).to.be.true;
+            }
+        });
 
         it('Walks through all expressions until cancelled', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `

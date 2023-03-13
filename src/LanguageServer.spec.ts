@@ -16,6 +16,7 @@ import { expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { isBrsFile, isLiteralString } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
+import { URI } from 'vscode-uri';
 
 const sinon = createSandbox();
 
@@ -1102,6 +1103,56 @@ describe('LanguageServer', () => {
                 expect(afterSpy.called).to.be.true;
             });
         });
+    });
+
+    it('semantic tokens request waits until after validation has finished', async () => {
+        fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `
+            sub main()
+                print \`hello world\`
+            end sub
+        `);
+        let spaceCount = 0;
+        const getContents = () => {
+            return `
+                namespace sgnode
+                    sub speak(message)
+                        print message
+                    end sub
+
+                    sub sayHello()
+                        sgnode.speak("Hello")${' '.repeat(spaceCount++)}
+                    end sub
+                end namespace
+            `;
+        };
+
+        const uri = URI.file(s`${rootDir}/source/sgnode.bs`).toString();
+
+        fsExtra.outputFileSync(s`${rootDir}/source/sgnode.bs`, getContents());
+        server.run();
+        await server['syncProjects']();
+        expectZeroDiagnostics(server.projects[0].builder.program);
+
+        fsExtra.outputFileSync(s`${rootDir}/source/sgnode.bs`, getContents());
+        const changeWatchedFilesPromise = server['onDidChangeWatchedFiles']({
+            changes: [{
+                type: FileChangeType.Changed,
+                uri: uri
+            }]
+        });
+        const document = {
+            getText: () => getContents(),
+            uri: uri
+        } as TextDocument;
+
+        const semanticTokensPromise = server['onFullSemanticTokens']({
+            textDocument: document
+        });
+        await Promise.all([
+            changeWatchedFilesPromise,
+            semanticTokensPromise
+        ]);
+        expectZeroDiagnostics(server.projects[0].builder.program);
     });
 });
 

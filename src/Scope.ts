@@ -4,7 +4,7 @@ import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink, Callable } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
@@ -148,8 +148,8 @@ export class Scope {
      */
     public getEnumMemberFileLink(enumMemberName: string, containingNamespace?: string): FileLink<EnumMemberStatement> {
         let lowerNameParts = enumMemberName?.split('.');
-        let memberName = lowerNameParts.splice(lowerNameParts.length - 1, 1)?.[0];
-        let lowerName = lowerNameParts.join('.').toLowerCase();
+        let memberName = lowerNameParts?.splice(lowerNameParts.length - 1, 1)?.[0];
+        let lowerName = lowerNameParts?.join('.').toLowerCase();
         const enumMap = this.getEnumMap();
 
         let enumeration = enumMap.get(
@@ -488,15 +488,25 @@ export class Scope {
      * If there are overridden callables with the same name, the closest callable to this scope is returned
      */
     public getCallableByName(name: string) {
-        let lowerName = name.toLowerCase();
-        let callables = this.getAllCallables();
-        for (let callable of callables) {
-            const callableName = callable.callable.getName(ParseMode.BrighterScript);
-            // Split by `.` and check the last term to consider namespaces.
-            if (callableName.toLowerCase() === lowerName || callableName.split('.').pop()?.toLowerCase() === lowerName) {
-                return callable.callable;
+        return this.getCallableMap().get(
+            name.toLowerCase()
+        );
+    }
+
+    public getCallableMap() {
+        return this.cache.getOrAdd('callableMap', () => {
+            const result = new Map<string, Callable>();
+            for (let callable of this.getAllCallables()) {
+                const callableName = callable.callable.getName(ParseMode.BrighterScript)?.toLowerCase();
+                result.set(callableName, callable.callable);
+                result.set(
+                    // Split by `.` and check the last term to consider namespaces.
+                    callableName.split('.').pop()?.toLowerCase(),
+                    callable.callable
+                );
             }
-        }
+            return result;
+        });
     }
 
     /**
@@ -574,7 +584,7 @@ export class Scope {
                             enumStatements: new Map(),
                             constStatements: new Map(),
                             statements: [],
-                            symbolTable: new SymbolTable(this.symbolTable)
+                            symbolTable: new SymbolTable(`Namespace Aggregate: '${loopName}'`, () => this.symbolTable)
                         });
                     }
                 }
@@ -593,7 +603,7 @@ export class Scope {
                 }
                 // Merges all the symbol tables of the namespace statements into the new symbol table created above.
                 // Set those symbol tables to have this new merged table as a parent
-                ns.symbolTable.mergeSymbolTable(namespaceStatement.getSymbolTable());
+                ns.symbolTable.mergeSymbolTable(namespaceStatement.body.getSymbolTable());
             }
 
             //associate child namespaces with their parents
@@ -719,9 +729,9 @@ export class Scope {
         this.cache.clear();
     }
 
-    public get symbolTable() {
+    public get symbolTable(): SymbolTable {
         return this.cache.getOrAdd('symbolTable', () => {
-            const result = new SymbolTable(this.getParentScope()?.symbolTable);
+            const result = new SymbolTable(`Scope: '${this.name}'`, () => this.getParentScope()?.symbolTable);
             for (let file of this.getOwnFiles()) {
                 if (isBrsFile(file)) {
                     result.mergeSymbolTable(file.parser?.symbolTable);
@@ -739,13 +749,14 @@ export class Scope {
     public linkSymbolTable() {
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
-                file.parser.symbolTable.pushParent(this.symbolTable);
+                file.parser.symbolTable.pushParentProvider(() => this.symbolTable);
 
                 //link each NamespaceStatement's SymbolTable with the aggregate NamespaceLookup SymbolTable
                 for (const namespace of file.parser.references.namespaceStatements) {
                     const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
-                    const namespaceSymbolTable = this.namespaceLookup.get(namespaceNameLower).symbolTable;
-                    namespace.getSymbolTable().pushParent(namespaceSymbolTable);
+                    namespace.getSymbolTable().addSibling(
+                        this.namespaceLookup.get(namespaceNameLower).symbolTable
+                    );
                 }
             }
         }
@@ -754,10 +765,13 @@ export class Scope {
     public unlinkSymbolTable() {
         for (let file of this.getOwnFiles()) {
             if (isBrsFile(file)) {
-                file.parser?.symbolTable.popParent();
+                file.parser?.symbolTable.popParentProvider();
 
                 for (const namespace of file.parser.references.namespaceStatements) {
-                    namespace.getSymbolTable().popParent();
+                    const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
+                    namespace.getSymbolTable().removeSibling(
+                        this.namespaceLookup.get(namespaceNameLower).symbolTable
+                    );
                 }
             }
         }

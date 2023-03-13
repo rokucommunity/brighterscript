@@ -82,6 +82,20 @@ describe('parser continue statements', () => {
         ]);
     });
 
+    it('allows `continue` to be used as a local variable', () => {
+        program.setFile<BrsFile>('source/main.bs', `
+            sub main()
+                continue = true
+                print continue
+                if not continue then
+                    print continue
+                end if
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     it('transpiles properly', () => {
         testTranspile(`
             sub main()
@@ -93,5 +107,20 @@ describe('parser continue statements', () => {
                 end for
             end sub
         `);
+    });
+
+    it('does not crash when missing loop type', () => {
+        program.plugins['suppressErrors'] = false;
+        program.setFile('source/main.brs', `
+            sub main()
+                while true
+                    continue
+                end while
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For).message
+        ]);
     });
 });

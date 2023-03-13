@@ -8,8 +8,9 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
+import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -17,6 +18,7 @@ import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
 import { Expression } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
+import { SourceNode } from 'source-map';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -60,13 +62,22 @@ export class CallExpression extends Expression {
          */
         readonly openingParen: Token,
         readonly closingParen: Token,
-        readonly args: Expression[]
+        readonly args: Expression[],
+        unused?: any
     ) {
         super();
         this.range = util.createBoundingRange(this.callee, this.openingParen, ...args, this.closingParen);
     }
 
     public readonly range: Range;
+
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
+     */
+    public get namespaceName() {
+        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+    }
 
     transpile(state: BrsTranspileState, nameOverride?: string) {
         let result = [];
@@ -114,11 +125,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly leftParen: Token,
         readonly rightParen: Token,
         readonly asToken?: Token,
-        readonly returnTypeToken?: Token,
-        /**
-         * If this function is enclosed within another function, this will reference that parent function
-         */
-        readonly parentFunction?: FunctionExpression
+        readonly returnTypeToken?: Token
     ) {
         super();
         if (this.returnTypeToken) {
@@ -131,14 +138,31 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
         //if there's a body, and it doesn't have a SymbolTable, assign one
         if (this.body && !this.body.symbolTable) {
-            this.body.symbolTable = new SymbolTable();
+            this.body.symbolTable = new SymbolTable(`Function Body`);
         }
+        this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
     }
 
     /**
      * The type this function returns
      */
     public returnType: BscType;
+
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
+     */
+    public get namespaceName() {
+        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+    }
+
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isFunctionExpression)` instead.
+     */
+    public get parentFunction() {
+        return this.findAncestor<FunctionExpression>(isFunctionExpression);
+    }
 
     /**
      * The list of function calls that are declared within this function scope. This excludes CallExpressions
@@ -153,8 +177,19 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
     /**
      * A list of all child functions declared directly within this function
+     * @deprecated use `.walk(createVisitor({ FunctionExpression: ()=>{}), { walkMode: WalkMode.visitAllRecursive })` instead
      */
-    public childFunctionExpressions = [] as FunctionExpression[];
+    public get childFunctionExpressions() {
+        const expressions = [] as FunctionExpression[];
+        this.walk(createVisitor({
+            FunctionExpression: (expression) => {
+                expressions.push(expression);
+            }
+        }), {
+            walkMode: WalkMode.visitAllRecursive
+        });
+        return expressions;
+    }
 
     /**
      * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
@@ -199,7 +234,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             state.transpileToken(this.rightParen)
         );
         //as [Type]
-        if (this.asToken) {
+        if (this.asToken && !state.options.removeParameterTypes) {
             results.push(
                 ' ',
                 //as
@@ -224,8 +259,37 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return results;
     }
 
-    getTypedef(state: BrsTranspileState, name?: Identifier) {
-        return this.transpile(state, name, false);
+    getTypedef(state: BrsTranspileState) {
+        let results = [
+            new SourceNode(1, 0, null, [
+                //'function'|'sub'
+                this.functionType?.text,
+                //functionName?
+                ...(isFunctionStatement(this.parent) || isMethodStatement(this.parent) ? [' ', this.parent.name?.text ?? ''] : []),
+                //leftParen
+                '(',
+                //parameters
+                ...(
+                    this.parameters?.map((param, i) => ([
+                        //separating comma
+                        i > 0 ? ', ' : '',
+                        ...param.getTypedef(state)
+                    ])) ?? []
+                ) as any,
+                //right paren
+                ')',
+                //as <ReturnType>
+                ...(this.asToken ? [
+                    ' as ',
+                    this.returnTypeToken?.text
+                ] : []),
+                '\n',
+                state.indent(),
+                //'end sub'|'end function'
+                this.end.text
+            ])
+        ];
+        return results;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -284,7 +348,7 @@ export class FunctionParameterExpression extends Expression {
             result.push(this.defaultValue.transpile(state));
         }
         //type declaration
-        if (this.asToken) {
+        if (this.asToken && !state.options.removeParameterTypes) {
             result.push(' ');
             result.push(state.transpileToken(this.asToken));
             result.push(' ');
@@ -292,6 +356,23 @@ export class FunctionParameterExpression extends Expression {
         }
 
         return result;
+    }
+
+    public getTypedef(state: BrsTranspileState): TranspileResult {
+        return [
+            //name
+            this.name.text,
+            //default value
+            ...(this.defaultValue ? [
+                ' = ',
+                ...this.defaultValue.transpile(state)
+            ] : []),
+            //type declaration
+            ...(this.asToken ? [
+                ' as ',
+                this.typeToken?.text
+            ] : [])
+        ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -344,6 +425,7 @@ export class NamespacedVariableNameExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
+        this.expression?.link();
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'expression', visitor, options);
         }
@@ -932,6 +1014,14 @@ export class CallfuncExpression extends Expression {
     }
 
     public readonly range: Range;
+
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
+     */
+    public get namespaceName() {
+        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+    }
 
     public transpile(state: BrsTranspileState) {
         let result = [];

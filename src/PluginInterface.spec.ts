@@ -7,7 +7,7 @@ describe('PluginInterface', () => {
     let pluginInterface: PluginInterface;
 
     beforeEach(() => {
-        pluginInterface = new PluginInterface([], new Logger());
+        pluginInterface = new PluginInterface([], { logger: new Logger() });
     });
 
     it('allows adding a plugin', () => {
