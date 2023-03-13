@@ -475,6 +475,7 @@ A list of filters used to hide diagnostics.
    - A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed.
    - A `number` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project.
    - An object can also be provided to filter specific diagnostic codes for a file pattern. For example,
+
         ```jsonc
         "diagnosticFilters": [{
             "src": "vendor/**/*",
@@ -485,6 +486,19 @@ A list of filters used to hide diagnostics.
 Defaults to `undefined`.
 
 If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify `diagnosticFilters`, the parent bsconfig's `diagnosticFilters` field will be completely overwritten.
+
+#### `diagnosticSeverityOverrides`
+
+Type: `Record<string | number, 'hint' | 'info' | 'warn' | 'error'>`
+
+A map of error codes and severity levels that will override diagnostics' severity. When a diagnostic generator doesn't offer enough control on an error's severity, this is a tool to work around blocking errors, or raise the level of other errors.
+
+      ```jsonc
+      "diagnosticSeverityOverrides": {
+        "1011": "error",       //raise a warning to an error
+        "BSLINT1001": "warn" //oops we have lots of those to fix... later
+      }
+      ```
 
 #### `diagnosticLevel`
 
