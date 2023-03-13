@@ -2009,7 +2009,8 @@ export class Parser {
                     left.name,
                     operator.kind === TokenKind.Equal
                         ? right
-                        : new BinaryExpression(left, operator, right)
+                        : new BinaryExpression(left, operator, right),
+                    left.dot
                 );
             }
         }

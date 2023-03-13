@@ -93,4 +93,14 @@ describe('optional chaining', () => {
             end sub
         `);
     });
+
+    it('includes final operator in chain', () => {
+        testTranspile(`
+            sub main()
+                if m.cardFolderStack <> invalid then
+                    m?.cardFolderStack?.visible?.ither = false
+                end if
+            end sub
+        `);
+    });
 });
