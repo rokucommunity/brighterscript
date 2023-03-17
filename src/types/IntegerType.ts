@@ -9,6 +9,8 @@ export class IntegerType implements BscType {
         public typeText?: string
     ) { }
 
+    public static instance = new IntegerType('integer');
+
     public isAssignableTo(targetType: BscType) {
         return (
             targetType instanceof IntegerType ||

@@ -315,14 +315,14 @@ export function isNumberType(e: any): e is IntegerType | LongIntegerType | Float
 // Literal reflection
 
 export function isLiteralInvalid(e: any): e is LiteralExpression & { type: InvalidType } {
-    return isLiteralExpression(e) && isInvalidType(e.type);
+    return isLiteralExpression(e) && isInvalidType(e.getType());
 }
 export function isLiteralBoolean(e: any): e is LiteralExpression & { type: BooleanType } {
-    return isLiteralExpression(e) && isBooleanType(e.type);
+    return isLiteralExpression(e) && isBooleanType(e.getType());
 }
 export function isLiteralString(e: any): e is LiteralExpression & { type: StringType } {
-    return isLiteralExpression(e) && isStringType(e.type);
+    return isLiteralExpression(e) && isStringType(e.getType());
 }
 export function isLiteralNumber(e: any): e is LiteralExpression & { type: IntegerType | LongIntegerType | FloatType | DoubleType } {
-    return isLiteralExpression(e) && isNumberType(e.type);
+    return isLiteralExpression(e) && isNumberType(e.getType());
 }

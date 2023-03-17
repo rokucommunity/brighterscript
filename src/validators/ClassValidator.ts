@@ -223,7 +223,7 @@ export class BsClassValidator {
                             if (isFieldStatement(ancestorAndMember.member)) {
                                 ancestorMemberType = ancestorAndMember.member.getType();
                             } else if (isMethodStatement(ancestorAndMember.member)) {
-                                ancestorMemberType = ancestorAndMember.member.func.getFunctionType();
+                                ancestorMemberType = ancestorAndMember.member.func.getType();
                             }
                             const childFieldType = member.getType();
                             if (!childFieldType.isAssignableTo(ancestorMemberType)) {
@@ -311,7 +311,7 @@ export class BsClassValidator {
                             if (!this.getClassByName(lowerFieldTypeName, currentNamespaceName) && !this.scope.hasInterface(lowerFieldTypeName) && !this.scope.hasEnum(lowerFieldTypeName)) {
                                 this.diagnostics.push({
                                     ...DiagnosticMessages.cannotFindType(fieldTypeName),
-                                    range: statement.type.range,
+                                    range: statement.typeExpression.range,
                                     file: classStatement.file
                                 });
                             }

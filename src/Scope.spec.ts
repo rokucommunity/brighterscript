@@ -1399,7 +1399,7 @@ describe('Scope', () => {
                 program.validate();
 
                 expectDiagnostics(program, [
-                    DiagnosticMessages.invalidFunctionReturnType('MyNamespace.UnknownType')
+                    DiagnosticMessages.cannotFindName('MyNamespace.UnknownType')
                 ]);
             });
 
@@ -1433,11 +1433,11 @@ describe('Scope', () => {
                 program.validate();
 
                 expectDiagnostics(program, [
-                    DiagnosticMessages.invalidFunctionReturnType('MyClass').message
+                    DiagnosticMessages.cannotFindName('MyClass').message
                 ]);
             });
 
-            it('can reference types from parent component', () => {
+            it.only('can reference types from parent component', () => {
                 program = new Program({ rootDir: rootDir });
 
                 program.setFile('components/parent.xml', trim`

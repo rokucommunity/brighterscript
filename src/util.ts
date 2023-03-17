@@ -1011,30 +1011,30 @@ export class Util {
                 return new BooleanType(token.text);
             case TokenKind.True:
             case TokenKind.False:
-                return new BooleanType();
+                return BooleanType.instance;
             case TokenKind.Double:
                 return new DoubleType(token.text);
             case TokenKind.DoubleLiteral:
-                return new DoubleType();
+                return DoubleType.instance;
             case TokenKind.Dynamic:
                 return new DynamicType(token.text);
             case TokenKind.Float:
                 return new FloatType(token.text);
             case TokenKind.FloatLiteral:
-                return new FloatType();
+                return FloatType.instance;
             case TokenKind.Function:
                 //TODO should there be a more generic function type without a signature that's assignable to all other function types?
                 return new FunctionType(new DynamicType(token.text));
             case TokenKind.Integer:
                 return new IntegerType(token.text);
             case TokenKind.IntegerLiteral:
-                return new IntegerType();
+                return IntegerType.instance;
             case TokenKind.Invalid:
                 return new InvalidType(token.text);
             case TokenKind.LongInteger:
                 return new LongIntegerType(token.text);
             case TokenKind.LongIntegerLiteral:
-                return new LongIntegerType();
+                return LongIntegerType.instance;
             case TokenKind.Object:
                 return new ObjectType(token.text);
             case TokenKind.String:
@@ -1043,7 +1043,7 @@ export class Util {
             case TokenKind.TemplateStringExpressionBegin:
             case TokenKind.TemplateStringExpressionEnd:
             case TokenKind.TemplateStringQuasi:
-                return new StringType();
+                return StringType.instance;
             case TokenKind.Void:
                 return new VoidType(token.text);
             case TokenKind.Identifier:

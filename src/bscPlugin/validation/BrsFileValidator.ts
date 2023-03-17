@@ -98,7 +98,7 @@ export class BrsFileValidator {
                 if (namespace) {
                     //add the transpiled name for namespaced functions to the root symbol table
                     const transpiledNamespaceFunctionName = node.getName(ParseMode.BrightScript);
-                    const funcType = node.func.getFunctionType();
+                    const funcType = node.func.getType();
                     funcType.setName(transpiledNamespaceFunctionName);
 
                     this.event.file.parser.ast.symbolTable.addSymbol(
@@ -116,7 +116,7 @@ export class BrsFileValidator {
             FunctionParameterExpression: (node) => {
                 const paramName = node.name?.text;
                 const symbolTable = node.getSymbolTable();
-                symbolTable?.addSymbol(paramName, node.name.range, node.type);
+                symbolTable?.addSymbol(paramName, node.name.range, node.getType());
             },
             InterfaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));

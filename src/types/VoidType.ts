@@ -6,6 +6,8 @@ export class VoidType implements BscType {
         public typeText?: string
     ) { }
 
+    public static instance = new VoidType('void');
+
     public isAssignableTo(targetType: BscType) {
         return (
             targetType instanceof VoidType ||

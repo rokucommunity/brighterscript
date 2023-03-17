@@ -9,6 +9,8 @@ export class FloatType implements BscType {
         public typeText?: string
     ) { }
 
+    public static instance = new FloatType('float');
+
     public isAssignableTo(targetType: BscType) {
         return (
             targetType instanceof FloatType ||

@@ -6,6 +6,11 @@ export class StringType implements BscType {
         public typeText?: string
     ) { }
 
+    /**
+     * A static instance that can be used to reduce memory and constructor costs, since there's nothing unique about this
+     */
+    public static instance = new StringType('string');
+
     public isAssignableTo(targetType: BscType) {
         return (
             targetType instanceof StringType ||
