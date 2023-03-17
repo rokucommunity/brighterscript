@@ -5,7 +5,6 @@ import type { BinaryExpression, NamespacedVariableNameExpression, FunctionExpres
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
-import { Position } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
@@ -52,9 +51,9 @@ export class Body extends Statement implements TypedefProvider {
     public symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
 
     public get range() {
-        return util.createRangeFromPositions(
-            this.statements[0]?.range.start ?? Position.create(0, 0),
-            this.statements[this.statements.length - 1]?.range.end ?? Position.create(0, 0)
+        //this needs to be a getter because the body has its statements pushed to it after being constructed
+        return util.createBoundingRange(
+            ...(this.statements ?? [])
         );
     }
 
@@ -120,7 +119,7 @@ export class AssignmentStatement extends Statement {
         readonly value: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.name.range.start, this.value.range.end);
+        this.range = util.createBoundingRange(name, equals, value);
     }
 
     public readonly range: Range;
@@ -161,11 +160,9 @@ export class Block extends Statement {
         readonly startingRange: Range
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.startingRange.start,
-            this.statements.length
-                ? this.statements[this.statements.length - 1].range.end
-                : this.startingRange.start
+        this.range = util.createBoundingRange(
+            { range: this.startingRange },
+            ...(statements ?? [])
         );
     }
 
@@ -239,10 +236,8 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
         super();
         this.visitMode = InternalWalkMode.visitStatements | InternalWalkMode.visitExpressions;
         if (this.comments?.length > 0) {
-
-            this.range = util.createRangeFromPositions(
-                this.comments[0].range.start,
-                this.comments[this.comments.length - 1].range.end
+            this.range = util.createBoundingRange(
+                ...this.comments
             );
         }
     }
@@ -407,9 +402,14 @@ export class IfStatement extends Statement {
         readonly isInline?: boolean
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.tokens.if.range.start,
-            (this.tokens.endIf ?? this.elseBranch ?? this.thenBranch).range.end
+        this.range = util.createBoundingRange(
+            tokens.if,
+            condition,
+            tokens.then,
+            thenBranch,
+            tokens.else,
+            elseBranch,
+            tokens.endIf
         );
     }
     public readonly range: Range;
@@ -509,7 +509,10 @@ export class IncrementStatement extends Statement {
         readonly operator: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.value.range.start, this.operator.range.end);
+        this.range = util.createBoundingRange(
+            value,
+            operator
+        );
     }
 
     public readonly range: Range;
@@ -555,11 +558,9 @@ export class PrintStatement extends Statement {
         readonly expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.tokens.print.range.start,
-            this.expressions.length
-                ? this.expressions[this.expressions.length - 1].range.end
-                : this.tokens.print.range.end
+        this.range = util.createBoundingRange(
+            tokens.print,
+            ...(expressions ?? [])
         );
     }
 
@@ -604,9 +605,12 @@ export class DimStatement extends Statement {
         public closingSquare?: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.dimToken.range.start,
-            (this.closingSquare ?? this.dimensions[this.dimensions.length - 1] ?? this.openingSquare ?? this.identifier ?? this.dimToken).range.end
+        this.range = util.createBoundingRange(
+            dimToken,
+            identifier,
+            openingSquare,
+            ...(dimensions ?? []),
+            closingSquare
         );
     }
     public range: Range;
@@ -646,7 +650,10 @@ export class GotoStatement extends Statement {
         }
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.tokens.goto.range.start, this.tokens.label.range.end);
+        this.range = util.createBoundingRange(
+            tokens.goto,
+            tokens.label
+        );
     }
 
     public readonly range: Range;
@@ -672,7 +679,10 @@ export class LabelStatement extends Statement {
         }
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.tokens.identifier.range.start, this.tokens.colon.range.end);
+        this.range = util.createBoundingRange(
+            tokens.identifier,
+            tokens.colon
+        );
     }
 
     public readonly range: Range;
@@ -698,9 +708,9 @@ export class ReturnStatement extends Statement {
         readonly value?: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.tokens.return.range.start,
-            this.value?.range.end || this.tokens.return.range.end
+        this.range = util.createBoundingRange(
+            tokens.return,
+            value
         );
     }
 
@@ -732,7 +742,7 @@ export class EndStatement extends Statement {
         }
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.tokens.end.range.start, this.tokens.end.range.end);
+        this.range = tokens.end.range;
     }
 
     public readonly range: Range;
@@ -755,7 +765,7 @@ export class StopStatement extends Statement {
         }
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.tokens.stop.range.start, this.tokens.stop.range.end);
+        this.range = tokens?.stop?.range;
     }
 
     public readonly range: Range;
@@ -783,8 +793,16 @@ export class ForStatement extends Statement {
         public increment?: Expression
     ) {
         super();
-        const lastRange = this.endForToken?.range ?? body.range;
-        this.range = util.createRangeFromPositions(this.forToken.range.start, lastRange.end);
+        this.range = util.createBoundingRange(
+            forToken,
+            counterDeclaration,
+            toToken,
+            finalValue,
+            stepToken,
+            increment,
+            body,
+            endForToken
+        );
     }
 
     public readonly range: Range;
@@ -860,8 +878,14 @@ export class ForEachStatement extends Statement {
         readonly body: Block
     ) {
         super();
-        const lastRange = this.tokens.endFor?.range ?? body.range;
-        this.range = util.createRangeFromPositions(this.tokens.forEach.range.start, lastRange.end);
+        this.range = util.createBoundingRange(
+            tokens.forEach,
+            item,
+            tokens.in,
+            target,
+            body,
+            tokens.endFor
+        );
     }
 
     public readonly range: Range;
@@ -921,8 +945,12 @@ export class WhileStatement extends Statement {
         readonly body: Block
     ) {
         super();
-        const lastRange = this.tokens.endWhile?.range ?? body.range;
-        this.range = util.createRangeFromPositions(this.tokens.while.range.start, lastRange.end);
+        this.range = util.createBoundingRange(
+            tokens.while,
+            condition,
+            body,
+            tokens.endWhile
+        );
     }
 
     public readonly range: Range;
@@ -973,7 +1001,12 @@ export class DottedSetStatement extends Statement {
         readonly dot?: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.obj.range.start, this.value.range.end);
+        this.range = util.createBoundingRange(
+            obj,
+            dot,
+            name,
+            value
+        );
     }
 
     public readonly range: Range;
@@ -1013,7 +1046,13 @@ export class IndexedSetStatement extends Statement {
         readonly closingSquare: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.obj.range.start, this.value.range.end);
+        this.range = util.createBoundingRange(
+            obj,
+            openingSquare,
+            index,
+            closingSquare,
+            value
+        );
     }
 
     public readonly range: Range;
@@ -1057,9 +1096,9 @@ export class LibraryStatement extends Statement implements TypedefProvider {
         }
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.tokens.library.range.start,
-            this.tokens.filePath ? this.tokens.filePath.range.end : this.tokens.library.range.end
+        this.range = util.createBoundingRange(
+            this.tokens.library,
+            this.tokens.filePath
         );
     }
 
@@ -1177,9 +1216,9 @@ export class ImportStatement extends Statement implements TypedefProvider {
         readonly filePathToken: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            importToken.range.start,
-            (filePathToken ?? importToken).range.end
+        this.range = util.createBoundingRange(
+            importToken,
+            filePathToken
         );
         if (this.filePathToken) {
             //remove quotes
@@ -1394,13 +1433,14 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         this.tokens.name = nameToken;
         this.tokens.as = asToken;
         this.tokens.type = typeToken;
-    }
-    public get range() {
-        return util.createRangeFromPositions(
-            this.tokens.name.range.start,
-            (this.tokens.type ?? this.tokens.as ?? this.tokens.name).range.end
+        this.range = util.createBoundingRange(
+            nameToken,
+            asToken,
+            typeToken
         );
     }
+
+    public range: Range;
 
     public tokens = {} as {
         name: Identifier;
@@ -1464,17 +1504,14 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 
     public get range() {
-        return util.createRangeFromPositions(
-            this.tokens.name.range.start,
-            (
-                this.tokens.returnType ??
-                this.tokens.as ??
-                this.tokens.rightParen ??
-                this.params?.[this.params?.length - 1] ??
-                this.tokens.leftParen ??
-                this.tokens.name ??
-                this.tokens.functionType
-            ).range.end
+        return util.createBoundingRange(
+            this.tokens.functionType,
+            this.tokens.name,
+            this.tokens.leftParen,
+            ...(this.params ?? []),
+            this.tokens.rightParen,
+            this.tokens.as,
+            this.tokens.returnType
         );
     }
 
@@ -1560,7 +1597,14 @@ export class ClassStatement extends Statement implements TypedefProvider {
             }
         }
 
-        this.range = util.createRangeFromPositions(this.classKeyword.range.start, this.end.range.end);
+        this.range = util.createBoundingRange(
+            classKeyword,
+            name,
+            extendsKeyword,
+            parentClassName,
+            ...(body ?? []),
+            end
+        );
     }
 
     /**
@@ -1937,9 +1981,10 @@ export class MethodStatement extends FunctionStatement {
                 this.modifiers.push(modifiers);
             }
         }
-        this.range = util.createRangeFromPositions(
-            (this.accessModifier ?? this.func).range.start,
-            this.func.range.end
+        this.range = util.createBoundingRange(
+            ...(this.modifiers),
+            override,
+            func
         );
     }
 
@@ -2119,9 +2164,13 @@ export class FieldStatement extends Statement implements TypedefProvider {
         readonly initialValue?: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            (this.accessModifier ?? this.name).range.start,
-            (this.initialValue ?? this.type ?? this.as ?? this.name).range.end
+        this.range = util.createBoundingRange(
+            accessModifier,
+            name,
+            as,
+            type,
+            equal,
+            initialValue
         );
     }
 
@@ -2200,14 +2249,15 @@ export class TryCatchStatement extends Statement {
         public catchStatement?: CatchStatement
     ) {
         super();
-    }
-
-    public get range() {
-        return util.createRangeFromPositions(
-            this.tokens.try.range.start,
-            (this.tokens.endTry ?? this.catchStatement ?? this.tryBranch ?? this.tokens.try).range.end
+        this.range = util.createBoundingRange(
+            tokens.try,
+            tryBranch,
+            catchStatement,
+            tokens.endTry
         );
     }
+
+    public readonly range: Range;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
@@ -2239,14 +2289,14 @@ export class CatchStatement extends Statement {
         public catchBranch?: Block
     ) {
         super();
-    }
-
-    public get range() {
-        return util.createRangeFromPositions(
-            this.tokens.catch.range.start,
-            (this.catchBranch ?? this.exceptionVariable ?? this.tokens.catch).range.end
+        this.range = util.createBoundingRange(
+            tokens.catch,
+            exceptionVariable,
+            catchBranch
         );
     }
+
+    public range: Range;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
@@ -2270,9 +2320,9 @@ export class ThrowStatement extends Statement {
         public expression?: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.throwToken.range.start,
-            (this.expression ?? this.throwToken).range.end
+        this.range = util.createBoundingRange(
+            throwToken,
+            expression
         );
     }
     public range: Range;
@@ -2318,10 +2368,12 @@ export class EnumStatement extends Statement implements TypedefProvider {
         this.body = this.body ?? [];
     }
 
-    public get range() {
-        return util.createRangeFromPositions(
-            this.tokens.enum.range.start ?? Position.create(0, 0),
-            (this.tokens.endEnum ?? this.tokens.name ?? this.tokens.enum).range.end
+    public get range(): Range {
+        return util.createBoundingRange(
+            this.tokens.enum,
+            this.tokens.name,
+            ...this.body,
+            this.tokens.endEnum
         );
     }
 
@@ -2476,9 +2528,10 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
     }
 
     public get range() {
-        return util.createRangeFromPositions(
-            (this.tokens.name ?? this.tokens.equal ?? this.value).range.start ?? Position.create(0, 0),
-            (this.value ?? this.tokens.equal ?? this.tokens.name).range.end
+        return util.createBoundingRange(
+            this.tokens.name,
+            this.tokens.equal,
+            this.value
         );
     }
 
@@ -2579,11 +2632,13 @@ export class ContinueStatement extends Statement {
         }
     ) {
         super();
+        this.range = util.createBoundingRange(
+            tokens.continue,
+            tokens.loopType
+        );
     }
 
-    public get range() {
-        return this.tokens.continue.range;
-    }
+    public range: Range;
 
     transpile(state: BrsTranspileState) {
         return [
