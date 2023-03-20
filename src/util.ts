@@ -336,6 +336,7 @@ export class Util {
         config.retainStagingFolder = config.retainStagingDir;
         config.copyToStaging = config.copyToStaging === false ? false : true;
         config.ignoreErrorCodes = config.ignoreErrorCodes ?? [];
+        config.diagnosticSeverityOverrides = config.diagnosticSeverityOverrides ?? {};
         config.diagnosticFilters = config.diagnosticFilters ?? [];
         config.plugins = config.plugins ?? [];
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;

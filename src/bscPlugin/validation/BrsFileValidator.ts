@@ -1,10 +1,10 @@
-import { isBody, isClassStatement, isCommentStatement, isConstStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
-import type { Expression, Statement } from '../../parser/AstNode';
+import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
@@ -62,6 +62,12 @@ export class BrsFileValidator {
             AssignmentStatement: (node) => {
                 //register this variable
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
+            },
+            DottedSetStatement: (node) => {
+                this.validateNoOptionalChainingInVarSet(node, [node.obj]);
+            },
+            IndexedSetStatement: (node) => {
+                this.validateNoOptionalChainingInVarSet(node, [node.obj]);
             },
             ForEachStatement: (node) => {
                 //register the for loop variable
@@ -340,6 +346,46 @@ export class BrsFileValidator {
                 range: statement.range,
                 ...DiagnosticMessages.illegalContinueStatement()
             });
+        }
+    }
+
+    /**
+     * Validate that there are no optional chaining operators on the left-hand-side of an assignment, indexed set, or dotted get
+     */
+    private validateNoOptionalChainingInVarSet(parent: AstNode, children: AstNode[]) {
+        const nodes = [...children, parent];
+        //flag optional chaining anywhere in the left of this statement
+        while (nodes.length > 0) {
+            const node = nodes.shift();
+            if (
+                // a?.b = true or a.b?.c = true
+                ((isDottedSetStatement(node) || isDottedGetExpression(node)) && node.dot?.kind === TokenKind.QuestionDot) ||
+                // a.b?[2] = true
+                (isIndexedGetExpression(node) && (node?.questionDotToken?.kind === TokenKind.QuestionDot || node.openingSquare?.kind === TokenKind.QuestionLeftSquare)) ||
+                // a?[1] = true
+                (isIndexedSetStatement(node) && node.openingSquare?.kind === TokenKind.QuestionLeftSquare)
+            ) {
+                //try to highlight the entire left-hand-side expression if possible
+                let range: Range;
+                if (isDottedSetStatement(parent)) {
+                    range = util.createBoundingRange(parent.obj, parent.dot, parent.name);
+                } else if (isIndexedSetStatement(parent)) {
+                    range = util.createBoundingRange(parent.obj, parent.openingSquare, parent.index, parent.closingSquare);
+                } else {
+                    range = node.range;
+                }
+
+                this.event.file.addDiagnostic({
+                    ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
+                    range: range
+                });
+            }
+
+            if (node === parent) {
+                break;
+            } else {
+                nodes.push(node.parent);
+            }
         }
     }
 }

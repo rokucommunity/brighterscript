@@ -719,6 +719,11 @@ export let DiagnosticMessages = {
         message: `You can not have more than 5 arguments in a callFunc. ${numberOfArgs} found.`,
         code: 1138,
         severity: DiagnosticSeverity.Error
+    }),
+    noOptionalChainingInLeftHandSideOfAssignment: () => ({
+        message: `Optional chaining may not be used in the left-hand side of an assignment`,
+        code: 1139,
+        severity: DiagnosticSeverity.Error
     })
 };
 
