@@ -25,8 +25,9 @@ import { ParseMode } from './parser/Parser';
 import type { DottedGetExpression, VariableExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
+import { isIdentifier } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isNewExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isNewExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
@@ -34,7 +35,7 @@ import type { SGAttribute } from './parser/SGTypes';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { Expression } from './parser/AstNode';
+import type { Expression, Statement } from './parser/AstNode';
 
 export class Util {
     public clearConsole() {
@@ -1351,11 +1352,13 @@ export class Util {
      * @param expression any ast expression
      * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
      */
-    public getAllDottedGetParts(expression: Expression): Identifier[] | undefined {
+    public getAllDottedGetParts(node: Expression | Statement): Identifier[] | undefined {
         const parts: Identifier[] = [];
-        let nextPart = expression;
+        let nextPart = node;
         while (nextPart) {
-            if (isDottedGetExpression(nextPart)) {
+            if (isAssignmentStatement(node)) {
+                return [node.name];
+            } else if (isDottedGetExpression(nextPart)) {
                 parts.push(nextPart?.name);
                 nextPart = nextPart.obj;
             } else if (isNamespacedVariableNameExpression(nextPart)) {

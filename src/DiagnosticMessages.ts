@@ -710,9 +710,9 @@ export let DiagnosticMessages = {
         code: 1136,
         severity: DiagnosticSeverity.Error
     }),
-    namespaceCannotBeReferencedDirectly: () => ({
-        message: `Namespace cannot be referenced directly`,
-        code: 1137,
+    itemCannotBeUsedAsVariable: (itemType: string) => ({
+        message: `${itemType} cannot be used as a variable`,
+        code: 1140,
         severity: DiagnosticSeverity.Error
     }),
     callfuncHasToManyArgs: (numberOfArgs: number) => ({

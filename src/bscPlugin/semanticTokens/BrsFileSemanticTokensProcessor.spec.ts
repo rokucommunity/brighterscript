@@ -19,9 +19,11 @@ describe('BrsFileSemanticTokensProcessor', () => {
         program.dispose();
     });
 
-    function expectSemanticTokens(file: BscFile, tokens: SemanticToken[]) {
+    function expectSemanticTokens(file: BscFile, tokens: SemanticToken[], validateDiagnostics = true) {
         program.validate();
-        expectZeroDiagnostics(program);
+        if (validateDiagnostics) {
+            expectZeroDiagnostics(program);
+        }
         const result = util.sortByRange(
             program.getSemanticTokens(file.srcPath)
         );
@@ -89,6 +91,28 @@ describe('BrsFileSemanticTokensProcessor', () => {
             range: util.createRange(2, 33, 2, 39),
             tokenType: SemanticTokenTypes.function
         }]);
+    });
+
+    it('matches namespace-relative parts', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            namespace alpha
+                sub test()
+                    lineHeight = 1
+                    print lineHeight
+                end sub
+            end namespace
+            namespace alpha.lineHeight
+            end namespace
+        `);
+        expectSemanticTokens(file, [{
+            //|lineHeight| = 1
+            range: util.createRange(3, 20, 3, 30),
+            tokenType: SemanticTokenTypes.namespace
+        }, {
+            //print |lineHeight|
+            range: util.createRange(4, 26, 4, 36),
+            tokenType: SemanticTokenTypes.namespace
+        }], false);
     });
 
     it('matches each namespace section for namespaced function assignment', () => {
