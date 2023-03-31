@@ -1133,7 +1133,7 @@ export class TemplateStringExpression extends Expression {
         if (this.quasis.length === 1 && this.expressions.length === 0) {
             return this.quasis[0].transpile(state);
         }
-        let result = [];
+        let result = ['('];
         let plus = '';
         //helper function to figure out when to include the plus
         function add(...items) {
@@ -1176,6 +1176,8 @@ export class TemplateStringExpression extends Expression {
                 }
             }
         }
+        //the expression should be wrapped in parens so it can be used line a single expression at runtime
+        result.push(')');
 
         return result;
     }
