@@ -5,10 +5,8 @@ import { isCallExpression, isCustomType, isNamespaceStatement, isNewExpression }
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnGetSemanticTokensEvent } from '../../interfaces';
 import type { Locatable } from '../../lexer/Token';
-import type { Expression } from '../../parser/AstNode';
-import { VariableExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import { NamespaceStatement } from '../../parser/Statement';
+import type { NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 
 export class BrsFileSemanticTokensProcessor {

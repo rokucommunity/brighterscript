@@ -712,7 +712,7 @@ export let DiagnosticMessages = {
     }),
     itemCannotBeUsedAsVariable: (itemType: string) => ({
         message: `${itemType} cannot be used as a variable`,
-        code: 1140,
+        code: 1137,
         severity: DiagnosticSeverity.Error
     }),
     callfuncHasToManyArgs: (numberOfArgs: number) => ({

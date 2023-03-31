@@ -25,7 +25,6 @@ import { ParseMode } from './parser/Parser';
 import type { DottedGetExpression, VariableExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
-import { isIdentifier } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
 import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isNewExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
@@ -1349,7 +1348,7 @@ export class Util {
 
     /**
      * Gets each part of the dotted get.
-     * @param expression any ast expression
+     * @param node any ast expression
      * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
      */
     public getAllDottedGetParts(node: Expression | Statement): Identifier[] | undefined {
