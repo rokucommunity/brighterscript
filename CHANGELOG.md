@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.63.0](https://github.com/rokucommunity/brighterscript/compare/v0.62.0...v0.63.0) - 2023-03-31
+### Changed
+ - Wrap transpiled template strings in parens ([#788](https://github.com/rokucommunity/brighterscript/pull/788))
+ - Simplify the ast range logic ([#784](https://github.com/rokucommunity/brighterscript/pull/784))
+
+
+
 ## [0.62.0](https://github.com/rokucommunity/brighterscript/compare/v0.61.3...v0.62.0) - 2023-03-16
 ### Added
  - `severityOverride` option ([#725](https://github.com/rokucommunity/brighterscript/pull/725))
