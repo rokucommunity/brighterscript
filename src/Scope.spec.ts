@@ -107,6 +107,24 @@ describe('Scope', () => {
         ]);
     });
 
+    it('flags parameter with same name as a sub namespace part', () => {
+        program.setFile('source/main.bs', `
+            namespace alpha
+                sub test(lineHeight as integer)
+                end sub
+            end namespace
+
+            namespace alpha.lineHeight
+            end namespace
+        `);
+        program.validate();
+        expectDiagnostics(program, [{
+            //sub test(|lineHeight| as integer)
+            message: DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace('lineHeight').message,
+            range: util.createRange(2, 29, 2, 39)
+        }]);
+    });
+
     it('flags assignments with same name as namespace', () => {
         program.setFile('source/main.bs', `
             namespace NameA.NameB
