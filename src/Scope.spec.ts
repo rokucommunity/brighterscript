@@ -121,7 +121,7 @@ describe('Scope', () => {
         expectDiagnostics(program, [{
             //sub test(|lineHeight| as integer)
             message: DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace('lineHeight').message,
-            range: util.createRange(2, 29, 2, 39)
+            range: util.createRange(2, 25, 2, 35)
         }]);
     });
 

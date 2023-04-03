@@ -95,7 +95,8 @@ export class BrsFileSemanticTokensProcessor {
         const nodes = [
             ...this.event.file.parser.references.expressions,
             //make a new VariableExpression to wrap the name. This is a hack, we could probably do it better
-            ...this.event.file.parser.references.assignmentStatements
+            ...this.event.file.parser.references.assignmentStatements,
+            ...this.event.file.parser.references.functionExpressions.map(x => x.parameters).flat()
         ];
 
         for (let node of nodes) {

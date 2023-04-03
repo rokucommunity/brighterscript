@@ -115,6 +115,22 @@ describe('BrsFileSemanticTokensProcessor', () => {
         }], false);
     });
 
+    it('matches namespace-relative parts in parameters', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            namespace alpha
+                sub test(lineHeight as integer)
+                end sub
+            end namespace
+            namespace alpha.lineHeight
+            end namespace
+        `);
+        expectSemanticTokens(file, [{
+            //sub test(|lineHeight| as integer)
+            range: util.createRange(2, 25, 2, 35),
+            tokenType: SemanticTokenTypes.namespace
+        }], false);
+    });
+
     it('matches each namespace section for namespaced function assignment', () => {
         const file = program.setFile<BrsFile>('source/main.bs', `
             sub new()
