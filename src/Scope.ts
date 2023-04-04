@@ -57,6 +57,24 @@ export class Scope {
     }
 
     /**
+     * Get a NamespaceContainer by its name, looking for a fully qualified version first, then global version next if not found
+     */
+    public getNamespace(name: string, containingNamespace?: string) {
+        const nameLower = name?.toLowerCase();
+        const lookup = this.namespaceLookup;
+
+        let ns: NamespaceContainer;
+        if (containingNamespace) {
+            ns = lookup.get(`${containingNamespace?.toLowerCase()}.${nameLower}`);
+        }
+        //if we couldn't find the namespace by its full namespaced name, look for a global version
+        if (!ns) {
+            ns = lookup.get(nameLower);
+        }
+        return ns;
+    }
+
+    /**
      * Get the class with the specified name.
      * @param className - The class name, including the namespace of the class if possible
      * @param containingNamespace - The namespace used to resolve relative class names. (i.e. the namespace around the current statement trying to find a class)
@@ -160,7 +178,7 @@ export class Scope {
             enumeration = enumMap.get(lowerName);
         }
         if (enumeration) {
-            let member = enumeration.item.findChild<EnumMemberStatement>((child) => isEnumMemberStatement(child) && child.name === memberName);
+            let member = enumeration.item.findChild<EnumMemberStatement>((child) => isEnumMemberStatement(child) && child.name?.toLowerCase() === memberName);
             return member ? { item: member, file: enumeration.file } : undefined;
         }
         return enumeration;
@@ -782,7 +800,7 @@ export class Scope {
         for (let func of file.parser.references.functionExpressions) {
             for (let param of func.parameters) {
                 let lowerParamName = param.name.text.toLowerCase();
-                let namespace = this.namespaceLookup.get(lowerParamName);
+                let namespace = this.getNamespace(lowerParamName, param.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase());
                 //see if the param matches any starting namespace part
                 if (namespace) {
                     this.diagnostics.push({
@@ -803,7 +821,7 @@ export class Scope {
 
         for (let assignment of file.parser.references.assignmentStatements) {
             let lowerAssignmentName = assignment.name.text.toLowerCase();
-            let namespace = this.namespaceLookup.get(lowerAssignmentName);
+            let namespace = this.getNamespace(lowerAssignmentName, assignment.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase());
             //see if the param matches any starting namespace part
             if (namespace) {
                 this.diagnostics.push({

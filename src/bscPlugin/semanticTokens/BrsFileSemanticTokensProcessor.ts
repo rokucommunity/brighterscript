@@ -19,7 +19,7 @@ export class BrsFileSemanticTokensProcessor {
     public process() {
         this.handleClasses();
         this.handleConstDeclarations();
-        this.iterateExpressions();
+        this.iterateNodes();
     }
 
     private handleConstDeclarations() {
@@ -84,7 +84,7 @@ export class BrsFileSemanticTokensProcessor {
         });
     }
 
-    private iterateExpressions() {
+    private iterateNodes() {
         const scope = this.event.scopes[0];
 
         //if this file has no scopes, there's nothing else we can do about this
@@ -92,30 +92,38 @@ export class BrsFileSemanticTokensProcessor {
             return;
         }
 
-        for (let expression of this.event.file.parser.references.expressions) {
+        const nodes = [
+            ...this.event.file.parser.references.expressions,
+            //make a new VariableExpression to wrap the name. This is a hack, we could probably do it better
+            ...this.event.file.parser.references.assignmentStatements,
+            ...this.event.file.parser.references.functionExpressions.map(x => x.parameters).flat()
+        ];
+
+        for (let node of nodes) {
             //lift the callee from call expressions to handle namespaced function calls
-            if (isCallExpression(expression)) {
-                expression = expression.callee;
-            } else if (isNewExpression(expression)) {
-                expression = expression.call.callee;
+            if (isCallExpression(node)) {
+                node = node.callee;
+            } else if (isNewExpression(node)) {
+                node = node.call.callee;
             }
-            const tokens = util.getAllDottedGetParts(expression);
+            const containingNamespaceNameLower = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase();
+            const tokens = util.getAllDottedGetParts(node);
             const processedNames: string[] = [];
             for (const token of tokens ?? []) {
                 processedNames.push(token.text?.toLowerCase());
                 const entityName = processedNames.join('.');
 
-                if (scope.getEnumMemberMap().has(entityName)) {
+                if (scope.getEnumMemberFileLink(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.enumMember);
-                } else if (scope.getEnumMap().has(entityName)) {
+                } else if (scope.getEnum(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.enum);
-                } else if (scope.getClassMap().has(entityName)) {
+                } else if (scope.getClass(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.class);
                 } else if (scope.getCallableByName(entityName)) {
                     this.addToken(token, SemanticTokenTypes.function);
-                } else if (scope.namespaceLookup.has(entityName)) {
+                } else if (scope.getNamespace(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.namespace);
-                } else if (scope.getConstFileLink(entityName)) {
+                } else if (scope.getConstFileLink(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.variable, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]);
                 }
             }
