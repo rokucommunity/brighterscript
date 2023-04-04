@@ -131,6 +131,23 @@ describe('BrsFileSemanticTokensProcessor', () => {
         }], false);
     });
 
+    it('matches namespace-relative parts in parameters', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            namespace designSystem
+                function getIcon(image = "" as string, size = -1 as float) as object
+                    return {}
+                end function
+            end namespace
+            namespace designSystem.size
+            end namespace
+        `);
+        expectSemanticTokens(file, [{
+            //sub test(|lineHeight| as integer)
+            range: util.createRange(2, 55, 2, 59),
+            tokenType: SemanticTokenTypes.namespace
+        }], false);
+    });
+
     it('matches each namespace section for namespaced function assignment', () => {
         const file = program.setFile<BrsFile>('source/main.bs', `
             sub new()
