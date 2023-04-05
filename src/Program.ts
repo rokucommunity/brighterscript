@@ -96,7 +96,7 @@ export class Program {
         this.globalScope.attachDependencyGraph(this.dependencyGraph);
         this.scopes.global = this.globalScope;
 
-        this.populateGlobalSymbolTable()
+        this.populateGlobalSymbolTable();
 
         //hardcode the files list for global scope to only contain the global file
         this.globalScope.getAllFiles = () => [globalFile];
@@ -107,13 +107,15 @@ export class Program {
         (this.globalScope as any).isValidated = true;
     }
 
-
+    /**
+     * Do all setup required for the global symbol table.
+     */
     private populateGlobalSymbolTable() {
         //Setup primitive types in global symbolTable
         //TODO: Need to handle Array types
 
         this.globalScope.symbolTable.addSymbol('boolean', undefined, BooleanType.instance, SymbolTypeFlags.typetime);
-        this.globalScope.symbolTable.addSymbol("double", undefined, DoubleType.instance, SymbolTypeFlags.typetime);
+        this.globalScope.symbolTable.addSymbol('double', undefined, DoubleType.instance, SymbolTypeFlags.typetime);
         this.globalScope.symbolTable.addSymbol('dynamic', undefined, DynamicType.instance, SymbolTypeFlags.typetime);
         this.globalScope.symbolTable.addSymbol('float', undefined, FloatType.instance, SymbolTypeFlags.typetime);
         this.globalScope.symbolTable.addSymbol('function', undefined, new FunctionType(DynamicType.instance), SymbolTypeFlags.typetime);
@@ -125,7 +127,7 @@ export class Program {
 
         for (let pair of globalCallableMap) {
             let [key, callable] = pair;
-            this.globalScope.symbolTable.addSymbol(key, undefined, callable.type, SymbolTypeFlags.runtime)
+            this.globalScope.symbolTable.addSymbol(key, undefined, callable.type, SymbolTypeFlags.runtime);
         }
     }
 

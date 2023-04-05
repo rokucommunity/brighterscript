@@ -88,7 +88,7 @@ export class HoverProcessor {
                     if (varDeclaration.name.toLowerCase() === lowerTokenText) {
                         let typeText: string;
                         if (isFunctionType(varDeclaration.type)) {
-                            varDeclaration.type.setName(varDeclaration.name)
+                            varDeclaration.type.setName(varDeclaration.name);
                             typeText = varDeclaration.type.toString();
                         } else {
                             typeText = `${varDeclaration.name} as ${varDeclaration.type.toString()}`;

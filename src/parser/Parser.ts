@@ -1,9 +1,11 @@
 import type { Token, Identifier } from '../lexer/Token';
 import { isToken } from '../lexer/Token';
-import { AllowedTypeIdentifiers, BlockTerminator, DeclarableTypes } from '../lexer/TokenKind';
+import type { BlockTerminator } from '../lexer/TokenKind';
 import { Lexer } from '../lexer/Lexer';
 import {
     AllowedLocalIdentifiers,
+    AllowedTypeIdentifiers,
+    DeclarableTypes,
     AllowedProperties,
     AssignmentOperators,
     BrighterScriptSourceLiterals,
@@ -2507,7 +2509,7 @@ export class Parser {
 
         if (this.checkAny(...AllowedTypeIdentifiers)) {
             // Since the next token is allowed as a type identifier, change the kind
-            nextToken = this.peek()
+            nextToken = this.peek();
             oldKind = nextToken.kind;
             nextToken.kind = TokenKind.Identifier;
         }
@@ -2516,8 +2518,7 @@ export class Parser {
             return new TypeExpression(
                 expr
             );
-        }
-        catch (error) {
+        } catch (error) {
             // Something went wrong - reset the kind to what it was previously
             nextToken.kind = oldKind;
             throw error;

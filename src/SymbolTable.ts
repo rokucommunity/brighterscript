@@ -91,7 +91,8 @@ export class SymbolTable {
         let result: BscSymbol[];
         // look in our map first
         if ((result = this.symbolMap.get(key))) {
-            result = result.filter(symbol => symbol.flags & bitFlags)
+            // eslint-disable-next-line no-bitwise
+            result = result.filter(symbol => symbol.flags & bitFlags);
             if (result.length > 0) {
                 return result;
             }
@@ -99,16 +100,15 @@ export class SymbolTable {
         //look through any sibling maps next
         for (let sibling of this.siblings) {
             if ((result = sibling.symbolMap.get(key))) {
-                result = result.filter(symbol => symbol.flags & bitFlags)
+                // eslint-disable-next-line no-bitwise
+                result = result.filter(symbol => symbol.flags & bitFlags);
                 if (result.length > 0) {
                     return result;
                 }
             }
         }
         // ask our parent for a symbol
-        if (result = this.parent?.getSymbol(key, bitFlags)) {
-            return result;
-        }
+        return this.parent?.getSymbol(key, bitFlags);
     }
 
     /**

@@ -60,8 +60,6 @@ describe('SymbolTable', () => {
         expect(table.hasSymbol('bar', SymbolTypeFlags.typetime)).to.be.true;
     });
 
-
-
     describe('mergeSymbolTable', () => {
 
         it('adds each symbol to the table', () => {

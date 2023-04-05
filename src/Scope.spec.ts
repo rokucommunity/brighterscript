@@ -1401,7 +1401,7 @@ describe('Scope', () => {
                 expectDiagnostics(program, [
                     DiagnosticMessages.cannotFindName('UnknownType').message
                 ]);
-                expect(program.getDiagnostics()[0]?.data?.fullName).to.eq('MyNamespace.UnknownType')
+                expect(program.getDiagnostics()[0]?.data?.fullName).to.eq('MyNamespace.UnknownType');
             });
 
             it('scopes types to correct scope', () => {

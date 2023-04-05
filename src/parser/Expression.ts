@@ -289,7 +289,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walkArray(this.parameters, visitor, options, this);
-            walk(this, 'returnTypeExpression', visitor, options)
+            walk(this, 'returnTypeExpression', visitor, options);
             //This is the core of full-program walking...it allows us to step into sub functions
             if (options.walkMode & InternalWalkMode.recurseChildFunctions) {
                 walk(this, 'body', visitor, options);
@@ -374,7 +374,7 @@ export class FunctionParameterExpression extends Expression {
             //type declaration
             ...(this.asToken ? [
                 ' as ',
-                ...this.typeExpression?.getTypedef(state)
+                ...(this.typeExpression?.getTypedef(state) ?? [''])
             ] : [])
         ];
     }
@@ -1608,7 +1608,7 @@ export class TypeExpression extends Expression implements TypedefProvider {
             }
         }
         if (isLiteralExpression(this.expression)) {
-            return this.expression.getType()
+            return this.expression.getType();
         }
 
         //TODO eventually support more complex types
