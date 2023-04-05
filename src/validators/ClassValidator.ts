@@ -6,7 +6,7 @@ import type { ClassStatement, MethodStatement, NamespaceStatement } from '../par
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
-import { isCallExpression, isFieldStatement, isMethodStatement, isCustomType, isNamespaceStatement } from '../astUtils/reflection';
+import { isCallExpression, isFieldStatement, isMethodStatement, isNamespaceStatement } from '../astUtils/reflection';
 import type { BscFile, BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
@@ -32,7 +32,7 @@ export class BsClassValidator {
         this.validateMemberCollisions();
         this.verifyChildConstructor();
         this.verifyNewExpressions();
-        this.validateFieldTypes();
+        //this.validateFieldTypes();
 
         this.cleanUp();
     }
@@ -295,7 +295,7 @@ export class BsClassValidator {
     /**
      * Check the types for fields, and validate they are valid types
      */
-    private validateFieldTypes() {
+    /*private validateFieldTypes() {
         for (const [, classStatement] of this.classes) {
             for (let statement of classStatement.body) {
                 if (isFieldStatement(statement)) {
@@ -320,7 +320,7 @@ export class BsClassValidator {
                 }
             }
         }
-    }
+    }*/
 
     /**
      * Get the closest member with the specified name (case-insensitive)

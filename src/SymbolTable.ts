@@ -1,6 +1,12 @@
 import type { Range } from 'vscode-languageserver';
 import type { BscType } from './types/BscType';
 
+
+export enum SymbolTypeFlags {
+    runtime = 1,
+    typetime = 2
+}
+
 /**
  * Stores the types associated with variables and functions in the Brighterscript code
  * Can be part of a hierarchy, so lookups can reference parent scopes
@@ -68,7 +74,7 @@ export class SymbolTable {
      * @param searchParent should we look to our parent if we don't have the symbol?
      * @returns true if this symbol is in the symbol table
      */
-    hasSymbol(name: string, searchParent = true): boolean {
+    hasSymbol(name: string,/* add flags */ searchParent = true): boolean {
         return !!this.getSymbol(name, searchParent);
     }
 
@@ -102,7 +108,7 @@ export class SymbolTable {
     /**
      * Adds a new symbol to the table
      */
-    addSymbol(name: string, range: Range, type: BscType) {
+    addSymbol(name: string, range: Range, type: BscType, flags = 0) {
         const key = name.toLowerCase();
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);
@@ -110,7 +116,8 @@ export class SymbolTable {
         this.symbolMap.get(key).push({
             name: name,
             range: range,
-            type: type
+            type: type,
+            flags: 0
         });
     }
 
@@ -124,7 +131,8 @@ export class SymbolTable {
                 this.addSymbol(
                     symbol.name,
                     symbol.range,
-                    symbol.type
+                    symbol.type,
+                    symbol.flags
                 );
             }
         }
@@ -152,6 +160,7 @@ export interface BscSymbol {
     name: string;
     range: Range;
     type: BscType;
+    flags: number;
 }
 
 /**

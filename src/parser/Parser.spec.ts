@@ -371,9 +371,8 @@ describe('parser', () => {
                 sub test(param1 as unknownType)
                 end sub
             `);
-            expectDiagnostics(parser, [{
-                ...DiagnosticMessages.functionParameterTypeIsInvalid('param1', 'unknownType')
-            }]);
+            // type validation happens at scope validation, not at the parser
+            expectZeroDiagnostics(parser);
             expect(
                 isFunctionStatement(parser.ast.statements[0])
             ).to.be.true;
@@ -532,7 +531,7 @@ describe('parser', () => {
                 function log() as UNKNOWN_TYPE
                 end function
             `, ParseMode.BrightScript);
-            expect(diagnostics.length).to.be.greaterThan(0);
+            expectZeroDiagnostics(diagnostics); // type validation happens at scope validation step
             expect(statements[0]).to.exist;
         });
         it('unknown function type is not a problem in Brighterscript mode', () => {
@@ -559,12 +558,12 @@ describe('parser', () => {
             expect(diagnostics.length).to.equal(0);
             expect(statements[0]).to.exist;
         });
-        it('does not allow custom parameter types in Brightscript Mode', () => {
+        it('does not cause any diagnostics when custom parameter types are used in Brightscript Mode', () => {
             let { diagnostics } = parse(`
                 sub foo(value as UNKNOWN_TYPE)
                 end sub
             `, ParseMode.BrightScript);
-            expect(diagnostics.length).not.to.equal(0);
+            expect(diagnostics.length).to.equal(0);
         });
         it('allows custom namespaced parameter types in BrighterscriptMode', () => {
             let { statements, diagnostics } = parse(`

@@ -1524,15 +1524,15 @@ describe('BrsFile', () => {
                 return { type: arg.type, range: arg.range, text: arg.text };
             });
             expect(argsMap).to.eql([{
-                type: new StringType(),
+                type: StringType.instance,
                 range: util.createRange(2, 32, 2, 38),
                 text: '"name"'
             }, {
-                type: new IntegerType(),
+                type: IntegerType.instance,
                 range: util.createRange(2, 40, 2, 42),
                 text: '12'
             }, {
-                type: new BooleanType(),
+                type: BooleanType.instance,
                 range: util.createRange(2, 44, 2, 48),
                 text: 'true'
             }]);
@@ -2854,11 +2854,11 @@ describe('BrsFile', () => {
                 sub bar(obj as SomeKlass)
                 end sub
             `, `
-                function foo() as object
+                function foo() as dynamic
                     return SomeKlass()
                 end function
 
-                sub bar(obj as object)
+                sub bar(obj as dynamic)
                 end sub
             `);
         });

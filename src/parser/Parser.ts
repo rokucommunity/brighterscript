@@ -1,6 +1,6 @@
 import type { Token, Identifier } from '../lexer/Token';
 import { isToken } from '../lexer/Token';
-import type { BlockTerminator } from '../lexer/TokenKind';
+import { AllowedTypeIdentifiers, BlockTerminator, DeclarableTypes } from '../lexer/TokenKind';
 import { Lexer } from '../lexer/Lexer';
 import {
     AllowedLocalIdentifiers,
@@ -427,11 +427,12 @@ export class Parser {
 
         const params = [];
         const rightParen = this.consumeToken(TokenKind.RightParen);
-        let asToken = null as Token;
+        // let asToken = null as Token;
+        // let returnTypeExpression: TypeExpression;
+        let asToken: Token;
         let returnTypeExpression: TypeExpression;
         if (this.check(TokenKind.As)) {
-            asToken = this.advance();
-            returnTypeExpression = this.typeExpression();
+            [asToken, returnTypeExpression] = this.consumeAsTokenAndTypeExpression();
         }
 
         return new InterfaceMethodStatement(
@@ -731,6 +732,9 @@ export class Parser {
             equal = this.advance();
             initialValue = this.expression();
         }
+        if (!fieldTypeExpression && initialValue) {
+            fieldTypeExpression = new TypeExpression(initialValue);
+        }
 
         return new FieldStatement(
             accessModifier,
@@ -833,9 +837,7 @@ export class Parser {
             let rightParen = this.advance();
 
             if (this.check(TokenKind.As)) {
-                asToken = this.advance();
-
-                typeExpression = this.typeExpression();
+                [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
             }
 
             params.reduce((haveFoundOptional: boolean, param: FunctionParameterExpression) => {
@@ -933,11 +935,10 @@ export class Parser {
             defaultValue = this.expression();
         }
 
-        let asToken = null;
+        let asToken: Token = null;
         if (this.check(TokenKind.As)) {
-            asToken = this.advance();
+            [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
 
-            typeExpression = this.typeExpression();
         }
         return new FunctionParameterExpression(
             name,
@@ -2494,10 +2495,33 @@ export class Parser {
      * Creates a TypeExpression, which wraps standard ASTNodes that represent a BscType
      */
     private typeExpression(): TypeExpression {
+        if (this.checkAny(...DeclarableTypes)) {
+            // if this is just a type, just use directly
+            return new TypeExpression(
+                new VariableExpression(this.advance() as Identifier)
+            );
+        }
         //support any expression. We will flag valid expression types later in the process
-        return new TypeExpression(
-            this.expression()
-        );
+        let nextToken: Token;
+        let oldKind: TokenKind;
+
+        if (this.checkAny(...AllowedTypeIdentifiers)) {
+            // Since the next token is allowed as a type identifier, change the kind
+            nextToken = this.peek()
+            oldKind = nextToken.kind;
+            nextToken.kind = TokenKind.Identifier;
+        }
+        try {
+            let expr = this.expression();
+            return new TypeExpression(
+                expr
+            );
+        }
+        catch (error) {
+            // Something went wrong - reset the kind to what it was previously
+            nextToken.kind = oldKind;
+            throw error;
+        }
     }
 
     private primary(): Expression {

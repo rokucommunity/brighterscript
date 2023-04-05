@@ -150,6 +150,7 @@ export class AssignmentStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
+            //TODO: Walk TypeExpression. We need to decide how to implement types on assignments
             walk(this, 'value', visitor, options);
         }
     }
@@ -1451,7 +1452,9 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        //nothing to walk
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typeExpression', visitor, options);
+        }
     }
 
     getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
@@ -1520,7 +1523,9 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     };
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        //nothing to walk
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'returnTypeExpression', visitor, options);
+        }
     }
 
     getTypedef(state: BrsTranspileState) {
@@ -2174,7 +2179,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
      * Defaults to `DynamicType`
      */
     getType() {
-        return this.typeExpression.getType();
+        return this.typeExpression?.getType() || DynamicType.instance;
     }
 
     public readonly range: Range;
@@ -2211,7 +2216,8 @@ export class FieldStatement extends Statement implements TypedefProvider {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (this.initialValue && options.walkMode & InternalWalkMode.walkExpressions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typeExpression', visitor, options);
             walk(this, 'initialValue', visitor, options);
         }
     }

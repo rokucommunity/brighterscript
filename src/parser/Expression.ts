@@ -275,7 +275,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 //as <ReturnType>
                 ...(this.asToken ? [
                     ' as ',
-                    ...this.returnTypeExpression.getType().toString()
+                    ...this.returnTypeExpression.getTypedef(state)
                 ] : []),
                 '\n',
                 state.indent(),
@@ -289,7 +289,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walkArray(this.parameters, visitor, options, this);
-
+            walk(this, 'returnTypeExpression', visitor, options)
             //This is the core of full-program walking...it allows us to step into sub functions
             if (options.walkMode & InternalWalkMode.recurseChildFunctions) {
                 walk(this, 'body', visitor, options);
@@ -309,7 +309,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         let functionType = new FunctionType(returnType);
         functionType.isSub = isSub;
         for (let param of this.parameters) {
-            functionType.addParameter(param.name.text, param.getType(), !!param.getType());
+            functionType.addParameter(param.name.text, param.getType(), !!param.defaultValue);
         }
         return functionType;
     }
@@ -327,7 +327,7 @@ export class FunctionParameterExpression extends Expression {
     }
 
     public getType() {
-        return this.typeExpression.getType();
+        return this.typeExpression?.getType() || DynamicType.instance;
     }
 
     public get range(): Range {
@@ -374,15 +374,16 @@ export class FunctionParameterExpression extends Expression {
             //type declaration
             ...(this.asToken ? [
                 ' as ',
-                this.typeExpression?.getType()?.toTypeString()
+                ...this.typeExpression?.getTypedef(state)
             ] : [])
         ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         // eslint-disable-next-line no-bitwise
-        if (this.defaultValue && options.walkMode & InternalWalkMode.walkExpressions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'defaultValue', visitor, options);
+            walk(this, 'typeExpression', visitor, options);
         }
     }
 }
@@ -587,7 +588,7 @@ export class LiteralExpression extends Expression {
             //wrap quasis with quotes (and escape inner quotemarks)
             text = `"${this.token.text.replace(/"/g, '""')}"`;
 
-        } else if (this.token.kind === TokenKind.String) {
+        } else if (this.token.kind === TokenKind.StringLiteral) {
             text = this.token.text;
             //add trailing quotemark if it's missing. We will have already generated a diagnostic for this.
             if (text.endsWith('"') === false) {
@@ -1594,7 +1595,9 @@ export class TypeExpression extends Expression implements TypedefProvider {
         return [this.getType().toTypeString()];
     }
     public walk(visitor: WalkVisitor, options: WalkOptions) {
-        throw new Error('Method not implemented.');
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        }
     }
 
     public getType(): BscType {
@@ -1603,6 +1606,9 @@ export class TypeExpression extends Expression implements TypedefProvider {
             if (standardType) {
                 return standardType;
             }
+        }
+        if (isLiteralExpression(this.expression)) {
+            return this.expression.getType()
         }
 
         //TODO eventually support more complex types
@@ -1619,7 +1625,8 @@ export class TypeExpression extends Expression implements TypedefProvider {
     }
 
     getTypedef(state: TranspileState): (string | SourceNode)[] {
-        return [this.getType().toTypeString()];
+        // TypeDefs should pass through any valid type names
+        return [util.getAllDottedGetParts(this.expression).map(part => part.text).join('.')];
     }
 
 }

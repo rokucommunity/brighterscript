@@ -1037,10 +1037,9 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.cannotFindType('Person'),
+            DiagnosticMessages.cannotFindName('Person'),
             DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'age', 'float', 'integer'),
-            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'name', 'integer', 'string'),
-            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'owner', 'string', 'Person')
+            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'name', 'integer', 'string')
         ]);
     });
 

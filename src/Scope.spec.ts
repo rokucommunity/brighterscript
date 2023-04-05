@@ -1166,8 +1166,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.invalidFunctionReturnType('unknownType').message,
-                    DiagnosticMessages.invalidFunctionReturnType('unknownType').message
+                    DiagnosticMessages.cannotFindName('unknownType').message,
+                    DiagnosticMessages.cannotFindName('unknownType').message
                 ]);
             });
 
@@ -1189,8 +1189,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message,
-                    DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message
+                    DiagnosticMessages.cannotFindName('unknownType').message,
+                    DiagnosticMessages.cannotFindName('unknownType').message
                 ]);
             });
 
@@ -1208,8 +1208,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindType('unknownType').message,
-                    DiagnosticMessages.cannotFindType('unknownType').message
+                    DiagnosticMessages.cannotFindName('unknownType').message,
+                    DiagnosticMessages.cannotFindName('unknownType').message
                 ]);
             });
 
@@ -1352,7 +1352,7 @@ describe('Scope', () => {
                 program.validate();
 
                 expectDiagnostics(program, [
-                    DiagnosticMessages.invalidFunctionReturnType('UnknownType').message
+                    DiagnosticMessages.cannotFindName('UnknownType').message
                 ]);
             });
 
@@ -1399,8 +1399,9 @@ describe('Scope', () => {
                 program.validate();
 
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindName('MyNamespace.UnknownType')
+                    DiagnosticMessages.cannotFindName('UnknownType').message
                 ]);
+                expect(program.getDiagnostics()[0]?.data?.fullName).to.eq('MyNamespace.UnknownType')
             });
 
             it('scopes types to correct scope', () => {
@@ -1437,7 +1438,7 @@ describe('Scope', () => {
                 ]);
             });
 
-            it.only('can reference types from parent component', () => {
+            it('can reference types from parent component', () => {
                 program = new Program({ rootDir: rootDir });
 
                 program.setFile('components/parent.xml', trim`

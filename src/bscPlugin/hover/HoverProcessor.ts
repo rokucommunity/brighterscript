@@ -1,5 +1,5 @@
 import { SourceNode } from 'source-map';
-import { isBrsFile, isFunctionType, isXmlFile } from '../../astUtils/reflection';
+import { isBrsFile, isFunctionType, isTypeExpression, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { Hover, ProvideHoverEvent } from '../../interfaces';
@@ -88,6 +88,7 @@ export class HoverProcessor {
                     if (varDeclaration.name.toLowerCase() === lowerTokenText) {
                         let typeText: string;
                         if (isFunctionType(varDeclaration.type)) {
+                            varDeclaration.type.setName(varDeclaration.name)
                             typeText = varDeclaration.type.toString();
                         } else {
                             typeText = `${varDeclaration.name} as ${varDeclaration.type.toString()}`;
@@ -110,14 +111,16 @@ export class HoverProcessor {
             }
         }
 
-        //look through all callables in relevant scopes
-        for (let scope of this.event.scopes) {
-            let callable = scope.getCallableByName(lowerTokenText);
-            if (callable) {
-                return {
-                    range: token.range,
-                    contents: this.buildContentsWithDocs(fence(callable.type.toString()), callable.functionStatement?.func?.functionType)
-                };
+        if (!expression.findAncestor(isTypeExpression)) {
+            //look through all callables in relevant scopes
+            for (let scope of this.event.scopes) {
+                let callable = scope.getCallableByName(lowerTokenText);
+                if (callable) {
+                    return {
+                        range: token.range,
+                        contents: this.buildContentsWithDocs(fence(callable.type.toString()), callable.functionStatement?.func?.functionType)
+                    };
+                }
             }
         }
     }

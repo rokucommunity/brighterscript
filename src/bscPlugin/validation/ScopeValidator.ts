@@ -132,6 +132,7 @@ export class ScopeValidator {
                 if (
                     !scope.getEnumMap().has(entityNameLower) &&
                     !scope.getClassMap().has(entityNameLower) &&
+                    !scope.getInterfaceMap().has(entityNameLower) &&
                     !scope.getConstMap().has(entityNameLower) &&
                     !scope.getCallableByName(entityNameLower) &&
                     !scope.getNamespace(entityNameLower, info.enclosingNamespaceNameLower)

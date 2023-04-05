@@ -475,7 +475,7 @@ export class BrsFile {
                         nameRange: stmt.item.range,
                         lineIndex: stmt.item.range.start.line,
                         name: stmt.item.text,
-                        type: new DynamicType()
+                        type: new DynamicType() //TODO: Infer types from array
                     });
                 },
                 LabelStatement: (stmt) => {

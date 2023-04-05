@@ -206,7 +206,7 @@ export let DiagnosticMessages = {
         code: 1036,
         severity: DiagnosticSeverity.Error
     }),
-    invalidFunctionReturnType: (typeText: string) => ({
+    __unused: (typeText: string) => ({
         message: `Function return type '${typeText}' is invalid`,
         code: 1037,
         severity: DiagnosticSeverity.Error
@@ -241,7 +241,7 @@ export let DiagnosticMessages = {
         code: 1043,
         severity: DiagnosticSeverity.Error
     }),
-    functionParameterTypeIsInvalid: (parameterName: string, typeText: string) => ({
+    ___unused: (parameterName: string, typeText: string) => ({
         message: `Function parameter '${parameterName}' is of invalid type '${typeText}'`,
         code: 1044,
         severity: DiagnosticSeverity.Error
@@ -637,7 +637,7 @@ export let DiagnosticMessages = {
         code: 1122,
         severity: DiagnosticSeverity.Error
     }),
-    cannotFindType: (typeName: string) => ({
+    __unused2: (typeName: string) => ({
         message: `Cannot find type with name '${typeName}'`,
         code: 1123,
         severity: DiagnosticSeverity.Error

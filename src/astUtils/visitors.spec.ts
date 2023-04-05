@@ -972,7 +972,11 @@ describe('astUtils visitors', () => {
             `, [
                 'ClassStatement',
                 'FieldStatement',
+                'TypeExpression',
+                'VariableExpression',
                 'FieldStatement',
+                'TypeExpression',
+                'VariableExpression',
                 'LiteralExpression',
                 'MethodStatement',
                 'FunctionExpression',
