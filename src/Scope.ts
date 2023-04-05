@@ -17,7 +17,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isEnumMemberStatement } from './astUtils/reflection';
+import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isEnumMemberStatement, isNamespaceStatement } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
 

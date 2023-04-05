@@ -9,7 +9,7 @@ import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement 
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isIndexedGetExpression } from '../astUtils/reflection';
-import { expectDiagnostics, expectZeroDiagnostics } from '../testHelpers.spec';
+import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
 import { BrsFile } from '../files/BrsFile';
