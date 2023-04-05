@@ -71,11 +71,11 @@ export class SymbolTable {
      * If the identifier is not in this table, it will check the parent
      *
      * @param name the name to lookup
-     * @param searchParent should we look to our parent if we don't have the symbol?
+     * @param bitFlags flags to match
      * @returns true if this symbol is in the symbol table
      */
-    hasSymbol(name: string,/* add flags */ searchParent = true): boolean {
-        return !!this.getSymbol(name, searchParent);
+    hasSymbol(name: string, bitFlags = SymbolTypeFlags.runtime): boolean {
+        return !!this.getSymbol(name, bitFlags);
     }
 
     /**
@@ -83,24 +83,30 @@ export class SymbolTable {
      * If the identifier is not in this table, it will check the parent
      *
      * @param  name the name to lookup
-     * @param searchParent should we look to our parent if we don't have the symbol?
+     * @param bitFlags flags to match
      * @returns An array of BscSymbols - one for each time this symbol had a type implicitly defined
      */
-    getSymbol(name: string, searchParent = true): BscSymbol[] {
+    getSymbol(name: string, bitFlags = SymbolTypeFlags.runtime): BscSymbol[] {
         const key = name.toLowerCase();
         let result: BscSymbol[];
         // look in our map first
         if ((result = this.symbolMap.get(key))) {
-            return result;
+            result = result.filter(symbol => symbol.flags & bitFlags)
+            if (result.length > 0) {
+                return result;
+            }
         }
         //look through any sibling maps next
         for (let sibling of this.siblings) {
             if ((result = sibling.symbolMap.get(key))) {
-                return result;
+                result = result.filter(symbol => symbol.flags & bitFlags)
+                if (result.length > 0) {
+                    return result;
+                }
             }
         }
         // ask our parent for a symbol
-        if (searchParent && (result = this.parent?.getSymbol(key))) {
+        if (result = this.parent?.getSymbol(key, bitFlags)) {
             return result;
         }
     }
@@ -108,7 +114,7 @@ export class SymbolTable {
     /**
      * Adds a new symbol to the table
      */
-    addSymbol(name: string, range: Range, type: BscType, flags = 0) {
+    addSymbol(name: string, range: Range, type: BscType, bitFlags = SymbolTypeFlags.runtime) {
         const key = name.toLowerCase();
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);
@@ -117,7 +123,7 @@ export class SymbolTable {
             name: name,
             range: range,
             type: type,
-            flags: 0
+            flags: bitFlags
         });
     }
 

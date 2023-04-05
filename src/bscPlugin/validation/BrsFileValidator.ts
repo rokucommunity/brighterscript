@@ -8,6 +8,8 @@ import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
+import { SymbolTypeFlags } from '../../SymbolTable';
+import { CustomType } from '../../types/CustomType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
@@ -51,13 +53,13 @@ export class BrsFileValidator {
                 this.validateEnumDeclaration(node);
 
                 //register this enum declaration
-                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance, SymbolTypeFlags.typetime);
             },
             ClassStatement: (node) => {
                 this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.classKeyword, node.name));
 
                 //register this class
-                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
+                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, new CustomType(node.name.text), SymbolTypeFlags.typetime);
             },
             AssignmentStatement: (node) => {
                 //register this variable
@@ -79,7 +81,8 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable().addSymbol(
                     node.name.split('.')[0],
                     node.nameExpression.range,
-                    DynamicType.instance
+                    DynamicType.instance,
+                    SymbolTypeFlags.typetime
                 );
             },
             FunctionStatement: (node) => {
@@ -120,7 +123,7 @@ export class BrsFileValidator {
             },
             InterfaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));
-                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);
+                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance, SymbolTypeFlags.typetime);
             },
             ConstStatement: (node) => {
                 this.validateDeclarationLocations(node, 'const', () => util.createBoundingRange(node.tokens.const, node.tokens.name));

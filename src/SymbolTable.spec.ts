@@ -1,4 +1,4 @@
-import { SymbolTable } from './SymbolTable';
+import { SymbolTable, SymbolTypeFlags } from './SymbolTable';
 import { expect } from './chai-config.spec';
 import { StringType } from './types/StringType';
 import { IntegerType } from './types/IntegerType';
@@ -49,6 +49,18 @@ describe('SymbolTable', () => {
         expect(child.hasSymbol('bar')).to.be.true;
         expect(child.hasSymbol('buz')).to.be.false;
     });
+
+    it('matches bitflags given', () => {
+        const table = new SymbolTable('Child', () => parent);
+        table.addSymbol('foo', null, new StringType(), SymbolTypeFlags.runtime);
+        table.addSymbol('bar', null, new IntegerType(), SymbolTypeFlags.typetime);
+        expect(table.hasSymbol('foo', SymbolTypeFlags.runtime)).to.be.true;
+        expect(table.hasSymbol('bar', SymbolTypeFlags.runtime)).to.be.false;
+        expect(table.hasSymbol('foo', SymbolTypeFlags.typetime)).to.be.false;
+        expect(table.hasSymbol('bar', SymbolTypeFlags.typetime)).to.be.true;
+    });
+
+
 
     describe('mergeSymbolTable', () => {
 
