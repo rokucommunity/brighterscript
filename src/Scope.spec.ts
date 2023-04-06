@@ -1139,6 +1139,29 @@ describe('Scope', () => {
             expect(plugin.afterScopeValidate.calledWith(compScope)).to.be.true;
         });
 
+        it('supports parameter types in functions in AA literals defined in other scope', () => {
+            program.setFile('source/util.brs', `
+                function getObj() as object
+                    aa = {
+                        name: "test"
+                        addInts: function(a = 1 as integer, b =-1 as integer) as integer
+                            return a + b
+                        end function
+                    }
+                end function
+            `);
+            program.setFile('components/comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp" extends="Scene">
+                    <script uri="comp.brs"/>
+                    <script uri="pkg:/source/util.brs"/>
+                </component>
+            `);
+            program.setFile(s`components/comp.brs`, ``);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         describe('custom types', () => {
             it('detects an unknown function return type', () => {
                 program.setFile(`source/main.bs`, `
@@ -1333,6 +1356,50 @@ describe('Scope', () => {
 
                     function foo(param as MyNamespace.MyClass) as MyNamespace.MyClass
                     end function
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds custom types from same namespace defined in different file', () => {
+                program.setFile(`source/klass.bs`, `
+                    namespace MyNamespace
+                        class Klass
+                        end class
+                    end namespace
+                `);
+
+                program.setFile(`source/otherklass.bs`, `
+                    namespace MyNamespace
+                        class OtherKlass
+                            function beClassy() as Klass
+                              return new Klass()
+                            end function
+                        end class
+                    end namespace
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds custom types from same namespace defined in different file when using full Namespace', () => {
+                program.setFile(`source/klass.bs`, `
+                    namespace MyNamespace
+                        class Klass
+                        end class
+                    end namespace
+                `);
+
+                program.setFile(`source/otherklass.bs`, `
+                    namespace MyNamespace
+                        class OtherKlass
+                            function beClassy() as MyNamespace.Klass
+                            end function
+                        end class
+                    end namespace
+
                 `);
                 program.validate();
 
