@@ -250,6 +250,42 @@ describe('HoverProcessor', () => {
             //  sub no|op()
             hover = program.getHover('source/main.bs', util.createPosition(12, 31))[0];
             // Unfortunately, we can't get hover details on class members yet
+            // TODO: Add hover ability on class members
+            expect(hover).to.be.undefined;
+        });
+
+        it('finds types properly', () => {
+            program.setFile('source/main.bs', `
+                class Person
+                end class
+
+                sub doWork(age as integer, name as string, guy as Person)
+                end sub
+            `);
+            program.validate();
+            // a|ge as integer
+            let hover = program.getHover('source/main.bs', util.createPosition(4, 29))[0];
+            expect(hover?.range).to.eql(util.createRange(4, 27, 4, 30));
+            expect(hover?.contents).to.eql(fence('age as integer'));
+            // age as int|eger
+            hover = program.getHover('source/main.bs', util.createPosition(4, 39))[0];
+            // no hover on base types
+            expect(hover).to.be.undefined;
+            // n|ame as string
+            hover = program.getHover('source/main.bs', util.createPosition(4, 46))[0];
+            expect(hover?.range).to.eql(util.createRange(4, 43, 4, 47));
+            expect(hover?.contents).to.eql(fence('name as string'));
+            // name as st|ring
+            hover = program.getHover('source/main.bs', util.createPosition(4, 54))[0];
+            // no hover on base types
+            expect(hover).to.be.undefined;
+            // gu|y as Person
+            hover = program.getHover('source/main.bs', util.createPosition(4, 60))[0];
+            expect(hover?.range).to.eql(util.createRange(4, 59, 4, 62));
+            expect(hover?.contents).to.eql(fence('guy as Person'));
+            // guy as Pe|rson
+            hover = program.getHover('source/main.bs', util.createPosition(4, 69))[0];
+            //TODO: Add hover on custom types (classes, interfaces, enums, etc.)
             expect(hover).to.be.undefined;
         });
     });

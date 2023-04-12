@@ -111,16 +111,16 @@ export class HoverProcessor {
             }
         }
 
-        if (!expression.findAncestor(isTypeExpression)) {
-            //look through all callables in relevant scopes
-            for (let scope of this.event.scopes) {
-                let callable = scope.getCallableByName(lowerTokenText);
-                if (callable) {
-                    return {
-                        range: token.range,
-                        contents: this.buildContentsWithDocs(fence(callable.type.toString()), callable.functionStatement?.func?.functionType)
-                    };
-                }
+        //Potentially a problem for the function `string()` as it is a type AND a function https://developer.roku.com/en-ca/docs/references/brightscript/language/global-string-functions.md#stringn-as-integer-str-as-string--as-string
+
+        //look through all callables in relevant scopes
+        for (let scope of this.event.scopes) {
+            let callable = scope.getCallableByName(lowerTokenText);
+            if (callable) {
+                return {
+                    range: token.range,
+                    contents: this.buildContentsWithDocs(fence(callable.type.toString()), callable.functionStatement?.func?.functionType)
+                };
             }
         }
     }

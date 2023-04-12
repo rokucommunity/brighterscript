@@ -71,10 +71,10 @@ export class SymbolTable {
      * If the identifier is not in this table, it will check the parent
      *
      * @param name the name to lookup
-     * @param bitFlags flags to match
+     * @param bitFlags flags to match (See SymbolTypeFlags)
      * @returns true if this symbol is in the symbol table
      */
-    hasSymbol(name: string, bitFlags = SymbolTypeFlags.runtime): boolean {
+    hasSymbol(name: string, bitFlags: number): boolean {
         return !!this.getSymbol(name, bitFlags);
     }
 
@@ -86,7 +86,7 @@ export class SymbolTable {
      * @param bitFlags flags to match
      * @returns An array of BscSymbols - one for each time this symbol had a type implicitly defined
      */
-    getSymbol(name: string, bitFlags = SymbolTypeFlags.runtime): BscSymbol[] {
+    getSymbol(name: string, bitFlags: number): BscSymbol[] {
         const key = name.toLowerCase();
         let result: BscSymbol[];
         // look in our map first
@@ -114,7 +114,7 @@ export class SymbolTable {
     /**
      * Adds a new symbol to the table
      */
-    addSymbol(name: string, range: Range, type: BscType, bitFlags = SymbolTypeFlags.runtime) {
+    addSymbol(name: string, range: Range, type: BscType, bitFlags: number) {
         const key = name.toLowerCase();
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);

@@ -117,6 +117,10 @@ export class CallExpression extends Expression {
             walkArray(this.args, visitor, options, this);
         }
     }
+
+    getType(): BscType {
+        return this.callee.getType();
+    }
 }
 
 export class FunctionExpression extends Expression implements TypedefProvider {
@@ -1629,7 +1633,7 @@ export class TypeExpression extends Expression implements TypedefProvider {
 
     getTypedef(state: TranspileState): (string | SourceNode)[] {
         // TypeDefs should pass through any valid type names
-        return [util.getAllDottedGetParts(this.expression).map(part => part.text).join('.')];
+        return this.expression.transpile(state as BrsTranspileState);
     }
 
 }

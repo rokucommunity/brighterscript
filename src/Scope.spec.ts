@@ -11,6 +11,7 @@ import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import type { OnScopeValidateEvent } from './interfaces';
+import { SymbolTypeFlags } from './SymbolTable';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -72,13 +73,16 @@ describe('Scope', () => {
         const symbolTable = file.parser.references.namespaceStatements[1].body.getSymbolTable();
         //the symbol table should contain the relative names for all items in this namespace across the entire scope
         expect(
-            symbolTable.hasSymbol('Beta')
+            // eslint-disable-next-line no-bitwise
+            symbolTable.hasSymbol('Beta', SymbolTypeFlags.runtime | SymbolTypeFlags.typetime)
         ).to.be.true;
         expect(
-            symbolTable.hasSymbol('Charlie')
+            // eslint-disable-next-line no-bitwise
+            symbolTable.hasSymbol('Charlie', SymbolTypeFlags.runtime | SymbolTypeFlags.typetime)
         ).to.be.true;
         expect(
-            symbolTable.hasSymbol('createBeta')
+            // eslint-disable-next-line no-bitwise
+            symbolTable.hasSymbol('createBeta', SymbolTypeFlags.runtime)
         ).to.be.true;
 
         expectZeroDiagnostics(program);

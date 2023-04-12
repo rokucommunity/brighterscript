@@ -517,6 +517,11 @@ export class BrsFile {
     }
 
     private getBscTypeFromAssignment(assignment: AssignmentStatement, scope: FunctionScope): BscType {
+        //TODO:
+        // This should be as simple as
+        // return assignment.value.getType()
+        // However, that requires scopes and symbol tables to be linked
+
         try {
             //function
             if (isFunctionExpression(assignment.value)) {
