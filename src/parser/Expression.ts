@@ -15,12 +15,13 @@ import type { TranspileResult, TypedefProvider } from '../interfaces';
 import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
 import { Expression } from './AstNode';
-import { SymbolTable } from '../SymbolTable';
+import { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
 import { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { StringType } from '../types/StringType';
 import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
+import { CustomType } from '../types/CustomType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -1615,12 +1616,12 @@ export class TypeExpression extends Expression implements TypedefProvider {
         const symbolTable = this.getSymbolTable();
         //get the leftmost variable, then walk into the type
         const parts = util.getAllDottedGetParts(this.expression);
-        const symbols = symbolTable?.getSymbol(parts[0].text) ?? [];
+        const symbols = symbolTable?.getSymbol(parts[0].text, SymbolTypeFlags.typetime) ?? [];
         if (symbols.length > 0 && parts.length === 1) {
             return symbols[0].type;
         } else {
-            //this is digging into nested objects (or namespaces, etc...) and we don't understand them yet. just return DynamicType
-            return DynamicType.instance;
+            //this is digging into nested objects (or namespaces, etc...)
+            return new CustomType(parts.map(part => part.text).join('.'));
         }
     }
 

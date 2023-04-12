@@ -219,5 +219,38 @@ describe('HoverProcessor', () => {
             expect(hover?.range).to.eql(util.createRange(2, 40, 2, 50));
             expect(hover?.contents).to.eql(fence('const name.sp.a.c.e.SOME_VALUE = true'));
         });
+
+        it('finds namespaced class types', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    myKlass = new name.Klass()
+                    runNoop(myKlass)
+                end sub
+
+                sub runNoop(myKlass as name.Klass)
+                    myKlass.noop()
+                end sub
+
+                namespace name
+                    class Klass
+                        sub noop()
+                        end sub
+                    end class
+                end namespace
+            `);
+            program.validate();
+            // run|Noop(myKlass)
+            let hover = program.getHover('source/main.bs', util.createPosition(3, 24))[0];
+            expect(hover?.range).to.eql(util.createRange(3, 20, 3, 27));
+            expect(hover?.contents).to.eql(fence('sub runNoop(myKlass as name.Klass) as void'));
+            // myKl|ass.noop()
+            hover = program.getHover('source/main.bs', util.createPosition(7, 25))[0];
+            expect(hover?.range).to.eql(util.createRange(7, 20, 7, 27));
+            expect(hover?.contents).to.eql(fence('myKlass as name.Klass'));
+            //  sub no|op()
+            hover = program.getHover('source/main.bs', util.createPosition(12, 31))[0];
+            expect(hover?.range).to.eql(util.createRange(12, 20, 12, 27));
+            expect(hover?.contents).to.eql(fence('myKlass as name.Klass'));
+        });
     });
 });
