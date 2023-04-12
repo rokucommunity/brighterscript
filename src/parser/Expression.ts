@@ -1621,6 +1621,8 @@ export class TypeExpression extends Expression implements TypedefProvider {
             return symbols[0].type;
         } else {
             //this is digging into nested objects (or namespaces, etc...)
+            //TODO: This is wrong -- it should be digging through the symbol tables.
+            //However, in the context of `callables` there is no symbol table because they are set at parse time
             return new CustomType(parts.map(part => part.text).join('.'));
         }
     }

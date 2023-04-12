@@ -734,7 +734,6 @@ export class Scope {
             this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
-            //this.diagnosticDetectInvalidFunctionExpressionTypes(file);
         });
     }
 
@@ -870,41 +869,6 @@ export class Scope {
         }
     }
 
-    /**
-     * Find function parameters and function return types that are neither built-in types or known Class references
-     */
-    /*private diagnosticDetectInvalidFunctionExpressionTypes(file: BrsFile) {
-        for (let func of file.parser.references.functionExpressions) {
-            if (isCustomType(func.returnTypeExpression) && func.getType().returnType) {
-                // check if this custom type is in our class map
-                const returnTypeName = func.returnTypeExpression.name;
-                const currentNamespaceName = func.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
-                if (!this.hasClass(returnTypeName, currentNamespaceName) && !this.hasInterface(returnTypeName) && !this.hasEnum(returnTypeName)) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.invalidFunctionReturnType(returnTypeName),
-                        range: func.returnTypeExpression.range,
-                        file: file
-                    });
-                }
-            }
-
-            for (let param of func.parameters) {
-                const paramType = param.getType();
-                if (isCustomType(paramType)) {
-                    const paramTypeName = paramType.name;
-                    const currentNamespaceName = func.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
-                    if (!this.hasClass(paramTypeName, currentNamespaceName) && !this.hasInterface(paramTypeName) && !this.hasEnum(paramTypeName)) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.functionParameterTypeIsInvalid(param.name.text, paramTypeName),
-                            range: param.typeExpression.range,
-                            file: file
-                        });
-
-                    }
-                }
-            }
-        }
-    }*/
 
     public getNewExpressions() {
         let result = [] as AugmentedNewExpression[];

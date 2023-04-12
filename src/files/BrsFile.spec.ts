@@ -2893,11 +2893,11 @@ describe('BrsFile', () => {
                 sub bar(obj as SomeKlass)
                 end sub
             `, `
-                function foo() as dynamic
+                function foo() as object
                     return SomeKlass()
                 end function
 
-                sub bar(obj as dynamic)
+                sub bar(obj as object)
                 end sub
             `);
         });
