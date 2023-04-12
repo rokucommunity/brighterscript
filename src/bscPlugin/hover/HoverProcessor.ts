@@ -1,5 +1,5 @@
 import { SourceNode } from 'source-map';
-import { isBrsFile, isFunctionType, isTypeExpression, isXmlFile } from '../../astUtils/reflection';
+import { isBrsFile, isFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { Hover, ProvideHoverEvent } from '../../interfaces';
