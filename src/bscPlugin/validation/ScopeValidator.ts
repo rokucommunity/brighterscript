@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isBrsFile, isLiteralExpression, isNamespaceStatement, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isLiteralExpression, isNamespaceStatement, isTypeExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -14,6 +14,7 @@ import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import type { Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
+import { SymbolTypeFlags } from '../../SymbolTable';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -94,10 +95,16 @@ export class ScopeValidator {
             const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
             //get the namespace container (accounting for namespace-relative as well)
             const namespaceContainer = scope.getNamespace(firstNamespacePartLower, info.enclosingNamespaceNameLower);
+            let symbolType = SymbolTypeFlags.runtime;
+            const isUsedAsType = info.expression.findAncestor(isTypeExpression);
+            if (isUsedAsType) {
+                // This is used in a TypeExpression - only look up types from SymbolTable
+                symbolType = SymbolTypeFlags.typetime;
+            }
 
             //flag all unknown left-most variables
             if (
-                !symbolTable?.hasSymbol(firstPart.name?.text) &&
+                !symbolTable?.hasSymbol(firstPart.name?.text, symbolType) &&
                 !namespaceContainer
             ) {
                 this.addMultiScopeDiagnostic({
@@ -132,6 +139,7 @@ export class ScopeValidator {
                 if (
                     !scope.getEnumMap().has(entityNameLower) &&
                     !scope.getClassMap().has(entityNameLower) &&
+                    !scope.getInterfaceMap().has(entityNameLower) &&
                     !scope.getConstMap().has(entityNameLower) &&
                     !scope.getCallableByName(entityNameLower) &&
                     !scope.getNamespace(entityNameLower, info.enclosingNamespaceNameLower)
@@ -162,6 +170,15 @@ export class ScopeValidator {
                     continue outer;
                 }
             }
+            //if the full expression is just an enum name, this is an illegal statement because enums don't exist at runtime
+            if (!isUsedAsType && enumStatement && info.parts.length === 1) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.itemCannotBeUsedAsVariable('enum'),
+                    range: info.expression.range,
+                    file: file
+                }, 'When used in scope');
+            }
+
             //if the full expression is a namespace path, this is an illegal statement because namespaces don't exist at runtme
             if (scope.getNamespace(entityNameLower, info.enclosingNamespaceNameLower)) {
                 this.addMultiScopeDiagnostic({

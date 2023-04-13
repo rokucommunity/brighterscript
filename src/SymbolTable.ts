@@ -1,6 +1,12 @@
 import type { Range } from 'vscode-languageserver';
 import type { BscType } from './types/BscType';
 
+
+export enum SymbolTypeFlags {
+    runtime = 1,
+    typetime = 2
+}
+
 /**
  * Stores the types associated with variables and functions in the Brighterscript code
  * Can be part of a hierarchy, so lookups can reference parent scopes
@@ -65,11 +71,11 @@ export class SymbolTable {
      * If the identifier is not in this table, it will check the parent
      *
      * @param name the name to lookup
-     * @param searchParent should we look to our parent if we don't have the symbol?
+     * @param bitFlags flags to match (See SymbolTypeFlags)
      * @returns true if this symbol is in the symbol table
      */
-    hasSymbol(name: string, searchParent = true): boolean {
-        return !!this.getSymbol(name, searchParent);
+    hasSymbol(name: string, bitFlags: number): boolean {
+        return !!this.getSymbol(name, bitFlags);
     }
 
     /**
@@ -77,32 +83,38 @@ export class SymbolTable {
      * If the identifier is not in this table, it will check the parent
      *
      * @param  name the name to lookup
-     * @param searchParent should we look to our parent if we don't have the symbol?
+     * @param bitFlags flags to match
      * @returns An array of BscSymbols - one for each time this symbol had a type implicitly defined
      */
-    getSymbol(name: string, searchParent = true): BscSymbol[] {
+    getSymbol(name: string, bitFlags: number): BscSymbol[] {
         const key = name.toLowerCase();
         let result: BscSymbol[];
         // look in our map first
         if ((result = this.symbolMap.get(key))) {
-            return result;
+            // eslint-disable-next-line no-bitwise
+            result = result.filter(symbol => symbol.flags & bitFlags);
+            if (result.length > 0) {
+                return result;
+            }
         }
         //look through any sibling maps next
         for (let sibling of this.siblings) {
             if ((result = sibling.symbolMap.get(key))) {
-                return result;
+                // eslint-disable-next-line no-bitwise
+                result = result.filter(symbol => symbol.flags & bitFlags);
+                if (result.length > 0) {
+                    return result;
+                }
             }
         }
         // ask our parent for a symbol
-        if (searchParent && (result = this.parent?.getSymbol(key))) {
-            return result;
-        }
+        return this.parent?.getSymbol(key, bitFlags);
     }
 
     /**
      * Adds a new symbol to the table
      */
-    addSymbol(name: string, range: Range, type: BscType) {
+    addSymbol(name: string, range: Range, type: BscType, bitFlags: number) {
         const key = name.toLowerCase();
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);
@@ -110,7 +122,8 @@ export class SymbolTable {
         this.symbolMap.get(key).push({
             name: name,
             range: range,
-            type: type
+            type: type,
+            flags: bitFlags
         });
     }
 
@@ -124,7 +137,8 @@ export class SymbolTable {
                 this.addSymbol(
                     symbol.name,
                     symbol.range,
-                    symbol.type
+                    symbol.type,
+                    symbol.flags
                 );
             }
         }
@@ -152,6 +166,7 @@ export interface BscSymbol {
     name: string;
     range: Range;
     type: BscType;
+    flags: number;
 }
 
 /**

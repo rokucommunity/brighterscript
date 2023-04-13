@@ -12,13 +12,16 @@ import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
 import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
-import { VoidType } from '../types/VoidType';
-import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
 import { Expression } from './AstNode';
-import { SymbolTable } from '../SymbolTable';
+import { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
 import { SourceNode } from 'source-map';
+import type { TranspileState } from './TranspileState';
+import { StringType } from '../types/StringType';
+import { DynamicType } from '../types/DynamicType';
+import { VoidType } from '../types/VoidType';
+import { CustomType } from '../types/CustomType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -114,6 +117,10 @@ export class CallExpression extends Expression {
             walkArray(this.args, visitor, options, this);
         }
     }
+
+    getType(): BscType {
+        return this.callee.getType();
+    }
 }
 
 export class FunctionExpression extends Expression implements TypedefProvider {
@@ -125,16 +132,9 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly leftParen: Token,
         readonly rightParen: Token,
         readonly asToken?: Token,
-        readonly returnTypeToken?: Token
+        readonly returnTypeExpression?: TypeExpression
     ) {
         super();
-        if (this.returnTypeToken) {
-            this.returnType = util.tokenToBscType(this.returnTypeToken);
-        } else if (this.functionType.text.toLowerCase() === 'sub') {
-            this.returnType = new VoidType();
-        } else {
-            this.returnType = DynamicType.instance;
-        }
 
         //if there's a body, and it doesn't have a SymbolTable, assign one
         if (this.body && !this.body.symbolTable) {
@@ -142,11 +142,6 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
     }
-
-    /**
-     * The type this function returns
-     */
-    public returnType: BscType;
 
     /**
      * Get the name of the wrapping namespace (if it exists)
@@ -201,7 +196,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             ...this.parameters,
             this.rightParen,
             this.asToken,
-            this.returnTypeToken,
+            this.returnTypeExpression,
             this.end
         );
     }
@@ -245,7 +240,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 state.transpileToken(this.asToken),
                 ' ',
                 //return type
-                state.sourceNode(this.returnTypeToken, this.returnType.toTypeString())
+                ...this.returnTypeExpression.transpile(state)
             );
         }
         if (includeBody) {
@@ -285,7 +280,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 //as <ReturnType>
                 ...(this.asToken ? [
                     ' as ',
-                    this.returnTypeToken?.text
+                    ...this.returnTypeExpression.getTypedef(state)
                 ] : []),
                 '\n',
                 state.indent(),
@@ -299,7 +294,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walkArray(this.parameters, visitor, options, this);
-
+            walk(this, 'returnTypeExpression', visitor, options);
             //This is the core of full-program walking...it allows us to step into sub functions
             if (options.walkMode & InternalWalkMode.recurseChildFunctions) {
                 walk(this, 'body', visitor, options);
@@ -307,11 +302,19 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
     }
 
-    getFunctionType(): FunctionType {
-        let functionType = new FunctionType(this.returnType);
-        functionType.isSub = this.functionType.text === 'sub';
+    public getType(): FunctionType {
+        //if there's a defined return type, use that
+        let returnType = this.returnTypeExpression?.getType();
+        const isSub = this.functionType.kind === TokenKind.Sub;
+        //if we don't have a return type and this is a sub, set the return type to `void`. else use `dynamic`
+        if (!returnType) {
+            returnType = isSub ? VoidType.instance : DynamicType.instance;
+        }
+
+        let functionType = new FunctionType(returnType);
+        functionType.isSub = isSub;
         for (let param of this.parameters) {
-            functionType.addParameter(param.name.text, param.type, !!param.typeToken);
+            functionType.addParameter(param.name.text, param.getType(), !!param.defaultValue);
         }
         return functionType;
     }
@@ -320,25 +323,23 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 export class FunctionParameterExpression extends Expression {
     constructor(
         public name: Identifier,
-        public typeToken?: Token,
+        public equalToken?: Token,
         public defaultValue?: Expression,
-        public asToken?: Token
+        public asToken?: Token,
+        public typeExpression?: TypeExpression
     ) {
         super();
-        if (typeToken) {
-            this.type = util.tokenToBscType(typeToken);
-        } else {
-            this.type = new DynamicType();
-        }
     }
 
-    public type: BscType;
+    public getType() {
+        return this.typeExpression?.getType() || DynamicType.instance;
+    }
 
     public get range(): Range {
         return util.createBoundingRange(
             this.name,
             this.asToken,
-            this.typeToken,
+            this.typeExpression,
             this.defaultValue
         );
     }
@@ -358,7 +359,9 @@ export class FunctionParameterExpression extends Expression {
             result.push(' ');
             result.push(state.transpileToken(this.asToken));
             result.push(' ');
-            result.push(state.sourceNode(this.typeToken, this.type.toTypeString()));
+            result.push(
+                ...(this.typeExpression?.transpile(state) ?? [])
+            );
         }
 
         return result;
@@ -376,15 +379,16 @@ export class FunctionParameterExpression extends Expression {
             //type declaration
             ...(this.asToken ? [
                 ' as ',
-                this.typeToken?.text
+                ...(this.typeExpression?.getTypedef(state) ?? [''])
             ] : [])
         ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         // eslint-disable-next-line no-bitwise
-        if (this.defaultValue && options.walkMode & InternalWalkMode.walkExpressions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'defaultValue', visitor, options);
+            walk(this, 'typeExpression', visitor, options);
         }
     }
 }
@@ -573,17 +577,15 @@ export class LiteralExpression extends Expression {
         public token: Token
     ) {
         super();
-        this.type = util.tokenToBscType(token);
+    }
+
+    public getType() {
+        return util.tokenToBscType(this.token);
     }
 
     public get range() {
         return this.token.range;
     }
-
-    /**
-     * The (data) type of this expression
-     */
-    public type: BscType;
 
     transpile(state: BrsTranspileState) {
         let text: string;
@@ -591,7 +593,7 @@ export class LiteralExpression extends Expression {
             //wrap quasis with quotes (and escape inner quotemarks)
             text = `"${this.token.text.replace(/"/g, '""')}"`;
 
-        } else if (isStringType(this.type)) {
+        } else if (this.token.kind === TokenKind.StringLiteral) {
             text = this.token.text;
             //add trailing quotemark if it's missing. We will have already generated a diagnostic for this.
             if (text.endsWith('"') === false) {
@@ -1129,6 +1131,10 @@ export class TemplateStringExpression extends Expression {
 
     public readonly range: Range;
 
+    public getType() {
+        return StringType.instance;
+    }
+
     transpile(state: BrsTranspileState) {
         if (this.quasis.length === 1 && this.expressions.length === 0) {
             return this.quasis[0].transpile(state);
@@ -1160,7 +1166,7 @@ export class TemplateStringExpression extends Expression {
                 //skip the toString wrapper around certain expressions
                 if (
                     isEscapedCharCodeLiteralExpression(expression) ||
-                    (isLiteralExpression(expression) && isStringType(expression.type))
+                    (isLiteralExpression(expression) && isStringType(expression.getType()))
                 ) {
                     add(
                         ...expression.transpile(state)
@@ -1570,9 +1576,64 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
 }
 
 function numberExpressionToValue(expr: LiteralExpression, operator = '') {
-    if (isIntegerType(expr.type) || isLongIntegerType(expr.type)) {
+    if (isIntegerType(expr.getType()) || isLongIntegerType(expr.getType())) {
         return parseInt(operator + expr.token.text);
     } else {
         return parseFloat(operator + expr.token.text);
     }
+}
+
+export class TypeExpression extends Expression implements TypedefProvider {
+    constructor(
+        /**
+         * The standard AST expression that represents the type for this TypeExpression.
+         */
+        public expression: Expression
+    ) {
+        super();
+        this.range = expression?.range;
+    }
+
+    public range: Range;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [this.getType().toTypeString()];
+    }
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        }
+    }
+
+    public getType(): BscType {
+        if (isVariableExpression(this.expression)) {
+            const standardType = util.tokenToBscType(this.expression.name, false);
+            if (standardType) {
+                return standardType;
+            }
+        }
+        if (isLiteralExpression(this.expression)) {
+            return this.expression.getType();
+        }
+
+        //TODO eventually support more complex types
+        const symbolTable = this.getSymbolTable();
+        //get the leftmost variable, then walk into the type
+        const parts = util.getAllDottedGetParts(this.expression);
+        const symbols = symbolTable?.getSymbol(parts[0].text, SymbolTypeFlags.typetime) ?? [];
+        if (symbols.length > 0 && parts.length === 1) {
+            return symbols[0].type;
+        } else {
+            //this is digging into nested objects (or namespaces, etc...)
+            //TODO: This is wrong -- it should be digging through the symbol tables.
+            //However, in the context of `callables` there is no symbol table because they are set at parse time
+            return new CustomType(parts.map(part => part.text).join('.'));
+        }
+    }
+
+    getTypedef(state: TranspileState): (string | SourceNode)[] {
+        // TypeDefs should pass through any valid type names
+        return this.expression.transpile(state as BrsTranspileState);
+    }
+
 }

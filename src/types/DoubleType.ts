@@ -9,6 +9,8 @@ export class DoubleType implements BscType {
         public typeText?: string
     ) { }
 
+    public static instance = new DoubleType('double');
+
     public isAssignableTo(targetType: BscType) {
         return (
             targetType instanceof DoubleType ||

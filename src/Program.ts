@@ -15,7 +15,7 @@ import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DependencyGraph } from './DependencyGraph';
 import { Logger, LogLevel } from './Logger';
 import chalk from 'chalk';
-import { globalFile } from './globalCallables';
+import { globalCallableMap, globalFile } from './globalCallables';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
@@ -29,6 +29,17 @@ import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
+import { IntegerType } from './types/IntegerType';
+import { StringType } from './types/StringType';
+import { SymbolTypeFlags } from './SymbolTable';
+import { BooleanType } from './types/BooleanType';
+import { DoubleType } from './types/DoubleType';
+import { DynamicType } from './types/DynamicType';
+import { FloatType } from './types/FloatType';
+import { FunctionType } from './types/FunctionType';
+import { LongIntegerType } from './types/LongIntegerType';
+import { ObjectType } from './types/ObjectType';
+import { VoidType } from './types/VoidType';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
@@ -84,6 +95,9 @@ export class Program {
         this.globalScope = new Scope('global', this, 'scope:global');
         this.globalScope.attachDependencyGraph(this.dependencyGraph);
         this.scopes.global = this.globalScope;
+
+        this.populateGlobalSymbolTable();
+
         //hardcode the files list for global scope to only contain the global file
         this.globalScope.getAllFiles = () => [globalFile];
         this.globalScope.validate();
@@ -91,6 +105,30 @@ export class Program {
         this.globalScope.getDiagnostics = () => [];
         //TODO we might need to fix this because the isValidated clears stuff now
         (this.globalScope as any).isValidated = true;
+    }
+
+    /**
+     * Do all setup required for the global symbol table.
+     */
+    private populateGlobalSymbolTable() {
+        //Setup primitive types in global symbolTable
+        //TODO: Need to handle Array types
+
+        this.globalScope.symbolTable.addSymbol('boolean', undefined, BooleanType.instance, SymbolTypeFlags.typetime);
+        this.globalScope.symbolTable.addSymbol('double', undefined, DoubleType.instance, SymbolTypeFlags.typetime);
+        this.globalScope.symbolTable.addSymbol('dynamic', undefined, DynamicType.instance, SymbolTypeFlags.typetime);
+        this.globalScope.symbolTable.addSymbol('float', undefined, FloatType.instance, SymbolTypeFlags.typetime);
+        this.globalScope.symbolTable.addSymbol('function', undefined, new FunctionType(DynamicType.instance), SymbolTypeFlags.typetime);
+        this.globalScope.symbolTable.addSymbol('integer', undefined, IntegerType.instance, SymbolTypeFlags.typetime);
+        this.globalScope.symbolTable.addSymbol('longinteger', undefined, LongIntegerType.instance, SymbolTypeFlags.typetime);
+        this.globalScope.symbolTable.addSymbol('object', undefined, new ObjectType(), SymbolTypeFlags.typetime);
+        this.globalScope.symbolTable.addSymbol('string', undefined, StringType.instance, SymbolTypeFlags.typetime);
+        this.globalScope.symbolTable.addSymbol('void', undefined, VoidType.instance, SymbolTypeFlags.typetime);
+
+        for (let pair of globalCallableMap) {
+            let [key, callable] = pair;
+            this.globalScope.symbolTable.addSymbol(key, undefined, callable.type, SymbolTypeFlags.runtime);
+        }
     }
 
     /**

@@ -100,6 +100,30 @@ describe('BrsFile', () => {
         }]);
     });
 
+    it('flags enums used as variables', () => {
+        program.setFile('source/main.bs', `
+            enum Foo
+                bar
+                baz
+            end enum
+
+            sub main()
+                print getFooValue()
+                print getFoo()
+            end sub
+
+            function getFoo() as Foo
+                return Foo ' Error - cannot return an enum, just an enum value
+            end function
+
+            function getFooValue() as Foo
+                return Foo.bar
+            end function
+        `);
+        program.validate();
+        expectDiagnostics(program, [DiagnosticMessages.itemCannotBeUsedAsVariable('enum').message]);
+    });
+
     it('supports the third parameter in CreateObject', () => {
         program.setFile('source/main.brs', `
             sub main()
@@ -1404,6 +1428,21 @@ describe('BrsFile', () => {
             `);
             expectZeroDiagnostics(file);
         });
+
+        it('supports parameter types in functions in AA literals', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    aa = {
+                        name: "test"
+                        addInts: function(a as integer, b as integer) as integer
+                            return a + b
+                        end function
+                    }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('findCallables', () => {
@@ -1524,15 +1563,15 @@ describe('BrsFile', () => {
                 return { type: arg.type, range: arg.range, text: arg.text };
             });
             expect(argsMap).to.eql([{
-                type: new StringType(),
+                type: StringType.instance,
                 range: util.createRange(2, 32, 2, 38),
                 text: '"name"'
             }, {
-                type: new IntegerType(),
+                type: IntegerType.instance,
                 range: util.createRange(2, 40, 2, 42),
                 text: '12'
             }, {
-                type: new BooleanType(),
+                type: BooleanType.instance,
                 range: util.createRange(2, 44, 2, 48),
                 text: 'true'
             }]);

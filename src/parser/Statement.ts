@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
-import type { BinaryExpression, NamespacedVariableNameExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression } from './Expression';
+import type { BinaryExpression, NamespacedVariableNameExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
@@ -13,7 +13,6 @@ import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpressi
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
-import type { BscType } from '../types/BscType';
 import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
@@ -114,9 +113,11 @@ export class Body extends Statement implements TypedefProvider {
 
 export class AssignmentStatement extends Statement {
     constructor(
-        readonly equals: Token,
-        readonly name: Identifier,
-        readonly value: Expression
+        public equals: Token,
+        public name: Identifier,
+        public value: Expression,
+        public asToken?: Token,
+        public typeExpression?: TypeExpression
     ) {
         super();
         this.range = util.createBoundingRange(name, equals, value);
@@ -149,6 +150,7 @@ export class AssignmentStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
+            //TODO: Walk TypeExpression. We need to decide how to implement types on assignments
             walk(this, 'value', visitor, options);
         }
     }
@@ -1426,17 +1428,15 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     constructor(
         nameToken: Identifier,
         asToken: Token,
-        typeToken: Token,
-        public type: BscType
+        public typeExpression: TypeExpression
     ) {
         super();
         this.tokens.name = nameToken;
         this.tokens.as = asToken;
-        this.tokens.type = typeToken;
         this.range = util.createBoundingRange(
-            nameToken,
-            asToken,
-            typeToken
+            this.tokens.name,
+            this.tokens.as,
+            this.typeExpression
         );
     }
 
@@ -1445,7 +1445,6 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     public tokens = {} as {
         name: Identifier;
         as: Token;
-        type: Token;
     };
 
     public get name() {
@@ -1453,7 +1452,9 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        //nothing to walk
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typeExpression', visitor, options);
+        }
     }
 
     getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
@@ -1469,10 +1470,10 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         result.push(
             this.tokens.name.text
         );
-        if (this.tokens.type?.text?.length > 0) {
+        if (this.typeExpression) {
             result.push(
                 ' as ',
-                this.tokens.type.text
+                ...this.typeExpression.getTypedef(state)
             );
         }
         return result;
@@ -1491,8 +1492,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         public params: FunctionParameterExpression[],
         rightParen: Token,
         asToken?: Token,
-        returnTypeToken?: Token,
-        public returnType?: BscType
+        public returnTypeExpression?: TypeExpression
     ) {
         super();
         this.tokens.functionType = functionTypeToken;
@@ -1500,7 +1500,6 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         this.tokens.leftParen = leftParen;
         this.tokens.rightParen = rightParen;
         this.tokens.as = asToken;
-        this.tokens.returnType = returnTypeToken;
     }
 
     public get range() {
@@ -1511,7 +1510,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             ...(this.params ?? []),
             this.tokens.rightParen,
             this.tokens.as,
-            this.tokens.returnType
+            this.returnTypeExpression
         );
     }
 
@@ -1521,11 +1520,12 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         leftParen: Token;
         rightParen: Token;
         as: Token;
-        returnType: Token;
     };
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        //nothing to walk
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'returnTypeExpression', visitor, options);
+        }
     }
 
     getTypedef(state: BrsTranspileState) {
@@ -1551,20 +1551,20 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             }
             const param = params[i];
             result.push(param.name.text);
-            if (param.typeToken?.text?.length > 0) {
+            if (param.typeExpression) {
                 result.push(
                     ' as ',
-                    param.typeToken.text
+                    ...param.typeExpression.getTypedef(state)
                 );
             }
         }
         result.push(
             ')'
         );
-        if (this.tokens.returnType?.text.length > 0) {
+        if (this.returnTypeExpression) {
             result.push(
                 ' as ',
-                this.tokens.returnType.text
+                ...this.returnTypeExpression.getTypedef(state)
             );
         }
         return result;
@@ -2159,7 +2159,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
         readonly accessModifier?: Token,
         readonly name?: Identifier,
         readonly as?: Token,
-        readonly type?: Token,
+        readonly typeExpression?: TypeExpression,
         readonly equal?: Token,
         readonly initialValue?: Expression
     ) {
@@ -2168,7 +2168,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
             accessModifier,
             name,
             as,
-            type,
+            typeExpression,
             equal,
             initialValue
         );
@@ -2179,13 +2179,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
      * Defaults to `DynamicType`
      */
     getType() {
-        if (this.type) {
-            return util.tokenToBscType(this.type);
-        } else if (isLiteralExpression(this.initialValue)) {
-            return this.initialValue.type;
-        } else {
-            return new DynamicType();
-        }
+        return this.typeExpression?.getType() || DynamicType.instance;
     }
 
     public readonly range: Range;
@@ -2222,7 +2216,8 @@ export class FieldStatement extends Statement implements TypedefProvider {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (this.initialValue && options.walkMode & InternalWalkMode.walkExpressions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typeExpression', visitor, options);
             walk(this, 'initialValue', visitor, options);
         }
     }

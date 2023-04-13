@@ -1,5 +1,5 @@
 import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement } from '../parser/Statement';
-import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression } from '../parser/Expression';
+import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypeExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { BscFile, File, TypedefProvider } from '../interfaces';
@@ -260,6 +260,9 @@ export function isAnnotationExpression(element: AstNode | undefined): element is
 export function isTypedefProvider(element: any): element is TypedefProvider {
     return 'getTypedef' in element;
 }
+export function isTypeExpression(element: any): element is TypeExpression {
+    return element?.constructor.name === 'TypeExpression';
+}
 
 // BscType reflection
 export function isStringType(value: any): value is StringType {
@@ -315,14 +318,14 @@ export function isNumberType(e: any): e is IntegerType | LongIntegerType | Float
 // Literal reflection
 
 export function isLiteralInvalid(e: any): e is LiteralExpression & { type: InvalidType } {
-    return isLiteralExpression(e) && isInvalidType(e.type);
+    return isLiteralExpression(e) && isInvalidType(e.getType());
 }
 export function isLiteralBoolean(e: any): e is LiteralExpression & { type: BooleanType } {
-    return isLiteralExpression(e) && isBooleanType(e.type);
+    return isLiteralExpression(e) && isBooleanType(e.getType());
 }
 export function isLiteralString(e: any): e is LiteralExpression & { type: StringType } {
-    return isLiteralExpression(e) && isStringType(e.type);
+    return isLiteralExpression(e) && isStringType(e.getType());
 }
 export function isLiteralNumber(e: any): e is LiteralExpression & { type: IntegerType | LongIntegerType | FloatType | DoubleType } {
-    return isLiteralExpression(e) && isNumberType(e.type);
+    return isLiteralExpression(e) && isNumberType(e.getType());
 }

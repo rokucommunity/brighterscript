@@ -11,6 +11,7 @@ import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import type { OnScopeValidateEvent } from './interfaces';
+import { SymbolTypeFlags } from './SymbolTable';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -72,13 +73,16 @@ describe('Scope', () => {
         const symbolTable = file.parser.references.namespaceStatements[1].body.getSymbolTable();
         //the symbol table should contain the relative names for all items in this namespace across the entire scope
         expect(
-            symbolTable.hasSymbol('Beta')
+            // eslint-disable-next-line no-bitwise
+            symbolTable.hasSymbol('Beta', SymbolTypeFlags.runtime | SymbolTypeFlags.typetime)
         ).to.be.true;
         expect(
-            symbolTable.hasSymbol('Charlie')
+            // eslint-disable-next-line no-bitwise
+            symbolTable.hasSymbol('Charlie', SymbolTypeFlags.runtime | SymbolTypeFlags.typetime)
         ).to.be.true;
         expect(
-            symbolTable.hasSymbol('createBeta')
+            // eslint-disable-next-line no-bitwise
+            symbolTable.hasSymbol('createBeta', SymbolTypeFlags.runtime)
         ).to.be.true;
 
         expectZeroDiagnostics(program);
@@ -1139,6 +1143,29 @@ describe('Scope', () => {
             expect(plugin.afterScopeValidate.calledWith(compScope)).to.be.true;
         });
 
+        it('supports parameter types in functions in AA literals defined in other scope', () => {
+            program.setFile('source/util.brs', `
+                function getObj() as object
+                    aa = {
+                        name: "test"
+                        addInts: function(a = 1 as integer, b =-1 as integer) as integer
+                            return a + b
+                        end function
+                    }
+                end function
+            `);
+            program.setFile('components/comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp" extends="Scene">
+                    <script uri="comp.brs"/>
+                    <script uri="pkg:/source/util.brs"/>
+                </component>
+            `);
+            program.setFile(s`components/comp.brs`, ``);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         describe('custom types', () => {
             it('detects an unknown function return type', () => {
                 program.setFile(`source/main.bs`, `
@@ -1166,8 +1193,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.invalidFunctionReturnType('unknownType').message,
-                    DiagnosticMessages.invalidFunctionReturnType('unknownType').message
+                    DiagnosticMessages.cannotFindName('unknownType').message,
+                    DiagnosticMessages.cannotFindName('unknownType').message
                 ]);
             });
 
@@ -1189,8 +1216,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message,
-                    DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message
+                    DiagnosticMessages.cannotFindName('unknownType').message,
+                    DiagnosticMessages.cannotFindName('unknownType').message
                 ]);
             });
 
@@ -1208,8 +1235,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindType('unknownType').message,
-                    DiagnosticMessages.cannotFindType('unknownType').message
+                    DiagnosticMessages.cannotFindName('unknownType').message,
+                    DiagnosticMessages.cannotFindName('unknownType').message
                 ]);
             });
 
@@ -1339,6 +1366,50 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
+            it('finds custom types from same namespace defined in different file', () => {
+                program.setFile(`source/klass.bs`, `
+                    namespace MyNamespace
+                        class Klass
+                        end class
+                    end namespace
+                `);
+
+                program.setFile(`source/otherklass.bs`, `
+                    namespace MyNamespace
+                        class OtherKlass
+                            function beClassy() as Klass
+                              return new Klass()
+                            end function
+                        end class
+                    end namespace
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds custom types from same namespace defined in different file when using full Namespace', () => {
+                program.setFile(`source/klass.bs`, `
+                    namespace MyNamespace
+                        class Klass
+                        end class
+                    end namespace
+                `);
+
+                program.setFile(`source/otherklass.bs`, `
+                    namespace MyNamespace
+                        class OtherKlass
+                            function beClassy() as MyNamespace.Klass
+                            end function
+                        end class
+                    end namespace
+
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
             it('detects missing custom types from current namespaces', () => {
                 program.setFile(`source/main.bs`, `
                     namespace MyNamespace
@@ -1352,7 +1423,7 @@ describe('Scope', () => {
                 program.validate();
 
                 expectDiagnostics(program, [
-                    DiagnosticMessages.invalidFunctionReturnType('UnknownType').message
+                    DiagnosticMessages.cannotFindName('UnknownType').message
                 ]);
             });
 
@@ -1399,8 +1470,9 @@ describe('Scope', () => {
                 program.validate();
 
                 expectDiagnostics(program, [
-                    DiagnosticMessages.invalidFunctionReturnType('MyNamespace.UnknownType')
+                    DiagnosticMessages.cannotFindName('UnknownType').message
                 ]);
+                expect(program.getDiagnostics()[0]?.data?.fullName).to.eq('MyNamespace.UnknownType');
             });
 
             it('scopes types to correct scope', () => {
@@ -1433,7 +1505,7 @@ describe('Scope', () => {
                 program.validate();
 
                 expectDiagnostics(program, [
-                    DiagnosticMessages.invalidFunctionReturnType('MyClass').message
+                    DiagnosticMessages.cannotFindName('MyClass').message
                 ]);
             });
 

@@ -4,10 +4,11 @@ import type { BlockTerminator } from '../lexer/TokenKind';
 import { Lexer } from '../lexer/Lexer';
 import {
     AllowedLocalIdentifiers,
+    AllowedTypeIdentifiers,
+    DeclarableTypes,
     AllowedProperties,
     AssignmentOperators,
     BrighterScriptSourceLiterals,
-    DeclarableTypes,
     DisallowedFunctionIdentifiersText,
     DisallowedLocalIdentifiersText,
     TokenKind
@@ -83,6 +84,7 @@ import {
     TemplateStringExpression,
     TemplateStringQuasiExpression,
     TernaryExpression,
+    TypeExpression,
     UnaryExpression,
     VariableExpression,
     XmlAttributeGetExpression
@@ -91,7 +93,7 @@ import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
 import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCallExpression, isCallfuncExpression, isMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
-import { createStringLiteral, createToken } from '../astUtils/creators';
+import { createStringLiteral } from '../astUtils/creators';
 import { Cache } from '../Cache';
 import type { Expression, Statement } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
@@ -394,19 +396,27 @@ export class Parser {
      */
     private interfaceFieldStatement() {
         const name = this.identifier(...AllowedProperties);
+        const [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
+        return new InterfaceFieldStatement(name, asToken, typeExpression);
+    }
+
+    private consumeAsTokenAndTypeExpression(): [Token, TypeExpression] {
         let asToken = this.consumeToken(TokenKind.As);
-        let typeToken = this.typeToken();
-        const type = util.tokenToBscType(typeToken);
-
-        if (!type) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, typeToken.text),
-                range: typeToken.range
-            });
-            throw this.lastDiagnosticAsError();
+        let typeExpression: TypeExpression;
+        if (asToken) {
+            //if there's nothing after the `as`, add a diagnostic and continue
+            if (this.checkEndOfStatement()) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unexpectedToken(asToken.text),
+                    range: asToken.range
+                });
+                //consume the statement separator
+                this.consumeStatementSeparators();
+            } else {
+                typeExpression = this.typeExpression();
+            }
         }
-
-        return new InterfaceFieldStatement(name, asToken, typeToken, type);
+        return [asToken, typeExpression];
     }
 
     /**
@@ -419,19 +429,12 @@ export class Parser {
 
         const params = [];
         const rightParen = this.consumeToken(TokenKind.RightParen);
-        let asToken = null as Token;
-        let returnTypeToken = null as Token;
+        // let asToken = null as Token;
+        // let returnTypeExpression: TypeExpression;
+        let asToken: Token;
+        let returnTypeExpression: TypeExpression;
         if (this.check(TokenKind.As)) {
-            asToken = this.advance();
-            returnTypeToken = this.typeToken();
-            const returnType = util.tokenToBscType(returnTypeToken);
-            if (!returnType) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, returnTypeToken.text),
-                    range: returnTypeToken.range
-                });
-                throw this.lastDiagnosticAsError();
-            }
+            [asToken, returnTypeExpression] = this.consumeAsTokenAndTypeExpression();
         }
 
         return new InterfaceMethodStatement(
@@ -441,8 +444,7 @@ export class Parser {
             params,
             rightParen,
             asToken,
-            returnTypeToken,
-            util.tokenToBscType(returnTypeToken)
+            returnTypeExpression
         );
     }
 
@@ -719,19 +721,10 @@ export class Parser {
             ...AllowedProperties
         ) as Identifier;
         let asToken: Token;
-        let fieldType: Token;
+        let fieldTypeExpression: TypeExpression;
         //look for `as SOME_TYPE`
         if (this.check(TokenKind.As)) {
-            asToken = this.advance();
-            fieldType = this.typeToken();
-
-            //no field type specified
-            if (!util.tokenToBscType(fieldType)) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.expectedValidTypeToFollowAsKeyword(),
-                    range: this.peek().range
-                });
-            }
+            [asToken, fieldTypeExpression] = this.consumeAsTokenAndTypeExpression();
         }
 
         let initialValue: Expression;
@@ -741,12 +734,15 @@ export class Parser {
             equal = this.advance();
             initialValue = this.expression();
         }
+        if (!fieldTypeExpression && initialValue) {
+            fieldTypeExpression = new TypeExpression(initialValue);
+        }
 
         return new FieldStatement(
             accessModifier,
             name,
             asToken,
-            fieldType,
+            fieldTypeExpression,
             equal,
             initialValue
         );
@@ -827,7 +823,7 @@ export class Parser {
 
             let params = [] as FunctionParameterExpression[];
             let asToken: Token;
-            let typeToken: Token;
+            let typeExpression: TypeExpression;
             if (!this.check(TokenKind.RightParen)) {
                 do {
                     if (params.length >= CallExpression.MaximumArguments) {
@@ -843,16 +839,7 @@ export class Parser {
             let rightParen = this.advance();
 
             if (this.check(TokenKind.As)) {
-                asToken = this.advance();
-
-                typeToken = this.typeToken();
-
-                if (!util.tokenToBscType(typeToken, this.options.mode === ParseMode.BrighterScript)) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.invalidFunctionReturnType(typeToken.text ?? ''),
-                        range: typeToken.range
-                    });
-                }
+                [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
             }
 
             params.reduce((haveFoundOptional: boolean, param: FunctionParameterExpression) => {
@@ -876,14 +863,8 @@ export class Parser {
                 leftParen,
                 rightParen,
                 asToken,
-                typeToken
+                typeExpression
             );
-
-            // add the function to the relevant symbol tables
-            if (!onlyCallableAsMember && name) {
-                const funcType = func.getFunctionType();
-                funcType.setName(name.text);
-            }
 
             this._references.functionExpressions.push(func);
 
@@ -947,33 +928,26 @@ export class Parser {
         // force the name into an identifier so the AST makes some sense
         name.kind = TokenKind.Identifier;
 
-        let typeToken: Token | undefined;
+        let typeExpression: TypeExpression;
         let defaultValue;
-
+        let equalToken: Token;
         // parse argument default value
-        if (this.match(TokenKind.Equal)) {
+        if ((equalToken = this.consumeTokenIf(TokenKind.Equal))) {
             // it seems any expression is allowed here -- including ones that operate on other arguments!
             defaultValue = this.expression();
         }
 
-        let asToken = null;
+        let asToken: Token = null;
         if (this.check(TokenKind.As)) {
-            asToken = this.advance();
+            [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
 
-            typeToken = this.typeToken();
-
-            if (!util.tokenToBscType(typeToken, this.options.mode === ParseMode.BrighterScript)) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, typeToken.text),
-                    range: typeToken.range
-                });
-            }
         }
         return new FunctionParameterExpression(
             name,
-            typeToken,
+            equalToken,
             defaultValue,
-            asToken
+            asToken,
+            typeExpression
         );
     }
 
@@ -2520,30 +2494,35 @@ export class Parser {
     }
 
     /**
-     * Tries to get the next token as a type
-     * Allows for built-in types (double, string, etc.) or namespaced custom types in Brighterscript mode
-     * Will return a token of whatever is next to be parsed
+     * Creates a TypeExpression, which wraps standard ASTNodes that represent a BscType
      */
-    private typeToken(): Token {
-        let typeToken: Token;
-
+    private typeExpression(): TypeExpression {
         if (this.checkAny(...DeclarableTypes)) {
-            // Token is a built in type
-            typeToken = this.advance();
-        } else if (this.options.mode === ParseMode.BrighterScript) {
-            try {
-                // see if we can get a namespaced identifer
-                const qualifiedType = this.getNamespacedVariableNameExpression();
-                typeToken = createToken(TokenKind.Identifier, qualifiedType.getName(this.options.mode), qualifiedType.range);
-            } catch {
-                //could not get an identifier - just get whatever's next
-                typeToken = this.advance();
-            }
-        } else {
-            // just get whatever's next
-            typeToken = this.advance();
+            // if this is just a type, just use directly
+            return new TypeExpression(
+                new VariableExpression(this.advance() as Identifier)
+            );
         }
-        return typeToken;
+        //support any expression. We will flag valid expression types later in the process
+        let nextToken: Token;
+        let oldKind: TokenKind;
+
+        if (this.checkAny(...AllowedTypeIdentifiers)) {
+            // Since the next token is allowed as a type identifier, change the kind
+            nextToken = this.peek();
+            oldKind = nextToken.kind;
+            nextToken.kind = TokenKind.Identifier;
+        }
+        try {
+            let expr = this.expression();
+            return new TypeExpression(
+                expr
+            );
+        } catch (error) {
+            // Something went wrong - reset the kind to what it was previously
+            nextToken.kind = oldKind;
+            throw error;
+        }
     }
 
     private primary(): Expression {
@@ -2820,6 +2799,15 @@ export class Parser {
             let error = new Error(diagnosticInfo.message);
             (error as any).isDiagnostic = true;
             throw error;
+        }
+    }
+
+    /**
+     * Consume next token IF it matches the specified kind. Otherwise, do nothing and return undefined
+     */
+    private consumeTokenIf(tokenKind: TokenKind) {
+        if (this.match(tokenKind)) {
+            return this.previous();
         }
     }
 

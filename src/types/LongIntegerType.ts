@@ -9,6 +9,8 @@ export class LongIntegerType implements BscType {
         public typeText?: string
     ) { }
 
+    public static instance = new LongIntegerType('longinteger');
+
     public isAssignableTo(targetType: BscType) {
         return (
             targetType instanceof LongIntegerType ||

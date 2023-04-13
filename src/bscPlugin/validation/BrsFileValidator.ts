@@ -8,6 +8,8 @@ import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
+import { SymbolTypeFlags } from '../../SymbolTable';
+import { CustomType } from '../../types/CustomType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
@@ -35,7 +37,7 @@ export class BrsFileValidator {
         const visitor = createVisitor({
             MethodStatement: (node) => {
                 //add the `super` symbol to class methods
-                node.func.body.symbolTable.addSymbol('super', undefined, DynamicType.instance);
+                node.func.body.symbolTable.addSymbol('super', undefined, DynamicType.instance, SymbolTypeFlags.runtime);
             },
             CallfuncExpression: (node) => {
                 if (node.args.length > 5) {
@@ -51,17 +53,19 @@ export class BrsFileValidator {
                 this.validateEnumDeclaration(node);
 
                 //register this enum declaration
-                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);
+                // eslint-disable-next-line no-bitwise
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance, SymbolTypeFlags.typetime | SymbolTypeFlags.runtime);
             },
             ClassStatement: (node) => {
                 this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.classKeyword, node.name));
 
                 //register this class
-                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
+                // eslint-disable-next-line no-bitwise
+                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, new CustomType(node.name.text), SymbolTypeFlags.typetime | SymbolTypeFlags.runtime);
             },
             AssignmentStatement: (node) => {
                 //register this variable
-                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
+                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance, SymbolTypeFlags.runtime);
             },
             DottedSetStatement: (node) => {
                 this.validateNoOptionalChainingInVarSet(node, [node.obj]);
@@ -71,7 +75,7 @@ export class BrsFileValidator {
             },
             ForEachStatement: (node) => {
                 //register the for loop variable
-                node.parent.getSymbolTable()?.addSymbol(node.item.text, node.item.range, DynamicType.instance);
+                node.parent.getSymbolTable()?.addSymbol(node.item.text, node.item.range, DynamicType.instance, SymbolTypeFlags.runtime);
             },
             NamespaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.keyword, node.nameExpression));
@@ -79,7 +83,8 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable().addSymbol(
                     node.name.split('.')[0],
                     node.nameExpression.range,
-                    DynamicType.instance
+                    DynamicType.instance,
+                    SymbolTypeFlags.typetime
                 );
             },
             FunctionStatement: (node) => {
@@ -89,7 +94,8 @@ export class BrsFileValidator {
                     node.parent.getSymbolTable().addSymbol(
                         node.name.text,
                         node.name.range,
-                        DynamicType.instance
+                        DynamicType.instance,
+                        SymbolTypeFlags.runtime
                     );
                 }
 
@@ -98,40 +104,42 @@ export class BrsFileValidator {
                 if (namespace) {
                     //add the transpiled name for namespaced functions to the root symbol table
                     const transpiledNamespaceFunctionName = node.getName(ParseMode.BrightScript);
-                    const funcType = node.func.getFunctionType();
+                    const funcType = node.func.getType();
                     funcType.setName(transpiledNamespaceFunctionName);
 
                     this.event.file.parser.ast.symbolTable.addSymbol(
                         transpiledNamespaceFunctionName,
                         node.name.range,
-                        funcType
+                        funcType,
+                        SymbolTypeFlags.runtime
                     );
                 }
             },
             FunctionExpression: (node) => {
-                if (!node.symbolTable.hasSymbol('m')) {
-                    node.symbolTable.addSymbol('m', undefined, DynamicType.instance);
+                if (!node.symbolTable.hasSymbol('m', SymbolTypeFlags.runtime)) {
+                    node.symbolTable.addSymbol('m', undefined, DynamicType.instance, SymbolTypeFlags.runtime);
                 }
             },
             FunctionParameterExpression: (node) => {
                 const paramName = node.name?.text;
                 const symbolTable = node.getSymbolTable();
-                symbolTable?.addSymbol(paramName, node.name.range, node.type);
+                symbolTable?.addSymbol(paramName, node.name.range, node.getType(), SymbolTypeFlags.runtime);
             },
             InterfaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));
+                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance, SymbolTypeFlags.typetime);
             },
             ConstStatement: (node) => {
                 this.validateDeclarationLocations(node, 'const', () => util.createBoundingRange(node.tokens.const, node.tokens.name));
 
-                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);
+                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance, SymbolTypeFlags.runtime);
             },
             CatchStatement: (node) => {
-                node.parent.getSymbolTable().addSymbol(node.exceptionVariable.text, node.exceptionVariable.range, DynamicType.instance);
+                node.parent.getSymbolTable().addSymbol(node.exceptionVariable.text, node.exceptionVariable.range, DynamicType.instance, SymbolTypeFlags.runtime);
             },
             DimStatement: (node) => {
                 if (node.identifier) {
-                    node.parent.getSymbolTable().addSymbol(node.identifier.text, node.identifier.range, DynamicType.instance);
+                    node.parent.getSymbolTable().addSymbol(node.identifier.text, node.identifier.range, DynamicType.instance, SymbolTypeFlags.runtime);
                 }
             },
             ContinueStatement: (node) => {

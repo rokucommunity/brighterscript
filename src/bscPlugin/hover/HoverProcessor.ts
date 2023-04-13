@@ -88,6 +88,7 @@ export class HoverProcessor {
                     if (varDeclaration.name.toLowerCase() === lowerTokenText) {
                         let typeText: string;
                         if (isFunctionType(varDeclaration.type)) {
+                            varDeclaration.type.setName(varDeclaration.name);
                             typeText = varDeclaration.type.toString();
                         } else {
                             typeText = `${varDeclaration.name} as ${varDeclaration.type.toString()}`;
@@ -109,6 +110,8 @@ export class HoverProcessor {
                 }
             }
         }
+
+        //Potentially a problem for the function `string()` as it is a type AND a function https://developer.roku.com/en-ca/docs/references/brightscript/language/global-string-functions.md#stringn-as-integer-str-as-string--as-string
 
         //look through all callables in relevant scopes
         for (let scope of this.event.scopes) {

@@ -8,6 +8,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import type { TranspileResult } from '../interfaces';
 import type { AnnotationExpression } from './Expression';
 import util from '../util';
+import { DynamicType } from '../types/DynamicType';
 
 /**
  * A BrightScript AST node
@@ -93,6 +94,13 @@ export abstract class AstNode {
                 return node.findChildAtPosition(position, options) ?? node;
             }
         }, options);
+    }
+
+    /**
+     * Get the BscType of this node.
+     */
+    public getType() {
+        return new DynamicType();
     }
 
     /**

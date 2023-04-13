@@ -464,7 +464,7 @@ export class BrsFile {
                     nameRange: param.name.range,
                     lineIndex: param.name.range.start.line,
                     name: param.name.text,
-                    type: param.type
+                    type: param.getType()
                 });
             }
 
@@ -475,7 +475,7 @@ export class BrsFile {
                         nameRange: stmt.item.range,
                         lineIndex: stmt.item.range.start.line,
                         name: stmt.item.text,
-                        type: new DynamicType()
+                        type: new DynamicType() //TODO: Infer types from array
                     });
                 },
                 LabelStatement: (stmt) => {
@@ -517,26 +517,19 @@ export class BrsFile {
     }
 
     private getBscTypeFromAssignment(assignment: AssignmentStatement, scope: FunctionScope): BscType {
+        //TODO:
+        // This should be as simple as
+        // return assignment.value.getType()
+        // However, that requires scopes and symbol tables to be linked
+
         try {
             //function
             if (isFunctionExpression(assignment.value)) {
-                let functionType = new FunctionType(assignment.value.returnType);
-                functionType.isSub = assignment.value.functionType.text === 'sub';
-                if (functionType.isSub) {
-                    functionType.returnType = new VoidType();
-                }
-
-                functionType.setName(assignment.name.text);
-                for (let param of assignment.value.parameters) {
-                    let isOptional = !!param.defaultValue;
-                    //TODO compute optional parameters
-                    functionType.addParameter(param.name.text, param.type, isOptional);
-                }
-                return functionType;
+                return assignment.value.getType();
 
                 //literal
             } else if (isLiteralExpression(assignment.value)) {
-                return assignment.value.type;
+                return assignment.value.getType();
 
                 //function call
             } else if (isCallExpression(assignment.value)) {
@@ -547,6 +540,8 @@ export class BrsFile {
                         return func.type.returnType;
                     }
                 }
+
+                //variable
             } else if (isVariableExpression(assignment.value)) {
                 let variableName = assignment.value?.name?.text;
                 let variable = scope.getVariableByName(variableName);
@@ -574,7 +569,7 @@ export class BrsFile {
     private findCallables() {
         for (let statement of this.parser.references.functionStatements ?? []) {
 
-            let functionType = new FunctionType(statement.func.returnType);
+            let functionType = new FunctionType(statement.func.getType().returnType);
             functionType.setName(statement.name.text);
             functionType.isSub = statement.func.functionType.text.toLowerCase() === 'sub';
             if (functionType.isSub) {
@@ -586,7 +581,7 @@ export class BrsFile {
             for (let param of statement.func.parameters) {
                 let callableParam = {
                     name: param.name.text,
-                    type: param.type,
+                    type: param.getType(),
                     isOptional: !!param.defaultValue,
                     isRestArgument: false
                 };
@@ -642,7 +637,7 @@ export class BrsFile {
                     if (isLiteralExpression(arg)) {
                         args.push({
                             range: arg.range,
-                            type: arg.type,
+                            type: arg.getType(),
                             text: arg.token.text,
                             expression: arg,
                             typeToken: undefined

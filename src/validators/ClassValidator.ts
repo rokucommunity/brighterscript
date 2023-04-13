@@ -6,7 +6,7 @@ import type { ClassStatement, MethodStatement, NamespaceStatement } from '../par
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
-import { isCallExpression, isFieldStatement, isMethodStatement, isCustomType, isNamespaceStatement } from '../astUtils/reflection';
+import { isCallExpression, isFieldStatement, isMethodStatement, isNamespaceStatement } from '../astUtils/reflection';
 import type { BscFile, BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
@@ -32,7 +32,6 @@ export class BsClassValidator {
         this.validateMemberCollisions();
         this.verifyChildConstructor();
         this.verifyNewExpressions();
-        this.validateFieldTypes();
 
         this.cleanUp();
     }
@@ -223,7 +222,7 @@ export class BsClassValidator {
                             if (isFieldStatement(ancestorAndMember.member)) {
                                 ancestorMemberType = ancestorAndMember.member.getType();
                             } else if (isMethodStatement(ancestorAndMember.member)) {
-                                ancestorMemberType = ancestorAndMember.member.func.getFunctionType();
+                                ancestorMemberType = ancestorAndMember.member.func.getType();
                             }
                             const childFieldType = member.getType();
                             if (!childFieldType.isAssignableTo(ancestorMemberType)) {
@@ -291,36 +290,6 @@ export class BsClassValidator {
         }
     }
 
-
-    /**
-     * Check the types for fields, and validate they are valid types
-     */
-    private validateFieldTypes() {
-        for (const [, classStatement] of this.classes) {
-            for (let statement of classStatement.body) {
-                if (isFieldStatement(statement)) {
-                    let fieldType = statement.getType();
-
-                    if (isCustomType(fieldType)) {
-                        const fieldTypeName = fieldType.name;
-                        const lowerFieldTypeName = fieldTypeName?.toLowerCase();
-                        if (lowerFieldTypeName) {
-                            const namespace = classStatement.findAncestor<NamespaceStatement>(isNamespaceStatement);
-                            const currentNamespaceName = namespace?.getName(ParseMode.BrighterScript);
-                            //check if this custom type is in our class map
-                            if (!this.getClassByName(lowerFieldTypeName, currentNamespaceName) && !this.scope.hasInterface(lowerFieldTypeName) && !this.scope.hasEnum(lowerFieldTypeName)) {
-                                this.diagnostics.push({
-                                    ...DiagnosticMessages.cannotFindType(fieldTypeName),
-                                    range: statement.type.range,
-                                    file: classStatement.file
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     /**
      * Get the closest member with the specified name (case-insensitive)

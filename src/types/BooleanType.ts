@@ -6,6 +6,8 @@ export class BooleanType implements BscType {
         public typeText?: string
     ) { }
 
+    public static instance = new BooleanType('boolean');
+
     public isAssignableTo(targetType: BscType) {
         return (
             targetType instanceof BooleanType ||
