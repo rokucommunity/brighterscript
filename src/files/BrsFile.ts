@@ -14,7 +14,7 @@ import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression, VariableExpression } from '../parser/Expression';
-import type { ClassStatement, FunctionStatement, NamespaceStatement, AssignmentStatement, MethodStatement, FieldStatement } from '../parser/Statement';
+import type { ClassStatement, FunctionStatement, NamespaceStatement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
@@ -24,8 +24,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
-import type { BscType } from '../types/BscType';
+import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -464,7 +463,7 @@ export class BrsFile {
                     nameRange: param.name.range,
                     lineIndex: param.name.range.start.line,
                     name: param.name.text,
-                    type: param.getType()
+                    getType: () => param.getType()
                 });
             }
 
@@ -475,7 +474,7 @@ export class BrsFile {
                         nameRange: stmt.item.range,
                         lineIndex: stmt.item.range.start.line,
                         name: stmt.item.text,
-                        type: new DynamicType() //TODO: Infer types from array
+                        getType: () => DynamicType.instance //TODO: Infer types from array
                     });
                 },
                 LabelStatement: (stmt) => {
@@ -510,58 +509,8 @@ export class BrsFile {
                     nameRange: statement.name.range,
                     lineIndex: statement.name.range.start.line,
                     name: statement.name.text,
-                    type: this.getBscTypeFromAssignment(statement, scope)
+                    getType: () => statement.value.getType()
                 });
-            }
-        }
-    }
-
-    private getBscTypeFromAssignment(assignment: AssignmentStatement, scope: FunctionScope): BscType {
-        //TODO:
-        // This should be as simple as
-        // return assignment.value.getType()
-        // However, that requires scopes and symbol tables to be linked
-
-        try {
-            //function
-            if (isFunctionExpression(assignment.value)) {
-                return assignment.value.getType();
-
-                //literal
-            } else if (isLiteralExpression(assignment.value)) {
-                return assignment.value.getType();
-
-                //function call
-            } else if (isCallExpression(assignment.value)) {
-                let calleeName = (assignment.value.callee as any)?.name?.text;
-                if (calleeName) {
-                    let func = this.getCallableByName(calleeName);
-                    if (func) {
-                        return func.type.returnType;
-                    }
-                }
-
-                //variable
-            } else if (isVariableExpression(assignment.value)) {
-                let variableName = assignment.value?.name?.text;
-                let variable = scope.getVariableByName(variableName);
-                return variable.type;
-            }
-        } catch (e) {
-            //do nothing. Just return dynamic
-        }
-        //fallback to dynamic
-        return new DynamicType();
-    }
-
-    private getCallableByName(name: string) {
-        name = name ? name.toLowerCase() : undefined;
-        if (!name) {
-            return;
-        }
-        for (let func of this.callables) {
-            if (func.name.toLowerCase() === name) {
-                return func;
             }
         }
     }
@@ -881,7 +830,7 @@ export class BrsFile {
                 names[variable.name.toLowerCase()] = true;
                 result.push({
                     label: variable.name,
-                    kind: isFunctionType(variable.type) ? CompletionItemKind.Function : CompletionItemKind.Variable
+                    kind: isFunctionType(variable.getType()) ? CompletionItemKind.Function : CompletionItemKind.Variable
                 });
             }
 

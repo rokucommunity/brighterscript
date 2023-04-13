@@ -136,7 +136,7 @@ export interface File {
 
 export interface VariableDeclaration {
     name: string;
-    type: BscType;
+    getType: () => BscType;
     /**
      * The range for the variable name
      */

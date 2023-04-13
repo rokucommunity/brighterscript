@@ -938,7 +938,7 @@ export class Scope {
                 const lowerVarName = varName.toLowerCase();
 
                 //if the var is a function
-                if (isFunctionType(varDeclaration.type)) {
+                if (isFunctionType(varDeclaration.getType())) {
                     //local var function with same name as stdlib function
                     if (
                         //has same name as stdlib

@@ -1698,21 +1698,21 @@ describe('BrsFile', () => {
                 lineIndex: 2,
                 name: 'sayHi'
             });
-            expect(file.functionScopes[0].variableDeclarations[0].type).instanceof(FunctionType);
+            expect(file.functionScopes[0].variableDeclarations[0].getType()).instanceof(FunctionType);
 
             expect(file.functionScopes[1].variableDeclarations).to.be.length(1);
             expect(file.functionScopes[1].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
                 lineIndex: 3,
                 name: 'age'
             });
-            expect(file.functionScopes[1].variableDeclarations[0].type).instanceof(IntegerType);
+            expect(file.functionScopes[1].variableDeclarations[0].getType()).instanceof(IntegerType);
 
             expect(file.functionScopes[2].variableDeclarations).to.be.length(1);
             expect(file.functionScopes[2].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
                 lineIndex: 7,
                 name: 'name'
             });
-            expect(file.functionScopes[2].variableDeclarations[0].type).instanceof(StringType);
+            expect(file.functionScopes[2].variableDeclarations[0].getType()).instanceof(StringType);
         });
 
         it('finds variable declarations inside of if statements', () => {
@@ -1738,29 +1738,34 @@ describe('BrsFile', () => {
                     return "bob"
                 end function
             `);
+            // Types are only guaranteed after validation
+            program.validate();
+            expectZeroDiagnostics(program);
 
             expect(file.functionScopes[0].variableDeclarations).to.be.length(1);
             expect(file.functionScopes[0].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
                 lineIndex: 2,
                 name: 'myName'
             });
-            expect(file.functionScopes[0].variableDeclarations[0].type).instanceof(StringType);
+            expect(file.functionScopes[0].variableDeclarations[0].getType()).instanceof(StringType);
         });
 
         it('finds variable type from other variable', () => {
-            file.parse(`
+            let file = program.setFile('source/main.brs', `
                 sub Main()
                    name = "bob"
                    nameCopy = name
                 end sub
             `);
+            // Types are only guaranteed after validation
+            program.validate();
 
             expect(file.functionScopes[0].variableDeclarations).to.be.length(2);
             expect(file.functionScopes[0].variableDeclarations[1]).to.deep.include(<VariableDeclaration>{
                 lineIndex: 3,
                 name: 'nameCopy'
             });
-            expect(file.functionScopes[0].variableDeclarations[1].type).instanceof(StringType);
+            expect(file.functionScopes[0].variableDeclarations[1].getType()).instanceof(StringType);
         });
 
         it('sets proper range for functions', () => {

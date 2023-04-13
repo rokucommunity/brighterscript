@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
@@ -119,7 +119,8 @@ export class CallExpression extends Expression {
     }
 
     getType(): BscType {
-        return this.callee.getType();
+        const callType = this.callee.getType();
+        return isFunctionType(callType) ? callType.returnType : DynamicType.instance;
     }
 }
 
@@ -883,6 +884,10 @@ export class VariableExpression extends Expression {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    public getType(): BscType {
+        return this.getSymbolTable()?.getSymbol(this.name.text, SymbolTypeFlags.runtime)?.[0]?.type ?? DynamicType.instance;
     }
 }
 

@@ -65,7 +65,8 @@ export class BrsFileValidator {
             },
             AssignmentStatement: (node) => {
                 //register this variable
-                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance, SymbolTypeFlags.runtime);
+                // TODO: the type of the LHS may not be known yet!
+                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, node.getType(), SymbolTypeFlags.runtime);
             },
             DottedSetStatement: (node) => {
                 this.validateNoOptionalChainingInVarSet(node, [node.obj]);
@@ -94,7 +95,7 @@ export class BrsFileValidator {
                     node.parent.getSymbolTable().addSymbol(
                         node.name.text,
                         node.name.range,
-                        DynamicType.instance,
+                        node.func.getType(),
                         SymbolTypeFlags.runtime
                     );
                 }
