@@ -65,6 +65,7 @@ export class BrsFileValidator {
             },
             AssignmentStatement: (node) => {
                 //register this variable
+                // TODO: the type of the LHS may not be known yet!
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, node.getType(), SymbolTypeFlags.runtime);
             },
             DottedSetStatement: (node) => {

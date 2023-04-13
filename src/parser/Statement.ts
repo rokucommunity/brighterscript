@@ -157,6 +157,7 @@ export class AssignmentStatement extends Statement {
     }
 
     getType(): BscType {
+        // TODO: the type of the LHS may not be known yet!
         return this.value.getType();
     }
 }
