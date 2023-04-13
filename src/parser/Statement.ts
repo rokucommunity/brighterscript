@@ -18,6 +18,7 @@ import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
 import type { Expression } from './AstNode';
 import { Statement } from './AstNode';
+import type { BscType } from '../types/BscType';
 
 export class EmptyStatement extends Statement {
     constructor(
@@ -153,6 +154,10 @@ export class AssignmentStatement extends Statement {
             //TODO: Walk TypeExpression. We need to decide how to implement types on assignments
             walk(this, 'value', visitor, options);
         }
+    }
+
+    getType(): BscType {
+        return this.value.getType();
     }
 }
 

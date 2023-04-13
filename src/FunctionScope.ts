@@ -26,6 +26,10 @@ export class FunctionScope {
     public variableDeclarations = [] as VariableDeclaration[];
     public labelStatements = [] as LabelDeclaration[];
 
+    public get symbolTable() {
+        return this.func?.body?.getSymbolTable();
+    }
+
     /**
      * Find all variable declarations above the given line index
      * @param lineIndex the 0-based line number
