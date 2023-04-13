@@ -16,7 +16,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim } from '../testHelpers.spec';
+import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
 import { ImportStatement } from '../parser/Statement';
@@ -1747,7 +1747,7 @@ describe('BrsFile', () => {
                 lineIndex: 2,
                 name: 'myName'
             });
-            expect(file.functionScopes[0].variableDeclarations[0].getType()).instanceof(StringType);
+            expectTypeToBe(file.functionScopes[0].variableDeclarations[0].getType(), StringType);
         });
 
         it('finds variable type from other variable', () => {
@@ -1765,7 +1765,7 @@ describe('BrsFile', () => {
                 lineIndex: 3,
                 name: 'nameCopy'
             });
-            expect(file.functionScopes[0].variableDeclarations[1].getType()).instanceof(StringType);
+            expectTypeToBe(file.functionScopes[0].variableDeclarations[1].getType(), StringType);
         });
 
         it('sets proper range for functions', () => {

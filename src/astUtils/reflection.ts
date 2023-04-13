@@ -20,6 +20,7 @@ import { DynamicType } from '../types/DynamicType';
 import type { InterfaceType } from '../types/InterfaceType';
 import type { ObjectType } from '../types/ObjectType';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
+import type { ReferenceType } from '../types/ReferenceType';
 
 // File reflection
 
@@ -303,6 +304,9 @@ export function isInterfaceType(e: any): e is InterfaceType {
 }
 export function isObjectType(e: any): e is ObjectType {
     return e?.constructor.name === 'ObjectType';
+}
+export function isReferenceType(e: any): e is ReferenceType {
+    return e?.constructor.name === 'ReferenceType';
 }
 
 const numberConstructorNames = [

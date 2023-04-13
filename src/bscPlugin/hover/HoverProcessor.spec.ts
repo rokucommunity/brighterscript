@@ -288,5 +288,39 @@ describe('HoverProcessor', () => {
             //TODO: Add hover on custom types (classes, interfaces, enums, etc.)
             expect(hover).to.be.undefined;
         });
+
+        it.only('finds types defined in different file', () => {
+            program.setFile(`source/main.bs`, `
+                sub main()
+                    thing = new MyKlass()
+                    useKlass(thing)
+                    someVal = getValue()
+                    print someVal
+                end sub
+
+                sub useKlass(thing as MyKlass)
+                    print thing
+                end sub
+            `);
+            program.setFile(`source/MyKlass.bs`, `
+                class MyKlass
+                end class
+            `);
+
+            program.setFile(`source/util.bs`, `
+                function getValue() as string
+                    return "hello"
+                end function
+            `);
+            program.validate();
+            //th|ing = new MyKlass()
+            let hover = program.getHover('source/main.bs', util.createPosition(2, 24))[0];
+            expect(hover?.range).to.eql(util.createRange(2, 20, 2, 25));
+            expect(hover?.contents).to.eql(fence('thing as MyKlass'));
+            //print some|Val
+            hover = program.getHover('source/main.bs', util.createPosition(5, 31))[0];
+            expect(hover?.range).to.eql(util.createRange(5, 27, 2, 33));
+            expect(hover?.contents).to.eql(fence('someVal as string'));
+        });
     });
 });

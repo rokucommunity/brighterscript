@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isReferenceType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
@@ -22,6 +22,7 @@ import { StringType } from '../types/StringType';
 import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
 import { CustomType } from '../types/CustomType';
+import { ReferenceType } from '../types/ReferenceType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -119,7 +120,10 @@ export class CallExpression extends Expression {
     }
 
     getType(): BscType {
-        const callType = this.callee.getType();
+        let callType = this.callee.getType();
+        if (isReferenceType(callType)) {
+            callType = callType.resolve();
+        }
         return isFunctionType(callType) ? callType.returnType : DynamicType.instance;
     }
 }
@@ -440,6 +444,10 @@ export class NamespacedVariableNameExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'expression', visitor, options);
         }
+    }
+
+    getType() {
+        return this.expression.getType();
     }
 }
 
@@ -887,7 +895,7 @@ export class VariableExpression extends Expression {
     }
 
     public getType(): BscType {
-        return this.getSymbolTable()?.getSymbol(this.name.text, SymbolTypeFlags.runtime)?.[0]?.type ?? DynamicType.instance;
+        return new ReferenceType(this.name.text, () => this.getSymbolTable()); //SymbolTableProvider  ////this.getSymbolTable()?.getSymbol(this.name.text, SymbolTypeFlags.runtime)?.[0]?.type ?? DynamicType.instance;
     }
 }
 
@@ -1007,6 +1015,10 @@ export class NewExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'call', visitor, options);
         }
+    }
+
+    getType() {
+        return this.call.getType();
     }
 }
 
