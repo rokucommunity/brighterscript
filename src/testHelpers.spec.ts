@@ -14,7 +14,6 @@ import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
 import type { BscType } from './types/BscType';
-import { isReferenceType } from './astUtils/reflection';
 
 export const tempDir = s`${__dirname}/../.tmp`;
 export const rootDir = s`${tempDir}/rootDir`;
@@ -370,8 +369,5 @@ export function mapToObject<T>(map: Map<any, T>) {
  * Test that a type is what was expected
  */
 export function expectTypeToBe(someType: BscType, expectedTypeClass: any) {
-    if (isReferenceType(someType)) {
-        someType = someType.resolve();
-    }
-    expect(someType).instanceof(expectedTypeClass);
+    expect(someType.constructor.name).to.eq(expectedTypeClass.name);
 }

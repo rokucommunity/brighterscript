@@ -39,4 +39,24 @@ describe('ReferenceType', () => {
         expect(ref.toTypeString()).to.eq('object');
         expect(ref.toString()).to.eq('SomeKlass');
     });
+
+    it('catches circular references', () => {
+        const table = new SymbolTable('test');
+        const ref = new ReferenceType('someVar', () => table);
+        table.addSymbol('someVar', null, ref, SymbolTypeFlags.runtime);
+        expectTypeToBe(ref, DynamicType);
+    });
+
+
+    it('catches circular references of many levels', () => {
+        const table = new SymbolTable('test');
+        const ref1 = new ReferenceType('someVar1', () => table);
+        const ref2 = new ReferenceType('someVar2', () => table);
+        const ref3 = new ReferenceType('someVar3', () => table);
+        table.addSymbol('someVar0', null, ref1, SymbolTypeFlags.runtime);
+        table.addSymbol('someVar1', null, ref2, SymbolTypeFlags.runtime);
+        table.addSymbol('someVar2', null, ref3, SymbolTypeFlags.runtime);
+        table.addSymbol('someVar3', null, ref1, SymbolTypeFlags.runtime);
+        expectTypeToBe(table.getSymbol('someVar0', SymbolTypeFlags.runtime)[0].type, DynamicType);
+    });
 });

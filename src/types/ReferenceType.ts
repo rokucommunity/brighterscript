@@ -4,33 +4,65 @@ import type { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
 export class ReferenceType implements BscType {
-    constructor(
-        public name: string,
-        private tableProvider: SymbolTableProvider
-    ) { }
+    constructor(public name: string, private tableProvider: SymbolTableProvider) {
+        // eslint-disable-next-line no-constructor-return
+        return new Proxy(this, {
+            get: (target, propName, receiver) => {
+                //There may be some need to specifically get members on ReferenceType in the future
+                // eg: if (Reflect.has(target, name)) {
+                //   return Reflect.get(target, propName, receiver);
 
-    public isAssignableTo(targetType: BscType) {
-        return this.resolve()?.isAssignableTo(targetType);
-    }
+                // Look for circular references
+                let innerType = this.resolve();
+                if (this.referenceChain.has(innerType)) {
+                    innerType = DynamicType.instance;
+                }
+                this.referenceChain.add(innerType);
+                const result = Reflect.get(innerType, propName, innerType);
+                this.referenceChain.clear();
+                return result;
+            },
+            set: (target, name, value, receiver) => {
+                //There may be some need to specifically set members on ReferenceType in the future
+                // eg: if (Reflect.has(target, name)) {
+                //   return Reflect.set(target, name, value, receiver);
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.resolve()?.isConvertibleTo(targetType);
-    }
+                // Look for circular references
+                let innerType = this.resolve();
+                if (this.referenceChain.has(innerType)) {
+                    innerType = DynamicType.instance;
+                }
+                const result = Reflect.set(innerType, name, value, innerType);
+                this.referenceChain.clear();
+                return result;
+            }
+        });
 
-    public toString() {
-        return this.resolve()?.toString();
-    }
-
-    public toTypeString(): string {
-        return this.resolve()?.toTypeString();
     }
 
     /**
      * Resolves the type based on the original name and the table provider
-     * Is public because there are situation when we may want to know if the resolved type is a function/class, etc.
      */
-    public resolve(): BscType {
+    private resolve(): BscType {
         // eslint-disable-next-line no-bitwise
         return this.tableProvider()?.getSymbol(this.name, SymbolTypeFlags.runtime | SymbolTypeFlags.typetime)?.[0]?.type ?? DynamicType.instance;
     }
+
+    public isAssignableTo(targetType: BscType): boolean {
+        throw new Error('Method not implemented.');
+    }
+
+    public isConvertibleTo(targetType: BscType): boolean {
+        throw new Error('Method not implemented.');
+    }
+
+    public toString(): string {
+        throw new Error('Method not implemented.');
+    }
+
+    public toTypeString(): string {
+        throw new Error('Method not implemented.');
+    }
+
+    private referenceChain = new Set<BscType>();
 }

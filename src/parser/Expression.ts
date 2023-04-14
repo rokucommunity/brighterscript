@@ -119,11 +119,8 @@ export class CallExpression extends Expression {
         }
     }
 
-    getType(): BscType {
+    getType() {
         let callType = this.callee.getType();
-        if (isReferenceType(callType)) {
-            callType = callType.resolve();
-        }
         return isFunctionType(callType) ? callType.returnType : callType;
     }
 }
@@ -894,7 +891,7 @@ export class VariableExpression extends Expression {
         //nothing to walk
     }
 
-    public getType(): BscType {
+    public getType() {
         return new ReferenceType(this.name.text, () => this.getSymbolTable());
     }
 }
