@@ -7,8 +7,16 @@ import { ReferenceType } from './ReferenceType';
 import { StringType } from './StringType';
 import { FloatType } from './FloatType';
 import { CustomType } from './CustomType';
+import { isReferenceType } from '../astUtils/reflection';
 
 describe('ReferenceType', () => {
+    it('can be checked with reflection', () => {
+        const table = new SymbolTable('test');
+        const ref = new ReferenceType('someVar', () => table);
+        expect(isReferenceType(ref)).to.be.true;
+    });
+
+
     it('defaults to dynamic type if it can not resolve', () => {
         expectTypeToBe(new ReferenceType('test', () => undefined), DynamicType);
         const table = new SymbolTable('testTable');

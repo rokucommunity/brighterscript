@@ -306,7 +306,7 @@ export function isObjectType(e: any): e is ObjectType {
     return e?.constructor.name === 'ObjectType';
 }
 export function isReferenceType(e: any): e is ReferenceType {
-    return e?.constructor.name === 'ReferenceType';
+    return e?.__reflection.name === 'ReferenceType';
 }
 
 const numberConstructorNames = [

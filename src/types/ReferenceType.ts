@@ -8,6 +8,11 @@ export class ReferenceType implements BscType {
         // eslint-disable-next-line no-constructor-return
         return new Proxy(this, {
             get: (target, propName, receiver) => {
+
+                if (propName === '__reflection') {
+                    // Cheeky way to get `isReferenceType` reflection to work
+                    return { name: 'ReferenceType' };
+                }
                 //There may be some need to specifically get members on ReferenceType in the future
                 // eg: if (Reflect.has(target, name)) {
                 //   return Reflect.get(target, propName, receiver);
