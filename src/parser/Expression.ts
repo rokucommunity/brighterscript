@@ -895,7 +895,7 @@ export class VariableExpression extends Expression {
     }
 
     public getType(): BscType {
-        return new ReferenceType(this.name.text, () => this.getSymbolTable()); //SymbolTableProvider  ////this.getSymbolTable()?.getSymbol(this.name.text, SymbolTypeFlags.runtime)?.[0]?.type ?? DynamicType.instance;
+        return new ReferenceType(this.name.text, () => this.getSymbolTable());
     }
 }
 
