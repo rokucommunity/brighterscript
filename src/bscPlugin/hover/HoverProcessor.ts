@@ -42,87 +42,92 @@ export class HoverProcessor {
 
     private getBrsFileHover(file: BrsFile): Hover {
         const scope = this.event.scopes[0];
-        const fence = (code: string) => util.mdFence(code, 'brightscript');
-        //get the token at the position
-        let token = file.getTokenAt(this.event.position);
+        try {
+            scope.linkSymbolTable();
+            const fence = (code: string) => util.mdFence(code, 'brightscript');
+            //get the token at the position
+            let token = file.getTokenAt(this.event.position);
 
-        let hoverTokenTypes = [
-            TokenKind.Identifier,
-            TokenKind.Function,
-            TokenKind.EndFunction,
-            TokenKind.Sub,
-            TokenKind.EndSub
-        ];
+            let hoverTokenTypes = [
+                TokenKind.Identifier,
+                TokenKind.Function,
+                TokenKind.EndFunction,
+                TokenKind.Sub,
+                TokenKind.EndSub
+            ];
 
-        //throw out invalid tokens and the wrong kind of tokens
-        if (!token || !hoverTokenTypes.includes(token.kind)) {
-            return null;
-        }
-
-        const expression = file.getClosestExpression(this.event.position);
-        if (expression) {
-            let containingNamespace = file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
-            const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
-
-            //find a constant with this name
-            const constant = scope?.getConstFileLink(fullName, containingNamespace);
-            if (constant) {
-                const constantValue = new SourceNode(null, null, null, constant.item.value.transpile(new BrsTranspileState(file))).toString();
-                return {
-                    contents: this.buildContentsWithDocs(fence(`const ${constant.item.fullName} = ${constantValue}`), constant.item.tokens.const),
-                    range: token.range
-                };
+            //throw out invalid tokens and the wrong kind of tokens
+            if (!token || !hoverTokenTypes.includes(token.kind)) {
+                return null;
             }
-        }
 
-        let lowerTokenText = token.text.toLowerCase();
+            const expression = file.getClosestExpression(this.event.position);
+            if (expression) {
+                let containingNamespace = file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
+                const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
-        //look through local variables first
-        {
-            //get the function scope for this position (if exists)
-            let functionScope = file.getFunctionScopeAtPosition(this.event.position);
-            if (functionScope) {
-                //find any variable with this name
-                for (const varDeclaration of functionScope.variableDeclarations) {
-                    //we found a variable declaration with this token text!
-                    if (varDeclaration.name.toLowerCase() === lowerTokenText) {
-                        let typeText: string;
-                        const varDeclarationType = varDeclaration.getType();
-                        if (isFunctionType(varDeclarationType)) {
-                            varDeclarationType.setName(varDeclaration.name);
-                            typeText = varDeclarationType.toString();
-                        } else {
-                            typeText = `${varDeclaration.name} as ${varDeclarationType.toString()}`;
+                //find a constant with this name
+                const constant = scope?.getConstFileLink(fullName, containingNamespace);
+                if (constant) {
+                    const constantValue = new SourceNode(null, null, null, constant.item.value.transpile(new BrsTranspileState(file))).toString();
+                    return {
+                        contents: this.buildContentsWithDocs(fence(`const ${constant.item.fullName} = ${constantValue}`), constant.item.tokens.const),
+                        range: token.range
+                    };
+                }
+            }
+
+            let lowerTokenText = token.text.toLowerCase();
+
+            //look through local variables first
+            {
+                //get the function scope for this position (if exists)
+                let functionScope = file.getFunctionScopeAtPosition(this.event.position);
+                if (functionScope) {
+                    //find any variable with this name
+                    for (const varDeclaration of functionScope.variableDeclarations) {
+                        //we found a variable declaration with this token text!
+                        if (varDeclaration.name.toLowerCase() === lowerTokenText) {
+                            let typeText: string;
+                            const varDeclarationType = varDeclaration.getType();
+                            if (isFunctionType(varDeclarationType)) {
+                                varDeclarationType.setName(varDeclaration.name);
+                                typeText = varDeclarationType.toString();
+                            } else {
+                                typeText = `${varDeclaration.name} as ${varDeclarationType.toString()}`;
+                            }
+                            return {
+                                range: token.range,
+                                //append the variable name to the front for scope
+                                contents: fence(typeText)
+                            };
                         }
-                        return {
-                            range: token.range,
-                            //append the variable name to the front for scope
-                            contents: fence(typeText)
-                        };
                     }
-                }
-                for (const labelStatement of functionScope.labelStatements) {
-                    if (labelStatement.name.toLocaleLowerCase() === lowerTokenText) {
-                        return {
-                            range: token.range,
-                            contents: fence(`${labelStatement.name}: label`)
-                        };
+                    for (const labelStatement of functionScope.labelStatements) {
+                        if (labelStatement.name.toLocaleLowerCase() === lowerTokenText) {
+                            return {
+                                range: token.range,
+                                contents: fence(`${labelStatement.name}: label`)
+                            };
+                        }
                     }
                 }
             }
-        }
 
-        //Potentially a problem for the function `string()` as it is a type AND a function https://developer.roku.com/en-ca/docs/references/brightscript/language/global-string-functions.md#stringn-as-integer-str-as-string--as-string
+            //Potentially a problem for the function `string()` as it is a type AND a function https://developer.roku.com/en-ca/docs/references/brightscript/language/global-string-functions.md#stringn-as-integer-str-as-string--as-string
 
-        //look through all callables in relevant scopes
-        for (let scope of this.event.scopes) {
-            let callable = scope.getCallableByName(lowerTokenText);
-            if (callable) {
-                return {
-                    range: token.range,
-                    contents: this.buildContentsWithDocs(fence(callable.type.toString()), callable.functionStatement?.func?.functionType)
-                };
+            //look through all callables in relevant scopes
+            for (let scope of this.event.scopes) {
+                let callable = scope.getCallableByName(lowerTokenText);
+                if (callable) {
+                    return {
+                        range: token.range,
+                        contents: this.buildContentsWithDocs(fence(callable.type.toString()), callable.functionStatement?.func?.functionType)
+                    };
+                }
             }
+        } finally {
+            scope?.unlinkSymbolTable();
         }
     }
 

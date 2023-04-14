@@ -9,6 +9,7 @@ import type { TranspileResult } from '../interfaces';
 import type { AnnotationExpression } from './Expression';
 import util from '../util';
 import { DynamicType } from '../types/DynamicType';
+import type { BscType } from '../types/BscType';
 
 /**
  * A BrightScript AST node
@@ -99,7 +100,7 @@ export abstract class AstNode {
     /**
      * Get the BscType of this node.
      */
-    public getType() {
+    public getType(): BscType {
         return new DynamicType();
     }
 

@@ -22,6 +22,7 @@ import { StringType } from '../types/StringType';
 import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
 import { CustomType } from '../types/CustomType';
+import { ReferenceType } from '../types/ReferenceType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -118,9 +119,9 @@ export class CallExpression extends Expression {
         }
     }
 
-    getType(): BscType {
-        const callType = this.callee.getType();
-        return isFunctionType(callType) ? callType.returnType : DynamicType.instance;
+    getType() {
+        let callType = this.callee.getType();
+        return isFunctionType(callType) ? callType.returnType : callType;
     }
 }
 
@@ -440,6 +441,10 @@ export class NamespacedVariableNameExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'expression', visitor, options);
         }
+    }
+
+    getType() {
+        return this.expression.getType();
     }
 }
 
@@ -886,8 +891,8 @@ export class VariableExpression extends Expression {
         //nothing to walk
     }
 
-    public getType(): BscType {
-        return this.getSymbolTable()?.getSymbol(this.name.text, SymbolTypeFlags.runtime)?.[0]?.type ?? DynamicType.instance;
+    public getType() {
+        return new ReferenceType(this.name.text, () => this.getSymbolTable());
     }
 }
 
@@ -1007,6 +1012,10 @@ export class NewExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'call', visitor, options);
         }
+    }
+
+    getType() {
+        return this.call.getType();
     }
 }
 

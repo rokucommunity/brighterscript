@@ -1538,6 +1538,25 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
 
             });
+
+            it('finds correctly types a variable with type from different file', () => {
+                program.setFile(`source/main.bs`, `
+                    sub main()
+                        thing = new MyKlass()
+                        useKlass(thing)
+                    end sub
+
+                    sub useKlass(thing as MyKlass)
+                        print thing
+                    end sub
+                `);
+                program.setFile(`source/MyKlass.bs`, `
+                    class MyKlass
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
         });
     });
 
