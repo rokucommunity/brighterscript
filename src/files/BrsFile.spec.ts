@@ -89,13 +89,13 @@ describe('BrsFile', () => {
         `);
         program.validate();
         expectDiagnostics(program, [{
-            ...DiagnosticMessages.namespaceCannotBeReferencedDirectly(),
+            ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
             range: util.createRange(3, 22, 3, 27)
         }, {
-            ...DiagnosticMessages.namespaceCannotBeReferencedDirectly(),
+            ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
             range: util.createRange(4, 22, 4, 32)
         }, {
-            ...DiagnosticMessages.namespaceCannotBeReferencedDirectly(),
+            ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
             range: util.createRange(5, 22, 5, 40)
         }]);
     });

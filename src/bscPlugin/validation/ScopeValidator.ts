@@ -1,10 +1,10 @@
 import { URI } from 'vscode-uri';
-import { isBrsFile, isLiteralExpression, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isLiteralExpression, isNamespaceStatement, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
-import type { EnumStatement } from '../../parser/Statement';
+import type { EnumStatement, NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -13,6 +13,7 @@ import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import type { Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
+import { ParseMode } from '../../parser/Parser';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -77,7 +78,8 @@ export class ScopeValidator {
                 if (parts.length > 0) {
                     result.push({
                         parts: parts,
-                        expression: expression
+                        expression: expression,
+                        enclosingNamespaceNameLower: expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase()
                     });
                 }
             }
@@ -88,8 +90,16 @@ export class ScopeValidator {
         for (const info of expressionInfos) {
             const symbolTable = info.expression.getSymbolTable();
             const firstPart = info.parts[0];
+            const firstNamespacePart = info.parts[0].name.text;
+            const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
+            //get the namespace container (accounting for namespace-relative as well)
+            const namespaceContainer = scope.getNamespace(firstNamespacePartLower, info.enclosingNamespaceNameLower);
+
             //flag all unknown left-most variables
-            if (!symbolTable?.hasSymbol(firstPart.name?.text)) {
+            if (
+                !symbolTable?.hasSymbol(firstPart.name?.text) &&
+                !namespaceContainer
+            ) {
                 this.addMultiScopeDiagnostic({
                     file: file as BscFile,
                     ...DiagnosticMessages.cannotFindName(firstPart.name?.text),
@@ -99,14 +109,13 @@ export class ScopeValidator {
                 continue;
             }
 
-            const firstNamespacePart = info.parts[0].name.text;
-            const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
-            const namespaceContainer = scope.namespaceLookup.get(firstNamespacePartLower);
-            const enumStatement = scope.getEnum(firstNamespacePartLower);
+            const enumStatement = scope.getEnum(firstNamespacePartLower, info.enclosingNamespaceNameLower);
+
             //if this isn't a namespace, skip it
             if (!namespaceContainer && !enumStatement) {
                 continue;
             }
+
             //catch unknown namespace items
             let entityName = firstNamespacePart;
             let entityNameLower = firstNamespacePart.toLowerCase();
@@ -125,7 +134,7 @@ export class ScopeValidator {
                     !scope.getClassMap().has(entityNameLower) &&
                     !scope.getConstMap().has(entityNameLower) &&
                     !scope.getCallableByName(entityNameLower) &&
-                    !scope.namespaceLookup.has(entityNameLower)
+                    !scope.getNamespace(entityNameLower, info.enclosingNamespaceNameLower)
                 ) {
                     //if this looks like an enum, provide a nicer error message
                     const theEnum = this.getEnum(scope, entityNameLower)?.item;
@@ -154,9 +163,9 @@ export class ScopeValidator {
                 }
             }
             //if the full expression is a namespace path, this is an illegal statement because namespaces don't exist at runtme
-            if (scope.namespaceLookup.has(entityNameLower)) {
+            if (scope.getNamespace(entityNameLower, info.enclosingNamespaceNameLower)) {
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.namespaceCannotBeReferencedDirectly(),
+                    ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
                     range: info.expression.range,
                     file: file
                 }, 'When used in scope');
@@ -360,5 +369,9 @@ export class ScopeValidator {
 interface ExpressionInfo {
     parts: Readonly<[VariableExpression, ...DottedGetExpression[]]>;
     expression: Readonly<Expression>;
+    /**
+     * The full namespace name that encloses this expression
+     */
+    enclosingNamespaceNameLower?: string;
 }
 type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };

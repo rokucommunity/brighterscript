@@ -107,6 +107,24 @@ describe('Scope', () => {
         ]);
     });
 
+    it('flags parameter with same name as a sub namespace part', () => {
+        program.setFile('source/main.bs', `
+            namespace alpha
+                sub test(lineHeight as integer)
+                end sub
+            end namespace
+
+            namespace alpha.lineHeight
+            end namespace
+        `);
+        program.validate();
+        expectDiagnostics(program, [{
+            //sub test(|lineHeight| as integer)
+            message: DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace('lineHeight').message,
+            range: util.createRange(2, 25, 2, 35)
+        }]);
+    });
+
     it('flags assignments with same name as namespace', () => {
         program.setFile('source/main.bs', `
             namespace NameA.NameB
@@ -118,9 +136,18 @@ describe('Scope', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea'),
-            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA'),
-            DiagnosticMessages.namespaceCannotBeReferencedDirectly()
+            {
+                ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea'),
+                range: util.createRange(4, 16, 4, 21)
+            },
+            {
+                ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA'),
+                range: util.createRange(5, 16, 5, 21)
+            },
+            {
+                ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
+                range: util.createRange(5, 16, 5, 21)
+            }
         ]);
     });
 
@@ -342,6 +369,70 @@ describe('Scope', () => {
             expectDiagnostics(program, [
                 DiagnosticMessages.cannotFindName('Name2')
             ]);
+        });
+
+        it('detects namespace-relative namespace name used like a variable', () => {
+            program.setFile('source/main.bs', `
+                namespace Alpha.Beta
+                    namespace Charlie
+                    end namespace
+
+                    sub test()
+                        thing = Charlie
+                        thing = Alpha.Beta.Charlie
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
+                range: util.createRange(6, 32, 6, 39)
+            }, {
+                ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
+                range: util.createRange(7, 32, 7, 50)
+            }]);
+        });
+
+        it('flags assignment with same name as a sub namespace part', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    sub test()
+                        lineHeight = 1
+                    end sub
+                end namespace
+
+                namespace alpha.lineHeight
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                //|lineHeight| = 1
+                message: DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('lineHeight').message,
+                range: util.createRange(3, 24, 3, 34)
+            }]);
+        });
+
+        it('flags local vars with same name as a sub namespace part', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    sub test()
+                        print lineHeight
+                    end sub
+                end namespace
+
+                namespace alpha.lineHeight
+                    const lg = 1.75
+                    const md = 1.5
+                    const sm = 1.25
+                    const xs = 1.0
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                //print |lineHeight|
+                message: DiagnosticMessages.itemCannotBeUsedAsVariable('namespace').message,
+                range: util.createRange(3, 30, 3, 40)
+            }]);
         });
 
         it('accepts namespace names in their transpiled form in .brs files', () => {
