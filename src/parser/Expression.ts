@@ -124,7 +124,7 @@ export class CallExpression extends Expression {
         if (isReferenceType(callType)) {
             callType = callType.resolve();
         }
-        return isFunctionType(callType) ? callType.returnType : DynamicType.instance;
+        return isFunctionType(callType) ? callType.returnType : callType;
     }
 }
 

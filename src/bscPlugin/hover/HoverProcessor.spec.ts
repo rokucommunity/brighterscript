@@ -289,7 +289,7 @@ describe('HoverProcessor', () => {
             expect(hover).to.be.undefined;
         });
 
-        it.only('finds types defined in different file', () => {
+        it('finds types defined in different file', () => {
             program.setFile(`source/main.bs`, `
                 sub main()
                     thing = new MyKlass()
@@ -319,7 +319,7 @@ describe('HoverProcessor', () => {
             expect(hover?.contents).to.eql(fence('thing as MyKlass'));
             //print some|Val
             hover = program.getHover('source/main.bs', util.createPosition(5, 31))[0];
-            expect(hover?.range).to.eql(util.createRange(5, 27, 2, 33));
+            expect(hover?.range).to.eql(util.createRange(5, 26, 5, 33));
             expect(hover?.contents).to.eql(fence('someVal as string'));
         });
     });
