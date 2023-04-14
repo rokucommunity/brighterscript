@@ -126,8 +126,6 @@ export class HoverProcessor {
                     };
                 }
             }
-        } catch (e) {
-            // nothing
         } finally {
             scope?.unlinkSymbolTable();
         }
