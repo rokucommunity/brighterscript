@@ -125,7 +125,7 @@ export class ScopeValidator {
                 entityNameLower += '.' + part.name.text.toLowerCase();
 
                 //if this is an enum member, stop validating here to prevent errors further down the chain
-                if (scope.getEnumMemberMap().has(entityNameLower)) {
+                if (scope.getEnumMemberFileLink(entityName, info.enclosingNamespaceNameLower)) {
                     break;
                 }
 
