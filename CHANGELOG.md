@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.64.2](https://github.com/rokucommunity/brighterscript/compare/v0.64.1...v0.64.2) - 2023-04-18
+### Fixed
+ - namespace-relative enum value false positive diagnostic ([#793](https://github.com/rokucommunity/brighterscript/pull/793))
+
+
+
 ## [0.64.1](https://github.com/rokucommunity/brighterscript/compare/v0.64.0...v0.64.1) - 2023-04-14
 ### Changed
  - Bump xml2js from 0.4.23 to 0.5.0 ([#790](https://github.com/rokucommunity/brighterscript/pull/790))
