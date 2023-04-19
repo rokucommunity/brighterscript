@@ -1747,7 +1747,7 @@ describe('Scope', () => {
             const mainFile = program.setFile('source/main.bs', `
                 sub main()
                     fooInstance = new Foo()
-                    myNum = foo.getNum()
+                    myNum = fooInstance.getNum()
                 end sub
 
                 class Foo
