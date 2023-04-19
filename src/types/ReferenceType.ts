@@ -1,6 +1,6 @@
 import type { SymbolTableProvider } from '../SymbolTable';
 import { SymbolTypeFlags } from '../SymbolTable';
-import { isDynamicType, isPropertyReferenceType, isReferenceType } from '../astUtils/reflection';
+import { isReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 

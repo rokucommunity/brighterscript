@@ -443,7 +443,7 @@ export class BrsFile {
         this._functionScopes = [];
 
         for (let func of functions) {
-            let scope = new FunctionScope(func, this);
+            let scope = new FunctionScope(func);
 
             //find parent function, and add this scope to it if found
             {

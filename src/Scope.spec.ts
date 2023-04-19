@@ -12,7 +12,7 @@ import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import type { OnScopeValidateEvent } from './interfaces';
 import { SymbolTypeFlags } from './SymbolTable';
-import { EnumMemberType, EnumType } from './types/EnumType';
+import { EnumMemberType } from './types/EnumType';
 import { CustomType } from './types/CustomType';
 import { BooleanType } from './types/BooleanType';
 import { StringType } from './types/StringType';

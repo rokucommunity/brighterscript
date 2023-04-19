@@ -9,9 +9,7 @@ import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
 import { SymbolTypeFlags } from '../../SymbolTable';
-import { CustomType } from '../../types/CustomType';
 import { DynamicType } from '../../types/DynamicType';
-import { EnumType } from '../../types/EnumType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
 
