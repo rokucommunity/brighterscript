@@ -21,7 +21,7 @@ import type { TranspileState } from './TranspileState';
 import { StringType } from '../types/StringType';
 import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
-import { PropertyReferenceType, ReferenceType } from '../types/ReferenceType';
+import { TypePropertyReferenceType, ReferenceType } from '../types/ReferenceType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -124,7 +124,7 @@ export class CallExpression extends Expression {
             return calleeType;
         }
 
-        return new PropertyReferenceType(calleeType, 'returnType');
+        return new TypePropertyReferenceType(calleeType, 'returnType');
     }
 }
 

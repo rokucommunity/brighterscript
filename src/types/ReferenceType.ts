@@ -29,7 +29,7 @@ export class ReferenceType extends BscType {
                         // Since we don't know what type this is, yet, return ReferenceType
                         return (memberName: string, flags: SymbolTypeFlags) => {
                             return new ReferenceType(memberName, () => {
-                                return (this.resolve() as any)?.symbolTable;
+                                return (this.resolve() as any)?.memberTable;
                             });
                         };
                     } else if (propName === 'toString') {
@@ -40,7 +40,7 @@ export class ReferenceType extends BscType {
                         // For transpilation, we should 'dynamic'
                         return () => 'dynamic';
                     } else if (propName === 'returnType') {
-                        return new PropertyReferenceType(this, propName);
+                        return new TypePropertyReferenceType(this, propName);
                     }
                 }
 
@@ -93,7 +93,7 @@ export class ReferenceType extends BscType {
  *
  * This is really cool. It's like programming with time-travel.
  */
-export class PropertyReferenceType extends BscType {
+export class TypePropertyReferenceType extends BscType {
     constructor(public outerType: BscType, public propertyName: string) {
         super(propertyName);
         // eslint-disable-next-line no-constructor-return
@@ -101,8 +101,8 @@ export class PropertyReferenceType extends BscType {
             get: (target, propName, receiver) => {
 
                 if (propName === '__reflection') {
-                    // Cheeky way to get `isPropertyReferenceType` reflection to work
-                    return { name: 'PropertyReferenceType' };
+                    // Cheeky way to get `isTypePropertyReferenceType` reflection to work
+                    return { name: 'TypePropertyReferenceType' };
                 }
 
                 if (isReferenceType(this.outerType)) {
@@ -111,7 +111,7 @@ export class PropertyReferenceType extends BscType {
                         //So if that symbol is ever populated, the correct type is passed through
                         return (memberName: string, flags: SymbolTypeFlags) => {
                             return new ReferenceType(memberName, () => {
-                                return (this.outerType[this.propertyName] as any)?.symbolTable;
+                                return (this.outerType[this.propertyName] as any)?.memberTable;
                             });
                         };
                     }

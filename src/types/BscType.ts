@@ -5,29 +5,29 @@ import type { Range } from 'vscode-languageserver';
 
 export abstract class BscType {
 
-    protected symbolTable: SymbolTable;
+    protected memberTable: SymbolTable;
     protected __identifier: string;
 
     constructor(name = '') {
         this.__identifier = `${this.constructor.name}${name ? ': ' + name : ''}`;
-        this.symbolTable = new SymbolTable(this.__identifier);
+        this.memberTable = new SymbolTable(this.__identifier);
     }
 
     pushMemberProvider(provider: SymbolTableProvider) {
-        this.symbolTable.pushParentProvider(provider);
+        this.memberTable.pushParentProvider(provider);
     }
 
     popMemberProvider() {
-        this.symbolTable.popParentProvider();
+        this.memberTable.popParentProvider();
     }
 
     addMember(name: string, range: Range, type: BscType, flags: SymbolTypeFlags) {
-        this.symbolTable.addSymbol(name, range, type, flags);
+        this.memberTable.addSymbol(name, range, type, flags);
     }
 
     getMemberType(name: string) {
         // eslint-disable-next-line no-bitwise
-        return this.symbolTable.getSymbol(name, SymbolTypeFlags.runtime | SymbolTypeFlags.typetime)?.[0]?.type;
+        return this.memberTable.getSymbol(name, SymbolTypeFlags.runtime | SymbolTypeFlags.typetime)?.[0]?.type;
     }
 
     isAssignableTo(_targetType: BscType): boolean {

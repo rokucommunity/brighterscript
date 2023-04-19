@@ -3,11 +3,11 @@ import { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
 import { expectTypeToBe } from '../testHelpers.spec';
 import { DynamicType } from './DynamicType';
 import { IntegerType } from './IntegerType';
-import { PropertyReferenceType, ReferenceType } from './ReferenceType';
+import { TypePropertyReferenceType, ReferenceType } from './ReferenceType';
 import { StringType } from './StringType';
 import { FloatType } from './FloatType';
 import { CustomType } from './CustomType';
-import { isPropertyReferenceType, isReferenceType } from '../astUtils/reflection';
+import { isTypePropertyReferenceType, isReferenceType } from '../astUtils/reflection';
 import { FunctionType } from './FunctionType';
 
 describe('ReferenceType', () => {
@@ -73,13 +73,13 @@ describe('PropertyReferenceType', () => {
 
     it('can be checked with reflection', () => {
         const func = new FunctionType(StringType.instance);
-        const propRef = new PropertyReferenceType(func, 'returnType');
-        expect(isPropertyReferenceType(propRef)).to.be.true;
+        const propRef = new TypePropertyReferenceType(func, 'returnType');
+        expect(isTypePropertyReferenceType(propRef)).to.be.true;
     });
 
     it('can resolve a FunctionType.returnType', () => {
         const func = new FunctionType(StringType.instance);
-        const propRef = new PropertyReferenceType(func, 'returnType');
+        const propRef = new TypePropertyReferenceType(func, 'returnType');
         expectTypeToBe(propRef, StringType);
     });
 
@@ -87,7 +87,7 @@ describe('PropertyReferenceType', () => {
     it('can resolve a property on a ReferenceType', () => {
         const table = new SymbolTable('test');
         const ref = new ReferenceType('someFunc', () => table);
-        const propRef = new PropertyReferenceType(ref, 'returnType');
+        const propRef = new TypePropertyReferenceType(ref, 'returnType');
         // `ref` will resolve to DynamicType, and its returnType is DynamicType.Instance
         expectTypeToBe(propRef, DynamicType);
         // Set ref to resolve to a function
@@ -98,7 +98,7 @@ describe('PropertyReferenceType', () => {
     it('resolves members of a property on a ReferenceType', () => {
         const table = new SymbolTable('test');
         const fnRef = new ReferenceType('someFunc', () => table);
-        const returnRef = new PropertyReferenceType(fnRef, 'returnType');
+        const returnRef = new TypePropertyReferenceType(fnRef, 'returnType');
         const returnPropRef = returnRef.getMemberType('myNum');
         // `ref` will resolve to DynamicType, and its returnType is DynamicType.Instance
         expectTypeToBe(returnPropRef, DynamicType);

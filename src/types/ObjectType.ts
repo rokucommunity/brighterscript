@@ -29,6 +29,6 @@ export class ObjectType extends BscType {
     }
 
     getMemberType(name: string) {
-        return super.getMemberType(name) ?? new ReferenceType(name, () => this.symbolTable);
+        return super.getMemberType(name) ?? new ReferenceType(name, () => this.memberTable);
     }
 }
