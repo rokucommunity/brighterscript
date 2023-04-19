@@ -27,7 +27,7 @@ export abstract class BscType {
 
     getMemberType(name: string) {
         // eslint-disable-next-line no-bitwise
-        return this.symbolTable.getSymbol(name, SymbolTypeFlags.runtime | SymbolTypeFlags.typetime)?.[0].type;
+        return this.symbolTable.getSymbol(name, SymbolTypeFlags.runtime | SymbolTypeFlags.typetime)?.[0]?.type;
     }
 
     isAssignableTo(_targetType: BscType): boolean {

@@ -1631,8 +1631,7 @@ export class TypeExpression extends Expression implements TypedefProvider {
         /**
          * The standard AST expression that represents the type for this TypeExpression.
          */
-        public expression: Expression,
-        private isRunTime = false
+        public expression: Expression
     ) {
         super();
         this.range = expression?.range;
@@ -1651,25 +1650,6 @@ export class TypeExpression extends Expression implements TypedefProvider {
 
     public getType(): BscType {
         return this.expression.getType();
-        /*
-        //TODO eventually support more complex types
-        //const symbolTable = this.getSymbolTable();
-        //get the leftmost variable, then walk into the type
-        const parts = util.getAllDottedGetParts(this.expression);
-        let finalTypeIndex = parts.length - 1;
-        if (this.isRunTime && parts.length > 1) {
-            finalTypeIndex--;
-        }
-        return new ReferenceType(parts[finalTypeIndex].text, () => this.getSymbolTable());
-        /*const symbols = symbolTable?.getSymbol(parts[0].text, this.lookupFlags) ?? [];
-        if (symbols.length > 0 && parts.length === 1) {
-            return symbols[0].type;
-        } else {
-            //this is digging into nested objects (or namespaces, etc...)
-            //TODO: This is wrong -- it should be digging through the symbol tables.
-            //However, in the context of `callables` there is no symbol table because they are set at parse time
-            return new CustomType(parts.map(part => part.text).join('.'));
-        }*/
     }
 
     getTypedef(state: TranspileState): (string | SourceNode)[] {
