@@ -88,10 +88,31 @@ describe('PropertyReferenceType', () => {
         const table = new SymbolTable('test');
         const ref = new ReferenceType('someFunc', () => table);
         const propRef = new PropertyReferenceType(ref, 'returnType');
-        // `ref` will resolve to DynamicType, and it's returnType is DynamicType.Instance
+        // `ref` will resolve to DynamicType, and its returnType is DynamicType.Instance
         expectTypeToBe(propRef, DynamicType);
         // Set ref to resolve to a function
         table.addSymbol('someFunc', null, new FunctionType(IntegerType.instance), SymbolTypeFlags.typetime);
         expectTypeToBe(propRef, IntegerType);
     });
+
+    it('resolves members of a property on a ReferenceType', () => {
+        const table = new SymbolTable('test');
+        const fnRef = new ReferenceType('someFunc', () => table);
+        const returnRef = new PropertyReferenceType(fnRef, 'returnType');
+        const returnPropRef = returnRef.getMemberType('myNum');
+        // `ref` will resolve to DynamicType, and its returnType is DynamicType.Instance
+        expectTypeToBe(returnPropRef, DynamicType);
+
+        // Set fnRef to resolve to a function that returns a complex type
+        const klassType = new CustomType('Klass');
+        klassType.addMember('myNum', null, IntegerType.instance, SymbolTypeFlags.runtime);
+        table.addSymbol('someFunc', null, new FunctionType(klassType), SymbolTypeFlags.runtime);
+
+        // returnPropRef = someFunc().myNum
+        expectTypeToBe(fnRef, FunctionType);
+        expectTypeToBe(returnRef, CustomType);
+        expectTypeToBe(returnPropRef, IntegerType);
+    });
+
+
 });

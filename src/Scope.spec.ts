@@ -1788,5 +1788,33 @@ describe('Scope', () => {
             expect(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Animals.Dog');
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoBark', SymbolTypeFlags.runtime)[0].type, StringType);
         });
+
+        it('finds correct types for method calls', () => {
+            const mainFile = program.setFile('source/main.bs', `
+                sub main()
+                    myVal = (new NameA.Klass()).getNumObj().num
+                end sub
+
+                namespace NameA
+                    class Klass
+                        function getNumObj() as NumObj
+                            return new NumObj()
+                        end function
+                    end class
+
+                    class NumObj
+                        num = 2
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+            const sourceScope = program.getScopeByName('source');
+            expect(sourceScope).to.exist;
+            sourceScope.linkSymbolTable();
+            expect(mainFnScope).to.exist;
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('myVal', SymbolTypeFlags.runtime)[0].type, IntegerType);
+        });
     });
 });

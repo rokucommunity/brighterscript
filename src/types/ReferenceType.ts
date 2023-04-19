@@ -1,6 +1,6 @@
 import type { SymbolTableProvider } from '../SymbolTable';
 import { SymbolTypeFlags } from '../SymbolTable';
-import { isDynamicType, isReferenceType } from '../astUtils/reflection';
+import { isDynamicType, isPropertyReferenceType, isReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
@@ -39,6 +39,8 @@ export class ReferenceType extends BscType {
                     } else if (propName === 'toTypeString') {
                         // For transpilation, we should 'dynamic'
                         return () => 'dynamic';
+                    } else if (propName === 'returnType') {
+                        return new PropertyReferenceType(this, propName);
                     }
                 }
 
@@ -102,11 +104,23 @@ export class PropertyReferenceType extends BscType {
                     // Cheeky way to get `isPropertyReferenceType` reflection to work
                     return { name: 'PropertyReferenceType' };
                 }
-                //There may be some need to specifically get members on ReferenceType in the future
-                // eg: if (Reflect.has(target, name)) {
-                //   return Reflect.get(target, propName, receiver);
 
+                if (isReferenceType(this.outerType)) {
+                    if (propName === 'getMemberType') {
+                        //If we're calling `getMemberType()`, we need it to proxy to using the actual symbol table
+                        //So if that symbol is ever populated, the correct type is passed through
+                        return (memberName: string, flags: SymbolTypeFlags) => {
+                            return new ReferenceType(memberName, () => {
+                                return (this.outerType[this.propertyName] as any)?.symbolTable;
+                            });
+                        };
+                    }
+                }
                 let inner = this.outerType[this.propertyName];
+
+                if (!inner) {
+                    inner = DynamicType.instance;
+                }
 
                 if (inner) {
                     const result = Reflect.get(inner, propName, inner);
@@ -121,7 +135,6 @@ export class PropertyReferenceType extends BscType {
                 let inner = this.outerType[this.propertyName];
 
                 if (inner) {
-                    inner = DynamicType.instance;
                     const result = Reflect.set(inner, name, value, inner);
                     return result;
                 }

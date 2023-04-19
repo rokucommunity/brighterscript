@@ -159,11 +159,7 @@ export class AssignmentStatement extends Statement {
     }
 
     getType() {
-        const valType = this.value.getType();
-        if (!valType) {
-            console.log('no value in assignment!');
-        }
-        return valType;
+        return this.value.getType();
     }
 }
 

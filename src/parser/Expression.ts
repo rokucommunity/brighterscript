@@ -592,6 +592,10 @@ export class GroupingExpression extends Expression {
             walk(this, 'expression', visitor, options);
         }
     }
+
+    getType() {
+        return this.expression.getType();
+    }
 }
 
 export class LiteralExpression extends Expression {
