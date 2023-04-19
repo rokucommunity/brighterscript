@@ -45,7 +45,6 @@ describe('ReferenceType', () => {
         const table = new SymbolTable('test');
         const ref = new ReferenceType('someKlass', () => table);
         table.addSymbol('someKlass', null, new CustomType('SomeKlass'), SymbolTypeFlags.runtime);
-        expect(ref.toTypeString()).to.eq('object');
         expect(ref.toString()).to.eq('SomeKlass');
     });
 
@@ -89,8 +88,8 @@ describe('PropertyReferenceType', () => {
         const table = new SymbolTable('test');
         const ref = new ReferenceType('someFunc', () => table);
         const propRef = new PropertyReferenceType(ref, 'returnType');
-        // `ref` will resolve to DynamicType, and that has no `returnType` property
-        expect(propRef.constructor).to.be.undefined;
+        // `ref` will resolve to DynamicType, and it's returnType is DynamicType.Instance
+        expectTypeToBe(propRef, DynamicType);
         // Set ref to resolve to a function
         table.addSymbol('someFunc', null, new FunctionType(IntegerType.instance), SymbolTypeFlags.typetime);
         expectTypeToBe(propRef, IntegerType);

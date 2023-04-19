@@ -1768,7 +1768,7 @@ describe('Scope', () => {
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('myNum', SymbolTypeFlags.runtime)[0].type, IntegerType);
         });
 
-        it.only('finds correct type for namespaced lookups', () => {
+        it('finds correct type for namespaced lookups', () => {
             const mainFile = program.setFile('source/main.bs', mainFileContents);
             program.setFile('source/animals.bs', animalFileContents);
             program.validate();

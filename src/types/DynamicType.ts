@@ -9,6 +9,10 @@ export class DynamicType extends BscType {
 
     public static readonly instance = new DynamicType();
 
+    get returnType() {
+        return DynamicType.instance;
+    }
+
     public isAssignableTo(targetType: BscType) {
         //everything can be dynamic, so as long as a type is provided, this is true
         return !!targetType;

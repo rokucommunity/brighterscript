@@ -17,7 +17,7 @@ export class CustomType extends BscType {
     }
 
     public toTypeString(): string {
-        return 'object';
+        return 'dynamic';
     }
 
     public isAssignableTo(targetType: BscType) {
