@@ -1,9 +1,11 @@
-import type { BscType } from './BscType';
+import { BscType } from './BscType';
 
-export class DynamicType implements BscType {
+export class DynamicType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
+    ) {
+        super();
+    }
 
     public static readonly instance = new DynamicType();
 

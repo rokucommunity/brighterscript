@@ -1,9 +1,15 @@
 import { isCustomType, isDynamicType } from '../astUtils/reflection';
-import type { BscType } from './BscType';
+import { BscType } from './BscType';
+import { ReferenceType } from './ReferenceType';
 
-export class CustomType implements BscType {
+export class CustomType extends BscType {
 
     constructor(public name: string) {
+        super(name);
+    }
+
+    getMemberType(name: string) {
+        return super.getMemberType(name) ?? new ReferenceType(name, () => this.symbolTable);
     }
 
     public toString() {

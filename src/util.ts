@@ -1004,7 +1004,7 @@ export class Util {
     /**
      * Convert a token into a BscType
      */
-    public tokenToBscType(token: Token, allowCustomType = true) {
+    public tokenToBscType(token: Token) {
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (token.kind) {
             case TokenKind.Boolean:
@@ -1068,9 +1068,6 @@ export class Util {
                         return new StringType(token.text);
                     case 'void':
                         return new VoidType(token.text);
-                }
-                if (allowCustomType) {
-                    return new CustomType(token.text);
                 }
         }
     }

@@ -1,7 +1,7 @@
-import type { BscType } from './BscType';
+import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
-export class UninitializedType implements BscType {
+export class UninitializedType extends BscType {
     public isAssignableTo(targetType: BscType) {
         return (
             targetType instanceof UninitializedType ||

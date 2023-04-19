@@ -1,10 +1,12 @@
-import type { BscType } from './BscType';
+import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
-export class BooleanType implements BscType {
+export class BooleanType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
+    ) {
+        super();
+    }
 
     public static instance = new BooleanType('boolean');
 

@@ -1,9 +1,10 @@
-import type { BscType } from './BscType';
+import { BscType } from './BscType';
 
-export class UnionType implements BscType {
+export class UnionType extends BscType {
     constructor(
         public types: BscType[]
     ) {
+        super();
     }
 
     public addType(type: BscType) {

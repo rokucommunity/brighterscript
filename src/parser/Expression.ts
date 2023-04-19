@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
@@ -22,7 +22,7 @@ import { StringType } from '../types/StringType';
 import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
 import { CustomType } from '../types/CustomType';
-import { ReferenceType } from '../types/ReferenceType';
+import { PropertyReferenceType, ReferenceType } from '../types/ReferenceType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -120,8 +120,13 @@ export class CallExpression extends Expression {
     }
 
     getType() {
-        let callType = this.callee.getType();
-        return isFunctionType(callType) ? callType.returnType : callType;
+        if (isNewExpression(this.parent)) {
+            return this.callee.getType();
+        }
+
+        return new PropertyReferenceType(this.callee.getType(), 'returnType');
+
+        //return (this.callee.getType()).returnType;
     }
 }
 
@@ -480,6 +485,18 @@ export class DottedGetExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'obj', visitor, options);
         }
+    }
+
+    getType() {
+        const objType = this.obj?.getType();
+        if (objType) {
+            const memberType = objType.getMemberType(this.name.text);
+            if (!memberType) {
+                return DynamicType.instance;
+            }
+            return memberType;
+        }
+        return DynamicType.instance;
     }
 
 }
@@ -891,8 +908,17 @@ export class VariableExpression extends Expression {
         //nothing to walk
     }
 
-    public getType() {
-        return new ReferenceType(this.name.text, () => this.getSymbolTable());
+    private _type: BscType;
+
+    getType() {
+        const standardType = util.tokenToBscType(this.name);
+        if (standardType) {
+            return standardType;
+        }
+        if (!this._type) {
+            this._type = new ReferenceType(this.name.text, () => this.getSymbolTable());
+        }
+        return this._type;
     }
 }
 
@@ -1602,7 +1628,8 @@ export class TypeExpression extends Expression implements TypedefProvider {
         /**
          * The standard AST expression that represents the type for this TypeExpression.
          */
-        public expression: Expression
+        public expression: Expression,
+        private isRunTime = false
     ) {
         super();
         this.range = expression?.range;
@@ -1620,21 +1647,18 @@ export class TypeExpression extends Expression implements TypedefProvider {
     }
 
     public getType(): BscType {
-        if (isVariableExpression(this.expression)) {
-            const standardType = util.tokenToBscType(this.expression.name, false);
-            if (standardType) {
-                return standardType;
-            }
-        }
-        if (isLiteralExpression(this.expression)) {
-            return this.expression.getType();
-        }
-
+        return this.expression.getType();
+        /*
         //TODO eventually support more complex types
-        const symbolTable = this.getSymbolTable();
+        //const symbolTable = this.getSymbolTable();
         //get the leftmost variable, then walk into the type
         const parts = util.getAllDottedGetParts(this.expression);
-        const symbols = symbolTable?.getSymbol(parts[0].text, SymbolTypeFlags.typetime) ?? [];
+        let finalTypeIndex = parts.length - 1;
+        if (this.isRunTime && parts.length > 1) {
+            finalTypeIndex--;
+        }
+        return new ReferenceType(parts[finalTypeIndex].text, () => this.getSymbolTable());
+        /*const symbols = symbolTable?.getSymbol(parts[0].text, this.lookupFlags) ?? [];
         if (symbols.length > 0 && parts.length === 1) {
             return symbols[0].type;
         } else {
@@ -1642,7 +1666,7 @@ export class TypeExpression extends Expression implements TypedefProvider {
             //TODO: This is wrong -- it should be digging through the symbol tables.
             //However, in the context of `callables` there is no symbol table because they are set at parse time
             return new CustomType(parts.map(part => part.text).join('.'));
-        }
+        }*/
     }
 
     getTypedef(state: TranspileState): (string | SourceNode)[] {

@@ -6,12 +6,17 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
-import { expectDiagnostics, expectZeroDiagnostics, trim } from './testHelpers.spec';
+import { expectDiagnostics, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import type { OnScopeValidateEvent } from './interfaces';
 import { SymbolTypeFlags } from './SymbolTable';
+import { EnumMemberType, EnumType } from './types/EnumType';
+import { CustomType } from './types/CustomType';
+import { BooleanType } from './types/BooleanType';
+import { StringType } from './types/StringType';
+import { IntegerType } from './types/IntegerType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -1676,6 +1681,112 @@ describe('Scope', () => {
                 'test.foo2',
                 'foo3'
             ]);
+        });
+    });
+
+    describe('symbolTable lookups', () => {
+        const mainFileContents = `
+            sub main()
+                population = Animals.getPopulation()
+                print population
+                flyBoy = new Animals.Bird()
+                flyBoysWings = flyBoy.hasWings
+                flyBoysSkin = flyBoy.skin
+                fido = new Animals.Dog()
+                fidoBark = fido.bark()
+                chimp = new Animals.Ape()
+                skin = Animals.SkinType.fur
+            end sub
+         `;
+
+        const animalFileContents = `
+            namespace Animals
+                function getPopulation() as integer
+                    return 10
+                end function
+
+                class Creature
+                    skin as Animals.SkinType
+                end class
+
+                class Bird extends Creature
+                    hasWings = true
+                    skin = Animals.SkinType.feathers
+                end class
+
+                class Mammal extends Creature
+                    hasLegs = true
+                    legCount as integer
+                    skin = Animals.SkinType.fur
+
+                    function getRunSpeed() as integer
+                        speed = m.legCount * 10
+                        return speed
+                    end function
+                end class
+
+                class Dog extends Mammal
+                    legCount = 4
+                    function bark() as string
+                        return "woof"
+                    end function
+                end class
+
+                class Ape extends Mammal
+                    legCount = 2
+                end class
+
+                enum SkinType
+                    feathers
+                    fur
+                end enum
+            end namespace
+        `;
+
+        it('finds correct return type for class methods', () => {
+            const mainFile = program.setFile('source/main.bs', `
+                sub main()
+                    fooInstance = new Foo()
+                    myNum = foo.getNum()
+                end sub
+
+                class Foo
+                    function getNum() as integer
+                        return 1
+                    end function
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 10));
+            const sourceScope = program.getScopeByName('source');
+            expect(sourceScope).to.exist;
+            expect(mainFnScope).to.exist;
+            sourceScope.linkSymbolTable();
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type, CustomType);
+            expect(mainFnScope.symbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Foo');
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('myNum', SymbolTypeFlags.runtime)[0].type, IntegerType);
+        });
+
+        it.only('finds correct type for namespaced lookups', () => {
+            const mainFile = program.setFile('source/main.bs', mainFileContents);
+            program.setFile('source/animals.bs', animalFileContents);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(7, 23));
+            const sourceScope = program.getScopeByName('source');
+            expect(sourceScope).to.exist;
+            sourceScope.linkSymbolTable();
+            expect(mainFnScope).to.exist;
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('skin', SymbolTypeFlags.runtime)[0].type, EnumMemberType);
+
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlags.runtime)[0].type, CustomType);
+            expect(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Animals.Bird');
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoysWings', SymbolTypeFlags.runtime)[0].type, BooleanType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoysSkin', SymbolTypeFlags.runtime)[0].type, EnumMemberType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlags.runtime)[0].type, CustomType);
+            expect(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Animals.Dog');
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoBark', SymbolTypeFlags.runtime)[0].type, StringType);
         });
     });
 });

@@ -1,8 +1,9 @@
-import type { BscType } from './BscType';
+import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
-export class ArrayType implements BscType {
+export class ArrayType extends BscType {
     constructor(...innerTypes: BscType[]) {
+        super();
         this.innerTypes = innerTypes;
     }
     public innerTypes: BscType[] = [];
