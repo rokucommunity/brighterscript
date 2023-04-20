@@ -16,7 +16,7 @@
     "publish-coverage": "nyc report --reporter=text-lcov | coveralls",
     "dep-graph": "madge --image graph.svg --extensions ts ./src/parser",
     "docs": "ts-node scripts/compile-doc-examples.ts",
-    "benchmark": "cd ./benchmarks && npm i && ts-node ./index.ts",
+    "benchmark": "cd ./benchmarks && ts-node ./index.ts",
     "scrape-roku-docs": "ts-node scripts/scrape-roku-docs.ts",
     "rescrape-roku-docs": "rm scripts/.cache.json && ts-node scripts/scrape-roku-docs.ts"
   },

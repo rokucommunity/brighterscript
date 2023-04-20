@@ -7,6 +7,7 @@ const tempDir = path.join(cwd, '.tmp');
 let nodeArgs = ['--max-old-space-size=8192'];
 
 clean();
+execSync('npm install');
 
 import * as fsExtra from 'fs-extra';
 import * as yargs from 'yargs';
@@ -36,7 +37,9 @@ class Runner {
                 this.prepare();
             }
             this.runBenchmarks();
-        } finally { }
+        } finally {
+            clean();
+        }
     }
 
     /**
@@ -229,5 +232,4 @@ function clean() {
     if (deps?.length > 0) {
         execSync(`npm remove ${deps.join(' ')}`);
     }
-    execSync('npm install');
 }
