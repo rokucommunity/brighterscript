@@ -1,17 +1,17 @@
-preventNodeModuleWalking();
-
-import * as path from 'path';
 import type { ExecSyncOptions, SpawnSyncOptions } from 'child_process';
 import * as childProcess from 'child_process';
+import * as path from 'path';
+import * as fs from 'fs';
+const cwd = __dirname;
+const tempDir = path.join(cwd, '.tmp');
+let nodeArgs = ['--max-old-space-size=8192'];
+
+clean();
 
 import * as fsExtra from 'fs-extra';
 import * as yargs from 'yargs';
 import * as rimraf from 'rimraf';
 import * as fastGlob from 'fast-glob';
-
-const cwd = __dirname;
-const tempDir = path.join(cwd, '.tmp');
-let nodeArgs = ['--max-old-space-size=8192'];
 
 interface RunnerOptions {
     versions: string[];
@@ -98,7 +98,7 @@ class Runner {
         for (let i = 0; i < this.options.versions.length; i++) {
             const version = this.options.versions[i];
             const name = `brighterscript${i + 1}`;
-            let location:string;
+            let location: string;
 
             //if the version is "current", then make a local copy of the package from the dist folder to install (because npm link makes things slower)
             if (version === 'local') {
@@ -215,20 +215,19 @@ const runner = new Runner(options as any);
 runner.run();
 
 function execSync(command: string, options: ExecSyncOptions = {}) {
+    console.log(command);
     return childProcess.execSync(command, { stdio: 'inherit', cwd: cwd, ...options });
 }
 
-function preventNodeModuleWalking() {
-    const Module = require('module').Module;
-    const nodeModulePaths = Module._nodeModulePaths; //backup the original method
-
-    Module._nodeModulePaths = function _nodeModulePaths(from) {
-        let paths = nodeModulePaths.call(this, from); // call the original method
-
-        //add your logic here to exclude parent dirs, I did a simple match with current dir
-        paths = paths.filter((path) => {
-            return path.startsWith(__dirname);
-        });
-        return paths;
-    };
+function clean() {
+    //delete any brighterscript dependencies listed in package.json
+    const deps = Object.keys(
+        JSON.parse(
+            fs.readFileSync(`${cwd}/package.json`)?.toString()
+        ).dependencies
+    ).filter(x => /brighterscript\d+/.exec(x));
+    if (deps?.length > 0) {
+        execSync(`npm remove ${deps.join(' ')}`);
+    }
+    execSync('npm install');
 }
