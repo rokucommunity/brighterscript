@@ -9,7 +9,6 @@ import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
 import { SymbolTypeFlags } from '../../SymbolTable';
-import { CustomType } from '../../types/CustomType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
@@ -37,6 +36,7 @@ export class BrsFileValidator {
         const visitor = createVisitor({
             MethodStatement: (node) => {
                 //add the `super` symbol to class methods
+                //Todo:  get the actual type of the parent class
                 node.func.body.symbolTable.addSymbol('super', undefined, DynamicType.instance, SymbolTypeFlags.runtime);
             },
             CallfuncExpression: (node) => {
@@ -54,18 +54,20 @@ export class BrsFileValidator {
 
                 //register this enum declaration
                 // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance, SymbolTypeFlags.typetime | SymbolTypeFlags.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, node.getType(), SymbolTypeFlags.typetime | SymbolTypeFlags.runtime);
             },
             ClassStatement: (node) => {
                 this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.classKeyword, node.name));
 
                 //register this class
                 // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, new CustomType(node.name.text), SymbolTypeFlags.typetime | SymbolTypeFlags.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, node.getType(), SymbolTypeFlags.typetime | SymbolTypeFlags.runtime);
             },
             AssignmentStatement: (node) => {
                 //register this variable
-                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, node.getType(), SymbolTypeFlags.runtime);
+
+                const nodeType = node.getType();
+                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, nodeType, SymbolTypeFlags.runtime);
             },
             DottedSetStatement: (node) => {
                 this.validateNoOptionalChainingInVarSet(node, [node.obj]);
@@ -83,7 +85,7 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable().addSymbol(
                     node.name.split('.')[0],
                     node.nameExpression.range,
-                    DynamicType.instance,
+                    node.getType(),
                     SymbolTypeFlags.typetime
                 );
             },
@@ -94,7 +96,7 @@ export class BrsFileValidator {
                     node.parent.getSymbolTable().addSymbol(
                         node.name.text,
                         node.name.range,
-                        node.func.getType(),
+                        node.getType(),
                         SymbolTypeFlags.runtime
                     );
                 }
@@ -102,6 +104,12 @@ export class BrsFileValidator {
                 const namespace = node.findAncestor(isNamespaceStatement);
                 //this function is declared inside a namespace
                 if (namespace) {
+                    namespace.getSymbolTable().addSymbol(
+                        node.name.text,
+                        node.name.range,
+                        node.getType(),
+                        SymbolTypeFlags.runtime
+                    );
                     //add the transpiled name for namespaced functions to the root symbol table
                     const transpiledNamespaceFunctionName = node.getName(ParseMode.BrightScript);
                     const funcType = node.func.getType();

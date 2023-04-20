@@ -10,19 +10,18 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
 import { Expression } from './AstNode';
-import { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTable } from '../SymbolTable';
 import { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { StringType } from '../types/StringType';
 import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
-import { CustomType } from '../types/CustomType';
-import { ReferenceType } from '../types/ReferenceType';
+import { TypePropertyReferenceType, ReferenceType } from '../types/ReferenceType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -120,8 +119,12 @@ export class CallExpression extends Expression {
     }
 
     getType() {
-        let callType = this.callee.getType();
-        return isFunctionType(callType) ? callType.returnType : callType;
+        const calleeType = this.callee.getType();
+        if (isNewExpression(this.parent)) {
+            return calleeType;
+        }
+
+        return new TypePropertyReferenceType(calleeType, 'returnType');
     }
 }
 
@@ -482,6 +485,18 @@ export class DottedGetExpression extends Expression {
         }
     }
 
+    getType() {
+        const objType = this.obj?.getType();
+        if (objType) {
+            const memberType = objType.getMemberType(this.name.text);
+            if (!memberType) {
+                return DynamicType.instance;
+            }
+            return memberType;
+        }
+        return DynamicType.instance;
+    }
+
 }
 
 export class XmlAttributeGetExpression extends Expression {
@@ -575,6 +590,10 @@ export class GroupingExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'expression', visitor, options);
         }
+    }
+
+    getType() {
+        return this.expression.getType();
     }
 }
 
@@ -891,8 +910,17 @@ export class VariableExpression extends Expression {
         //nothing to walk
     }
 
-    public getType() {
-        return new ReferenceType(this.name.text, () => this.getSymbolTable());
+    private _type: BscType;
+
+    getType() {
+        const standardType = util.tokenToBscType(this.name);
+        if (standardType) {
+            return standardType;
+        }
+        if (!this._type) {
+            this._type = new ReferenceType(this.name.text, () => this.getSymbolTable());
+        }
+        return this._type;
     }
 }
 
@@ -1620,29 +1648,7 @@ export class TypeExpression extends Expression implements TypedefProvider {
     }
 
     public getType(): BscType {
-        if (isVariableExpression(this.expression)) {
-            const standardType = util.tokenToBscType(this.expression.name, false);
-            if (standardType) {
-                return standardType;
-            }
-        }
-        if (isLiteralExpression(this.expression)) {
-            return this.expression.getType();
-        }
-
-        //TODO eventually support more complex types
-        const symbolTable = this.getSymbolTable();
-        //get the leftmost variable, then walk into the type
-        const parts = util.getAllDottedGetParts(this.expression);
-        const symbols = symbolTable?.getSymbol(parts[0].text, SymbolTypeFlags.typetime) ?? [];
-        if (symbols.length > 0 && parts.length === 1) {
-            return symbols[0].type;
-        } else {
-            //this is digging into nested objects (or namespaces, etc...)
-            //TODO: This is wrong -- it should be digging through the symbol tables.
-            //However, in the context of `callables` there is no symbol table because they are set at parse time
-            return new CustomType(parts.map(part => part.text).join('.'));
-        }
+        return this.expression.getType();
     }
 
     getTypedef(state: TranspileState): (string | SourceNode)[] {

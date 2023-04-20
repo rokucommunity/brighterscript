@@ -1,10 +1,12 @@
-import type { BscType } from './BscType';
+import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
-export class InvalidType implements BscType {
+export class InvalidType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
+    ) {
+        super();
+    }
 
     public isAssignableTo(targetType: BscType) {
         return (

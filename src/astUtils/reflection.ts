@@ -20,7 +20,8 @@ import { DynamicType } from '../types/DynamicType';
 import type { InterfaceType } from '../types/InterfaceType';
 import type { ObjectType } from '../types/ObjectType';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
-import type { ReferenceType } from '../types/ReferenceType';
+import type { TypePropertyReferenceType, ReferenceType } from '../types/ReferenceType';
+import type { EnumMemberType, EnumType } from '../types/EnumType';
 
 // File reflection
 
@@ -306,7 +307,16 @@ export function isObjectType(e: any): e is ObjectType {
     return e?.constructor.name === 'ObjectType';
 }
 export function isReferenceType(e: any): e is ReferenceType {
-    return e?.__reflection.name === 'ReferenceType';
+    return e?.__reflection?.name === 'ReferenceType';
+}
+export function isEnumType(e: any): e is EnumType {
+    return e?.constructor.name === 'EnumType';
+}
+export function isEnumMemberType(e: any): e is EnumMemberType {
+    return e?.constructor.name === 'EnumMemberType';
+}
+export function isTypePropertyReferenceType(e: any): e is TypePropertyReferenceType {
+    return e?.__reflection?.name === 'TypePropertyReferenceType';
 }
 
 const numberConstructorNames = [

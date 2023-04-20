@@ -1,10 +1,12 @@
-import type { BscType } from './BscType';
+import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
-export class StringType implements BscType {
+export class StringType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
+    ) {
+        super();
+    }
 
     /**
      * A static instance that can be used to reduce memory and constructor costs, since there's nothing unique about this

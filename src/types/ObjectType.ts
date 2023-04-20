@@ -1,10 +1,13 @@
-import type { BscType } from './BscType';
+import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
+import { ReferenceType } from './ReferenceType';
 
-export class ObjectType implements BscType {
+export class ObjectType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
+    ) {
+        super();
+    }
 
     public isAssignableTo(targetType: BscType) {
         return (
@@ -23,5 +26,9 @@ export class ObjectType implements BscType {
 
     public toTypeString(): string {
         return this.toString();
+    }
+
+    getMemberType(name: string) {
+        return super.getMemberType(name) ?? new ReferenceType(name, () => this.memberTable);
     }
 }

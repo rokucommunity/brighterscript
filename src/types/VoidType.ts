@@ -1,10 +1,12 @@
-import type { BscType } from './BscType';
+import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
-export class VoidType implements BscType {
+export class VoidType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
+    ) {
+        super();
+    }
 
     public static instance = new VoidType('void');
 

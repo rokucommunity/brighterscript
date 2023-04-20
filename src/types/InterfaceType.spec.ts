@@ -92,10 +92,10 @@ describe('InterfaceType', () => {
 
         it('matches properties in mismatched order', () => {
             expect(
-                new InterfaceType(new Map([
+                new InterfaceType('', new Map([
                     ['name', new StringType()],
                     ['age', new IntegerType()]
-                ])).isAssignableTo(new InterfaceType(new Map([
+                ])).isAssignableTo(new InterfaceType('', new Map([
                     ['age', new IntegerType()],
                     ['name', new StringType()]
                 ])))
@@ -186,6 +186,7 @@ describe('InterfaceType', () => {
 
 function iface(members: Record<string, BscType>) {
     return new InterfaceType(
+        '',
         objectToMap(members)
     );
 }

@@ -369,5 +369,5 @@ export function mapToObject<T>(map: Map<any, T>) {
  * Test that a type is what was expected
  */
 export function expectTypeToBe(someType: BscType, expectedTypeClass: any) {
-    expect(someType.constructor.name).to.eq(expectedTypeClass.name);
+    expect(someType?.constructor?.name).to.eq(expectedTypeClass.name);
 }

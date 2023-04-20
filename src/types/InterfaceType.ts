@@ -1,17 +1,13 @@
 import { isDynamicType, isInterfaceType, isObjectType } from '../astUtils/reflection';
-import type { BscType } from './BscType';
+import { BscType } from './BscType';
 
-export class InterfaceType implements BscType {
+export class InterfaceType extends BscType {
     public constructor(
+        public name: string,
         public members: Map<string, BscType>
     ) {
-
+        super(name);
     }
-
-    /**
-     * The name of the interface. Can be null.
-     */
-    public name: string;
 
     public isAssignableTo(targetType: BscType) {
         //we must have all of the members of the target type, and they must be equivalent types

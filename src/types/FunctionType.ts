@@ -1,11 +1,11 @@
-import type { BscType } from './BscType';
+import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
-export class FunctionType implements BscType {
+export class FunctionType extends BscType {
     constructor(
         public returnType: BscType
     ) {
-
+        super();
     }
 
     /**

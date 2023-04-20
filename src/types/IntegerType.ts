@@ -1,13 +1,15 @@
-import type { BscType } from './BscType';
+import { BscType } from './BscType';
 import { DoubleType } from './DoubleType';
 import { DynamicType } from './DynamicType';
 import { FloatType } from './FloatType';
 import { LongIntegerType } from './LongIntegerType';
 
-export class IntegerType implements BscType {
+export class IntegerType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
+    ) {
+        super();
+    }
 
     public static instance = new IntegerType('integer');
 

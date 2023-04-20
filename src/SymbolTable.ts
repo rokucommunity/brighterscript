@@ -154,7 +154,9 @@ export class SymbolTable {
             symbols: [
                 ...new Set(
                     [...this.symbolMap.entries()].map(([key, symbols]) => {
-                        return symbols.map(x => x.name);
+                        return symbols.map(x => {
+                            return { name: x.name, type: x.type?.toString() };
+                        });
                     }).flat().sort()
                 )
             ]

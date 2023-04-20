@@ -101,7 +101,7 @@ export abstract class AstNode {
      * Get the BscType of this node.
      */
     public getType(): BscType {
-        return new DynamicType();
+        return DynamicType.instance;
     }
 
     /**

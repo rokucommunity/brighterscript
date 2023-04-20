@@ -12,6 +12,7 @@ import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer/TokenKind';
 import { DynamicType } from '../types/DynamicType';
+import type { BscType } from '../types/BscType';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -218,7 +219,7 @@ export class BsClassValidator {
 
                         //child field has same name as parent
                         if (isFieldStatement(member)) {
-                            let ancestorMemberType = new DynamicType();
+                            let ancestorMemberType: BscType = new DynamicType();
                             if (isFieldStatement(ancestorAndMember.member)) {
                                 ancestorMemberType = ancestorAndMember.member.getType();
                             } else if (isMethodStatement(ancestorAndMember.member)) {

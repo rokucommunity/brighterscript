@@ -15,9 +15,12 @@ import { createInvalidLiteral, createMethodStatement, createToken, interpolatedR
 import { DynamicType } from '../types/DynamicType';
 import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
-import { SymbolTable } from '../SymbolTable';
+import { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
 import type { Expression } from './AstNode';
 import { Statement } from './AstNode';
+import { CustomType } from '../types/CustomType';
+import { EnumMemberType, EnumType } from '../types/EnumType';
+import { NamespaceType } from '../types/NameSpaceType';
 
 export class EmptyStatement extends Statement {
     constructor(
@@ -391,6 +394,12 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'func', visitor, options);
         }
+    }
+
+    getType() {
+        const funcExprType = this.func.getType();
+        funcExprType.setName(this.name.text);
+        return funcExprType;
     }
 }
 
@@ -1214,6 +1223,18 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
             walk(this, 'body', visitor, options);
         }
     }
+
+    protected _type: NamespaceType;
+
+    getType() {
+        if (this._type) {
+            return this._type;
+        }
+        this._type = new NamespaceType(this.name);
+        this._type.pushMemberProvider(() => this.symbolTable);
+        return this._type;
+    }
+
 }
 
 export class ImportStatement extends Statement implements TypedefProvider {
@@ -1963,6 +1984,27 @@ export class ClassStatement extends Statement implements TypedefProvider {
             walkArray(this.body, visitor, options, this);
         }
     }
+
+    protected _type: CustomType;
+
+    getType() {
+        if (this._type) {
+            return this._type;
+        }
+        this._type = new CustomType(this.getName(ParseMode.BrighterScript));
+        if (this.hasParentClass()) {
+            // TODO figure out setting the type's member table parentage
+        }
+
+        for (const statement of this.methods) {
+            const funcType = statement?.func.getType();
+            this._type.addMember(statement?.name?.text, statement?.range, funcType, SymbolTypeFlags.runtime);
+        }
+        for (const statement of this.fields) {
+            this._type.addMember(statement?.name?.text, statement?.range, statement.getType(), SymbolTypeFlags.runtime);
+        }
+        return this._type;
+    }
 }
 
 const accessModifiers = [
@@ -2505,6 +2547,20 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
         }
     }
+
+    protected _type: EnumType;
+
+    getType() {
+        if (this._type) {
+            return this._type;
+        }
+        this._type = new EnumType(this.fullName);
+        for (const statement of this.getMembers()) {
+            this._type.addMember(statement?.tokens?.name?.text, statement?.range, statement.getType(), SymbolTypeFlags.runtime);
+        }
+
+        return this._type;
+    }
 }
 
 export class EnumMemberStatement extends Statement implements TypedefProvider {
@@ -2557,6 +2613,17 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         if (this.value && options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'value', visitor, options);
         }
+    }
+
+
+    protected _type: EnumMemberType;
+
+    getType() {
+        if (this._type) {
+            return this._type;
+        }
+        this._type = new EnumMemberType((this.parent as EnumStatement)?.fullName, this.tokens?.name?.text);
+        return this._type;
     }
 }
 
