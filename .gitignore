@@ -14,3 +14,4 @@ graph.svg
 benchmarks/*.brs
 isolate-*
 v8*.log
+*.cpuprofile

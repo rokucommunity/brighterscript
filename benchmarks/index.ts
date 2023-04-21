@@ -128,7 +128,7 @@ class Runner {
 
         if (this.options.profile) {
             console.log('Deleting previous profile runs\n');
-            rimraf.sync(path.join(__dirname, 'isolate-*'));
+            rimraf.sync(path.join(__dirname, 'isolate-*'), { glob: true });
         }
 
         //run one target at a time
@@ -144,14 +144,11 @@ class Runner {
                     cwd: cwd
                 });
 
-                execSync(`node ${nodeArgs.join(' ')} ${this.options.profile ? '--prof ' : ''}target-runner.js "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.options.project}" "${this.options.quick}"`);
+                execSync(`node ${nodeArgs.join(' ')} target-runner.js "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.options.project}" "${this.options.quick}" "${this.options.profile}"`);
                 if (this.options.profile) {
                     const logFile = fastGlob.sync('isolate-*.log', {
                         cwd: cwd
                     }).filter(x => !beforeLogs.includes(x))[0];
-
-                    execSync(`node --prof-process ${logFile} > "${logFile.replace(/\.log$/, '')} (${target} ${version}).txt"`);
-                    execSync(`node --prof-process --preprocess -j ${logFile} > "${logFile.replace(/\.log$/, '')} (${target} ${version}).json"`);
                 }
             }
             //print a newline to separate the targets
