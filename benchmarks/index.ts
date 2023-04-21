@@ -220,13 +220,14 @@ function execSync(command: string, options: ExecSyncOptions = {}) {
 }
 
 function clean() {
-    //delete any brighterscript dependencies listed in package.json
-    const deps = Object.keys(
-        JSON.parse(
-            fs.readFileSync(`${cwd}/package.json`)?.toString()
-        ).dependencies
-    ).filter(x => /brighterscript\d+/.exec(x));
-    if (deps?.length > 0) {
-        execSync(`npm remove ${deps.join(' ')}`);
+    const packageJson = JSON.parse(
+        fs.readFileSync(`${cwd}/package.json`)?.toString()
+    );
+    //remove any brighterscript dependencies from the package.json (but don't actually remove the files)
+    for (const key in packageJson.dependencies) {
+        if (/brighterscript\d+/.exec(key)) {
+            delete packageJson.dependencies[key];
+        }
     }
+    fs.writeFileSync(`${cwd}/package.json`, JSON.stringify(packageJson, null, 4));
 }
