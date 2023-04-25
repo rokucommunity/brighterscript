@@ -489,10 +489,6 @@ export class DottedGetExpression extends Expression {
         }
     }
 
-    isOptionalChain() {
-        return this.dot.kind === TokenKind.QuestionDot;
-    }
-
     getType(flags: SymbolTypeFlags) {
         //reset
         this.typeChain = [];
