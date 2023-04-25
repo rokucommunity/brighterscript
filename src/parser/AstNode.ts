@@ -39,13 +39,15 @@ export abstract class AstNode {
     public symbolTable?: SymbolTable;
 
     /**
-     * Get the closest symbol table for this node. Should be overridden in children that directly contain a symbol table
+     * Get the closest symbol table for this node
      */
     public getSymbolTable(): SymbolTable {
-        if (this.symbolTable) {
-            return this.symbolTable;
-        } else {
-            return this.parent?.getSymbolTable();
+        let node: AstNode = this;
+        while (node) {
+            if (node.symbolTable) {
+                return node.symbolTable;
+            }
+            node = node.parent;
         }
     }
 
