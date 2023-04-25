@@ -1,3 +1,4 @@
+import type { SymbolTypeFlags } from '../SymbolTable';
 import { isCustomType, isDynamicType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
@@ -8,8 +9,8 @@ export class CustomType extends BscType {
         super(name);
     }
 
-    getMemberType(name: string) {
-        return super.getMemberType(name) ?? new ReferenceType(name, () => this.memberTable);
+    getMemberType(name: string, flags: SymbolTypeFlags) {
+        return super.getMemberType(name, flags) ?? new ReferenceType(name, flags, () => this.memberTable);
     }
 
     public toString() {

@@ -22,6 +22,7 @@ import type { ObjectType } from '../types/ObjectType';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import type { TypePropertyReferenceType, ReferenceType } from '../types/ReferenceType';
 import type { EnumMemberType, EnumType } from '../types/EnumType';
+import type { NamespaceType } from '../types/NameSpaceType';
 
 // File reflection
 
@@ -317,6 +318,9 @@ export function isEnumMemberType(e: any): e is EnumMemberType {
 }
 export function isTypePropertyReferenceType(e: any): e is TypePropertyReferenceType {
     return e?.__reflection?.name === 'TypePropertyReferenceType';
+}
+export function isNamespaceType(e: any): e is NamespaceType {
+    return e?.constructor.name === 'NamespaceType';
 }
 
 const numberConstructorNames = [

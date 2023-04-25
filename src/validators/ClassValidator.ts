@@ -13,6 +13,7 @@ import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer/TokenKind';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
+import { SymbolTypeFlags } from '../SymbolTable';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -223,7 +224,7 @@ export class BsClassValidator {
                             if (isFieldStatement(ancestorAndMember.member)) {
                                 ancestorMemberType = ancestorAndMember.member.getType();
                             } else if (isMethodStatement(ancestorAndMember.member)) {
-                                ancestorMemberType = ancestorAndMember.member.func.getType();
+                                ancestorMemberType = ancestorAndMember.member.func.getType(SymbolTypeFlags.typetime);
                             }
                             const childFieldType = member.getType();
                             if (!childFieldType.isAssignableTo(ancestorMemberType)) {

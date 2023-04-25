@@ -158,8 +158,8 @@ export class AssignmentStatement extends Statement {
         }
     }
 
-    getType() {
-        return this.value.getType();
+    getType(flags: SymbolTypeFlags) {
+        return this.value.getType(flags);
     }
 }
 
@@ -396,8 +396,8 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         }
     }
 
-    getType() {
-        const funcExprType = this.func.getType();
+    getType(flags: SymbolTypeFlags) {
+        const funcExprType = this.func.getType(flags);
         funcExprType.setName(this.name.text);
         return funcExprType;
     }
@@ -1231,7 +1231,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
             return this._type;
         }
         this._type = new NamespaceType(this.name);
-        this._type.pushMemberProvider(() => this.symbolTable);
+        this._type.pushMemberProvider(() => this.body.getSymbolTable());
         return this._type;
     }
 
@@ -1987,7 +1987,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     protected _type: CustomType;
 
-    getType() {
+    getType(flags: SymbolTypeFlags) {
         if (this._type) {
             return this._type;
         }
@@ -1997,7 +1997,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }
 
         for (const statement of this.methods) {
-            const funcType = statement?.func.getType();
+            const funcType = statement?.func.getType(flags);
             this._type.addMember(statement?.name?.text, statement?.range, funcType, SymbolTypeFlags.runtime);
         }
         for (const statement of this.fields) {
@@ -2225,7 +2225,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
      * Defaults to `DynamicType`
      */
     getType() {
-        return this.typeExpression?.getType() || DynamicType.instance;
+        return this.typeExpression?.getType(SymbolTypeFlags.typetime) ?? this.initialValue?.getType(SymbolTypeFlags.runtime) ?? DynamicType.instance;
     }
 
     public readonly range: Range;
@@ -2409,6 +2409,9 @@ export class EnumStatement extends Statement implements TypedefProvider {
         this.body = this.body ?? [];
     }
 
+    public symbolTable = new SymbolTable('Enum');
+
+
     public get range(): Range {
         return util.createBoundingRange(
             this.tokens.enum,
@@ -2555,6 +2558,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
             return this._type;
         }
         this._type = new EnumType(this.fullName);
+        this._type.pushMemberProvider(() => this.getSymbolTable());
         for (const statement of this.getMembers()) {
             this._type.addMember(statement?.tokens?.name?.text, statement?.range, statement.getType(), SymbolTypeFlags.runtime);
         }
@@ -2687,6 +2691,10 @@ export class ConstStatement extends Statement implements TypedefProvider {
         if (this.value && options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'value', visitor, options);
         }
+    }
+
+    getType(flags: SymbolTypeFlags) {
+        return this.value.getType(flags);
     }
 }
 

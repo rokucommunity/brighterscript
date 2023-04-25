@@ -1514,7 +1514,7 @@ describe('BrsFile', () => {
                 isOptional: true,
                 isRestArgument: false
             });
-            expect(callable.params[0].type).instanceof(DynamicType);
+            expect(callable.params[0].type).instanceof(IntegerType);
         });
 
         it('finds parameter types', () => {
@@ -1862,7 +1862,7 @@ describe('BrsFile', () => {
             expect(hover.range).to.eql(Range.create(1, 25, 1, 29));
             expect(hover.contents).to.equal([
                 '```brightscript',
-                'function Main(count? as dynamic) as dynamic',
+                'function Main(count? as integer) as dynamic',
                 '```'
             ].join('\n'));
         });
@@ -1884,7 +1884,7 @@ describe('BrsFile', () => {
             expect(hover.range).to.eql(Range.create(2, 25, 2, 29));
             expect(hover.contents).to.equal([
                 '```brightscript',
-                'function Main(count? as dynamic) as dynamic',
+                'function Main(count? as integer) as dynamic',
                 '```'
             ].join('\n'));
         });

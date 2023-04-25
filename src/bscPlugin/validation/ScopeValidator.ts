@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isBrsFile, isLiteralExpression, isNamespaceStatement, isTypeExpression, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isDottedGetExpression, isLiteralExpression, isNamespaceStatement, isTypeExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -15,7 +15,6 @@ import type { Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import { SymbolTypeFlags } from '../../SymbolTable';
-
 /**
  * The lower-case names of all platform-included scenegraph nodes
  */
@@ -90,16 +89,64 @@ export class ScopeValidator {
         outer:
         for (const info of expressionInfos) {
             const symbolTable = info.expression.getSymbolTable();
+            const fullName = info.parts.map(part => part.name.text).join('.');
             const firstPart = info.parts[0];
             const firstNamespacePart = info.parts[0].name.text;
             const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
             //get the namespace container (accounting for namespace-relative as well)
             const namespaceContainer = scope.getNamespace(firstNamespacePartLower, info.enclosingNamespaceNameLower);
             let symbolType = SymbolTypeFlags.runtime;
+            let oppositeSymbolType = SymbolTypeFlags.typetime;
             const isUsedAsType = info.expression.findAncestor(isTypeExpression);
             if (isUsedAsType) {
                 // This is used in a TypeExpression - only look up types from SymbolTable
                 symbolType = SymbolTypeFlags.typetime;
+                oppositeSymbolType = SymbolTypeFlags.runtime;
+            }
+            let exprType = info.expression.getType(symbolType);
+            if (!exprType || !exprType.isResolvable()) {
+                if (info.expression.getType(oppositeSymbolType)?.isResolvable()) {
+                    const invalidlyUsedResolvedTypeName = info.expression.getType(oppositeSymbolType).toString();
+                    if (isUsedAsType) {
+
+                        this.addMultiScopeDiagnostic({
+                            ...DiagnosticMessages.itemCannotBeUsedAsType(fullName),
+                            range: info.expression.range,
+                            file: file
+                        }, 'When used in scope');
+                    } else {
+                        this.addMultiScopeDiagnostic({
+                            ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedTypeName),
+                            range: info.expression.range,
+                            file: file
+                        }, 'When used in scope');
+                    }
+                    continue;
+                }
+
+                let fullErrorName = fullName;
+                let lastName = info.parts[info.parts.length - 1].name.text;
+                if (isDottedGetExpression(info.expression)) {
+                    fullErrorName = '';
+                    for (let i = 0; i < info.expression.typeChain.length; i++) {
+                        const chainItem = info.expression.typeChain[i];
+                        if (i > 0) {
+                            fullErrorName += '.';
+                        }
+                        fullErrorName += chainItem.name;
+                        lastName = chainItem.name;
+                        if (!chainItem.resolved) {
+                            break;
+                        }
+                    }
+                }
+                this.addMultiScopeDiagnostic({
+                    file: file as BscFile,
+                    ...DiagnosticMessages.cannotFindName(lastName, fullErrorName),
+                    range: info.expression.range
+                });
+                //skip to the next expression
+                continue;
             }
 
             //flag all unknown left-most variables

@@ -17,8 +17,6 @@ import type { FunctionExpression, VariableExpression } from '../parser/Expressio
 import type { ClassStatement, FunctionStatement, NamespaceStatement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program } from '../Program';
 import { DynamicType } from '../types/DynamicType';
-import { FunctionType } from '../types/FunctionType';
-import { VoidType } from '../types/VoidType';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
@@ -30,6 +28,7 @@ import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
+import { SymbolTypeFlags } from '../SymbolTable';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -463,7 +462,7 @@ export class BrsFile {
                     nameRange: param.name.range,
                     lineIndex: param.name.range.start.line,
                     name: param.name.text,
-                    getType: () => param.getType()
+                    getType: () => param.getType(SymbolTypeFlags.runtime)
                 });
             }
 
@@ -509,7 +508,7 @@ export class BrsFile {
                     nameRange: statement.name.range,
                     lineIndex: statement.name.range.start.line,
                     name: statement.name.text,
-                    getType: () => statement.value.getType()
+                    getType: () => statement.value.getType(SymbolTypeFlags.runtime)
                 });
             }
         }
@@ -518,25 +517,25 @@ export class BrsFile {
     private findCallables() {
         for (let statement of this.parser.references.functionStatements ?? []) {
 
-            let functionType = new FunctionType(statement.func.getType().returnType);
+            /*let functionType = new FunctionType(statement.func.getType(SymbolTypeFlags.runtime).returnType);
             functionType.setName(statement.name.text);
             functionType.isSub = statement.func.functionType.text.toLowerCase() === 'sub';
             if (functionType.isSub) {
                 functionType.returnType = new VoidType();
-            }
+            }*/
 
             //extract the parameters
             let params = [] as CallableParam[];
             for (let param of statement.func.parameters) {
                 let callableParam = {
                     name: param.name.text,
-                    type: param.getType(),
+                    type: param.getType(SymbolTypeFlags.typetime),
                     isOptional: !!param.defaultValue,
                     isRestArgument: false
                 };
                 params.push(callableParam);
-                let isOptional = !!param.defaultValue;
-                functionType.addParameter(callableParam.name, callableParam.type, isOptional);
+                // let isOptional = !!param.defaultValue;
+                //functionType.addParameter(callableParam.name, callableParam.type, isOptional);
             }
 
             this.callables.push({
@@ -546,7 +545,7 @@ export class BrsFile {
                 file: this,
                 params: params,
                 range: statement.func.range,
-                type: functionType,
+                type: statement.getType(SymbolTypeFlags.typetime),
                 getName: statement.getName.bind(statement),
                 hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
                 functionStatement: statement
