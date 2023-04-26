@@ -1,15 +1,13 @@
-import type { SymbolTypeFlags } from '../SymbolTable';
-import { isClassType, isDynamicType, isObjectType } from '../astUtils/reflection';
-import { BscType } from './BscType';
+import { SymbolTypeFlags } from '../SymbolTable';
+import { isClassType, isDynamicType, isInterfaceType, isObjectType } from '../astUtils/reflection';
+import type { BscType } from './BscType';
+import { InheritableType } from './InheritableType';
 import { ReferenceType } from './ReferenceType';
 
-export class ClassType extends BscType {
+export class ClassType extends InheritableType {
 
     constructor(public name: string, public readonly superClass?: ClassType | ReferenceType) {
-        super(name);
-        if (superClass) {
-            this.memberTable.pushParentProvider(() => this.superClass.memberTable);
-        }
+        super(name, superClass);
     }
 
     getMemberType(name: string, flags: SymbolTypeFlags) {
@@ -24,43 +22,24 @@ export class ClassType extends BscType {
         return 'dynamic';
     }
 
-    isResolvable(): boolean {
-        return this.superClass ? this.superClass.isResolvable() : true;
-    }
 
     public isAssignableTo(targetType: BscType) {
         if (isClassType(targetType) && targetType.name === this.name) {
             return true;
         } else if (isDynamicType(targetType) || isObjectType(targetType)) {
             return true;
+        } else if (isInterfaceType(targetType)) {
+            return this.checkAssignabilityToInterface(targetType, SymbolTypeFlags.runtime);
         } else {
             const ancestorTypes = this.getAncestorTypeList();
-            if (ancestorTypes?.find(ancestorType => targetType.equals(ancestorType))) {
+            if (ancestorTypes?.find(ancestorType => ancestorType.equals(targetType))) {
                 return true;
             }
             return false;
         }
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
-    }
-
     public equals(targetType: BscType): boolean {
         return isClassType(targetType) && this.toString() === targetType?.toString();
-    }
-
-    protected getAncestorTypeList(): ClassType[] {
-        const ancestors = [];
-        let currentSuperClass = this.superClass;
-        while (currentSuperClass) {
-            if (isClassType(currentSuperClass)) {
-                ancestors.push(currentSuperClass);
-                currentSuperClass = currentSuperClass.superClass;
-            } else {
-                break;
-            }
-        }
-        return ancestors;
     }
 }

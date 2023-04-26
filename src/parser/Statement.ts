@@ -22,6 +22,10 @@ import { ClassType } from '../types/ClassType';
 import { EnumMemberType, EnumType } from '../types/EnumType';
 import { NamespaceType } from '../types/NameSpaceType';
 import { ReferenceType } from '../types/ReferenceType';
+import { InterfaceType } from '../types/InterfaceType';
+import type { BscType } from '../types/BscType';
+import { VoidType } from '../types/VoidType';
+import { FunctionType } from '../types/FunctionType';
 
 export class EmptyStatement extends Statement {
     constructor(
@@ -1332,13 +1336,19 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
     }
 
-    public get fields() {
-        return this.body.filter(x => isInterfaceFieldStatement(x));
+    public get fields(): InterfaceFieldStatement[] {
+        return this.body.filter(x => isInterfaceFieldStatement(x)) as InterfaceFieldStatement[];
     }
 
-    public get methods() {
-        return this.body.filter(x => isInterfaceMethodStatement(x));
+    public get methods(): InterfaceMethodStatement[] {
+        return this.body.filter(x => isInterfaceMethodStatement(x)) as InterfaceMethodStatement[];
     }
+
+
+    public hasParentInterface() {
+        return !!this.parentInterfaceName;
+    }
+
 
     /**
      * The name of the interface WITH its leading namespace (if applicable)
@@ -1445,6 +1455,26 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             walkArray(this.body, visitor, options, this);
         }
     }
+
+    private _type: InterfaceType;
+
+
+    getType(flags: SymbolTypeFlags) {
+        if (this._type) {
+            return this._type;
+        }
+        let superIface = this.hasParentInterface() ? new ReferenceType(this.parentInterfaceName.getName(ParseMode.BrighterScript), SymbolTypeFlags.typetime, () => this.parent.getSymbolTable()) : undefined;
+
+        this._type = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
+
+        for (const statement of this.methods) {
+            this._type.addMember(statement?.tokens.name?.text, statement?.range, statement?.getType(flags), SymbolTypeFlags.runtime);
+        }
+        for (const statement of this.fields) {
+            this._type.addMember(statement?.tokens.name?.text, statement?.range, statement.getType(flags), SymbolTypeFlags.runtime);
+        }
+        return this._type;
+    }
 }
 
 export class InterfaceFieldStatement extends Statement implements TypedefProvider {
@@ -1454,7 +1484,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     constructor(
         nameToken: Identifier,
         asToken: Token,
-        public typeExpression: TypeExpression
+        public typeExpression?: TypeExpression
     ) {
         super();
         this.tokens.name = nameToken;
@@ -1505,8 +1535,14 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         return result;
     }
 
+    public getType(flags: SymbolTypeFlags): BscType {
+        return this.typeExpression?.getType(flags) ?? DynamicType.instance;
+    }
+
 }
 
+//TODO: there is much that is similar with this and FunctionExpression.
+//It would be nice to refactor this so there is less duplicated code
 export class InterfaceMethodStatement extends Statement implements TypedefProvider {
     public transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('Method not implemented.');
@@ -1594,6 +1630,29 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             );
         }
         return result;
+    }
+
+    private _type: FunctionType;
+
+    public getType(flags: SymbolTypeFlags): FunctionType {
+        if (this._type) {
+            return this._type;
+        }
+
+        //if there's a defined return type, use that
+        let returnType = this.returnTypeExpression?.getType(flags);
+        const isSub = this.tokens.functionType.kind === TokenKind.Sub;
+        //if we don't have a return type and this is a sub, set the return type to `void`. else use `dynamic`
+        if (!returnType) {
+            returnType = isSub ? VoidType.instance : DynamicType.instance;
+        }
+
+        this._type = new FunctionType(returnType);
+        this._type.isSub = isSub;
+        for (let param of this.params) {
+            this._type.addParameter(param.name.text, param.getType(flags), !!param.defaultValue);
+        }
+        return this._type;
     }
 }
 
@@ -2276,7 +2335,7 @@ export class ClassFieldStatement extends FieldStatement { }
 export type MemberStatement = FieldStatement | MethodStatement;
 
 /**
- * @deprecated use `MemeberStatement`
+ * @deprecated use `MemberStatement`
  */
 export type ClassMemberStatement = MemberStatement;
 

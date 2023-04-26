@@ -1,66 +1,63 @@
+import { SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType, isInterfaceType, isObjectType } from '../astUtils/reflection';
-import { BscType } from './BscType';
+import type { BscType } from './BscType';
+import { InheritableType } from './InheritableType';
+import type { ReferenceType } from './ReferenceType';
 
-export class InterfaceType extends BscType {
+export class InterfaceType extends InheritableType {
     public constructor(
         public name: string,
-        public members: Map<string, BscType>
+        public readonly superInterface?: InterfaceType | ReferenceType
     ) {
-        super(name);
+        super(name, superInterface);
     }
 
     public isAssignableTo(targetType: BscType) {
-        //we must have all of the members of the target type, and they must be equivalent types
+        if (isInterfaceType(targetType) && targetType.name === this.name) {
+            return true;
+        }
+        if (isObjectType(targetType) || isDynamicType(targetType)) {
+            return true;
+        }
         if (isInterfaceType(targetType)) {
-            for (const [targetMemberName, targetMemberType] of targetType.members) {
-                //we don't have the target member
-                if (!this.members.has(targetMemberName)) {
-                    return false;
-                }
-                //our member's type is not assignable to the target member type
-                if (!this.members.get(targetMemberName).isAssignableTo(targetMemberType)) {
-                    return false;
-                }
+            const ancestorTypes = this.getAncestorTypeList();
+            if (ancestorTypes?.find(ancestorType => targetType.equals(ancestorType))) {
+                return true;
             }
-            //we have all of the target member's types. we are assignable!
-            return true;
-
-            //we are always assignable to dynamic or object
-        } else if (isDynamicType(targetType) || isObjectType(targetType)) {
-            return true;
-
-            //not assignable to any other object types
-        } else {
-            return false;
+            return this.checkAssignabilityToInterface(targetType, SymbolTypeFlags.runtime);
         }
+        return false;
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
-    }
-
-    public toString() {
+    /**
+     * Gets a string representation of the Interface that looks like javascript
+     * Useful for debugging
+     * @returns {string}
+     */
+    public toJSString() {
+        // eslint-disable-next-line no-bitwise
+        const flags = SymbolTypeFlags.runtime | SymbolTypeFlags.typetime;
         let result = '{';
-        for (const [key, type] of this.members.entries()) {
-            result += ' ' + key + ': ' + type.toString() + ';';
+        const memberSymbols = (this.memberTable?.getAllSymbols(flags) || []).sort((a, b) => a.name.localeCompare(b.name));
+        for (const symbol of memberSymbols) {
+            let symbolTypeString = symbol.type.toString();
+            if (isInterfaceType(symbol.type)) {
+                symbolTypeString = symbol.type.toJSString();
+            }
+            result += ' ' + symbol.name + ': ' + symbolTypeString + ';';
         }
-        if (this.members.size > 0) {
+        if (memberSymbols.length > 0) {
             result += ' ';
         }
         return result + '}';
     }
 
-    public toTypeString(): string {
-        return 'object';
-    }
-
     public equals(targetType: BscType): boolean {
+
         if (isInterfaceType(targetType)) {
-            if (targetType.members.size !== this.members.size) {
-                return false;
-            }
-            return targetType.isAssignableTo(this);
+            return this.isAssignableTo(targetType) && targetType.isAssignableTo(this);
         }
         return false;
     }
 }
+

@@ -309,7 +309,12 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
     }
 
+    protected _type: FunctionType;
+
     public getType(flags: SymbolTypeFlags): FunctionType {
+        if (this._type) {
+            return this._type;
+        }
         //if there's a defined return type, use that
         let returnType = this.returnTypeExpression?.getType(flags);
         const isSub = this.functionType.kind === TokenKind.Sub;
@@ -318,12 +323,12 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             returnType = isSub ? VoidType.instance : DynamicType.instance;
         }
 
-        let functionType = new FunctionType(returnType);
-        functionType.isSub = isSub;
+        this._type = new FunctionType(returnType);
+        this._type.isSub = isSub;
         for (let param of this.parameters) {
-            functionType.addParameter(param.name.text, param.getType(flags), !!param.defaultValue);
+            this._type.addParameter(param.name.text, param.getType(flags), !!param.defaultValue);
         }
-        return functionType;
+        return this._type;
     }
 }
 
