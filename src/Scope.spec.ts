@@ -13,7 +13,7 @@ import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import type { OnScopeValidateEvent } from './interfaces';
 import { SymbolTypeFlags } from './SymbolTable';
 import { EnumMemberType } from './types/EnumType';
-import { CustomType } from './types/CustomType';
+import { ClassType } from './types/ClassType';
 import { BooleanType } from './types/BooleanType';
 import { StringType } from './types/StringType';
 import { IntegerType } from './types/IntegerType';
@@ -1987,7 +1987,7 @@ describe('Scope', () => {
             expect(sourceScope).to.exist;
             expect(mainFnScope).to.exist;
             sourceScope.linkSymbolTable();
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type, CustomType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type, ClassType);
             expect(mainFnScope.symbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Foo');
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('myNum', SymbolTypeFlags.runtime)[0].type, IntegerType);
         });
@@ -2054,11 +2054,11 @@ describe('Scope', () => {
             expect(mainFnScope).to.exist;
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('skin', SymbolTypeFlags.runtime)[0].type, EnumMemberType);
 
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlags.runtime)[0].type, CustomType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlags.runtime)[0].type, ClassType);
             expect(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Animals.Bird');
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoysWings', SymbolTypeFlags.runtime)[0].type, BooleanType);
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoysSkin', SymbolTypeFlags.runtime)[0].type, EnumMemberType);
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlags.runtime)[0].type, CustomType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlags.runtime)[0].type, ClassType);
             expect(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Animals.Dog');
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoBark', SymbolTypeFlags.runtime)[0].type, StringType);
         });

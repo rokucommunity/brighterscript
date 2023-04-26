@@ -18,7 +18,7 @@ import type { TranspileState } from './TranspileState';
 import { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
 import type { Expression } from './AstNode';
 import { Statement } from './AstNode';
-import { CustomType } from '../types/CustomType';
+import { ClassType } from '../types/ClassType';
 import { EnumMemberType, EnumType } from '../types/EnumType';
 import { NamespaceType } from '../types/NameSpaceType';
 
@@ -1985,13 +1985,13 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }
     }
 
-    protected _type: CustomType;
+    protected _type: ClassType;
 
     getType(flags: SymbolTypeFlags) {
         if (this._type) {
             return this._type;
         }
-        this._type = new CustomType(this.getName(ParseMode.BrighterScript));
+        this._type = new ClassType(this.getName(ParseMode.BrighterScript));
         if (this.hasParentClass()) {
             // TODO figure out setting the type's member table parentage
         }

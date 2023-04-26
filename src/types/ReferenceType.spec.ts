@@ -6,7 +6,7 @@ import { IntegerType } from './IntegerType';
 import { TypePropertyReferenceType, ReferenceType } from './ReferenceType';
 import { StringType } from './StringType';
 import { FloatType } from './FloatType';
-import { CustomType } from './CustomType';
+import { ClassType } from './ClassType';
 import { isTypePropertyReferenceType, isReferenceType } from '../astUtils/reflection';
 import { FunctionType } from './FunctionType';
 
@@ -46,7 +46,7 @@ describe('ReferenceType', () => {
     it('resolves before stringifying', () => {
         const table = new SymbolTable('test');
         const ref = new ReferenceType('someKlass', runtimeFlag, () => table);
-        table.addSymbol('someKlass', null, new CustomType('SomeKlass'), SymbolTypeFlags.runtime);
+        table.addSymbol('someKlass', null, new ClassType('SomeKlass'), SymbolTypeFlags.runtime);
         expect(ref.toString()).to.eq('SomeKlass');
     });
 
@@ -106,13 +106,13 @@ describe('PropertyReferenceType', () => {
         expectTypeToBe(returnPropRef, DynamicType);
 
         // Set fnRef to resolve to a function that returns a complex type
-        const klassType = new CustomType('Klass');
+        const klassType = new ClassType('Klass');
         klassType.addMember('myNum', null, IntegerType.instance, SymbolTypeFlags.runtime);
         table.addSymbol('someFunc', null, new FunctionType(klassType), SymbolTypeFlags.runtime);
 
         // returnPropRef = someFunc().myNum
         expectTypeToBe(fnRef, FunctionType);
-        expectTypeToBe(returnRef, CustomType);
+        expectTypeToBe(returnRef, ClassType);
         expectTypeToBe(returnPropRef, IntegerType);
     });
 
