@@ -3,7 +3,7 @@ import { WalkMode } from '../astUtils/visitors';
 import type { Position, Range } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { InternalWalkMode } from '../astUtils/visitors';
-import type { SymbolTable } from '../SymbolTable';
+import type { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
 import type { BrsTranspileState } from './BrsTranspileState';
 import type { TranspileResult } from '../interfaces';
 import type { AnnotationExpression } from './Expression';
@@ -102,7 +102,7 @@ export abstract class AstNode {
     /**
      * Get the BscType of this node.
      */
-    public getType(): BscType {
+    public getType(flags: SymbolTypeFlags): BscType {
         return DynamicType.instance;
     }
 

@@ -1,6 +1,6 @@
+import type { SymbolTypeFlags } from '../SymbolTable';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
-import { ReferenceType } from './ReferenceType';
 
 export class ObjectType extends BscType {
     constructor(
@@ -28,7 +28,9 @@ export class ObjectType extends BscType {
         return this.toString();
     }
 
-    getMemberType(name: string) {
-        return super.getMemberType(name) ?? new ReferenceType(name, () => this.memberTable);
+    getMemberType(name: string, flags: SymbolTypeFlags) {
+        // TODO: How should we handle accessing properties of an object?
+        // For example, we could add fields as properties to m.top, but there could be other members added programmatically
+        return super.getMemberType(name, flags) ?? DynamicType.instance;
     }
 }

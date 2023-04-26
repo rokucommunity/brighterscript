@@ -10,12 +10,12 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
 import { Expression } from './AstNode';
-import { SymbolTable } from '../SymbolTable';
+import { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
 import { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { StringType } from '../types/StringType';
@@ -118,12 +118,14 @@ export class CallExpression extends Expression {
         }
     }
 
-    getType() {
-        const calleeType = this.callee.getType();
+    getType(flags: SymbolTypeFlags) {
+        const calleeType = this.callee.getType(flags);
         if (isNewExpression(this.parent)) {
             return calleeType;
         }
-
+        if (isFunctionType(calleeType) && !isReferenceType(calleeType.returnType)) {
+            return calleeType.returnType;
+        }
         return new TypePropertyReferenceType(calleeType, 'returnType');
     }
 }
@@ -307,9 +309,9 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
     }
 
-    public getType(): FunctionType {
+    public getType(flags: SymbolTypeFlags): FunctionType {
         //if there's a defined return type, use that
-        let returnType = this.returnTypeExpression?.getType();
+        let returnType = this.returnTypeExpression?.getType(flags);
         const isSub = this.functionType.kind === TokenKind.Sub;
         //if we don't have a return type and this is a sub, set the return type to `void`. else use `dynamic`
         if (!returnType) {
@@ -319,7 +321,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         let functionType = new FunctionType(returnType);
         functionType.isSub = isSub;
         for (let param of this.parameters) {
-            functionType.addParameter(param.name.text, param.getType(), !!param.defaultValue);
+            functionType.addParameter(param.name.text, param.getType(flags), !!param.defaultValue);
         }
         return functionType;
     }
@@ -336,8 +338,8 @@ export class FunctionParameterExpression extends Expression {
         super();
     }
 
-    public getType() {
-        return this.typeExpression?.getType() || DynamicType.instance;
+    public getType(_flags: SymbolTypeFlags) {
+        return this.typeExpression?.getType(SymbolTypeFlags.typetime) ?? this.defaultValue?.getType(SymbolTypeFlags.runtime) ?? DynamicType.instance;
     }
 
     public get range(): Range {
@@ -446,8 +448,8 @@ export class NamespacedVariableNameExpression extends Expression {
         }
     }
 
-    getType() {
-        return this.expression.getType();
+    getType(flags: SymbolTypeFlags) {
+        return this.expression.getType(flags);
     }
 }
 
@@ -463,6 +465,11 @@ export class DottedGetExpression extends Expression {
         super();
         this.range = util.createBoundingRange(this.obj, this.dot, this.name);
     }
+
+    // TODO: remove typeChain, instead, allow an array passed into `getType()` to be filled with the
+    // types found
+    // The typechain needs to be agnostic of use, and some other function will be used for changing it into a human-readable format
+    public typeChain: { name: string; resolved: boolean }[] = [];
 
     public readonly range: Range;
 
@@ -485,15 +492,26 @@ export class DottedGetExpression extends Expression {
         }
     }
 
-    getType() {
-        const objType = this.obj?.getType();
-        if (objType) {
-            const memberType = objType.getMemberType(this.name.text);
-            if (!memberType) {
-                return DynamicType.instance;
-            }
-            return memberType;
+    getType(flags: SymbolTypeFlags) {
+        //reset
+        this.typeChain = [];
+        const objType = this.obj?.getType(flags);
+        const result = objType?.getMemberType(this.name?.text, flags);
+        const typeChainEntry = { name: this.name.text, resolved: !isReferenceType(result) };
+
+        if (isDottedGetExpression(this.obj)) {
+            this.typeChain.push(...this.obj.typeChain, typeChainEntry);
+        } else {
+            const parentName = (this.obj as any)?.name ? (this.obj as any)?.name.text : 'unknown';
+            const parentEntry = { name: parentName, resolved: !isReferenceType(objType) || objType.isResolvable() };
+            this.typeChain.push(parentEntry, typeChainEntry);
         }
+        if (result || flags & SymbolTypeFlags.typetime) {
+            // All types should be known at typetime
+            return result;
+        }
+        // It is possible at runtime that a value has been added dynamically to an object, or something
+        // TODO: maybe have a strict flag on this?
         return DynamicType.instance;
     }
 
@@ -592,8 +610,8 @@ export class GroupingExpression extends Expression {
         }
     }
 
-    getType() {
-        return this.expression.getType();
+    getType(flags: SymbolTypeFlags) {
+        return this.expression.getType(flags);
     }
 }
 
@@ -604,7 +622,7 @@ export class LiteralExpression extends Expression {
         super();
     }
 
-    public getType() {
+    public getType(_flags: SymbolTypeFlags = SymbolTypeFlags.runtime | SymbolTypeFlags.typetime) {
         return util.tokenToBscType(this.token);
     }
 
@@ -912,13 +930,13 @@ export class VariableExpression extends Expression {
 
     private _type: BscType;
 
-    getType() {
+    getType(flags: SymbolTypeFlags) {
         const standardType = util.tokenToBscType(this.name);
         if (standardType) {
             return standardType;
         }
         if (!this._type) {
-            this._type = new ReferenceType(this.name.text, () => this.getSymbolTable());
+            this._type = new ReferenceType(this.name.text, flags, () => this.getSymbolTable());
         }
         return this._type;
     }
@@ -1042,8 +1060,8 @@ export class NewExpression extends Expression {
         }
     }
 
-    getType() {
-        return this.call.getType();
+    getType(flags: SymbolTypeFlags) {
+        return this.call.getType(flags);
     }
 }
 
@@ -1173,7 +1191,7 @@ export class TemplateStringExpression extends Expression {
 
     public readonly range: Range;
 
-    public getType() {
+    public getType(flags: SymbolTypeFlags) {
         return StringType.instance;
     }
 
@@ -1647,8 +1665,8 @@ export class TypeExpression extends Expression implements TypedefProvider {
         }
     }
 
-    public getType(): BscType {
-        return this.expression.getType();
+    public getType(_flags: SymbolTypeFlags = SymbolTypeFlags.typetime): BscType {
+        return this.expression.getType(SymbolTypeFlags.typetime);
     }
 
     getTypedef(state: TranspileState): (string | SourceNode)[] {

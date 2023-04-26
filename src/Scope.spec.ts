@@ -1563,6 +1563,230 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
         });
+
+        describe('runtime vs typetime', () => {
+            it('detects invalidly using a class member as a parameter type', () => {
+                program.setFile(`source/main.bs`, `
+                    sub a(num as myClass.member)
+                    end sub
+
+                    class MyClass
+                        member as integer
+                    end class
+
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.itemCannotBeUsedAsType('myClass.member').message
+                ]);
+            });
+
+            it('detects invalidly using an EnumMember as a parameter type', () => {
+                program.setFile(`source/main.bs`, `
+                    sub a(num as MyNameSpace.SomeEnum.memberA)
+                    end sub
+
+                    namespace MyNameSpace
+                        enum SomeEnum
+                            memberA
+                            memberB
+                        end enum
+                    end namespace
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.itemCannotBeUsedAsType('MyNameSpace.SomeEnum.memberA').message
+                ]);
+            });
+
+            it('detects a member of a nested namespace', () => {
+                program.setFile(`source/main.bs`, `
+                    sub a(num as NSExistsA.NSExistsB.Klass)
+                    end sub
+
+                    namespace NSExistsA.NSExistsB
+                        class Klass
+                        end class
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('detects an unknown member of a nested namespace', () => {
+                program.setFile(`source/main.bs`, `
+                    sub a(num as NSExistsA.NSExistsB.NSDoesNotExistC.Klass)
+                    end sub
+
+                    namespace NSExistsA.NSExistsB
+                        class Klass
+                        end class
+                    end namespace
+                `);
+                program.validate();
+
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('NSDoesNotExistC', 'NSExistsA.NSExistsB.NSDoesNotExistC').message
+                ]);
+            });
+
+
+            it('resolves a const in a namespace', () => {
+                program.setFile(`source/main.bs`, `
+                    sub a()
+                        print NSExistsA.SOME_CONST
+                    end sub
+
+                    namespace NSExistsA
+                        const SOME_CONST = 3.14
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('resolves namespaces with relative references', () => {
+                program.setFile(`source/main.bs`, `
+                    namespace NameA
+                        sub fn1()
+                            'fully qualified-relative references are allowed
+                            print NameA.API_URL
+                            'namespace-relative references are allowed as well
+                            print API_URL
+                        end sub
+
+                        const API_URL = "http://some.url.com"
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('resolves nested namespaces with relative references', () => {
+                program.setFile(`source/main.bs`, `
+                    sub main()
+                        print NameA.A_VAL
+                        print NameA.NameB.B_VAL
+                        print NameA.NameB.NameC.C_VAL
+                        print SOME_CONST
+                    end sub
+                    namespace NameA
+                        sub fnA()
+                            print NameA.A_VAL
+                            print A_VAL
+                        end sub
+                        namespace NameB
+                            sub fnB()
+                                print NameA.NameB.B_VAL
+                                print B_VAL
+                            end sub
+                            namespace NameC
+                                sub fnC()
+                                   print NameA.NameB.NameC.C_VAL
+                                   print C_VAL
+                                end sub
+                                const C_VAL = "C"
+                            end namespace
+                            const B_VAL = "B"
+                        end namespace
+                        const A_VAL="A"
+                    end namespace
+                    const SOME_CONST = "hello"
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('resolves namespaces defined in different locations', () => {
+                program.setFile(`source/main.bs`, `
+                    sub main()
+                        print NameA.A_VAL
+                        print NameA.funcA()
+                        print NameA.makeClass().value
+                    end sub
+                    namespace NameA
+                        const A_VAL="A"
+                    end namespace
+                    namespace NameA
+                        function funcA() as integer
+                            return 17
+                        end function
+                    end namespace
+                    namespace NameA
+                        function makeClass() as SomeKlass
+                            return new SomeKlass()
+                        end function
+                    end namespace
+                    namespace NameA
+                        class SomeKlass
+                            value = 3.14
+                        end class
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('resolves deep namespaces defined in different locations', () => {
+                program.setFile(`source/main.bs`, `
+                    sub main()
+                        print NameA.NameB.B_VAL
+                        print NameA.NameB.funcB()
+                        print NameA.makeClassA().value
+                        print NameA.NameB.makeClassB().value
+                    end sub
+                    namespace NameA
+                        namespace NameB
+                            const B_VAL="B"
+                        end namespace
+                    end namespace
+                    namespace NameA.NameB
+                        function funcB() as integer
+                            return 17
+                        end function
+                    end namespace
+                    namespace NameA
+                        function makeClassA() as NameA.NameB.SomeKlass
+                            return new NameA.NameB.SomeKlass()
+                        end function
+                    end namespace
+                    namespace NameA
+                        namespace NameB
+                            function makeClassB() as SomeKlass
+                                return new SomeKlass()
+                            end function
+                        end namespace
+                    end namespace
+                    namespace NameA.NameB
+                        class SomeKlass
+                            value = 3.14
+                        end class
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows dot-references to properties on results of global callables ', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn()
+                        print CreateObject("roSgNode", "Node").id
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows dot-references to functions on results of global callables ', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn()
+                        print CreateObject("roDateTime").asSeconds()
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
     });
 
     describe('inheritance', () => {
@@ -1767,6 +1991,56 @@ describe('Scope', () => {
             expect(mainFnScope.symbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Foo');
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('myNum', SymbolTypeFlags.runtime)[0].type, IntegerType);
         });
+
+        it('finds correct parameter type with default value enums are used', () => {
+            const mainFile = program.setFile('source/main.bs', `
+                sub paint(colorChoice = Color.red)
+                    paintColor = colorChoice
+                    print paintColor
+                end sub
+
+                enum Color
+                    red
+                    blue
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 25));
+            const sourceScope = program.getScopeByName('source');
+            expect(sourceScope).to.exist;
+            expect(mainFnScope).to.exist;
+            sourceScope.linkSymbolTable();
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('paintColor', SymbolTypeFlags.runtime)[0].type, EnumMemberType);
+        });
+
+        it('finds correct class field type with default value enums are used', () => {
+            const mainFile = program.setFile('source/main.bs', `
+                sub main()
+                    foo = new Paint()
+                    paintColor = foo.colorType
+                    print paintColor
+                end sub
+
+                class Paint
+                    colorType = Color.red
+                end class
+
+                enum Color
+                    red
+                    blue
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 25));
+            const sourceScope = program.getScopeByName('source');
+            expect(sourceScope).to.exist;
+            expect(mainFnScope).to.exist;
+            sourceScope.linkSymbolTable();
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('paintColor', SymbolTypeFlags.runtime)[0].type, EnumMemberType);
+        });
+
 
         it('finds correct type for namespaced lookups', () => {
             const mainFile = program.setFile('source/main.bs', mainFileContents);

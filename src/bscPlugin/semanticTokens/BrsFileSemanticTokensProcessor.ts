@@ -8,6 +8,7 @@ import type { Locatable } from '../../lexer/Token';
 import { ParseMode } from '../../parser/Parser';
 import type { NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
+import { SymbolTypeFlags } from '../../SymbolTable';
 
 export class BrsFileSemanticTokensProcessor {
     public constructor(
@@ -35,7 +36,7 @@ export class BrsFileSemanticTokensProcessor {
         //classes used in function param types
         for (const func of this.event.file.parser.references.functionExpressions) {
             for (const parm of func.parameters) {
-                if (isCustomType(parm.getType())) {
+                if (isCustomType(parm.getType(SymbolTypeFlags.typetime))) {
                     const namespace = parm.findAncestor<NamespaceStatement>(isNamespaceStatement);
                     classes.push({
                         className: util.getAllDottedGetParts(parm.typeExpression.expression).map(x => x.text).join('.'),

@@ -734,9 +734,6 @@ export class Parser {
             equal = this.advance();
             initialValue = this.expression();
         }
-        if (!fieldTypeExpression && initialValue) {
-            fieldTypeExpression = new TypeExpression(initialValue);
-        }
 
         return new FieldStatement(
             accessModifier,

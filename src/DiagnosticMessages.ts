@@ -724,6 +724,11 @@ export let DiagnosticMessages = {
         message: `Optional chaining may not be used in the left-hand side of an assignment`,
         code: 1139,
         severity: DiagnosticSeverity.Error
+    }),
+    itemCannotBeUsedAsType: (typeText: string) => ({
+        message: `'${typeText}' cannot be used as a type`,
+        code: 1140,
+        severity: DiagnosticSeverity.Error
     })
 };
 

@@ -1,3 +1,4 @@
+import type { SymbolTypeFlags } from '../SymbolTable';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
 
@@ -11,7 +12,7 @@ export class NamespaceType extends BscType {
         return this.name;
     }
 
-    getMemberType(name: string) {
-        return super.getMemberType(name) ?? new ReferenceType(name, () => this.memberTable);
+    getMemberType(name: string, flags: SymbolTypeFlags) {
+        return super.getMemberType(name, flags) ?? new ReferenceType(name, flags, () => this.memberTable);
     }
 }

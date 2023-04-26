@@ -406,3 +406,8 @@ export interface FileLink<T> {
     item: T;
     file: BrsFile;
 }
+
+export interface TypeResolution {
+    name: string;
+    resolved: boolean;
+}

@@ -1,11 +1,11 @@
 import type { SymbolTableProvider } from '../SymbolTable';
-import { SymbolTypeFlags } from '../SymbolTable';
+import type { SymbolTypeFlags } from '../SymbolTable';
 import { isReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
 export class ReferenceType extends BscType {
-    constructor(public name: string, private tableProvider: SymbolTableProvider) {
+    constructor(public name: string, public flags: SymbolTypeFlags, private tableProvider: SymbolTableProvider) {
         super(name);
         // eslint-disable-next-line no-constructor-return
         return new Proxy(this, {
@@ -15,6 +15,24 @@ export class ReferenceType extends BscType {
                     // Cheeky way to get `isReferenceType` reflection to work
                     return { name: 'ReferenceType' };
                 }
+                if (propName === '__identifier') {
+                    // Cheeky way to get `isReferenceType` reflection to work
+                    return this.__identifier;
+                }
+                if (propName === 'isResolvable') {
+                    return () => {
+                        return !!this.resolve();
+                    };
+                }
+                if (propName === 'getTarget') {
+                    return () => {
+                        return this.resolve();
+                    };
+                }
+                if (propName === 'tableProvider') {
+                    return this.tableProvider;
+                }
+
                 //There may be some need to specifically get members on ReferenceType in the future
                 // eg: if (Reflect.has(target, name)) {
                 //   return Reflect.get(target, propName, receiver);
@@ -28,7 +46,7 @@ export class ReferenceType extends BscType {
                         // We're looking for a member of a reference type
                         // Since we don't know what type this is, yet, return ReferenceType
                         return (memberName: string, flags: SymbolTypeFlags) => {
-                            return new ReferenceType(memberName, () => {
+                            return new ReferenceType(memberName, this.flags, () => {
                                 return (this.resolve() as any)?.memberTable;
                             });
                         };
@@ -76,7 +94,7 @@ export class ReferenceType extends BscType {
      */
     private resolve(): BscType {
         // eslint-disable-next-line no-bitwise
-        return this.tableProvider()?.getSymbol(this.name, SymbolTypeFlags.runtime | SymbolTypeFlags.typetime)?.[0]?.type;
+        return this.tableProvider()?.getSymbol(this.name, this.flags)?.[0]?.type;
     }
 
     private referenceChain = new Set<BscType>();
@@ -105,12 +123,12 @@ export class TypePropertyReferenceType extends BscType {
                     return { name: 'TypePropertyReferenceType' };
                 }
 
-                if (isReferenceType(this.outerType)) {
+                if (isReferenceType(this.outerType) && !this.outerType.isResolvable()) {
                     if (propName === 'getMemberType') {
                         //If we're calling `getMemberType()`, we need it to proxy to using the actual symbol table
                         //So if that symbol is ever populated, the correct type is passed through
                         return (memberName: string, flags: SymbolTypeFlags) => {
-                            return new ReferenceType(memberName, () => {
+                            return new ReferenceType(memberName, flags, () => {
                                 return (this.outerType[this.propertyName] as any)?.memberTable;
                             });
                         };

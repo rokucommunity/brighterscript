@@ -1,11 +1,10 @@
-import type { SymbolTableProvider } from '../SymbolTable';
-import { SymbolTypeFlags } from '../SymbolTable';
+import type { SymbolTableProvider, SymbolTypeFlags } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import type { Range } from 'vscode-languageserver';
 
 export abstract class BscType {
 
-    protected memberTable: SymbolTable;
+    public readonly memberTable: SymbolTable;
     protected __identifier: string;
 
     constructor(name = '') {
@@ -25,9 +24,12 @@ export abstract class BscType {
         this.memberTable.addSymbol(name, range, type, flags);
     }
 
-    getMemberType(name: string) {
-        // eslint-disable-next-line no-bitwise
-        return this.memberTable.getSymbol(name, SymbolTypeFlags.runtime | SymbolTypeFlags.typetime)?.[0]?.type;
+    getMemberType(name: string, flags: SymbolTypeFlags) {
+        return this.memberTable.getSymbol(name, flags)?.[0]?.type;
+    }
+
+    isResolvable(): boolean {
+        return true;
     }
 
     isAssignableTo(_targetType: BscType): boolean {

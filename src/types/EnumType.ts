@@ -67,4 +67,8 @@ export class EnumMemberType extends BscType {
             targetType?.enumName.toLowerCase() === this.enumName.toLowerCase() &&
             targetType?.memberName.toLowerCase() === this.memberName.toLowerCase();
     }
+
+    getReferenceChain(): string[] {
+        return [this.enumName, this.memberName];
+    }
 }
