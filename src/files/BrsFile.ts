@@ -527,8 +527,6 @@ export class BrsFile {
                     isRestArgument: false
                 };
                 params.push(callableParam);
-                // let isOptional = !!param.defaultValue;
-                //functionType.addParameter(callableParam.name, callableParam.type, isOptional);
             }
 
             this.callables.push({
