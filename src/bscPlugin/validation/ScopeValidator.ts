@@ -127,6 +127,7 @@ export class ScopeValidator {
                 let fullErrorName = fullName;
                 let lastName = info.parts[info.parts.length - 1].name.text;
                 if (isDottedGetExpression(info.expression)) {
+                    //TODO: Wrap deciphering a typeChain in a function, so that it cna handle multiple kinds of expressions
                     fullErrorName = '';
                     for (let i = 0; i < info.expression.typeChain.length; i++) {
                         const chainItem = info.expression.typeChain[i];

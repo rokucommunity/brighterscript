@@ -517,13 +517,6 @@ export class BrsFile {
     private findCallables() {
         for (let statement of this.parser.references.functionStatements ?? []) {
 
-            /*let functionType = new FunctionType(statement.func.getType(SymbolTypeFlags.runtime).returnType);
-            functionType.setName(statement.name.text);
-            functionType.isSub = statement.func.functionType.text.toLowerCase() === 'sub';
-            if (functionType.isSub) {
-                functionType.returnType = new VoidType();
-            }*/
-
             //extract the parameters
             let params = [] as CallableParam[];
             for (let param of statement.func.parameters) {

@@ -44,8 +44,4 @@ export abstract class BscType {
     toTypeString(): string {
         throw new Error('Method not implemented.');
     }
-
-    getReferenceChain(): string[] {
-        return [(this as any).name ?? this.constructor.name];
-    }
 }

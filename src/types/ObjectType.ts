@@ -29,7 +29,8 @@ export class ObjectType extends BscType {
     }
 
     getMemberType(name: string, flags: SymbolTypeFlags) {
-        // An object can only have runtime members
+        // TODO: How should we handle accessing properties of an object?
+        // For example, we could add fields as properties to m.top, but there could be other members added programmatically
         return super.getMemberType(name, flags) ?? DynamicType.instance;
     }
 }

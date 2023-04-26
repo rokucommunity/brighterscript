@@ -338,7 +338,7 @@ export class FunctionParameterExpression extends Expression {
         super();
     }
 
-    public getType(flags: SymbolTypeFlags) {
+    public getType(_flags: SymbolTypeFlags) {
         return this.typeExpression?.getType(SymbolTypeFlags.typetime) ?? this.defaultValue?.getType(SymbolTypeFlags.runtime) ?? DynamicType.instance;
     }
 
@@ -466,6 +466,9 @@ export class DottedGetExpression extends Expression {
         this.range = util.createBoundingRange(this.obj, this.dot, this.name);
     }
 
+    // TODO: remove typeChain, instead, allow an array passed into `getType()` to be filled with the
+    // types found
+    // The typechain needs to be agnostic of use, and some other function will be used for changing it into a human-readable format
     public typeChain: { name: string; resolved: boolean }[] = [];
 
     public readonly range: Range;
