@@ -21,6 +21,7 @@ import { Statement } from './AstNode';
 import { ClassType } from '../types/ClassType';
 import { EnumMemberType, EnumType } from '../types/EnumType';
 import { NamespaceType } from '../types/NameSpaceType';
+import { ReferenceType } from '../types/ReferenceType';
 
 export class EmptyStatement extends Statement {
     constructor(
@@ -1991,10 +1992,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
         if (this._type) {
             return this._type;
         }
-        this._type = new ClassType(this.getName(ParseMode.BrighterScript));
-        if (this.hasParentClass()) {
-            // TODO figure out setting the type's member table parentage
-        }
+        let superClass = this.hasParentClass() ? new ReferenceType(this.parentClassName.getName(ParseMode.BrighterScript), SymbolTypeFlags.typetime, () => this.parent.getSymbolTable()) : undefined;
+
+        this._type = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
 
         for (const statement of this.methods) {
             const funcType = statement?.func.getType(flags);

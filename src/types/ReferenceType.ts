@@ -46,7 +46,7 @@ export class ReferenceType extends BscType {
                         // We're looking for a member of a reference type
                         // Since we don't know what type this is, yet, return ReferenceType
                         return (memberName: string, flags: SymbolTypeFlags) => {
-                            return new ReferenceType(memberName, this.flags, () => {
+                            return new ReferenceType(memberName, flags, () => {
                                 return (this.resolve() as any)?.memberTable;
                             });
                         };

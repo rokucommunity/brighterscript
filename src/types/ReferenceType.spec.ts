@@ -116,5 +116,4 @@ describe('PropertyReferenceType', () => {
         expectTypeToBe(returnPropRef, IntegerType);
     });
 
-
 });
