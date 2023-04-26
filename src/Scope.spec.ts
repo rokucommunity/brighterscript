@@ -1919,6 +1919,9 @@ describe('Scope', () => {
                 fido = new Animals.Dog()
                 fidoBark = fido.bark()
                 chimp = new Animals.Ape()
+                chimpHasLegs = chimp.hasLegs
+                chimpSpeed = chimp.getRunSpeed()
+                fidoSpeed = fido.getRunSpeed()
                 skin = Animals.SkinType.fur
             end sub
          `;
@@ -2061,6 +2064,24 @@ describe('Scope', () => {
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlags.runtime)[0].type, ClassType);
             expect(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Animals.Dog');
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoBark', SymbolTypeFlags.runtime)[0].type, StringType);
+        });
+
+        it('finds correct type for members of classes with super classes', () => {
+            const mainFile = program.setFile('source/main.bs', mainFileContents);
+            program.setFile('source/animals.bs', animalFileContents);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(7, 23));
+            const sourceScope = program.getScopeByName('source');
+            expect(sourceScope).to.exist;
+            sourceScope.linkSymbolTable();
+            expect(mainFnScope).to.exist;
+            const chimpType = mainFnScope.symbolTable.getSymbol('chimp', SymbolTypeFlags.runtime)[0].type;
+            expectTypeToBe(chimpType, ClassType);
+            expectTypeToBe((chimpType as ClassType).superClass, ClassType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('chimpHasLegs', SymbolTypeFlags.runtime)[0].type, BooleanType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('chimpSpeed', SymbolTypeFlags.runtime)[0].type, IntegerType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoSpeed', SymbolTypeFlags.runtime)[0].type, IntegerType);
         });
 
         it('finds correct types for method calls', () => {

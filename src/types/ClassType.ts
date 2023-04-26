@@ -7,11 +7,13 @@ export class ClassType extends BscType {
 
     constructor(public name: string, public readonly superClass?: ClassType | ReferenceType) {
         super(name);
-
+        if (superClass) {
+            this.memberTable.pushParentProvider(() => this.superClass.memberTable);
+        }
     }
 
     getMemberType(name: string, flags: SymbolTypeFlags) {
-        return super.getMemberType(name, flags) ?? this.superClass?.getMemberType(name, flags) ?? new ReferenceType(name, flags, () => this.memberTable);
+        return super.getMemberType(name, flags) ?? new ReferenceType(name, flags, () => this.memberTable);
     }
 
     public toString() {
