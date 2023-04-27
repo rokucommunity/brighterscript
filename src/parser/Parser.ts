@@ -75,7 +75,6 @@ import {
     GroupingExpression,
     IndexedGetExpression,
     LiteralExpression,
-    NamespacedVariableNameExpression,
     NewExpression,
     NullCoalescingExpression,
     RegexLiteralExpression,
@@ -1360,7 +1359,7 @@ export class Parser {
                 expr = new DottedGetExpression(expr, identifier, dot);
             }
         }
-        return new NamespacedVariableNameExpression(expr);
+        return expr;
     }
 
     /**
