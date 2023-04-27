@@ -44,8 +44,4 @@ export abstract class BscType {
     toTypeString(): string {
         throw new Error('Method not implemented.');
     }
-
-    equals(targetType: BscType): boolean {
-        return targetType.constructor.name === this.constructor.name;
-    }
 }

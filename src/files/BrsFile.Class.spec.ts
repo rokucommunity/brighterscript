@@ -1178,9 +1178,12 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             `);
             program.validate();
-            expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird')
-            ]);
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird'),
+                relatedInformation: [{
+                    message: `Not defined in scope 'source'`
+                }]
+            }]);
         });
 
         it('namespaced parent class from inside namespace', () => {

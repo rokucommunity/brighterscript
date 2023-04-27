@@ -131,7 +131,7 @@ export class BrsFileValidator {
                     node.parent.getSymbolTable().addSymbol(
                         node.name.text,
                         node.name.range,
-                        node.getType(SymbolTypeFlags.runtime),
+                        node.getType(SymbolTypeFlags.typetime),
                         SymbolTypeFlags.runtime
                     );
                 }
@@ -170,7 +170,8 @@ export class BrsFileValidator {
             },
             InterfaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));
-                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, node.getType(SymbolTypeFlags.typetime), SymbolTypeFlags.typetime);
+                // eslint-disable-next-line no-bitwise
+                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, node.getType(SymbolTypeFlags.typetime), SymbolTypeFlags.runtime | SymbolTypeFlags.typetime);
             },
             ConstStatement: (node) => {
                 this.validateDeclarationLocations(node, 'const', () => util.createBoundingRange(node.tokens.const, node.tokens.name));

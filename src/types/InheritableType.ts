@@ -5,7 +5,7 @@ import { ReferenceType } from './ReferenceType';
 
 export abstract class InheritableType extends BscType {
 
-    constructor(public name: string, public readonly parentType?: InheritableType | ReferenceType) {
+    constructor(public name: string, public readonly parentType?: BscType) {
         super(name);
         if (parentType) {
             this.memberTable.pushParentProvider(() => this.parentType.memberTable);
@@ -32,8 +32,8 @@ export abstract class InheritableType extends BscType {
         return this.isAssignableTo(targetType);
     }
 
-    public equals(targetType: BscType): boolean {
-        return isClassType(targetType) && this.toString() === targetType?.toString();
+    equals(targetType: BscType) {
+        return this === targetType;
     }
 
     protected getAncestorTypeList(): InheritableType[] {
@@ -50,7 +50,7 @@ export abstract class InheritableType extends BscType {
         return ancestors;
     }
 
-    checkAssignabilityToInterface(targetType: BscType, flags: SymbolTypeFlags) {
+    protected checkAssignabilityToInterface(targetType: BscType, flags: SymbolTypeFlags) {
         if (!isInterfaceType(targetType)) {
             return false;
         }
@@ -70,7 +70,7 @@ export abstract class InheritableType extends BscType {
      * Gets a string representation of the Interface that looks like javascript
      * Useful for debugging
      */
-    public toJSString() {
+    private toJSString() {
         // eslint-disable-next-line no-bitwise
         const flags = SymbolTypeFlags.runtime | SymbolTypeFlags.typetime;
         let result = '{';

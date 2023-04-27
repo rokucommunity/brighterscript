@@ -77,8 +77,8 @@ describe('ClassType', () => {
             superKlass.addMember('name', null, StringType.instance, SymbolTypeFlags.runtime);
             superKlass.addMember('age', null, IntegerType.instance, SymbolTypeFlags.runtime);
 
-            expect(subKlass.toJSString).to.exist;
-            expect(subKlass.toJSString()).to.equal('{ age: integer; name: string; }');
+            expect((subKlass as any).toJSString).to.exist;
+            expect((subKlass as any).toJSString()).to.equal('{ age: integer; name: string; }');
         });
     });
 

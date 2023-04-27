@@ -12,22 +12,22 @@ import { SymbolTypeFlags } from '../SymbolTable';
 describe('InterfaceType', () => {
     describe('toJSString', () => {
         it('returns empty curly braces when no members', () => {
-            expect(iface({}).toJSString()).to.eql('{}');
+            expect((iface({}) as any).toJSString()).to.eql('{}');
         });
 
         it('includes member types', () => {
-            expect(iface({ name: new StringType() }).toJSString()).to.eql('{ name: string; }');
+            expect((iface({ name: new StringType() }) as any).toJSString()).to.eql('{ name: string; }');
         });
 
         it('includes nested object types', () => {
             expect(
-                iface({
+                (iface({
                     name: new StringType(),
                     parent: iface({
                         age: new IntegerType()
                     })
                 }
-                ).toJSString()
+                ) as any).toJSString()
             ).to.eql('{ name: string; parent: { age: integer; }; }');
         });
     });
@@ -204,7 +204,7 @@ function expectAssignable(targetMembers: Record<string, BscType>, sourceMembers:
     const targetIface = iface(targetMembers);
     const sourceIface = iface(sourceMembers);
     if (!sourceIface.isAssignableTo(targetIface)) {
-        assert.fail(`expected type ${targetIface.toJSString()} to be assignable to type ${sourceIface.toJSString()}`);
+        assert.fail(`expected type ${(targetIface as any).toJSString()} to be assignable to type ${(sourceIface as any).toJSString()}`);
     }
 }
 
@@ -212,6 +212,6 @@ function expectNotAssignable(targetMembers: Record<string, BscType>, sourceMembe
     const targetIface = iface(targetMembers);
     const sourceIface = iface(sourceMembers);
     if (sourceIface.isAssignableTo(targetIface)) {
-        assert.fail(`expected type ${targetIface.toJSString()} to not be assignable to type ${sourceIface.toJSString()}`);
+        assert.fail(`expected type ${(targetIface as any).toJSString()} to not be assignable to type ${(sourceIface as any).toJSString()}`);
     }
 }

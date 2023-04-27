@@ -1228,15 +1228,10 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         }
     }
 
-    protected _type: NamespaceType;
-
     getType() {
-        if (this._type) {
-            return this._type;
-        }
-        this._type = new NamespaceType(this.name);
-        this._type.pushMemberProvider(() => this.body.getSymbolTable());
-        return this._type;
+        const resultType = new NamespaceType(this.name);
+        resultType.pushMemberProvider(() => this.body.getSymbolTable());
+        return resultType;
     }
 
 }
@@ -1455,24 +1450,18 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         }
     }
 
-    private _type: InterfaceType;
-
-
     getType(flags: SymbolTypeFlags) {
-        if (this._type) {
-            return this._type;
-        }
-        let superIface = this.parentInterfaceName?.getType(flags) as InterfaceType;
+        const superIface = this.parentInterfaceName?.getType(flags) as InterfaceType;
 
-        this._type = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
+        const resultType = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
 
         for (const statement of this.methods) {
-            this._type.addMember(statement?.tokens.name?.text, statement?.range, statement?.getType(flags), SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.tokens.name?.text, statement?.range, statement?.getType(flags), SymbolTypeFlags.runtime);
         }
         for (const statement of this.fields) {
-            this._type.addMember(statement?.tokens.name?.text, statement?.range, statement.getType(flags), SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.tokens.name?.text, statement?.range, statement.getType(flags), SymbolTypeFlags.runtime);
         }
-        return this._type;
+        return resultType;
     }
 }
 
@@ -1631,13 +1620,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         return result;
     }
 
-    private _type: FunctionType;
-
     public getType(flags: SymbolTypeFlags): FunctionType {
-        if (this._type) {
-            return this._type;
-        }
-
         //if there's a defined return type, use that
         let returnType = this.returnTypeExpression?.getType(flags);
         const isSub = this.tokens.functionType.kind === TokenKind.Sub;
@@ -1646,12 +1629,12 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             returnType = isSub ? VoidType.instance : DynamicType.instance;
         }
 
-        this._type = new FunctionType(returnType);
-        this._type.isSub = isSub;
+        const resultType = new FunctionType(returnType);
+        resultType.isSub = isSub;
         for (let param of this.params) {
-            this._type.addParameter(param.name.text, param.getType(flags), !!param.defaultValue);
+            resultType.addParameter(param.name.text, param.getType(flags), !!param.defaultValue);
         }
-        return this._type;
+        return resultType;
     }
 }
 
@@ -2044,24 +2027,19 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }
     }
 
-    protected _type: ClassType;
-
     getType(flags: SymbolTypeFlags) {
-        if (this._type) {
-            return this._type;
-        }
-        let superClass = this.parentClassName?.getType(flags) as ClassType;
+        const superClass = this.parentClassName?.getType(flags) as ClassType;
 
-        this._type = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
+        const resultType = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
 
         for (const statement of this.methods) {
             const funcType = statement?.func.getType(flags);
-            this._type.addMember(statement?.name?.text, statement?.range, funcType, SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.name?.text, statement?.range, funcType, SymbolTypeFlags.runtime);
         }
         for (const statement of this.fields) {
-            this._type.addMember(statement?.name?.text, statement?.range, statement.getType(), SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.name?.text, statement?.range, statement.getType(), SymbolTypeFlags.runtime);
         }
-        return this._type;
+        return resultType;
     }
 }
 
@@ -2609,19 +2587,14 @@ export class EnumStatement extends Statement implements TypedefProvider {
         }
     }
 
-    protected _type: EnumType;
-
     getType() {
-        if (this._type) {
-            return this._type;
-        }
-        this._type = new EnumType(this.fullName);
-        this._type.pushMemberProvider(() => this.getSymbolTable());
+        const resultType = new EnumType(this.fullName);
+        resultType.pushMemberProvider(() => this.getSymbolTable());
         for (const statement of this.getMembers()) {
-            this._type.addMember(statement?.tokens?.name?.text, statement?.range, statement.getType(), SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.tokens?.name?.text, statement?.range, statement.getType(), SymbolTypeFlags.runtime);
         }
 
-        return this._type;
+        return resultType;
     }
 }
 
@@ -2677,15 +2650,8 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         }
     }
 
-
-    protected _type: EnumMemberType;
-
     getType() {
-        if (this._type) {
-            return this._type;
-        }
-        this._type = new EnumMemberType((this.parent as EnumStatement)?.fullName, this.tokens?.name?.text);
-        return this._type;
+        return new EnumMemberType((this.parent as EnumStatement)?.fullName, this.tokens?.name?.text);
     }
 }
 

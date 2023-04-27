@@ -1,39 +1,35 @@
 import { SymbolTypeFlags } from '../SymbolTable';
-import { isDynamicType, isInterfaceType, isObjectType } from '../astUtils/reflection';
+import { isDynamicType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
-import { InheritableType } from './InheritableType';
-import type { ReferenceType } from './ReferenceType';
+import { InheritableType, isInheritableType } from './InheritableType';
 
 export class InterfaceType extends InheritableType {
     public constructor(
         public name: string,
-        public readonly superInterface?: InterfaceType | ReferenceType
+        public readonly superInterface?: BscType
     ) {
         super(name, superInterface);
     }
 
     public isAssignableTo(targetType: BscType) {
-        if (isInterfaceType(targetType) && targetType.name === this.name) {
+        //TODO: We need to make sure that things don't get assigned to built-in types
+        if (this === targetType) {
             return true;
         }
         if (isObjectType(targetType) || isDynamicType(targetType)) {
             return true;
         }
-        if (isInterfaceType(targetType)) {
-            const ancestorTypes = this.getAncestorTypeList();
-            if (ancestorTypes?.find(ancestorType => targetType.equals(ancestorType))) {
-                return true;
-            }
+        const ancestorTypes = this.getAncestorTypeList();
+        if (ancestorTypes?.find(ancestorType => ancestorType.equals(targetType))) {
+            return true;
+        }
+        if (isInheritableType(targetType)) {
             return this.checkAssignabilityToInterface(targetType, SymbolTypeFlags.runtime);
         }
         return false;
     }
 
-    public equals(targetType: BscType): boolean {
-
-        if (isInterfaceType(targetType)) {
-            return this.isAssignableTo(targetType) && targetType.isAssignableTo(this);
-        }
-        return false;
+    equals(targetType: BscType): boolean {
+        return this.isAssignableTo(targetType) && targetType.isAssignableTo(this);
     }
 }

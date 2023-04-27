@@ -2,31 +2,27 @@ import { SymbolTypeFlags } from '../SymbolTable';
 import { isClassType, isDynamicType, isInterfaceType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import { InheritableType } from './InheritableType';
-import type { ReferenceType } from './ReferenceType';
 
 export class ClassType extends InheritableType {
 
-    constructor(public name: string, public readonly superClass?: ClassType | ReferenceType) {
+    constructor(public name: string, public readonly superClass?: BscType) {
         super(name, superClass);
     }
 
     public isAssignableTo(targetType: BscType) {
-        if (isClassType(targetType) && targetType.name === this.name) {
+        //TODO: We need to make sure that things don't get assigned to built-in types
+        if (this === targetType) {
             return true;
         } else if (isDynamicType(targetType) || isObjectType(targetType)) {
             return true;
-        } else if (isInterfaceType(targetType)) {
-            return this.checkAssignabilityToInterface(targetType, SymbolTypeFlags.runtime);
-        } else {
+        } else if (isClassType(targetType)) {
             const ancestorTypes = this.getAncestorTypeList();
-            if (ancestorTypes?.find(ancestorType => ancestorType.equals(targetType))) {
+            if (ancestorTypes?.find(ancestorType => ancestorType === targetType)) {
                 return true;
             }
-            return false;
+        } else if (isInterfaceType(targetType)) {
+            return this.checkAssignabilityToInterface(targetType, SymbolTypeFlags.runtime);
         }
-    }
-
-    public equals(targetType: BscType): boolean {
-        return isClassType(targetType) && this.toString() === targetType?.toString();
+        return false;
     }
 }
