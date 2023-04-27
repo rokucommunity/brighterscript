@@ -176,7 +176,7 @@ describe.only('ComponentStatement', () => {
         ).to.exist;
     });
 
-    it('moves component statements from nested source path into pkg:/components', () => {
+    it('moves component statements from nested pkg:/source into pkg:/components', () => {
         program.setFile('source/nested/path/MainScene.bs', `
             component MainScene
             end component
@@ -252,7 +252,7 @@ describe.only('ComponentStatement', () => {
         `);
     });
 
-    it('adds public fields and methods to the xml interface', async () => {
+    it('adds public members to the xml interface', async () => {
         program.setFile('components/ZombieKeyboard.bs', `
             component ZombieKeyboard
 
@@ -284,7 +284,7 @@ describe.only('ComponentStatement', () => {
         `);
     });
 
-    it('adds private field to m and creates init function if missing', async () => {
+    it('adds private member to m and creates init function if missing', async () => {
         program.setFile('components/ZombieKeyboard.bs', `
             component ZombieKeyboard
                 private isEnabled = true
@@ -302,6 +302,70 @@ describe.only('ComponentStatement', () => {
         await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.brs'), `
             sub init()
                 m.isEnabled = true
+            end sub
+        `);
+    });
+
+    it('adds private member to start of existing init function', async () => {
+        program.setFile('components/ZombieKeyboard.bs', `
+            component ZombieKeyboard
+                private sub init()
+                    'test
+                end sub
+                private isEnabled = true
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.brs'), `
+            sub init()
+                m.isEnabled = true
+                'test
+            end sub
+        `);
+    });
+
+    it('adds private methods to codebehind as plain functions', async () => {
+        program.setFile('components/ZombieKeyboard.bs', `
+            component ZombieKeyboard
+                private sub init()
+                    'test
+                end sub
+                private sub doSomething()
+                    print "do something"
+                end sub
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.brs'), `
+            sub init()
+                'test
+            end sub
+
+            sub doSomething()
+                print "do something"
+            end sub
+        `);
+    });
+
+    it('rewrites m method calls', async () => {
+        program.setFile('components/ZombieKeyboard.bs', `
+            component ZombieKeyboard
+                private sub init()
+                    m.doSomething()
+                end sub
+                private sub doSomething()
+                    print "do something"
+                end sub
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.brs'), `
+            sub init()
+                doSomething()
+            end sub
+
+            sub doSomething()
+                print "do something"
             end sub
         `);
     });

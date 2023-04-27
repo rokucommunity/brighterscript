@@ -56,13 +56,13 @@ export class CallExpression extends Expression {
     static MaximumArguments = 32;
 
     constructor(
-        readonly callee: Expression,
+        public callee: Expression,
         /**
          * Can either be `(`, or `?(` for optional chaining
          */
-        readonly openingParen: Token,
-        readonly closingParen: Token,
-        readonly args: Expression[],
+        public openingParen: Token,
+        public closingParen: Token,
+        public args: Expression[],
         unused?: any
     ) {
         super();

@@ -7,10 +7,11 @@ import { Cache } from '../../Cache';
 import * as path from 'path';
 import { util } from '../../util';
 import type { ProvideFileEvent } from '../../interfaces';
-import { isFieldStatement, isMethodStatement } from '../../astUtils/reflection';
+import { isDottedGetExpression, isFieldStatement, isMethodStatement, isVariableExpression } from '../../astUtils/reflection';
 import { createFunctionStatement, createFunctionExpression, createDottedSetStatement, createVariableExpression } from '../../astUtils/creators';
 import type { Statement } from '../../parser/AstNode';
 import { TokenKind } from '../../lexer/TokenKind';
+import { VariableExpression } from '../../parser/Expression';
 
 export class ComponentStatementProvider {
     constructor(
@@ -93,6 +94,7 @@ export class ComponentStatementProvider {
                 if (member?.name?.text.toLowerCase() === 'init') {
                     initFunc = func;
                 }
+                this.rewriteMAccess(func);
                 //if this is a private field, and it has a value
             } else if (isFieldStatement(member) && member.accessModifier?.text.toLowerCase() === 'private' && member.initialValue) {
                 //add private fields to the global m
@@ -127,5 +129,18 @@ export class ComponentStatementProvider {
 
         this.event.files.push(file);
         return file;
+    }
+
+    private rewriteMAccess(func: FunctionStatement) {
+        func.func.body.walk(createVisitor({
+            CallExpression: (call) => {
+                //if this is a `m.doSomething()` call, rewrite it to call the root level method
+                if (isDottedGetExpression(call.callee) && isVariableExpression(call.callee.obj) && call.callee.obj.name.text?.toLowerCase() === 'm') {
+                    call.callee = new VariableExpression(call.callee.name);
+                }
+            }
+        }), {
+            walkMode: WalkMode.visitAll
+        });
     }
 }
