@@ -1630,6 +1630,27 @@ describe('Scope', () => {
                 ]);
             });
 
+            it('allows a class to extend from a class in another namespace and file', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn(myFace as Villain)
+                        print myFace.coin
+                    end sub
+
+                    class Villain extends MyKlasses.twoFace
+                        name as string
+                    end class
+                `);
+                program.setFile(`source/extra.bs`, `
+                    namespace MyKlasses
+                        class twoFace
+                            coin as string
+                        end class
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
 
             it('resolves a const in a namespace', () => {
                 program.setFile(`source/main.bs`, `
@@ -1844,6 +1865,27 @@ describe('Scope', () => {
                     interface twoFace
                         coin as string
                     end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows an interface to extend from an interface in another namespace and file', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn(myFace as iFace)
+                        print myFace.coin
+                    end sub
+
+                    interface iFace extends MyInterfaces.twoFace
+                        name as string
+                    end interface
+                `);
+                program.setFile(`source/interfaces.bs`, `
+                    namespace MyInterfaces
+                        interface twoFace
+                            coin as string
+                        end interface
+                    end namespace
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);

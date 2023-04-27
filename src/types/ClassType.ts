@@ -2,26 +2,13 @@ import { SymbolTypeFlags } from '../SymbolTable';
 import { isClassType, isDynamicType, isInterfaceType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import { InheritableType } from './InheritableType';
-import { ReferenceType } from './ReferenceType';
+import type { ReferenceType } from './ReferenceType';
 
 export class ClassType extends InheritableType {
 
     constructor(public name: string, public readonly superClass?: ClassType | ReferenceType) {
         super(name, superClass);
     }
-
-    getMemberType(name: string, flags: SymbolTypeFlags) {
-        return super.getMemberType(name, flags) ?? new ReferenceType(name, flags, () => this.memberTable);
-    }
-
-    public toString() {
-        return this.name;
-    }
-
-    public toTypeString(): string {
-        return 'dynamic';
-    }
-
 
     public isAssignableTo(targetType: BscType) {
         if (isClassType(targetType) && targetType.name === this.name) {

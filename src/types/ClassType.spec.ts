@@ -5,6 +5,7 @@ import { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
 import { expectTypeToBe } from '../testHelpers.spec';
 import { ReferenceType } from './ReferenceType';
 import { isReferenceType } from '../astUtils/reflection';
+import { IntegerType } from './IntegerType';
 
 describe('ClassType', () => {
 
@@ -67,6 +68,18 @@ describe('ClassType', () => {
         myTable.addSymbol('SuperKlass', null, superKlass, SymbolTypeFlags.typetime | SymbolTypeFlags.runtime);
         expect(futureTitleType.isResolvable()).to.be.true;
         expectTypeToBe(futureTitleType, StringType);
+    });
+
+    describe('toJSString', () => {
+        it('includes superclass members', () => {
+            const superKlass = new ClassType('SuperKlass');
+            const subKlass = new ClassType('SubKlass', superKlass);
+            superKlass.addMember('name', null, StringType.instance, SymbolTypeFlags.runtime);
+            superKlass.addMember('age', null, IntegerType.instance, SymbolTypeFlags.runtime);
+
+            expect(subKlass.toJSString).to.exist;
+            expect(subKlass.toJSString()).to.equal('{ age: integer; name: string; }');
+        });
     });
 
 });

@@ -29,29 +29,6 @@ export class InterfaceType extends InheritableType {
         return false;
     }
 
-    /**
-     * Gets a string representation of the Interface that looks like javascript
-     * Useful for debugging
-     * @returns {string}
-     */
-    public toJSString() {
-        // eslint-disable-next-line no-bitwise
-        const flags = SymbolTypeFlags.runtime | SymbolTypeFlags.typetime;
-        let result = '{';
-        const memberSymbols = (this.memberTable?.getAllSymbols(flags) || []).sort((a, b) => a.name.localeCompare(b.name));
-        for (const symbol of memberSymbols) {
-            let symbolTypeString = symbol.type.toString();
-            if (isInterfaceType(symbol.type)) {
-                symbolTypeString = symbol.type.toJSString();
-            }
-            result += ' ' + symbol.name + ': ' + symbolTypeString + ';';
-        }
-        if (memberSymbols.length > 0) {
-            result += ' ';
-        }
-        return result + '}';
-    }
-
     public equals(targetType: BscType): boolean {
 
         if (isInterfaceType(targetType)) {
@@ -60,4 +37,3 @@ export class InterfaceType extends InheritableType {
         return false;
     }
 }
-

@@ -21,7 +21,6 @@ import { Statement } from './AstNode';
 import { ClassType } from '../types/ClassType';
 import { EnumMemberType, EnumType } from '../types/EnumType';
 import { NamespaceType } from '../types/NameSpaceType';
-import { ReferenceType } from '../types/ReferenceType';
 import { InterfaceType } from '../types/InterfaceType';
 import type { BscType } from '../types/BscType';
 import { VoidType } from '../types/VoidType';
@@ -1463,7 +1462,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         if (this._type) {
             return this._type;
         }
-        let superIface = this.hasParentInterface() ? new ReferenceType(this.parentInterfaceName.getName(), SymbolTypeFlags.typetime, () => this.parent.getSymbolTable()) : undefined;
+        let superIface = this.parentInterfaceName?.getType(flags) as InterfaceType;
 
         this._type = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
 
@@ -2051,7 +2050,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         if (this._type) {
             return this._type;
         }
-        let superClass = this.hasParentClass() ? new ReferenceType(this.parentClassName.getName(), SymbolTypeFlags.typetime, () => this.parent.getSymbolTable()) : undefined;
+        let superClass = this.parentClassName?.getType(flags) as ClassType;
 
         this._type = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
 

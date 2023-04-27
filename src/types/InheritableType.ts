@@ -1,4 +1,4 @@
-import type { SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTypeFlags } from '../SymbolTable';
 import { isClassType, isInterfaceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
@@ -40,7 +40,7 @@ export abstract class InheritableType extends BscType {
         const ancestors = [];
         let currentParentType = this.parentType;
         while (currentParentType) {
-            if (isClassType(currentParentType) || isInterfaceType(currentParentType)) {
+            if (isInheritableType(currentParentType)) {
                 ancestors.push(currentParentType);
                 currentParentType = currentParentType.parentType;
             } else {
@@ -64,4 +64,31 @@ export abstract class InheritableType extends BscType {
         }
         return isSuperSet;
     }
+
+
+    /**
+     * Gets a string representation of the Interface that looks like javascript
+     * Useful for debugging
+     */
+    public toJSString() {
+        // eslint-disable-next-line no-bitwise
+        const flags = SymbolTypeFlags.runtime | SymbolTypeFlags.typetime;
+        let result = '{';
+        const memberSymbols = (this.memberTable?.getAllSymbols(flags) || []).sort((a, b) => a.name.localeCompare(b.name));
+        for (const symbol of memberSymbols) {
+            let symbolTypeString = symbol.type.toString();
+            if (isInheritableType(symbol.type)) {
+                symbolTypeString = symbol.type.toJSString();
+            }
+            result += ' ' + symbol.name + ': ' + symbolTypeString + ';';
+        }
+        if (memberSymbols.length > 0) {
+            result += ' ';
+        }
+        return result + '}';
+    }
+}
+
+export function isInheritableType(target): target is InheritableType {
+    return isClassType(target) || isInterfaceType(target);
 }
