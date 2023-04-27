@@ -18,9 +18,11 @@ import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
 import type { Expression } from './AstNode';
+import { AstNodeKind } from './AstNode';
 import { Statement } from './AstNode';
 
 export class EmptyStatement extends Statement {
+    kind = AstNodeKind.EmptyStatement;
     constructor(
         /**
          * Create a negative range to indicate this is an interpolated location
@@ -42,6 +44,7 @@ export class EmptyStatement extends Statement {
  * This is a top-level statement. Consider this the root of the AST
  */
 export class Body extends Statement implements TypedefProvider {
+    kind = AstNodeKind.Body;
     constructor(
         public statements: Statement[] = []
     ) {
@@ -113,6 +116,7 @@ export class Body extends Statement implements TypedefProvider {
 }
 
 export class AssignmentStatement extends Statement {
+    kind = AstNodeKind.AssignmentStatement;
     constructor(
         readonly equals: Token,
         readonly name: Identifier,
@@ -155,6 +159,7 @@ export class AssignmentStatement extends Statement {
 }
 
 export class Block extends Statement {
+    kind = AstNodeKind.Block;
     constructor(
         readonly statements: Statement[],
         readonly startingRange: Range
@@ -209,6 +214,7 @@ export class Block extends Statement {
 }
 
 export class ExpressionStatement extends Statement {
+    kind = AstNodeKind.ExpressionStatement;
     constructor(
         readonly expression: Expression
     ) {
@@ -230,6 +236,7 @@ export class ExpressionStatement extends Statement {
 }
 
 export class CommentStatement extends Statement implements Expression, TypedefProvider {
+    kind = AstNodeKind.CommentStatement;
     constructor(
         public comments: Token[]
     ) {
@@ -276,6 +283,7 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
 }
 
 export class ExitForStatement extends Statement {
+    kind = AstNodeKind.ExitForStatement;
     constructor(
         readonly tokens: {
             exitFor: Token;
@@ -300,6 +308,7 @@ export class ExitForStatement extends Statement {
 }
 
 export class ExitWhileStatement extends Statement {
+    kind = AstNodeKind.ExitWhileStatement;
     constructor(
         readonly tokens: {
             exitWhile: Token;
@@ -323,6 +332,7 @@ export class ExitWhileStatement extends Statement {
 }
 
 export class FunctionStatement extends Statement implements TypedefProvider {
+    kind = AstNodeKind.FunctionStatement;
     constructor(
         public name: Identifier,
         public func: FunctionExpression
@@ -389,6 +399,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
 }
 
 export class IfStatement extends Statement {
+    kind = AstNodeKind.IfStatement;
     constructor(
         readonly tokens: {
             if: Token;
@@ -504,6 +515,7 @@ export class IfStatement extends Statement {
 }
 
 export class IncrementStatement extends Statement {
+    kind = AstNodeKind.IncrementStatement;
     constructor(
         readonly value: Expression,
         readonly operator: Token
@@ -545,12 +557,13 @@ export interface PrintSeparatorSpace extends Token {
  * Represents a `print` statement within BrightScript.
  */
 export class PrintStatement extends Statement {
+    kind = AstNodeKind.PrintStatement;
     /**
-     * Creates a new internal representation of a BrightScript `print` statement.
-     * @param tokens the tokens for this statement
-     * @param tokens.print a print token
-     * @param expressions an array of expressions or `PrintSeparator`s to be evaluated and printed.
-     */
+         * Creates a new internal representation of a BrightScript `print` statement.
+         * @param tokens the tokens for this statement
+         * @param tokens.print a print token
+         * @param expressions an array of expressions or `PrintSeparator`s to be evaluated and printed.
+         */
     constructor(
         readonly tokens: {
             print: Token;
@@ -597,6 +610,7 @@ export class PrintStatement extends Statement {
 }
 
 export class DimStatement extends Statement {
+    kind = AstNodeKind.DimStatement;
     constructor(
         public dimToken: Token,
         public identifier?: Identifier,
@@ -643,6 +657,7 @@ export class DimStatement extends Statement {
 }
 
 export class GotoStatement extends Statement {
+    kind = AstNodeKind.GotoStatement;
     constructor(
         readonly tokens: {
             goto: Token;
@@ -672,6 +687,7 @@ export class GotoStatement extends Statement {
 }
 
 export class LabelStatement extends Statement {
+    kind = AstNodeKind.LabelStatement;
     constructor(
         readonly tokens: {
             identifier: Token;
@@ -701,6 +717,7 @@ export class LabelStatement extends Statement {
 }
 
 export class ReturnStatement extends Statement {
+    kind = AstNodeKind.ReturnStatement;
     constructor(
         readonly tokens: {
             return: Token;
@@ -736,6 +753,7 @@ export class ReturnStatement extends Statement {
 }
 
 export class EndStatement extends Statement {
+    kind = AstNodeKind.EndStatement;
     constructor(
         readonly tokens: {
             end: Token;
@@ -759,6 +777,7 @@ export class EndStatement extends Statement {
 }
 
 export class StopStatement extends Statement {
+    kind = AstNodeKind.StopStatement;
     constructor(
         readonly tokens: {
             stop: Token;
@@ -782,6 +801,7 @@ export class StopStatement extends Statement {
 }
 
 export class ForStatement extends Statement {
+    kind = AstNodeKind.ForStatement;
     constructor(
         public forToken: Token,
         public counterDeclaration: AssignmentStatement,
@@ -867,6 +887,7 @@ export class ForStatement extends Statement {
 }
 
 export class ForEachStatement extends Statement {
+    kind = AstNodeKind.ForEachStatement;
     constructor(
         readonly tokens: {
             forEach: Token;
@@ -936,6 +957,7 @@ export class ForEachStatement extends Statement {
 }
 
 export class WhileStatement extends Statement {
+    kind = AstNodeKind.WhileStatement;
     constructor(
         readonly tokens: {
             while: Token;
@@ -994,6 +1016,7 @@ export class WhileStatement extends Statement {
 }
 
 export class DottedSetStatement extends Statement {
+    kind = AstNodeKind.DottedSetStatement;
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
@@ -1038,6 +1061,7 @@ export class DottedSetStatement extends Statement {
 }
 
 export class IndexedSetStatement extends Statement {
+    kind = AstNodeKind.IndexedSetStatement;
     constructor(
         readonly obj: Expression,
         readonly index: Expression,
@@ -1089,6 +1113,7 @@ export class IndexedSetStatement extends Statement {
 }
 
 export class LibraryStatement extends Statement implements TypedefProvider {
+    kind = AstNodeKind.LibraryStatement;
     constructor(
         readonly tokens: {
             library: Token;
@@ -1129,6 +1154,7 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 }
 
 export class NamespaceStatement extends Statement implements TypedefProvider {
+    kind = AstNodeKind.NamespaceStatement;
     constructor(
         public keyword: Token,
         // this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
@@ -1211,6 +1237,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
 }
 
 export class ImportStatement extends Statement implements TypedefProvider {
+    kind = AstNodeKind.ImportStatement;
     constructor(
         readonly importToken: Token,
         readonly filePathToken: Token
@@ -1264,6 +1291,7 @@ export class ImportStatement extends Statement implements TypedefProvider {
 }
 
 export class InterfaceStatement extends Statement implements TypedefProvider {
+    kind = AstNodeKind.InterfaceStatement;
     constructor(
         interfaceToken: Token,
         name: Identifier,
@@ -1420,6 +1448,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
 }
 
 export class InterfaceFieldStatement extends Statement implements TypedefProvider {
+    kind = AstNodeKind.InterfaceFieldStatement;
     public transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('Method not implemented.');
     }
@@ -1481,6 +1510,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
 }
 
 export class InterfaceMethodStatement extends Statement implements TypedefProvider {
+    kind = AstNodeKind.InterfaceMethodStatement;
     public transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('Method not implemented.');
     }
@@ -1573,6 +1603,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
 
 export class ClassStatement extends Statement implements TypedefProvider {
 
+    kind = AstNodeKind.ClassStatement;
     constructor(
         readonly classKeyword: Token,
         /**
@@ -1967,6 +1998,7 @@ const accessModifiers = [
     TokenKind.Private
 ];
 export class MethodStatement extends FunctionStatement {
+    kind = AstNodeKind.MethodStatement;
     constructor(
         modifiers: Token | Token[],
         name: Identifier,
@@ -2155,6 +2187,7 @@ export class ClassMethodStatement extends MethodStatement { }
 
 export class FieldStatement extends Statement implements TypedefProvider {
 
+    kind = AstNodeKind.FieldStatement;
     constructor(
         readonly accessModifier?: Token,
         readonly name?: Identifier,
@@ -2240,6 +2273,7 @@ export type MemberStatement = FieldStatement | MethodStatement;
 export type ClassMemberStatement = MemberStatement;
 
 export class TryCatchStatement extends Statement {
+    kind = AstNodeKind.TryCatchStatement;
     constructor(
         public tokens: {
             try: Token;
@@ -2281,6 +2315,7 @@ export class TryCatchStatement extends Statement {
 }
 
 export class CatchStatement extends Statement {
+    kind = AstNodeKind.CatchStatement;
     constructor(
         public tokens: {
             catch: Token;
@@ -2315,6 +2350,7 @@ export class CatchStatement extends Statement {
 }
 
 export class ThrowStatement extends Statement {
+    kind = AstNodeKind.ThrowStatement;
     constructor(
         public throwToken: Token,
         public expression?: Expression
@@ -2356,6 +2392,7 @@ export class ThrowStatement extends Statement {
 
 export class EnumStatement extends Statement implements TypedefProvider {
 
+    kind = AstNodeKind.EnumStatement;
     constructor(
         public tokens: {
             enum: Token;
@@ -2510,6 +2547,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
 export class EnumMemberStatement extends Statement implements TypedefProvider {
 
+    kind = AstNodeKind.EnumMemberStatement;
     public constructor(
         public tokens: {
             name: Identifier;
@@ -2563,6 +2601,7 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
 
 export class ConstStatement extends Statement implements TypedefProvider {
 
+    kind = AstNodeKind.ConstStatement;
     public constructor(
         public tokens: {
             const: Token;
@@ -2625,6 +2664,7 @@ export class ConstStatement extends Statement implements TypedefProvider {
 }
 
 export class ContinueStatement extends Statement {
+    kind = AstNodeKind.ContinueStatement;
     constructor(
         public tokens: {
             continue: Token;

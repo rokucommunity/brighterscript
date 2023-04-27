@@ -16,13 +16,14 @@ import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
-import { Expression } from './AstNode';
+import { AstNodeKind, Expression } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
 import { SourceNode } from 'source-map';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
 export class BinaryExpression extends Expression {
+    kind = AstNodeKind.BinaryExpression;
     constructor(
         public left: Expression,
         public operator: Token,
@@ -53,6 +54,7 @@ export class BinaryExpression extends Expression {
 }
 
 export class CallExpression extends Expression {
+    kind = AstNodeKind.CallExpression;
     static MaximumArguments = 32;
 
     constructor(
@@ -117,6 +119,7 @@ export class CallExpression extends Expression {
 }
 
 export class FunctionExpression extends Expression implements TypedefProvider {
+    kind = AstNodeKind.FunctionExpression;
     constructor(
         readonly parameters: FunctionParameterExpression[],
         public body: Block,
@@ -318,6 +321,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 }
 
 export class FunctionParameterExpression extends Expression {
+    kind = AstNodeKind.FunctionParameterExpression;
     constructor(
         public name: Identifier,
         public typeToken?: Token,
@@ -390,6 +394,7 @@ export class FunctionParameterExpression extends Expression {
 }
 
 export class NamespacedVariableNameExpression extends Expression {
+    kind = AstNodeKind.NamespacedVariableNameExpression;
     constructor(
         //if this is a `DottedGetExpression`, it must be comprised only of `VariableExpression`s
         readonly expression: DottedGetExpression | VariableExpression
@@ -439,6 +444,7 @@ export class NamespacedVariableNameExpression extends Expression {
 }
 
 export class DottedGetExpression extends Expression {
+    kind = AstNodeKind.DottedGetExpression;
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
@@ -475,6 +481,7 @@ export class DottedGetExpression extends Expression {
 }
 
 export class XmlAttributeGetExpression extends Expression {
+    kind = AstNodeKind.XmlAttributeGetExpression;
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
@@ -505,6 +512,7 @@ export class XmlAttributeGetExpression extends Expression {
 }
 
 export class IndexedGetExpression extends Expression {
+    kind = AstNodeKind.IndexedGetExpression;
     constructor(
         public obj: Expression,
         public index: Expression,
@@ -540,6 +548,7 @@ export class IndexedGetExpression extends Expression {
 }
 
 export class GroupingExpression extends Expression {
+    kind = AstNodeKind.GroupingExpression;
     constructor(
         readonly tokens: {
             left: Token;
@@ -569,6 +578,7 @@ export class GroupingExpression extends Expression {
 }
 
 export class LiteralExpression extends Expression {
+    kind = AstNodeKind.LiteralExpression;
     constructor(
         public token: Token
     ) {
@@ -616,6 +626,7 @@ export class LiteralExpression extends Expression {
  * during template string transpile by identifying these expressions explicitly and skipping the bslib_toString around them
  */
 export class EscapedCharCodeLiteralExpression extends Expression {
+    kind = AstNodeKind.EscapedCharCodeLiteralExpression;
     constructor(
         readonly token: Token & { charCode: number }
     ) {
@@ -636,6 +647,7 @@ export class EscapedCharCodeLiteralExpression extends Expression {
 }
 
 export class ArrayLiteralExpression extends Expression {
+    kind = AstNodeKind.ArrayLiteralExpression;
     constructor(
         readonly elements: Array<Expression | CommentStatement>,
         readonly open: Token,
@@ -704,6 +716,7 @@ export class ArrayLiteralExpression extends Expression {
 }
 
 export class AAMemberExpression extends Expression {
+    kind = AstNodeKind.AAMemberExpression;
     constructor(
         public keyToken: Token,
         public colonToken: Token,
@@ -729,6 +742,7 @@ export class AAMemberExpression extends Expression {
 }
 
 export class AALiteralExpression extends Expression {
+    kind = AstNodeKind.AALiteralExpression;
     constructor(
         readonly elements: Array<AAMemberExpression | CommentStatement>,
         readonly open: Token,
@@ -818,6 +832,7 @@ export class AALiteralExpression extends Expression {
 }
 
 export class UnaryExpression extends Expression {
+    kind = AstNodeKind.UnaryExpression;
     constructor(
         public operator: Token,
         public right: Expression
@@ -844,6 +859,7 @@ export class UnaryExpression extends Expression {
 }
 
 export class VariableExpression extends Expression {
+    kind = AstNodeKind.VariableExpression;
     constructor(
         readonly name: Identifier
     ) {
@@ -885,6 +901,7 @@ export class VariableExpression extends Expression {
 }
 
 export class SourceLiteralExpression extends Expression {
+    kind = AstNodeKind.SourceLiteralExpression;
     constructor(
         readonly token: Token
     ) {
@@ -966,6 +983,7 @@ export class SourceLiteralExpression extends Expression {
  * do more type checking.
  */
 export class NewExpression extends Expression {
+    kind = AstNodeKind.NewExpression;
     constructor(
         readonly newKeyword: Token,
         readonly call: CallExpression
@@ -1004,6 +1022,7 @@ export class NewExpression extends Expression {
 }
 
 export class CallfuncExpression extends Expression {
+    kind = AstNodeKind.CallfuncExpression;
     constructor(
         readonly callee: Expression,
         readonly operator: Token,
@@ -1076,6 +1095,7 @@ export class CallfuncExpression extends Expression {
  * This is a single expression that represents the string contatenation of all parts of a single quasi.
  */
 export class TemplateStringQuasiExpression extends Expression {
+    kind = AstNodeKind.TemplateStringQuasiExpression;
     constructor(
         readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>
     ) {
@@ -1112,6 +1132,7 @@ export class TemplateStringQuasiExpression extends Expression {
 }
 
 export class TemplateStringExpression extends Expression {
+    kind = AstNodeKind.TemplateStringExpression;
     constructor(
         readonly openingBacktick: Token,
         readonly quasis: TemplateStringQuasiExpression[],
@@ -1198,6 +1219,7 @@ export class TemplateStringExpression extends Expression {
 }
 
 export class TaggedTemplateStringExpression extends Expression {
+    kind = AstNodeKind.TaggedTemplateStringExpression;
     constructor(
         readonly tagName: Identifier,
         readonly openingBacktick: Token,
@@ -1275,6 +1297,7 @@ export class TaggedTemplateStringExpression extends Expression {
 }
 
 export class AnnotationExpression extends Expression {
+    kind = AstNodeKind.AnnotationExpression;
     constructor(
         readonly atToken: Token,
         readonly nameToken: Token
@@ -1319,6 +1342,7 @@ export class AnnotationExpression extends Expression {
 }
 
 export class TernaryExpression extends Expression {
+    kind = AstNodeKind.TernaryExpression;
     constructor(
         readonly test: Expression,
         readonly questionMarkToken: Token,
@@ -1407,6 +1431,7 @@ export class TernaryExpression extends Expression {
 }
 
 export class NullCoalescingExpression extends Expression {
+    kind = AstNodeKind.NullCoalescingExpression;
     constructor(
         public consequent: Expression,
         public questionQuestionToken: Token,
@@ -1490,6 +1515,7 @@ export class NullCoalescingExpression extends Expression {
 }
 
 export class RegexLiteralExpression extends Expression {
+    kind = AstNodeKind.RegexLiteralExpression;
     public constructor(
         public tokens: {
             regexLiteral: Token;

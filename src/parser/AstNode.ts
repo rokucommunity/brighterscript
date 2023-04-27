@@ -13,6 +13,7 @@ import util from '../util';
  * A BrightScript AST node
  */
 export abstract class AstNode {
+    public abstract kind: AstNodeKind;
     /**
      *  The starting and ending location of the node.
      */
@@ -126,4 +127,74 @@ export abstract class Expression extends AstNode {
      * When being considered by the walk visitor, this describes what type of element the current class is.
      */
     public visitMode = InternalWalkMode.visitExpressions;
+}
+
+export enum AstNodeKind {
+    Body = 0,
+    BinaryExpression = 1,
+    CallExpression = 2,
+    FunctionExpression = 3,
+    FunctionParameterExpression = 4,
+    NamespacedVariableNameExpression = 5,
+    DottedGetExpression = 6,
+    XmlAttributeGetExpression = 7,
+    IndexedGetExpression = 8,
+    GroupingExpression = 9,
+    LiteralExpression = 10,
+    EscapedCharCodeLiteralExpression = 11,
+    ArrayLiteralExpression = 12,
+    AAMemberExpression = 13,
+    AALiteralExpression = 14,
+    UnaryExpression = 15,
+    VariableExpression = 16,
+    SourceLiteralExpression = 17,
+    NewExpression = 18,
+    CallfuncExpression = 19,
+    TemplateStringQuasiExpression = 20,
+    TemplateStringExpression = 21,
+    TaggedTemplateStringExpression = 22,
+    AnnotationExpression = 23,
+    TernaryExpression = 24,
+    NullCoalescingExpression = 25,
+    RegexLiteralExpression = 26,
+    EmptyStatement = 27,
+    AssignmentStatement = 28,
+    ExpressionStatement = 29,
+    CommentStatement = 30,
+    ExitForStatement = 31,
+    ExitWhileStatement = 32,
+    FunctionStatement = 33,
+    IfStatement = 34,
+    IncrementStatement = 35,
+    PrintStatement = 36,
+    DimStatement = 37,
+    GotoStatement = 38,
+    LabelStatement = 39,
+    ReturnStatement = 40,
+    EndStatement = 41,
+    StopStatement = 42,
+    ForStatement = 43,
+    ForEachStatement = 44,
+    WhileStatement = 45,
+    DottedSetStatement = 46,
+    IndexedSetStatement = 47,
+    LibraryStatement = 48,
+    NamespaceStatement = 49,
+    ImportStatement = 50,
+    InterfaceStatement = 51,
+    InterfaceFieldStatement = 52,
+    InterfaceMethodStatement = 53,
+    ClassStatement = 54,
+    MethodStatement = 55,
+    ClassMethodStatement = 56,
+    FieldStatement = 57,
+    ClassFieldStatement = 58,
+    TryCatchStatement = 59,
+    CatchStatement = 60,
+    ThrowStatement = 61,
+    EnumStatement = 62,
+    EnumMemberStatement = 63,
+    ConstStatement = 64,
+    ContinueStatement = 65,
+    Block = 66
 }
