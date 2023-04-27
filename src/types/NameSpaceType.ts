@@ -15,4 +15,5 @@ export class NamespaceType extends BscType {
     getMemberType(name: string, flags: SymbolTypeFlags) {
         return super.getMemberType(name, flags) ?? new ReferenceType(name, flags, () => this.memberTable);
     }
+
 }

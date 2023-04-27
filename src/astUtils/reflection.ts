@@ -13,7 +13,7 @@ import { IntegerType } from '../types/IntegerType';
 import { LongIntegerType } from '../types/LongIntegerType';
 import { FloatType } from '../types/FloatType';
 import { DoubleType } from '../types/DoubleType';
-import { CustomType } from '../types/CustomType';
+import { ClassType } from '../types/ClassType';
 import type { Scope } from '../Scope';
 import type { XmlScope } from '../XmlScope';
 import { DynamicType } from '../types/DynamicType';
@@ -295,8 +295,8 @@ export function isInvalidType(e: any): e is InvalidType {
 export function isVoidType(e: any): e is VoidType {
     return e?.constructor.name === VoidType.name;
 }
-export function isCustomType(e: any): e is CustomType {
-    return e?.constructor.name === CustomType.name;
+export function isClassType(e: any): e is ClassType {
+    return e?.constructor.name === ClassType.name;
 }
 export function isDynamicType(e: any): e is DynamicType {
     return e?.constructor.name === DynamicType.name;

@@ -1,32 +1,33 @@
 import { expect } from '../chai-config.spec';
 import { assert } from 'sinon';
-import { objectToMap } from '../testHelpers.spec';
 import type { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 import { IntegerType } from './IntegerType';
 import { InterfaceType } from './InterfaceType';
 import { ObjectType } from './ObjectType';
 import { StringType } from './StringType';
+import type { ReferenceType } from './ReferenceType';
+import { SymbolTypeFlags } from '../SymbolTable';
 
 describe('InterfaceType', () => {
-    describe('toString', () => {
+    describe('toJSString', () => {
         it('returns empty curly braces when no members', () => {
-            expect(iface({}).toString()).to.eql('{}');
+            expect((iface({}) as any).toJSString()).to.eql('{}');
         });
 
         it('includes member types', () => {
-            expect(iface({ name: new StringType() }).toString()).to.eql('{ name: string; }');
+            expect((iface({ name: new StringType() }) as any).toJSString()).to.eql('{ name: string; }');
         });
 
         it('includes nested object types', () => {
             expect(
-                iface({
+                (iface({
                     name: new StringType(),
                     parent: iface({
                         age: new IntegerType()
                     })
                 }
-                ).toString()
+                ) as any).toJSString()
             ).to.eql('{ name: string; parent: { age: integer; }; }');
         });
     });
@@ -91,15 +92,17 @@ describe('InterfaceType', () => {
         });
 
         it('matches properties in mismatched order', () => {
-            expect(
-                new InterfaceType('', new Map([
-                    ['name', new StringType()],
-                    ['age', new IntegerType()]
-                ])).isAssignableTo(new InterfaceType('', new Map([
-                    ['age', new IntegerType()],
-                    ['name', new StringType()]
-                ])))
-            ).to.be.true;
+            const ifaceOne = iface({
+                name: new StringType(),
+                age: new IntegerType()
+            });
+            const ifaceTwo = iface({
+                age: new IntegerType(),
+                name: new StringType()
+            });
+
+            expect(ifaceOne.isAssignableTo(ifaceTwo)).to.be.true;
+            expect(ifaceTwo.isAssignableTo(ifaceOne)).to.be.true;
         });
 
         it('rejects with member having mismatched type', () => {
@@ -184,18 +187,24 @@ describe('InterfaceType', () => {
     });
 });
 
-function iface(members: Record<string, BscType>) {
-    return new InterfaceType(
-        '',
-        objectToMap(members)
-    );
+let ifaceCount = 0;
+
+function iface(members: Record<string, BscType>, name?: string, parentType?: InterfaceType | ReferenceType) {
+    name = name ?? 'SomeIFace' + ifaceCount;
+    ifaceCount++;
+    const ifaceType = new InterfaceType(name, parentType);
+
+    for (const key in members) {
+        ifaceType.addMember(key, null, members[key], SymbolTypeFlags.runtime);
+    }
+    return ifaceType;
 }
 
 function expectAssignable(targetMembers: Record<string, BscType>, sourceMembers: Record<string, BscType>) {
     const targetIface = iface(targetMembers);
     const sourceIface = iface(sourceMembers);
     if (!sourceIface.isAssignableTo(targetIface)) {
-        assert.fail(`expected type ${targetIface.toString()} to be assignable to type ${sourceIface.toString()}`);
+        assert.fail(`expected type ${(targetIface as any).toJSString()} to be assignable to type ${(sourceIface as any).toJSString()}`);
     }
 }
 
@@ -203,6 +212,6 @@ function expectNotAssignable(targetMembers: Record<string, BscType>, sourceMembe
     const targetIface = iface(targetMembers);
     const sourceIface = iface(sourceMembers);
     if (sourceIface.isAssignableTo(targetIface)) {
-        assert.fail(`expected type ${targetIface.toString()} to not be assignable to type ${sourceIface.toString()}`);
+        assert.fail(`expected type ${(targetIface as any).toJSString()} to not be assignable to type ${(sourceIface as any).toJSString()}`);
     }
 }

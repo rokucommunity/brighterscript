@@ -318,12 +318,12 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             returnType = isSub ? VoidType.instance : DynamicType.instance;
         }
 
-        let functionType = new FunctionType(returnType);
-        functionType.isSub = isSub;
+        const resultType = new FunctionType(returnType);
+        resultType.isSub = isSub;
         for (let param of this.parameters) {
-            functionType.addParameter(param.name.text, param.getType(flags), !!param.defaultValue);
+            resultType.addParameter(param.name.text, param.getType(flags), !!param.defaultValue);
         }
-        return functionType;
+        return resultType;
     }
 }
 
@@ -497,13 +497,13 @@ export class DottedGetExpression extends Expression {
         this.typeChain = [];
         const objType = this.obj?.getType(flags);
         const result = objType?.getMemberType(this.name?.text, flags);
-        const typeChainEntry = { name: this.name.text, resolved: !isReferenceType(result) };
+        const typeChainEntry = { name: this.name.text, resolved: !!result && !isReferenceType(result) };
 
         if (isDottedGetExpression(this.obj)) {
             this.typeChain.push(...this.obj.typeChain, typeChainEntry);
         } else {
             const parentName = (this.obj as any)?.name ? (this.obj as any)?.name.text : 'unknown';
-            const parentEntry = { name: parentName, resolved: !isReferenceType(objType) || objType.isResolvable() };
+            const parentEntry = { name: parentName, resolved: !!objType && (!isReferenceType(objType) || objType.isResolvable()) };
             this.typeChain.push(parentEntry, typeChainEntry);
         }
         if (result || flags & SymbolTypeFlags.typetime) {
@@ -928,17 +928,13 @@ export class VariableExpression extends Expression {
         //nothing to walk
     }
 
-    private _type: BscType;
 
     getType(flags: SymbolTypeFlags) {
         const standardType = util.tokenToBscType(this.name);
         if (standardType) {
             return standardType;
         }
-        if (!this._type) {
-            this._type = new ReferenceType(this.name.text, flags, () => this.getSymbolTable());
-        }
-        return this._type;
+        return new ReferenceType(this.name.text, flags, () => this.getSymbolTable());
     }
 }
 
@@ -1672,6 +1668,16 @@ export class TypeExpression extends Expression implements TypedefProvider {
     getTypedef(state: TranspileState): (string | SourceNode)[] {
         // TypeDefs should pass through any valid type names
         return this.expression.transpile(state as BrsTranspileState);
+    }
+
+    getName(): string {
+        //TODO: this may not support Complex Types, eg. generics or Unions
+        return util.getAllDottedGetParts(this.expression).map(x => x.text).join('.');
+    }
+
+    getNameParts(): string[] {
+        //TODO: really, this code is only used to get Namespaces. It could be more clear.
+        return util.getAllDottedGetParts(this.expression).map(x => x.text);
     }
 
 }

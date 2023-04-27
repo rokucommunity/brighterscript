@@ -63,9 +63,9 @@ export class ScopeValidator {
             const expressions = [
                 ...file.parser.references.expressions,
                 //all class "extends <whatever>" expressions
-                ...file.parser.references.classStatements.map(x => x.parentClassName?.expression),
+                ...file.parser.references.classStatements.map(x => x.parentClassName),
                 //all interface "extends <whatever>" expressions
-                ...file.parser.references.interfaceStatements.map(x => x.parentInterfaceName?.expression)
+                ...file.parser.references.interfaceStatements.map(x => x.parentInterfaceName)
             ];
             for (let expression of expressions) {
                 if (!expression) {

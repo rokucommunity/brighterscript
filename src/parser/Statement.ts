@@ -18,9 +18,13 @@ import type { TranspileState } from './TranspileState';
 import { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
 import type { Expression } from './AstNode';
 import { Statement } from './AstNode';
-import { CustomType } from '../types/CustomType';
+import { ClassType } from '../types/ClassType';
 import { EnumMemberType, EnumType } from '../types/EnumType';
 import { NamespaceType } from '../types/NameSpaceType';
+import { InterfaceType } from '../types/InterfaceType';
+import type { BscType } from '../types/BscType';
+import { VoidType } from '../types/VoidType';
+import { FunctionType } from '../types/FunctionType';
 
 export class EmptyStatement extends Statement {
     constructor(
@@ -1224,15 +1228,10 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         }
     }
 
-    protected _type: NamespaceType;
-
     getType() {
-        if (this._type) {
-            return this._type;
-        }
-        this._type = new NamespaceType(this.name);
-        this._type.pushMemberProvider(() => this.body.getSymbolTable());
-        return this._type;
+        const resultType = new NamespaceType(this.name);
+        resultType.pushMemberProvider(() => this.body.getSymbolTable());
+        return resultType;
     }
 
 }
@@ -1295,7 +1294,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         interfaceToken: Token,
         name: Identifier,
         extendsToken: Token,
-        public parentInterfaceName: NamespacedVariableNameExpression,
+        public parentInterfaceName: TypeExpression,
         public body: Statement[],
         endInterfaceToken: Token
     ) {
@@ -1331,13 +1330,19 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
     }
 
-    public get fields() {
-        return this.body.filter(x => isInterfaceFieldStatement(x));
+    public get fields(): InterfaceFieldStatement[] {
+        return this.body.filter(x => isInterfaceFieldStatement(x)) as InterfaceFieldStatement[];
     }
 
-    public get methods() {
-        return this.body.filter(x => isInterfaceMethodStatement(x));
+    public get methods(): InterfaceMethodStatement[] {
+        return this.body.filter(x => isInterfaceMethodStatement(x)) as InterfaceMethodStatement[];
     }
+
+
+    public hasParentInterface() {
+        return !!this.parentInterfaceName;
+    }
+
 
     /**
      * The name of the interface WITH its leading namespace (if applicable)
@@ -1398,7 +1403,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             ' ',
             this.tokens.name.text
         );
-        const parentInterfaceName = this.parentInterfaceName?.getName(ParseMode.BrighterScript);
+        const parentInterfaceName = this.parentInterfaceName?.getName();
         if (parentInterfaceName) {
             result.push(
                 ' extends ',
@@ -1444,6 +1449,20 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             walkArray(this.body, visitor, options, this);
         }
     }
+
+    getType(flags: SymbolTypeFlags) {
+        const superIface = this.parentInterfaceName?.getType(flags) as InterfaceType;
+
+        const resultType = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
+
+        for (const statement of this.methods) {
+            resultType.addMember(statement?.tokens.name?.text, statement?.range, statement?.getType(flags), SymbolTypeFlags.runtime);
+        }
+        for (const statement of this.fields) {
+            resultType.addMember(statement?.tokens.name?.text, statement?.range, statement.getType(flags), SymbolTypeFlags.runtime);
+        }
+        return resultType;
+    }
 }
 
 export class InterfaceFieldStatement extends Statement implements TypedefProvider {
@@ -1453,7 +1472,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     constructor(
         nameToken: Identifier,
         asToken: Token,
-        public typeExpression: TypeExpression
+        public typeExpression?: TypeExpression
     ) {
         super();
         this.tokens.name = nameToken;
@@ -1504,8 +1523,14 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         return result;
     }
 
+    public getType(flags: SymbolTypeFlags): BscType {
+        return this.typeExpression?.getType(flags) ?? DynamicType.instance;
+    }
+
 }
 
+//TODO: there is much that is similar with this and FunctionExpression.
+//It would be nice to refactor this so there is less duplicated code
 export class InterfaceMethodStatement extends Statement implements TypedefProvider {
     public transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('Method not implemented.');
@@ -1594,6 +1619,23 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         }
         return result;
     }
+
+    public getType(flags: SymbolTypeFlags): FunctionType {
+        //if there's a defined return type, use that
+        let returnType = this.returnTypeExpression?.getType(flags);
+        const isSub = this.tokens.functionType.kind === TokenKind.Sub;
+        //if we don't have a return type and this is a sub, set the return type to `void`. else use `dynamic`
+        if (!returnType) {
+            returnType = isSub ? VoidType.instance : DynamicType.instance;
+        }
+
+        const resultType = new FunctionType(returnType);
+        resultType.isSub = isSub;
+        for (let param of this.params) {
+            resultType.addParameter(param.name.text, param.getType(flags), !!param.defaultValue);
+        }
+        return resultType;
+    }
 }
 
 export class ClassStatement extends Statement implements TypedefProvider {
@@ -1607,7 +1649,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         public body: Statement[],
         readonly end: Token,
         readonly extendsKeyword?: Token,
-        readonly parentClassName?: NamespacedVariableNameExpression
+        readonly parentClassName?: TypeExpression
     ) {
         super();
         this.body = this.body ?? [];
@@ -1693,7 +1735,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         if (this.extendsKeyword && this.parentClassName) {
             const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
             const fqName = util.getFullyQualifiedClassName(
-                this.parentClassName.getName(ParseMode.BrighterScript),
+                this.parentClassName.getName(),
                 namespace?.getName(ParseMode.BrighterScript)
             );
             result.push(
@@ -1746,7 +1788,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
                 //find the parent class
                 stmt = state.file.getClassFileLink(
-                    stmt.parentClassName.getName(ParseMode.BrighterScript),
+                    stmt.parentClassName.getName(),
                     namespace?.getName(ParseMode.BrighterScript)
                 )?.item;
                 myIndex++;
@@ -1777,7 +1819,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             if (stmt.parentClassName) {
                 const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
                 stmt = state.file.getClassFileLink(
-                    stmt.parentClassName.getName(ParseMode.BrighterScript),
+                    stmt.parentClassName.getName(),
                     namespace?.getName(ParseMode.BrighterScript)
                 )?.item;
                 ancestors.push(stmt);
@@ -1985,25 +2027,19 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }
     }
 
-    protected _type: CustomType;
-
     getType(flags: SymbolTypeFlags) {
-        if (this._type) {
-            return this._type;
-        }
-        this._type = new CustomType(this.getName(ParseMode.BrighterScript));
-        if (this.hasParentClass()) {
-            // TODO figure out setting the type's member table parentage
-        }
+        const superClass = this.parentClassName?.getType(flags) as ClassType;
+
+        const resultType = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
 
         for (const statement of this.methods) {
             const funcType = statement?.func.getType(flags);
-            this._type.addMember(statement?.name?.text, statement?.range, funcType, SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.name?.text, statement?.range, funcType, SymbolTypeFlags.runtime);
         }
         for (const statement of this.fields) {
-            this._type.addMember(statement?.name?.text, statement?.range, statement.getType(), SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.name?.text, statement?.range, statement.getType(), SymbolTypeFlags.runtime);
         }
-        return this._type;
+        return resultType;
     }
 }
 
@@ -2276,7 +2312,7 @@ export class ClassFieldStatement extends FieldStatement { }
 export type MemberStatement = FieldStatement | MethodStatement;
 
 /**
- * @deprecated use `MemeberStatement`
+ * @deprecated use `MemberStatement`
  */
 export type ClassMemberStatement = MemberStatement;
 
@@ -2551,19 +2587,14 @@ export class EnumStatement extends Statement implements TypedefProvider {
         }
     }
 
-    protected _type: EnumType;
-
     getType() {
-        if (this._type) {
-            return this._type;
-        }
-        this._type = new EnumType(this.fullName);
-        this._type.pushMemberProvider(() => this.getSymbolTable());
+        const resultType = new EnumType(this.fullName);
+        resultType.pushMemberProvider(() => this.getSymbolTable());
         for (const statement of this.getMembers()) {
-            this._type.addMember(statement?.tokens?.name?.text, statement?.range, statement.getType(), SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.tokens?.name?.text, statement?.range, statement.getType(), SymbolTypeFlags.runtime);
         }
 
-        return this._type;
+        return resultType;
     }
 }
 
@@ -2619,15 +2650,8 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         }
     }
 
-
-    protected _type: EnumMemberType;
-
     getType() {
-        if (this._type) {
-            return this._type;
-        }
-        this._type = new EnumMemberType((this.parent as EnumStatement)?.fullName, this.tokens?.name?.text);
-        return this._type;
+        return new EnumMemberType((this.parent as EnumStatement)?.fullName, this.tokens?.name?.text);
     }
 }
 

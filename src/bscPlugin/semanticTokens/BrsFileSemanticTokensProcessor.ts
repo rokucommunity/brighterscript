@@ -1,7 +1,7 @@
 import type { Range } from 'vscode-languageserver-protocol';
 import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isCallExpression, isCustomType, isNamespaceStatement, isNewExpression } from '../../astUtils/reflection';
+import { isCallExpression, isClassType, isNamespaceStatement, isNewExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnGetSemanticTokensEvent } from '../../interfaces';
 import type { Locatable } from '../../lexer/Token';
@@ -36,7 +36,7 @@ export class BrsFileSemanticTokensProcessor {
         //classes used in function param types
         for (const func of this.event.file.parser.references.functionExpressions) {
             for (const parm of func.parameters) {
-                if (isCustomType(parm.getType(SymbolTypeFlags.typetime))) {
+                if (isClassType(parm.getType(SymbolTypeFlags.typetime))) {
                     const namespace = parm.findAncestor<NamespaceStatement>(isNamespaceStatement);
                     classes.push({
                         className: util.getAllDottedGetParts(parm.typeExpression.expression).map(x => x.text).join('.'),

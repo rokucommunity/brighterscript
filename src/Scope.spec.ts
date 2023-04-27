@@ -13,7 +13,7 @@ import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import type { OnScopeValidateEvent } from './interfaces';
 import { SymbolTypeFlags } from './SymbolTable';
 import { EnumMemberType } from './types/EnumType';
-import { CustomType } from './types/CustomType';
+import { ClassType } from './types/ClassType';
 import { BooleanType } from './types/BooleanType';
 import { StringType } from './types/StringType';
 import { IntegerType } from './types/IntegerType';
@@ -1630,6 +1630,27 @@ describe('Scope', () => {
                 ]);
             });
 
+            it('allows a class to extend from a class in another namespace and file', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn(myFace as Villain)
+                        print myFace.coin
+                    end sub
+
+                    class Villain extends MyKlasses.twoFace
+                        name as string
+                    end class
+                `);
+                program.setFile(`source/extra.bs`, `
+                    namespace MyKlasses
+                        class twoFace
+                            coin as string
+                        end class
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
 
             it('resolves a const in a namespace', () => {
                 program.setFile(`source/main.bs`, `
@@ -1787,6 +1808,90 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
         });
+
+        describe('interfaces', () => {
+            it('allows using interfaces as types', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn(myFace as iFace)
+                    end sub
+
+                    interface iFace
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('disallows using interface members as types', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn(myFaceName as iFace.name)
+                    end sub
+
+                    interface iFace
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.itemCannotBeUsedAsType('iFace.name').message
+                ]);
+            });
+
+            it('allows accessing interface members in code', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn(myFace as iFace)
+                        print myFace.name
+                    end sub
+
+                    interface iFace
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows accessing an interface member from a super interface', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn(myFace as iFace)
+                        print myFace.coin
+                    end sub
+
+                    interface iFace extends twoFace
+                        name as string
+                    end interface
+
+                    interface twoFace
+                        coin as string
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows an interface to extend from an interface in another namespace and file', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn(myFace as iFace)
+                        print myFace.coin
+                    end sub
+
+                    interface iFace extends MyInterfaces.twoFace
+                        name as string
+                    end interface
+                `);
+                program.setFile(`source/interfaces.bs`, `
+                    namespace MyInterfaces
+                        interface twoFace
+                            coin as string
+                        end interface
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+        });
     });
 
     describe('inheritance', () => {
@@ -1919,6 +2024,9 @@ describe('Scope', () => {
                 fido = new Animals.Dog()
                 fidoBark = fido.bark()
                 chimp = new Animals.Ape()
+                chimpHasLegs = chimp.hasLegs
+                chimpSpeed = chimp.getRunSpeed()
+                fidoSpeed = fido.getRunSpeed()
                 skin = Animals.SkinType.fur
             end sub
          `;
@@ -1987,7 +2095,7 @@ describe('Scope', () => {
             expect(sourceScope).to.exist;
             expect(mainFnScope).to.exist;
             sourceScope.linkSymbolTable();
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type, CustomType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type, ClassType);
             expect(mainFnScope.symbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Foo');
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('myNum', SymbolTypeFlags.runtime)[0].type, IntegerType);
         });
@@ -2054,13 +2162,31 @@ describe('Scope', () => {
             expect(mainFnScope).to.exist;
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('skin', SymbolTypeFlags.runtime)[0].type, EnumMemberType);
 
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlags.runtime)[0].type, CustomType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlags.runtime)[0].type, ClassType);
             expect(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Animals.Bird');
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoysWings', SymbolTypeFlags.runtime)[0].type, BooleanType);
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoysSkin', SymbolTypeFlags.runtime)[0].type, EnumMemberType);
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlags.runtime)[0].type, CustomType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlags.runtime)[0].type, ClassType);
             expect(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Animals.Dog');
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoBark', SymbolTypeFlags.runtime)[0].type, StringType);
+        });
+
+        it('finds correct type for members of classes with super classes', () => {
+            const mainFile = program.setFile('source/main.bs', mainFileContents);
+            program.setFile('source/animals.bs', animalFileContents);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(7, 23));
+            const sourceScope = program.getScopeByName('source');
+            expect(sourceScope).to.exist;
+            sourceScope.linkSymbolTable();
+            expect(mainFnScope).to.exist;
+            const chimpType = mainFnScope.symbolTable.getSymbol('chimp', SymbolTypeFlags.runtime)[0].type;
+            expectTypeToBe(chimpType, ClassType);
+            expectTypeToBe((chimpType as ClassType).superClass, ClassType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('chimpHasLegs', SymbolTypeFlags.runtime)[0].type, BooleanType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('chimpSpeed', SymbolTypeFlags.runtime)[0].type, IntegerType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoSpeed', SymbolTypeFlags.runtime)[0].type, IntegerType);
         });
 
         it('finds correct types for method calls', () => {

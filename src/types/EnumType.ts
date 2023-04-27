@@ -27,7 +27,7 @@ export class EnumType extends BscType {
         return 'dynamic';
     }
 
-    public equals(targetType: BscType): boolean {
+    protected equals(targetType: BscType): boolean {
         return isEnumType(targetType) && targetType?.name.toLowerCase() === this.name.toLowerCase();
     }
 }
@@ -62,7 +62,7 @@ export class EnumMemberType extends BscType {
         return 'dynamic';
     }
 
-    public equals(targetType: BscType): boolean {
+    protected equals(targetType: BscType): boolean {
         return isEnumMemberType(targetType) &&
             targetType?.enumName.toLowerCase() === this.enumName.toLowerCase() &&
             targetType?.memberName.toLowerCase() === this.memberName.toLowerCase();

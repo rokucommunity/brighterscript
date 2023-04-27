@@ -145,11 +145,35 @@ export class SymbolTable {
     }
 
     /**
+     * Get list of symbols declared directly in this SymbolTable (excludes parent SymbolTable).
+     */
+    public getOwnSymbols(): BscSymbol[] {
+        return [].concat(...this.symbolMap.values());
+    }
+
+    /**
+     * Get list of all symbols declared in this SymbolTable (includes parent SymbolTable).
+     */
+    public getAllSymbols(bitFlags: SymbolTypeFlags): BscSymbol[] {
+        let symbols = this.getOwnSymbols();
+        //look through any sibling maps next
+        for (let sibling of this.siblings) {
+            symbols = symbols.concat(sibling.getAllSymbols(bitFlags));
+        }
+        if (this.parent) {
+            symbols = symbols.concat(this.parent.getAllSymbols(bitFlags));
+        }
+        // eslint-disable-next-line no-bitwise
+        return symbols.filter(symbol => symbol.flags & bitFlags);
+    }
+
+    /**
      * Serialize this SymbolTable to JSON (useful for debugging reasons)
      */
     private toJSON() {
         return {
             name: this.name,
+            siblings: [...this.siblings].map(sibling => sibling.toJSON()),
             parent: this.parent?.toJSON(),
             symbols: [
                 ...new Set(
