@@ -1300,7 +1300,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         interfaceToken: Token,
         name: Identifier,
         extendsToken: Token,
-        public parentInterfaceName: NamespacedVariableNameExpression,
+        public parentInterfaceName: TypeExpression,
         public body: Statement[],
         endInterfaceToken: Token
     ) {
@@ -1409,7 +1409,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             ' ',
             this.tokens.name.text
         );
-        const parentInterfaceName = this.parentInterfaceName?.getName(ParseMode.BrighterScript);
+        const parentInterfaceName = this.parentInterfaceName?.getName();
         if (parentInterfaceName) {
             result.push(
                 ' extends ',
@@ -1463,7 +1463,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         if (this._type) {
             return this._type;
         }
-        let superIface = this.hasParentInterface() ? new ReferenceType(this.parentInterfaceName.getName(ParseMode.BrighterScript), SymbolTypeFlags.typetime, () => this.parent.getSymbolTable()) : undefined;
+        let superIface = this.hasParentInterface() ? new ReferenceType(this.parentInterfaceName.getName(), SymbolTypeFlags.typetime, () => this.parent.getSymbolTable()) : undefined;
 
         this._type = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
 
@@ -1667,7 +1667,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         public body: Statement[],
         readonly end: Token,
         readonly extendsKeyword?: Token,
-        readonly parentClassName?: NamespacedVariableNameExpression
+        readonly parentClassName?: TypeExpression
     ) {
         super();
         this.body = this.body ?? [];
@@ -1753,7 +1753,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         if (this.extendsKeyword && this.parentClassName) {
             const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
             const fqName = util.getFullyQualifiedClassName(
-                this.parentClassName.getName(ParseMode.BrighterScript),
+                this.parentClassName.getName(),
                 namespace?.getName(ParseMode.BrighterScript)
             );
             result.push(
@@ -1806,7 +1806,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
                 //find the parent class
                 stmt = state.file.getClassFileLink(
-                    stmt.parentClassName.getName(ParseMode.BrighterScript),
+                    stmt.parentClassName.getName(),
                     namespace?.getName(ParseMode.BrighterScript)
                 )?.item;
                 myIndex++;
@@ -1837,7 +1837,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             if (stmt.parentClassName) {
                 const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
                 stmt = state.file.getClassFileLink(
-                    stmt.parentClassName.getName(ParseMode.BrighterScript),
+                    stmt.parentClassName.getName(),
                     namespace?.getName(ParseMode.BrighterScript)
                 )?.item;
                 ancestors.push(stmt);
@@ -2051,7 +2051,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         if (this._type) {
             return this._type;
         }
-        let superClass = this.hasParentClass() ? new ReferenceType(this.parentClassName.getName(ParseMode.BrighterScript), SymbolTypeFlags.typetime, () => this.parent.getSymbolTable()) : undefined;
+        let superClass = this.hasParentClass() ? new ReferenceType(this.parentClassName.getName(), SymbolTypeFlags.typetime, () => this.parent.getSymbolTable()) : undefined;
 
         this._type = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
 

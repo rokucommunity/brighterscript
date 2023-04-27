@@ -407,7 +407,7 @@ export class Parser {
             //if there's nothing after the `as`, add a diagnostic and continue
             if (this.checkEndOfStatement()) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.unexpectedToken(asToken.text),
+                    ...DiagnosticMessages.expectedIdentifierAfterKeyword(asToken.text),
                     range: asToken.range
                 });
                 //consume the statement separator
@@ -460,11 +460,18 @@ export class Parser {
         const nameToken = this.identifier();
 
         let extendsToken: Token;
-        let parentInterfaceName: NamespacedVariableNameExpression;
+        let parentInterfaceName: TypeExpression;
 
         if (this.peek().text.toLowerCase() === 'extends') {
             extendsToken = this.advance();
-            parentInterfaceName = this.getNamespacedVariableNameExpression();
+            if (this.checkEndOfStatement()) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedIdentifierAfterKeyword(extendsToken.text),
+                    range: extendsToken.range
+                });
+            } else {
+                parentInterfaceName = this.typeExpression();
+            }
         }
         this.consumeStatementSeparators();
         //gather up all interface members (Fields, Methods)
@@ -601,7 +608,7 @@ export class Parser {
             TokenKind.Class
         );
         let extendsKeyword: Token;
-        let parentClassName: NamespacedVariableNameExpression;
+        let parentClassName: TypeExpression;
 
         //get the class name
         let className = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('class'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
@@ -609,7 +616,14 @@ export class Parser {
         //see if the class inherits from parent
         if (this.peek().text.toLowerCase() === 'extends') {
             extendsKeyword = this.advance();
-            parentClassName = this.getNamespacedVariableNameExpression();
+            if (this.checkEndOfStatement()) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedIdentifierAfterKeyword(extendsKeyword.text),
+                    range: extendsKeyword.range
+                });
+            } else {
+                parentClassName = this.typeExpression();
+            }
         }
 
         //ensure statement separator

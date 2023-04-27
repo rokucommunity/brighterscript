@@ -360,7 +360,7 @@ export class BsClassValidator {
     private linkClassesWithParents() {
         //link all classes with their parents
         for (const [, classStatement] of this.classes) {
-            let parentClassName = classStatement.parentClassName?.getName(ParseMode.BrighterScript);
+            let parentClassName = classStatement.parentClassName?.getName();
             if (parentClassName) {
                 let relativeName: string;
                 let absoluteName: string;

@@ -1787,6 +1787,69 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
         });
+
+        describe('interfaces', () => {
+            it('allows using interfaces as types', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn(myFace as iFace)
+                    end sub
+
+                    interface iFace
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('disallows using interface members as types', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn(myFaceName as iFace.name)
+                    end sub
+
+                    interface iFace
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.itemCannotBeUsedAsType('iFace.name').message
+                ]);
+            });
+
+            it('allows accessing interface members in code', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn(myFace as iFace)
+                        print myFace.name
+                    end sub
+
+                    interface iFace
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows accessing an interface member from a super interface', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn(myFace as iFace)
+                        print myFace.coin
+                    end sub
+
+                    interface iFace extends twoFace
+                        name as string
+                    end interface
+
+                    interface twoFace
+                        coin as string
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+        });
     });
 
     describe('inheritance', () => {

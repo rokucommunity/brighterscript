@@ -502,13 +502,13 @@ export class DottedGetExpression extends Expression {
         this.typeChain = [];
         const objType = this.obj?.getType(flags);
         const result = objType?.getMemberType(this.name?.text, flags);
-        const typeChainEntry = { name: this.name.text, resolved: !isReferenceType(result) };
+        const typeChainEntry = { name: this.name.text, resolved: !!result && !isReferenceType(result) };
 
         if (isDottedGetExpression(this.obj)) {
             this.typeChain.push(...this.obj.typeChain, typeChainEntry);
         } else {
             const parentName = (this.obj as any)?.name ? (this.obj as any)?.name.text : 'unknown';
-            const parentEntry = { name: parentName, resolved: !isReferenceType(objType) || objType.isResolvable() };
+            const parentEntry = { name: parentName, resolved: !!objType && (!isReferenceType(objType) || objType.isResolvable()) };
             this.typeChain.push(parentEntry, typeChainEntry);
         }
         if (result || flags & SymbolTypeFlags.typetime) {
@@ -1677,6 +1677,16 @@ export class TypeExpression extends Expression implements TypedefProvider {
     getTypedef(state: TranspileState): (string | SourceNode)[] {
         // TypeDefs should pass through any valid type names
         return this.expression.transpile(state as BrsTranspileState);
+    }
+
+    getName(): string {
+        //TODO: this may not support Complex Types, eg. generics or Unions
+        return util.getAllDottedGetParts(this.expression).map(x => x.text).join('.');
+    }
+
+    getNameParts(): string[] {
+        //TODO: really, this code is only used to get Namespaces. It could be more clear.
+        return util.getAllDottedGetParts(this.expression).map(x => x.text);
     }
 
 }

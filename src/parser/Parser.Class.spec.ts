@@ -238,7 +238,7 @@ describe('parser class', () => {
             expect(diagnostics.length).to.be.greaterThan(0);
             let cls = statements[0] as ClassStatement;
             expect(cls.fields[0].name.text).to.equal('middleName');
-            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.unexpectedToken('as'));
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedIdentifierAfterKeyword('as'));
         });
 
         it('field access modifier defaults to undefined when omitted', () => {
@@ -367,7 +367,7 @@ describe('parser class', () => {
         expect(diagnostics[0]?.message).to.not.exist;
         let stmt = (statements[1] as ClassStatement);
         expect(stmt.extendsKeyword.text).to.equal('extends');
-        expect(stmt.parentClassName.getName(ParseMode.BrighterScript)).to.equal('Person');
+        expect(stmt.parentClassName.getName()).to.equal('Person');
     });
 
     it('catches missing identifier after "extends" keyword', () => {
