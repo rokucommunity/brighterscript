@@ -283,4 +283,26 @@ describe.only('ComponentStatement', () => {
             end sub
         `);
     });
+
+    it('adds private field to m and creates init function if missing', async () => {
+        program.setFile('components/ZombieKeyboard.bs', `
+            component ZombieKeyboard
+                private isEnabled = true
+            end component
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.xml'), `
+            <component name="ZombieKeyboard" extends="Group">
+                <script uri="pkg:/components/ZombieKeyboard.brs" type="text/brightscript" />
+                <script uri="pkg:/components/ZombieKeyboard.codebehind.brs" type="text/brightscript" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+            </component>
+        `);
+
+        await testTranspile(program.getFile('components/ZombieKeyboard.codebehind.brs'), `
+            sub init()
+                m.isEnabled = true
+            end sub
+        `);
+    });
 });

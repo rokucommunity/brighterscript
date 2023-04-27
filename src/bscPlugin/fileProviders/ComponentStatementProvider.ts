@@ -2,14 +2,15 @@ import undent from 'undent';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import { ParseMode } from '../../parser/Parser';
-import type { ComponentStatement } from '../../parser/Statement';
+import type { ComponentStatement, FunctionStatement } from '../../parser/Statement';
 import { Cache } from '../../Cache';
 import * as path from 'path';
 import { util } from '../../util';
 import type { ProvideFileEvent } from '../../interfaces';
 import { isFieldStatement, isMethodStatement } from '../../astUtils/reflection';
-import { createFunctionStatement, createAssignmentStatement } from '../../astUtils/creators';
+import { createFunctionStatement, createFunctionExpression, createDottedSetStatement, createVariableExpression } from '../../astUtils/creators';
 import type { Statement } from '../../parser/AstNode';
+import { TokenKind } from '../../lexer/TokenKind';
 
 export class ComponentStatementProvider {
     constructor(
@@ -81,23 +82,40 @@ export class ComponentStatementProvider {
             destPath: `${destDir}/${name}.codebehind.brs`
         });
         const initStatements: Statement[] = [];
+        let initFunc: FunctionStatement;
         //create AST from all the fields and methods in the component statement
         for (const member of statement.getMembers()) {
             if (isMethodStatement(member)) {
+                const func = createFunctionStatement(member.name, member.func);
                 //convert the method into a standard function
-                file.ast.statements.push(
-                    createFunctionStatement(member.name, member.func)
-                );
+                file.ast.statements.push(func);
+
+                if (member?.name?.text.toLowerCase() === 'init') {
+                    initFunc = func;
+                }
                 //if this is a private field, and it has a value
-            } else if (isFieldStatement(member) && member.accessModifier.text.toLowerCase() === 'private' && member.initialValue) {
+            } else if (isFieldStatement(member) && member.accessModifier?.text.toLowerCase() === 'private' && member.initialValue) {
                 //add private fields to the global m
                 initStatements.push(
-                    createAssignmentStatement({
-                        name: member.name,
-                        value: member.initialValue
-                    })
+                    createDottedSetStatement(
+                        createVariableExpression('m'),
+                        member.name.text,
+                        member.initialValue
+                    )
                 );
             }
+        }
+
+        //push statements to the start of `init()`
+        if (initStatements.length > 0) {
+            //create the `init` function if it doesn't exist
+            if (!initFunc) {
+                initFunc = createFunctionStatement('init',
+                    createFunctionExpression(TokenKind.Sub)
+                );
+                file.ast.statements.unshift(initFunc);
+            }
+            initFunc.func.body.statements.unshift(...initStatements);
         }
 
         //TODO these are hacks that we need until scope has been refactored to leverate the AST directly

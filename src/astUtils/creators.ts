@@ -4,7 +4,7 @@ import { TokenKind } from '../lexer/TokenKind';
 import type { Expression } from '../parser/AstNode';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../parser/Expression';
 import type { SGAttribute } from '../parser/SGTypes';
-import { AssignmentStatement, Block, FunctionStatement, MethodStatement } from '../parser/Statement';
+import { AssignmentStatement, Block, DottedSetStatement, FunctionStatement, MethodStatement } from '../parser/Statement';
 
 /**
  * A range that points to the beginning of the file. Used to give non-null ranges to programmatically-added source code.
@@ -105,6 +105,14 @@ export function createIdentifier(name: string, range?: Range): Identifier {
 
 export function createVariableExpression(ident: string, range?: Range): VariableExpression {
     return new VariableExpression(createToken(TokenKind.Identifier, ident, range));
+}
+
+export function createDottedSetStatement(obj: Expression, name: string, value: Expression, range?: Range): DottedSetStatement {
+    return new DottedSetStatement(
+        obj,
+        createToken(TokenKind.Identifier, name, range),
+        value
+    );
 }
 
 export function createDottedIdentifier(path: string[], range?: Range): DottedGetExpression {
