@@ -14,6 +14,7 @@ import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
 import type { Token } from './lexer/Token';
+import type { SymbolTypeFlags } from './SymbolTable';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -410,4 +411,10 @@ export interface FileLink<T> {
 export interface TypeResolution {
     name: string;
     resolved: boolean;
+}
+
+export interface GetTypeOptions {
+    flags: SymbolTypeFlags;
+    typeChain?: { name: string; resolved: boolean }[];
+    //TODO: Add a TypeCache that can be used to look up and store types to short circuit reference type look ups
 }

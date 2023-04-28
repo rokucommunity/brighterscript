@@ -103,10 +103,11 @@ export class ScopeValidator {
                 symbolType = SymbolTypeFlags.typetime;
                 oppositeSymbolType = SymbolTypeFlags.runtime;
             }
-            let exprType = info.expression.getType(symbolType);
+            const typeChain = [];
+            let exprType = info.expression.getType({ flags: symbolType, typeChain: typeChain });
             if (!exprType || !exprType.isResolvable()) {
-                if (info.expression.getType(oppositeSymbolType)?.isResolvable()) {
-                    const invalidlyUsedResolvedTypeName = info.expression.getType(oppositeSymbolType).toString();
+                if (info.expression.getType({ flags: oppositeSymbolType })?.isResolvable()) {
+                    const invalidlyUsedResolvedTypeName = info.expression.getType({ flags: oppositeSymbolType }).toString();
                     if (isUsedAsType) {
 
                         this.addMultiScopeDiagnostic({
@@ -127,10 +128,10 @@ export class ScopeValidator {
                 let fullErrorName = fullName;
                 let lastName = info.parts[info.parts.length - 1].name.text;
                 if (isDottedGetExpression(info.expression)) {
-                    //TODO: Wrap deciphering a typeChain in a function, so that it cna handle multiple kinds of expressions
+                    //TODO: Wrap deciphering a typeChain in a function, so that it can handle multiple kinds of expressions
                     fullErrorName = '';
-                    for (let i = 0; i < info.expression.typeChain.length; i++) {
-                        const chainItem = info.expression.typeChain[i];
+                    for (let i = 0; i < typeChain.length; i++) {
+                        const chainItem = typeChain[i];
                         if (i > 0) {
                             fullErrorName += '.';
                         }
