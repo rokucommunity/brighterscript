@@ -7,6 +7,11 @@ import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { tempDir, rootDir } from './testHelpers.spec';
+import { TypeResolution } from './types/BscType';
+import { ClassType } from './types/ClassType';
+import { NamespaceType } from './types/NameSpaceType';
+import { ReferenceType } from './types/ReferenceType';
+import { SymbolTypeFlags } from './SymbolTable';
 
 const sinon = createSandbox();
 
@@ -803,6 +808,21 @@ describe('util', () => {
                     'uri', util.createRange(2, 3, 4, 5)
                 )
             }]);
+        });
+    });
+    describe('processTypeChain', () => {
+        it('should  find the correct details in a list of type resolutions', () => {
+            const chain = [
+                new TypeResolution('AlphaNamespace', new NamespaceType('Alpha'), util.createRange(1, 1, 2, 2)),
+                new TypeResolution('BetaProp', new ClassType('Beta'), util.createRange(2, 2, 3, 3)),
+                new TypeResolution('CharlieProp', new ReferenceType('Charlie', SymbolTypeFlags.runtime, () => null), util.createRange(3, 3, 4, 4))
+            ];
+
+            const result = util.processTypeChain(chain);
+            expect(result.cannotFindName).to.eql('CharlieProp');
+            expect(result.fullChainName).to.eql('AlphaNamespace.BetaProp.CharlieProp');
+            expect(result.fullErrorName).to.eql('Beta.CharlieProp');
+            expect(result.range).to.eql(util.createRange(3, 3, 4, 4));
         });
     });
 });

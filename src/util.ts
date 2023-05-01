@@ -10,6 +10,7 @@ import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
+import type { TypeResolution } from './types/BscType';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -1471,6 +1472,35 @@ export class Util {
                 range: this.createRange(0, 0, 0, Number.MAX_VALUE)
             }]);
         }
+    }
+
+    public processTypeChain(typeChain: TypeResolution[]): { cannotFindName: string; fullErrorName: string; fullChainName: string; range: Range } {
+        let fullChainName = '';
+        let fullErrorName = '';
+        let cannotFindName = '';
+        let previousTypeName = '';
+        let errorRange: Range;
+        for (let i = 0; i < typeChain.length; i++) {
+            const chainItem = typeChain[i];
+            if (i > 0) {
+                fullChainName += '.';
+            }
+            fullChainName += chainItem.name;
+            fullErrorName = previousTypeName ? `${previousTypeName}.${chainItem.name}` : chainItem.name;
+            previousTypeName = chainItem.type.toString();
+            cannotFindName = chainItem.name;
+            if (!chainItem.resolved) {
+                errorRange = chainItem.range;
+                break;
+            }
+        }
+        return {
+            cannotFindName: cannotFindName,
+            fullErrorName: fullErrorName,
+            fullChainName: fullChainName,
+            range: errorRange
+
+        };
     }
 }
 

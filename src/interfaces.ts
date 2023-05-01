@@ -11,7 +11,7 @@ import type { FunctionStatement } from './parser/Statement';
 import type { Expression } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceMapGenerator, SourceNode } from 'source-map';
-import type { BscType } from './types/BscType';
+import type { BscType, TypeResolution } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
 import type { Token } from './lexer/Token';
 import type { SymbolTypeFlags } from './SymbolTable';
@@ -408,13 +408,9 @@ export interface FileLink<T> {
     file: BrsFile;
 }
 
-export interface TypeResolution {
-    name: string;
-    resolved: boolean;
-}
 
 export interface GetTypeOptions {
     flags: SymbolTypeFlags;
-    typeChain?: { name: string; resolved: boolean }[];
+    typeChain?: TypeResolution[];
     //TODO: Add a TypeCache that can be used to look up and store types to short circuit reference type look ups
 }

@@ -13,6 +13,7 @@ import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
 import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import type { BscType } from '../types/BscType';
+import { TypeResolution } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
 import { Expression } from './AstNode';
 import { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
@@ -490,19 +491,10 @@ export class DottedGetExpression extends Expression {
     }
 
     getType(options: GetTypeOptions) {
-        //reset
-
         const objType = this.obj?.getType(options);
         const result = objType?.getMemberType(this.name?.text, options.flags);
-        const typeChainEntry = { name: this.name.text, resolved: !!result && !isReferenceType(result) };
-
-        if (isDottedGetExpression(this.obj)) {
-            options.typeChain?.push(typeChainEntry);
-        } else {
-            const parentName = (this.obj as any)?.name ? (this.obj as any)?.name.text : 'unknown';
-            const parentEntry = { name: parentName, resolved: !!objType && (!isReferenceType(objType) || objType.isResolvable()) };
-            options.typeChain?.push(parentEntry, typeChainEntry);
-        }
+        const typeChainEntry = new TypeResolution(this.name?.text, result, this.range);
+        options.typeChain?.push(typeChainEntry);
         if (result || options.flags & SymbolTypeFlags.typetime) {
             // All types should be known at typetime
             return result;
@@ -512,6 +504,33 @@ export class DottedGetExpression extends Expression {
         return DynamicType.instance;
     }
 
+}
+
+class SomeKlass {
+
+    getDiffClass(): NameA.OtherKlass {
+        return new NameA.OtherKlass();
+    }
+
+    getClassArr() {
+        return [new SomeKlass(), new SomeKlass()];
+    }
+
+}
+
+// eslint-disable-next-line @typescript-eslint/no-namespace
+namespace NameA {
+    export class OtherKlass {
+
+        getStr() {
+            return 'hello';
+        }
+
+    }
+}
+
+function returnsAClass(): SomeKlass {
+    return new SomeKlass();
 }
 
 export class XmlAttributeGetExpression extends Expression {
@@ -927,11 +946,9 @@ export class VariableExpression extends Expression {
 
 
     getType(options: GetTypeOptions) {
-        const standardType = util.tokenToBscType(this.name);
-        if (standardType) {
-            return standardType;
-        }
-        return new ReferenceType(this.name.text, options.flags, () => this.getSymbolTable());
+        const resultType = util.tokenToBscType(this.name) ?? new ReferenceType(this.name.text, options.flags, () => this.getSymbolTable());
+        options.typeChain?.push(new TypeResolution(this.name.text, resultType, this.range));
+        return resultType;
     }
 }
 
