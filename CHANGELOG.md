@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.64.3](https://github.com/rokucommunity/brighterscript/compare/v0.64.2...v0.64.3) - 2023-04-28
+### Changed
+ - Improves performance in symbol table fetching ([#797](https://github.com/rokucommunity/brighterscript/pull/797))
+
+
+
 ## [0.64.2](https://github.com/rokucommunity/brighterscript/compare/v0.64.1...v0.64.2) - 2023-04-18
 ### Fixed
  - namespace-relative enum value false positive diagnostic ([#793](https://github.com/rokucommunity/brighterscript/pull/793))
