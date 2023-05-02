@@ -506,33 +506,6 @@ export class DottedGetExpression extends Expression {
 
 }
 
-class SomeKlass {
-
-    getDiffClass(): NameA.OtherKlass {
-        return new NameA.OtherKlass();
-    }
-
-    getClassArr() {
-        return [new SomeKlass(), new SomeKlass()];
-    }
-
-}
-
-// eslint-disable-next-line @typescript-eslint/no-namespace
-namespace NameA {
-    export class OtherKlass {
-
-        getStr() {
-            return 'hello';
-        }
-
-    }
-}
-
-function returnsAClass(): SomeKlass {
-    return new SomeKlass();
-}
-
 export class XmlAttributeGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
