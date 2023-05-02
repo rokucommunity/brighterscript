@@ -4,11 +4,15 @@ export class UnionType extends BscType {
     constructor(
         public types: BscType[]
     ) {
-        super();
+        super(joinTypesString(types));
+        for (const type of this.types) {
+            this.memberTable.addSibling(type.memberTable);
+        }
     }
 
     public addType(type: BscType) {
         this.types.push(type);
+        this.memberTable.addSibling(type.memberTable);
     }
 
     isAssignableTo(targetType: BscType): boolean {
@@ -18,10 +22,15 @@ export class UnionType extends BscType {
         throw new Error('Method not implemented.');
     }
     toString(): string {
-        throw new Error('Method not implemented.');
+        return joinTypesString(this.types);
     }
     toTypeString(): string {
-        throw new Error('Method not implemented.');
+        return 'dynamic';
     }
 
+}
+
+
+function joinTypesString(types: BscType[]) {
+    return types.map(t => t.toString()).join(' | ');
 }
