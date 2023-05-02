@@ -1,4 +1,4 @@
-import { isDynamicType, isEnumMemberType, isEnumType } from '../astUtils/reflection';
+import { isDynamicType, isEnumMemberType, isEnumType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 
 export class EnumType extends BscType {
@@ -9,6 +9,9 @@ export class EnumType extends BscType {
     }
 
     public isAssignableTo(targetType: BscType) {
+        if (isUnionType(targetType) && targetType.canBeAssignedFrom(this)) {
+            return true;
+        }
         return (
             this.equals(targetType) ||
             isDynamicType(targetType)

@@ -1,3 +1,4 @@
+import { isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 import { FloatType } from './FloatType';
@@ -14,6 +15,9 @@ export class DoubleType extends BscType {
     public static instance = new DoubleType('double');
 
     public isAssignableTo(targetType: BscType) {
+        if (isUnionType(targetType) && targetType.canBeAssignedFrom(this)) {
+            return true;
+        }
         return (
             targetType instanceof DoubleType ||
             targetType instanceof DynamicType

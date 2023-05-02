@@ -3,6 +3,7 @@ import type { SymbolTypeFlags } from '../SymbolTable';
 import { isReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
+import { getUniqueType } from './UnionType';
 
 export class ReferenceType extends BscType {
     constructor(public name: string, public flags: SymbolTypeFlags, private tableProvider: SymbolTableProvider) {
@@ -96,7 +97,7 @@ export class ReferenceType extends BscType {
      */
     private resolve(): BscType {
         // eslint-disable-next-line no-bitwise
-        return this.tableProvider()?.getSymbol(this.name, this.flags)?.[0]?.type;
+        return getUniqueType(this.tableProvider()?.getSymbol(this.name, this.flags)?.map(symbol => symbol.type));//[0]?.type;
     }
 
     private referenceChain = new Set<BscType>();

@@ -1,3 +1,4 @@
+import { isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
@@ -14,6 +15,9 @@ export class StringType extends BscType {
     public static instance = new StringType('string');
 
     public isAssignableTo(targetType: BscType) {
+        if (isUnionType(targetType) && targetType.canBeAssignedFrom(this)) {
+            return true;
+        }
         return (
             targetType instanceof StringType ||
             targetType instanceof DynamicType

@@ -23,6 +23,7 @@ import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import type { TypePropertyReferenceType, ReferenceType } from '../types/ReferenceType';
 import type { EnumMemberType, EnumType } from '../types/EnumType';
 import type { NamespaceType } from '../types/NameSpaceType';
+import type { UnionType } from '../types/UnionType';
 
 // File reflection
 
@@ -321,6 +322,9 @@ export function isTypePropertyReferenceType(e: any): e is TypePropertyReferenceT
 }
 export function isNamespaceType(e: any): e is NamespaceType {
     return e?.constructor.name === 'NamespaceType';
+}
+export function isUnionType(e: any): e is UnionType {
+    return e?.constructor.name === 'UnionType';
 }
 
 const numberConstructorNames = [

@@ -1,3 +1,4 @@
+import { isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
@@ -36,6 +37,8 @@ export class FunctionType extends BscType {
 
     public isAssignableTo(targetType: BscType) {
         if (targetType instanceof DynamicType) {
+            return true;
+        } else if (isUnionType(targetType) && targetType.canBeAssignedFrom(this)) {
             return true;
         } else if (targetType instanceof FunctionType) {
             //compare all parameters

@@ -1,5 +1,5 @@
 import { SymbolTypeFlags } from '../SymbolTable';
-import { isDynamicType, isObjectType } from '../astUtils/reflection';
+import { isDynamicType, isObjectType, isUnionType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import { InheritableType, isInheritableType } from './InheritableType';
 
@@ -17,6 +17,8 @@ export class InterfaceType extends InheritableType {
             return true;
         }
         if (isObjectType(targetType) || isDynamicType(targetType)) {
+            return true;
+        } else if (isUnionType(targetType) && targetType.canBeAssignedFrom(this)) {
             return true;
         }
         const ancestorTypes = this.getAncestorTypeList();

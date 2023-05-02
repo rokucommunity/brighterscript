@@ -1,5 +1,5 @@
+import { isBooleanType, isDynamicType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
 
 export class BooleanType extends BscType {
     constructor(
@@ -11,9 +11,13 @@ export class BooleanType extends BscType {
     public static instance = new BooleanType('boolean');
 
     public isAssignableTo(targetType: BscType) {
+        if (isUnionType(targetType) && targetType.canBeAssignedFrom(this)) {
+            return true;
+        }
+
         return (
-            targetType instanceof BooleanType ||
-            targetType instanceof DynamicType
+            isBooleanType(targetType) ||
+            isDynamicType(targetType)
         );
     }
 

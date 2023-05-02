@@ -1,4 +1,5 @@
 import type { SymbolTypeFlags } from '../SymbolTable';
+import { isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
@@ -10,6 +11,9 @@ export class ObjectType extends BscType {
     }
 
     public isAssignableTo(targetType: BscType) {
+        if (isUnionType(targetType) && targetType.canBeAssignedFrom(this)) {
+            return true;
+        }
         return (
             targetType instanceof ObjectType ||
             targetType instanceof DynamicType
