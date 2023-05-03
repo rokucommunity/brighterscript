@@ -462,7 +462,7 @@ export class BrsFile {
                     nameRange: param.name.range,
                     lineIndex: param.name.range.start.line,
                     name: param.name.text,
-                    getType: () => param.getType(SymbolTypeFlags.runtime)
+                    getType: () => param.getType({ flags: SymbolTypeFlags.runtime })
                 });
             }
 
@@ -508,7 +508,7 @@ export class BrsFile {
                     nameRange: statement.name.range,
                     lineIndex: statement.name.range.start.line,
                     name: statement.name.text,
-                    getType: () => statement.value.getType(SymbolTypeFlags.runtime)
+                    getType: () => statement.value.getType({ flags: SymbolTypeFlags.runtime })
                 });
             }
         }
@@ -522,7 +522,7 @@ export class BrsFile {
             for (let param of statement.func.parameters) {
                 let callableParam = {
                     name: param.name.text,
-                    type: param.getType(SymbolTypeFlags.typetime),
+                    type: param.getType({ flags: SymbolTypeFlags.typetime }),
                     isOptional: !!param.defaultValue,
                     isRestArgument: false
                 };
@@ -536,7 +536,7 @@ export class BrsFile {
                 file: this,
                 params: params,
                 range: statement.func.range,
-                type: statement.getType(SymbolTypeFlags.typetime),
+                type: statement.getType({ flags: SymbolTypeFlags.typetime }),
                 getName: statement.getName.bind(statement),
                 hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
                 functionStatement: statement

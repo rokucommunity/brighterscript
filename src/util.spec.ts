@@ -7,6 +7,11 @@ import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { tempDir, rootDir } from './testHelpers.spec';
+import { TypeChainEntry } from './interfaces';
+import { ClassType } from './types/ClassType';
+import { NamespaceType } from './types/NameSpaceType';
+import { ReferenceType } from './types/ReferenceType';
+import { SymbolTypeFlags } from './SymbolTable';
 
 const sinon = createSandbox();
 
@@ -803,6 +808,22 @@ describe('util', () => {
                     'uri', util.createRange(2, 3, 4, 5)
                 )
             }]);
+        });
+    });
+    describe('processTypeChain', () => {
+        it('should  find the correct details in a list of type resolutions', () => {
+            const chain = [
+                new TypeChainEntry('AlphaNamespace', new NamespaceType('Alpha'), util.createRange(1, 1, 2, 2)),
+                new TypeChainEntry('BetaProp', new ClassType('Beta'), util.createRange(2, 2, 3, 3)),
+                new TypeChainEntry('CharlieProp', new ReferenceType('Charlie', SymbolTypeFlags.runtime, () => null), util.createRange(3, 3, 4, 4))
+            ];
+
+            const result = util.processTypeChain(chain);
+            expect(result.missingItemName).to.eql('CharlieProp');
+            expect(result.fullChainName).to.eql('AlphaNamespace.BetaProp.CharlieProp');
+            expect(result.missingItemParentTypeName).to.eql('Beta');
+            expect(result.fullNameOfMissingItem).to.eql('Beta.CharlieProp');
+            expect(result.range).to.eql(util.createRange(3, 3, 4, 4));
         });
     });
 });
