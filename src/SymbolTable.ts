@@ -140,7 +140,7 @@ export class SymbolTable {
         //Need to take the intersection of siblings...
         const key = name.toLowerCase();
         let result: BscSymbol[];
-        let resultMe = [];
+        let resultSoFar = [];
         // look in our map first
         if ((result = this.symbolMap.get(key))) {
             // eslint-disable-next-line no-bitwise
@@ -149,6 +149,7 @@ export class SymbolTable {
                 return result;
             }
         }
+
         //look through any sibling maps next
         for (let sibling of this.siblings) {
             if ((result = sibling.symbolMap.get(key))) {
