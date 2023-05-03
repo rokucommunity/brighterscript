@@ -423,7 +423,7 @@ export class TypeChainEntry {
     }
 }
 
-export interface TypeChainProcessResults {
+export interface TypeChainProcessResult {
     missingItemName: string;
     missingItemParentTypeName: string;
     fullNameOfMissingItem: string;
