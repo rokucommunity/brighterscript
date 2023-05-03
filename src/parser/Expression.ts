@@ -13,7 +13,7 @@ import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
 import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import type { BscType } from '../types/BscType';
-import { TypeResolution } from '../types/BscType';
+import { TypeChainEntry } from '../interfaces';
 import { FunctionType } from '../types/FunctionType';
 import { Expression } from './AstNode';
 import { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
@@ -493,7 +493,7 @@ export class DottedGetExpression extends Expression {
     getType(options: GetTypeOptions) {
         const objType = this.obj?.getType(options);
         const result = objType?.getMemberType(this.name?.text, options.flags);
-        const typeChainEntry = new TypeResolution(this.name?.text, result, this.range);
+        const typeChainEntry = new TypeChainEntry(this.name?.text, result, this.range);
         options.typeChain?.push(typeChainEntry);
         if (result || options.flags & SymbolTypeFlags.typetime) {
             // All types should be known at typetime
@@ -920,7 +920,7 @@ export class VariableExpression extends Expression {
 
     getType(options: GetTypeOptions) {
         const resultType = util.tokenToBscType(this.name) ?? new ReferenceType(this.name.text, options.flags, () => this.getSymbolTable());
-        options.typeChain?.push(new TypeResolution(this.name.text, resultType, this.range));
+        options.typeChain?.push(new TypeChainEntry(this.name.text, resultType, this.range));
         return resultType;
     }
 }

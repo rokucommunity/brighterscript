@@ -9,8 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
-import type { TypeResolution } from './types/BscType';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TypeChainEntry, TypeChainProcessResults } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -1474,11 +1473,12 @@ export class Util {
         }
     }
 
-    public processTypeChain(typeChain: TypeResolution[]): { cannotFindName: string; fullErrorName: string; fullChainName: string; range: Range } {
+    public processTypeChain(typeChain: TypeChainEntry[]): TypeChainProcessResults {
         let fullChainName = '';
         let fullErrorName = '';
-        let cannotFindName = '';
+        let missingItemName = '';
         let previousTypeName = '';
+        let parentTypeName = '';
         let errorRange: Range;
         for (let i = 0; i < typeChain.length; i++) {
             const chainItem = typeChain[i];
@@ -1486,17 +1486,19 @@ export class Util {
                 fullChainName += '.';
             }
             fullChainName += chainItem.name;
+            parentTypeName = previousTypeName;
             fullErrorName = previousTypeName ? `${previousTypeName}.${chainItem.name}` : chainItem.name;
             previousTypeName = chainItem.type.toString();
-            cannotFindName = chainItem.name;
-            if (!chainItem.resolved) {
+            missingItemName = chainItem.name;
+            if (!chainItem.isResolved) {
                 errorRange = chainItem.range;
                 break;
             }
         }
         return {
-            cannotFindName: cannotFindName,
-            fullErrorName: fullErrorName,
+            missingItemName: missingItemName,
+            missingItemParentTypeName: parentTypeName,
+            fullNameOfMissingItem: fullErrorName,
             fullChainName: fullChainName,
             range: errorRange
 

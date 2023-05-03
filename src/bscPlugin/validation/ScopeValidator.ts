@@ -126,10 +126,9 @@ export class ScopeValidator {
                 }
 
                 const typeChainScan = util.processTypeChain(typeChain);
-
                 this.addMultiScopeDiagnostic({
                     file: file as BscFile,
-                    ...DiagnosticMessages.cannotFindName(typeChainScan.cannotFindName, typeChainScan.fullErrorName),
+                    ...DiagnosticMessages.cannotFindName(typeChainScan.missingItemName, typeChainScan.fullNameOfMissingItem),
                     range: typeChainScan.range
                 });
                 //skip to the next expression

@@ -47,10 +47,3 @@ export abstract class BscType {
 }
 
 
-export class TypeResolution {
-    constructor(public name: string, public type: BscType, public range: Range) {
-    }
-    get resolved() {
-        return this.type?.isResolvable();
-    }
-}
