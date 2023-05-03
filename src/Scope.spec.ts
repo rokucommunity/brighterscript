@@ -1808,7 +1808,6 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
-
             it('finds unknown members of primitive types', () => {
                 program.setFile(`source/main.bs`, `
                     sub fn(input as SomeKlass)
@@ -1824,6 +1823,33 @@ describe('Scope', () => {
                 program.validate();
                 //TODO: ideally, if this is a primitive type, we should know all the possible members
                 // This *SHOULD* be an error, but currently, during Runtime, an unknown member (from DottedtGetExpression) is returned as Dynamic.instance
+                expectZeroDiagnostics(program);
+            });
+
+
+            it('finds members of arrays', () => {
+                program.setFile(`source/main.bs`, `
+                    sub fn(input as SomeKlass)
+                        numValue = input.getOtherKlasses()[2].num
+                        print numValue
+                    end sub
+
+                    class OtherKlass
+                      num = 1
+                    end class
+
+                    class SomeKlass
+                        function getPi() as float
+                            return 3.14
+                        end function
+
+                        function getOtherKlasses()
+                            return [new OtherKlass(), new OtherKlass(), new OtherKlass()]
+                        end function
+                    end class
+                `);
+                program.validate();
+                //TODO: When array types are available, check that `numValue` is an integer
                 expectZeroDiagnostics(program);
             });
 

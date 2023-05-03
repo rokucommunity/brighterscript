@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TypeChainEntry, TypeChainProcessResults } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TypeChainEntry, TypeChainProcessResult } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -1473,7 +1473,7 @@ export class Util {
         }
     }
 
-    public processTypeChain(typeChain: TypeChainEntry[]): TypeChainProcessResults {
+    public processTypeChain(typeChain: TypeChainEntry[]): TypeChainProcessResult {
         let fullChainName = '';
         let fullErrorName = '';
         let missingItemName = '';
