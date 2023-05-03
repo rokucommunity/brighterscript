@@ -3,7 +3,7 @@ import type { SymbolTypeFlags } from '../SymbolTable';
 import { isReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
-import { getUniqueType } from './UnionType';
+import { getUniqueType } from './helpers';
 
 export class ReferenceType extends BscType {
     constructor(public name: string, public flags: SymbolTypeFlags, private tableProvider: SymbolTableProvider) {
@@ -43,13 +43,13 @@ export class ReferenceType extends BscType {
                 if (!innerType) {
                     // No real BscType found - we may need to handle some specific cases
 
-                    if (propName === 'getMemberType') {
+                    if (propName === 'getMemberTypes') {
                         // We're looking for a member of a reference type
                         // Since we don't know what type this is, yet, return ReferenceType
                         return (memberName: string, flags: SymbolTypeFlags) => {
-                            return new ReferenceType(memberName, flags, () => {
+                            return [new ReferenceType(memberName, flags, () => {
                                 return (this.resolve() as any)?.memberTable;
-                            });
+                            })];
                         };
                     } else if (propName === 'toString') {
                         // This type was never found
@@ -96,8 +96,7 @@ export class ReferenceType extends BscType {
      * Resolves the type based on the original name and the table provider
      */
     private resolve(): BscType {
-        // eslint-disable-next-line no-bitwise
-        return getUniqueType(this.tableProvider()?.getSymbol(this.name, this.flags)?.map(symbol => symbol.type));//[0]?.type;
+        return getUniqueType(this.tableProvider()?.getSymbolTypes(this.name, this.flags));
     }
 
     private referenceChain = new Set<BscType>();
@@ -127,13 +126,13 @@ export class TypePropertyReferenceType extends BscType {
                 }
 
                 if (isReferenceType(this.outerType) && !this.outerType.isResolvable()) {
-                    if (propName === 'getMemberType') {
-                        //If we're calling `getMemberType()`, we need it to proxy to using the actual symbol table
+                    if (propName === 'getMemberTypes') {
+                        //If we're calling `getMemberTypes()`, we need it to proxy to using the actual symbol table
                         //So if that symbol is ever populated, the correct type is passed through
                         return (memberName: string, flags: SymbolTypeFlags) => {
-                            return new ReferenceType(memberName, flags, () => {
+                            return [new ReferenceType(memberName, flags, () => {
                                 return (this.outerType[this.propertyName] as any)?.memberTable;
-                            });
+                            })];
                         };
                     }
                 }

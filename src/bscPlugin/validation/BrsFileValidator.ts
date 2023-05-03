@@ -67,7 +67,6 @@ export class BrsFileValidator {
             },
             AssignmentStatement: (node) => {
                 //register this variable
-
                 const nodeType = node.getType(SymbolTypeFlags.runtime);
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, nodeType, SymbolTypeFlags.runtime);
             },

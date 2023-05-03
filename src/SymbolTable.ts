@@ -127,6 +127,14 @@ export class SymbolTable {
         });
     }
 
+    getSymbolTypes(name: string, bitFlags: number): BscType[] {
+        const symbolArray = this.getSymbol(name, bitFlags);
+        if (!symbolArray) {
+            return undefined;
+        }
+        return symbolArray.map(symbol => symbol.type);
+    }
+
     /**
      * Adds all the symbols from another table to this one
      * It will overwrite any existing symbols in this table
@@ -199,3 +207,5 @@ export interface BscSymbol {
  * A function that returns a symbol table.
  */
 export type SymbolTableProvider = () => SymbolTable;
+
+

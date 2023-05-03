@@ -22,6 +22,7 @@ import { StringType } from '../types/StringType';
 import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
 import { TypePropertyReferenceType, ReferenceType } from '../types/ReferenceType';
+import { getUniqueType } from '../types/helpers';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -496,7 +497,7 @@ export class DottedGetExpression extends Expression {
         //reset
         this.typeChain = [];
         const objType = this.obj?.getType(flags);
-        const result = objType?.getMemberType(this.name?.text, flags);
+        const result = getUniqueType(objType?.getMemberTypes(this.name?.text, flags));
         const typeChainEntry = { name: this.name.text, resolved: !!result && !isReferenceType(result) };
 
         if (isDottedGetExpression(this.obj)) {

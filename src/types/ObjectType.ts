@@ -32,9 +32,9 @@ export class ObjectType extends BscType {
         return this.toString();
     }
 
-    getMemberType(name: string, flags: SymbolTypeFlags) {
+    getMemberTypes(name: string, flags: SymbolTypeFlags) {
         // TODO: How should we handle accessing properties of an object?
         // For example, we could add fields as properties to m.top, but there could be other members added programmatically
-        return super.getMemberType(name, flags) ?? DynamicType.instance;
+        return super.getMemberTypes(name, flags) ?? [DynamicType.instance];
     }
 }

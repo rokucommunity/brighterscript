@@ -24,8 +24,8 @@ export abstract class BscType {
         this.memberTable.addSymbol(name, range, type, flags);
     }
 
-    getMemberType(name: string, flags: SymbolTypeFlags) {
-        return this.memberTable.getSymbol(name, flags)?.[0]?.type;
+    getMemberTypes(name: string, flags: SymbolTypeFlags) {
+        return this.memberTable.getSymbolTypes(name, flags);
     }
 
     isResolvable(): boolean {
