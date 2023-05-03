@@ -29,6 +29,8 @@ export class SymbolTable {
 
     private parentProviders = [] as SymbolTableProvider[];
 
+    public findIntersectionOfSiblings = false;
+
     /**
      * Push a function that will provide a parent SymbolTable when requested
      */
@@ -128,11 +130,39 @@ export class SymbolTable {
     }
 
     getSymbolTypes(name: string, bitFlags: number): BscType[] {
-        const symbolArray = this.getSymbol(name, bitFlags);
-        if (!symbolArray) {
-            return undefined;
+        if (!this.findIntersectionOfSiblings) {
+            const symbolArray = this.getSymbol(name, bitFlags);
+            if (!symbolArray) {
+                return undefined;
+            }
+            return symbolArray.map(symbol => symbol.type);
         }
-        return symbolArray.map(symbol => symbol.type);
+        //Need to take the intersection of siblings...
+        const key = name.toLowerCase();
+        let result: BscSymbol[];
+        let resultMe = [];
+        // look in our map first
+        if ((result = this.symbolMap.get(key))) {
+            // eslint-disable-next-line no-bitwise
+            const resultMe = result.filter(symbol => symbol.flags & bitFlags);
+            if (resultMe.length > 0) {
+                return result;
+            }
+        }
+        //look through any sibling maps next
+        for (let sibling of this.siblings) {
+            if ((result = sibling.symbolMap.get(key))) {
+                // eslint-disable-next-line no-bitwise
+                result = result.filter(symbol => symbol.flags & bitFlags);
+                if (result.length > 0) {
+                    return result;
+                }
+            }
+        }
+        // ask our parent for a symbol
+        return this.parent?.getSymbol(key, bitFlags);
+
+        return [];
     }
 
     /**

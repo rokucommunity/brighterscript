@@ -1,3 +1,4 @@
+import type { SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { isInheritableType } from './InheritableType';
@@ -15,6 +16,10 @@ export class UnionType extends BscType {
     public addType(type: BscType) {
         this.types.push(type);
         this.memberTable.addSibling(type.memberTable);
+    }
+
+    getMemberTypes(name: string, flags: SymbolTypeFlags) {
+        return [];
     }
 
     isAssignableTo(targetType: BscType): boolean {
@@ -61,7 +66,6 @@ export class UnionType extends BscType {
     canBeAssignedFrom(targetType: BscType) {
         return !!this.types.find(t => targetType?.isAssignableTo(t));
     }
-
 }
 
 
