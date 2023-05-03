@@ -35,13 +35,13 @@ export class BrsFileSemanticTokensProcessor {
 
         //classes used in function param types
         for (const func of this.event.file.parser.references.functionExpressions) {
-            for (const parm of func.parameters) {
-                if (isClassType(parm.getType(SymbolTypeFlags.typetime))) {
-                    const namespace = parm.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            for (const param of func.parameters) {
+                if (isClassType(param.getType({ flags: SymbolTypeFlags.typetime }))) {
+                    const namespace = param.findAncestor<NamespaceStatement>(isNamespaceStatement);
                     classes.push({
-                        className: util.getAllDottedGetParts(parm.typeExpression.expression).map(x => x.text).join('.'),
+                        className: util.getAllDottedGetParts(param.typeExpression.expression).map(x => x.text).join('.'),
                         namespaceName: namespace?.getName(ParseMode.BrighterScript),
-                        range: parm.typeExpression.range
+                        range: param.typeExpression.range
                     });
                 }
             }

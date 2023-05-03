@@ -63,11 +63,11 @@ export class BrsFileValidator {
 
                 //register this class
                 // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, node.getType(SymbolTypeFlags.typetime), SymbolTypeFlags.typetime | SymbolTypeFlags.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, node.getType({ flags: SymbolTypeFlags.typetime }), SymbolTypeFlags.typetime | SymbolTypeFlags.runtime);
             },
             AssignmentStatement: (node) => {
                 //register this variable
-                const nodeType = node.getType(SymbolTypeFlags.runtime);
+                const nodeType = node.getType({ flags: SymbolTypeFlags.runtime });
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, nodeType, SymbolTypeFlags.runtime);
             },
             DottedSetStatement: (node) => {
@@ -130,7 +130,7 @@ export class BrsFileValidator {
                     node.parent.getSymbolTable().addSymbol(
                         node.name.text,
                         node.name.range,
-                        node.getType(SymbolTypeFlags.typetime),
+                        node.getType({ flags: SymbolTypeFlags.typetime }),
                         SymbolTypeFlags.runtime
                     );
                 }
@@ -141,12 +141,12 @@ export class BrsFileValidator {
                     namespace.getSymbolTable().addSymbol(
                         node.name.text,
                         node.name.range,
-                        node.getType(SymbolTypeFlags.typetime),
+                        node.getType({ flags: SymbolTypeFlags.typetime }),
                         SymbolTypeFlags.runtime
                     );
                     //add the transpiled name for namespaced functions to the root symbol table
                     const transpiledNamespaceFunctionName = node.getName(ParseMode.BrightScript);
-                    const funcType = node.func.getType(SymbolTypeFlags.typetime);
+                    const funcType = node.func.getType({ flags: SymbolTypeFlags.typetime });
                     funcType.setName(transpiledNamespaceFunctionName);
 
                     this.event.file.parser.ast.symbolTable.addSymbol(
@@ -165,17 +165,17 @@ export class BrsFileValidator {
             FunctionParameterExpression: (node) => {
                 const paramName = node.name?.text;
                 const symbolTable = node.getSymbolTable();
-                symbolTable?.addSymbol(paramName, node.name.range, node.getType(SymbolTypeFlags.typetime), SymbolTypeFlags.runtime);
+                symbolTable?.addSymbol(paramName, node.name.range, node.getType({ flags: SymbolTypeFlags.typetime }), SymbolTypeFlags.runtime);
             },
             InterfaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));
                 // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, node.getType(SymbolTypeFlags.typetime), SymbolTypeFlags.runtime | SymbolTypeFlags.typetime);
+                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, node.getType({ flags: SymbolTypeFlags.typetime }), SymbolTypeFlags.runtime | SymbolTypeFlags.typetime);
             },
             ConstStatement: (node) => {
                 this.validateDeclarationLocations(node, 'const', () => util.createBoundingRange(node.tokens.const, node.tokens.name));
 
-                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, node.getType(SymbolTypeFlags.typetime), SymbolTypeFlags.runtime);
+                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, node.getType({ flags: SymbolTypeFlags.typetime }), SymbolTypeFlags.runtime);
             },
             CatchStatement: (node) => {
                 node.parent.getSymbolTable().addSymbol(node.exceptionVariable.text, node.exceptionVariable.range, DynamicType.instance, SymbolTypeFlags.runtime);

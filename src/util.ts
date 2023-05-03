@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TypeChainEntry, TypeChainProcessResult } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -1471,6 +1471,38 @@ export class Util {
                 range: this.createRange(0, 0, 0, Number.MAX_VALUE)
             }]);
         }
+    }
+
+    public processTypeChain(typeChain: TypeChainEntry[]): TypeChainProcessResult {
+        let fullChainName = '';
+        let fullErrorName = '';
+        let missingItemName = '';
+        let previousTypeName = '';
+        let parentTypeName = '';
+        let errorRange: Range;
+        for (let i = 0; i < typeChain.length; i++) {
+            const chainItem = typeChain[i];
+            if (i > 0) {
+                fullChainName += '.';
+            }
+            fullChainName += chainItem.name;
+            parentTypeName = previousTypeName;
+            fullErrorName = previousTypeName ? `${previousTypeName}.${chainItem.name}` : chainItem.name;
+            previousTypeName = chainItem.type.toString();
+            missingItemName = chainItem.name;
+            if (!chainItem.isResolved) {
+                errorRange = chainItem.range;
+                break;
+            }
+        }
+        return {
+            missingItemName: missingItemName,
+            missingItemParentTypeName: parentTypeName,
+            fullNameOfMissingItem: fullErrorName,
+            fullChainName: fullChainName,
+            range: errorRange
+
+        };
     }
 }
 

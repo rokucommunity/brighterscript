@@ -11,8 +11,9 @@ import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
 import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
-import type { TranspileResult, TypedefProvider } from '../interfaces';
+import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import type { BscType } from '../types/BscType';
+import { TypeChainEntry } from '../interfaces';
 import { FunctionType } from '../types/FunctionType';
 import { Expression } from './AstNode';
 import { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
@@ -119,8 +120,8 @@ export class CallExpression extends Expression {
         }
     }
 
-    getType(flags: SymbolTypeFlags) {
-        const calleeType = this.callee.getType(flags);
+    getType(options: GetTypeOptions) {
+        const calleeType = this.callee.getType(options);
         if (isNewExpression(this.parent)) {
             return calleeType;
         }
@@ -310,9 +311,9 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
     }
 
-    public getType(flags: SymbolTypeFlags): FunctionType {
+    public getType(options: GetTypeOptions): FunctionType {
         //if there's a defined return type, use that
-        let returnType = this.returnTypeExpression?.getType(flags);
+        let returnType = this.returnTypeExpression?.getType(options);
         const isSub = this.functionType.kind === TokenKind.Sub;
         //if we don't have a return type and this is a sub, set the return type to `void`. else use `dynamic`
         if (!returnType) {
@@ -322,7 +323,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         const resultType = new FunctionType(returnType);
         resultType.isSub = isSub;
         for (let param of this.parameters) {
-            resultType.addParameter(param.name.text, param.getType(flags), !!param.defaultValue);
+            resultType.addParameter(param.name.text, param.getType(options), !!param.defaultValue);
         }
         return resultType;
     }
@@ -339,8 +340,10 @@ export class FunctionParameterExpression extends Expression {
         super();
     }
 
-    public getType(_flags: SymbolTypeFlags) {
-        return this.typeExpression?.getType(SymbolTypeFlags.typetime) ?? this.defaultValue?.getType(SymbolTypeFlags.runtime) ?? DynamicType.instance;
+    public getType(options: GetTypeOptions) {
+        return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlags.typetime }) ??
+            this.defaultValue?.getType({ ...options, flags: SymbolTypeFlags.runtime }) ??
+            DynamicType.instance;
     }
 
     public get range(): Range {
@@ -449,8 +452,8 @@ export class NamespacedVariableNameExpression extends Expression {
         }
     }
 
-    getType(flags: SymbolTypeFlags) {
-        return this.expression.getType(flags);
+    getType(options: GetTypeOptions) {
+        return this.expression.getType(options);
     }
 }
 
@@ -466,11 +469,6 @@ export class DottedGetExpression extends Expression {
         super();
         this.range = util.createBoundingRange(this.obj, this.dot, this.name);
     }
-
-    // TODO: remove typeChain, instead, allow an array passed into `getType()` to be filled with the
-    // types found
-    // The typechain needs to be agnostic of use, and some other function will be used for changing it into a human-readable format
-    public typeChain: { name: string; resolved: boolean }[] = [];
 
     public readonly range: Range;
 
@@ -493,21 +491,12 @@ export class DottedGetExpression extends Expression {
         }
     }
 
-    getType(flags: SymbolTypeFlags) {
-        //reset
-        this.typeChain = [];
-        const objType = this.obj?.getType(flags);
-        const result = getUniqueType(objType?.getMemberTypes(this.name?.text, flags));
-        const typeChainEntry = { name: this.name.text, resolved: !!result && !isReferenceType(result) };
-
-        if (isDottedGetExpression(this.obj)) {
-            this.typeChain.push(...this.obj.typeChain, typeChainEntry);
-        } else {
-            const parentName = (this.obj as any)?.name ? (this.obj as any)?.name.text : 'unknown';
-            const parentEntry = { name: parentName, resolved: !!objType && (!isReferenceType(objType) || objType.isResolvable()) };
-            this.typeChain.push(parentEntry, typeChainEntry);
-        }
-        if (result || flags & SymbolTypeFlags.typetime) {
+    getType(options: GetTypeOptions) {
+        const objType = this.obj?.getType(options);
+        const result = getUniqueType(objType?.getMemberTypes(this.name?.text, options.flags));
+        const typeChainEntry = new TypeChainEntry(this.name?.text, result, this.range);
+        options.typeChain?.push(typeChainEntry);
+        if (result || options.flags & SymbolTypeFlags.typetime) {
             // All types should be known at typetime
             return result;
         }
@@ -611,8 +600,8 @@ export class GroupingExpression extends Expression {
         }
     }
 
-    getType(flags: SymbolTypeFlags) {
-        return this.expression.getType(flags);
+    getType(options: GetTypeOptions) {
+        return this.expression.getType(options);
     }
 }
 
@@ -623,7 +612,7 @@ export class LiteralExpression extends Expression {
         super();
     }
 
-    public getType(_flags: SymbolTypeFlags = SymbolTypeFlags.runtime | SymbolTypeFlags.typetime) {
+    public getType(options?: GetTypeOptions) {
         return util.tokenToBscType(this.token);
     }
 
@@ -930,12 +919,10 @@ export class VariableExpression extends Expression {
     }
 
 
-    getType(flags: SymbolTypeFlags) {
-        const standardType = util.tokenToBscType(this.name);
-        if (standardType) {
-            return standardType;
-        }
-        return new ReferenceType(this.name.text, flags, () => this.getSymbolTable());
+    getType(options: GetTypeOptions) {
+        const resultType = util.tokenToBscType(this.name) ?? new ReferenceType(this.name.text, options.flags, () => this.getSymbolTable());
+        options.typeChain?.push(new TypeChainEntry(this.name.text, resultType, this.range));
+        return resultType;
     }
 }
 
@@ -1057,8 +1044,8 @@ export class NewExpression extends Expression {
         }
     }
 
-    getType(flags: SymbolTypeFlags) {
-        return this.call.getType(flags);
+    getType(options: GetTypeOptions) {
+        return this.call.getType(options);
     }
 }
 
@@ -1188,7 +1175,7 @@ export class TemplateStringExpression extends Expression {
 
     public readonly range: Range;
 
-    public getType(flags: SymbolTypeFlags) {
+    public getType(options: GetTypeOptions) {
         return StringType.instance;
     }
 
@@ -1654,7 +1641,7 @@ export class TypeExpression extends Expression implements TypedefProvider {
     public range: Range;
 
     public transpile(state: BrsTranspileState): TranspileResult {
-        return [this.getType().toTypeString()];
+        return [this.getType({ flags: SymbolTypeFlags.typetime }).toTypeString()];
     }
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
@@ -1662,8 +1649,8 @@ export class TypeExpression extends Expression implements TypedefProvider {
         }
     }
 
-    public getType(_flags: SymbolTypeFlags = SymbolTypeFlags.typetime): BscType {
-        return this.expression.getType(SymbolTypeFlags.typetime);
+    public getType(options: GetTypeOptions): BscType {
+        return this.expression.getType({ ...options, flags: SymbolTypeFlags.typetime });
     }
 
     getTypedef(state: TranspileState): (string | SourceNode)[] {

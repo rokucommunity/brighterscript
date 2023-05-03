@@ -10,7 +10,7 @@ import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
 import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
-import type { TranspileResult, TypedefProvider } from '../interfaces';
+import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { SourceNode } from 'source-map';
@@ -162,8 +162,8 @@ export class AssignmentStatement extends Statement {
         }
     }
 
-    getType(flags: SymbolTypeFlags) {
-        return this.value.getType(flags);
+    getType(options: GetTypeOptions) {
+        return this.value.getType(options);
     }
 }
 
@@ -400,8 +400,8 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         }
     }
 
-    getType(flags: SymbolTypeFlags) {
-        const funcExprType = this.func.getType(flags);
+    getType(options: GetTypeOptions) {
+        const funcExprType = this.func.getType(options);
         funcExprType.setName(this.name.text);
         return funcExprType;
     }
@@ -1450,16 +1450,16 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         }
     }
 
-    getType(flags: SymbolTypeFlags) {
-        const superIface = this.parentInterfaceName?.getType(flags) as InterfaceType;
+    getType(options: GetTypeOptions) {
+        const superIface = this.parentInterfaceName?.getType(options) as InterfaceType;
 
         const resultType = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
 
         for (const statement of this.methods) {
-            resultType.addMember(statement?.tokens.name?.text, statement?.range, statement?.getType(flags), SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.tokens.name?.text, statement?.range, statement?.getType(options), SymbolTypeFlags.runtime);
         }
         for (const statement of this.fields) {
-            resultType.addMember(statement?.tokens.name?.text, statement?.range, statement.getType(flags), SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.tokens.name?.text, statement?.range, statement.getType(options), SymbolTypeFlags.runtime);
         }
         return resultType;
     }
@@ -1523,8 +1523,8 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         return result;
     }
 
-    public getType(flags: SymbolTypeFlags): BscType {
-        return this.typeExpression?.getType(flags) ?? DynamicType.instance;
+    public getType(options: GetTypeOptions): BscType {
+        return this.typeExpression?.getType(options) ?? DynamicType.instance;
     }
 
 }
@@ -1620,9 +1620,9 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         return result;
     }
 
-    public getType(flags: SymbolTypeFlags): FunctionType {
+    public getType(options): FunctionType {
         //if there's a defined return type, use that
-        let returnType = this.returnTypeExpression?.getType(flags);
+        let returnType = this.returnTypeExpression?.getType(options);
         const isSub = this.tokens.functionType.kind === TokenKind.Sub;
         //if we don't have a return type and this is a sub, set the return type to `void`. else use `dynamic`
         if (!returnType) {
@@ -1632,7 +1632,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         const resultType = new FunctionType(returnType);
         resultType.isSub = isSub;
         for (let param of this.params) {
-            resultType.addParameter(param.name.text, param.getType(flags), !!param.defaultValue);
+            resultType.addParameter(param.name.text, param.getType(options), !!param.defaultValue);
         }
         return resultType;
     }
@@ -2027,17 +2027,17 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }
     }
 
-    getType(flags: SymbolTypeFlags) {
-        const superClass = this.parentClassName?.getType(flags) as ClassType;
+    getType(options: GetTypeOptions) {
+        const superClass = this.parentClassName?.getType(options) as ClassType;
 
         const resultType = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
 
         for (const statement of this.methods) {
-            const funcType = statement?.func.getType(flags);
+            const funcType = statement?.func.getType(options);
             resultType.addMember(statement?.name?.text, statement?.range, funcType, SymbolTypeFlags.runtime);
         }
         for (const statement of this.fields) {
-            resultType.addMember(statement?.name?.text, statement?.range, statement.getType(), SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.name?.text, statement?.range, statement.getType(options), SymbolTypeFlags.runtime);
         }
         return resultType;
     }
@@ -2260,8 +2260,9 @@ export class FieldStatement extends Statement implements TypedefProvider {
      * Derive a ValueKind from the type token, or the initial value.
      * Defaults to `DynamicType`
      */
-    getType() {
-        return this.typeExpression?.getType(SymbolTypeFlags.typetime) ?? this.initialValue?.getType(SymbolTypeFlags.runtime) ?? DynamicType.instance;
+    getType(options: GetTypeOptions) {
+        return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlags.typetime }) ??
+            this.initialValue?.getType({ ...options, flags: SymbolTypeFlags.runtime }) ?? DynamicType.instance;
     }
 
     public readonly range: Range;
@@ -2281,7 +2282,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
                 );
             }
 
-            let type = this.getType();
+            let type = this.getType({ flags: SymbolTypeFlags.typetime });
             if (isInvalidType(type) || isVoidType(type)) {
                 type = new DynamicType();
             }
@@ -2717,8 +2718,8 @@ export class ConstStatement extends Statement implements TypedefProvider {
         }
     }
 
-    getType(flags: SymbolTypeFlags) {
-        return this.value.getType(flags);
+    getType(options: GetTypeOptions) {
+        return this.value.getType(options);
     }
 }
 
