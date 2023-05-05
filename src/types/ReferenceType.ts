@@ -1,6 +1,6 @@
 import type { SymbolTableProvider } from '../SymbolTable';
 import type { SymbolTypeFlags } from '../SymbolTable';
-import { isReferenceType } from '../astUtils/reflection';
+import { isDynamicType, isReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 import { getUniqueType } from './helpers';
@@ -62,6 +62,10 @@ export class ReferenceType extends BscType {
                         return new TypePropertyReferenceType(this, propName);
                     } else if (propName === 'memberTable') {
                         return this.tableProvider();
+                    } else if (propName === 'isTypeCompatible') {
+                        return (targetType: BscType) => {
+                            return isDynamicType(targetType);
+                        };
                     }
                 }
 

@@ -24,6 +24,8 @@ import type { TypePropertyReferenceType, ReferenceType } from '../types/Referenc
 import type { EnumMemberType, EnumType } from '../types/EnumType';
 import type { NamespaceType } from '../types/NameSpaceType';
 import type { UnionType } from '../types/UnionType';
+import type { UninitializedType } from '../types/UninitializedType';
+import type { ArrayType } from '../types/ArrayType';
 
 // File reflection
 
@@ -325,6 +327,12 @@ export function isNamespaceType(e: any): e is NamespaceType {
 }
 export function isUnionType(e: any): e is UnionType {
     return e?.constructor.name === 'UnionType';
+}
+export function isUninitializedType(e: any): e is UninitializedType {
+    return e?.constructor.name === 'UninitializedType';
+}
+export function isArrayType(e: any): e is ArrayType {
+    return e?.constructor.name === 'ArrayType';
 }
 
 const numberConstructorNames = [

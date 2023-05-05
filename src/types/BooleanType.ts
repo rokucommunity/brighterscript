@@ -10,19 +10,11 @@ export class BooleanType extends BscType {
 
     public static instance = new BooleanType('boolean');
 
-    public isAssignableTo(targetType: BscType) {
-        if (isUnionType(targetType) && targetType.canBeAssignedFrom(this)) {
-            return true;
-        }
-
+    public isTypeCompatible(targetType: BscType) {
         return (
             isBooleanType(targetType) ||
             isDynamicType(targetType)
         );
-    }
-
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
     }
 
     public toString() {
@@ -31,5 +23,9 @@ export class BooleanType extends BscType {
 
     public toTypeString(): string {
         return this.toString();
+    }
+
+    isEqual(targetType: BscType): boolean {
+        return isBooleanType(targetType);
     }
 }

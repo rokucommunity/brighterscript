@@ -1,7 +1,6 @@
 import type { SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
-import { isInheritableType } from './InheritableType';
 
 export class UnionType extends BscType {
     constructor(
@@ -22,39 +21,27 @@ export class UnionType extends BscType {
         return [];
     }
 
-    isAssignableTo(targetType: BscType): boolean {
+    isTypeCompatible(targetType: BscType): boolean {
         if (isDynamicType(targetType)) {
             return true;
         }
-        if (isInheritableType(targetType)) {
-            let isAssignable = true;
-            for (const currentType of this.types) {
-                // assignable to target if each of these types can assign to target
-                if (!currentType.isAssignableTo(targetType)) {
-                    isAssignable = false;
-                    break;
-                }
-            }
-            return isAssignable;
-        }
         if (isUnionType(targetType)) {
-            let isAssignable = true;
-            for (const currentType of this.types) {
-                // assignable to target if each of these types can assign to target
-                if (!targetType.canBeAssignedFrom(currentType)) {
-                    isAssignable = false;
-                    break;
+            // check if this set of inner types is a SUPERSET of targetTypes's inner types
+            for (const targetInnerType of targetType.types) {
+                if (!this.isTypeCompatible(targetInnerType)) {
+                    return false;
                 }
             }
-            return isAssignable;
+            return true;
         }
-
+        for (const innerType of this.types) {
+            const foundCompatibleInnerType = innerType.isTypeCompatible(targetType);
+            console.log((targetType as any).__identifier, ` is${foundCompatibleInnerType ? ' ' : ' not '}compatible with `, (innerType as any).__identifier);
+            if (foundCompatibleInnerType) {
+                return true;
+            }
+        }
         return false;
-    }
-
-
-    isConvertibleTo(targetType: BscType): boolean {
-        return this.isAssignableTo(targetType);
     }
     toString(): string {
         return joinTypesString(this.types);
@@ -63,8 +50,10 @@ export class UnionType extends BscType {
         return 'dynamic';
     }
 
-    canBeAssignedFrom(targetType: BscType) {
-        return !!this.types.find(t => targetType?.isAssignableTo(t));
+    checkAllMemberTypes(predicate: (BscType) => boolean) {
+        return this.types.reduce((acc, type) => {
+            return acc && predicate(type);
+        }, true);
     }
 }
 

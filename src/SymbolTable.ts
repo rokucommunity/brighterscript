@@ -140,30 +140,29 @@ export class SymbolTable {
         //Need to take the intersection of siblings...
         const key = name.toLowerCase();
         let result: BscSymbol[];
-        let resultSoFar = [];
+        let resultSoFar: BscSymbol[] = [];
         // look in our map first
         if ((result = this.symbolMap.get(key))) {
             // eslint-disable-next-line no-bitwise
             const resultMe = result.filter(symbol => symbol.flags & bitFlags);
-            if (resultMe.length > 0) {
-                return result;
-            }
+            resultSoFar.push(...resultMe);
         }
 
         //look through any sibling maps next
         for (let sibling of this.siblings) {
             if ((result = sibling.symbolMap.get(key))) {
                 // eslint-disable-next-line no-bitwise
-                result = result.filter(symbol => symbol.flags & bitFlags);
-                if (result.length > 0) {
-                    return result;
-                }
+                const resultMe = result.filter(symbol => symbol.flags & bitFlags);
+                resultSoFar.push(...resultMe);
             }
         }
-        // ask our parent for a symbol
-        return this.parent?.getSymbol(key, bitFlags);
 
-        return [];
+        const typeResults = resultSoFar.map(result => result.type);
+        if (typeResults.length > 0) {
+            return typeResults;
+        }
+        // ask our parent for a symbol
+        return this.parent?.getSymbolTypes(key, bitFlags);
     }
 
     /**
@@ -238,5 +237,3 @@ export interface BscSymbol {
  * A function that returns a symbol table.
  */
 export type SymbolTableProvider = () => SymbolTable;
-
-

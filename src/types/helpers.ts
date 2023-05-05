@@ -1,5 +1,6 @@
 import { isDynamicType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
+import { isInheritableType } from './InheritableType';
 import { UnionType } from './UnionType';
 
 /**
@@ -43,13 +44,18 @@ export function getUniqueType(types: BscType[]): BscType {
             if (uniqueTypes[j].ignore) {
                 continue;
             }
-            if (currentType.type.isAssignableTo(uniqueTypes[j].type)) {
-                // the currentType can be assigned to some other type - it won't be in the final set
-                break;
-            }
-            if (uniqueTypes[j].type.isAssignableTo(currentType.type)) {
-                //the type we're checking is less general than the current type... it can be ignored
+
+            if (currentType.type.isEqual(uniqueTypes[j].type)) {
                 uniqueTypes[j].ignore = true;
+            } else if (isInheritableType(uniqueTypes[j].type)) {
+                if (currentType.type.isTypeCompatible(uniqueTypes[j].type)) {
+                    //the type we're checking is less general than the current type... it can be ignored
+                    uniqueTypes[j].ignore = true;
+                }
+                if (uniqueTypes[j].type.isTypeCompatible(currentType.type)) {
+                    // the currentType can be assigned to some other type - it won't be in the final set
+                    break;
+                }
             }
             if (j === uniqueTypes.length - 1) {
                 //this type was not convertible to anything else... it is as general as possible

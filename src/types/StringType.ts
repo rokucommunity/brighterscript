@@ -1,6 +1,5 @@
-import { isUnionType } from '../astUtils/reflection';
+import { isDynamicType, isStringType } from '../astUtils/reflection';
 import { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
 
 export class StringType extends BscType {
     constructor(
@@ -14,18 +13,11 @@ export class StringType extends BscType {
      */
     public static instance = new StringType('string');
 
-    public isAssignableTo(targetType: BscType) {
-        if (isUnionType(targetType) && targetType.canBeAssignedFrom(this)) {
-            return true;
-        }
+    public isTypeCompatible(targetType: BscType) {
         return (
-            targetType instanceof StringType ||
-            targetType instanceof DynamicType
+            isStringType(targetType) ||
+            isDynamicType(targetType)
         );
-    }
-
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
     }
 
     public toString() {
@@ -34,5 +26,9 @@ export class StringType extends BscType {
 
     public toTypeString(): string {
         return this.toString();
+    }
+
+    public isEqual(targetType: BscType): boolean {
+        return isStringType(targetType);
     }
 }

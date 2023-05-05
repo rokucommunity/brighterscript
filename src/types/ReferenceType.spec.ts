@@ -40,7 +40,7 @@ describe('ReferenceType', () => {
         const ref = new ReferenceType('someVar', runtimeFlag, () => table);
         table.addSymbol('someVar', null, IntegerType.instance, SymbolTypeFlags.runtime);
         expect(ref.isAssignableTo(IntegerType.instance)).to.be.true;
-        expect(ref.isConvertibleTo(FloatType.instance)).to.be.true;
+        expect(ref.isTypeCompatible(FloatType.instance)).to.be.true;
     });
 
     it('resolves before stringifying', () => {

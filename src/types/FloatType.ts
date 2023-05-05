@@ -1,9 +1,5 @@
-import { isUnionType } from '../astUtils/reflection';
+import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType } from '../astUtils/reflection';
 import { BscType } from './BscType';
-import { DoubleType } from './DoubleType';
-import { DynamicType } from './DynamicType';
-import { IntegerType } from './IntegerType';
-import { LongIntegerType } from './LongIntegerType';
 
 export class FloatType extends BscType {
     constructor(
@@ -14,28 +10,15 @@ export class FloatType extends BscType {
 
     public static instance = new FloatType('float');
 
-    public isAssignableTo(targetType: BscType) {
-        if (isUnionType(targetType) && targetType.canBeAssignedFrom(this)) {
-            return true;
-        }
+    public isTypeCompatible(targetType: BscType) {
         return (
-            targetType instanceof FloatType ||
-            targetType instanceof DynamicType
+            isDynamicType(targetType) ||
+            isIntegerType(targetType) ||
+            isFloatType(targetType) ||
+            isDoubleType(targetType) ||
+            isLongIntegerType(targetType)
         );
-    }
 
-    public isConvertibleTo(targetType: BscType) {
-        if (
-            targetType instanceof DynamicType ||
-            targetType instanceof IntegerType ||
-            targetType instanceof FloatType ||
-            targetType instanceof DoubleType ||
-            targetType instanceof LongIntegerType
-        ) {
-            return true;
-        } else {
-            return false;
-        }
     }
 
     public toString() {
@@ -44,5 +27,9 @@ export class FloatType extends BscType {
 
     public toTypeString(): string {
         return this.toString();
+    }
+
+    public isEqual(targetType: BscType): boolean {
+        return isFloatType(targetType);
     }
 }

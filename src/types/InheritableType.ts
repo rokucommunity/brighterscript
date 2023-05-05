@@ -28,14 +28,6 @@ export abstract class InheritableType extends BscType {
         return this.parentType ? this.parentType.isResolvable() : true;
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
-    }
-
-    equals(targetType: BscType) {
-        return this === targetType;
-    }
-
     protected getAncestorTypeList(): InheritableType[] {
         const ancestors = [];
         let currentParentType = this.parentType;
@@ -49,22 +41,6 @@ export abstract class InheritableType extends BscType {
         }
         return ancestors;
     }
-
-    protected checkAssignabilityToInterface(targetType: BscType, flags: SymbolTypeFlags) {
-        if (!isInterfaceType(targetType)) {
-            return false;
-        }
-        let isSuperSet = true;
-        const targetSymbols = targetType.memberTable?.getAllSymbols(flags);
-        for (const targetSymbol of targetSymbols) {
-            // TODO TYPES: this ignores union types
-
-            const mySymbolsWithName = this.memberTable.getSymbol(targetSymbol.name, flags);
-            isSuperSet = isSuperSet && mySymbolsWithName && mySymbolsWithName.length > 0 && mySymbolsWithName[0].type.isAssignableTo(targetSymbol.type);
-        }
-        return isSuperSet;
-    }
-
 
     /**
      * Gets a string representation of the Interface that looks like javascript

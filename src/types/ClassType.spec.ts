@@ -23,9 +23,9 @@ describe('ClassType', () => {
         const superKlass = new ClassType('SuperKlass', grandSuperKlass);
         const subKlass = new ClassType('SubKlass', superKlass);
 
-        expect(subKlass.isAssignableTo(subKlass)).to.be.true;
-        expect(subKlass.isAssignableTo(superKlass)).to.be.true;
-        expect(subKlass.isAssignableTo(grandSuperKlass)).to.be.true;
+        expect(subKlass.isTypeCompatible(subKlass)).to.be.true;
+        expect(superKlass.isTypeCompatible(subKlass)).to.be.true;
+        expect(grandSuperKlass.isTypeCompatible(superKlass)).to.be.true;
     });
 
     it('should not be assignable to a class that is not an ancestor', () => {
@@ -34,8 +34,8 @@ describe('ClassType', () => {
         const superKlass = new ClassType('SuperKlass');
         const subKlass = new ClassType('SubKlass', superKlass);
 
-        expect(subKlass.isAssignableTo(superKlass)).to.be.true;
-        expect(subKlass.isAssignableTo(otherKlass)).to.be.false;
+        expect(superKlass.isTypeCompatible(subKlass)).to.be.true;
+        expect(otherKlass.isTypeCompatible(subKlass)).to.be.false;
     });
 
     it('will look in super classes for members', () => {

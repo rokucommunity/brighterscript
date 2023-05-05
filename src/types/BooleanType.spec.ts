@@ -1,18 +1,18 @@
 import { expect } from '../chai-config.spec';
 
 import { BooleanType } from './BooleanType';
-import { DoubleType } from './DoubleType';
 import { DynamicType } from './DynamicType';
-import { StringType } from './StringType';
-import { UnionType } from './UnionType';
+import { IntegerType } from './IntegerType';
 
 describe('BooleanType', () => {
-    it('is equivalent to boolean types', () => {
-        expect(new BooleanType().isAssignableTo(new BooleanType())).to.be.true;
-        expect(new BooleanType().isAssignableTo(new DynamicType())).to.be.true;
+    it('is equal to boolean type', () => {
+        expect(new BooleanType().isEqual(new BooleanType())).to.be.true;
+        expect(new BooleanType().isEqual(new DynamicType())).to.be.false;
     });
 
-    it('can be assigned to a Union that includes this type', () => {
-        expect(BooleanType.instance.isAssignableTo(new UnionType([DoubleType.instance, StringType.instance, BooleanType.instance]))).to.be.true;
+    it('is compatible with only correct types', () => {
+        expect(new BooleanType().isTypeCompatible(new BooleanType())).to.be.true;
+        expect(new BooleanType().isTypeCompatible(new DynamicType())).to.be.true;
+        expect(new BooleanType().isTypeCompatible(IntegerType.instance)).to.be.false;
     });
 });

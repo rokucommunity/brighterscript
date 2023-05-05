@@ -1,4 +1,4 @@
-import { isUnionType } from '../astUtils/reflection';
+import { isFunctionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
@@ -35,12 +35,28 @@ export class FunctionType extends BscType {
         return this;
     }
 
-    public isAssignableTo(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType) {
         if (targetType instanceof DynamicType) {
             return true;
-        } else if (isUnionType(targetType) && targetType.canBeAssignedFrom(this)) {
-            return true;
-        } else if (targetType instanceof FunctionType) {
+        }
+        return this.isEqual(targetType);
+    }
+
+    public toString() {
+        let paramTexts = [];
+        for (let param of this.params) {
+            paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString()}`);
+        }
+        return `${this.isSub ? 'sub' : 'function'} ${this.name}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
+
+    }
+
+    public toTypeString(): string {
+        return 'Function';
+    }
+
+    isEqual(targetType: BscType) {
+        if (isFunctionType(targetType)) {
             //compare all parameters
             let len = Math.max(this.params.length, targetType.params.length);
             for (let i = 0; i < len; i++) {
@@ -58,25 +74,7 @@ export class FunctionType extends BscType {
 
             //made it here, all params and return type are equivalent
             return true;
-        } else {
-            return false;
         }
-    }
-
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
-    }
-
-    public toString() {
-        let paramTexts = [];
-        for (let param of this.params) {
-            paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString()}`);
-        }
-        return `${this.isSub ? 'sub' : 'function'} ${this.name}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
-
-    }
-
-    public toTypeString(): string {
-        return 'Function';
+        return false;
     }
 }
