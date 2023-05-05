@@ -32,7 +32,7 @@ Namespaces can also contain classes. See the [classes](classes.md#Namespaces) fo
 ## Namespace inference
 Functions and classes within a namespace do not need to be prefixed with the full namespace name when called from another location in the same namespace. For example,
 
-```
+```BrighterScript
 namespace Vertibrates.Birds
     function GetAllBirds()
         return [
