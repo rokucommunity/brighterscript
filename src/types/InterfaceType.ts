@@ -29,9 +29,10 @@ export class InterfaceType extends InheritableType {
         return false;
     }
 
+    /**
+     *  Is this the exact same interface as the target?
+     */
     isEqual(targetType: BscType): boolean {
-        return isInterfaceType(targetType) &&
-            this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlags.runtime) &&
-            targetType.checkCompatibilityBasedOnMembers(this, SymbolTypeFlags.runtime);
+        return isInterfaceType(targetType) && this.name === targetType.name;
     }
 }
