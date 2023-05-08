@@ -227,7 +227,7 @@ export class BsClassValidator {
                                 ancestorMemberType = ancestorAndMember.member.func.getType({ flags: SymbolTypeFlags.typetime });
                             }
                             const childFieldType = member.getType({ flags: SymbolTypeFlags.typetime });
-                            if (!childFieldType.isAssignableTo(ancestorMemberType)) {
+                            if (!ancestorMemberType.isTypeCompatible(childFieldType)) {
                                 //flag incompatible child field type to ancestor field type
                                 this.diagnostics.push({
                                     ...DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty(

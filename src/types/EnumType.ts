@@ -8,15 +8,12 @@ export class EnumType extends BscType {
         super(name);
     }
 
-    public isAssignableTo(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType) {
         return (
-            this.equals(targetType) ||
-            isDynamicType(targetType)
+            isDynamicType(targetType) ||
+            this.isEqual(targetType) ||
+            (isEnumMemberType(targetType) && targetType?.enumName.toLowerCase() === this.name.toLowerCase())
         );
-    }
-
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
     }
 
     public toString() {
@@ -27,7 +24,7 @@ export class EnumType extends BscType {
         return 'dynamic';
     }
 
-    protected equals(targetType: BscType): boolean {
+    public isEqual(targetType: BscType): boolean {
         return isEnumType(targetType) && targetType?.name.toLowerCase() === this.name.toLowerCase();
     }
 }
@@ -43,15 +40,18 @@ export class EnumMemberType extends BscType {
 
     public isAssignableTo(targetType: BscType) {
         return (
-            this.equals(targetType) ||
+            this.isEqual(targetType) ||
             (isEnumType(targetType) &&
                 targetType?.name.toLowerCase() === this.enumName.toLowerCase()) ||
             isDynamicType(targetType)
         );
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+    public isTypeCompatible(targetType: BscType) {
+        return (
+            this.isEqual(targetType) ||
+            isDynamicType(targetType)
+        );
     }
 
     public toString() {
@@ -62,13 +62,9 @@ export class EnumMemberType extends BscType {
         return 'dynamic';
     }
 
-    protected equals(targetType: BscType): boolean {
+    public isEqual(targetType: BscType): boolean {
         return isEnumMemberType(targetType) &&
             targetType?.enumName.toLowerCase() === this.enumName.toLowerCase() &&
             targetType?.memberName.toLowerCase() === this.memberName.toLowerCase();
-    }
-
-    getReferenceChain(): string[] {
-        return [this.enumName, this.memberName];
     }
 }

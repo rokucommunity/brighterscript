@@ -1,3 +1,4 @@
+import { isDynamicType, isUninitializedType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
@@ -9,8 +10,11 @@ export class UninitializedType extends BscType {
         );
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+    public isTypeCompatible(targetType: BscType) {
+        return (
+            isUninitializedType(targetType) ||
+            isDynamicType(targetType)
+        );
     }
 
     public toString() {
@@ -19,5 +23,9 @@ export class UninitializedType extends BscType {
 
     public toTypeString(): string {
         return this.toString();
+    }
+
+    public isEqual(targetType: BscType): boolean {
+        return isUninitializedType(targetType);
     }
 }

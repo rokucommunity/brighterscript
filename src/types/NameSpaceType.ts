@@ -1,4 +1,5 @@
 import type { SymbolTypeFlags } from '../SymbolTable';
+import { isNamespaceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
 
@@ -12,8 +13,12 @@ export class NamespaceType extends BscType {
         return this.name;
     }
 
-    getMemberType(name: string, flags: SymbolTypeFlags) {
-        return super.getMemberType(name, flags) ?? new ReferenceType(name, flags, () => this.memberTable);
+    getMemberTypes(name: string, flags: SymbolTypeFlags) {
+        return super.getMemberTypes(name, flags) ?? [new ReferenceType(name, flags, () => this.memberTable)];
+    }
+
+    isEqual(targetType: BscType): boolean {
+        return isNamespaceType(targetType) && targetType.name === this.name;
     }
 
 }

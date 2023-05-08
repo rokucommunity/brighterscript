@@ -40,7 +40,7 @@ describe('ReferenceType', () => {
         const ref = new ReferenceType('someVar', runtimeFlag, () => table);
         table.addSymbol('someVar', null, IntegerType.instance, SymbolTypeFlags.runtime);
         expect(ref.isAssignableTo(IntegerType.instance)).to.be.true;
-        expect(ref.isConvertibleTo(FloatType.instance)).to.be.true;
+        expect(ref.isTypeCompatible(FloatType.instance)).to.be.true;
     });
 
     it('resolves before stringifying', () => {
@@ -101,9 +101,9 @@ describe('PropertyReferenceType', () => {
         const table = new SymbolTable('test');
         const fnRef = new ReferenceType('someFunc', runtimeFlag, () => table);
         const returnRef = new TypePropertyReferenceType(fnRef, 'returnType');
-        const returnPropRef = returnRef.getMemberType('myNum', SymbolTypeFlags.runtime);
+        const returnPropRef = returnRef.getMemberTypes('myNum', SymbolTypeFlags.runtime);
         // `ref` will resolve to DynamicType, and its returnType is DynamicType.Instance
-        expectTypeToBe(returnPropRef, DynamicType);
+        expectTypeToBe(returnPropRef[0], DynamicType);
 
         // Set fnRef to resolve to a function that returns a complex type
         const klassType = new ClassType('Klass');
@@ -113,7 +113,7 @@ describe('PropertyReferenceType', () => {
         // returnPropRef = someFunc().myNum
         expectTypeToBe(fnRef, FunctionType);
         expectTypeToBe(returnRef, ClassType);
-        expectTypeToBe(returnPropRef, IntegerType);
+        expectTypeToBe(returnPropRef[0], IntegerType);
     });
 
 });

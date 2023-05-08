@@ -1030,7 +1030,7 @@ describe('BrsFile BrighterScript classes', () => {
                 public owner as Person
             end class
             class Duck extends Bird
-                public age = 12.2 'should be integer but is float
+                public age = 12.2 'should be integer, but a float can be assigned to an int
                 public name = 12 'should be string but is integer
                 public owner as string
             end class
@@ -1038,7 +1038,6 @@ describe('BrsFile BrighterScript classes', () => {
         program.validate();
         expectDiagnostics(program, [
             DiagnosticMessages.cannotFindName('Person'),
-            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'age', 'float', 'integer'),
             DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'name', 'integer', 'string'),
             DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'owner', 'string', 'Person')
         ]);

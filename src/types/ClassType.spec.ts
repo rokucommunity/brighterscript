@@ -6,6 +6,7 @@ import { expectTypeToBe } from '../testHelpers.spec';
 import { ReferenceType } from './ReferenceType';
 import { isReferenceType } from '../astUtils/reflection';
 import { IntegerType } from './IntegerType';
+import { getUniqueType } from './helpers';
 
 describe('ClassType', () => {
 
@@ -22,9 +23,9 @@ describe('ClassType', () => {
         const superKlass = new ClassType('SuperKlass', grandSuperKlass);
         const subKlass = new ClassType('SubKlass', superKlass);
 
-        expect(subKlass.isAssignableTo(subKlass)).to.be.true;
-        expect(subKlass.isAssignableTo(superKlass)).to.be.true;
-        expect(subKlass.isAssignableTo(grandSuperKlass)).to.be.true;
+        expect(subKlass.isTypeCompatible(subKlass)).to.be.true;
+        expect(superKlass.isTypeCompatible(subKlass)).to.be.true;
+        expect(grandSuperKlass.isTypeCompatible(superKlass)).to.be.true;
     });
 
     it('should not be assignable to a class that is not an ancestor', () => {
@@ -33,15 +34,15 @@ describe('ClassType', () => {
         const superKlass = new ClassType('SuperKlass');
         const subKlass = new ClassType('SubKlass', superKlass);
 
-        expect(subKlass.isAssignableTo(superKlass)).to.be.true;
-        expect(subKlass.isAssignableTo(otherKlass)).to.be.false;
+        expect(superKlass.isTypeCompatible(subKlass)).to.be.true;
+        expect(otherKlass.isTypeCompatible(subKlass)).to.be.false;
     });
 
     it('will look in super classes for members', () => {
         const superKlass = new ClassType('SuperKlass');
         superKlass.addMember('title', null, StringType.instance, SymbolTypeFlags.runtime);
         const subKlass = new ClassType('SubKlass', superKlass);
-        expectTypeToBe(subKlass.getMemberType('title', SymbolTypeFlags.runtime), StringType);
+        expectTypeToBe(getUniqueType(subKlass.getMemberTypes('title', SymbolTypeFlags.runtime)), StringType);
     });
 
     it('allow ReferenceTypes as super classes', () => {
@@ -59,7 +60,7 @@ describe('ClassType', () => {
         const futureSuperKlass = new ReferenceType('SuperKlass', SymbolTypeFlags.typetime, () => myTable);
         const subKlass = new ClassType('SubKlass', futureSuperKlass);
         expect(subKlass.isResolvable()).to.be.false;
-        const futureTitleType = subKlass.getMemberType('title', SymbolTypeFlags.runtime);
+        const futureTitleType = getUniqueType(subKlass.getMemberTypes('title', SymbolTypeFlags.runtime));
         expect(isReferenceType(futureTitleType)).to.be.true;
         expect(futureTitleType.isResolvable()).to.be.false;
         const superKlass = new ClassType('SuperKlass');

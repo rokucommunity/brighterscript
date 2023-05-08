@@ -32,9 +32,9 @@ describe('InterfaceType', () => {
         });
     });
 
-    describe('isConvertibleTo', () => {
+    describe('isTypeCompatible', () => {
         it('works', () => {
-            expectAssignable({
+            expectCompatible({
                 name: new StringType()
             }, {
                 name: new StringType()
@@ -45,28 +45,28 @@ describe('InterfaceType', () => {
     describe('equals', () => {
         it('matches equal objects', () => {
             expect(
-                iface({ name: new StringType() }).equals(iface({ name: new StringType() }))
+                iface({ name: new StringType() }).isEqual(iface({ name: new StringType() }))
             ).to.be.true;
         });
 
         it('does not match inequal objects', () => {
             expect(
-                iface({ name: new StringType() }).equals(iface({ name: new IntegerType() }))
+                iface({ name: new StringType() }).isEqual(iface({ name: new IntegerType() }))
             ).to.be.false;
         });
     });
 
-    describe('isAssignableTo', () => {
-        it('rejects being assignable to other types', () => {
+    describe('isTypeCompatible', () => {
+        it('rejects being able to assign other types to this', () => {
             expect(
                 iface({
                     name: new StringType()
-                }).isAssignableTo(new IntegerType())
+                }).isTypeCompatible(new IntegerType())
             ).to.be.false;
         });
 
         it('matches exact properties', () => {
-            expectAssignable({
+            expectCompatible({
                 name: new StringType()
             }, {
                 name: new StringType()
@@ -74,7 +74,7 @@ describe('InterfaceType', () => {
         });
 
         it('matches an object with more properties being assigned to an object with less', () => {
-            expectAssignable({
+            expectCompatible({
                 name: new StringType()
             }, {
                 name: new StringType(),
@@ -83,7 +83,7 @@ describe('InterfaceType', () => {
         });
 
         it('rejects assigning an object with less properties to one with more', () => {
-            expectNotAssignable({
+            expectNotCompatible({
                 name: new StringType(),
                 age: new IntegerType()
             }, {
@@ -101,12 +101,12 @@ describe('InterfaceType', () => {
                 name: new StringType()
             });
 
-            expect(ifaceOne.isAssignableTo(ifaceTwo)).to.be.true;
-            expect(ifaceTwo.isAssignableTo(ifaceOne)).to.be.true;
+            expect(ifaceOne.isTypeCompatible(ifaceTwo)).to.be.true;
+            expect(ifaceTwo.isTypeCompatible(ifaceOne)).to.be.true;
         });
 
         it('rejects with member having mismatched type', () => {
-            expectNotAssignable({
+            expectNotCompatible({
                 name: new StringType()
             }, {
                 name: new IntegerType()
@@ -114,7 +114,7 @@ describe('InterfaceType', () => {
         });
 
         it('rejects with object member having mismatched type', () => {
-            expectNotAssignable({
+            expectNotCompatible({
                 parent: iface({
                     name: new StringType()
                 })
@@ -126,7 +126,7 @@ describe('InterfaceType', () => {
         });
 
         it('rejects with object member having missing prop type', () => {
-            expectNotAssignable({
+            expectNotCompatible({
                 parent: iface({
                     name: new StringType(),
                     age: new IntegerType()
@@ -139,7 +139,7 @@ describe('InterfaceType', () => {
         });
 
         it('accepts with object member having same prop types', () => {
-            expectAssignable({
+            expectCompatible({
                 parent: iface({
                     name: new StringType(),
                     age: new IntegerType()
@@ -153,35 +153,35 @@ describe('InterfaceType', () => {
         });
 
         it('accepts with source member having dyanmic prop type', () => {
-            expectAssignable({
+            expectCompatible({
+                parent: new DynamicType()
+            }, {
                 parent: iface({
                     name: new StringType(),
                     age: new IntegerType()
                 })
-            }, {
-                parent: new DynamicType()
             });
         });
 
         it('accepts with target member having dyanmic prop type', () => {
-            expectAssignable({
-                parent: new DynamicType()
-            }, {
+            expectCompatible({
                 parent: iface({
                     name: new StringType(),
                     age: new IntegerType()
                 })
+            }, {
+                parent: new DynamicType()
             });
         });
 
         it('accepts with target member having "object" prop type', () => {
-            expectAssignable({
-                parent: new ObjectType()
-            }, {
+            expectCompatible({
                 parent: iface({
                     name: new StringType(),
                     age: new IntegerType()
                 })
+            }, {
+                parent: new ObjectType()
             });
         });
     });
@@ -200,18 +200,18 @@ function iface(members: Record<string, BscType>, name?: string, parentType?: Int
     return ifaceType;
 }
 
-function expectAssignable(targetMembers: Record<string, BscType>, sourceMembers: Record<string, BscType>) {
+function expectCompatible(targetMembers: Record<string, BscType>, sourceMembers: Record<string, BscType>) {
     const targetIface = iface(targetMembers);
     const sourceIface = iface(sourceMembers);
-    if (!sourceIface.isAssignableTo(targetIface)) {
+    if (!sourceIface.isTypeCompatible(targetIface)) {
         assert.fail(`expected type ${(targetIface as any).toJSString()} to be assignable to type ${(sourceIface as any).toJSString()}`);
     }
 }
 
-function expectNotAssignable(targetMembers: Record<string, BscType>, sourceMembers: Record<string, BscType>) {
+function expectNotCompatible(targetMembers: Record<string, BscType>, sourceMembers: Record<string, BscType>) {
     const targetIface = iface(targetMembers);
     const sourceIface = iface(sourceMembers);
-    if (sourceIface.isAssignableTo(targetIface)) {
+    if (sourceIface.isTypeCompatible(targetIface)) {
         assert.fail(`expected type ${(targetIface as any).toJSString()} to not be assignable to type ${(sourceIface as any).toJSString()}`);
     }
 }

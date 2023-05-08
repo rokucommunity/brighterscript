@@ -1,8 +1,6 @@
+import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType } from '../astUtils/reflection';
 import { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
-import { FloatType } from './FloatType';
-import { IntegerType } from './IntegerType';
-import { LongIntegerType } from './LongIntegerType';
+
 
 export class DoubleType extends BscType {
     constructor(
@@ -13,25 +11,14 @@ export class DoubleType extends BscType {
 
     public static instance = new DoubleType('double');
 
-    public isAssignableTo(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType) {
         return (
-            targetType instanceof DoubleType ||
-            targetType instanceof DynamicType
+            isDynamicType(targetType) ||
+            isIntegerType(targetType) ||
+            isFloatType(targetType) ||
+            isDoubleType(targetType) ||
+            isLongIntegerType(targetType)
         );
-    }
-
-    public isConvertibleTo(targetType: BscType) {
-        if (
-            targetType instanceof DynamicType ||
-            targetType instanceof IntegerType ||
-            targetType instanceof FloatType ||
-            targetType instanceof DoubleType ||
-            targetType instanceof LongIntegerType
-        ) {
-            return true;
-        } else {
-            return false;
-        }
     }
     public toString() {
         return this.typeText ?? 'double';
@@ -39,5 +26,9 @@ export class DoubleType extends BscType {
 
     public toTypeString(): string {
         return this.toString();
+    }
+
+    public isEqual(targetType: BscType): boolean {
+        return isDoubleType(targetType);
     }
 }
