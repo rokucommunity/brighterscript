@@ -1,4 +1,4 @@
-import { isBooleanType, isDynamicType, isUnionType } from '../astUtils/reflection';
+import { isBooleanType, isDynamicType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 
 export class BooleanType extends BscType {

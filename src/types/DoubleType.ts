@@ -1,6 +1,5 @@
-import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType, isUnionType } from '../astUtils/reflection';
+import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType } from '../astUtils/reflection';
 import { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
 
 
 export class DoubleType extends BscType {
