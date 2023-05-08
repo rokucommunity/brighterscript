@@ -43,6 +43,31 @@ export abstract class InheritableType extends BscType {
     }
 
     /**
+     *  Checks if other type is an ancestor of this
+     */
+    isTypeAncestor(otherType: BscType) {
+        if (!isInheritableType(otherType)) {
+            return false;
+        }
+        // Check if targetType is an ancestor of this
+        const ancestors = this.getAncestorTypeList();
+        if (ancestors?.find(ancestorType => ancestorType.isEqual(otherType))) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+    *  Checks if other type is an descendent of this
+    */
+    isTypeDescendent(otherType: BscType) {
+        if (!isInheritableType(otherType)) {
+            return false;
+        }
+        return otherType.isTypeAncestor(this);
+    }
+
+    /**
      * Gets a string representation of the Interface that looks like javascript
      * Useful for debugging
      */

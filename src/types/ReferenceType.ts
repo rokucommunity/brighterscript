@@ -66,6 +66,8 @@ export class ReferenceType extends BscType {
                         return (targetType: BscType) => {
                             return isDynamicType(targetType);
                         };
+                    } else if (propName === 'isEqual') {
+                        return (targetType: BscType) => false;
                     }
                 }
 
