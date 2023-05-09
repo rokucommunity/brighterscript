@@ -3,6 +3,35 @@ import type { BscType } from './BscType';
 import { isInheritableType } from './InheritableType';
 import { UnionType } from './UnionType';
 
+export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[]) {
+    if (!typesArr1 || !typesArr2) {
+        return undefined;
+    }
+    return typesArr1?.filter((currentType) => {
+        const indexOfCurrentTypeInArr2 = typesArr2.findIndex((checkType) => {
+            return currentType.isEqual(checkType);
+        });
+        return indexOfCurrentTypeInArr2 >= 0
+    })
+}
+
+export function findTypeUnion(...typesArr: BscType[][]) {
+    return getUniqueTypesFromArray([].concat(...typesArr));
+}
+
+export function getUniqueTypesFromArray(types: BscType[]) {
+    if (!types) {
+        return undefined;
+    }
+    return types?.filter((currentType, currentIndex) => {
+        const latestIndex = types.findIndex((checkType) => {
+            return currentType.isEqual(checkType);
+        });
+        // the index that was found is the index we're checking --- there are no equal types after this
+        return latestIndex === currentIndex
+    })
+}
+
 /**
  * Reduces a list of types based on equality or inheritance
  * If all types are the same - just that type is returned
@@ -22,13 +51,7 @@ export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
     }
 
     // Get a list of unique types, based on the `isEqual()` method
-    const uniqueTypes = types.filter((currentType, currentIndex) => {
-        const lastIndex = types.findIndex((checkType) => {
-            return currentType.isEqual(checkType);
-        });
-        // the index that was found is the index we're checking --- there are no equal types after this
-        return lastIndex === currentIndex;
-    }).map(t => {
+    const uniqueTypes = getUniqueTypesFromArray(types).map(t => {
         // map to object with `shouldIgnore` flag
         return { type: t, shouldIgnore: false }
     });

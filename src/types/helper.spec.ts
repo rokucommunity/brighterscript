@@ -7,16 +7,93 @@ import { FloatType } from './FloatType';
 import { IntegerType } from './IntegerType';
 import { StringType } from './StringType';
 import { UnionType } from './UnionType';
-import { getUniqueType } from './helpers';
+import { findTypeIntersection, findTypeUnion, getUniqueType, getUniqueTypesFromArray } from './helpers';
 import { InterfaceType } from './InterfaceType';
 import { SymbolTypeFlags } from '../SymbolTable';
+import { DoubleType } from './DoubleType';
+import { BooleanType } from './BooleanType';
+
+
+describe('findTypeIntersection', () => {
+
+    it('should return the intersection if the arrays have one element', () => {
+        const intersection = findTypeIntersection([IntegerType.instance], [IntegerType.instance])
+        expect(intersection.length).to.eq(1);
+        expect(intersection).to.include(IntegerType.instance);
+    });
+
+    it('should return empty array if no common types', () => {
+        let intersection = findTypeIntersection([IntegerType.instance], [StringType.instance])
+        expect(intersection.length).to.eq(0);
+        intersection = findTypeIntersection([IntegerType.instance, DoubleType.instance], [FloatType.instance, StringType.instance])
+        expect(intersection.length).to.eq(0);
+    });
+
+    it('should return minimum intersection', () => {
+        let intersection = findTypeIntersection([DoubleType.instance, IntegerType.instance, BooleanType.instance], [BooleanType.instance, FloatType.instance, IntegerType.instance, StringType.instance])
+        expect(intersection.length).to.eq(2);
+        expect(intersection).to.include(IntegerType.instance);
+        expect(intersection).to.include(BooleanType.instance);
+    });
+});
+
+
+describe('findTypeUnion', () => {
+
+    it('should return the intersection if the arrays have one element', () => {
+        const union = findTypeUnion([IntegerType.instance], [IntegerType.instance])
+        expect(union.length).to.eq(1);
+        expect(union).to.include(IntegerType.instance);
+    });
+
+    it('should not have duplicates', () => {
+        let union = findTypeUnion([IntegerType.instance, StringType.instance], [StringType.instance, IntegerType.instance, FloatType.instance])
+        expect(union.length).to.eq(3);
+    });
+
+    it('should return array of all types', () => {
+        let union = findTypeUnion([IntegerType.instance], [StringType.instance])
+        expect(union.length).to.eq(2);
+        union = findTypeUnion([IntegerType.instance, DoubleType.instance], [FloatType.instance, StringType.instance])
+        expect(union.length).to.eq(4);
+    });
+});
+
+
+describe('getUniqueTypesFromArray', () => {
+
+    it('should return the single type from arrays have one element', () => {
+        let intersection = getUniqueTypesFromArray([IntegerType.instance])
+        expect(intersection.length).to.eq(1);
+        expect(intersection).to.include(IntegerType.instance);
+        getUniqueTypesFromArray([IntegerType.instance, IntegerType.instance, IntegerType.instance, IntegerType.instance])
+        expect(intersection.length).to.eq(1);
+        expect(intersection).to.include(IntegerType.instance);
+    });
+
+    it('should return an array with ni duplicates', () => {
+        let intersection = getUniqueTypesFromArray([IntegerType.instance, StringType.instance, IntegerType.instance, StringType.instance, IntegerType.instance, StringType.instance])
+        expect(intersection.length).to.eq(2);
+        expect(intersection).to.include(IntegerType.instance);
+        expect(intersection).to.include(StringType.instance);
+    });
+
+    it('should not worry about inheritance ', () => {
+        let klass = new ClassType('Klass');
+        let subklass = new ClassType('Subklass', klass);
+        let intersection = getUniqueTypesFromArray([klass, subklass, subklass, klass, klass])
+        expect(intersection.length).to.eq(2);
+        expect(intersection).to.include(klass);
+        expect(intersection).to.include(subklass);
+    });
+});
+
 
 describe('getUniqueType', () => {
 
     it('should return a single type if only one is given', () => {
         expectTypeToBe(getUniqueType([IntegerType.instance]), IntegerType);
     });
-
 
     it('should return a single type if all types are the same', () => {
         expectTypeToBe(getUniqueType([IntegerType.instance, IntegerType.instance, IntegerType.instance]), IntegerType);

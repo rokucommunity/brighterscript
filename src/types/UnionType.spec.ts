@@ -6,6 +6,7 @@ import { FloatType } from './FloatType';
 import { InterfaceType } from './InterfaceType';
 import { SymbolTypeFlags } from '../SymbolTable';
 import { BooleanType } from './BooleanType';
+import { expectTypeToBe } from '../testHelpers.spec';
 
 
 describe('UnionType', () => {
@@ -52,6 +53,33 @@ describe('UnionType', () => {
 
         expect(myUnion.isTypeCompatible(otherUnion)).to.be.true;
         expect(otherUnion.isTypeCompatible(myUnion)).to.be.false;
+    });
+
+    describe('getMemberTypes', () => {
+        it('will find the union of inner types', () => {
+            const iFace1 = new InterfaceType('iFace1');
+            iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlags.runtime);
+            iFace1.addMember('name', null, StringType.instance, SymbolTypeFlags.runtime);
+            iFace1.addMember('height', null, FloatType.instance, SymbolTypeFlags.runtime);
+
+            const iFace2 = new InterfaceType('iFace2');
+            iFace2.addMember('age', null, IntegerType.instance, SymbolTypeFlags.runtime);
+            iFace2.addMember('name', null, StringType.instance, SymbolTypeFlags.runtime);
+            iFace2.addMember('height', null, StringType.instance, SymbolTypeFlags.runtime);
+
+            const myUnion = new UnionType([iFace1, iFace2]);
+
+            const ageTypes = myUnion.getMemberTypes('age', SymbolTypeFlags.runtime);
+            expect(ageTypes.length).to.be.eq(1);
+            expectTypeToBe(ageTypes[0], IntegerType);
+            const nameTypes = myUnion.getMemberTypes('name', SymbolTypeFlags.runtime);
+            expect(nameTypes.length).to.be.eq(1);
+            expectTypeToBe(nameTypes[0], StringType);
+            const heightTypes = myUnion.getMemberTypes('height', SymbolTypeFlags.runtime);
+            expect(heightTypes.length).to.be.eq(2);
+            expect(heightTypes).to.include(FloatType.instance);
+            expect(heightTypes).to.include(StringType.instance);
+        });
     });
 
 });
