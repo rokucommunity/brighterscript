@@ -1,7 +1,9 @@
 import type { SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType, isUnionType } from '../astUtils/reflection';
+import { TokenKind } from '../lexer/TokenKind';
 import { BscType } from './BscType';
 import { findTypeUnion } from './helpers';
+import { createToken } from '../astUtils/creators';
 
 export class UnionType extends BscType {
     constructor(
@@ -71,6 +73,6 @@ export class UnionType extends BscType {
 
 
 function joinTypesString(types: BscType[]) {
-    return types.map(t => t.toString()).join(' | ');
+    return types.map(t => t.toString()).join(' or ');
 }
 

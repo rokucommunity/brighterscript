@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isTypedefProvider, isUnaryExpression, isUnionExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import type { BscType } from '../types/BscType';
 import { TypeChainEntry } from '../interfaces';
@@ -1676,7 +1676,9 @@ export class UnionExpression extends Expression {
         /**
          * The standard expression that are unified
          */
-        public expressions: Expression[]
+        public expressions: Expression[],
+        public orTokens: Token[]
+
     ) {
         super();
         this.range = util.createBoundingRange(...this.expressions);
@@ -1690,7 +1692,7 @@ export class UnionExpression extends Expression {
         return [].concat(...this.expressions.map((expr, index) => {
             const result: TranspileResult = [];
             if (index > 0) {
-                result.push(' | ');
+                result.push(this.orTokens[index - 1].text);
             }
             result.push(...expr.transpile(state));
             return result;

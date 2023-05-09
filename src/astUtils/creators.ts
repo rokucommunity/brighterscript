@@ -58,7 +58,6 @@ const tokenDefaults = {
     [TokenKind.MinusEqual]: '-=',
     [TokenKind.MinusMinus]: '--',
     [TokenKind.Newline]: '\n',
-    [TokenKind.Pipe]: '|',
     [TokenKind.PkgLocationLiteral]: 'PKG_LOCATION',
     [TokenKind.PkgPathLiteral]: 'PKG_PATH',
     [TokenKind.Plus]: '+',

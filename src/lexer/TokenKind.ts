@@ -81,7 +81,6 @@ export enum TokenKind {
     QuestionLeftSquare = 'QuestionLeftSquare', // ?[
     QuestionLeftParen = 'QuestionLeftParen', // ?(
     QuestionAt = 'QuestionAt', // ?@
-    Pipe = 'Pipe', // |
 
     // conditional compilation
     HashIf = 'HashIf', // #if

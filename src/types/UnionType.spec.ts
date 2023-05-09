@@ -55,6 +55,16 @@ describe('UnionType', () => {
         expect(otherUnion.isTypeCompatible(myUnion)).to.be.false;
     });
 
+    it('will get a string representation in order given', () => {
+        const iFace1 = new InterfaceType('SomeIface');
+        iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlags.typetime);
+        iFace1.addMember('name', null, StringType.instance, SymbolTypeFlags.typetime);
+        iFace1.addMember('height', null, FloatType.instance, SymbolTypeFlags.typetime);
+        const myUnion = new UnionType([FloatType.instance, StringType.instance, BooleanType.instance, iFace1]);
+
+        expect(myUnion.toString()).to.eq('float or string or boolean or SomeIface');
+    });
+
     describe('getMemberTypes', () => {
         it('will find the union of inner types', () => {
             const iFace1 = new InterfaceType('iFace1');

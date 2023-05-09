@@ -98,6 +98,7 @@ import { createStringLiteral } from '../astUtils/creators';
 import { Cache } from '../Cache';
 import type { Expression, Statement } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
+import { UnionType } from '../types/UnionType';
 
 export class Parser {
     /**
@@ -2509,47 +2510,50 @@ export class Parser {
      * Creates a TypeExpression, which wraps standard ASTNodes that represent a BscType
      */
     private typeExpression(): TypeExpression {
-        if (this.checkAny(...DeclarableTypes)) {
-            // if this is just a type, just use directly
-            return new TypeExpression(
-                new VariableExpression(this.advance() as Identifier)
-            );
-        }
-        //support any expression. We will flag valid expression types later in the process
-        let nextToken: Token;
-        let oldKind: TokenKind;
-
-        if (this.checkAny(...AllowedTypeIdentifiers)) {
-            // Since the next token is allowed as a type identifier, change the kind
-            nextToken = this.peek();
-            oldKind = nextToken.kind;
-            nextToken.kind = TokenKind.Identifier;
-        }
-        try {
-            let expr = this.expression();
-            return new TypeExpression(
-                expr
-            );
-        } catch (error) {
-            // Something went wrong - reset the kind to what it was previously
-            nextToken.kind = oldKind;
-            throw error;
-        }
-    }
-
-    private unionExpression(): UnionExpression {
-
         const expressions = [];
+        const orTokens = [];
         while (true) {
-            expressions.push(this.expression());
-            if (this.check(TokenKind.Pipe)) {
-                this.advance();
+            if (this.checkAny(...DeclarableTypes)) {
+                // if this is just a type, just use directly
+                expressions.push(new TypeExpression(
+                    new VariableExpression(this.advance() as Identifier)
+                ));
+            } else {
+                //support any expression. We will flag valid expression types later in the process
+                let nextToken: Token;
+                let oldKind: TokenKind;
+
+                if (this.checkAny(...AllowedTypeIdentifiers)) {
+                    // Since the next token is allowed as a type identifier, change the kind
+                    nextToken = this.peek();
+                    oldKind = nextToken.kind;
+                    nextToken.kind = TokenKind.Identifier;
+                }
+                try {
+                    let expr = this.expression();
+                    expressions.push(new TypeExpression(expr));
+                } catch (error) {
+                    // Something went wrong - reset the kind to what it was previously
+                    nextToken.kind = oldKind;
+                    throw error;
+                }
+            }
+            if (this.check(TokenKind.Or)) {
+                orTokens.push(this.advance());
             } else {
                 break;
             }
         }
-
-        return new UnionExpression(expressions);
+        if (expressions.length === 0) {
+            // No type! return undefined
+            return;
+        }
+        if (expressions.length === 1) {
+            // Only one type is given - just return that type
+            return expressions[0];
+        }
+        //Multiple types - this is a union
+        return new TypeExpression(new UnionExpression(expressions, orTokens));
     }
 
     private primary(): Expression {
