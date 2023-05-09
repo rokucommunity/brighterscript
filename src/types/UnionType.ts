@@ -1,9 +1,7 @@
 import type { SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType, isUnionType } from '../astUtils/reflection';
-import { TokenKind } from '../lexer/TokenKind';
 import { BscType } from './BscType';
 import { findTypeUnion } from './helpers';
-import { createToken } from '../astUtils/creators';
 
 export class UnionType extends BscType {
     constructor(

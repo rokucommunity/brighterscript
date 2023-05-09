@@ -98,7 +98,6 @@ import { createStringLiteral } from '../astUtils/creators';
 import { Cache } from '../Cache';
 import type { Expression, Statement } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
-import { UnionType } from '../types/UnionType';
 
 export class Parser {
     /**

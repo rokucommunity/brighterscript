@@ -115,5 +115,4 @@ describe('UnionType', () => {
             expectTypeToBe(heightTypes2[0], FloatType);
         });
     });
-
 });
