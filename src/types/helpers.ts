@@ -11,8 +11,8 @@ export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[])
         const indexOfCurrentTypeInArr2 = typesArr2.findIndex((checkType) => {
             return currentType.isEqual(checkType);
         });
-        return indexOfCurrentTypeInArr2 >= 0
-    })
+        return indexOfCurrentTypeInArr2 >= 0;
+    });
 }
 
 export function findTypeUnion(...typesArr: BscType[][]) {
@@ -28,8 +28,8 @@ export function getUniqueTypesFromArray(types: BscType[]) {
             return currentType.isEqual(checkType);
         });
         // the index that was found is the index we're checking --- there are no equal types after this
-        return latestIndex === currentIndex
-    })
+        return latestIndex === currentIndex;
+    });
 }
 
 /**
@@ -53,7 +53,7 @@ export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
     // Get a list of unique types, based on the `isEqual()` method
     const uniqueTypes = getUniqueTypesFromArray(types).map(t => {
         // map to object with `shouldIgnore` flag
-        return { type: t, shouldIgnore: false }
+        return { type: t, shouldIgnore: false };
     });
 
     if (uniqueTypes.length === 1) {
@@ -110,7 +110,7 @@ export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
  * @returns either the singular most general type, if there is one, otherwise a UnionType of the most general types
  */
 export function getUniqueType(types: BscType[]): BscType {
-    const generalizedTypes = reduceTypesToMostGeneric(types)
+    const generalizedTypes = reduceTypesToMostGeneric(types);
     if (!generalizedTypes || generalizedTypes.length === 0) {
         return undefined;
     }

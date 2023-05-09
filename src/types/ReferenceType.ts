@@ -67,7 +67,13 @@ export class ReferenceType extends BscType {
                             return isDynamicType(targetType);
                         };
                     } else if (propName === 'isEqual') {
-                        return (targetType: BscType) => false;
+                        return (targetType: BscType) => {
+                            if (isReferenceType(targetType)) {
+                                return this.name === targetType.toString() &&
+                                    this.memberTable === targetType.memberTable;
+                            }
+                            return false;
+                        };
                     }
                 }
 

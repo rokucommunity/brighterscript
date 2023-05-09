@@ -1,7 +1,7 @@
 import type { SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
-import { findTypeIntersection, findTypeUnion, reduceTypesToMostGeneric } from './helpers';
+import { findTypeUnion } from './helpers';
 
 export class UnionType extends BscType {
     constructor(
@@ -15,7 +15,16 @@ export class UnionType extends BscType {
     }
 
     getMemberTypes(name: string, flags: SymbolTypeFlags) {
-        return findTypeUnion(...this.types.map((innerType) => innerType.getMemberTypes(name, flags)));
+        const innerTypesMemberTypes = this.types.map((innerType) => innerType?.getMemberTypes(name, flags));
+        for (const types of innerTypesMemberTypes) {
+            if (!types || types.length === 0) {
+                return;
+            } else if (types.find((t => !t.isResolvable()))) {
+                // this inner type has an unresolvable member --- therefore this member is not defined for all inner types
+                return;
+            }
+        }
+        return findTypeUnion(...innerTypesMemberTypes);
     }
 
     isTypeCompatible(targetType: BscType): boolean {

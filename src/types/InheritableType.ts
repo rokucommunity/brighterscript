@@ -58,8 +58,8 @@ export abstract class InheritableType extends BscType {
     }
 
     /**
-    *  Checks if other type is an descendent of this
-    */
+     *  Checks if other type is an descendent of this
+     */
     isTypeDescendent(otherType: BscType) {
         if (!isInheritableType(otherType)) {
             return false;
