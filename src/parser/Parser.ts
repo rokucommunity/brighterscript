@@ -86,6 +86,7 @@ import {
     TernaryExpression,
     TypeExpression,
     UnaryExpression,
+    UnionExpression,
     VariableExpression,
     XmlAttributeGetExpression
 } from './Expression';
@@ -97,7 +98,6 @@ import { createStringLiteral } from '../astUtils/creators';
 import { Cache } from '../Cache';
 import type { Expression, Statement } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
-
 export class Parser {
     /**
      * The array of tokens passed to `parse()`
@@ -2534,6 +2534,21 @@ export class Parser {
             nextToken.kind = oldKind;
             throw error;
         }
+    }
+
+    private unionExpression(): UnionExpression {
+
+        const expressions = [];
+        while (true) {
+            expressions.push(this.expression());
+            if (this.check(TokenKind.Pipe)) {
+                this.advance();
+            } else {
+                break;
+            }
+        }
+
+        return new UnionExpression(expressions);
     }
 
     private primary(): Expression {

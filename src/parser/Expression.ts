@@ -24,6 +24,7 @@ import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
 import { TypePropertyReferenceType, ReferenceType } from '../types/ReferenceType';
 import { getUniqueType } from '../types/helpers';
+import { UnionType } from '../types/UnionType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -1668,4 +1669,33 @@ export class TypeExpression extends Expression implements TypedefProvider {
         return util.getAllDottedGetParts(this.expression).map(x => x.text);
     }
 
+}
+
+export class UnionExpression extends Expression {
+    constructor(
+        /**
+         * The standard expression that are unified
+         */
+        public expressions: Expression[]
+    ) {
+        super();
+        this.range = util.createBoundingRange(...this.expressions);
+    }
+
+    public range: Range;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [this.getType({ flags: SymbolTypeFlags.typetime }).toTypeString()];
+    }
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            for (let i = 0; i < this.expressions.length; i++) {
+                walk(this.expressions, i, visitor, options);
+            }
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        return new UnionType(this.expressions.map(expr => expr.getType(options)));
+    }
 }
