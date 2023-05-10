@@ -86,7 +86,6 @@ import {
     TernaryExpression,
     TypeExpression,
     UnaryExpression,
-    UnionExpression,
     VariableExpression,
     XmlAttributeGetExpression
 } from './Expression';
@@ -1323,10 +1322,15 @@ export class Parser {
      * Get an expression with identifiers separated by periods. Useful for namespaces and class extends
      */
     private getNamespacedVariableNameExpression() {
+        return new NamespacedVariableNameExpression(this.identifyingExpression());
+    }
+
+    private identifyingExpression(allowedTokenKinds?: TokenKind[]): DottedGetExpression | VariableExpression {
+        allowedTokenKinds = allowedTokenKinds ?? this.allowedLocalIdentifiers;
         let firstIdentifier = this.consume(
             DiagnosticMessages.expectedIdentifierAfterKeyword(this.previous().text),
             TokenKind.Identifier,
-            ...this.allowedLocalIdentifiers
+            ...allowedTokenKinds
         ) as Identifier;
 
         let expr: DottedGetExpression | VariableExpression;
@@ -1349,7 +1353,7 @@ export class Parser {
                 let identifier = this.tryConsume(
                     DiagnosticMessages.expectedIdentifier(),
                     TokenKind.Identifier,
-                    ...this.allowedLocalIdentifiers,
+                    ...allowedTokenKinds,
                     ...AllowedProperties
                 ) as Identifier;
 
@@ -1361,9 +1365,8 @@ export class Parser {
                 expr = new DottedGetExpression(expr, identifier, dot);
             }
         }
-        return new NamespacedVariableNameExpression(expr);
+        return expr;
     }
-
     /**
      * Add an 'unexpected token' diagnostic for any token found between current and the first stopToken found.
      */
@@ -2509,50 +2512,49 @@ export class Parser {
      * Creates a TypeExpression, which wraps standard ASTNodes that represent a BscType
      */
     private typeExpression(): TypeExpression {
-        const expressions = [];
-        const orTokens = [];
-        while (true) {
-            if (this.checkAny(...DeclarableTypes)) {
-                // if this is just a type, just use directly
-                expressions.push(new TypeExpression(
-                    new VariableExpression(this.advance() as Identifier)
-                ));
-            } else {
-                //support any expression. We will flag valid expression types later in the process
-                let nextToken: Token;
-                let oldKind: TokenKind;
+        const changedTokens: { token: Token; oldKind: TokenKind }[] = [];
+        try {
+            let expr: Expression = this.getTypeExpressionPart(changedTokens);
+            while (this.matchAny(TokenKind.Or)) {
+                let operator = this.previous();
+                let right = this.getTypeExpressionPart(changedTokens);
+                if (right) {
+                    expr = new BinaryExpression(expr, operator, right);
+                } else {
+                    break;
+                }
+            }
+            if (expr) {
+                return new TypeExpression(expr);
+            }
 
-                if (this.checkAny(...AllowedTypeIdentifiers)) {
-                    // Since the next token is allowed as a type identifier, change the kind
-                    nextToken = this.peek();
-                    oldKind = nextToken.kind;
-                    nextToken.kind = TokenKind.Identifier;
-                }
-                try {
-                    let expr = this.expression();
-                    expressions.push(new TypeExpression(expr));
-                } catch (error) {
-                    // Something went wrong - reset the kind to what it was previously
-                    nextToken.kind = oldKind;
-                    throw error;
-                }
+        } catch (error) {
+            // Something went wrong - reset the kind to what it was previously
+            for (const changedToken of changedTokens) {
+                changedToken.token.kind = changedToken.oldKind;
             }
-            if (this.check(TokenKind.Or)) {
-                orTokens.push(this.advance());
-            } else {
-                break;
+            throw error;
+        }
+    }
+
+    private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
+        let expr: VariableExpression | DottedGetExpression;
+        if (this.checkAny(...DeclarableTypes)) {
+            // if this is just a type, just use directly
+            expr = new VariableExpression(this.advance() as Identifier);
+        } else {
+            if (this.checkAny(...AllowedTypeIdentifiers)) {
+                // Since the next token is allowed as a type identifier, change the kind
+                let nextToken = this.peek();
+                changedTokens.push({ token: nextToken, oldKind: nextToken.kind });
+                nextToken.kind = TokenKind.Identifier;
+            }
+            expr = this.identifyingExpression(AllowedTypeIdentifiers);
+            if (expr) {
+                this._references.expressions.add(expr);
             }
         }
-        if (expressions.length === 0) {
-            // No type! return undefined
-            return;
-        }
-        if (expressions.length === 1) {
-            // Only one type is given - just return that type
-            return expressions[0];
-        }
-        //Multiple types - this is a union
-        return new TypeExpression(new UnionExpression(expressions, orTokens));
+        return expr;
     }
 
     private primary(): Expression {

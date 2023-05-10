@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import type { BscType } from '../types/BscType';
 import { TypeChainEntry } from '../interfaces';
@@ -25,6 +25,7 @@ import { VoidType } from '../types/VoidType';
 import { TypePropertyReferenceType, ReferenceType } from '../types/ReferenceType';
 import { getUniqueType } from '../types/helpers';
 import { UnionType } from '../types/UnionType';
+import { ObjectType } from '../types/ObjectType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -56,7 +57,25 @@ export class BinaryExpression extends Expression {
             walk(this, 'right', visitor, options);
         }
     }
+
+
+    public getType(options: GetTypeOptions): BscType {
+        const operatorKind = this.operator.kind;
+        if (options.flags & SymbolTypeFlags.typetime) {
+            // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+            switch (operatorKind) {
+                case TokenKind.Or:
+                    return new UnionType([this.left.getType(options), this.right.getType(options)]);
+                //TODO: Intersection Types?, eg. case TokenKind.And:
+
+            }
+        }
+        //TODO: figure out result type on +, *, or, and, etc!
+        return DynamicType.instance;
+    }
+
 }
+
 
 export class CallExpression extends Expression {
     static MaximumArguments = 32;
@@ -762,6 +781,10 @@ export class AAMemberExpression extends Expression {
         walk(this, 'value', visitor, options);
     }
 
+    getType(options: GetTypeOptions): BscType {
+        return this.value.getType(options);
+    }
+
 }
 
 export class AALiteralExpression extends Expression {
@@ -850,6 +873,17 @@ export class AALiteralExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walkArray(this.elements, visitor, options, this);
         }
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        const resultType = new ObjectType();
+        for (const element of this.elements) {
+            if (isAAMemberExpression(element)) {
+                resultType.addMember(element.keyToken.text, element.range, element.getType(options), SymbolTypeFlags.runtime);
+            }
+
+        }
+        return resultType;
     }
 }
 
@@ -1669,45 +1703,4 @@ export class TypeExpression extends Expression implements TypedefProvider {
         return util.getAllDottedGetParts(this.expression).map(x => x.text);
     }
 
-}
-
-export class UnionExpression extends Expression {
-    constructor(
-        /**
-         * The standard expression that are unified
-         */
-        public expressions: Expression[],
-        public orTokens: Token[]
-
-    ) {
-        super();
-        this.range = util.createBoundingRange(...this.expressions);
-    }
-
-    public range: Range;
-
-    public transpile(state: BrsTranspileState): TranspileResult {
-        // This should only be called in the context of a typeDef
-        // loop through all expressions - join with ' | '
-        return [].concat(...this.expressions.map((expr, index) => {
-            const result: TranspileResult = [];
-            if (index > 0) {
-                result.push(this.orTokens[index - 1].text);
-            }
-            result.push(...expr.transpile(state));
-            return result;
-        }));
-
-    }
-    public walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkMode & InternalWalkMode.walkExpressions) {
-            for (let i = 0; i < this.expressions.length; i++) {
-                walk(this.expressions, i, visitor, options);
-            }
-        }
-    }
-
-    public getType(options: GetTypeOptions): BscType {
-        return new UnionType(this.expressions.map(expr => expr.getType(options)));
-    }
 }

@@ -1051,6 +1051,8 @@ export class Util {
                         return new BooleanType(token.text);
                     case 'double':
                         return new DoubleType(token.text);
+                    case 'dynamic':
+                        return new DynamicType(token.text);
                     case 'float':
                         return new FloatType(token.text);
                     case 'function':
