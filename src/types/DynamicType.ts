@@ -1,3 +1,4 @@
+import { isDynamicType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 
 export class DynamicType extends BscType {
@@ -21,7 +22,7 @@ export class DynamicType extends BscType {
     /**
      * The dynamic type is convertible to everything.
      */
-    public isConvertibleTo(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType) {
         //everything can be dynamic, so as long as a type is provided, this is true
         return !!targetType;
     }
@@ -33,4 +34,9 @@ export class DynamicType extends BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    public isEqual(targetType: BscType) {
+        return isDynamicType(targetType);
+    }
 }
+

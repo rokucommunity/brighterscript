@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isBrsFile, isDottedGetExpression, isLiteralExpression, isNamespaceStatement, isTypeExpression, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isLiteralExpression, isNamespaceStatement, isTypeExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -89,7 +89,6 @@ export class ScopeValidator {
         outer:
         for (const info of expressionInfos) {
             const symbolTable = info.expression.getSymbolTable();
-            const fullName = info.parts.map(part => part.name.text).join('.');
             const firstPart = info.parts[0];
             const firstNamespacePart = info.parts[0].name.text;
             const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
@@ -103,20 +102,22 @@ export class ScopeValidator {
                 symbolType = SymbolTypeFlags.typetime;
                 oppositeSymbolType = SymbolTypeFlags.runtime;
             }
-            let exprType = info.expression.getType(symbolType);
+            const typeChain = [];
+            let exprType = info.expression.getType({ flags: symbolType, typeChain: typeChain });
             if (!exprType || !exprType.isResolvable()) {
-                if (info.expression.getType(oppositeSymbolType)?.isResolvable()) {
-                    const invalidlyUsedResolvedTypeName = info.expression.getType(oppositeSymbolType).toString();
+                if (info.expression.getType({ flags: oppositeSymbolType })?.isResolvable()) {
+                    const oppoSiteTypeChain = [];
+                    const invalidlyUsedResolvedType = info.expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain });
+                    const typeChainScan = util.processTypeChain(oppoSiteTypeChain);
                     if (isUsedAsType) {
-
                         this.addMultiScopeDiagnostic({
-                            ...DiagnosticMessages.itemCannotBeUsedAsType(fullName),
+                            ...DiagnosticMessages.itemCannotBeUsedAsType(typeChainScan.fullChainName),
                             range: info.expression.range,
                             file: file
                         }, 'When used in scope');
                     } else {
                         this.addMultiScopeDiagnostic({
-                            ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedTypeName),
+                            ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedType.toString()),
                             range: info.expression.range,
                             file: file
                         }, 'When used in scope');
@@ -124,27 +125,11 @@ export class ScopeValidator {
                     continue;
                 }
 
-                let fullErrorName = fullName;
-                let lastName = info.parts[info.parts.length - 1].name.text;
-                if (isDottedGetExpression(info.expression)) {
-                    //TODO: Wrap deciphering a typeChain in a function, so that it cna handle multiple kinds of expressions
-                    fullErrorName = '';
-                    for (let i = 0; i < info.expression.typeChain.length; i++) {
-                        const chainItem = info.expression.typeChain[i];
-                        if (i > 0) {
-                            fullErrorName += '.';
-                        }
-                        fullErrorName += chainItem.name;
-                        lastName = chainItem.name;
-                        if (!chainItem.resolved) {
-                            break;
-                        }
-                    }
-                }
+                const typeChainScan = util.processTypeChain(typeChain);
                 this.addMultiScopeDiagnostic({
                     file: file as BscFile,
-                    ...DiagnosticMessages.cannotFindName(lastName, fullErrorName),
-                    range: info.expression.range
+                    ...DiagnosticMessages.cannotFindName(typeChainScan.missingItemName, typeChainScan.fullNameOfMissingItem),
+                    range: typeChainScan.range
                 });
                 //skip to the next expression
                 continue;

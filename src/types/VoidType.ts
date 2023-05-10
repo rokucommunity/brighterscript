@@ -1,5 +1,5 @@
+import { isDynamicType, isVoidType } from '../astUtils/reflection';
 import { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
 
 export class VoidType extends BscType {
     constructor(
@@ -10,15 +10,11 @@ export class VoidType extends BscType {
 
     public static instance = new VoidType('void');
 
-    public isAssignableTo(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType) {
         return (
-            targetType instanceof VoidType ||
-            targetType instanceof DynamicType
+            isVoidType(targetType) ||
+            isDynamicType(targetType)
         );
-    }
-
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
     }
 
     public toString() {
@@ -27,5 +23,9 @@ export class VoidType extends BscType {
 
     public toTypeString(): string {
         return this.toString();
+    }
+
+    public isEqual(targetType: BscType) {
+        return isVoidType(targetType);
     }
 }
