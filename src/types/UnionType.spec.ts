@@ -7,6 +7,7 @@ import { InterfaceType } from './InterfaceType';
 import { SymbolTypeFlags } from '../SymbolTable';
 import { BooleanType } from './BooleanType';
 import { expectTypeToBe } from '../testHelpers.spec';
+import { isReferenceType } from '../astUtils/reflection';
 
 
 describe('UnionType', () => {
@@ -92,7 +93,7 @@ describe('UnionType', () => {
         });
 
 
-        it('will return undefined if any inner type does not include the member', () => {
+        it('will return reference types if any inner type does not include the member', () => {
             const iFace1 = new InterfaceType('iFace1');
             iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlags.typetime);
             iFace1.addMember('name', null, StringType.instance, SymbolTypeFlags.typetime);
@@ -104,8 +105,12 @@ describe('UnionType', () => {
 
             const myUnion = new UnionType([iFace1, iFace2]);
             const heightTypes1 = myUnion.getMemberTypes('height', SymbolTypeFlags.typetime);
+
+            expect(heightTypes1.length).to.eq(2);
+            expectTypeToBe(heightTypes1[0], FloatType);
             // height does not exist in iFace2
-            expect(heightTypes1).to.be.undefined;
+            expect(isReferenceType(heightTypes1[1])).to.be.true;
+            expect(heightTypes1[1].isResolvable()).to.be.false;
 
             iFace2.addMember('height', null, FloatType.instance, SymbolTypeFlags.typetime);
             const heightTypes2 = myUnion.getMemberTypes('height', SymbolTypeFlags.typetime);

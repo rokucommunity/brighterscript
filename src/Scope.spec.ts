@@ -2262,5 +2262,65 @@ describe('Scope', () => {
             expect(mainFnScope).to.exist;
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('myVal', SymbolTypeFlags.runtime)[0].type, IntegerType);
         });
+
+        describe('union types', () => {
+
+            it('should find actual members correctly', () => {
+                const mainFile = program.setFile('source/main.bs', `
+                    sub printName(thing as Person or Pet)
+                        name = thing.name
+                        print(name)
+                    end sub
+
+                    class Person
+                        name as string
+                        age as integer
+                    end class
+
+                    class Pet
+                        name as string
+                        legs as integer
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope).to.exist;
+                sourceScope.linkSymbolTable();
+                expect(mainFnScope).to.exist;
+                expectTypeToBe(mainFnScope.symbolTable.getSymbol('name', SymbolTypeFlags.runtime)[0].type, StringType);
+            });
+
+            it('should have an error when a non union member is accessed', () => {
+                const mainFile = program.setFile('source/main.bs', `
+                    sub printLegs(thing as Person or Pet)
+                        legs = thing.legs
+                        print(legs)
+                    end sub
+
+                    class Person
+                        name as string
+                        age as integer
+                    end class
+
+                    class Pet
+                        name as string
+                        legs as integer
+                    end class
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('legs').message
+                ]);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope).to.exist;
+                sourceScope.linkSymbolTable();
+                expect(mainFnScope).to.exist;
+                expect(mainFnScope.symbolTable.getSymbol('legs', SymbolTypeFlags.runtime)[0].type.isResolvable()).to.be.false;
+            });
+
+        });
     });
 });

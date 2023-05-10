@@ -1,4 +1,4 @@
-import type { SymbolTableProvider } from '../SymbolTable';
+import type { SymbolTypesGetterProvider } from '../SymbolTable';
 import type { SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType, isReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
@@ -6,7 +6,7 @@ import { DynamicType } from './DynamicType';
 import { getUniqueType } from './helpers';
 
 export class ReferenceType extends BscType {
-    constructor(public name: string, public flags: SymbolTypeFlags, private tableProvider: SymbolTableProvider) {
+    constructor(public name: string, public flags: SymbolTypeFlags, private tableProvider: SymbolTypesGetterProvider) {
         super(name);
         // eslint-disable-next-line no-constructor-return
         return new Proxy(this, {
@@ -48,7 +48,10 @@ export class ReferenceType extends BscType {
                         // Since we don't know what type this is, yet, return ReferenceType
                         return (memberName: string, flags: SymbolTypeFlags) => {
                             return [new ReferenceType(memberName, flags, () => {
-                                return (this.resolve() as any)?.memberTable;
+                                const resolvedType = this.resolve();
+                                if (resolvedType) {
+                                    return resolvedType.memberTable;
+                                }
                             })];
                         };
                     } else if (propName === 'toString') {
@@ -70,7 +73,7 @@ export class ReferenceType extends BscType {
                         return (targetType: BscType) => {
                             if (isReferenceType(targetType)) {
                                 return this.name === targetType.toString() &&
-                                    this.memberTable === targetType.memberTable;
+                                    this.tableProvider() === targetType.tableProvider();
                             }
                             return false;
                         };

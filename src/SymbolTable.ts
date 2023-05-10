@@ -11,7 +11,7 @@ export enum SymbolTypeFlags {
  * Stores the types associated with variables and functions in the Brighterscript code
  * Can be part of a hierarchy, so lookups can reference parent scopes
  */
-export class SymbolTable {
+export class SymbolTable implements SymbolTypesGetter {
     constructor(
         public name: string,
         parentProvider?: SymbolTableProvider
@@ -204,7 +204,16 @@ export interface BscSymbol {
     flags: number;
 }
 
+export interface SymbolTypesGetter {
+    getSymbolTypes(name: string, bitFlags: number): BscType[];
+}
+
 /**
  * A function that returns a symbol table.
  */
 export type SymbolTableProvider = () => SymbolTable;
+
+/**
+ * A function that returns a symbol types getter - smaller interface used in types
+ */
+export type SymbolTypesGetterProvider = () => SymbolTypesGetter;

@@ -1,6 +1,7 @@
-import type { SymbolTypeFlags } from '../SymbolTable';
+import type { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
+import { ReferenceType } from './ReferenceType';
 import { findTypeUnion } from './helpers';
 
 export class UnionType extends BscType {
@@ -14,15 +15,22 @@ export class UnionType extends BscType {
         this.types.push(type);
     }
 
+    private getMemberTypesFromInnerTypes(name: string, flags: SymbolTypeFlags) {
+        return this.types.map((innerType) => innerType?.getMemberTypes(name, flags));
+    }
+
     getMemberTypes(name: string, flags: SymbolTypeFlags) {
-        const innerTypesMemberTypes = this.types.map((innerType) => innerType?.getMemberTypes(name, flags));
-        for (const types of innerTypesMemberTypes) {
-            if (!types || types.length === 0) {
-                return;
-            } else if (types.find((t => !t.isResolvable()))) {
-                // this inner type has an unresolvable member --- therefore this member is not defined for all inner types
-                return;
-            }
+        const innerTypesMemberTypes = this.getMemberTypesFromInnerTypes(name, flags);
+        if (!innerTypesMemberTypes) {
+            // We don't have any members of any inner types that match
+            // so instead, create reference type that will
+            return [new ReferenceType(name, flags, () => {
+                return {
+                    getSymbolTypes: (innerName: string, innerFlags: SymbolTypeFlags) => {
+                        return findTypeUnion(...this.getMemberTypesFromInnerTypes(name, flags));
+                    }
+                };
+            })];
         }
         return findTypeUnion(...innerTypesMemberTypes);
     }
