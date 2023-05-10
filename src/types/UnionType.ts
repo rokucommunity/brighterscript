@@ -1,4 +1,4 @@
-import type { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
+import type { SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
