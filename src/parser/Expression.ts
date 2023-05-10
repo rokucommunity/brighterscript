@@ -67,7 +67,6 @@ export class BinaryExpression extends Expression {
                 case TokenKind.Or:
                     return new UnionType([this.left.getType(options), this.right.getType(options)]);
                 //TODO: Intersection Types?, eg. case TokenKind.And:
-
             }
         }
         //TODO: figure out result type on +, *, or, and, etc!

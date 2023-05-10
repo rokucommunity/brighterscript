@@ -71,7 +71,7 @@ describe('getUniqueTypesFromArray', () => {
         expect(intersection).to.include(IntegerType.instance);
     });
 
-    it('should return an array with ni duplicates', () => {
+    it('should return an array with no duplicates', () => {
         let intersection = getUniqueTypesFromArray([IntegerType.instance, StringType.instance, IntegerType.instance, StringType.instance, IntegerType.instance, StringType.instance]);
         expect(intersection.length).to.eq(2);
         expect(intersection).to.include(IntegerType.instance);
