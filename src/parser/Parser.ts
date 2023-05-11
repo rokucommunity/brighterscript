@@ -1325,7 +1325,7 @@ export class Parser {
         let firstIdentifier = this.consume(
             DiagnosticMessages.expectedIdentifierAfterKeyword(this.previous().text),
             TokenKind.Identifier,
-            ...this.allowedLocalIdentifiers
+            ...allowedTokenKinds
         ) as Identifier;
 
         let expr: DottedGetExpression | VariableExpression;
@@ -1348,7 +1348,7 @@ export class Parser {
                 let identifier = this.tryConsume(
                     DiagnosticMessages.expectedIdentifier(),
                     TokenKind.Identifier,
-                    ...this.allowedLocalIdentifiers,
+                    ...allowedTokenKinds,
                     ...AllowedProperties
                 ) as Identifier;
 
