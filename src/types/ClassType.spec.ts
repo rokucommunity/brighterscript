@@ -47,7 +47,7 @@ describe('ClassType', () => {
 
     it('allow ReferenceTypes as super classes', () => {
         const myTable = new SymbolTable('test');
-        const futureSuperKlass = new ReferenceType('SuperKlass', SymbolTypeFlags.typetime, () => myTable);
+        const futureSuperKlass = new ReferenceType('SuperKlass', 'SuperKlass', SymbolTypeFlags.typetime, () => myTable);
         const subKlass = new ClassType('SubKlass', futureSuperKlass);
         expect(subKlass.isResolvable()).to.be.false;
         const superKlass = new ClassType('SuperKlass');
@@ -57,7 +57,7 @@ describe('ClassType', () => {
 
     it('allows members of future super classes to be resolved', () => {
         const myTable = new SymbolTable('test');
-        const futureSuperKlass = new ReferenceType('SuperKlass', SymbolTypeFlags.typetime, () => myTable);
+        const futureSuperKlass = new ReferenceType('SuperKlass', 'SuperKlass', SymbolTypeFlags.typetime, () => myTable);
         const subKlass = new ClassType('SubKlass', futureSuperKlass);
         expect(subKlass.isResolvable()).to.be.false;
         const futureTitleType = getUniqueType(subKlass.getMemberTypes('title', SymbolTypeFlags.runtime));

@@ -12,8 +12,8 @@ export abstract class InheritableType extends BscType {
         }
     }
 
-    getMemberTypes(name: string, flags: SymbolTypeFlags) {
-        return super.getMemberTypes(name, flags) ?? [new ReferenceType(name, flags, () => this.memberTable)];
+    getMemberTypes(memberName: string, flags: SymbolTypeFlags) {
+        return super.getMemberTypes(memberName, flags) ?? [new ReferenceType(memberName, memberName, flags, () => this.memberTable)];
     }
 
     public toString() {
@@ -40,6 +40,31 @@ export abstract class InheritableType extends BscType {
             }
         }
         return ancestors;
+    }
+
+    /**
+     *  Checks if other type is an ancestor of this
+     */
+    isTypeAncestor(otherType: BscType) {
+        if (!isInheritableType(otherType)) {
+            return false;
+        }
+        // Check if targetType is an ancestor of this
+        const ancestors = this.getAncestorTypeList();
+        if (ancestors?.find(ancestorType => ancestorType.isEqual(otherType))) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     *  Checks if other type is an descendent of this
+     */
+    isTypeDescendent(otherType: BscType) {
+        if (!isInheritableType(otherType)) {
+            return false;
+        }
+        return otherType.isTypeAncestor(this);
     }
 
     /**

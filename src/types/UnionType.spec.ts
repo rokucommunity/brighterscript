@@ -6,6 +6,8 @@ import { FloatType } from './FloatType';
 import { InterfaceType } from './InterfaceType';
 import { SymbolTypeFlags } from '../SymbolTable';
 import { BooleanType } from './BooleanType';
+import { expectTypeToBe } from '../testHelpers.spec';
+import { isReferenceType } from '../astUtils/reflection';
 
 
 describe('UnionType', () => {
@@ -54,4 +56,68 @@ describe('UnionType', () => {
         expect(otherUnion.isTypeCompatible(myUnion)).to.be.false;
     });
 
+    it('will get a string representation in order given', () => {
+        const iFace1 = new InterfaceType('SomeIface');
+        iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlags.typetime);
+        iFace1.addMember('name', null, StringType.instance, SymbolTypeFlags.typetime);
+        iFace1.addMember('height', null, FloatType.instance, SymbolTypeFlags.typetime);
+        const myUnion = new UnionType([FloatType.instance, StringType.instance, BooleanType.instance, iFace1]);
+
+        expect(myUnion.toString()).to.eq('float or string or boolean or SomeIface');
+    });
+
+    describe('getMemberTypes', () => {
+        it('will find the union of inner types', () => {
+            const iFace1 = new InterfaceType('iFace1');
+            iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlags.typetime);
+            iFace1.addMember('name', null, StringType.instance, SymbolTypeFlags.typetime);
+            iFace1.addMember('height', null, FloatType.instance, SymbolTypeFlags.typetime);
+
+            const iFace2 = new InterfaceType('iFace2');
+            iFace2.addMember('age', null, IntegerType.instance, SymbolTypeFlags.typetime);
+            iFace2.addMember('name', null, StringType.instance, SymbolTypeFlags.typetime);
+            iFace2.addMember('height', null, StringType.instance, SymbolTypeFlags.typetime);
+
+            const myUnion = new UnionType([iFace1, iFace2]);
+
+            const ageTypes = myUnion.getMemberTypes('age', SymbolTypeFlags.typetime);
+            expect(ageTypes.length).to.be.eq(1);
+            expectTypeToBe(ageTypes[0], IntegerType);
+            const nameTypes = myUnion.getMemberTypes('name', SymbolTypeFlags.typetime);
+            expect(nameTypes.length).to.be.eq(1);
+            expectTypeToBe(nameTypes[0], StringType);
+            const heightTypes = myUnion.getMemberTypes('height', SymbolTypeFlags.typetime);
+            expect(heightTypes.length).to.be.eq(2);
+            expect(heightTypes).to.include(FloatType.instance);
+            expect(heightTypes).to.include(StringType.instance);
+        });
+
+
+        it('will return reference types if any inner type does not include the member', () => {
+            const iFace1 = new InterfaceType('iFace1');
+            iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlags.typetime);
+            iFace1.addMember('name', null, StringType.instance, SymbolTypeFlags.typetime);
+            iFace1.addMember('height', null, FloatType.instance, SymbolTypeFlags.typetime);
+
+            const iFace2 = new InterfaceType('iFace2');
+            iFace2.addMember('age', null, IntegerType.instance, SymbolTypeFlags.typetime);
+            iFace2.addMember('name', null, StringType.instance, SymbolTypeFlags.typetime);
+
+            const myUnion = new UnionType([iFace1, iFace2]);
+            const heightTypes1 = myUnion.getMemberTypes('height', SymbolTypeFlags.typetime);
+
+            expect(heightTypes1.length).to.eq(2);
+            expectTypeToBe(heightTypes1[0], FloatType);
+            // height does not exist in iFace2
+            expect(isReferenceType(heightTypes1[1])).to.be.true;
+            expect(heightTypes1[1].isResolvable()).to.be.false;
+
+            iFace2.addMember('height', null, FloatType.instance, SymbolTypeFlags.typetime);
+            const heightTypes2 = myUnion.getMemberTypes('height', SymbolTypeFlags.typetime);
+            // now height does exist in iFace2
+            expect(heightTypes2).to.exist;
+            expect(heightTypes2.length).to.eq(1);
+            expectTypeToBe(heightTypes2[0], FloatType);
+        });
+    });
 });

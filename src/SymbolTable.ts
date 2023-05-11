@@ -11,7 +11,7 @@ export enum SymbolTypeFlags {
  * Stores the types associated with variables and functions in the Brighterscript code
  * Can be part of a hierarchy, so lookups can reference parent scopes
  */
-export class SymbolTable {
+export class SymbolTable implements SymbolTypesGetter {
     constructor(
         public name: string,
         parentProvider?: SymbolTableProvider
@@ -28,8 +28,6 @@ export class SymbolTable {
     private symbolMap = new Map<string, BscSymbol[]>();
 
     private parentProviders = [] as SymbolTableProvider[];
-
-    public findIntersectionOfSiblings = false;
 
     /**
      * Push a function that will provide a parent SymbolTable when requested
@@ -130,39 +128,12 @@ export class SymbolTable {
     }
 
     getSymbolTypes(name: string, bitFlags: number): BscType[] {
-        if (!this.findIntersectionOfSiblings) {
-            const symbolArray = this.getSymbol(name, bitFlags);
-            if (!symbolArray) {
-                return undefined;
-            }
-            return symbolArray.map(symbol => symbol.type);
+        const symbolArray = this.getSymbol(name, bitFlags);
+        if (!symbolArray) {
+            return undefined;
         }
-        //Need to take the intersection of siblings...
-        const key = name.toLowerCase();
-        let result: BscSymbol[];
-        let resultSoFar: BscSymbol[] = [];
-        // look in our map first
-        if ((result = this.symbolMap.get(key))) {
-            // eslint-disable-next-line no-bitwise
-            const resultMe = result.filter(symbol => symbol.flags & bitFlags);
-            resultSoFar.push(...resultMe);
-        }
+        return symbolArray.map(symbol => symbol.type);
 
-        //look through any sibling maps next
-        for (let sibling of this.siblings) {
-            if ((result = sibling.symbolMap.get(key))) {
-                // eslint-disable-next-line no-bitwise
-                const resultMe = result.filter(symbol => symbol.flags & bitFlags);
-                resultSoFar.push(...resultMe);
-            }
-        }
-
-        const typeResults = resultSoFar.map(result => result.type);
-        if (typeResults.length > 0) {
-            return typeResults;
-        }
-        // ask our parent for a symbol
-        return this.parent?.getSymbolTypes(key, bitFlags);
     }
 
     /**
@@ -233,7 +204,16 @@ export interface BscSymbol {
     flags: number;
 }
 
+export interface SymbolTypesGetter {
+    getSymbolTypes(name: string, bitFlags: number): BscType[];
+}
+
 /**
  * A function that returns a symbol table.
  */
 export type SymbolTableProvider = () => SymbolTable;
+
+/**
+ * A function that returns a symbol types getter - smaller interface used in types
+ */
+export type SymbolTypesGetterProvider = () => SymbolTypesGetter;

@@ -1362,7 +1362,6 @@ export class Parser {
         }
         return expr;
     }
-
     /**
      * Add an 'unexpected token' diagnostic for any token found between current and the first stopToken found.
      */
@@ -2508,32 +2507,49 @@ export class Parser {
      * Creates a TypeExpression, which wraps standard ASTNodes that represent a BscType
      */
     private typeExpression(): TypeExpression {
-        if (this.checkAny(...DeclarableTypes)) {
-            // if this is just a type, just use directly
-            return new TypeExpression(
-                new VariableExpression(this.advance() as Identifier)
-            );
-        }
-        //support any expression. We will flag valid expression types later in the process
-        let nextToken: Token;
-        let oldKind: TokenKind;
-
-        if (this.checkAny(...AllowedTypeIdentifiers)) {
-            // Since the next token is allowed as a type identifier, change the kind
-            nextToken = this.peek();
-            oldKind = nextToken.kind;
-            nextToken.kind = TokenKind.Identifier;
-        }
+        const changedTokens: { token: Token; oldKind: TokenKind }[] = [];
         try {
-            let expr = this.expression();
-            return new TypeExpression(
-                expr
-            );
+            let expr: Expression = this.getTypeExpressionPart(changedTokens);
+            while (this.matchAny(TokenKind.Or)) {
+                let operator = this.previous();
+                let right = this.getTypeExpressionPart(changedTokens);
+                if (right) {
+                    expr = new BinaryExpression(expr, operator, right);
+                } else {
+                    break;
+                }
+            }
+            if (expr) {
+                return new TypeExpression(expr);
+            }
+
         } catch (error) {
             // Something went wrong - reset the kind to what it was previously
-            nextToken.kind = oldKind;
+            for (const changedToken of changedTokens) {
+                changedToken.token.kind = changedToken.oldKind;
+            }
             throw error;
         }
+    }
+
+    private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
+        let expr: VariableExpression | DottedGetExpression;
+        if (this.checkAny(...DeclarableTypes)) {
+            // if this is just a type, just use directly
+            expr = new VariableExpression(this.advance() as Identifier);
+        } else {
+            if (this.checkAny(...AllowedTypeIdentifiers)) {
+                // Since the next token is allowed as a type identifier, change the kind
+                let nextToken = this.peek();
+                changedTokens.push({ token: nextToken, oldKind: nextToken.kind });
+                nextToken.kind = TokenKind.Identifier;
+            }
+            expr = this.identifyingExpression(AllowedTypeIdentifiers);
+            if (expr) {
+                this._references.expressions.add(expr);
+            }
+        }
+        return expr;
     }
 
     private primary(): Expression {

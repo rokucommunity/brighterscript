@@ -24,6 +24,7 @@ import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
 import { TypePropertyReferenceType, ReferenceType } from '../types/ReferenceType';
 import { getUniqueType } from '../types/helpers';
+import { UnionType } from '../types/UnionType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -55,7 +56,24 @@ export class BinaryExpression extends Expression {
             walk(this, 'right', visitor, options);
         }
     }
+
+
+    public getType(options: GetTypeOptions): BscType {
+        const operatorKind = this.operator.kind;
+        if (options.flags & SymbolTypeFlags.typetime) {
+            // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+            switch (operatorKind) {
+                case TokenKind.Or:
+                    return new UnionType([this.left.getType(options), this.right.getType(options)]);
+                //TODO: Intersection Types?, eg. case TokenKind.And:
+            }
+        }
+        //TODO: figure out result type on +, *, or, and, etc!
+        return DynamicType.instance;
+    }
+
 }
+
 
 export class CallExpression extends Expression {
     static MaximumArguments = 32;
@@ -714,6 +732,10 @@ export class AAMemberExpression extends Expression {
         walk(this, 'value', visitor, options);
     }
 
+    getType(options: GetTypeOptions): BscType {
+        return this.value.getType(options);
+    }
+
 }
 
 export class AALiteralExpression extends Expression {
@@ -803,6 +825,22 @@ export class AALiteralExpression extends Expression {
             walkArray(this.elements, visitor, options, this);
         }
     }
+
+    getType(options: GetTypeOptions): BscType {
+        return super.getType(options);
+
+        // TODO: create an AssocArray type, and populate its members:
+        /*
+        const resultType = new AssocArrayType();
+        for (const element of this.elements) {
+            if (isAAMemberExpression(element)) {
+                resultType.addMember(element.keyToken.text, element.range, element.getType(options), SymbolTypeFlags.runtime);
+            }
+
+        }
+        return resultType;
+        */
+    }
 }
 
 export class UnaryExpression extends Expression {
@@ -873,7 +911,7 @@ export class VariableExpression extends Expression {
 
 
     getType(options: GetTypeOptions) {
-        const resultType = util.tokenToBscType(this.name) ?? new ReferenceType(this.name.text, options.flags, () => this.getSymbolTable());
+        const resultType = util.tokenToBscType(this.name) ?? new ReferenceType(this.name.text, this.name.text, options.flags, () => this.getSymbolTable());
         options.typeChain?.push(new TypeChainEntry(this.name.text, resultType, this.range));
         return resultType;
     }

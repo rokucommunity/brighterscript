@@ -1,24 +1,38 @@
 import type { SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
+import { ReferenceType } from './ReferenceType';
+import { findTypeUnion } from './helpers';
 
 export class UnionType extends BscType {
     constructor(
         public types: BscType[]
     ) {
         super(joinTypesString(types));
-        for (const type of this.types) {
-            this.memberTable.addSibling(type.memberTable);
-        }
     }
 
     public addType(type: BscType) {
         this.types.push(type);
-        this.memberTable.addSibling(type.memberTable);
+    }
+
+    private getMemberTypesFromInnerTypes(name: string, flags: SymbolTypeFlags) {
+        return this.types.map((innerType) => innerType?.getMemberTypes(name, flags));
     }
 
     getMemberTypes(name: string, flags: SymbolTypeFlags) {
-        return [];
+        const innerTypesMemberTypes = this.getMemberTypesFromInnerTypes(name, flags);
+        if (!innerTypesMemberTypes) {
+            // We don't have any members of any inner types that match
+            // so instead, create reference type that will
+            return [new ReferenceType(name, name, flags, () => {
+                return {
+                    getSymbolTypes: (innerName: string, innerFlags: SymbolTypeFlags) => {
+                        return findTypeUnion(...this.getMemberTypesFromInnerTypes(name, flags));
+                    }
+                };
+            })];
+        }
+        return findTypeUnion(...innerTypesMemberTypes);
     }
 
     isTypeCompatible(targetType: BscType): boolean {
@@ -36,7 +50,6 @@ export class UnionType extends BscType {
         }
         for (const innerType of this.types) {
             const foundCompatibleInnerType = innerType.isTypeCompatible(targetType);
-            console.log((targetType as any).__identifier, ` is${foundCompatibleInnerType ? ' ' : ' not '}compatible with `, (innerType as any).__identifier);
             if (foundCompatibleInnerType) {
                 return true;
             }
@@ -55,10 +68,17 @@ export class UnionType extends BscType {
             return acc && predicate(type);
         }, true);
     }
+
+    isEqual(targetType: BscType): boolean {
+        if (!isUnionType(targetType)) {
+            return false;
+        }
+        return this.isTypeCompatible(targetType) && targetType.isTypeCompatible(this);
+    }
 }
 
 
 function joinTypesString(types: BscType[]) {
-    return types.map(t => t.toString()).join(' | ');
+    return types.map(t => t.toString()).join(' or ');
 }
 

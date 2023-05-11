@@ -14,16 +14,12 @@ export class ClassType extends InheritableType {
         } else if (isDynamicType(targetType)) {
             return true;
         } else if (isClassType(targetType)) {
-            // Check if this is an ancestor of targetType
-            const targetAncestorTypes = targetType.getAncestorTypeList();
-            if (targetAncestorTypes?.find(ancestorType => ancestorType.isEqual(this))) {
-                return true;
-            }
+            return this.isTypeDescendent(targetType);
         }
         return false;
     }
 
     isEqual(targetType: BscType): boolean {
-        return isClassType(targetType) && this.name === targetType.name;
+        return isClassType(targetType) && this.name.toLowerCase() === targetType.name.toLowerCase();
     }
 }

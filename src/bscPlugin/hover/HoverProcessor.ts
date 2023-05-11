@@ -1,5 +1,5 @@
 import { SourceNode } from 'source-map';
-import { isBrsFile, isFunctionType, isXmlFile } from '../../astUtils/reflection';
+import { isBrsFile, isFunctionType, isTypeExpression, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { Hover, ProvideHoverEvent } from '../../interfaces';
@@ -114,16 +114,18 @@ export class HoverProcessor {
                 }
             }
 
-            //Potentially a problem for the function `string()` as it is a type AND a function https://developer.roku.com/en-ca/docs/references/brightscript/language/global-string-functions.md#stringn-as-integer-str-as-string--as-string
-
             //look through all callables in relevant scopes
-            for (let scope of this.event.scopes) {
-                let callable = scope.getCallableByName(lowerTokenText);
-                if (callable) {
-                    return {
-                        range: token.range,
-                        contents: this.buildContentsWithDocs(fence(callable.type.toString()), callable.functionStatement?.func?.functionType)
-                    };
+            if (!expression?.findAncestor(isTypeExpression)) {
+                // only look for callables when they aren't inside a type expression
+                // this was a problem for the function `string()` as it is a type AND a function https://developer.roku.com/en-ca/docs/references/brightscript/language/global-string-functions.md#stringn-as-integer-str-as-string--as-string
+                for (let scope of this.event.scopes) {
+                    let callable = scope.getCallableByName(lowerTokenText);
+                    if (callable) {
+                        return {
+                            range: token.range,
+                            contents: this.buildContentsWithDocs(fence(callable.type.toString()), callable.functionStatement?.func?.functionType)
+                        };
+                    }
                 }
             }
         } finally {

@@ -1306,7 +1306,7 @@ describe('parser', () => {
     });
 });
 
-function parse(text: string, mode?: ParseMode) {
+export function parse(text: string, mode?: ParseMode) {
     let { tokens } = Lexer.scan(text);
     return Parser.parse(tokens, {
         mode: mode

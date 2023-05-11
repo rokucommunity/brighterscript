@@ -43,11 +43,16 @@ describe('InterfaceType', () => {
     });
 
     describe('equals', () => {
-        it('matches equal objects', () => {
+        it('matches same objects', () => {
+            const ifaceObj = iface({ name: new StringType() });
+            expect(ifaceObj.isEqual(ifaceObj)).to.be.true;
+        });
+        it('does not match interfaces with same members', () => {
             expect(
                 iface({ name: new StringType() }).isEqual(iface({ name: new StringType() }))
-            ).to.be.true;
+            ).to.be.false;
         });
+
 
         it('does not match inequal objects', () => {
             expect(
