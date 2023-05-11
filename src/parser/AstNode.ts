@@ -52,13 +52,23 @@ export abstract class AstNode {
     }
 
     /**
-     * Walk upward and return the first node that results in `true` from the matcher
+     * Walk upward and return the first node that results in `true` from the matcher.
+     * @param matcher a function called for each node. If you return true, this function returns the specified node. If you return a node, that node is returned. all other return values continue the loop
+     *                The function's second parameter is a cancellation token. If you'd like to short-circuit the walk, call `cancellationToken.cancel()`, then this function will return `undefined`
      */
-    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode) => boolean | undefined) {
+    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode, cancellationToken: CancellationTokenSource) => boolean | AstNode | undefined | void): TNode {
         let node = this.parent;
+
+        const cancel = new CancellationTokenSource();
         while (node) {
-            if (matcher(node)) {
-                return node as TNode;
+            let matcherValue = matcher(node, cancel);
+            if (cancel.token.isCancellationRequested) {
+                return;
+            }
+            if (matcherValue) {
+                cancel.cancel();
+                return (matcherValue === true ? node : matcherValue) as TNode;
+
             }
             node = node.parent;
         }
@@ -68,11 +78,11 @@ export abstract class AstNode {
      * Find the first child where the matcher evaluates to true.
      * @param matcher a function called for each node. If you return true, this function returns the specified node. If you return a node, that node is returned. all other return values continue the loop
      */
-    public findChild<TNodeType extends AstNode = AstNode>(matcher: (node: AstNode) => boolean | AstNode, options?: WalkOptions) {
+    public findChild<TNode extends AstNode = AstNode>(matcher: (node: AstNode, cancellationSource) => boolean | AstNode | undefined | void, options?: WalkOptions) {
         const cancel = new CancellationTokenSource();
         let result: AstNode;
         this.walk((node) => {
-            const matcherValue = matcher(node);
+            const matcherValue = matcher(node, cancel);
             if (matcherValue) {
                 cancel.cancel();
                 result = matcherValue === true ? node : matcherValue;
@@ -82,7 +92,7 @@ export abstract class AstNode {
             ...options ?? {},
             cancel: cancel.token
         });
-        return result as TNodeType;
+        return result as TNode;
     }
 
     /**
