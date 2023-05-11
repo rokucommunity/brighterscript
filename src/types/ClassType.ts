@@ -20,6 +20,6 @@ export class ClassType extends InheritableType {
     }
 
     isEqual(targetType: BscType): boolean {
-        return isClassType(targetType) && this.name === targetType.name;
+        return isClassType(targetType) && this.name.toLowerCase() === targetType.name.toLowerCase();
     }
 }

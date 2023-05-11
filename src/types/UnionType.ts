@@ -24,7 +24,7 @@ export class UnionType extends BscType {
         if (!innerTypesMemberTypes) {
             // We don't have any members of any inner types that match
             // so instead, create reference type that will
-            return [new ReferenceType(name, flags, () => {
+            return [new ReferenceType(name, name, flags, () => {
                 return {
                     getSymbolTypes: (innerName: string, innerFlags: SymbolTypeFlags) => {
                         return findTypeUnion(...this.getMemberTypesFromInnerTypes(name, flags));

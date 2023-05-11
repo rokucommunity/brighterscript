@@ -12,8 +12,8 @@ export abstract class InheritableType extends BscType {
         }
     }
 
-    getMemberTypes(name: string, flags: SymbolTypeFlags) {
-        return super.getMemberTypes(name, flags) ?? [new ReferenceType(name, flags, () => this.memberTable)];
+    getMemberTypes(memberName: string, flags: SymbolTypeFlags) {
+        return super.getMemberTypes(memberName, flags) ?? [new ReferenceType(memberName, memberName, flags, () => this.memberTable)];
     }
 
     public toString() {

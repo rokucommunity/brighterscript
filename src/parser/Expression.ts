@@ -911,7 +911,7 @@ export class VariableExpression extends Expression {
 
 
     getType(options: GetTypeOptions) {
-        const resultType = util.tokenToBscType(this.name) ?? new ReferenceType(this.name.text, options.flags, () => this.getSymbolTable());
+        const resultType = util.tokenToBscType(this.name) ?? new ReferenceType(this.name.text, this.name.text, options.flags, () => this.getSymbolTable());
         options.typeChain?.push(new TypeChainEntry(this.name.text, resultType, this.range));
         return resultType;
     }

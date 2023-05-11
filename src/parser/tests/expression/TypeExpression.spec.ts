@@ -51,7 +51,7 @@ describe('TypeExpressions', () => {
             expect(isTypeExpression(funcStmt.func.parameters[0].typeExpression)).to.be.true;
             const p1Type = funcStmt.func.parameters[0].getType({ flags: SymbolTypeFlags.typetime });
             expectTypeToBe(p1Type, UnionType);
-            expect(p1Type.toString()).to.eq('integer or SomeType or string');
+            expect(p1Type.toString()).to.eq('integer or Namespaced.SomeType or string');
         } else {
             assert.fail(`expected ${funcStmt} to be FunctionStatement`);
         }
@@ -93,7 +93,7 @@ describe('TypeExpressions', () => {
             expect(isTypeExpression(funcStmt.func.parameters[0].typeExpression)).to.be.true;
             const p1Type = funcStmt.func.parameters[0].getType({ flags: SymbolTypeFlags.typetime });
             expectTypeToBe(p1Type, UnionType);
-            expect(p1Type.toString()).to.eq('Alpha or Beta or Charlie or Delta');
+            expect(p1Type.toString()).to.eq('NS1.Alpha or NS1.NS2.Beta or NS1.NS2.NS3.Charlie or Delta');
         } else {
             assert.fail(`expected ${funcStmt} to be FunctionStatement`);
         }

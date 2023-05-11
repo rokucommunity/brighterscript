@@ -33,6 +33,6 @@ export class InterfaceType extends InheritableType {
      *  Is this the exact same interface as the target?
      */
     isEqual(targetType: BscType): boolean {
-        return isInterfaceType(targetType) && this.name === targetType.name;
+        return isInterfaceType(targetType) && this.name.toLowerCase() === targetType.name.toLowerCase();
     }
 }
