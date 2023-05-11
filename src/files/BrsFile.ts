@@ -828,7 +828,7 @@ export class BrsFile {
                 //include the first part of namespaces
                 let namespaces = scope.getAllNamespaceStatements();
                 for (let stmt of namespaces) {
-                    let firstPart = stmt.nameExpression.getNameParts().shift();
+                    let firstPart = util.getAllDottedGetParts(stmt.nameExpression).shift().text;
                     //skip duplicate namespace names
                     if (names[firstPart.toLowerCase()]) {
                         continue;

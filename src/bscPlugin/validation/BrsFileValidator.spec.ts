@@ -35,7 +35,7 @@ describe('BrsFileValidator', () => {
         expect(aaLiteral.parent).to.equal(beta);
     });
 
-    it('links NamespacedVariableNameExpression dotted get parents', () => {
+    it('links namespace name dotted get parents', () => {
         const { ast } = program.setFile<BrsFile>('source/main.bs', `
             namespace alpha.bravo
                 class Delta extends alpha.bravo.Charlie
