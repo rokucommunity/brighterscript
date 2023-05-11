@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
-import type { BinaryExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression, DottedGetExpression } from './Expression';
+import type { BinaryExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
