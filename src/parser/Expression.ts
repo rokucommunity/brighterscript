@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import type { BscType } from '../types/BscType';
 import { TypeChainEntry } from '../interfaces';
@@ -25,7 +25,6 @@ import { VoidType } from '../types/VoidType';
 import { TypePropertyReferenceType, ReferenceType } from '../types/ReferenceType';
 import { getUniqueType } from '../types/helpers';
 import { UnionType } from '../types/UnionType';
-import { ObjectType } from '../types/ObjectType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -423,59 +422,6 @@ export class FunctionParameterExpression extends Expression {
     }
 }
 
-export class NamespacedVariableNameExpression extends Expression {
-    constructor(
-        //if this is a `DottedGetExpression`, it must be comprised only of `VariableExpression`s
-        readonly expression: DottedGetExpression | VariableExpression
-    ) {
-        super();
-        this.range = expression.range;
-    }
-    range: Range;
-
-    transpile(state: BrsTranspileState) {
-        return [
-            state.sourceNode(this, this.getName(ParseMode.BrightScript))
-        ];
-    }
-
-    public getNameParts() {
-        let parts = [] as string[];
-        if (isVariableExpression(this.expression)) {
-            parts.push(this.expression.name.text);
-        } else {
-            let expr = this.expression;
-
-            parts.push(expr.name.text);
-
-            while (isVariableExpression(expr) === false) {
-                expr = expr.obj as DottedGetExpression;
-                parts.unshift(expr.name.text);
-            }
-        }
-        return parts;
-    }
-
-    getName(parseMode: ParseMode) {
-        if (parseMode === ParseMode.BrighterScript) {
-            return this.getNameParts().join('.');
-        } else {
-            return this.getNameParts().join('_');
-        }
-    }
-
-    walk(visitor: WalkVisitor, options: WalkOptions) {
-        this.expression?.link();
-        if (options.walkMode & InternalWalkMode.walkExpressions) {
-            walk(this, 'expression', visitor, options);
-        }
-    }
-
-    getType(options: GetTypeOptions) {
-        return this.expression.getType(options);
-    }
-}
-
 export class DottedGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
@@ -494,7 +440,9 @@ export class DottedGetExpression extends Expression {
     transpile(state: BrsTranspileState) {
         //if the callee starts with a namespace name, transpile the name
         if (state.file.calleeStartsWithNamespace(this)) {
-            return new NamespacedVariableNameExpression(this as DottedGetExpression | VariableExpression).transpile(state);
+            return [
+                state.sourceNode(this, this.getName(ParseMode.BrightScript))
+            ];
         } else {
             return [
                 ...this.obj.transpile(state),
@@ -522,6 +470,10 @@ export class DottedGetExpression extends Expression {
         // It is possible at runtime that a value has been added dynamically to an object, or something
         // TODO: maybe have a strict flag on this?
         return DynamicType.instance;
+    }
+
+    getName(parseMode: ParseMode) {
+        return util.getAllDottedGetPartsAsString(this, parseMode);
     }
 
 }
@@ -875,7 +827,11 @@ export class AALiteralExpression extends Expression {
     }
 
     getType(options: GetTypeOptions): BscType {
-        const resultType = new ObjectType();
+        return super.getType(options);
+
+        // TODO: create an AssocArray type, and populate its members:
+        /*
+        const resultType = new AssocArrayType();
         for (const element of this.elements) {
             if (isAAMemberExpression(element)) {
                 resultType.addMember(element.keyToken.text, element.range, element.getType(options), SymbolTypeFlags.runtime);
@@ -883,6 +839,7 @@ export class AALiteralExpression extends Expression {
 
         }
         return resultType;
+        */
     }
 }
 
@@ -1055,8 +1012,8 @@ export class NewExpression extends Expression {
      */
     public get className() {
         //the parser guarantees the callee of a new statement's call object will be
-        //a NamespacedVariableNameExpression
-        return this.call.callee as NamespacedVariableNameExpression;
+        //either a VariableExpression or a DottedGet
+        return this.call.callee as (VariableExpression | DottedGetExpression);
     }
 
     public readonly range: Range;
@@ -1692,9 +1649,9 @@ export class TypeExpression extends Expression implements TypedefProvider {
         return this.expression.transpile(state as BrsTranspileState);
     }
 
-    getName(): string {
+    getName(parseMode = ParseMode.BrighterScript): string {
         //TODO: this may not support Complex Types, eg. generics or Unions
-        return util.getAllDottedGetParts(this.expression).map(x => x.text).join('.');
+        return util.getAllDottedGetPartsAsString(this.expression, parseMode);
     }
 
     getNameParts(): string[] {

@@ -645,7 +645,6 @@ describe('astUtils visitors', () => {
                end namespace
             `, [
                 'NamespaceStatement',
-                'NamespacedVariableNameExpression',
                 'DottedGetExpression',
                 'VariableExpression'
             ]);
@@ -939,7 +938,6 @@ describe('astUtils visitors', () => {
                 'AssignmentStatement',
                 'NewExpression',
                 'CallExpression',
-                'NamespacedVariableNameExpression',
                 'VariableExpression'
             ]);
         });

@@ -60,13 +60,7 @@ export class ScopeValidator {
         //build an expression collection ONCE per file
         const expressionInfos = this.expressionsByFile.getOrAdd(file, () => {
             const result: DeepWriteable<ExpressionInfo[]> = [];
-            const expressions = [
-                ...file.parser.references.expressions,
-                //all class "extends <whatever>" expressions
-                ...file.parser.references.classStatements.map(x => x.parentClassName),
-                //all interface "extends <whatever>" expressions
-                ...file.parser.references.interfaceStatements.map(x => x.parentInterfaceName)
-            ];
+            const expressions = [...file.parser.references.expressions];
             for (let expression of expressions) {
                 if (!expression) {
                     continue;

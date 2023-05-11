@@ -26,7 +26,7 @@ import type { DottedGetExpression, VariableExpression } from './parser/Expressio
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isFunctionParameterExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isNewExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isFunctionParameterExpression, isIndexedGetExpression, isNewExpression, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
@@ -1358,7 +1358,7 @@ export class Util {
             } else if (isDottedGetExpression(nextPart)) {
                 parts.push(nextPart?.name);
                 nextPart = nextPart.obj;
-            } else if (isNamespacedVariableNameExpression(nextPart)) {
+            } else if (isTypeExpression(nextPart)) {
                 nextPart = nextPart.expression;
             } else if (isVariableExpression(nextPart)) {
                 parts.push(nextPart?.name);
@@ -1371,6 +1371,11 @@ export class Util {
             }
         }
         return parts.reverse();
+    }
+
+    public getAllDottedGetPartsAsString(node: Expression | Statement, parseMode = ParseMode.BrighterScript) {
+        const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
+        return this.getAllDottedGetParts(node).map(part => part.text).join(sep);
     }
 
     /**
@@ -1386,7 +1391,7 @@ export class Util {
             } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
                 nextPart = nextPart.callee;
 
-            } else if (isNamespacedVariableNameExpression(nextPart)) {
+            } else if (isTypeExpression(nextPart)) {
                 nextPart = nextPart.expression;
             } else {
                 break;
@@ -1419,7 +1424,7 @@ export class Util {
                 nextPart = nextPart.call.callee;
                 parts = [];
 
-            } else if (isNamespacedVariableNameExpression(nextPart)) {
+            } else if (isTypeExpression(nextPart)) {
                 nextPart = nextPart.expression;
 
             } else if (isVariableExpression(nextPart)) {

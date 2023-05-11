@@ -75,7 +75,6 @@ import {
     GroupingExpression,
     IndexedGetExpression,
     LiteralExpression,
-    NamespacedVariableNameExpression,
     NewExpression,
     NullCoalescingExpression,
     RegexLiteralExpression,
@@ -1288,7 +1287,7 @@ export class Parser {
 
         this.namespaceAndFunctionDepth++;
 
-        let name = this.getNamespacedVariableNameExpression();
+        let name = this.identifyingExpression();
         //set the current namespace name
         let result = new NamespaceStatement(keyword, name, null, null);
 
@@ -1321,10 +1320,6 @@ export class Parser {
     /**
      * Get an expression with identifiers separated by periods. Useful for namespaces and class extends
      */
-    private getNamespacedVariableNameExpression() {
-        return new NamespacedVariableNameExpression(this.identifyingExpression());
-    }
-
     private identifyingExpression(allowedTokenKinds?: TokenKind[]): DottedGetExpression | VariableExpression {
         allowedTokenKinds = allowedTokenKinds ?? this.allowedLocalIdentifiers;
         let firstIdentifier = this.consume(
@@ -2370,7 +2365,7 @@ export class Parser {
         this.warnIfNotBrighterScriptMode(`using 'new' keyword to construct a class`);
         let newToken = this.advance();
 
-        let nameExpr = this.getNamespacedVariableNameExpression();
+        let nameExpr = this.identifyingExpression();
         let leftParen = this.consume(
             DiagnosticMessages.unexpectedToken(this.peek().text),
             TokenKind.LeftParen,

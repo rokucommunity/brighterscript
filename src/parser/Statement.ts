@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
-import type { BinaryExpression, NamespacedVariableNameExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression } from './Expression';
+import type { BinaryExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
@@ -1151,7 +1151,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     constructor(
         public keyword: Token,
         // this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
-        public nameExpression: NamespacedVariableNameExpression,
+        public nameExpression: Expression,
         public body: Body,
         public endKeyword: Token
     ) {
@@ -1184,13 +1184,12 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
 
     public getName(parseMode: ParseMode) {
         const parentNamespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
-        let name = this.nameExpression.getName(parseMode);
+        const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
+        let name = util.getAllDottedGetPartsAsString(this.nameExpression, parseMode);
 
         if (parentNamespace) {
-            const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
             name = parentNamespace.getName(parseMode) + sep + name;
         }
-
         return name;
     }
 
