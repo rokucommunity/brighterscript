@@ -28,6 +28,9 @@ export class ReferenceType extends BscType {
                     // Cheeky way to get `isReferenceType` reflection to work
                     return this.__identifier;
                 }
+                if (propName === 'fullName') {
+                    return this.fullName;
+                }
                 if (propName === 'isResolvable') {
                     return () => {
                         return !!this.resolve();
@@ -40,6 +43,17 @@ export class ReferenceType extends BscType {
                 }
                 if (propName === 'tableProvider') {
                     return this.tableProvider;
+                }
+                if (propName === 'isEqual') {
+                    //Need to be able to check equality without resolution, because resolution need to check equality
+                    //To see if you need to make a UnionType
+                    return (targetType: BscType) => {
+                        if (isReferenceType(targetType)) {
+                            return this.fullName.toLowerCase() === targetType.fullName.toLowerCase() &&
+                                this.tableProvider() === targetType.tableProvider();
+                        }
+                        return targetType.isEqual(this);
+                    };
                 }
 
                 //There may be some need to specifically get members on ReferenceType in the future
@@ -70,7 +84,8 @@ export class ReferenceType extends BscType {
                         // For transpilation, we should 'dynamic'
                         return () => 'dynamic';
                     } else if (propName === 'returnType') {
-                        return new TypePropertyReferenceType(this, propName);
+                        this.returnTypePropertyReference = this.returnTypePropertyReference ?? new TypePropertyReferenceType(this, propName);
+                        return this.returnTypePropertyReference;
                     } else if (propName === 'memberTable') {
                         return this.tableProvider();
                     } else if (propName === 'isTypeCompatible') {
@@ -127,6 +142,8 @@ export class ReferenceType extends BscType {
     }
 
     private referenceChain = new Set<BscType>();
+
+    private returnTypePropertyReference: TypePropertyReferenceType;
 }
 
 /**
