@@ -143,7 +143,7 @@ export class CallExpression extends Expression {
         if (isNewExpression(this.parent)) {
             return calleeType;
         }
-        if (isFunctionType(calleeType) && !isReferenceType(calleeType.returnType)) {
+        if (isFunctionType(calleeType) && (!isReferenceType(calleeType.returnType) || calleeType.returnType.isResolvable())) {
             return calleeType.returnType;
         }
         return new TypePropertyReferenceType(calleeType, 'returnType');
