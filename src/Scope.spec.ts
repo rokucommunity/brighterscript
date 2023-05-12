@@ -17,6 +17,9 @@ import { ClassType } from './types/ClassType';
 import { BooleanType } from './types/BooleanType';
 import { StringType } from './types/StringType';
 import { IntegerType } from './types/IntegerType';
+import { DynamicType } from './types/DynamicType';
+import { ObjectType } from './types/ObjectType';
+import { getUniqueType } from './types/helpers';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -2261,6 +2264,27 @@ describe('Scope', () => {
             sourceScope.linkSymbolTable();
             expect(mainFnScope).to.exist;
             expectTypeToBe(mainFnScope.symbolTable.getSymbol('myVal', SymbolTypeFlags.runtime)[0].type, IntegerType);
+        });
+
+        it('finds correct types for self-referencing variables', () => {
+            const mainFile = program.setFile('source/main.bs', `
+                sub main()
+                    dt = CreateObject("roDateTime")
+                    hours = dt.GetHours()
+                    hours = hours
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+            const sourceScope = program.getScopeByName('source');
+            expect(sourceScope).to.exist;
+            sourceScope.linkSymbolTable();
+            expect(mainFnScope).to.exist;
+            let dtType = getUniqueType(mainFnScope.symbolTable.getSymbolTypes('dt', SymbolTypeFlags.runtime));
+            expectTypeToBe(dtType, ObjectType);
+            let hoursType = getUniqueType(mainFnScope.symbolTable.getSymbolTypes('hours', SymbolTypeFlags.runtime));
+            expectTypeToBe(hoursType, DynamicType);
         });
 
         describe('union types', () => {
