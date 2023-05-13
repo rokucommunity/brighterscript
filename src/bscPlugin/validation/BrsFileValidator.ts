@@ -147,7 +147,7 @@ export class BrsFileValidator {
                     //add the transpiled name for namespaced functions to the root symbol table
                     const transpiledNamespaceFunctionName = node.getName(ParseMode.BrightScript);
                     const funcType = node.func.getType({ flags: SymbolTypeFlags.typetime });
-                    funcType.setName(transpiledNamespaceFunctionName);
+                    //funcType.setName(transpiledNamespaceFunctionName);
 
                     this.event.file.parser.ast.symbolTable.addSymbol(
                         transpiledNamespaceFunctionName,

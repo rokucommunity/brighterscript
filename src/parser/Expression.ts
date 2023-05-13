@@ -58,7 +58,7 @@ export class BinaryExpression extends Expression {
     }
 
 
-    public getType(options: GetTypeOptions): BscType {
+    public ZgetType(options: GetTypeOptions): BscType {
         const operatorKind = this.operator.kind;
         if (options.flags & SymbolTypeFlags.typetime) {
             // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
@@ -138,7 +138,7 @@ export class CallExpression extends Expression {
         }
     }
 
-    getType(options: GetTypeOptions) {
+    ZgetType(options: GetTypeOptions) {
         const calleeType = this.callee.getType(options);
         if (isNewExpression(this.parent)) {
             return calleeType;
@@ -329,7 +329,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
     }
 
-    public getType(options: GetTypeOptions): FunctionType {
+    public ZgetType(options: GetTypeOptions): FunctionType {
         //if there's a defined return type, use that
         let returnType = this.returnTypeExpression?.getType(options);
         const isSub = this.functionType.kind === TokenKind.Sub;
@@ -358,7 +358,7 @@ export class FunctionParameterExpression extends Expression {
         super();
     }
 
-    public getType(options: GetTypeOptions) {
+    public ZgetType(options: GetTypeOptions) {
         return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlags.typetime }) ??
             this.defaultValue?.getType({ ...options, flags: SymbolTypeFlags.runtime }) ??
             DynamicType.instance;
@@ -458,7 +458,7 @@ export class DottedGetExpression extends Expression {
         }
     }
 
-    getType(options: GetTypeOptions) {
+    ZgetType(options: GetTypeOptions) {
         const objType = this.obj?.getType(options);
         const result = getUniqueType(objType?.getMemberTypes(this.name?.text, options.flags));
         const typeChainEntry = new TypeChainEntry(this.name?.text, result, this.range);
@@ -571,7 +571,7 @@ export class GroupingExpression extends Expression {
         }
     }
 
-    getType(options: GetTypeOptions) {
+    ZgetType(options: GetTypeOptions) {
         return this.expression.getType(options);
     }
 }
@@ -732,7 +732,7 @@ export class AAMemberExpression extends Expression {
         walk(this, 'value', visitor, options);
     }
 
-    getType(options: GetTypeOptions): BscType {
+    ZgetType(options: GetTypeOptions): BscType {
         return this.value.getType(options);
     }
 
@@ -826,7 +826,7 @@ export class AALiteralExpression extends Expression {
         }
     }
 
-    getType(options: GetTypeOptions): BscType {
+    ZgetType(options: GetTypeOptions): BscType {
         return super.getType(options);
 
         // TODO: create an AssocArray type, and populate its members:
@@ -910,7 +910,7 @@ export class VariableExpression extends Expression {
     }
 
 
-    getType(options: GetTypeOptions) {
+    ZgetType(options: GetTypeOptions) {
         const resultType = util.tokenToBscType(this.name) ?? new ReferenceType(this.name.text, this.name.text, options.flags, () => this.getSymbolTable());
         options.typeChain?.push(new TypeChainEntry(this.name.text, resultType, this.range));
         return resultType;
@@ -1035,7 +1035,7 @@ export class NewExpression extends Expression {
         }
     }
 
-    getType(options: GetTypeOptions) {
+    ZgetType(options: GetTypeOptions) {
         return this.call.getType(options);
     }
 }
@@ -1106,6 +1106,10 @@ export class CallfuncExpression extends Expression {
             walkArray(this.args, visitor, options, this);
         }
     }
+
+    ZgetType(options: GetTypeOptions) {
+        return this.callee.getType(options);
+    }
 }
 
 /**
@@ -1166,7 +1170,7 @@ export class TemplateStringExpression extends Expression {
 
     public readonly range: Range;
 
-    public getType(options: GetTypeOptions) {
+    public ZgetType(options: GetTypeOptions) {
         return StringType.instance;
     }
 
@@ -1640,7 +1644,7 @@ export class TypeExpression extends Expression implements TypedefProvider {
         }
     }
 
-    public getType(options: GetTypeOptions): BscType {
+    public ZgetType(options: GetTypeOptions): BscType {
         return this.expression.getType({ ...options, flags: SymbolTypeFlags.typetime });
     }
 

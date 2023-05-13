@@ -29,6 +29,7 @@ import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import { SymbolTypeFlags } from '../SymbolTable';
+import type { FunctionType } from '../types/FunctionType';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -536,7 +537,7 @@ export class BrsFile {
                 file: this,
                 params: params,
                 range: statement.func.range,
-                type: statement.getType({ flags: SymbolTypeFlags.typetime }),
+                type: statement.getType({ flags: SymbolTypeFlags.typetime }) as FunctionType,
                 getName: statement.getName.bind(statement),
                 hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
                 functionStatement: statement
