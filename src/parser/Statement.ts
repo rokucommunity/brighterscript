@@ -162,7 +162,7 @@ export class AssignmentStatement extends Statement {
         }
     }
 
-    ZgetType(options: GetTypeOptions) {
+    getType(options: GetTypeOptions) {
         return this.value.getType(options);
     }
 }
@@ -400,9 +400,9 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         }
     }
 
-    ZgetType(options: GetTypeOptions) {
+    getType(options: GetTypeOptions) {
         const funcExprType = this.func.getType(options);
-        //funcExprType.setName(this.name.text);
+        funcExprType.setName(this.name.text);
         return funcExprType;
     }
 }
@@ -1449,7 +1449,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         }
     }
 
-    ZgetType(options: GetTypeOptions) {
+    getType(options: GetTypeOptions) {
         const superIface = this.parentInterfaceName?.getType(options) as InterfaceType;
 
         const resultType = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
@@ -1522,7 +1522,7 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         return result;
     }
 
-    public ZgetType(options: GetTypeOptions): BscType {
+    public getType(options: GetTypeOptions): BscType {
         return this.typeExpression?.getType(options) ?? DynamicType.instance;
     }
 
@@ -2026,7 +2026,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }
     }
 
-    ZgetType(options: GetTypeOptions) {
+    getType(options: GetTypeOptions) {
         const superClass = this.parentClassName?.getType(options) as ClassType;
 
         const resultType = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
@@ -2259,7 +2259,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
      * Derive a ValueKind from the type token, or the initial value.
      * Defaults to `DynamicType`
      */
-    ZgetType(options: GetTypeOptions) {
+    getType(options: GetTypeOptions) {
         return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlags.typetime }) ??
             this.initialValue?.getType({ ...options, flags: SymbolTypeFlags.runtime }) ?? DynamicType.instance;
     }
@@ -2717,7 +2717,7 @@ export class ConstStatement extends Statement implements TypedefProvider {
         }
     }
 
-    ZgetType(options: GetTypeOptions) {
+    getType(options: GetTypeOptions) {
         return this.value.getType(options);
     }
 }

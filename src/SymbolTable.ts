@@ -75,7 +75,30 @@ export class SymbolTable implements SymbolTypesGetter {
      * @returns true if this symbol is in the symbol table
      */
     hasSymbol(name: string, bitFlags: number): boolean {
-        return !!this.getSymbol(name, bitFlags);
+        let currentTable: SymbolTable = this;
+        const key = name?.toLowerCase();
+        let result: BscSymbol[];
+        do {
+            // look in our map first
+            if ((result = currentTable.symbolMap.get(key))) {
+                // eslint-disable-next-line no-bitwise
+                if (result.find(symbol => symbol.flags & bitFlags)) {
+                    return true;
+                }
+            }
+
+            //look through any sibling maps next
+            for (let sibling of currentTable.siblings) {
+                if ((result = sibling.symbolMap.get(key))) {
+                    // eslint-disable-next-line no-bitwise
+                    if (result.find(symbol => symbol.flags & bitFlags)) {
+                        return true;
+                    }
+                }
+            }
+            currentTable = currentTable.parent;
+        } while (currentTable);
+        return false;
     }
 
     /**
@@ -87,28 +110,30 @@ export class SymbolTable implements SymbolTypesGetter {
      * @returns An array of BscSymbols - one for each time this symbol had a type implicitly defined
      */
     getSymbol(name: string, bitFlags: number): BscSymbol[] {
-        const key = name.toLowerCase();
+        let currentTable: SymbolTable = this;
+        const key = name?.toLowerCase();
         let result: BscSymbol[];
-        // look in our map first
-        if ((result = this.symbolMap.get(key))) {
-            // eslint-disable-next-line no-bitwise
-            result = result.filter(symbol => symbol.flags & bitFlags);
-            if (result.length > 0) {
-                return result;
-            }
-        }
-        //look through any sibling maps next
-        for (let sibling of this.siblings) {
-            if ((result = sibling.symbolMap.get(key))) {
+        do {
+            // look in our map first
+            if ((result = currentTable.symbolMap.get(key))) {
                 // eslint-disable-next-line no-bitwise
                 result = result.filter(symbol => symbol.flags & bitFlags);
                 if (result.length > 0) {
                     return result;
                 }
             }
-        }
-        // ask our parent for a symbol
-        return this.parent?.getSymbol(key, bitFlags);
+            //look through any sibling maps next
+            for (let sibling of currentTable.siblings) {
+                if ((result = sibling.symbolMap.get(key))) {
+                    // eslint-disable-next-line no-bitwise
+                    result = result.filter(symbol => symbol.flags & bitFlags);
+                    if (result.length > 0) {
+                        return result;
+                    }
+                }
+            }
+            currentTable = currentTable.parent;
+        } while (currentTable);
     }
 
     /**
