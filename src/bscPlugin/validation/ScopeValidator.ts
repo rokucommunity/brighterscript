@@ -15,6 +15,7 @@ import type { Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import { SymbolTypeFlags } from '../../SymbolTable';
+
 /**
  * The lower-case names of all platform-included scenegraph nodes
  */
@@ -82,8 +83,6 @@ export class ScopeValidator {
 
         outer:
         for (const info of expressionInfos) {
-            const symbolTable = info.expression.getSymbolTable();
-            const firstPart = info.parts[0];
             const firstNamespacePart = info.parts[0].name.text;
             const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
             //get the namespace container (accounting for namespace-relative as well)
@@ -124,20 +123,6 @@ export class ScopeValidator {
                     file: file as BscFile,
                     ...DiagnosticMessages.cannotFindName(typeChainScan.missingItemName, typeChainScan.fullNameOfMissingItem),
                     range: typeChainScan.range
-                });
-                //skip to the next expression
-                continue;
-            }
-
-            //flag all unknown left-most variables
-            if (
-                !symbolTable?.hasSymbol(firstPart.name?.text, symbolType) &&
-                !namespaceContainer
-            ) {
-                this.addMultiScopeDiagnostic({
-                    file: file as BscFile,
-                    ...DiagnosticMessages.cannotFindName(firstPart.name?.text),
-                    range: firstPart.name.range
                 });
                 //skip to the next expression
                 continue;

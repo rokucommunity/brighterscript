@@ -180,6 +180,9 @@ export class TypePropertyReferenceType extends BscType {
                             })];
                         };
                     }
+                    if (propName === 'isResolvable') {
+                        return () => false;
+                    }
                 }
                 let inner = this.outerType[this.propertyName];
 
