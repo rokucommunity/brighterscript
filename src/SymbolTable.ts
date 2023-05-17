@@ -1,6 +1,5 @@
 import type { Range } from 'vscode-languageserver';
 import type { BscType } from './types/BscType';
-import type { TypeCache, TypeCacheProvider } from './TypeCache';
 
 export enum SymbolTypeFlags {
     runtime = 1,
@@ -64,34 +63,6 @@ export class SymbolTable implements SymbolTypesGetter {
      */
     public removeSibling(sibling: SymbolTable) {
         this.siblings.delete(sibling);
-    }
-
-
-    private typeCacheProvider: TypeCacheProvider;
-
-    /**
-     * The parent SymbolTable (if there is one)
-     */
-    get typeCache() {
-        return this.typeCacheProvider?.();
-    }
-
-
-    setTypeCache(cacheProvider: TypeCacheProvider) {
-        this.typeCacheProvider = cacheProvider;
-    }
-
-
-    removeTypeCache() {
-        this.typeCacheProvider = undefined;
-    }
-
-    getCachedType(name: string, bitFlags: SymbolTypeFlags) {
-        return this.typeCache?.getType(this, name, bitFlags);
-    }
-
-    setCachedType(name: string, bitFlags: SymbolTypeFlags, type: BscType) {
-        return this.typeCache?.setType(this, name, bitFlags, type);
     }
 
     /**
@@ -185,10 +156,6 @@ export class SymbolTable implements SymbolTypesGetter {
     }
 
     getSymbolTypes(name: string, bitFlags: SymbolTypeFlags): BscType[] {
-        const cacheResult = this.typeCache?.getType(this, name, bitFlags);
-        if (cacheResult) {
-            return [cacheResult];
-        }
         const symbolArray = this.getSymbol(name, bitFlags);
         if (!symbolArray) {
             return undefined;
@@ -267,9 +234,6 @@ export interface BscSymbol {
 
 export interface SymbolTypesGetter {
     getSymbolTypes(name: string, bitFlags: SymbolTypeFlags): BscType[];
-    typeCache: TypeCache;
-    getCachedType(name: string, bitFlags: SymbolTypeFlags): BscType;
-    setCachedType(name: string, bitFlags: SymbolTypeFlags, type: BscType);
 }
 
 /**

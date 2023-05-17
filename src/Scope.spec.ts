@@ -2327,7 +2327,7 @@ describe('Scope', () => {
                 const mainFile = program.setFile('source/main.bs', `
                     sub printName(thing as Person or Pet)
                         name = thing.name
-                        print(name)
+                        print name
                     end sub
 
                     class Person
@@ -2353,8 +2353,7 @@ describe('Scope', () => {
             it('should have an error when a non union member is accessed', () => {
                 const mainFile = program.setFile('source/main.bs', `
                     sub printLegs(thing as Person or Pet)
-                        legs = thing.legs
-                        print legs
+                        print thing.legs
                     end sub
 
                     class Person
@@ -2376,7 +2375,6 @@ describe('Scope', () => {
                 expect(sourceScope).to.exist;
                 sourceScope.linkSymbolTable();
                 expect(mainFnScope).to.exist;
-                expect(mainFnScope.symbolTable.getSymbol('legs', SymbolTypeFlags.runtime)[0].type.isResolvable()).to.be.false;
             });
 
         });

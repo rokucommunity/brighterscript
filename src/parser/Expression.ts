@@ -463,21 +463,11 @@ export class DottedGetExpression extends Expression {
     }
 
     getType(options: GetTypeOptions) {
-        const symbolTable = this.getSymbolTable();
-        symbolTable.setTypeCache(options.typeCacheProvider);
-        const cacheKey = options.cacheKey ?? this.getName(ParseMode.BrighterScript);
-        const cacheResult = symbolTable.getCachedType(cacheKey, options.flags);
-        if (cacheResult) {
-            return cacheResult;
-        }
         const objType = this.obj?.getType(options);
-        objType?.memberTable?.setTypeCache(options.typeCacheProvider);
         const result = getUniqueType(objType?.getMemberTypes(this.name?.text, options.flags));
         options.typeChain?.push(new TypeChainEntry(this.name?.text, result, this.range));
         if (result || options.flags & SymbolTypeFlags.typetime) {
             // All types should be known at typetime
-            symbolTable.setCachedType(cacheKey, options.flags, result);
-            objType?.memberTable?.setCachedType(this.name?.text, options.flags, result);
             return result;
         }
         // It is possible at runtime that a value has been added dynamically to an object, or something
@@ -924,23 +914,11 @@ export class VariableExpression extends Expression {
 
 
     getType(options: GetTypeOptions) {
-        const symbolTable = this.getSymbolTable();
-        symbolTable.setTypeCache(options.typeCacheProvider);
-        const cacheKey = options.cacheKey ?? this.name.text;
-        const cacheResult = this.getSymbolTable().getCachedType(cacheKey, options.flags);
-        if (cacheResult) {
-            return cacheResult;
-        }
         let resultType: BscType = util.tokenToBscType(this.name);
         if (!resultType) {
-            resultType = getUniqueType(symbolTable.getSymbolTypes(this.name.text, options.flags)) ??
-                new ReferenceType(this.name.text, this.name.text, options.flags, () => this.getSymbolTable());
+            resultType = getUniqueType(this.getSymbolTable().getSymbolTypes(this.name.text, options.flags)) ?? new ReferenceType(this.name.text, this.name.text, options.flags, () => this.getSymbolTable());
         }
         options.typeChain?.push(new TypeChainEntry(this.name.text, resultType, this.range));
-
-        if (resultType || options.flags & SymbolTypeFlags.typetime) {
-            symbolTable.setCachedType(cacheKey, options.flags, resultType);
-        }
         return resultType;
     }
 }

@@ -20,7 +20,6 @@ import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph'
 import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isEnumMemberStatement, isNamespaceStatement } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
-import { TypeCache } from './TypeCache';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -765,7 +764,6 @@ export class Scope {
      * This will only rebuilt if the symbol table has not been built before
      */
     public linkSymbolTable() {
-        this.typeCache.clear();
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
                 file.parser.symbolTable.pushParentProvider(() => this.symbolTable);
@@ -783,9 +781,6 @@ export class Scope {
 
     }
 
-
-    typeCache: TypeCache = new TypeCache();
-
     public unlinkSymbolTable() {
         for (let file of this.getOwnFiles()) {
             if (isBrsFile(file)) {
@@ -799,7 +794,6 @@ export class Scope {
                 }
             }
         }
-        this.typeCache.clear();
     }
 
     private detectVariableNamespaceCollisions(file: BrsFile) {

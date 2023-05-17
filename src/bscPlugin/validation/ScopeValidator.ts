@@ -104,18 +104,15 @@ export class ScopeValidator {
                 oppositeSymbolType = SymbolTypeFlags.runtime;
             }
             const typeChain = [];
-            const cacheKey = info.parts.map(part => part.name.text).join('.');
             let exprType = info.expression.getType({
                 flags: symbolType,
-                typeChain: typeChain,
-                cacheKey: cacheKey,
-                typeCacheProvider: () => scope.typeCache
+                typeChain: typeChain
             });
 
             if (!exprType || !exprType.isResolvable()) {
                 if (info.expression.getType({ flags: oppositeSymbolType })?.isResolvable()) {
                     const oppoSiteTypeChain = [];
-                    const invalidlyUsedResolvedType = info.expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain, typeCacheProvider: () => scope.typeCache });
+                    const invalidlyUsedResolvedType = info.expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain });
                     const typeChainScan = util.processTypeChain(oppoSiteTypeChain);
                     if (isUsedAsType) {
                         this.addMultiScopeDiagnostic({

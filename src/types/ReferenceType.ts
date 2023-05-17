@@ -33,7 +33,11 @@ export class ReferenceType extends BscType {
                 }
                 if (propName === 'isResolvable') {
                     return () => {
-                        return !!this.resolve();
+                        let resultSoFar = this.resolve();
+                        while (isReferenceType(resultSoFar)) {
+                            resultSoFar = (resultSoFar as any).getTarget();
+                        }
+                        return !!resultSoFar;
                     };
                 }
                 if (propName === 'getTarget') {
@@ -50,7 +54,7 @@ export class ReferenceType extends BscType {
                     return (targetType: BscType) => {
                         if (isReferenceType(targetType)) {
                             return this.fullName.toLowerCase() === targetType.fullName.toLowerCase() &&
-                                this.tableProvider() === targetType.tableProvider();
+                                this.tableProvider === targetType.tableProvider;
                         }
                         return targetType.isEqual(this);
                     };
@@ -69,12 +73,23 @@ export class ReferenceType extends BscType {
                         // We're looking for a member of a reference type
                         // Since we don't know what type this is, yet, return ReferenceType
                         return (memberName: string, flags: SymbolTypeFlags) => {
-                            return [new ReferenceType(memberName, this.makeMemberFullName(memberName), flags, () => {
-                                const resolvedType = this.resolve();
-                                if (resolvedType) {
-                                    return resolvedType.memberTable;
-                                }
-                            })];
+                            const resolvedType = this.resolve();
+                            if (resolvedType) {
+                                return resolvedType.getMemberTypes(memberName, flags);
+                            }
+
+                            const refLookUp = `${memberName.toLowerCase()}-${flags}`;
+                            let memberTypeReference = this.memberTypeReferences.get(refLookUp) ?? new ReferenceType(memberName, this.makeMemberFullName(memberName), flags, () => {
+                                return {
+                                    getSymbolTypes: (innerName: string, innerFlags: SymbolTypeFlags) => {
+                                        const resolvedType = this.resolve();
+                                        if (resolvedType) {
+                                            return resolvedType.getMemberTypes(innerName, innerFlags);
+                                        }
+                                    }
+                                };
+                            });
+                            return [memberTypeReference];
                         };
                     } else if (propName === 'toString') {
                         // This type was never found
@@ -84,8 +99,7 @@ export class ReferenceType extends BscType {
                         // For transpilation, we should 'dynamic'
                         return () => 'dynamic';
                     } else if (propName === 'returnType') {
-                        //this.returnTypePropertyReference = this.returnTypePropertyReference ??
-                        this.returnTypePropertyReference = new TypePropertyReferenceType(this, propName);
+                        this.returnTypePropertyReference = this.returnTypePropertyReference ?? new TypePropertyReferenceType(this, propName);
                         return this.returnTypePropertyReference;
                     } else if (propName === 'memberTable') {
                         return this.tableProvider();
@@ -135,14 +149,7 @@ export class ReferenceType extends BscType {
      * Resolves the type based on the original name and the table provider
      */
     private resolve(): BscType {
-        const cacheResult = this.tableProvider()?.getCachedType(this.fullName, this.flags);
-        if (cacheResult) {
-            return cacheResult;
-        }
         const resolvedType = getUniqueType(this.tableProvider()?.getSymbolTypes(this.memberKey, this.flags));
-        if (resolvedType) {
-            this.tableProvider()?.setCachedType(this.fullName, this.flags, resolvedType);
-        }
         return resolvedType;
     }
 
@@ -153,6 +160,8 @@ export class ReferenceType extends BscType {
     private referenceChain = new Set<BscType>();
 
     private returnTypePropertyReference: TypePropertyReferenceType;
+
+    private memberTypeReferences = new Map<string, ReferenceType>();
 }
 
 /**
@@ -183,9 +192,13 @@ export class TypePropertyReferenceType extends BscType {
                         //If we're calling `getMemberTypes()`, we need it to proxy to using the actual symbol table
                         //So if that symbol is ever populated, the correct type is passed through
                         return (memberName: string, flags: SymbolTypeFlags) => {
-                            const fullMemberMame = this.outerType.toString() + '.' + memberName;
-                            return [new ReferenceType(memberName, fullMemberMame, flags, () => {
-                                return (this.outerType[this.propertyName] as any)?.memberTable;
+                            const fullMemberName = this.outerType.toString() + '.' + memberName;
+                            return [new ReferenceType(memberName, fullMemberName, flags, () => {
+                                return {
+                                    getSymbolTypes: (innerName: string, innerFlags: SymbolTypeFlags) => {
+                                        return this.outerType?.[this.propertyName]?.getMemberTypes(innerName, innerFlags);
+                                    }
+                                };
                             })];
                         };
                     }

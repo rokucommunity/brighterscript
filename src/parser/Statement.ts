@@ -164,7 +164,8 @@ export class AssignmentStatement extends Statement {
     }
 
     getType(options: GetTypeOptions) {
-        return this.value.getType(options);
+        const rhs = this.value.getType(options);
+        return rhs;
     }
 }
 
