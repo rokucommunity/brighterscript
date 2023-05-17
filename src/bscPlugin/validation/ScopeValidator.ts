@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isBrsFile, isLiteralExpression, isNamespaceStatement, isTypeExpression, isXmlScope } from '../../astUtils/reflection';
+import { isBinaryExpression, isBrsFile, isLiteralExpression, isNamespaceStatement, isTypeExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -15,6 +15,7 @@ import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import type { AstNode, Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
+import { TokenKind } from '../../lexer/TokenKind';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -59,8 +60,18 @@ export class ScopeValidator {
     private checkIfUsedAsTypeExpression(expression: AstNode): boolean {
         //TODO: this is much faster than node.findAncestor(), but will not work for "complicated" type expressions
         // like UnionTypes
-        return isTypeExpression(expression) ||
-            isTypeExpression(expression.parent);
+        if (isTypeExpression(expression) ||
+            isTypeExpression(expression.parent)) {
+            return true;
+        }
+        if (isBinaryExpression(expression.parent)) {
+            let currentExpr: AstNode = expression.parent;
+            while (isBinaryExpression(currentExpr) && currentExpr.operator.kind === TokenKind.Or) {
+                currentExpr = currentExpr.parent;
+            }
+            return isTypeExpression(currentExpr);
+        }
+        return false;
     }
 
     private expressionsByFile = new Cache<BrsFile, Readonly<ExpressionInfo>[]>();
