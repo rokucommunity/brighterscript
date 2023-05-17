@@ -3256,7 +3256,6 @@ export class References {
      * `value = SomeEnum.value > 2 or SomeEnum.otherValue < 10` will result in 4 entries. `SomeEnum.value`, `2`, `SomeEnum.otherValue`, `10`
      */
     public expressions = new Set<Expression>();
-
     public importStatements = [] as ImportStatement[];
     public libraryStatements = [] as LibraryStatement[];
     public namespaceStatements = [] as NamespaceStatement[];

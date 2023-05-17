@@ -1941,6 +1941,40 @@ describe('Scope', () => {
             });
 
         });
+
+
+        it('should accept global callables returning objects', () => {
+            program.setFile(`source/main.brs`, `
+                sub main()
+                    screen = CreateObject("roSGScreen")
+                    port = CreateObject("roMessagePort")
+                    scene = screen.CreateScene("MyMainScene")
+                    screen.setMessagePort(port)
+                    screen.show()
+                    while(true)
+                        msg     = wait(0, port)
+                        msgType = type(msg)
+
+                        if type(msg) = "roInputEvent"
+                            if msg.IsInput()
+                                info = msg.GetInfo()
+                                if info.DoesExist("mediaType")
+                                    mediaType = info.mediaType
+                                    print mediaType
+                                end if
+                            end if
+                        end if
+                    end while
+                end sub
+            `);
+            program.setFile('components/MyMainScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyMainScene" extends="Scene">
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('inheritance', () => {
@@ -2320,7 +2354,7 @@ describe('Scope', () => {
                 const mainFile = program.setFile('source/main.bs', `
                     sub printLegs(thing as Person or Pet)
                         legs = thing.legs
-                        print(legs)
+                        print legs
                     end sub
 
                     class Person

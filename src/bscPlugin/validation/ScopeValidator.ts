@@ -4,6 +4,7 @@ import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
+import { SymbolTypeFlags } from '../../SymbolTable';
 import type { EnumStatement, NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
@@ -11,10 +12,9 @@ import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
-import type { Expression } from '../../parser/AstNode';
+import type { AstNode, Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import { SymbolTypeFlags } from '../../SymbolTable';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -55,6 +55,14 @@ export class ScopeValidator {
         });
     }
 
+
+    private checkIfUsedAsTypeExpression(expression: AstNode): boolean {
+        //TODO: this is much faster than node.findAncestor(), but will not work for "complicated" type expressions
+        // like UnionTypes
+        return isTypeExpression(expression) ||
+            isTypeExpression(expression.parent);
+    }
+
     private expressionsByFile = new Cache<BrsFile, Readonly<ExpressionInfo>[]>();
     private iterateFileExpressions(file: BrsFile) {
         const { scope } = this.event;
@@ -87,20 +95,27 @@ export class ScopeValidator {
             const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
             //get the namespace container (accounting for namespace-relative as well)
             const namespaceContainer = scope.getNamespace(firstNamespacePartLower, info.enclosingNamespaceNameLower);
+            const isUsedAsType = this.checkIfUsedAsTypeExpression(info.expression);
             let symbolType = SymbolTypeFlags.runtime;
             let oppositeSymbolType = SymbolTypeFlags.typetime;
-            const isUsedAsType = info.expression.findAncestor(isTypeExpression);
             if (isUsedAsType) {
                 // This is used in a TypeExpression - only look up types from SymbolTable
                 symbolType = SymbolTypeFlags.typetime;
                 oppositeSymbolType = SymbolTypeFlags.runtime;
             }
             const typeChain = [];
-            let exprType = info.expression.getType({ flags: symbolType, typeChain: typeChain });
+            const cacheKey = info.parts.map(part => part.name.text).join('.');
+            let exprType = info.expression.getType({
+                flags: symbolType,
+                typeChain: typeChain,
+                cacheKey: cacheKey,
+                typeCacheProvider: () => scope.typeCache
+            });
+
             if (!exprType || !exprType.isResolvable()) {
                 if (info.expression.getType({ flags: oppositeSymbolType })?.isResolvable()) {
                     const oppoSiteTypeChain = [];
-                    const invalidlyUsedResolvedType = info.expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain });
+                    const invalidlyUsedResolvedType = info.expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain, typeCacheProvider: () => scope.typeCache });
                     const typeChainScan = util.processTypeChain(oppoSiteTypeChain);
                     if (isUsedAsType) {
                         this.addMultiScopeDiagnostic({
@@ -131,7 +146,7 @@ export class ScopeValidator {
             const enumStatement = scope.getEnum(firstNamespacePartLower, info.enclosingNamespaceNameLower);
 
             //if this isn't a namespace, skip it
-            if (!namespaceContainer && !enumStatement) {
+            if (!namespaceContainer && !enumStatement && exprType) {
                 continue;
             }
 

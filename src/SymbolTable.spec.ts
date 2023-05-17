@@ -1,8 +1,9 @@
-import { SymbolTable, SymbolTypeFlags } from './SymbolTable';
+import { SymbolTable } from './SymbolTable';
 import { expect } from './chai-config.spec';
 import { StringType } from './types/StringType';
 import { IntegerType } from './types/IntegerType';
 import { BooleanType } from './types/BooleanType';
+import { SymbolTypeFlags } from './SymbolTable';
 
 describe('SymbolTable', () => {
     let parent: SymbolTable;

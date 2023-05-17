@@ -84,7 +84,8 @@ export class ReferenceType extends BscType {
                         // For transpilation, we should 'dynamic'
                         return () => 'dynamic';
                     } else if (propName === 'returnType') {
-                        this.returnTypePropertyReference = this.returnTypePropertyReference ?? new TypePropertyReferenceType(this, propName);
+                        //this.returnTypePropertyReference = this.returnTypePropertyReference ??
+                        this.returnTypePropertyReference = new TypePropertyReferenceType(this, propName);
                         return this.returnTypePropertyReference;
                     } else if (propName === 'memberTable') {
                         return this.tableProvider();
@@ -134,7 +135,15 @@ export class ReferenceType extends BscType {
      * Resolves the type based on the original name and the table provider
      */
     private resolve(): BscType {
-        return getUniqueType(this.tableProvider()?.getSymbolTypes(this.memberKey, this.flags));
+        const cacheResult = this.tableProvider()?.getCachedType(this.fullName, this.flags);
+        if (cacheResult) {
+            return cacheResult;
+        }
+        const resolvedType = getUniqueType(this.tableProvider()?.getSymbolTypes(this.memberKey, this.flags));
+        if (resolvedType) {
+            this.tableProvider()?.setCachedType(this.fullName, this.flags, resolvedType);
+        }
+        return resolvedType;
     }
 
     makeMemberFullName(memberName: string) {

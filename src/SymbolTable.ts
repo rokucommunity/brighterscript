@@ -1,6 +1,6 @@
 import type { Range } from 'vscode-languageserver';
 import type { BscType } from './types/BscType';
-
+import type { TypeCache, TypeCacheProvider } from './TypeCache';
 
 export enum SymbolTypeFlags {
     runtime = 1,
@@ -66,6 +66,34 @@ export class SymbolTable implements SymbolTypesGetter {
         this.siblings.delete(sibling);
     }
 
+
+    private typeCacheProvider: TypeCacheProvider;
+
+    /**
+     * The parent SymbolTable (if there is one)
+     */
+    get typeCache() {
+        return this.typeCacheProvider?.();
+    }
+
+
+    setTypeCache(cacheProvider: TypeCacheProvider) {
+        this.typeCacheProvider = cacheProvider;
+    }
+
+
+    removeTypeCache() {
+        this.typeCacheProvider = undefined;
+    }
+
+    getCachedType(name: string, bitFlags: SymbolTypeFlags) {
+        return this.typeCache?.getType(this, name, bitFlags);
+    }
+
+    setCachedType(name: string, bitFlags: SymbolTypeFlags, type: BscType) {
+        return this.typeCache?.setType(this, name, bitFlags, type);
+    }
+
     /**
      * Checks if the symbol table contains the given symbol by name
      * If the identifier is not in this table, it will check the parent
@@ -74,7 +102,11 @@ export class SymbolTable implements SymbolTypesGetter {
      * @param bitFlags flags to match (See SymbolTypeFlags)
      * @returns true if this symbol is in the symbol table
      */
-    hasSymbol(name: string, bitFlags: number): boolean {
+    hasSymbol(name: string, bitFlags: SymbolTypeFlags): boolean {
+        //const cacheResult = this.typeCache?.getType(this, name, bitFlags);
+        //if (cacheResult) {
+        //    return true;
+        // }
         let currentTable: SymbolTable = this;
         const key = name?.toLowerCase();
         let result: BscSymbol[];
@@ -109,7 +141,7 @@ export class SymbolTable implements SymbolTypesGetter {
      * @param bitFlags flags to match
      * @returns An array of BscSymbols - one for each time this symbol had a type implicitly defined
      */
-    getSymbol(name: string, bitFlags: number): BscSymbol[] {
+    getSymbol(name: string, bitFlags: SymbolTypeFlags): BscSymbol[] {
         let currentTable: SymbolTable = this;
         const key = name?.toLowerCase();
         let result: BscSymbol[];
@@ -139,7 +171,7 @@ export class SymbolTable implements SymbolTypesGetter {
     /**
      * Adds a new symbol to the table
      */
-    addSymbol(name: string, range: Range, type: BscType, bitFlags: number) {
+    addSymbol(name: string, range: Range, type: BscType, bitFlags: SymbolTypeFlags) {
         const key = name.toLowerCase();
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);
@@ -152,7 +184,11 @@ export class SymbolTable implements SymbolTypesGetter {
         });
     }
 
-    getSymbolTypes(name: string, bitFlags: number): BscType[] {
+    getSymbolTypes(name: string, bitFlags: SymbolTypeFlags): BscType[] {
+        const cacheResult = this.typeCache?.getType(this, name, bitFlags);
+        if (cacheResult) {
+            return [cacheResult];
+        }
         const symbolArray = this.getSymbol(name, bitFlags);
         if (!symbolArray) {
             return undefined;
@@ -226,11 +262,14 @@ export interface BscSymbol {
     name: string;
     range: Range;
     type: BscType;
-    flags: number;
+    flags: SymbolTypeFlags;
 }
 
 export interface SymbolTypesGetter {
-    getSymbolTypes(name: string, bitFlags: number): BscType[];
+    getSymbolTypes(name: string, bitFlags: SymbolTypeFlags): BscType[];
+    typeCache: TypeCache;
+    getCachedType(name: string, bitFlags: SymbolTypeFlags): BscType;
+    setCachedType(name: string, bitFlags: SymbolTypeFlags, type: BscType);
 }
 
 /**
@@ -242,3 +281,5 @@ export type SymbolTableProvider = () => SymbolTable;
  * A function that returns a symbol types getter - smaller interface used in types
  */
 export type SymbolTypesGetterProvider = () => SymbolTypesGetter;
+
+
