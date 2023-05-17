@@ -74,10 +74,6 @@ export class SymbolTable implements SymbolTypesGetter {
      * @returns true if this symbol is in the symbol table
      */
     hasSymbol(name: string, bitFlags: SymbolTypeFlags): boolean {
-        //const cacheResult = this.typeCache?.getType(this, name, bitFlags);
-        //if (cacheResult) {
-        //    return true;
-        // }
         let currentTable: SymbolTable = this;
         const key = name?.toLowerCase();
         let result: BscSymbol[];
