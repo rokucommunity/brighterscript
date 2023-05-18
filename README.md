@@ -540,6 +540,12 @@ Type: `boolean`
 
 Allow BrighterScript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
 
+#### `enhancedTypingValidation`
+
+Type: `boolean`
+
+Performs additional validation on all declared and inferred types, such as checking member accesses in Classes and Interfaces, verifying that Namespace members exist when accessed, etc.
+
 ## Ignore errors and warnings on a per-line basis
 In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:
  - `bs:disable-next-line`
