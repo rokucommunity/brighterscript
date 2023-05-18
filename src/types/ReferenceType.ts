@@ -1,3 +1,4 @@
+import type { CacheVerifierProvider } from '../CacheVerifier';
 import type { SymbolTypesGetterProvider } from '../SymbolTable';
 import type { SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType, isReferenceType } from '../astUtils/reflection';
@@ -14,7 +15,7 @@ export class ReferenceType extends BscType {
      * @param flags is this type available at typetime, runtime, etc.
      * @param tableProvider function that returns a SymbolTable that we use for the lookup.
      */
-    constructor(public memberKey: string, public fullName, public flags: SymbolTypeFlags, private tableProvider: SymbolTypesGetterProvider) {
+    constructor(public memberKey: string, public fullName, public flags: SymbolTypeFlags, private tableProvider: SymbolTypesGetterProvider, private cacheVerifierProvider?: CacheVerifierProvider) {
         super(memberKey);
         // eslint-disable-next-line no-constructor-return
         return new Proxy(this, {
@@ -86,9 +87,15 @@ export class ReferenceType extends BscType {
                                         if (resolvedType) {
                                             return resolvedType.getMemberTypes(innerName, innerFlags);
                                         }
+                                    },
+                                    getCachedType: (name, options) => {
+                                        return this.memberTable.getCachedType(name, options);
+                                    },
+                                    setCachedType: (name, type, options) => {
+                                        return this.memberTable.setCachedType(name, type, options);
                                     }
                                 };
-                            });
+                            }, this.cacheVerifierProvider);
                             return [memberTypeReference];
                         };
                     } else if (propName === 'toString') {
@@ -102,7 +109,7 @@ export class ReferenceType extends BscType {
                         this.returnTypePropertyReference = this.returnTypePropertyReference ?? new TypePropertyReferenceType(this, propName);
                         return this.returnTypePropertyReference;
                     } else if (propName === 'memberTable') {
-                        return this.tableProvider();
+                        return this.memberTable;
                     } else if (propName === 'isTypeCompatible') {
                         return (targetType: BscType) => {
                             return isDynamicType(targetType);
@@ -149,7 +156,19 @@ export class ReferenceType extends BscType {
      * Resolves the type based on the original name and the table provider
      */
     private resolve(): BscType {
-        const resolvedType = getUniqueType(this.tableProvider()?.getSymbolTypes(this.memberKey, this.flags));
+        const symbolTable = this.tableProvider();
+        if (!symbolTable) {
+            return;
+        }
+        let cacheOptions = { flags: this.flags, cacheVerifierProvider: this.cacheVerifierProvider };
+        let resolvedType = symbolTable.getCachedType(this.memberKey, cacheOptions);
+        if (resolvedType && !isReferenceType(resolvedType)) {
+            return resolvedType;
+        }
+        resolvedType = getUniqueType(symbolTable.getSymbolTypes(this.memberKey, this.flags));
+        if (resolvedType && !isReferenceType(resolvedType)) {
+            symbolTable.setCachedType(this.memberKey, resolvedType, cacheOptions);
+        }
         return resolvedType;
     }
 
@@ -176,7 +195,7 @@ export class ReferenceType extends BscType {
  * This is really cool. It's like programming with time-travel.
  */
 export class TypePropertyReferenceType extends BscType {
-    constructor(public outerType: BscType, public propertyName: string) {
+    constructor(public outerType: BscType, public propertyName: string, private cacheVerifierProvider?: CacheVerifierProvider) {
         super(propertyName);
         // eslint-disable-next-line no-constructor-return
         return new Proxy(this, {
@@ -197,9 +216,11 @@ export class TypePropertyReferenceType extends BscType {
                                 return {
                                     getSymbolTypes: (innerName: string, innerFlags: SymbolTypeFlags) => {
                                         return this.outerType?.[this.propertyName]?.getMemberTypes(innerName, innerFlags);
-                                    }
+                                    },
+                                    getCachedType: (name, options) => this.outerType?.[this.propertyName]?.memberTable?.getCachedType(name, options),
+                                    setCachedType: (name, type, options) => this.outerType?.[this.propertyName]?.memberTable?.setCachedType(name, type, options)
                                 };
-                            })];
+                            }, this.cacheVerifierProvider)];
                         };
                     }
                     if (propName === 'isResolvable') {

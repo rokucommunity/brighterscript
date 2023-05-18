@@ -1,5 +1,7 @@
 import type { Range } from 'vscode-languageserver';
 import type { BscType } from './types/BscType';
+import type { GetTypeOptions } from './interfaces';
+import type { CacheVerifierProvider } from './CacheVerifier';
 
 export enum SymbolTypeFlags {
     runtime = 1,
@@ -15,6 +17,7 @@ export class SymbolTable implements SymbolTypesGetter {
         public name: string,
         parentProvider?: SymbolTableProvider
     ) {
+        this.resetTypeCache();
         if (parentProvider) {
             this.pushParentProvider(parentProvider);
         }
@@ -27,6 +30,11 @@ export class SymbolTable implements SymbolTypesGetter {
     private symbolMap = new Map<string, BscSymbol[]>();
 
     private parentProviders = [] as SymbolTableProvider[];
+
+    private cacheToken: string;
+
+    private typeCache: Array<Map<string, BscType>>;
+
 
     /**
      * Push a function that will provide a parent SymbolTable when requested
@@ -200,6 +208,54 @@ export class SymbolTable implements SymbolTypesGetter {
         return symbols.filter(symbol => symbol.flags & bitFlags);
     }
 
+
+    private resetTypeCache(cacheVerifierProvider?: CacheVerifierProvider) {
+        this.typeCache = [
+            undefined,
+            new Map<string, BscType>(), //SymbolTypeFlags.runtime
+            new Map<string, BscType>(), //SymbolTypeFlags.typetime
+            new Map<string, BscType>() //SymbolTypeFlags.runtime & SymbolTypeFlags.typetime
+        ];
+        const cacheVerifier = cacheVerifierProvider?.();
+        if (cacheVerifier) {
+            this.cacheToken = cacheVerifier.getToken();
+        }
+    }
+
+
+    getCachedType(name: string, options: GetTypeOptions): BscType {
+        const cacheVerifier = options.cacheVerifierProvider?.();
+        if (cacheVerifier) {
+            if (!cacheVerifier.checkToken(this.cacheToken)) {
+                // we have a bad token
+                this.resetTypeCache(options.cacheVerifierProvider);
+                return;
+            }
+        } else {
+            // no cache verifier
+            return;
+        }
+        return this.typeCache[options.flags]?.get(name.toLowerCase());
+    }
+
+
+    setCachedType(name: string, type: BscType, options: GetTypeOptions) {
+        if (!type) {
+            return;
+        }
+        const cacheVerifier = options.cacheVerifierProvider?.();
+        if (cacheVerifier) {
+            if (!cacheVerifier.checkToken(this.cacheToken)) {
+                // we have a bad token - remove all other caches
+                this.resetTypeCache(options.cacheVerifierProvider);
+            }
+        } else {
+            // no cache verifier
+            return;
+        }
+        return this.typeCache[options.flags]?.set(name.toLowerCase(), type);
+    }
+
     /**
      * Serialize this SymbolTable to JSON (useful for debugging reasons)
      */
@@ -230,6 +286,8 @@ export interface BscSymbol {
 
 export interface SymbolTypesGetter {
     getSymbolTypes(name: string, bitFlags: SymbolTypeFlags): BscType[];
+    getCachedType(name, options): BscType;
+    setCachedType(name, type, options);
 }
 
 /**

@@ -150,7 +150,7 @@ export class CallExpression extends Expression {
         if (!isReferenceType(calleeType) && (calleeType as any).returnType?.isResolvable()) {
             return (calleeType as any).returnType;
         }
-        return new TypePropertyReferenceType(calleeType, 'returnType');
+        return new TypePropertyReferenceType(calleeType, 'returnType', options.cacheVerifierProvider);
     }
 }
 
@@ -915,10 +915,15 @@ export class VariableExpression extends Expression {
 
     getType(options: GetTypeOptions) {
         let resultType: BscType = util.tokenToBscType(this.name);
+        const symbolTable = this.getSymbolTable();
+        const nameKey = this.name.text;
         if (!resultType) {
-            resultType = getUniqueType(this.getSymbolTable().getSymbolTypes(this.name.text, options.flags)) ?? new ReferenceType(this.name.text, this.name.text, options.flags, () => this.getSymbolTable());
+            resultType = symbolTable.getCachedType(nameKey, options) ??
+                getUniqueType(symbolTable.getSymbolTypes(nameKey, options.flags)) ??
+                new ReferenceType(nameKey, nameKey, options.flags, () => this.getSymbolTable(), options.cacheVerifierProvider);
         }
-        options.typeChain?.push(new TypeChainEntry(this.name.text, resultType, this.range));
+        symbolTable.setCachedType(nameKey, resultType, options);
+        options.typeChain?.push(new TypeChainEntry(nameKey, resultType, this.range));
         return resultType;
     }
 }

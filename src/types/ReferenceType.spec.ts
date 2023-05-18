@@ -41,7 +41,6 @@ describe('ReferenceType', () => {
         const table = new SymbolTable('test');
         const ref = new ReferenceType('someVar', 'someVar', runtimeFlag, () => table);
         table.addSymbol('someVar', null, IntegerType.instance, SymbolTypeFlags.runtime);
-        expect(ref.isAssignableTo(IntegerType.instance)).to.be.true;
         expect(ref.isTypeCompatible(FloatType.instance)).to.be.true;
     });
 

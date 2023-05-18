@@ -20,6 +20,7 @@ import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph'
 import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isEnumMemberStatement, isNamespaceStatement } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
+import { CacheVerifier } from './CacheVerifier';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -777,9 +778,10 @@ export class Scope {
                 }
             }
         }
-
-
+        this.typeCacheVerifier.generateToken();
     }
+
+    typeCacheVerifier = new CacheVerifier();
 
     public unlinkSymbolTable() {
         for (let file of this.getOwnFiles()) {

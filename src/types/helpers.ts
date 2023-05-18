@@ -8,8 +8,11 @@ export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[])
         return undefined;
     }
     return typesArr1?.filter((currentType) => {
+        if (!currentType) {
+            return false;
+        }
         const indexOfCurrentTypeInArr2 = typesArr2.findIndex((checkType) => {
-            return currentType.isEqual(checkType);
+            return currentType?.isEqual(checkType);
         });
         return indexOfCurrentTypeInArr2 >= 0;
     });
@@ -24,6 +27,9 @@ export function getUniqueTypesFromArray(types: BscType[]) {
         return undefined;
     }
     return types?.filter((currentType, currentIndex) => {
+        if (!currentType) {
+            return false;
+        }
         const latestIndex = types.findIndex((checkType) => {
             return currentType.isEqual(checkType);
         });

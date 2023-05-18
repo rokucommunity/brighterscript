@@ -28,7 +28,9 @@ export class UnionType extends BscType {
                 return {
                     getSymbolTypes: (innerName: string, innerFlags: SymbolTypeFlags) => {
                         return findTypeUnion(...this.getMemberTypesFromInnerTypes(name, flags));
-                    }
+                    },
+                    getCachedType: (name, options) => this.memberTable.getCachedType(name, options),
+                    setCachedType: (name, type, options) => this.memberTable.setCachedType(name, type, options)
                 };
             })];
         }
