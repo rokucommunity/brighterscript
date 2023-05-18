@@ -1,3 +1,4 @@
+import type { CacheVerifierProvider } from '../CacheVerifier';
 import type { SymbolTypesGetterProvider } from '../SymbolTable';
 import type { SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType, isReferenceType } from '../astUtils/reflection';
@@ -14,7 +15,7 @@ export class ReferenceType extends BscType {
      * @param flags is this type available at typetime, runtime, etc.
      * @param tableProvider function that returns a SymbolTable that we use for the lookup.
      */
-    constructor(public memberKey: string, public fullName, public flags: SymbolTypeFlags, private tableProvider: SymbolTypesGetterProvider) {
+    constructor(public memberKey: string, public fullName, public flags: SymbolTypeFlags, private tableProvider: SymbolTypesGetterProvider, private cacheVerifierProvider?: CacheVerifierProvider) {
         super(memberKey);
         // eslint-disable-next-line no-constructor-return
         return new Proxy(this, {
@@ -33,7 +34,11 @@ export class ReferenceType extends BscType {
                 }
                 if (propName === 'isResolvable') {
                     return () => {
-                        return !!this.resolve();
+                        let resultSoFar = this.resolve();
+                        while (isReferenceType(resultSoFar)) {
+                            resultSoFar = (resultSoFar as any).getTarget();
+                        }
+                        return !!resultSoFar;
                     };
                 }
                 if (propName === 'getTarget') {
@@ -50,7 +55,7 @@ export class ReferenceType extends BscType {
                     return (targetType: BscType) => {
                         if (isReferenceType(targetType)) {
                             return this.fullName.toLowerCase() === targetType.fullName.toLowerCase() &&
-                                this.tableProvider() === targetType.tableProvider();
+                                this.tableProvider === targetType.tableProvider;
                         }
                         return targetType.isEqual(this);
                     };
@@ -69,12 +74,29 @@ export class ReferenceType extends BscType {
                         // We're looking for a member of a reference type
                         // Since we don't know what type this is, yet, return ReferenceType
                         return (memberName: string, flags: SymbolTypeFlags) => {
-                            return [new ReferenceType(memberName, this.makeMemberFullName(memberName), flags, () => {
-                                const resolvedType = this.resolve();
-                                if (resolvedType) {
-                                    return resolvedType.memberTable;
-                                }
-                            })];
+                            const resolvedType = this.resolve();
+                            if (resolvedType) {
+                                return resolvedType.getMemberTypes(memberName, flags);
+                            }
+
+                            const refLookUp = `${memberName.toLowerCase()}-${flags}`;
+                            let memberTypeReference = this.memberTypeReferences.get(refLookUp) ?? new ReferenceType(memberName, this.makeMemberFullName(memberName), flags, () => {
+                                return {
+                                    getSymbolTypes: (innerName: string, innerFlags: SymbolTypeFlags) => {
+                                        const resolvedType = this.resolve();
+                                        if (resolvedType) {
+                                            return resolvedType.getMemberTypes(innerName, innerFlags);
+                                        }
+                                    },
+                                    getCachedType: (name, options) => {
+                                        return this.memberTable.getCachedType(name, options);
+                                    },
+                                    setCachedType: (name, type, options) => {
+                                        return this.memberTable.setCachedType(name, type, options);
+                                    }
+                                };
+                            }, this.cacheVerifierProvider);
+                            return [memberTypeReference];
                         };
                     } else if (propName === 'toString') {
                         // This type was never found
@@ -87,7 +109,7 @@ export class ReferenceType extends BscType {
                         this.returnTypePropertyReference = this.returnTypePropertyReference ?? new TypePropertyReferenceType(this, propName);
                         return this.returnTypePropertyReference;
                     } else if (propName === 'memberTable') {
-                        return this.tableProvider();
+                        return this.memberTable;
                     } else if (propName === 'isTypeCompatible') {
                         return (targetType: BscType) => {
                             return isDynamicType(targetType);
@@ -134,7 +156,20 @@ export class ReferenceType extends BscType {
      * Resolves the type based on the original name and the table provider
      */
     private resolve(): BscType {
-        return getUniqueType(this.tableProvider()?.getSymbolTypes(this.memberKey, this.flags));
+        const symbolTable = this.tableProvider();
+        if (!symbolTable) {
+            return;
+        }
+        let cacheOptions = { flags: this.flags, cacheVerifierProvider: this.cacheVerifierProvider };
+        let resolvedType = symbolTable.getCachedType(this.memberKey, cacheOptions);
+        if (resolvedType && !isReferenceType(resolvedType)) {
+            return resolvedType;
+        }
+        resolvedType = getUniqueType(symbolTable.getSymbolTypes(this.memberKey, this.flags));
+        if (resolvedType && !isReferenceType(resolvedType)) {
+            symbolTable.setCachedType(this.memberKey, resolvedType, cacheOptions);
+        }
+        return resolvedType;
     }
 
     makeMemberFullName(memberName: string) {
@@ -144,6 +179,8 @@ export class ReferenceType extends BscType {
     private referenceChain = new Set<BscType>();
 
     private returnTypePropertyReference: TypePropertyReferenceType;
+
+    private memberTypeReferences = new Map<string, ReferenceType>();
 }
 
 /**
@@ -158,7 +195,7 @@ export class ReferenceType extends BscType {
  * This is really cool. It's like programming with time-travel.
  */
 export class TypePropertyReferenceType extends BscType {
-    constructor(public outerType: BscType, public propertyName: string) {
+    constructor(public outerType: BscType, public propertyName: string, private cacheVerifierProvider?: CacheVerifierProvider) {
         super(propertyName);
         // eslint-disable-next-line no-constructor-return
         return new Proxy(this, {
@@ -174,11 +211,20 @@ export class TypePropertyReferenceType extends BscType {
                         //If we're calling `getMemberTypes()`, we need it to proxy to using the actual symbol table
                         //So if that symbol is ever populated, the correct type is passed through
                         return (memberName: string, flags: SymbolTypeFlags) => {
-                            const fullMemberMame = this.outerType.toString() + '.' + memberName;
-                            return [new ReferenceType(memberName, fullMemberMame, flags, () => {
-                                return (this.outerType[this.propertyName] as any)?.memberTable;
-                            })];
+                            const fullMemberName = this.outerType.toString() + '.' + memberName;
+                            return [new ReferenceType(memberName, fullMemberName, flags, () => {
+                                return {
+                                    getSymbolTypes: (innerName: string, innerFlags: SymbolTypeFlags) => {
+                                        return this.outerType?.[this.propertyName]?.getMemberTypes(innerName, innerFlags);
+                                    },
+                                    getCachedType: (name, options) => this.outerType?.[this.propertyName]?.memberTable?.getCachedType(name, options),
+                                    setCachedType: (name, type, options) => this.outerType?.[this.propertyName]?.memberTable?.setCachedType(name, type, options)
+                                };
+                            }, this.cacheVerifierProvider)];
                         };
+                    }
+                    if (propName === 'isResolvable') {
+                        return () => false;
                     }
                 }
                 let inner = this.outerType[this.propertyName];

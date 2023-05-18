@@ -26,7 +26,7 @@ import type { DottedGetExpression, VariableExpression } from './parser/Expressio
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isFunctionParameterExpression, isIndexedGetExpression, isNewExpression, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isFunctionParameterExpression, isGroupingExpression, isIndexedGetExpression, isLiteralExpression, isNewExpression, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
@@ -34,6 +34,7 @@ import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { Expression, Statement } from './parser/AstNode';
+import { createIdentifier } from './astUtils/creators';
 
 export class Util {
     public clearConsole() {
@@ -1358,13 +1359,23 @@ export class Util {
             } else if (isDottedGetExpression(nextPart)) {
                 parts.push(nextPart?.name);
                 nextPart = nextPart.obj;
+            } else if (isCallExpression(nextPart)) {
+                nextPart = nextPart.callee;
             } else if (isTypeExpression(nextPart)) {
                 nextPart = nextPart.expression;
             } else if (isVariableExpression(nextPart)) {
                 parts.push(nextPart?.name);
                 break;
+            } else if (isLiteralExpression(nextPart)) {
+                parts.push(nextPart?.token as Identifier);
+                break;
+            } else if (isIndexedGetExpression(nextPart)) {
+                nextPart = nextPart.obj;
             } else if (isFunctionParameterExpression(nextPart)) {
                 return [nextPart.name];
+            } else if (isGroupingExpression(nextPart)) {
+                parts.push(createIdentifier('()', nextPart.range));
+                break;
             } else {
                 //we found a non-DottedGet expression, so return because this whole operation is invalid.
                 return undefined;
@@ -1375,7 +1386,11 @@ export class Util {
 
     public getAllDottedGetPartsAsString(node: Expression | Statement, parseMode = ParseMode.BrighterScript) {
         const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
-        return this.getAllDottedGetParts(node).map(part => part.text).join(sep);
+        const hello = this.getAllDottedGetParts(node)?.map(part => part.text).join(sep);
+        if (!hello) {
+            console.log(node);
+        }
+        return hello;
     }
 
     /**

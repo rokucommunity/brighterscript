@@ -1,12 +1,13 @@
 import { expect } from 'chai';
 import { ClassType } from './ClassType';
 import { StringType } from './StringType';
-import { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTable } from '../SymbolTable';
 import { expectTypeToBe } from '../testHelpers.spec';
 import { ReferenceType } from './ReferenceType';
 import { isReferenceType } from '../astUtils/reflection';
 import { IntegerType } from './IntegerType';
 import { getUniqueType } from './helpers';
+import { SymbolTypeFlags } from '../SymbolTable';
 
 describe('ClassType', () => {
 

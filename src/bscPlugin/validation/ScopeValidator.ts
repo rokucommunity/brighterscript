@@ -1,9 +1,10 @@
 import { URI } from 'vscode-uri';
-import { isBrsFile, isLiteralExpression, isNamespaceStatement, isTypeExpression, isXmlScope } from '../../astUtils/reflection';
+import { isBinaryExpression, isBrsFile, isLiteralExpression, isNamespaceStatement, isTypeExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
+import { SymbolTypeFlags } from '../../SymbolTable';
 import type { EnumStatement, NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
@@ -11,10 +12,11 @@ import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
-import type { Expression } from '../../parser/AstNode';
+import type { AstNode, Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import { SymbolTypeFlags } from '../../SymbolTable';
+import { TokenKind } from '../../lexer/TokenKind';
+
 /**
  * The lower-case names of all platform-included scenegraph nodes
  */
@@ -54,6 +56,24 @@ export class ScopeValidator {
         });
     }
 
+
+    private checkIfUsedAsTypeExpression(expression: AstNode): boolean {
+        //TODO: this is much faster than node.findAncestor(), but will not work for "complicated" type expressions
+        // like UnionTypes
+        if (isTypeExpression(expression) ||
+            isTypeExpression(expression.parent)) {
+            return true;
+        }
+        if (isBinaryExpression(expression.parent)) {
+            let currentExpr: AstNode = expression.parent;
+            while (isBinaryExpression(currentExpr) && currentExpr.operator.kind === TokenKind.Or) {
+                currentExpr = currentExpr.parent;
+            }
+            return isTypeExpression(currentExpr);
+        }
+        return false;
+    }
+
     private expressionsByFile = new Cache<BrsFile, Readonly<ExpressionInfo>[]>();
     private iterateFileExpressions(file: BrsFile) {
         const { scope } = this.event;
@@ -82,22 +102,25 @@ export class ScopeValidator {
 
         outer:
         for (const info of expressionInfos) {
-            const symbolTable = info.expression.getSymbolTable();
-            const firstPart = info.parts[0];
             const firstNamespacePart = info.parts[0].name.text;
             const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
             //get the namespace container (accounting for namespace-relative as well)
             const namespaceContainer = scope.getNamespace(firstNamespacePartLower, info.enclosingNamespaceNameLower);
+            const isUsedAsType = this.checkIfUsedAsTypeExpression(info.expression);
             let symbolType = SymbolTypeFlags.runtime;
             let oppositeSymbolType = SymbolTypeFlags.typetime;
-            const isUsedAsType = info.expression.findAncestor(isTypeExpression);
             if (isUsedAsType) {
                 // This is used in a TypeExpression - only look up types from SymbolTable
                 symbolType = SymbolTypeFlags.typetime;
                 oppositeSymbolType = SymbolTypeFlags.runtime;
             }
             const typeChain = [];
-            let exprType = info.expression.getType({ flags: symbolType, typeChain: typeChain });
+            let exprType = info.expression.getType({
+                flags: symbolType,
+                typeChain: typeChain,
+                cacheVerifierProvider: () => scope.typeCacheVerifier
+            });
+
             if (!exprType || !exprType.isResolvable()) {
                 if (info.expression.getType({ flags: oppositeSymbolType })?.isResolvable()) {
                     const oppoSiteTypeChain = [];
@@ -129,24 +152,10 @@ export class ScopeValidator {
                 continue;
             }
 
-            //flag all unknown left-most variables
-            if (
-                !symbolTable?.hasSymbol(firstPart.name?.text, symbolType) &&
-                !namespaceContainer
-            ) {
-                this.addMultiScopeDiagnostic({
-                    file: file as BscFile,
-                    ...DiagnosticMessages.cannotFindName(firstPart.name?.text),
-                    range: firstPart.name.range
-                });
-                //skip to the next expression
-                continue;
-            }
-
             const enumStatement = scope.getEnum(firstNamespacePartLower, info.enclosingNamespaceNameLower);
 
             //if this isn't a namespace, skip it
-            if (!namespaceContainer && !enumStatement) {
+            if (!namespaceContainer && !enumStatement && exprType) {
                 continue;
             }
 

@@ -1,6 +1,7 @@
 import type { Range } from 'vscode-languageserver';
 import type { BscType } from './types/BscType';
-
+import type { GetTypeOptions } from './interfaces';
+import type { CacheVerifierProvider } from './CacheVerifier';
 
 export enum SymbolTypeFlags {
     runtime = 1,
@@ -16,6 +17,7 @@ export class SymbolTable implements SymbolTypesGetter {
         public name: string,
         parentProvider?: SymbolTableProvider
     ) {
+        this.resetTypeCache();
         if (parentProvider) {
             this.pushParentProvider(parentProvider);
         }
@@ -28,6 +30,11 @@ export class SymbolTable implements SymbolTypesGetter {
     private symbolMap = new Map<string, BscSymbol[]>();
 
     private parentProviders = [] as SymbolTableProvider[];
+
+    private cacheToken: string;
+
+    private typeCache: Array<Map<string, BscType>>;
+
 
     /**
      * Push a function that will provide a parent SymbolTable when requested
@@ -74,8 +81,31 @@ export class SymbolTable implements SymbolTypesGetter {
      * @param bitFlags flags to match (See SymbolTypeFlags)
      * @returns true if this symbol is in the symbol table
      */
-    hasSymbol(name: string, bitFlags: number): boolean {
-        return !!this.getSymbol(name, bitFlags);
+    hasSymbol(name: string, bitFlags: SymbolTypeFlags): boolean {
+        let currentTable: SymbolTable = this;
+        const key = name?.toLowerCase();
+        let result: BscSymbol[];
+        do {
+            // look in our map first
+            if ((result = currentTable.symbolMap.get(key))) {
+                // eslint-disable-next-line no-bitwise
+                if (result.find(symbol => symbol.flags & bitFlags)) {
+                    return true;
+                }
+            }
+
+            //look through any sibling maps next
+            for (let sibling of currentTable.siblings) {
+                if ((result = sibling.symbolMap.get(key))) {
+                    // eslint-disable-next-line no-bitwise
+                    if (result.find(symbol => symbol.flags & bitFlags)) {
+                        return true;
+                    }
+                }
+            }
+            currentTable = currentTable.parent;
+        } while (currentTable);
+        return false;
     }
 
     /**
@@ -86,35 +116,37 @@ export class SymbolTable implements SymbolTypesGetter {
      * @param bitFlags flags to match
      * @returns An array of BscSymbols - one for each time this symbol had a type implicitly defined
      */
-    getSymbol(name: string, bitFlags: number): BscSymbol[] {
-        const key = name.toLowerCase();
+    getSymbol(name: string, bitFlags: SymbolTypeFlags): BscSymbol[] {
+        let currentTable: SymbolTable = this;
+        const key = name?.toLowerCase();
         let result: BscSymbol[];
-        // look in our map first
-        if ((result = this.symbolMap.get(key))) {
-            // eslint-disable-next-line no-bitwise
-            result = result.filter(symbol => symbol.flags & bitFlags);
-            if (result.length > 0) {
-                return result;
-            }
-        }
-        //look through any sibling maps next
-        for (let sibling of this.siblings) {
-            if ((result = sibling.symbolMap.get(key))) {
+        do {
+            // look in our map first
+            if ((result = currentTable.symbolMap.get(key))) {
                 // eslint-disable-next-line no-bitwise
                 result = result.filter(symbol => symbol.flags & bitFlags);
                 if (result.length > 0) {
                     return result;
                 }
             }
-        }
-        // ask our parent for a symbol
-        return this.parent?.getSymbol(key, bitFlags);
+            //look through any sibling maps next
+            for (let sibling of currentTable.siblings) {
+                if ((result = sibling.symbolMap.get(key))) {
+                    // eslint-disable-next-line no-bitwise
+                    result = result.filter(symbol => symbol.flags & bitFlags);
+                    if (result.length > 0) {
+                        return result;
+                    }
+                }
+            }
+            currentTable = currentTable.parent;
+        } while (currentTable);
     }
 
     /**
      * Adds a new symbol to the table
      */
-    addSymbol(name: string, range: Range, type: BscType, bitFlags: number) {
+    addSymbol(name: string, range: Range, type: BscType, bitFlags: SymbolTypeFlags) {
         const key = name.toLowerCase();
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);
@@ -127,7 +159,7 @@ export class SymbolTable implements SymbolTypesGetter {
         });
     }
 
-    getSymbolTypes(name: string, bitFlags: number): BscType[] {
+    getSymbolTypes(name: string, bitFlags: SymbolTypeFlags): BscType[] {
         const symbolArray = this.getSymbol(name, bitFlags);
         if (!symbolArray) {
             return undefined;
@@ -176,6 +208,54 @@ export class SymbolTable implements SymbolTypesGetter {
         return symbols.filter(symbol => symbol.flags & bitFlags);
     }
 
+
+    private resetTypeCache(cacheVerifierProvider?: CacheVerifierProvider) {
+        this.typeCache = [
+            undefined,
+            new Map<string, BscType>(), //SymbolTypeFlags.runtime
+            new Map<string, BscType>(), //SymbolTypeFlags.typetime
+            new Map<string, BscType>() //SymbolTypeFlags.runtime & SymbolTypeFlags.typetime
+        ];
+        const cacheVerifier = cacheVerifierProvider?.();
+        if (cacheVerifier) {
+            this.cacheToken = cacheVerifier.getToken();
+        }
+    }
+
+
+    getCachedType(name: string, options: GetTypeOptions): BscType {
+        const cacheVerifier = options.cacheVerifierProvider?.();
+        if (cacheVerifier) {
+            if (!cacheVerifier.checkToken(this.cacheToken)) {
+                // we have a bad token
+                this.resetTypeCache(options.cacheVerifierProvider);
+                return;
+            }
+        } else {
+            // no cache verifier
+            return;
+        }
+        return this.typeCache[options.flags]?.get(name.toLowerCase());
+    }
+
+
+    setCachedType(name: string, type: BscType, options: GetTypeOptions) {
+        if (!type) {
+            return;
+        }
+        const cacheVerifier = options.cacheVerifierProvider?.();
+        if (cacheVerifier) {
+            if (!cacheVerifier.checkToken(this.cacheToken)) {
+                // we have a bad token - remove all other caches
+                this.resetTypeCache(options.cacheVerifierProvider);
+            }
+        } else {
+            // no cache verifier
+            return;
+        }
+        return this.typeCache[options.flags]?.set(name.toLowerCase(), type);
+    }
+
     /**
      * Serialize this SymbolTable to JSON (useful for debugging reasons)
      */
@@ -201,11 +281,13 @@ export interface BscSymbol {
     name: string;
     range: Range;
     type: BscType;
-    flags: number;
+    flags: SymbolTypeFlags;
 }
 
 export interface SymbolTypesGetter {
-    getSymbolTypes(name: string, bitFlags: number): BscType[];
+    getSymbolTypes(name: string, bitFlags: SymbolTypeFlags): BscType[];
+    getCachedType(name, options): BscType;
+    setCachedType(name, type, options);
 }
 
 /**
@@ -217,3 +299,5 @@ export type SymbolTableProvider = () => SymbolTable;
  * A function that returns a symbol types getter - smaller interface used in types
  */
 export type SymbolTypesGetterProvider = () => SymbolTypesGetter;
+
+

@@ -1,3 +1,4 @@
+import type { SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 
@@ -37,6 +38,10 @@ export class DynamicType extends BscType {
 
     public isEqual(targetType: BscType) {
         return isDynamicType(targetType);
+    }
+
+    getMemberTypes(memberName: string, flags: SymbolTypeFlags) {
+        return [DynamicType.instance];
     }
 }
 

@@ -12,11 +12,12 @@ import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
 import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
-import type { BscType } from '../types/BscType';
 import { TypeChainEntry } from '../interfaces';
+import type { BscType } from '../types/BscType';
+import { SymbolTypeFlags } from '../SymbolTable';
 import { FunctionType } from '../types/FunctionType';
 import { Expression } from './AstNode';
-import { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTable } from '../SymbolTable';
 import { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { StringType } from '../types/StringType';
@@ -146,7 +147,10 @@ export class CallExpression extends Expression {
         if (isFunctionType(calleeType) && (!isReferenceType(calleeType.returnType) || calleeType.returnType.isResolvable())) {
             return calleeType.returnType;
         }
-        return new TypePropertyReferenceType(calleeType, 'returnType');
+        if (!isReferenceType(calleeType) && (calleeType as any).returnType?.isResolvable()) {
+            return (calleeType as any).returnType;
+        }
+        return new TypePropertyReferenceType(calleeType, 'returnType', options.cacheVerifierProvider);
     }
 }
 
@@ -461,8 +465,7 @@ export class DottedGetExpression extends Expression {
     getType(options: GetTypeOptions) {
         const objType = this.obj?.getType(options);
         const result = getUniqueType(objType?.getMemberTypes(this.name?.text, options.flags));
-        const typeChainEntry = new TypeChainEntry(this.name?.text, result, this.range);
-        options.typeChain?.push(typeChainEntry);
+        options.typeChain?.push(new TypeChainEntry(this.name?.text, result, this.range));
         if (result || options.flags & SymbolTypeFlags.typetime) {
             // All types should be known at typetime
             return result;
@@ -911,8 +914,16 @@ export class VariableExpression extends Expression {
 
 
     getType(options: GetTypeOptions) {
-        const resultType = util.tokenToBscType(this.name) ?? new ReferenceType(this.name.text, this.name.text, options.flags, () => this.getSymbolTable());
-        options.typeChain?.push(new TypeChainEntry(this.name.text, resultType, this.range));
+        let resultType: BscType = util.tokenToBscType(this.name);
+        const symbolTable = this.getSymbolTable();
+        const nameKey = this.name.text;
+        if (!resultType) {
+            resultType = symbolTable.getCachedType(nameKey, options) ??
+                getUniqueType(symbolTable.getSymbolTypes(nameKey, options.flags)) ??
+                new ReferenceType(nameKey, nameKey, options.flags, () => this.getSymbolTable(), options.cacheVerifierProvider);
+        }
+        symbolTable.setCachedType(nameKey, resultType, options);
+        options.typeChain?.push(new TypeChainEntry(nameKey, resultType, this.range));
         return resultType;
     }
 }
@@ -1105,6 +1116,10 @@ export class CallfuncExpression extends Expression {
             walk(this, 'callee', visitor, options);
             walkArray(this.args, visitor, options, this);
         }
+    }
+
+    getType(options: GetTypeOptions) {
+        return this.callee.getType(options);
     }
 }
 

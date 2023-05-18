@@ -15,6 +15,7 @@ import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
 import type { Token } from './lexer/Token';
 import type { SymbolTypeFlags } from './SymbolTable';
+import type { CacheVerifierProvider } from './CacheVerifier';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -412,7 +413,7 @@ export interface FileLink<T> {
 export interface GetTypeOptions {
     flags: SymbolTypeFlags;
     typeChain?: TypeChainEntry[];
-    //TODO: Add a TypeCache that can be used to look up and store types to short circuit reference type look ups
+    cacheVerifierProvider?: CacheVerifierProvider;
 }
 
 export class TypeChainEntry {
@@ -430,3 +431,4 @@ export interface TypeChainProcessResult {
     fullChainName: string;
     range: Range;
 }
+

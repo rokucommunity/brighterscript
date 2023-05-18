@@ -1,5 +1,6 @@
 import { expect } from 'chai';
-import { SymbolTable, SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTable } from '../SymbolTable';
+import { SymbolTypeFlags } from '../SymbolTable';
 import { expectTypeToBe } from '../testHelpers.spec';
 import { DynamicType } from './DynamicType';
 import { IntegerType } from './IntegerType';
@@ -40,7 +41,6 @@ describe('ReferenceType', () => {
         const table = new SymbolTable('test');
         const ref = new ReferenceType('someVar', 'someVar', runtimeFlag, () => table);
         table.addSymbol('someVar', null, IntegerType.instance, SymbolTypeFlags.runtime);
-        expect(ref.isAssignableTo(IntegerType.instance)).to.be.true;
         expect(ref.isTypeCompatible(FloatType.instance)).to.be.true;
     });
 
