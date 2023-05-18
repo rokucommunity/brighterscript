@@ -15,7 +15,6 @@ import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
 import type { Token } from './lexer/Token';
 import type { SymbolTypeFlags } from './SymbolTable';
-import type { TypeCacheProvider } from './TypeCache';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -414,7 +413,6 @@ export interface GetTypeOptions {
     flags: SymbolTypeFlags;
     typeChain?: TypeChainEntry[];
     cacheKey?: string;
-    typeCacheProvider?: TypeCacheProvider;
 }
 
 export class TypeChainEntry {
