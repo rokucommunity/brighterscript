@@ -114,48 +114,69 @@ export class ScopeValidator {
                 symbolType = SymbolTypeFlags.typetime;
                 oppositeSymbolType = SymbolTypeFlags.runtime;
             }
-            const typeChain = [];
-            let exprType = info.expression.getType({
-                flags: symbolType,
-                typeChain: typeChain,
-                cacheVerifierProvider: () => scope.typeCacheVerifier
-            });
 
-            if (!exprType || !exprType.isResolvable()) {
-                if (info.expression.getType({ flags: oppositeSymbolType })?.isResolvable()) {
-                    const oppoSiteTypeChain = [];
-                    const invalidlyUsedResolvedType = info.expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain });
-                    const typeChainScan = util.processTypeChain(oppoSiteTypeChain);
-                    if (isUsedAsType) {
-                        this.addMultiScopeDiagnostic({
-                            ...DiagnosticMessages.itemCannotBeUsedAsType(typeChainScan.fullChainName),
-                            range: info.expression.range,
-                            file: file
-                        }, 'When used in scope');
-                    } else {
-                        this.addMultiScopeDiagnostic({
-                            ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedType.toString()),
-                            range: info.expression.range,
-                            file: file
-                        }, 'When used in scope');
+            if (scope.program.options.enhancedTypingValidation) {
+                // Do a complete type check on all DottedGet and Variable expressions
+                // this will create a diagnostic if an invalid member is accessed
+                const typeChain = [];
+                let exprType = info.expression.getType({
+                    flags: symbolType,
+                    typeChain: typeChain,
+                    cacheVerifierProvider: () => scope.typeCacheVerifier
+                });
+
+                if (!exprType || !exprType.isResolvable()) {
+                    if (info.expression.getType({ flags: oppositeSymbolType })?.isResolvable()) {
+                        const oppoSiteTypeChain = [];
+                        const invalidlyUsedResolvedType = info.expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain });
+                        const typeChainScan = util.processTypeChain(oppoSiteTypeChain);
+                        if (isUsedAsType) {
+                            this.addMultiScopeDiagnostic({
+                                ...DiagnosticMessages.itemCannotBeUsedAsType(typeChainScan.fullChainName),
+                                range: info.expression.range,
+                                file: file
+                            }, 'When used in scope');
+                        } else {
+                            this.addMultiScopeDiagnostic({
+                                ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedType.toString()),
+                                range: info.expression.range,
+                                file: file
+                            }, 'When used in scope');
+                        }
+                        continue;
                     }
+
+                    const typeChainScan = util.processTypeChain(typeChain);
+                    this.addMultiScopeDiagnostic({
+                        file: file as BscFile,
+                        ...DiagnosticMessages.cannotFindName(typeChainScan.missingItemName, typeChainScan.fullNameOfMissingItem),
+                        range: typeChainScan.range
+                    });
+                    //skip to the next expression
                     continue;
                 }
-
-                const typeChainScan = util.processTypeChain(typeChain);
-                this.addMultiScopeDiagnostic({
-                    file: file as BscFile,
-                    ...DiagnosticMessages.cannotFindName(typeChainScan.missingItemName, typeChainScan.fullNameOfMissingItem),
-                    range: typeChainScan.range
-                });
-                //skip to the next expression
-                continue;
+            } else {
+                //flag all unknown left-most variables only
+                const symbolTable = info.expression.getSymbolTable();
+                const firstPart = info.parts[0];
+                if (
+                    !symbolTable?.hasSymbol(firstPart.name?.text, symbolType) &&
+                    !namespaceContainer
+                ) {
+                    this.addMultiScopeDiagnostic({
+                        file: file as BscFile,
+                        ...DiagnosticMessages.cannotFindName(firstPart.name?.text),
+                        range: firstPart.name.range
+                    });
+                    //skip to the next expression
+                    continue;
+                }
             }
 
             const enumStatement = scope.getEnum(firstNamespacePartLower, info.enclosingNamespaceNameLower);
 
             //if this isn't a namespace, skip it
-            if (!namespaceContainer && !enumStatement && exprType) {
+            if (!namespaceContainer && !enumStatement) {
                 continue;
             }
 

@@ -12,7 +12,7 @@ export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[])
             return false;
         }
         const indexOfCurrentTypeInArr2 = typesArr2.findIndex((checkType) => {
-            return currentType?.isEqual(checkType);
+            return currentType.isEqual(checkType);
         });
         return indexOfCurrentTypeInArr2 >= 0;
     });
