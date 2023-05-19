@@ -2,7 +2,7 @@ import { isBody, isClassStatement, isCommentStatement, isConstStatement, isDotte
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { OnFileValidateEvent } from '../../interfaces';
+import type { GetTypeOptions, OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import type { LiteralExpression } from '../../parser/Expression';
@@ -32,6 +32,17 @@ export class BrsFileValidator {
     }
 
     /**
+     *  Wrapper for getting the type from an expression, so we can use a program option to just return a default Dynamic type
+     */
+    private getTypeFromNode(node: AstNode, options?: GetTypeOptions): BscType {
+        if (this.event.program.options.enhancedTypingValidation) {
+            return node.getType(options);
+        }
+        return DynamicType.instance;
+    }
+
+
+    /**
      * Walk the full AST
      */
     private walk() {
@@ -55,20 +66,21 @@ export class BrsFileValidator {
                 this.validateEnumDeclaration(node);
 
                 //register this enum declaration
+                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlags.typetime });
                 // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, node.getType(), SymbolTypeFlags.typetime | SymbolTypeFlags.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, nodeType, SymbolTypeFlags.typetime | SymbolTypeFlags.runtime);
             },
             ClassStatement: (node) => {
                 this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.classKeyword, node.name));
 
                 //register this class
-                const nodeType = node.getType({ flags: SymbolTypeFlags.typetime });
+                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlags.typetime });
                 // eslint-disable-next-line no-bitwise
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, nodeType, SymbolTypeFlags.typetime | SymbolTypeFlags.runtime);
             },
             AssignmentStatement: (node) => {
                 //register this variable
-                const nodeType = node.getType({ flags: SymbolTypeFlags.runtime });
+                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlags.runtime });
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, nodeType, SymbolTypeFlags.runtime);
             },
             DottedSetStatement: (node) => {
@@ -125,12 +137,13 @@ export class BrsFileValidator {
             },
             FunctionStatement: (node) => {
                 this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.functionType, node.name));
+                const funcType = node.getType({ flags: SymbolTypeFlags.typetime });
 
                 if (node.name?.text) {
                     node.parent.getSymbolTable().addSymbol(
                         node.name.text,
                         node.name.range,
-                        node.getType({ flags: SymbolTypeFlags.typetime }),
+                        funcType,
                         SymbolTypeFlags.runtime
                     );
                 }
@@ -141,13 +154,11 @@ export class BrsFileValidator {
                     namespace.getSymbolTable().addSymbol(
                         node.name.text,
                         node.name.range,
-                        node.getType({ flags: SymbolTypeFlags.typetime }),
+                        funcType,
                         SymbolTypeFlags.runtime
                     );
                     //add the transpiled name for namespaced functions to the root symbol table
                     const transpiledNamespaceFunctionName = node.getName(ParseMode.BrightScript);
-                    const funcType = node.func.getType({ flags: SymbolTypeFlags.typetime });
-                    //funcType.setName(transpiledNamespaceFunctionName);
 
                     this.event.file.parser.ast.symbolTable.addSymbol(
                         transpiledNamespaceFunctionName,
@@ -171,13 +182,13 @@ export class BrsFileValidator {
             InterfaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));
 
-                const nodeType = node.getType({ flags: SymbolTypeFlags.typetime });
+                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlags.typetime });
                 // eslint-disable-next-line no-bitwise
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, nodeType, SymbolTypeFlags.runtime | SymbolTypeFlags.typetime);
             },
             ConstStatement: (node) => {
                 this.validateDeclarationLocations(node, 'const', () => util.createBoundingRange(node.tokens.const, node.tokens.name));
-                const nodeType = node.getType({ flags: SymbolTypeFlags.typetime });
+                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlags.typetime });
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, nodeType, SymbolTypeFlags.runtime);
             },
             CatchStatement: (node) => {

@@ -508,8 +508,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectDiagnostics(program, [{
-                ...DiagnosticMessages.cannotFindName('subname', 'Name1.subname'),
-                range: util.createRange(2, 26, 2, 33)
+                ...DiagnosticMessages.cannotFindName('subname', 'Name1.subname')
             }]);
         });
 

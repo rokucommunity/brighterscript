@@ -1,16 +1,15 @@
+import { v4 as uuid } from 'uuid';
+
 export class CacheVerifier {
 
     private currentToken: string;
-    private tokenCount = 0;
-
 
     constructor() {
         this.generateToken();
     }
 
     generateToken() {
-        this.tokenCount++;
-        this.currentToken = this.tokenCount.toString();
+        this.currentToken = uuid();
     }
 
     getToken(): string {
