@@ -14,55 +14,53 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 The BrighterScript language provides new features and syntax enhancements to Roku's BrightScript language. Because the language is a superset of BrightScript, the parser and associated tools (VSCode integration, cli, etc...) work with standard BrightScript (.brs) files. This means you will get benefits (as described in the following section) from using the BrighterScript compiler, whether your project contains BrighterScript (.bs) files or not. The BrighterScript language transpiles to standard BrightScript, so your code is fully compatible with all roku devices.
 
 ## Features
-
 BrighterScript adds several new features to the BrightScript language such as Namespaces, classes, import statements, and more. Take a look at the language specification docs for more information.
 
 [BrighterScript Language Specification](https://github.com/rokucommunity/BrighterScript/blob/master/docs/readme.md)
 
 ## Why use the BrighterScript compiler/CLI?
 
-- Check the entire project for syntax and program errors without needing to run on an actual Roku device.
-- Catch syntax and program errors at compile time which would not otherwise appear until runtime.
-- The compiler can be used as part of your tool-chains, such as continuous integration or a custom build pipeline.
-- Get real-time syntax validation by using the cli in `--watch` mode.
+ - Check the entire project for syntax and program errors without needing to run on an actual Roku device.
+ - Catch syntax and program errors at compile time which would not otherwise appear until runtime.
+ - The compiler can be used as part of your tool-chains, such as continuous integration or a custom build pipeline.
+ - Get real-time syntax validation by using the cli in `--watch` mode.
 
 ## Why use the BrighterScript language?
 
-- Brighterscript is in good hands:
-  - The project is open source.
-  - Brighterscript is designed by Roku developers, for Roku developers.
-  - The project is owned by [RokuCommunity](https://github.com/rokucommunity) and the syntax and features are thoroughly thought out, discussed, and planned.
-  - Actively developed.
-- Reduce boilerplate code and time debugging with language features like these:
+ - Brighterscript is in good hands:
+    - The project is open source.
+    - Brighterscript is designed by Roku developers, for Roku developers.
+    - The project is owned by [RokuCommunity](https://github.com/rokucommunity) and the syntax and features are thoroughly thought out, discussed, and planned.
+    - Actively developed.
+ - Reduce boilerplate code and time debugging with language features like these:
+    - [Import statements](https://github.com/rokucommunity/brighterscript/blob/master/docs/imports.md)
+      - Declare import statements in scripts instead of xml script tags.
+      - Automatically add script tags to XML components for all script import statements and their cascading dependencies
+      - Missing imports are flagged at compile time.
+    - [Classes](https://github.com/rokucommunity/brighterscript/blob/master/docs/classes.md)
+      - Support for class inheritance and method overrides
+      - Class fields and can be marked as `public`, `protected`, and `private` and incorrect access will be enforced by compile-time checks.
+      - Class methods are automatically scoped to the class
+    - [Namespaces](https://github.com/rokucommunity/brighterscript/blob/master/docs/namespaces.md):
+      - Automatically add a name prefix to all methods inside a namespace block.
+      - Prevents method naming collisions and improves code readability and maintainability.
+      - Missing method invocations, and other namespace related syntax errors are reported at compile time.
+    - [Ternary operator](https://github.com/rokucommunity/brighterscript/blob/master/docs/ternary-operator.md)
+      - `username = m.user <> invalid ? m.user.name : "not logged in"`
+    - [Template strings](https://github.com/rokucommunity/brighterscript/blob/master/docs/template-strings.md)
+      - ```print `Hello ${firstNameVar}` ```.
+    - [null-coalescing operator](https://github.com/rokucommunity/brighterscript/blob/master/docs/null-coalescing-operator.md)
+      - `user = m.user ?? getDefaultUser()`
+    - Additional Language features coming soon
+      - null-conditional operator: `userSettings = m.user?.account?.profile?.settings`
+    - and [more](https://github.com/rokucommunity/BrighterScript/blob/master/docs/readme.md)...
 
-  - [Import statements](https://github.com/rokucommunity/brighterscript/blob/master/docs/imports.md)
-    - Declare import statements in scripts instead of xml script tags.
-    - Automatically add script tags to XML components for all script import statements and their cascading dependencies
-    - Missing imports are flagged at compile time.
-  - [Classes](https://github.com/rokucommunity/brighterscript/blob/master/docs/classes.md)
-    - Support for class inheritance and method overrides
-    - Class fields and can be marked as `public`, `protected`, and `private` and incorrect access will be enforced by compile-time checks.
-    - Class methods are automatically scoped to the class
-  - [Namespaces](https://github.com/rokucommunity/brighterscript/blob/master/docs/namespaces.md):
-    - Automatically add a name prefix to all methods inside a namespace block.
-    - Prevents method naming collisions and improves code readability and maintainability.
-    - Missing method invocations, and other namespace related syntax errors are reported at compile time.
-  - [Ternary operator](https://github.com/rokucommunity/brighterscript/blob/master/docs/ternary-operator.md)
-    - `username = m.user <> invalid ? m.user.name : "not logged in"`
-  - [Template strings](https://github.com/rokucommunity/brighterscript/blob/master/docs/template-strings.md)
-    - `` print `Hello ${firstNameVar}`  ``.
-  - [null-coalescing operator](https://github.com/rokucommunity/brighterscript/blob/master/docs/null-coalescing-operator.md)
-    - `user = m.user ?? getDefaultUser()`
-  - Additional Language features coming soon
-    - null-conditional operator: `userSettings = m.user?.account?.profile?.settings`
-  - and [more](https://github.com/rokucommunity/BrighterScript/blob/master/docs/readme.md)...
 
-- Full BrighterScript support for syntax checking, validation, and intellisense is available within the [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=celsoaf.brightscript) VSCode extension.
+  - Full BrighterScript support for syntax checking, validation, and intellisense is available within the [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=celsoaf.brightscript) VSCode extension.
 
-- And if it's not enough, the [plugin API](https://github.com/rokucommunity/brighterscript/blob/master/docs/plugins.md) allows extending the compiler to provide extra diagnostics or transformations.
+  - And if it's not enough, the [plugin API](https://github.com/rokucommunity/brighterscript/blob/master/docs/plugins.md) allows extending the compiler to provide extra diagnostics or transformations.
 
 ## Who uses Brighterscript?
-
 <br/>
 <p align="center">
     <a href="https://www.fubo.tv/">
@@ -93,17 +91,16 @@ BrighterScript adds several new features to the BrightScript language such as Na
 </p>
 <br/>
 
+
 The BrighterScript project is used to power the popular [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=rokucommunity.brightscript) VSCode extension, the [maestro framework](https://github.com/georgejecook/maestro/blob/master/docs/index.md), and more.
 
 [Contact us](https://github.com/rokucommunity/brighterscript/issues/new) if you use BrighterScript in your project and would like your logo listed above. More projects are adopting BrighterScript all the time, from using the new BrighterScript language features to simply using the compiler in their build pipeline.
 
 ## What's with the name?
-
 The name BrighterScript is a compliment to everything that is great about Roku's awesome BrightScript language. Naming things is hard, and discoverability and recognizability are both very important. Here are the reasons we chose this name:
-
-- the `er` in BrighterScript represents the additional features we have added on top of BrightScript
-- It looks so similar to BrightScript, which is fitting because this language is 95% BrightScript, 5% extra stuff (the `er` bits).
-- The config file and extension look very similar between BrightScript and BrighterScript. Take `bsconfig.json` for example. While `brsconfig.json` might be more fitting for a pure BrightScript project, `bsconfig.json` is so very close that you probably wouldn't think twice about it. Same with the fact that `.bs` (BrighterScript) and `.brs` are very similar.
+ - the `er` in BrighterScript represents the additional features we have added on top of BrightScript
+ - It looks so similar to BrightScript, which is fitting because this language is 95% BrightScript, 5% extra stuff (the `er` bits).
+ - The config file and extension look very similar between BrightScript and BrighterScript. Take `bsconfig.json` for example. While `brsconfig.json` might be more fitting for a pure BrightScript project, `bsconfig.json` is so very close that you probably wouldn't think twice about it. Same with the fact that `.bs` (BrighterScript) and `.brs` are very similar.
 
 We want to honor BrightScript, the language that BrighterScript is based off of, and could think of no better way than to use _most_ of its name in our name.
 
@@ -132,43 +129,40 @@ That's it! It will find all files in your BrightScript project, check for syntax
 If you need to configure `bsc`, you can do so in two ways:
 
 1. Using command line arguments.
-   This tool can be fully configured using command line arguments. To see a full list, run `bsc --help` in your terminal.
+    This tool can be fully configured using command line arguments. To see a full list, run `bsc --help` in your terminal.
 2. Using a `bsconfig.json` file. See [the available options](#bsconfigjson-options) below.
-   By default, `bsc` looks for a `bsconfig.json` file at the same directory that `bsc` is executed. If you want to store your `bsconfig.json` file somewhere else, then you should provide the `--project` argument and specify the path to your `bsconfig.json` file.
+    By default, `bsc` looks for a `bsconfig.json` file at the same directory that `bsc` is executed. If you want to store your `bsconfig.json` file somewhere else, then you should provide the `--project` argument and specify the path to your `bsconfig.json` file.
 
 ### Examples
 
 1. Your project resides in a subdirectory of your workspace folder.
 
-   ```bash
-   bsc --root-dir ./rokuSourceFiles
-   ```
-
+    ```bash
+    bsc --root-dir ./rokuSourceFiles
+    ```
 2. Run the compiler in watch mode
 
-   ```bash
-   bsc --watch
-   ```
+    ```bash
+    bsc --watch
+    ```
 
 3. Run the compiler in watch mode, and redeploy to the roku on every change
-   ```bash
-   bsc --watch --deploy --host 192.168.1.10 --password secret_password
-   ```
+    ```bash
+    bsc --watch --deploy --host 192.168.1.10 --password secret_password
+    ```
 4. Use a bsconfig.json file not located at cwd
-
-   ```bash
-   bsc --project ./some_folder/bsconfig.json
-   ```
+    ```bash
+    bsc --project ./some_folder/bsconfig.json
+    ```
 
 5. Run the compiler as a **linter** only (watch mode supported)
-   ```bash
-   bsc --create-package false --copy-to-staging false
-   ```
+    ```bash
+    bsc --create-package false --copy-to-staging false
+    ```
 
 ## bsconfig.json
 
 ### Overview
-
 The presence of a `bsconfig.json` file in a directory indicates that the directory is the root of a BrightScript project. The `bsconfig.json` file specifies the root files and the compiler options required to compile the project.
 
 ### Configuration inheritance with `extends`
@@ -184,37 +178,35 @@ The `files` property from the inheriting config file overwrite those from the ba
 All relative paths found in the configuration file will be resolved relative to the configuration file they originated in.
 
 ### Optional `extends` and `project`
-
 There are situations where you want to store some compiler settings in a config file, but not fail if that config file doesn't exist. To do this, you can denote that your `extends` or `project` path is optional by prefixing it with a question mark (`?`). For example:
 
-- **bsconfig.json** `extends`
-  ```json
-  {
-    "extends": "?path/to/optional/bsconfig.json"
-  }
-  ```
-- CLI "extends"
-
-  ```
-  bsc --extends "?path/to/optional/bsconfig.json"
-  ```
-
-- CLI `project` argument
-  ```
-  bsc --project "?path/to/optional/bsconfig.json"
-  ```
-- Node.js API `extends`
-  ```
-  var programBuilder = new ProgramBuilder({
+ - **bsconfig.json** `extends`
+    ```json
+    {
       "extends": "?path/to/optional/bsconfig.json"
-  });
-  ```
-- Node.js API `project`
-  ```
-  var programBuilder = new ProgramBuilder({
-      "project": "?path/to/optional/bsconfig.json"
-  });
-  ```
+    }
+    ```
+ - CLI "extends"
+    ```
+    bsc --extends "?path/to/optional/bsconfig.json"
+    ```
+
+ - CLI `project` argument
+    ```
+    bsc --project "?path/to/optional/bsconfig.json"
+    ```
+ - Node.js API `extends`
+    ```
+    var programBuilder = new ProgramBuilder({
+        "extends": "?path/to/optional/bsconfig.json"
+    });
+    ```
+ - Node.js API `project`
+    ```
+    var programBuilder = new ProgramBuilder({
+        "project": "?path/to/optional/bsconfig.json"
+    });
+    ```
 
 ### `bsconfig.json` options
 
@@ -267,16 +259,14 @@ If true, removes the explicit type to function's parameters and return (i.e. the
 #### `files`
 
 Type:
-
 ```typescript
 Array<
-  | string
-  | string[]
-  | {
-      src: string | string[];
-      dest: string;
-    }
->;
+  string |
+  string[] |
+  {
+    src: string | string[],
+    dest: string
+  }>
 ```
 
 The files array is how you specify what files are included in your project. Any strings found in the files array must be relative to rootDir, and are used as include filters, meaning that if a file matches the pattern, it is included.
@@ -285,7 +275,12 @@ For most standard projects, the default files array should work just fine:
 
 ```jsonc
 {
-  "files": ["source/**/*", "components/**/*", "images/**/*", "manifest"]
+    "files": [
+        "source/**/*",
+        "components/**/*",
+        "images/**/*",
+        "manifest"
+    ]
 }
 ```
 
@@ -314,7 +309,10 @@ You can exclude files from the output by prefixing your file patterns with "!". 
 
 ```jsonc
 {
-  "files": ["source/**/*", "!source/some/unwanted/file.brs"]
+    "files": [
+        "source/**/*",
+        "!source/some/unwanted/file.brs"
+    ]
 }
 ```
 
@@ -328,13 +326,13 @@ Patterns may not reference files outside of `rootDir` unless the `{ src, dest }`
 
 ```jsonc
 {
-  "rootDir": "C:/projects/CatVideoPlayer",
-  "files": [
-    "source/main.brs",
+    "rootDir": "C:/projects/CatVideoPlayer",
+    "files": [
+        "source/main.brs",
 
-    //NOT allowed because it navigates outside the rootDir
-    "../common/promise.brs"
-  ]
+        //NOT allowed because it navigates outside the rootDir
+        "../common/promise.brs"
+    ]
 }
 ```
 
@@ -352,17 +350,17 @@ The object structure is as follows:
 
 ```typescript
 {
-  /**
-   * A glob pattern string or file path, or an array of glob pattern strings and/or file paths.
-   * These can be relative paths or absolute paths.
-   * All non-absolute paths are resolved relative to the rootDir
-   */
-  src: Array<string | string[]>;
-  /**
-   * The relative path to the location in the output folder where the files should be placed,
-   * relative to the root of the output folder
-   */
-  dest: string | undefined;
+    /**
+     * A glob pattern string or file path, or an array of glob pattern strings and/or file paths.
+     * These can be relative paths or absolute paths.
+     * All non-absolute paths are resolved relative to the rootDir
+     */
+    src: Array<string | string[]>;
+    /**
+     * The relative path to the location in the output folder where the files should be placed,
+     * relative to the root of the output folder
+     */
+    dest: string | undefined
 }
 ```
 
@@ -390,14 +388,14 @@ An example of combining regular and advanced file patterns:
 
 ```jsonc
 {
-  "rootDir": "C:/projects/CatVideoPlayer",
-  "files": [
-    "source/main.brs",
-    {
-      "src": "../common/promise.brs",
-      "dest": "source/common"
-    }
-  ]
+    "rootDir": "C:/projects/CatVideoPlayer",
+    "files": [
+        "source/main.brs",
+        {
+          "src": "../common/promise.brs",
+          "dest": "source/common"
+        }
+    ]
 }
 ```
 
@@ -409,15 +407,15 @@ For example, if you have a base project and a child project that wants to overri
 
 ```jsonc
 {
-  "files": [
-    {
-      //copy all files from the base project
-      "src": "../BaseProject/**/*"
-    },
-    // Override "../BaseProject/themes/theme.brs"
-    // with "${rootDir}/themes/theme.brs"
-    "themes/theme.brs"
-  ]
+    "files": [
+        {
+            //copy all files from the base project
+            "src": "../BaseProject/**/*"
+        },
+        // Override "../BaseProject/themes/theme.brs"
+        // with "${rootDir}/themes/theme.brs"
+        "themes/theme.brs"
+    ]
 }
 ```
 
@@ -474,17 +472,16 @@ Emit full paths to files when printing diagnostics to the console. Defaults to `
 Type: `Array<string | number | {src: string; codes: number[]}`
 
 A list of filters used to hide diagnostics.
+   - A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed.
+   - A `number` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project.
+   - An object can also be provided to filter specific diagnostic codes for a file pattern. For example,
 
-- A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed.
-- A `number` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project.
-- An object can also be provided to filter specific diagnostic codes for a file pattern. For example,
-
-  ```jsonc
-  "diagnosticFilters": [{
-      "src": "vendor/**/*",
-      "codes": [1000, 1011] //ignore these specific codes from vendor libraries
-  }]
-  ```
+        ```jsonc
+        "diagnosticFilters": [{
+            "src": "vendor/**/*",
+            "codes": [1000, 1011] //ignore these specific codes from vendor libraries
+        }]
+        ```
 
 Defaults to `undefined`.
 
@@ -550,13 +547,11 @@ Type: `boolean`
 Performs additional validation on all declared and inferred types, such as checking member accesses in Classes and Interfaces, verifying that Namespace members exist when accessed, etc.
 
 ## Ignore errors and warnings on a per-line basis
-
 In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:
-
-- `bs:disable-next-line`
-- `bs:disable-next-line: code1 code2 code3`
-- `bs:disable-line`
-- `bs:disable-line: code1 code2 code3`
+ - `bs:disable-next-line`
+ - `bs:disable-next-line: code1 code2 code3`
+ - `bs:disable-line`
+ - `bs:disable-line: code1 code2 code3`
 
 Here are some examples:
 
@@ -580,17 +575,16 @@ end sub
 
 The primary motivation for this feature was to provide a stopgap measure to hide incorrectly-thrown errors on legitimate BrightScript code due to parser bugs. This is still a new project and it is likely to be missing support for certain BrightScript syntaxes. It is recommended that you only use these comments when absolutely necessary.
 
-## ropm support
 
+## ropm support
 In order for BrighterScript-transpiled projects to work as ropm modules, they need a reference to [bslib](https://github.com/rokucommunity/bslib/blob/master/source/bslib.brs) (the BrightScript runtime library for BrighterScript features) in their package. As `ropm` and `brighterscript` become more popular, this could result in many duplicate copies of `bslib.brs`.
 
 To encourage reducing code duplication, BrighterScript has built-in support for loading `bslib` from [ropm](https://github.com/rokucommunity/ropm). Here's how it works:
-
 1. if your program does not use ropm, or _does_ use ropm but does not directly reference bslib, then the BrighterScript compiler will copy bslib to `"pkg:/source/bslib.brs"` at transpile-time.
 2. if your program uses ropm and has installed `bslib` as a dependency, then the BrighterScript compiler will _not_ emit a copy of bslib at `pkg:/source/bslib.brs`, and will instead use the path to the version from ropm `pkg:/source/roku_modules/bslib/bslib.brs`.
 
-### Installing bslib in your ropm-enabled project
 
+### Installing bslib in your ropm-enabled project
 bslib is published to npm under the name [@rokucommunity/bslib](https://npmjs.com/package/@rokucommunity/bslib). If you use NodeJS version 12 or above, we recommend installing `@rokucommunity/bslib` with the `bslib` alias, as it produces smaller transpiled code (i.e. emits `bslib_` prefix instead of `rokucommunity_bslib_`). Here's the command to install bslib under the `bslib` alias using the ropm CLI.
 
 ```bash
@@ -598,9 +592,7 @@ ropm install bslib@npm:@rokucommunity/bslib
 ```
 
 #### bslib support on NodeJS versions less than 12
-
 npm aliases only work in NodeJS version 12 and above. If you're using a NodeJS version less than 12, you will need to install @rokucommunity/bslib directly without the alias. BrighterScript recognizes this pattern as well, it's just not preferred (for the reasons mentioned previously). Here's the command for that:
-
 ```bash
 ropm install @rokucommunity/bslib
 ```
@@ -610,9 +602,7 @@ ropm install @rokucommunity/bslib
 This project also contributes a class that aligns with Microsoft's [Language Server Protocol](https://microsoft.github.io/language-server-protocol/), which makes it easy to integrate `BrightScript` and `BrighterScript` with any IDE that supports the protocol. We won't go into more detail here, but you can use the `LanguageServer` class from this project to integrate into your IDE. The [vscode-BrightScript-language](https://github.com/rokucommunity/vscode-BrightScript-language) extension uses this LanguageServer class to bring `BrightScript` and `BrighterScript` language support to Visual Studio Code.
 
 ## Changelog
-
 [Click here](CHANGELOG.md) to view the changelog.
 
 ## Special Thanks
-
 Special thanks to the [brs](https://github.com/sjbarag/brs) project for its fantastic work on its blazing fast BrightScript parser which was used as the foundation for the BrighterScript parser.
