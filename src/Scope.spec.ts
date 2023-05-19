@@ -1567,7 +1567,7 @@ describe('Scope', () => {
         });
         describe('enhanced typing', () => {
             beforeEach(() => {
-                program.options.enhancedTypingValidation = true;
+                program.options.enableTypeValidation = true;
             });
 
             describe('runtime vs typetime', () => {
@@ -2102,7 +2102,7 @@ describe('Scope', () => {
 
     describe('symbolTable lookups with enhanced typing', () => {
         beforeEach(() => {
-            program.options.enhancedTypingValidation = true;
+            program.options.enableTypeValidation = true;
         });
         const mainFileContents = `
             sub main()

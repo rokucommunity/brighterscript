@@ -115,7 +115,7 @@ export class ScopeValidator {
                 oppositeSymbolType = SymbolTypeFlags.runtime;
             }
 
-            if (scope.program.options.enhancedTypingValidation) {
+            if (scope.program.options.enableTypeValidation) {
                 // Do a complete type check on all DottedGet and Variable expressions
                 // this will create a diagnostic if an invalid member is accessed
                 const typeChain = [];

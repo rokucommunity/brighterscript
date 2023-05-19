@@ -290,7 +290,7 @@ describe('HoverProcessor', () => {
         });
 
         it('finds types from assignments defined in different file, with enhancedTypeValidation', () => {
-            program.options.enhancedTypingValidation = true;
+            program.options.enableTypeValidation = true;
             program.setFile(`source/main.bs`, `
                 sub main()
                     thing = new MyKlass()

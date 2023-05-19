@@ -35,7 +35,7 @@ export class BrsFileValidator {
      *  Wrapper for getting the type from an expression, so we can use a program option to just return a default Dynamic type
      */
     private getTypeFromNode(node: AstNode, options?: GetTypeOptions): BscType {
-        if (this.event.program.options.enhancedTypingValidation) {
+        if (this.event.program.options.enableTypeValidation) {
             return node.getType(options);
         }
         return DynamicType.instance;

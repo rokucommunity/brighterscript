@@ -468,7 +468,7 @@ export class BrsFile {
                     lineIndex: param.name.range.start.line,
                     name: param.name.text,
                     getType: () => {
-                        if (this.program.options.enhancedTypingValidation) {
+                        if (this.program.options.enableTypeValidation) {
                             return param.getType({ flags: SymbolTypeFlags.typetime });
                         }
                         return paramType;
@@ -520,7 +520,7 @@ export class BrsFile {
                     lineIndex: statement.name.range.start.line,
                     name: statement.name.text,
                     getType: () => {
-                        if (this.program.options.enhancedTypingValidation) {
+                        if (this.program.options.enableTypeValidation) {
                             return statement.getType({ flags: SymbolTypeFlags.runtime });
                         }
                         return assignmentType;
@@ -619,7 +619,7 @@ export class BrsFile {
                 params.push(callableParam);
             }
 
-            const funcType = this.program.options.enhancedTypingValidation
+            const funcType = this.program.options.enableTypeValidation
                 ? statement.getType({ flags: SymbolTypeFlags.typetime })
                 : this.getFunctionTypeFromFuncExpr(statement.func, statement.name.text);
 
