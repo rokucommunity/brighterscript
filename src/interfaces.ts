@@ -148,7 +148,6 @@ export interface VariableDeclaration {
      * we only need to know the line index
      */
     lineIndex: number;
-    isFunction?: boolean;
 }
 
 export interface LabelDeclaration {

@@ -462,7 +462,7 @@ export class BrsFile {
 
             //add every parameter
             for (let param of func.parameters) {
-                const paramType = this.getBscTypeFromTypeExpression(param.typeExpression);
+                let paramType;
                 scope.variableDeclarations.push({
                     nameRange: param.name.range,
                     lineIndex: param.name.range.start.line,
@@ -471,6 +471,7 @@ export class BrsFile {
                         if (this.program.options.enableTypeValidation) {
                             return param.getType({ flags: SymbolTypeFlags.typetime });
                         }
+                        paramType = paramType ?? this.getBscTypeFromTypeExpression(param.typeExpression);
                         return paramType;
                     }
                 });
@@ -514,7 +515,7 @@ export class BrsFile {
 
             //skip variable declarations that are outside of any scope
             if (scope) {
-                const assignmentType = this.getBscTypeFromAssignment(statement, scope);
+                let assignmentType;
                 scope.variableDeclarations.push({
                     nameRange: statement.name.range,
                     lineIndex: statement.name.range.start.line,
@@ -523,6 +524,7 @@ export class BrsFile {
                         if (this.program.options.enableTypeValidation) {
                             return statement.getType({ flags: SymbolTypeFlags.runtime });
                         }
+                        assignmentType = assignmentType ?? this.getBscTypeFromAssignment(statement, scope);
                         return assignmentType;
                     }
                 });
@@ -610,9 +612,13 @@ export class BrsFile {
             //extract the parameters
             let params = [] as CallableParam[];
             for (let param of statement.func.parameters) {
+                const paramType = this.program.options.enableTypeValidation
+                    ? param.getType({ flags: SymbolTypeFlags.typetime })
+                    : this.getBscTypeFromTypeExpression(param.typeExpression, param.defaultValue);
+
                 let callableParam = {
                     name: param.name.text,
-                    type: this.getBscTypeFromTypeExpression(param.typeExpression, param.defaultValue),
+                    type: paramType,
                     isOptional: !!param.defaultValue,
                     isRestArgument: false
                 };
