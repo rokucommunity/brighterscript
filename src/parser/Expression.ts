@@ -917,12 +917,18 @@ export class VariableExpression extends Expression {
         let resultType: BscType = util.tokenToBscType(this.name);
         const symbolTable = this.getSymbolTable();
         const nameKey = this.name.text;
+        let setNewCacheValue = false;
         if (!resultType) {
-            resultType = symbolTable.getCachedType(nameKey, options) ??
-                getUniqueType(symbolTable.getSymbolTypes(nameKey, options.flags)) ??
-                new ReferenceType(nameKey, nameKey, options.flags, () => this.getSymbolTable(), options.cacheVerifierProvider);
+            resultType = symbolTable.getCachedType(nameKey, options);
+            if (!resultType) {
+                resultType = getUniqueType(symbolTable.getSymbolTypes(nameKey, options.flags)) ??
+                    new ReferenceType(nameKey, nameKey, options.flags, () => this.getSymbolTable(), options.cacheVerifierProvider);
+                setNewCacheValue = true;
+            }
         }
-        symbolTable.setCachedType(nameKey, resultType, options);
+        if (setNewCacheValue) {
+            symbolTable.setCachedType(nameKey, resultType, options);
+        }
         options.typeChain?.push(new TypeChainEntry(nameKey, resultType, this.range));
         return resultType;
     }
