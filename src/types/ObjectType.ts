@@ -1,8 +1,8 @@
 import { SymbolTypeFlags } from '../SymbolTable';
-import { isDynamicType, isObjectType, isUnionType } from '../astUtils/reflection';
+import { isDynamicType, isInheritableType, isObjectType, isUnionType } from '../astUtils/reflection';
+import type { GetTypeOptions } from '../interfaces';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
-import { isInheritableType } from './InheritableType';
 
 export class ObjectType extends BscType {
     constructor(
@@ -31,10 +31,10 @@ export class ObjectType extends BscType {
         return this.toString();
     }
 
-    getMemberTypes(name: string, flags: SymbolTypeFlags) {
+    getMemberType(name: string, options: GetTypeOptions) {
         // TODO: How should we handle accessing properties of an object?
         // For example, we could add fields as properties to m.top, but there could be other members added programmatically
-        return super.getMemberTypes(name, flags) ?? [DynamicType.instance];
+        return super.getMemberType(name, options) ?? DynamicType.instance;
     }
 
     isEqual(otherType: BscType) {

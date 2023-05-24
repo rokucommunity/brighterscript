@@ -121,7 +121,7 @@ export class BrsFileValidator {
                     if (!isNamespaceType(nextNamespaceType)) {
                         // if it is the last one, ie, the part that represents this node/namespace.
                         // make sure the namespace's symboltable is a provider for the previous types' member table
-                        nextNamespaceType = (i === namespaceParts.length - 1) ? node.getType() : new NamespaceType(nameSoFar);
+                        nextNamespaceType = (i === namespaceParts.length - 1) ? node.getType({ flags: SymbolTypeFlags.typetime }) : new NamespaceType(nameSoFar);
                         currentSymbolTable.addSymbol(part, node.nameExpression.range, nextNamespaceType, namespaceTypeFlags);
 
                     }

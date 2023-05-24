@@ -23,8 +23,7 @@ import type { TranspileState } from './TranspileState';
 import { StringType } from '../types/StringType';
 import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
-import { TypePropertyReferenceType, ReferenceType } from '../types/ReferenceType';
-import { getUniqueType } from '../types/helpers';
+import { TypePropertyReferenceType } from '../types/ReferenceType';
 import { UnionType } from '../types/UnionType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
@@ -150,7 +149,7 @@ export class CallExpression extends Expression {
         if (!isReferenceType(calleeType) && (calleeType as any).returnType?.isResolvable()) {
             return (calleeType as any).returnType;
         }
-        return new TypePropertyReferenceType(calleeType, 'returnType', options.cacheVerifierProvider);
+        return new TypePropertyReferenceType(calleeType, 'returnType');
     }
 }
 
@@ -464,7 +463,7 @@ export class DottedGetExpression extends Expression {
 
     getType(options: GetTypeOptions) {
         const objType = this.obj?.getType(options);
-        const result = getUniqueType(objType?.getMemberTypes(this.name?.text, options.flags));
+        const result = objType?.getMemberType(this.name?.text, options);
         options.typeChain?.push(new TypeChainEntry(this.name?.text, result, this.range));
         if (result || options.flags & SymbolTypeFlags.typetime) {
             // All types should be known at typetime
@@ -915,19 +914,10 @@ export class VariableExpression extends Expression {
 
     getType(options: GetTypeOptions) {
         let resultType: BscType = util.tokenToBscType(this.name);
-        const symbolTable = this.getSymbolTable();
         const nameKey = this.name.text;
-        let setNewCacheValue = false;
         if (!resultType) {
-            resultType = symbolTable.getCachedType(nameKey, options);
-            if (!resultType) {
-                resultType = getUniqueType(symbolTable.getSymbolTypes(nameKey, options.flags)) ??
-                    new ReferenceType(nameKey, nameKey, options.flags, () => this.getSymbolTable(), options.cacheVerifierProvider);
-                setNewCacheValue = true;
-            }
-        }
-        if (setNewCacheValue) {
-            symbolTable.setCachedType(nameKey, resultType, options);
+            const symbolTable = this.getSymbolTable();
+            resultType = symbolTable.getSymbolType(nameKey, { ...options, fullName: nameKey, tableProvider: () => this.getSymbolTable() });
         }
         options.typeChain?.push(new TypeChainEntry(nameKey, resultType, this.range));
         return resultType;

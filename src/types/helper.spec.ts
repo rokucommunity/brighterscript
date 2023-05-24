@@ -6,7 +6,7 @@ import { DynamicType } from './DynamicType';
 import { FloatType } from './FloatType';
 import { IntegerType } from './IntegerType';
 import { StringType } from './StringType';
-import { UnionType } from './UnionType';
+import { UnionType, unionTypeFactory } from './UnionType';
 import { findTypeIntersection, findTypeUnion, getUniqueType, getUniqueTypesFromArray } from './helpers';
 import { InterfaceType } from './InterfaceType';
 import { SymbolTypeFlags } from '../SymbolTable';
@@ -92,28 +92,28 @@ describe('getUniqueTypesFromArray', () => {
 describe('getUniqueType', () => {
 
     it('should return a single type if only one is given', () => {
-        expectTypeToBe(getUniqueType([IntegerType.instance]), IntegerType);
+        expectTypeToBe(getUniqueType([IntegerType.instance], unionTypeFactory), IntegerType);
     });
 
     it('should return a single type if all types are the same', () => {
-        expectTypeToBe(getUniqueType([IntegerType.instance, IntegerType.instance, IntegerType.instance]), IntegerType);
+        expectTypeToBe(getUniqueType([IntegerType.instance, IntegerType.instance, IntegerType.instance], unionTypeFactory), IntegerType);
     });
 
     it('should return dynamic if dynamic is included', () => {
-        expectTypeToBe(getUniqueType([IntegerType.instance, DynamicType.instance, StringType.instance]), DynamicType);
+        expectTypeToBe(getUniqueType([IntegerType.instance, DynamicType.instance, StringType.instance], unionTypeFactory), DynamicType);
     });
 
     it('should return the most general type of all types inputed', () => {
         const superKlassType = new ClassType('Super');
         const subKlassType = new ClassType('Sub', superKlassType);
-        expect(getUniqueType([subKlassType, superKlassType]).toString()).to.eq('Super');
-        expect(getUniqueType([subKlassType, subKlassType]).toString()).to.eq('Sub');
-        expect(getUniqueType([superKlassType, subKlassType]).toString()).to.eq('Super');
-        expect(getUniqueType([subKlassType, superKlassType, subKlassType]).toString()).to.eq('Super');
+        expect(getUniqueType([subKlassType, superKlassType], unionTypeFactory).toString()).to.eq('Super');
+        expect(getUniqueType([subKlassType, subKlassType], unionTypeFactory).toString()).to.eq('Sub');
+        expect(getUniqueType([superKlassType, subKlassType], unionTypeFactory).toString()).to.eq('Super');
+        expect(getUniqueType([subKlassType, superKlassType, subKlassType], unionTypeFactory).toString()).to.eq('Super');
     });
 
     it('should return a union type of unique types', () => {
-        const resultType = getUniqueType([IntegerType.instance, StringType.instance, IntegerType.instance, FloatType.instance]);
+        const resultType = getUniqueType([IntegerType.instance, StringType.instance, IntegerType.instance, FloatType.instance], unionTypeFactory);
         expectTypeToBe(resultType, UnionType);
         if (isUnionType(resultType)) {
             expect(resultType.types.length).to.eq(3);
@@ -139,7 +139,7 @@ describe('getUniqueType', () => {
         expect(iface2.isTypeCompatible(iface1)).to.be.true;
         expect(iface1.isEqual(iface2)).to.be.false;
 
-        const resultType = getUniqueType([iface1, iface2]);
+        const resultType = getUniqueType([iface1, iface2], unionTypeFactory);
         expectTypeToBe(resultType, UnionType);
         if (isUnionType(resultType)) {
             expect(resultType.types.length).to.eq(2);

@@ -1,8 +1,12 @@
-import type { SymbolTypeFlags } from '../SymbolTable';
+import type { GetTypeOptions } from '../interfaces';
 import { isDynamicType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
-import { findTypeUnion } from './helpers';
+import { findTypeUnion, getUniqueType } from './helpers';
+
+export function unionTypeFactory(types: BscType[]) {
+    return new UnionType(types);
+}
 
 export class UnionType extends BscType {
     constructor(
@@ -15,26 +19,33 @@ export class UnionType extends BscType {
         this.types.push(type);
     }
 
-    private getMemberTypesFromInnerTypes(name: string, flags: SymbolTypeFlags) {
-        return this.types.map((innerType) => innerType?.getMemberTypes(name, flags));
+    isResolvable(): boolean {
+        for (const type of this.types) {
+            if (!type.isResolvable()) {
+                return false;
+            }
+        }
+        return true;
     }
 
-    getMemberTypes(name: string, flags: SymbolTypeFlags) {
-        const innerTypesMemberTypes = this.getMemberTypesFromInnerTypes(name, flags);
+    private getMemberTypeFromInnerTypes(name: string, options: GetTypeOptions) {
+        return this.types.map((innerType) => innerType?.getMemberType(name, options));
+    }
+
+    getMemberType(name: string, options: GetTypeOptions) {
+        const innerTypesMemberTypes = this.getMemberTypeFromInnerTypes(name, options);
         if (!innerTypesMemberTypes) {
             // We don't have any members of any inner types that match
             // so instead, create reference type that will
-            return [new ReferenceType(name, name, flags, () => {
+            return new ReferenceType(name, name, options.flags, () => {
                 return {
-                    getSymbolTypes: (innerName: string, innerFlags: SymbolTypeFlags) => {
-                        return findTypeUnion(...this.getMemberTypesFromInnerTypes(name, flags));
-                    },
-                    getCachedType: (name, options) => this.memberTable.getCachedType(name, options),
-                    setCachedType: (name, type, options) => this.memberTable.setCachedType(name, type, options)
+                    getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
+                        return getUniqueType(findTypeUnion(this.getMemberTypeFromInnerTypes(name, options)), unionTypeFactory);
+                    }
                 };
-            })];
+            });
         }
-        return findTypeUnion(...innerTypesMemberTypes);
+        return getUniqueType(findTypeUnion(innerTypesMemberTypes), unionTypeFactory);
     }
 
     isTypeCompatible(targetType: BscType): boolean {

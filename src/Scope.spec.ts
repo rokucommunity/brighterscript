@@ -19,7 +19,6 @@ import { StringType } from './types/StringType';
 import { IntegerType } from './types/IntegerType';
 import { DynamicType } from './types/DynamicType';
 import { ObjectType } from './types/ObjectType';
-import { getUniqueType } from './types/helpers';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -2185,9 +2184,11 @@ describe('Scope', () => {
             expect(sourceScope).to.exist;
             expect(mainFnScope).to.exist;
             sourceScope.linkSymbolTable();
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type, ClassType);
-            expect(mainFnScope.symbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Foo');
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('myNum', SymbolTypeFlags.runtime)[0].type, IntegerType);
+            const mainSymbolTable = mainFnScope.symbolTable;
+            expectTypeToBe(mainSymbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type, ClassType);
+            expect(mainSymbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Foo');
+            let myNumType = mainSymbolTable.getSymbolType('myNum', { flags: SymbolTypeFlags.runtime });
+            expectTypeToBe(myNumType, IntegerType);
         });
 
         it('finds correct parameter type with default value enums are used', () => {
@@ -2235,8 +2236,10 @@ describe('Scope', () => {
             const sourceScope = program.getScopeByName('source');
             expect(sourceScope).to.exist;
             expect(mainFnScope).to.exist;
-            sourceScope.linkSymbolTable();
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('paintColor', SymbolTypeFlags.runtime)[0].type, EnumMemberType);
+            //sourceScope.linkSymbolTable();
+            let mainScopeSymbolTable = mainFnScope.symbolTable;
+            let paintType = mainScopeSymbolTable.getSymbolType('paintColor', { flags: SymbolTypeFlags.runtime });
+            expectTypeToBe(paintType, EnumMemberType);
         });
 
 
@@ -2322,9 +2325,10 @@ describe('Scope', () => {
             expect(sourceScope).to.exist;
             sourceScope.linkSymbolTable();
             expect(mainFnScope).to.exist;
-            let dtType = getUniqueType(mainFnScope.symbolTable.getSymbolTypes('dt', SymbolTypeFlags.runtime));
+            const getTypeOptions = { flags: SymbolTypeFlags.runtime };
+            let dtType = mainFnScope.symbolTable.getSymbolType('dt', getTypeOptions);
             expectTypeToBe(dtType, ObjectType);
-            let hoursType = getUniqueType(mainFnScope.symbolTable.getSymbolTypes('hours', SymbolTypeFlags.runtime));
+            let hoursType = mainFnScope.symbolTable.getSymbolType('hours', getTypeOptions);
             expectTypeToBe(hoursType, DynamicType);
         });
 
@@ -2354,7 +2358,8 @@ describe('Scope', () => {
                 expect(sourceScope).to.exist;
                 sourceScope.linkSymbolTable();
                 expect(mainFnScope).to.exist;
-                expectTypeToBe(mainFnScope.symbolTable.getSymbol('name', SymbolTypeFlags.runtime)[0].type, StringType);
+                const mainSymbolTable = mainFnScope.symbolTable;
+                expectTypeToBe(mainSymbolTable.getSymbolType('name', { flags: SymbolTypeFlags.runtime }), StringType);
             });
 
             it('should have an error when a non union member is accessed', () => {

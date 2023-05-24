@@ -1229,7 +1229,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         }
     }
 
-    getType() {
+    getType(options: GetTypeOptions) {
         const resultType = new NamespaceType(this.name);
         resultType.pushMemberProvider(() => this.body.getSymbolTable());
         return resultType;
