@@ -130,9 +130,7 @@ export class ReferenceType extends BscType {
                 if (!innerType) {
                     innerType = DynamicType.instance;
                 }
-                //this.referenceChain.add(innerType);
                 const result = Reflect.get(innerType, propName, innerType);
-                //this.referenceChain.clear();
                 return result;
             },
             set: (target, name, value, receiver) => {
