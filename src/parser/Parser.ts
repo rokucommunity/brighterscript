@@ -83,6 +83,7 @@ import {
     TemplateStringExpression,
     TemplateStringQuasiExpression,
     TernaryExpression,
+    TypeCastExpression,
     TypeExpression,
     UnaryExpression,
     VariableExpression,
@@ -944,7 +945,7 @@ export class Parser {
         // parse argument default value
         if ((equalToken = this.consumeTokenIf(TokenKind.Equal))) {
             // it seems any expression is allowed here -- including ones that operate on other arguments!
-            defaultValue = this.expression();
+            defaultValue = this.expression(false);
         }
 
         let asToken: Token = null;
@@ -2210,8 +2211,26 @@ export class Parser {
         this.pendingAnnotations = parentAnnotations;
     }
 
-    private expression(): Expression {
-        const expression = this.anonymousFunction();
+    private expression(findTypeCast = true): Expression {
+        let expression = this.anonymousFunction();
+        let asToken: Token;
+        let typeExpression: TypeExpression;
+        if (findTypeCast) {
+            do {
+                if (this.check(TokenKind.As)) {
+                    // Check if this expression is wrapped in any type casts
+                    // allows for multiple casts:
+                    // myVal = foo() as dynamic as string
+                    [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
+                    if (asToken && typeExpression) {
+                        expression = new TypeCastExpression(expression, asToken, typeExpression);
+                    }
+                } else {
+                    break;
+                }
+
+            } while (asToken && typeExpression);
+        }
         this._references.expressions.add(expression);
         return expression;
     }
