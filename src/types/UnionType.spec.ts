@@ -66,7 +66,7 @@ describe('UnionType', () => {
         expect(myUnion.toString()).to.eq('float or string or boolean or SomeIface');
     });
 
-    describe('getMemberTypes', () => {
+    describe('getMemberType', () => {
         it('will find the union of inner types', () => {
             const iFace1 = new InterfaceType('iFace1');
             iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlags.typetime);
@@ -80,14 +80,14 @@ describe('UnionType', () => {
 
             const myUnion = new UnionType([iFace1, iFace2]);
 
-            const ageTypes = myUnion.getMemberTypes('age', SymbolTypeFlags.typetime);
-            expect(ageTypes.length).to.be.eq(1);
-            expectTypeToBe(ageTypes[0], IntegerType);
-            const nameTypes = myUnion.getMemberTypes('name', SymbolTypeFlags.typetime);
-            expect(nameTypes.length).to.be.eq(1);
-            expectTypeToBe(nameTypes[0], StringType);
-            const heightTypes = myUnion.getMemberTypes('height', SymbolTypeFlags.typetime);
-            expect(heightTypes.length).to.be.eq(2);
+            const options = { flags: SymbolTypeFlags.typetime };
+            const ageType = myUnion.getMemberType('age', options);
+            expectTypeToBe(ageType, IntegerType);
+            const nameType = myUnion.getMemberType('name', options);
+            expectTypeToBe(nameType, StringType);
+            const heightType = myUnion.getMemberType('height', options);
+            expectTypeToBe(heightType, UnionType);
+            const heightTypes = (heightType as UnionType).types;
             expect(heightTypes).to.include(FloatType.instance);
             expect(heightTypes).to.include(StringType.instance);
         });
@@ -104,8 +104,10 @@ describe('UnionType', () => {
             iFace2.addMember('name', null, StringType.instance, SymbolTypeFlags.typetime);
 
             const myUnion = new UnionType([iFace1, iFace2]);
-            const heightTypes1 = myUnion.getMemberTypes('height', SymbolTypeFlags.typetime);
-
+            const options = { flags: SymbolTypeFlags.typetime };
+            const heightType1 = myUnion.getMemberType('height', options);
+            expectTypeToBe(heightType1, UnionType);
+            const heightTypes1 = (heightType1 as UnionType).types;
             expect(heightTypes1.length).to.eq(2);
             expectTypeToBe(heightTypes1[0], FloatType);
             // height does not exist in iFace2
@@ -113,11 +115,8 @@ describe('UnionType', () => {
             expect(heightTypes1[1].isResolvable()).to.be.false;
 
             iFace2.addMember('height', null, FloatType.instance, SymbolTypeFlags.typetime);
-            const heightTypes2 = myUnion.getMemberTypes('height', SymbolTypeFlags.typetime);
-            // now height does exist in iFace2
-            expect(heightTypes2).to.exist;
-            expect(heightTypes2.length).to.eq(1);
-            expectTypeToBe(heightTypes2[0], FloatType);
+            const heightType2 = myUnion.getMemberType('height', options);
+            expectTypeToBe(heightType2, FloatType);
         });
     });
 });

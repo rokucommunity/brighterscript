@@ -26,6 +26,7 @@ import type { NamespaceType } from '../types/NameSpaceType';
 import type { UnionType } from '../types/UnionType';
 import type { UninitializedType } from '../types/UninitializedType';
 import type { ArrayType } from '../types/ArrayType';
+import type { InheritableType } from '../types/InheritableType';
 
 // File reflection
 
@@ -333,6 +334,10 @@ export function isUninitializedType(e: any): e is UninitializedType {
 }
 export function isArrayType(e: any): e is ArrayType {
     return e?.constructor.name === 'ArrayType';
+}
+
+export function isInheritableType(target): target is InheritableType {
+    return isClassType(target) || isInterfaceType(target);
 }
 
 const numberConstructorNames = [

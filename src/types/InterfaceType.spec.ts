@@ -168,7 +168,7 @@ describe('InterfaceType', () => {
             });
         });
 
-        it('accepts with target member having dyanmic prop type', () => {
+        it('accepts with target member having dynamic prop type', () => {
             expectCompatible({
                 parent: iface({
                     name: new StringType(),

@@ -31,7 +31,7 @@ import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import { IntegerType } from './types/IntegerType';
 import { StringType } from './types/StringType';
-import { SymbolTypeFlags } from './SymbolTable';
+import { SymbolTable, SymbolTypeFlags } from './SymbolTable';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -40,6 +40,9 @@ import { FunctionType } from './types/FunctionType';
 import { LongIntegerType } from './types/LongIntegerType';
 import { ObjectType } from './types/ObjectType';
 import { VoidType } from './types/VoidType';
+import { CacheVerifier } from './CacheVerifier';
+import { referenceTypeFactory } from './types/ReferenceType';
+import { unionTypeFactory } from './types/UnionType';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
@@ -90,6 +93,8 @@ export class Program {
 
     public logger: Logger;
 
+    public typeCacheVerifier = new CacheVerifier();
+
     private createGlobalScope() {
         //create the 'global' scope
         this.globalScope = new Scope('global', this, 'scope:global');
@@ -105,6 +110,11 @@ export class Program {
         this.globalScope.getDiagnostics = () => [];
         //TODO we might need to fix this because the isValidated clears stuff now
         (this.globalScope as any).isValidated = true;
+
+        // Adds a factory to SymbolTable so it can create ReferenceTypes
+        SymbolTable.ReferenceTypeFactory = referenceTypeFactory;
+        SymbolTable.cacheVerifier = this.typeCacheVerifier;
+        SymbolTable.UnionTypeFactory = unionTypeFactory;
     }
 
     /**

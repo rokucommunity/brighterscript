@@ -51,25 +51,28 @@ describe('ReferenceType', () => {
         expect(ref.toString()).to.eq('SomeKlass');
     });
 
-    it('catches circular references', () => {
-        const table = new SymbolTable('test');
-        const ref = new ReferenceType('someVar', 'someVar', runtimeFlag, () => table);
-        table.addSymbol('someVar', null, ref, SymbolTypeFlags.runtime);
-        expectTypeToBe(ref, DynamicType);
-    });
+    describe('circular references', () => {
+        it('catches circular references', () => {
+            const table = new SymbolTable('test');
+            const ref = new ReferenceType('someVar', 'someVar', runtimeFlag, () => table);
+            table.addSymbol('someVar', null, ref, SymbolTypeFlags.runtime);
+            expectTypeToBe(ref, DynamicType);
+        });
 
 
-    it('catches circular references of many levels', () => {
-        const table = new SymbolTable('test');
-        const ref1 = new ReferenceType('someVar1', 'someVar1', runtimeFlag, () => table);
-        const ref2 = new ReferenceType('someVar2', 'someVar2', runtimeFlag, () => table);
-        const ref3 = new ReferenceType('someVar3', 'someVar3', runtimeFlag, () => table);
-        table.addSymbol('someVar0', null, ref1, SymbolTypeFlags.runtime);
-        table.addSymbol('someVar1', null, ref2, SymbolTypeFlags.runtime);
-        table.addSymbol('someVar2', null, ref3, SymbolTypeFlags.runtime);
-        table.addSymbol('someVar3', null, ref1, SymbolTypeFlags.runtime);
-        expectTypeToBe(table.getSymbol('someVar0', SymbolTypeFlags.runtime)[0].type, DynamicType);
+        it('catches circular references of many levels', () => {
+            const table = new SymbolTable('test');
+            const ref1 = new ReferenceType('someVar1', 'someVar1', runtimeFlag, () => table);
+            const ref2 = new ReferenceType('someVar2', 'someVar2', runtimeFlag, () => table);
+            const ref3 = new ReferenceType('someVar3', 'someVar3', runtimeFlag, () => table);
+            table.addSymbol('someVar0', null, ref1, SymbolTypeFlags.runtime);
+            table.addSymbol('someVar1', null, ref2, SymbolTypeFlags.runtime);
+            table.addSymbol('someVar2', null, ref3, SymbolTypeFlags.runtime);
+            table.addSymbol('someVar3', null, ref1, SymbolTypeFlags.runtime);
+            expectTypeToBe(table.getSymbol('someVar0', SymbolTypeFlags.runtime)[0].type, DynamicType);
+        });
     });
+
 });
 
 describe('PropertyReferenceType', () => {
@@ -102,9 +105,9 @@ describe('PropertyReferenceType', () => {
         const table = new SymbolTable('test');
         const fnRef = new ReferenceType('someFunc', 'someFunc', runtimeFlag, () => table);
         const returnRef = new TypePropertyReferenceType(fnRef, 'returnType');
-        const returnPropRef = returnRef.getMemberTypes('myNum', SymbolTypeFlags.runtime);
+        const returnPropRef = returnRef.getMemberType('myNum', { flags: SymbolTypeFlags.runtime });
         // `ref` will resolve to DynamicType, and its returnType is DynamicType.Instance
-        expectTypeToBe(returnPropRef[0], DynamicType);
+        expectTypeToBe(returnPropRef, DynamicType);
 
         // Set fnRef to resolve to a function that returns a complex type
         const klassType = new ClassType('Klass');
@@ -114,7 +117,7 @@ describe('PropertyReferenceType', () => {
         // returnPropRef = someFunc().myNum
         expectTypeToBe(fnRef, FunctionType);
         expectTypeToBe(returnRef, ClassType);
-        expectTypeToBe(returnPropRef[0], IntegerType);
+        expectTypeToBe(returnPropRef, IntegerType);
     });
 
 

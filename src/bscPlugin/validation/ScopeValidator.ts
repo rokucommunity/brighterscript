@@ -121,8 +121,7 @@ export class ScopeValidator {
                 const typeChain = [];
                 let exprType = info.expression.getType({
                     flags: symbolType,
-                    typeChain: typeChain,
-                    cacheVerifierProvider: () => scope.typeCacheVerifier
+                    typeChain: typeChain
                 });
 
                 if (!exprType || !exprType.isResolvable()) {

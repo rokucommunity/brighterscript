@@ -1,7 +1,6 @@
-import type { SymbolTypeFlags } from '../SymbolTable';
 import { isNamespaceType } from '../astUtils/reflection';
+import type { GetTypeOptions } from '../interfaces';
 import { BscType } from './BscType';
-import { ReferenceType } from './ReferenceType';
 
 export class NamespaceType extends BscType {
 
@@ -13,8 +12,9 @@ export class NamespaceType extends BscType {
         return this.name;
     }
 
-    getMemberTypes(name: string, flags: SymbolTypeFlags) {
-        return super.getMemberTypes(name, flags) ?? [new ReferenceType(name, this.toString() + '.' + name, flags, () => this.memberTable)];
+    getMemberType(name: string, options: GetTypeOptions) {
+        const fullName = this.toString() + '.' + name;
+        return super.getMemberType(name, { ...options, fullName: fullName, tableProvider: () => this.memberTable });
     }
 
     isEqual(targetType: BscType): boolean {

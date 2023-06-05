@@ -1,7 +1,5 @@
-import { isDynamicType } from '../astUtils/reflection';
+import { isDynamicType, isInheritableType, isReferenceType, isUnionType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
-import { isInheritableType } from './InheritableType';
-import { UnionType } from './UnionType';
 
 export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[]) {
     if (!typesArr1 || !typesArr2) {
@@ -66,7 +64,7 @@ export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
         // only one type after filtering
         return [uniqueTypes[0].type];
     }
-    const existingDynamicType = uniqueTypes.find(t => isDynamicType(t.type));
+    const existingDynamicType = uniqueTypes.find(t => !isReferenceType(t.type) && isDynamicType(t.type));
     if (existingDynamicType) {
         // If it includes dynamic, then the result is dynamic
         return [existingDynamicType.type];
@@ -115,7 +113,13 @@ export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
  * @param types array of types
  * @returns either the singular most general type, if there is one, otherwise a UnionType of the most general types
  */
-export function getUniqueType(types: BscType[]): BscType {
+export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscType[]) => BscType): BscType {
+    types = types?.map(type => {
+        if (!isReferenceType(type) && isUnionType(type)) {
+            return type.types;
+        }
+        return type;
+    }).flat();
     const generalizedTypes = reduceTypesToMostGeneric(types);
     if (!generalizedTypes || generalizedTypes.length === 0) {
         return undefined;
@@ -124,5 +128,5 @@ export function getUniqueType(types: BscType[]): BscType {
         // only one type
         return generalizedTypes[0];
     }
-    return new UnionType(generalizedTypes);
+    return unionTypeFactory(generalizedTypes);
 }

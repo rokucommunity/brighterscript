@@ -1,4 +1,4 @@
-import type { SymbolTypeFlags } from '../SymbolTable';
+import type { GetTypeOptions } from '../interfaces';
 import { isDynamicType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 
@@ -40,8 +40,8 @@ export class DynamicType extends BscType {
         return isDynamicType(targetType);
     }
 
-    getMemberTypes(memberName: string, flags: SymbolTypeFlags) {
-        return [DynamicType.instance];
+    getMemberType(memberName: string, options: GetTypeOptions) {
+        return DynamicType.instance;
     }
 }
 
