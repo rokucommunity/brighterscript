@@ -1,7 +1,7 @@
-import type { SymbolTableProvider } from '../SymbolTable';
-import { SymbolTable } from '../SymbolTable';
+import type { GetSymbolTypeOptions, SymbolTableProvider } from '../SymbolTable';
 import type { Range } from 'vscode-languageserver';
 import type { SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTable } from '../SymbolTable';
 
 export abstract class BscType {
 
@@ -25,8 +25,8 @@ export abstract class BscType {
         this.memberTable.addSymbol(name, range, type, flags);
     }
 
-    getMemberTypes(name: string, flags: SymbolTypeFlags) {
-        return this.memberTable.getSymbolTypes(name, flags);
+    getMemberType(name: string, options: GetSymbolTypeOptions) {
+        return this.memberTable.getSymbolType(name, options);
     }
 
     isResolvable(): boolean {
@@ -65,7 +65,7 @@ export abstract class BscType {
         let isSuperSet = true;
         const targetSymbols = targetType.memberTable?.getAllSymbols(flags);
         for (const targetSymbol of targetSymbols) {
-            const myTypesOfTargetSymbol = this.getMemberTypes(targetSymbol.name, flags);
+            const myTypesOfTargetSymbol = this.memberTable.getSymbolTypes(targetSymbol.name, flags);
             isSuperSet = isSuperSet && myTypesOfTargetSymbol && myTypesOfTargetSymbol.length > 0 &&
                 myTypesOfTargetSymbol.reduce((acc, myTypeOfTarget) => {
                     return acc && myTypeOfTarget.isTypeCompatible(targetSymbol.type);

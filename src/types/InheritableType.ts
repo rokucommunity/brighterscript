@@ -1,7 +1,7 @@
-import { SymbolTypeFlags } from '../SymbolTable';
-import { isClassType, isInterfaceType } from '../astUtils/reflection';
+import type { GetTypeOptions } from '../interfaces';
+import { isInheritableType } from '../astUtils/reflection';
+import type { SymbolTypeFlags } from '../SymbolTable';
 import { BscType } from './BscType';
-import { ReferenceType } from './ReferenceType';
 
 export abstract class InheritableType extends BscType {
 
@@ -12,8 +12,8 @@ export abstract class InheritableType extends BscType {
         }
     }
 
-    getMemberTypes(memberName: string, flags: SymbolTypeFlags) {
-        return super.getMemberTypes(memberName, flags) ?? [new ReferenceType(memberName, memberName, flags, () => this.memberTable)];
+    getMemberType(memberName: string, options: GetTypeOptions) {
+        return super.getMemberType(memberName, { ...options, fullName: memberName, tableProvider: () => this.memberTable });
     }
 
     public toString() {
@@ -73,7 +73,7 @@ export abstract class InheritableType extends BscType {
      */
     private toJSString() {
         // eslint-disable-next-line no-bitwise
-        const flags = SymbolTypeFlags.runtime | SymbolTypeFlags.typetime;
+        const flags = 3 as SymbolTypeFlags; //SymbolTypeFlags.runtime | SymbolTypeFlags.typetime;
         let result = '{';
         const memberSymbols = (this.memberTable?.getAllSymbols(flags) || []).sort((a, b) => a.name.localeCompare(b.name));
         for (const symbol of memberSymbols) {
@@ -90,6 +90,3 @@ export abstract class InheritableType extends BscType {
     }
 }
 
-export function isInheritableType(target): target is InheritableType {
-    return isClassType(target) || isInterfaceType(target);
-}

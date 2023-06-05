@@ -6,7 +6,6 @@ import { expectTypeToBe } from '../testHelpers.spec';
 import { ReferenceType } from './ReferenceType';
 import { isReferenceType } from '../astUtils/reflection';
 import { IntegerType } from './IntegerType';
-import { getUniqueType } from './helpers';
 import { SymbolTypeFlags } from '../SymbolTable';
 
 describe('ClassType', () => {
@@ -43,7 +42,7 @@ describe('ClassType', () => {
         const superKlass = new ClassType('SuperKlass');
         superKlass.addMember('title', null, StringType.instance, SymbolTypeFlags.runtime);
         const subKlass = new ClassType('SubKlass', superKlass);
-        expectTypeToBe(getUniqueType(subKlass.getMemberTypes('title', SymbolTypeFlags.runtime)), StringType);
+        expectTypeToBe(subKlass.getMemberType('title', { flags: SymbolTypeFlags.runtime }), StringType);
     });
 
     it('allow ReferenceTypes as super classes', () => {
@@ -61,7 +60,7 @@ describe('ClassType', () => {
         const futureSuperKlass = new ReferenceType('SuperKlass', 'SuperKlass', SymbolTypeFlags.typetime, () => myTable);
         const subKlass = new ClassType('SubKlass', futureSuperKlass);
         expect(subKlass.isResolvable()).to.be.false;
-        const futureTitleType = getUniqueType(subKlass.getMemberTypes('title', SymbolTypeFlags.runtime));
+        const futureTitleType = subKlass.getMemberType('title', { flags: SymbolTypeFlags.runtime });
         expect(isReferenceType(futureTitleType)).to.be.true;
         expect(futureTitleType.isResolvable()).to.be.false;
         const superKlass = new ClassType('SuperKlass');
