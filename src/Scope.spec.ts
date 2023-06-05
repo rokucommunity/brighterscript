@@ -19,7 +19,6 @@ import { StringType } from './types/StringType';
 import { IntegerType } from './types/IntegerType';
 import { DynamicType } from './types/DynamicType';
 import { ObjectType } from './types/ObjectType';
-import { getUniqueType } from './types/helpers';
 import { FloatType } from './types/FloatType';
 
 describe('Scope', () => {
