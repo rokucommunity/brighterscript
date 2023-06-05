@@ -1671,3 +1671,35 @@ export class TypeExpression extends Expression implements TypedefProvider {
     }
 
 }
+
+
+export class TypeCastExpression extends Expression {
+    constructor(
+        public obj: Expression,
+        public asToken?: Token,
+        public typeExpression?: TypeExpression
+    ) {
+        super();
+        this.range = util.createBoundingRange(
+            this.obj,
+            this.asToken,
+            this.typeExpression
+        );
+    }
+
+    public range: Range;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return this.obj.transpile(state);
+    }
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'obj', visitor, options);
+            walk(this, 'typeExpression', visitor, options);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        return this.typeExpression.getType(options);
+    }
+}

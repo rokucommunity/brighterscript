@@ -19,6 +19,7 @@ import { StringType } from './types/StringType';
 import { IntegerType } from './types/IntegerType';
 import { DynamicType } from './types/DynamicType';
 import { ObjectType } from './types/ObjectType';
+import { FloatType } from './types/FloatType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -2389,6 +2390,43 @@ describe('Scope', () => {
                 expect(mainFnScope).to.exist;
             });
 
+        });
+
+        describe('type casts', () => {
+            it('should use type casts to determine the types of symbols', () => {
+                const mainFile = program.setFile('source/main.bs', `
+                    sub main(thing)
+                        value = thing as float
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                sourceScope.linkSymbolTable();
+                let mainSymbolTable = mainFnScope.symbolTable;
+                expectTypeToBe(mainSymbolTable.getSymbol('value', SymbolTypeFlags.runtime)[0].type, FloatType);
+            });
+
+
+            it('should allow type casts in dotted get statements', () => {
+                const mainFile = program.setFile('source/main.bs', `
+                    sub main(thing)
+                        value = (thing as MyThing).name
+                    end sub
+
+                    interface MyThing
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                sourceScope.linkSymbolTable();
+                let mainSymbolTable = mainFnScope.symbolTable;
+                expectTypeToBe(mainSymbolTable.getSymbol('value', SymbolTypeFlags.runtime)[0].type, StringType);
+            });
         });
     });
 });
