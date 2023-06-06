@@ -42,7 +42,7 @@ describe('XmlFile', () => {
                 name: 'allows modifying the parsed XML model',
                 afterFileParse: (file) => {
                     if (isXmlFile(file) && file.parser.ast.root?.attributes?.[0]?.value) {
-                        file.parser.ast.root.attributes[0].value.text = expected;
+                        file.parser.ast.root.attributes[0].value = expected;
                     }
                 }
             });
@@ -59,13 +59,13 @@ describe('XmlFile', () => {
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
                 afterFileParse: () => {
-                    let child = file.parser.ast.component.children.children[0];
+                    let child = file.parser.ast.component.children.childNodes[0];
                     expect(child.attributes).to.have.lengthOf(4);
-                    child.setAttribute('text', undefined);
-                    expect(child.getAttribute('id').value.text).to.equal('one');
+                    child.setAttributeValue('text', undefined);
+                    expect(child.getAttribute('id').value).to.equal('one');
                     expect(child.attributes).to.have.lengthOf(3);
-                    child.setAttribute('text3', undefined);
-                    expect(child.getAttribute('id').value.text).to.equal('one');
+                    child.setAttributeValue('text3', undefined);
+                    expect(child.getAttribute('id').value).to.equal('one');
                     expect(child.attributes).to.have.lengthOf(2);
                 }
             });
@@ -631,11 +631,11 @@ describe('XmlFile', () => {
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="MainScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    <customization resumehandler="customResume" />
+                    <customization suspendhandler="customSuspend" />
                     <children>
                         <Rectangle width="1920" height="1080" />
                     </children>
-                    <customization resumehandler="customResume" />
-                    <customization suspendhandler="customSuspend" />
                 </component>
             `);
         });
@@ -751,6 +751,62 @@ describe('XmlFile', () => {
                     fsExtra.readFileSync(`${stagingDir}/components/SimpleScene.xml`).toString()
                 )
             ).to.eql(expected);
+        });
+
+        it('injects new scripts near existing scripts', () => {
+            program.setFile(`components/SimpleScene.bs`, `
+                sub b()
+                end sub
+            `);
+
+            testTranspile(trim`
+                <component name="SimpleScene" extends="group">
+                    <script type="text/brightscript" uri="SimpleScene.bs"/>
+                    <children>
+                        <aa id="aa">
+                            <bb id="bb" />
+                        </aa>
+                    </children>
+                </component>
+            `, trim`
+                <component name="SimpleScene" extends="group">
+                    <script type="text/brightscript" uri="SimpleScene.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    <children>
+                        <aa id="aa">
+                            <bb id="bb" />
+                        </aa>
+                    </children>
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
+        });
+
+        it('injects new scripts at top of component when no scripts were present', () => {
+            program.setFile(`components/SimpleScene.bs`, `
+                sub b()
+                end sub
+            `);
+            program.options.autoImportComponentScript = true;
+
+            testTranspile(trim`
+                <component name="SimpleScene" extends="group">
+                    <children>
+                        <aa id="aa">
+                            <bb id="bb" />
+                        </aa>
+                    </children>
+                </component>
+            `, trim`
+                <component name="SimpleScene" extends="group">
+                    <script type="text/brightscript" uri="pkg:/components/SimpleScene.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    <children>
+                        <aa id="aa">
+                            <bb id="bb" />
+                        </aa>
+                    </children>
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
         });
 
         it('keeps all content of the XML', () => {

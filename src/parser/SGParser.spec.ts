@@ -1,7 +1,7 @@
 import { expect } from '../chai-config.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { expectZeroDiagnostics, trim } from '../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import SGParser from './SGParser';
 import { createSandbox } from 'sinon';
 import { Program } from '../Program';
@@ -12,17 +12,23 @@ let sinon = createSandbox();
 describe('SGParser', () => {
 
     let program: Program;
+    const testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
         program = new Program({ rootDir: rootDir, sourceMap: false });
     });
+
     afterEach(() => {
         sinon.restore();
         program.dispose();
     });
 
     it('Parses well formed SG component', () => {
-        const file = program.setFile<XmlFile>('components/file.xml', trim`
+        program.setFile('components/Component1.brs', `
+            sub load()
+            end sub
+        `);
+        const { file } = testTranspile<XmlFile>(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ParentScene" extends="GrandparentScene">
                 <interface>
@@ -44,18 +50,8 @@ describe('SGParser', () => {
                         font="font:MediumBoldSystemFont"
                         />
                 </children>
-            </component>`
-        );
-        const { ast } = file.parser;
-        expect(ast.prolog).to.exist;
-        expect(ast.component).to.exist;
-        expect(ast.root).to.equal(ast.component);
-        expectZeroDiagnostics(file);
-
-        const output = file.transpile();
-        expect(
-            output.code.trimEnd()
-        ).to.equal(trim`
+            </component>
+        `, trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ParentScene" extends="GrandparentScene">
                 <interface>
@@ -73,7 +69,12 @@ describe('SGParser', () => {
                     <Label id="loadingIndicator" text="Loading..." font="font:MediumBoldSystemFont" />
                 </children>
             </component>
-        `);
+        `, undefined, 'components/file.xml');
+
+        const { ast } = file.parser;
+        expect(ast.prolog).to.exist;
+        expect(ast.component).to.exist;
+        expect(ast.root).to.equal(ast.component);
     });
 
     it('does not crash when missing tag name', () => {

@@ -1,4 +1,4 @@
-import type { SGChildren, SGComponent, SGField, SGFunction, SGInterface, SGNode, SGScript, SGTag } from '../parser/SGTypes';
+import type { SGChildren, SGComponent, SGInterfaceField, SGInterfaceFunction, SGInterface, SGNode, SGScript, SGTag } from '../parser/SGTypes';
 
 export function isSGComponent(tag: SGTag): tag is SGComponent {
     return tag?.constructor.name === 'SGComponent';
@@ -12,15 +12,15 @@ export function isSGScript(tag: SGTag): tag is SGScript {
 export function isSGChildren(tag: SGTag): tag is SGChildren {
     return tag?.constructor.name === 'SGChildren';
 }
-export function isSGField(tag: SGTag): tag is SGField {
+export function isSGInterfaceField(tag: SGTag): tag is SGInterfaceField {
     return tag?.constructor.name === 'SGField';
 }
-export function isSGFunction(tag: SGTag): tag is SGFunction {
+export function isSGInterfaceFunction(tag: SGTag): tag is SGInterfaceFunction {
     return tag?.constructor.name === 'SGFunction';
 }
 export function isSGNode(tag: SGTag): tag is SGNode {
     return tag?.constructor.name === 'SGNode';
 }
 export function isSGCustomization(tag: SGTag): tag is SGNode {
-    return isSGNode(tag) && tag.tag?.text?.toLowerCase() === 'customization';
+    return isSGNode(tag) && tag.tokens.startTagName?.text?.toLowerCase() === 'customization';
 }

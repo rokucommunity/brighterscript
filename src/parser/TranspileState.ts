@@ -84,9 +84,12 @@ export class TranspileState {
     /**
      * Create a SourceNode from a token, accounting for missing range and multi-line text
      */
-    public transpileToken(token: { range?: Range; text: string }) {
+    public transpileToken(token: { range?: Range; text: string }, defaultValue?: string) {
+        if (!token && defaultValue !== undefined) {
+            return new SourceNode(null, null, null, defaultValue);
+        }
         if (!token.range) {
-            return token.text;
+            return new SourceNode(null, null, null, token.text);
         }
         //split multi-line text
         if (token.range.end.line > token.range.start.line) {
