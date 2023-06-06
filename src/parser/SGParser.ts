@@ -4,7 +4,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { Diagnostic } from 'vscode-languageserver';
 import util from '../util';
 import { SGAst, SGProlog, SGChildren, SGComponent, SGInterfaceField, SGInterfaceFunction, SGInterface, SGNode, SGScript, SGAttribute } from './SGTypes';
-import type { SGTag, SGToken, SGReferences } from './SGTypes';
+import type { SGElement, SGToken, SGReferences } from './SGTypes';
 import { isSGComponent } from '../astUtils/xml';
 
 export default class SGParser {
@@ -152,7 +152,7 @@ export default class SGParser {
             );
         }
 
-        let root: SGTag;
+        let root: SGElement;
         if (element.length > 0 && element[0]?.children?.Name) {
             root = this.mapElement(element[0]);
         }
@@ -163,7 +163,7 @@ export default class SGParser {
         };
     }
 
-    mapElement({ children }: ElementCstNode): SGTag {
+    mapElement({ children }: ElementCstNode): SGElement {
         const startTagOpen = this.mapToken(children.OPEN[0]);
         const startTagName = this.mapToken(children.Name[0]);
         const attributes = this.mapAttributes(children.attribute);
@@ -174,7 +174,7 @@ export default class SGParser {
 
         const content = children.content?.[0];
 
-        let childrenContent: SGTag[];
+        let childrenContent: SGElement[];
 
         switch (startTagName.text) {
             case 'component':
@@ -237,12 +237,12 @@ export default class SGParser {
         );
     }
 
-    mapElements(content: ContentCstNode, allow: string[]): SGTag[] {
+    mapElements(content: ContentCstNode, allow: string[]): SGElement[] {
         if (!content) {
             return [];
         }
         const { element } = content.children;
-        const tags: SGTag[] = [];
+        const tags: SGElement[] = [];
         if (element) {
             for (const entry of element) {
                 const name = entry.children.Name?.[0];

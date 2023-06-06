@@ -104,14 +104,14 @@ export class SGAttribute {
     }
 }
 
-export class SGTag {
+export class SGElement {
 
     constructor(
         startTagOpen: SGToken,
         startTagName: SGToken,
         attributes = [] as SGAttribute[],
         startTagClose?: SGToken,
-        childNodes = [] as SGTag[],
+        elements = [] as SGElement[],
         endTagOpen?: SGToken,
         endTagName?: SGToken,
         endTagClose?: SGToken
@@ -120,7 +120,7 @@ export class SGTag {
         this.tokens.startTagName = startTagName;
         this.attributes = attributes;
         this.tokens.startTagClose = startTagClose;
-        this.childNodes = childNodes;
+        this.elements = elements;
         this.tokens.endTagOpen = endTagOpen;
         this.tokens.endTagName = endTagName;
         this.tokens.endTagClose = endTagClose;
@@ -161,7 +161,7 @@ export class SGTag {
     /**
      * The array of direct children AST elements of this AST node
      */
-    public childNodes = [] as SGTag[];
+    public elements = [] as SGElement[];
 
     public get range() {
         if (!this._range) {
@@ -170,7 +170,7 @@ export class SGTag {
                 this.tokens.startTagName,
                 this.attributes?.[this.attributes?.length - 1],
                 this.tokens.startTagClose,
-                this.childNodes?.[this.childNodes?.length - 1],
+                this.elements?.[this.elements?.length - 1],
                 this.tokens.endTagOpen,
                 this.tokens.endTagName,
                 this.tokens.endTagClose
@@ -184,7 +184,7 @@ export class SGTag {
      * Is this a self-closing tag?
      */
     get isSelfClosing() {
-        return !this.tokens.endTagName;
+        return this.tokens.startTagClose && this.tokens.startTagClose?.text !== '>';
     }
 
     get id() {
@@ -197,7 +197,7 @@ export class SGTag {
     /**
      * Get the name of this tag.
      */
-    public get name() {
+    public get tagName() {
         return this.tokens.startTagName?.text;
     }
 
@@ -206,10 +206,10 @@ export class SGTag {
      * This does not step into children's children.
      *
      */
-    public getChildNodesByTagName<T extends SGTag>(tagName: string) {
+    public getElementsByTagName<T extends SGElement>(tagName: string) {
         const result = [] as T[];
         const lowerTagName = tagName.toLowerCase();
-        for (const el of this.childNodes) {
+        for (const el of this.elements) {
             if (el.tokens.startTagName.text.toLowerCase() === lowerTagName) {
                 result.push(el as T);
             }
@@ -220,8 +220,8 @@ export class SGTag {
     /**
      * Add a child to the end of the children array
      */
-    public addChild<T extends SGTag>(tag: T) {
-        this.childNodes.push(tag);
+    public addChild<T extends SGElement>(tag: T) {
+        this.elements.push(tag);
         return tag;
     }
 
@@ -229,10 +229,10 @@ export class SGTag {
      * Remove a child from the children array.
      * @returns true if node was found and removed, false if the node wasn't there and thus nothing was done
      */
-    public removeChild(tag: SGTag) {
-        const idx = this.childNodes.indexOf(tag);
+    public removeChild(tag: SGElement) {
+        const idx = this.elements.indexOf(tag);
         if (idx > -1) {
-            this.childNodes.splice(idx, 1);
+            this.elements.splice(idx, 1);
             return true;
         }
         return false;
@@ -268,19 +268,23 @@ export class SGTag {
      * Set an attribute value by its name. If no attribute exists with this name, it is created
      */
     public setAttributeValue(name: string, value: string) {
-        let attr = this.getAttribute(name);
-        //create an attribute with this name if we don't have one yet
-        if (!attr) {
-            attr = createSGAttribute(name, value);
-            this.attributes.push(
-                attr
-            );
+        if (value === undefined) {
+            this.removeAttribute(name);
+        } else {
+            let attr = this.getAttribute(name);
+            //create an attribute with this name if we don't have one yet
+            if (!attr) {
+                attr = createSGAttribute(name, value);
+                this.attributes.push(
+                    attr
+                );
+            }
+            attr.value = value;
         }
-        attr.value = value;
     }
 
     /**
-     * Remove an attribute by its name
+     * Remove an attribute by its name. DO NOT USE this to edit AST (use ASTEditor)
      * @returns true if an attribute was found and removed. False if no attribute was found
      */
     public removeAttribute(name: string) {
@@ -316,7 +320,7 @@ export class SGTag {
                 state.newline
             ];
             state.blockDepth++;
-            for (const child of this.childNodes) {
+            for (const child of this.elements) {
                 chunks.push(
                     state.indentText,
                     child.transpile(state)
@@ -343,15 +347,15 @@ export class SGTag {
     }
 }
 
-export class SGProlog extends SGTag { }
+export class SGProlog extends SGElement { }
 
-export class SGNode extends SGTag { }
+export class SGNode extends SGElement { }
 
-export class SGChildren extends SGTag { }
+export class SGChildren extends SGElement { }
 
-export class SGCustomization extends SGTag { }
+export class SGCustomization extends SGElement { }
 
-export class SGScript extends SGTag {
+export class SGScript extends SGElement {
 
     public cdata?: SGToken;
 
@@ -417,7 +421,7 @@ export class SGScript extends SGTag {
     }
 }
 
-export class SGInterfaceField extends SGTag {
+export class SGInterfaceField extends SGElement {
 
     get type() {
         return this.getAttributeValue('type');
@@ -453,36 +457,63 @@ export class SGInterfaceField extends SGTag {
     set alwaysNotify(value: string) {
         this.setAttributeValue('alwaysNotify', value);
     }
-    get bscType() {
+
+    /**
+     * Get the `BscType` instance that represents the type for this interface field
+     */
+    getType() {
         return getBscTypeFromSGFieldType(this.type);
     }
 }
 
-export const SGFieldTypes = [
-    'integer', 'int', 'longinteger', 'float', 'string', 'str', 'boolean', 'bool',
-    'vector2d', 'color', 'time', 'uri', 'node', 'floatarray', 'intarray', 'boolarray',
-    'stringarray', 'vector2darray', 'colorarray', 'timearray', 'nodearray', 'assocarray',
-    'array', 'roarray', 'rect2d', 'rect2darray'
-];
+export enum SGFieldType {
+    integer = 'integer',
+    int = 'int',
+    longinteger = 'longinteger',
+    float = 'float',
+    string = 'string',
+    str = 'str',
+    boolean = 'boolean',
+    bool = 'bool',
+    vector2d = 'vector2d',
+    color = 'color',
+    time = 'time',
+    uri = 'uri',
+    node = 'node',
+    floatarray = 'floatarray',
+    intarray = 'intarray',
+    boolarray = 'boolarray',
+    stringarray = 'stringarray',
+    vector2darray = 'vector2darray',
+    colorarray = 'colorarray',
+    timearray = 'timearray',
+    nodearray = 'nodearray',
+    assocarray = 'assocarray',
+    array = 'array',
+    roarray = 'roarray',
+    rect2d = 'rect2d',
+    rect2darray = 'rect2darray'
+}
+export const SGFieldTypes = Object.keys(SGFieldType);
 
 export function getBscTypeFromSGFieldType(sgFieldType: string) {
     switch (sgFieldType) {
-        case 'integer':
-        case 'int': {
+        case SGFieldType.integer:
+        case SGFieldType.int: {
             return new IntegerType();
         }
-        case 'longinteger': {
+        case SGFieldType.longinteger: {
             return new LongIntegerType();
         }
-        case 'float': {
+        case SGFieldType.float: {
             return new FloatType();
         }
-        case 'string':
-        case 'str': {
+        case SGFieldType.string:
+        case SGFieldType.str: {
             return new StringType();
         }
-        case 'boolean':
-        case 'bool': {
+        case SGFieldType.boolean:
+        case SGFieldType.bool: {
             return new BooleanType();
         }
         default: {
@@ -491,7 +522,7 @@ export function getBscTypeFromSGFieldType(sgFieldType: string) {
     }
 }
 
-export class SGInterfaceFunction extends SGTag {
+export class SGInterfaceFunction extends SGElement {
     get name() {
         return this.getAttributeValue('name');
     }
@@ -509,19 +540,19 @@ export class SGInterfaceFunction extends SGTag {
 
 export type SGInterfaceMember = SGInterfaceField | SGInterfaceFunction;
 
-export class SGInterface extends SGTag {
+export class SGInterface extends SGElement {
     public get fields() {
-        return this.getChildNodesByTagName<SGInterfaceField>('field');
+        return this.getElementsByTagName<SGInterfaceField>('field');
     }
 
     public get functions() {
-        return this.getChildNodesByTagName<SGInterfaceFunction>('function');
+        return this.getElementsByTagName<SGInterfaceFunction>('function');
     }
 
     public get members() {
         const result = [] as Array<SGInterfaceMember>;
-        for (const node of this.childNodes) {
-            const tagName = node.name?.toLowerCase();
+        for (const node of this.elements) {
+            const tagName = node.tagName?.toLowerCase();
             if (tagName === 'field' || tagName === 'function') {
                 result.push(node as SGInterfaceMember);
             }
@@ -533,8 +564,8 @@ export class SGInterface extends SGTag {
      * Check if there's an SGField with the specified name
      */
     public hasField(id: string) {
-        for (const node of this.childNodes) {
-            const tagName = node.name?.toLowerCase();
+        for (const node of this.elements) {
+            const tagName = node.tagName?.toLowerCase();
             if (tagName === 'field' && (node as SGInterfaceField).id === id) {
                 return true;
             }
@@ -546,8 +577,8 @@ export class SGInterface extends SGTag {
      * Check if there's an SGFunction with the specified name
      */
     public hasFunction(name: string) {
-        for (const node of this.childNodes) {
-            const tagName = node.name?.toLowerCase();
+        for (const node of this.elements) {
+            const tagName = node.tagName?.toLowerCase();
             if (tagName === 'function' && (node as SGInterfaceFunction).name === name) {
                 return true;
             }
@@ -588,11 +619,10 @@ export class SGInterface extends SGTag {
      * @returns true if a field was found and removed. Returns false if no field was found with that name
      */
     public removeField(id: string) {
-        for (let i = 0; i < this.childNodes.length; i++) {
-            const node = this.childNodes[i];
-            const tagName = node.name?.toLowerCase();
-            if (tagName === 'field' && node.id === id) {
-                this.childNodes.splice(i, 1);
+        for (let i = 0; i < this.elements.length; i++) {
+            const node = this.elements[i];
+            if (node.tagName?.toLowerCase() === 'field' && node.id === id) {
+                this.elements.splice(i, 1);
                 return true;
             }
         }
@@ -603,7 +633,7 @@ export class SGInterface extends SGTag {
      * Get the interface function with the specified name
      */
     public getFunction(name: string) {
-        return this.functions.find(field => field.name === name);
+        return this.functions.find(func => func.name === name);
     }
 
     /**
@@ -624,11 +654,10 @@ export class SGInterface extends SGTag {
      * @returns true if a function was found and removed. Returns false if no function was found with that name
      */
     public removeFunction(name: string) {
-        for (let i = 0; i < this.childNodes.length; i++) {
-            const node = this.childNodes[i];
-            const tagName = node.name?.toLowerCase();
-            if (tagName === 'function' && node.getAttributeValue('name') === name) {
-                this.childNodes.splice(i, 1);
+        for (let i = 0; i < this.elements.length; i++) {
+            const node = this.elements[i];
+            if (node.tagName?.toLowerCase() === 'function' && node.getAttributeValue('name') === name) {
+                this.elements.splice(i, 1);
                 return true;
             }
         }
@@ -636,14 +665,17 @@ export class SGInterface extends SGTag {
     }
 }
 
-export class SGComponent extends SGTag {
+/**
+ * The `<component>` element in SceneGraph. Not to be confused about usages of components like `<Rectangle>`, those are considered `SGNode` instances.
+ */
+export class SGComponent extends SGElement {
 
     /**
      * Get all the <Field> and <Function> elements across all <Interface> nodes in this component
      */
     public get interfaceMembers() {
         const members = [] as Array<SGInterfaceMember>;
-        for (const ifaceNode of this.getChildNodesByTagName<SGInterface>('interface')) {
+        for (const ifaceNode of this.getElementsByTagName<SGInterface>('interface')) {
             members.push(
                 ...ifaceNode.members
             );
@@ -652,27 +684,30 @@ export class SGComponent extends SGTag {
     }
 
     public get scripts() {
-        return this.getChildNodesByTagName<SGScript>('script');
+        return this.getElementsByTagName<SGScript>('script');
     }
 
     /**
-     * Get the <interface> element from this component (if present), or undefined if not
+     * Get the <interface> element from this component (if present), or undefined if not.
+     * NOTE: Roku supports and merges multiple <interface> elements in a component, but this
+     * property points to the FIRST one. If you need to check whether a member exists,
+     * look through `this.interfaceMemebers` instead.
      */
-    public get interface(): SGInterface | undefined {
-        return this.getChildNodesByTagName<SGInterface>('interface')[0];
+    public get interfaceElement(): SGInterface | undefined {
+        return this.getElementsByTagName<SGInterface>('interface')[0];
     }
 
     /**
-     * Get the `<children>` element of this component. (not to be confused with the AST `childNodes` property).
+     * Get the `<children>` element of this component. (not to be confused with the AST `childTags` property).
      * If there are multiope `<children>` elements, this function will return the last `<children>` tag because that's what Roku devices do.
      */
-    public get children() {
-        const children = this.getChildNodesByTagName<SGChildren>('children');
+    public get childrenElement() {
+        const children = this.getElementsByTagName<SGChildren>('children');
         return children[children.length - 1];
     }
 
-    public get customizations() {
-        return this.getChildNodesByTagName<SGCustomization>('customization');
+    public get customizationElements() {
+        return this.getElementsByTagName<SGCustomization>('customization');
     }
 
     get name() {
@@ -689,11 +724,19 @@ export class SGComponent extends SGTag {
         this.setAttributeValue('extends', value);
     }
 
+    //TODO verify this is the right name
+    get initialFocus() {
+        return this.getAttributeValue('initialFocus');
+    }
+    set initialFocus(value: string) {
+        this.setAttributeValue('initialFocus', value);
+    }
+
     /**
      * Does the specified field exist in the component interface?
      */
     public hasInterfaceField(id: string) {
-        for (const ifaceNode of this.getChildNodesByTagName<SGInterface>('interface')) {
+        for (const ifaceNode of this.getElementsByTagName<SGInterface>('interface')) {
             if (ifaceNode.hasField(id)) {
                 return true;
             }
@@ -705,7 +748,7 @@ export class SGComponent extends SGTag {
      * Does the specified function exist in the component interface?
      */
     public hasInterfaceFunction(name: string) {
-        for (const ifaceNode of this.getChildNodesByTagName<SGInterface>('interface')) {
+        for (const ifaceNode of this.getElementsByTagName<SGInterface>('interface')) {
             if (ifaceNode.hasFunction(name)) {
                 return true;
             }
@@ -717,7 +760,7 @@ export class SGComponent extends SGTag {
      * Get an interface field with the specified name
      */
     public getInterfaceField(name: string): SGInterfaceField | undefined {
-        for (const ifaceNode of this.getChildNodesByTagName<SGInterface>('interface')) {
+        for (const ifaceNode of this.getElementsByTagName<SGInterface>('interface')) {
             const field = ifaceNode.getField(name);
             if (field) {
                 return field;
@@ -729,7 +772,7 @@ export class SGComponent extends SGTag {
      * Return the first SGInterface node found, or insert a new one then return it
      */
     private ensureInterfaceNode(): SGInterface {
-        for (const el of this.childNodes) {
+        for (const el of this.elements) {
             if (el.tokens.startTagName.text.toLowerCase() === 'interface') {
                 return el as SGInterface;
             }
@@ -762,7 +805,7 @@ export class SGComponent extends SGTag {
      * @returns true if a field was found and removed. Returns false if no field was found with that name
      */
     public removeInterfaceField(id: string) {
-        for (const ifaceNode of this.getChildNodesByTagName<SGInterface>('interface')) {
+        for (const ifaceNode of this.getElementsByTagName<SGInterface>('interface')) {
             if (ifaceNode.removeField(id)) {
                 return true;
             }
@@ -774,7 +817,7 @@ export class SGComponent extends SGTag {
      * Get an interface field with the specified name
      */
     public getInterfaceFunction(name: string): SGInterfaceFunction | undefined {
-        for (const ifaceNode of this.getChildNodesByTagName<SGInterface>('interface')) {
+        for (const ifaceNode of this.getElementsByTagName<SGInterface>('interface')) {
             const func = ifaceNode.getFunction(name);
             if (func) {
                 return func;
@@ -787,7 +830,7 @@ export class SGComponent extends SGTag {
      * @returns true if a function was found and removed. Returns false if no function was found with that name
      */
     public removeInterfaceFunction(name: string) {
-        for (const ifaceNode of this.getChildNodesByTagName<SGInterface>('interface')) {
+        for (const ifaceNode of this.getElementsByTagName<SGInterface>('interface')) {
             if (ifaceNode.removeFunction(name)) {
                 return true;
             }
@@ -806,7 +849,7 @@ export class SGAst {
 
     constructor(
         public prolog?: SGProlog,
-        public root?: SGTag,
+        public root?: SGElement,
         public component?: SGComponent
     ) {
     }

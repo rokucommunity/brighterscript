@@ -59,7 +59,7 @@ describe('XmlFile', () => {
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
                 afterFileParse: () => {
-                    let child = file.parser.ast.component.children.childNodes[0];
+                    let child = file.parser.ast.component.childrenElement.elements[0];
                     expect(child.attributes).to.have.lengthOf(4);
                     child.setAttributeValue('text', undefined);
                     expect(child.getAttribute('id').value).to.equal('one');

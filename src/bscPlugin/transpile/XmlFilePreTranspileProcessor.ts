@@ -55,12 +55,12 @@ export class XmlFilePreTranspileProcessor {
 
         if (extraImportScripts) {
             //add new scripts after the LAST `<script>` tag that was created explicitly by the user, or at the top of the component if it has no scripts
-            let lastScriptIndex = util.findLastIndex(this.event.file.ast.component.childNodes, x => x.tokens.startTagName.text.toLowerCase() === 'script');
+            let lastScriptIndex = util.findLastIndex(this.event.file.ast.component.elements, x => x.tokens.startTagName.text.toLowerCase() === 'script');
             lastScriptIndex = lastScriptIndex >= 0
                 ? lastScriptIndex + 1
                 : 0;
 
-            this.event.editor.arraySplice(this.event.file.ast.component.childNodes, lastScriptIndex, 0, ...extraImportScripts);
+            this.event.editor.arraySplice(this.event.file.ast.component.elements, lastScriptIndex, 0, ...extraImportScripts);
         }
     }
 }

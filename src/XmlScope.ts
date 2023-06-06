@@ -7,7 +7,7 @@ import type { Program } from './Program';
 import util from './util';
 import { isXmlFile } from './astUtils/reflection';
 import { SGFieldTypes } from './parser/SGTypes';
-import type { SGTag } from './parser/SGTypes';
+import type { SGElement } from './parser/SGTypes';
 
 export class XmlScope extends Scope {
     constructor(
@@ -52,10 +52,10 @@ export class XmlScope extends Scope {
     }
 
     private diagnosticValidateInterface(callableContainerMap: CallableContainerMap) {
-        if (!this.xmlFile.parser.ast?.component?.interface) {
+        if (!this.xmlFile.parser.ast?.component?.interfaceElement) {
             return;
         }
-        const iface = this.xmlFile.parser.ast.component.interface;
+        const iface = this.xmlFile.parser.ast.component.interfaceElement;
 
         //validate functions
         for (const func of iface.functions) {
@@ -90,7 +90,7 @@ export class XmlScope extends Scope {
         }
     }
 
-    private diagnosticMissingAttribute(tag: SGTag, name: string) {
+    private diagnosticMissingAttribute(tag: SGElement, name: string) {
         this.diagnostics.push({
             ...DiagnosticMessages.xmlTagMissingAttribute(tag.tokens.startTagName.text, name),
             range: tag.tokens.startTagName.range,
