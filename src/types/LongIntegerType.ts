@@ -1,5 +1,6 @@
 import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType } from '../astUtils/reflection';
 import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
 
 export class LongIntegerType extends BscType {
     constructor(
@@ -7,6 +8,8 @@ export class LongIntegerType extends BscType {
     ) {
         super();
     }
+
+    public readonly kind = BscTypeKind.LongIntegerType;
 
     public static instance = new LongIntegerType('longinteger');
 

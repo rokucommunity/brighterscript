@@ -22,7 +22,7 @@ import { AstNodeKind } from './AstNode';
 import { Statement } from './AstNode';
 import { ClassType } from '../types/ClassType';
 import { EnumMemberType, EnumType } from '../types/EnumType';
-import { NamespaceType } from '../types/NameSpaceType';
+import { NamespaceType } from '../types/NamespaceType';
 import { InterfaceType } from '../types/InterfaceType';
 import type { BscType } from '../types/BscType';
 import { VoidType } from '../types/VoidType';

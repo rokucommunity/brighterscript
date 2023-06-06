@@ -10,7 +10,7 @@ import { FloatType } from './FloatType';
 import { ClassType } from './ClassType';
 import { isTypePropertyReferenceType, isReferenceType } from '../astUtils/reflection';
 import { FunctionType } from './FunctionType';
-import { NamespaceType } from './NameSpaceType';
+import { NamespaceType } from './NamespaceType';
 
 const runtimeFlag = SymbolTypeFlags.runtime;
 

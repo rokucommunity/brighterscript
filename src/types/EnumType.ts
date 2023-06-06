@@ -1,5 +1,6 @@
 import { isDynamicType, isEnumMemberType, isEnumType } from '../astUtils/reflection';
 import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
 
 export class EnumType extends BscType {
     constructor(
@@ -7,6 +8,8 @@ export class EnumType extends BscType {
     ) {
         super(name);
     }
+
+    public readonly kind = BscTypeKind.EnumType;
 
     public isTypeCompatible(targetType: BscType) {
         return (
@@ -37,6 +40,8 @@ export class EnumMemberType extends BscType {
     ) {
         super(`${enumName}.${memberName}`);
     }
+
+    public readonly kind = BscTypeKind.EnumMemberType;
 
     public isAssignableTo(targetType: BscType) {
         return (

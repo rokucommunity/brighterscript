@@ -3,31 +3,32 @@ import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpre
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { BscFile, File, TypedefProvider } from '../interfaces';
-import { InvalidType } from '../types/InvalidType';
-import { VoidType } from '../types/VoidType';
+import type { InvalidType } from '../types/InvalidType';
+import type { VoidType } from '../types/VoidType';
 import { InternalWalkMode } from './visitors';
-import { FunctionType } from '../types/FunctionType';
-import { StringType } from '../types/StringType';
-import { BooleanType } from '../types/BooleanType';
+import type { FunctionType } from '../types/FunctionType';
+import type { StringType } from '../types/StringType';
+import type { BooleanType } from '../types/BooleanType';
 import { IntegerType } from '../types/IntegerType';
 import { LongIntegerType } from '../types/LongIntegerType';
 import { FloatType } from '../types/FloatType';
 import { DoubleType } from '../types/DoubleType';
-import { ClassType } from '../types/ClassType';
+import type { ClassType } from '../types/ClassType';
 import type { Scope } from '../Scope';
 import type { XmlScope } from '../XmlScope';
-import { DynamicType } from '../types/DynamicType';
+import type { DynamicType } from '../types/DynamicType';
 import type { InterfaceType } from '../types/InterfaceType';
 import type { ObjectType } from '../types/ObjectType';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import { AstNodeKind } from '../parser/AstNode';
 import type { TypePropertyReferenceType, ReferenceType } from '../types/ReferenceType';
 import type { EnumMemberType, EnumType } from '../types/EnumType';
-import type { NamespaceType } from '../types/NameSpaceType';
 import type { UnionType } from '../types/UnionType';
 import type { UninitializedType } from '../types/UninitializedType';
 import type { ArrayType } from '../types/ArrayType';
 import type { InheritableType } from '../types/InheritableType';
+import { BscTypeKind } from '../types/BscTypeKind';
+import type { NamespaceType } from '../types/NamespaceType';
 
 // File reflection
 export function isBrsFile(file: (BscFile | File)): file is BrsFile {
@@ -46,7 +47,7 @@ export function isXmlScope(scope: (Scope)): scope is XmlScope {
 // Statements reflection
 
 /**
- * Determine if the variable is a descendent of the Statement base class.
+ * Determine if the variablvalue is a descendent of the Statement base class.
  * Due to performance restrictions, this expects all statements to
  * directly extend Statement or FunctionStatement,
  * so it only checks the immediate parent's class name.
@@ -184,7 +185,7 @@ export function isThrowStatement(element: AstNode | undefined): element is Throw
 
 // Expressions reflection
 /**
- * Determine if the variable is a descendent of the Expression base class.
+ * Determine if the variablvalue is a descendent of the Expression base class.
  * Due to performance restrictions, this expects all statements to directly extend Expression,
  * so it only checks the immediate parent's class name. For example:
  * this will work for StringLiteralExpression -> Expression,
@@ -273,67 +274,67 @@ export function isTypeCastExpression(element: any): element is TypeCastExpressio
 
 // BscType reflection
 export function isStringType(value: any): value is StringType {
-    return value?.constructor.name === StringType.name;
+    return value?.kind === BscTypeKind.StringType;
 }
-export function isFunctionType(e: any): e is FunctionType {
-    return e?.constructor.name === FunctionType.name;
+export function isFunctionType(value: any): value is FunctionType {
+    return value?.kind === BscTypeKind.FunctionType;
 }
-export function isBooleanType(e: any): e is BooleanType {
-    return e?.constructor.name === BooleanType.name;
+export function isBooleanType(value: any): value is BooleanType {
+    return value?.kind === BscTypeKind.BooleanType;
 }
-export function isIntegerType(e: any): e is IntegerType {
-    return e?.constructor.name === IntegerType.name;
+export function isIntegerType(value: any): value is IntegerType {
+    return value?.kind === BscTypeKind.IntegerType;
 }
-export function isLongIntegerType(e: any): e is LongIntegerType {
-    return e?.constructor.name === LongIntegerType.name;
+export function isLongIntegerType(value: any): value is LongIntegerType {
+    return value?.kind === BscTypeKind.LongIntegerType;
 }
-export function isFloatType(e: any): e is FloatType {
-    return e?.constructor.name === FloatType.name;
+export function isFloatType(value: any): value is FloatType {
+    return value?.kind === BscTypeKind.FloatType;
 }
-export function isDoubleType(e: any): e is DoubleType {
-    return e?.constructor.name === DoubleType.name;
+export function isDoubleType(value: any): value is DoubleType {
+    return value?.kind === BscTypeKind.DoubleType;
 }
-export function isInvalidType(e: any): e is InvalidType {
-    return e?.constructor.name === InvalidType.name;
+export function isInvalidType(value: any): value is InvalidType {
+    return value?.kind === BscTypeKind.InvalidType;
 }
-export function isVoidType(e: any): e is VoidType {
-    return e?.constructor.name === VoidType.name;
+export function isVoidType(value: any): value is VoidType {
+    return value?.kind === BscTypeKind.VoidType;
 }
-export function isClassType(e: any): e is ClassType {
-    return e?.constructor.name === ClassType.name;
+export function isClassType(value: any): value is ClassType {
+    return value?.kind === BscTypeKind.ClassType;
 }
-export function isDynamicType(e: any): e is DynamicType {
-    return e?.constructor.name === DynamicType.name;
+export function isDynamicType(value: any): value is DynamicType {
+    return value?.kind === BscTypeKind.DynamicType;
 }
-export function isInterfaceType(e: any): e is InterfaceType {
-    return e?.constructor.name === 'InterfaceType';
+export function isInterfaceType(value: any): value is InterfaceType {
+    return value?.kind === BscTypeKind.InterfaceType;
 }
-export function isObjectType(e: any): e is ObjectType {
-    return e?.constructor.name === 'ObjectType';
+export function isObjectType(value: any): value is ObjectType {
+    return value?.kind === BscTypeKind.ObjectType;
 }
-export function isReferenceType(e: any): e is ReferenceType {
-    return e?.__reflection?.name === 'ReferenceType';
+export function isReferenceType(value: any): value is ReferenceType {
+    return value?.__reflection?.name === 'ReferenceType';
 }
-export function isEnumType(e: any): e is EnumType {
-    return e?.constructor.name === 'EnumType';
+export function isEnumType(value: any): value is EnumType {
+    return value?.kind === BscTypeKind.EnumType;
 }
-export function isEnumMemberType(e: any): e is EnumMemberType {
-    return e?.constructor.name === 'EnumMemberType';
+export function isEnumMemberType(value: any): value is EnumMemberType {
+    return value?.kind === BscTypeKind.EnumMemberType;
 }
-export function isTypePropertyReferenceType(e: any): e is TypePropertyReferenceType {
-    return e?.__reflection?.name === 'TypePropertyReferenceType';
+export function isTypePropertyReferenceType(value: any): value is TypePropertyReferenceType {
+    return value?.__reflection?.name === 'TypePropertyReferenceType';
 }
-export function isNamespaceType(e: any): e is NamespaceType {
-    return e?.constructor.name === 'NamespaceType';
+export function isNamespaceType(value: any): value is NamespaceType {
+    return value?.kind === BscTypeKind.NamespaceType;
 }
-export function isUnionType(e: any): e is UnionType {
-    return e?.constructor.name === 'UnionType';
+export function isUnionType(value: any): value is UnionType {
+    return value?.kind === BscTypeKind.UnionType;
 }
-export function isUninitializedType(e: any): e is UninitializedType {
-    return e?.constructor.name === 'UninitializedType';
+export function isUninitializedType(value: any): value is UninitializedType {
+    return value?.kind === BscTypeKind.UninitializedType;
 }
-export function isArrayType(e: any): e is ArrayType {
-    return e?.constructor.name === 'ArrayType';
+export function isArrayType(value: any): value is ArrayType {
+    return value?.kind === BscTypeKind.ArrayType;
 }
 
 export function isInheritableType(target): target is InheritableType {
@@ -346,21 +347,21 @@ const numberConstructorNames = [
     FloatType.name,
     DoubleType.name
 ];
-export function isNumberType(e: any): e is IntegerType | LongIntegerType | FloatType | DoubleType {
-    return numberConstructorNames.includes(e?.constructor.name);
+export function isNumberType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType {
+    return numberConstructorNames.includes(value?.constructor.name);
 }
 
 // Literal reflection
 
-export function isLiteralInvalid(e: any): e is LiteralExpression & { type: InvalidType } {
-    return isLiteralExpression(e) && isInvalidType(e.getType());
+export function isLiteralInvalid(value: any): value is LiteralExpression & { type: InvalidType } {
+    return isLiteralExpression(value) && isInvalidType(value.getType());
 }
-export function isLiteralBoolean(e: any): e is LiteralExpression & { type: BooleanType } {
-    return isLiteralExpression(e) && isBooleanType(e.getType());
+export function isLiteralBoolean(value: any): value is LiteralExpression & { type: BooleanType } {
+    return isLiteralExpression(value) && isBooleanType(value.getType());
 }
-export function isLiteralString(e: any): e is LiteralExpression & { type: StringType } {
-    return isLiteralExpression(e) && isStringType(e.getType());
+export function isLiteralString(value: any): value is LiteralExpression & { type: StringType } {
+    return isLiteralExpression(value) && isStringType(value.getType());
 }
-export function isLiteralNumber(e: any): e is LiteralExpression & { type: IntegerType | LongIntegerType | FloatType | DoubleType } {
-    return isLiteralExpression(e) && isNumberType(e.getType());
+export function isLiteralNumber(value: any): value is LiteralExpression & { type: IntegerType | LongIntegerType | FloatType | DoubleType } {
+    return isLiteralExpression(value) && isNumberType(value.getType());
 }

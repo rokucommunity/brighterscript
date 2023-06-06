@@ -1,5 +1,6 @@
 import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType } from '../astUtils/reflection';
 import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
 
 export class FloatType extends BscType {
     constructor(
@@ -7,6 +8,8 @@ export class FloatType extends BscType {
     ) {
         super();
     }
+
+    public readonly kind = BscTypeKind.FloatType;
 
     public static instance = new FloatType('float');
 

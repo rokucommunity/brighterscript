@@ -1,6 +1,7 @@
 import { SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType, isInterfaceType, isUnionType, isInheritableType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
 import { InheritableType } from './InheritableType';
 
 export class InterfaceType extends InheritableType {
@@ -10,6 +11,8 @@ export class InterfaceType extends InheritableType {
     ) {
         super(name, superInterface);
     }
+
+    public readonly kind = BscTypeKind.InterfaceType;
 
     public isTypeCompatible(targetType: BscType) {
         //TODO: We need to make sure that things don't get assigned to built-in types
