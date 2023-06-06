@@ -1458,6 +1458,17 @@ export class Util {
             }]);
         }
     }
+
+    /**
+     * Find the index of the last item in the array that matches.
+     */
+    public findLastIndex<T>(array: T[], matcher: (T) => boolean) {
+        for (let i = array.length - 1; i >= 0; i--) {
+            if (matcher(array[i])) {
+                return i;
+            }
+        }
+    }
 }
 
 /**

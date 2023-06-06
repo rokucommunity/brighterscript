@@ -14,7 +14,6 @@ import type { SGToken } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';
-import { createSGScript } from '../astUtils/creators';
 import type { FunctionScope } from '../FunctionScope';
 
 export class XmlFile {
@@ -426,7 +425,7 @@ export class XmlFile {
      * and only includes the ones that are not found on the parent.
      * If no parent is found, all imports are returned
      */
-    private getMissingImportsForTranspile() {
+    public getMissingImportsForTranspile() {
         let ownImports = this.getAvailableScriptImports();
         //add the bslib path to ownImports, it'll get filtered down below
         ownImports.push(this.program.bslibPkgPath);

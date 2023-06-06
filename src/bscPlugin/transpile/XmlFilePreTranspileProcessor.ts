@@ -1,5 +1,5 @@
-import { createSGScript, createToken } from '../../astUtils/creators';
-import { isXmlFile, isDottedGetExpression, isLiteralExpression, isVariableExpression } from '../../astUtils/reflection';
+import { createSGScript } from '../../astUtils/creators';
+import { isXmlFile } from '../../astUtils/reflection';
 import type { XmlFile } from '../../files/XmlFile';
 import type { BeforeFileTranspileEvent } from '../../interfaces';
 import util from '../../util';
@@ -55,7 +55,7 @@ export class XmlFilePreTranspileProcessor {
 
         if (extraImportScripts) {
             //add new scripts after the LAST `<script>` tag that was created explicitly by the user, or at the top of the component if it has no scripts
-            let lastScriptIndex = this.event.file.ast.component.childNodes.findLastIndex(x => x.tokens.startTagName.text.toLowerCase() === 'script');
+            let lastScriptIndex = util.findLastIndex(this.event.file.ast.component.childNodes, x => x.tokens.startTagName.text.toLowerCase() === 'script');
             lastScriptIndex = lastScriptIndex >= 0
                 ? lastScriptIndex + 1
                 : 0;

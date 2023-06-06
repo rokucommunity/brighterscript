@@ -1,7 +1,7 @@
 import { expect } from '../chai-config.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
+import { getTestTranspile, trim } from '../testHelpers.spec';
 import SGParser from './SGParser';
 import { createSandbox } from 'sinon';
 import { Program } from '../Program';
