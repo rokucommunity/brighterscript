@@ -12,7 +12,7 @@ export class XmlFileValidator {
 
     public process() {
         util.validateTooDeepFile(this.event.file);
-        if (this.event.file.parser.ast.root) {
+        if (this.event.file.parser.ast.rootElement) {
             this.validateComponent(this.event.file.parser.ast);
         } else {
             //skip empty XML
@@ -20,29 +20,29 @@ export class XmlFileValidator {
     }
 
     private validateComponent(ast: SGAst) {
-        const { root, component } = ast;
-        if (!component) {
+        const { rootElement, componentElement } = ast;
+        if (!componentElement) {
             //not a SG component
             this.event.file.diagnostics.push({
                 ...DiagnosticMessages.xmlComponentMissingComponentDeclaration(),
-                range: root.range,
+                range: rootElement.range,
                 file: this.event.file
             });
             return;
         }
 
         //component name/extends
-        if (!component.name) {
+        if (!componentElement.name) {
             this.event.file.diagnostics.push({
                 ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
-                range: component.tokens.startTagName.range,
+                range: componentElement.tokens.startTagName.range,
                 file: this.event.file
             });
         }
-        if (!component.extends) {
+        if (!componentElement.extends) {
             this.event.file.diagnostics.push({
                 ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
-                range: component.tokens.startTagName.range,
+                range: componentElement.tokens.startTagName.range,
                 file: this.event.file
             });
         }

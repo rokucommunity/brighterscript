@@ -51,19 +51,19 @@ export default class SGParser {
     private findReferences() {
         this._references = this.emptySGReferences();
 
-        const { component } = this.ast;
-        if (!component) {
+        const { componentElement } = this.ast;
+        if (!componentElement) {
             return;
         }
 
-        const nameAttr = component.getAttribute('name');
+        const nameAttr = componentElement.getAttribute('name');
         this._references.name = nameAttr?.tokens.value;
-        const extendsAttr = component.getAttribute('extends');
+        const extendsAttr = componentElement.getAttribute('extends');
         if (extendsAttr?.tokens.value) {
             this._references.extends = extendsAttr.tokens.value;
         }
 
-        for (const script of component.scriptElements) {
+        for (const script of componentElement.scriptElements) {
             const uriAttr = script.getAttribute('uri');
             if (uriAttr?.tokens.value) {
                 const uri = uriAttr.tokens.value.text;

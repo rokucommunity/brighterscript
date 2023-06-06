@@ -188,7 +188,7 @@ export class XmlFile {
      */
     public get needsTranspiled() {
         //needsTranspiled should be true if an import is brighterscript
-        return this._needsTranspiled || this.ast?.component?.scriptElements?.some(
+        return this._needsTranspiled || this.ast?.componentElement?.scriptElements?.some(
             script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
         );
     }

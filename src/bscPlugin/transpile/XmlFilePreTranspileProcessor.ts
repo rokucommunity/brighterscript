@@ -19,7 +19,7 @@ export class XmlFilePreTranspileProcessor {
         this.injectScriptImports();
 
         //transform any brighterscript `type` attributes to `brightscript`
-        for (const script of this.event.file.ast?.component?.scriptElements ?? []) {
+        for (const script of this.event.file.ast?.componentElement?.scriptElements ?? []) {
             const type = script.getAttribute('type');
             if (/text\/brighterscript/i.test(type?.value)) {
                 this.event.editor.setProperty(
@@ -55,12 +55,12 @@ export class XmlFilePreTranspileProcessor {
 
         if (extraImportScripts) {
             //add new scripts after the LAST `<script>` tag that was created explicitly by the user, or at the top of the component if it has no scripts
-            let lastScriptIndex = util.findLastIndex(this.event.file.ast.component.elements, x => x.tokens.startTagName.text.toLowerCase() === 'script');
+            let lastScriptIndex = util.findLastIndex(this.event.file.ast.componentElement.elements, x => x.tokens.startTagName.text.toLowerCase() === 'script');
             lastScriptIndex = lastScriptIndex >= 0
                 ? lastScriptIndex + 1
                 : 0;
 
-            this.event.editor.arraySplice(this.event.file.ast.component.elements, lastScriptIndex, 0, ...extraImportScripts);
+            this.event.editor.arraySplice(this.event.file.ast.componentElement.elements, lastScriptIndex, 0, ...extraImportScripts);
         }
     }
 }

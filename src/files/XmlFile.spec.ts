@@ -41,8 +41,8 @@ describe('XmlFile', () => {
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
                 afterFileParse: (file) => {
-                    if (isXmlFile(file) && file.parser.ast.root?.attributes?.[0]?.value) {
-                        file.parser.ast.root.attributes[0].value = expected;
+                    if (isXmlFile(file) && file.parser.ast.rootElement?.attributes?.[0]?.value) {
+                        file.parser.ast.rootElement.attributes[0].value = expected;
                     }
                 }
             });
@@ -59,7 +59,7 @@ describe('XmlFile', () => {
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
                 afterFileParse: () => {
-                    let child = file.parser.ast.component.childrenElement.elements[0];
+                    let child = file.parser.ast.componentElement.childrenElement.elements[0];
                     expect(child.attributes).to.have.lengthOf(4);
                     child.setAttributeValue('text', undefined);
                     expect(child.getAttribute('id').value).to.equal('one');

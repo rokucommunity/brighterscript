@@ -862,24 +862,24 @@ export interface SGReferences {
 export class SGAst {
 
     constructor(
-        public prolog?: SGProlog,
-        public root?: SGElement,
-        public component?: SGComponent
+        public prologElement?: SGProlog,
+        public rootElement?: SGElement,
+        public componentElement?: SGComponent
     ) {
     }
 
     public transpile(state: TranspileState): SourceNode {
         const chunks = [] as SourceNode[];
         //write XML prolog
-        if (this.prolog) {
+        if (this.prologElement) {
             chunks.push(
-                this.prolog.transpile(state)
+                this.prologElement.transpile(state)
             );
         }
-        if (this.component) {
+        if (this.componentElement) {
             //write content
             chunks.push(
-                this.component.transpile(state)
+                this.componentElement.transpile(state)
             );
         }
         return new SourceNode(null, null, null, chunks);
