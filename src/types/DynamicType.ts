@@ -1,6 +1,7 @@
 import type { GetTypeOptions } from '../interfaces';
 import { isDynamicType } from '../astUtils/reflection';
 import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
 
 export class DynamicType extends BscType {
     constructor(
@@ -8,6 +9,8 @@ export class DynamicType extends BscType {
     ) {
         super();
     }
+
+    public readonly kind = BscTypeKind.DynamicType;
 
     public static readonly instance = new DynamicType();
 

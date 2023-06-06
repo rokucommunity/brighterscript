@@ -11,7 +11,7 @@ import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStat
 import { SymbolTypeFlags } from '../../SymbolTable';
 import type { BscType } from '../../types/BscType';
 import { DynamicType } from '../../types/DynamicType';
-import { NamespaceType } from '../../types/NameSpaceType';
+import { NamespaceType } from '../../types/NamespaceType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
 

@@ -1,5 +1,6 @@
 import { isDynamicType, isInvalidType } from '../astUtils/reflection';
 import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
 
 export class InvalidType extends BscType {
     constructor(
@@ -7,6 +8,8 @@ export class InvalidType extends BscType {
     ) {
         super();
     }
+
+    public readonly kind = BscTypeKind.InvalidType;
 
     public isTypeCompatible(targetType: BscType) {
         return (

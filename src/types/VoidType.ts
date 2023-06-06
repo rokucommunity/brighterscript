@@ -1,5 +1,6 @@
 import { isDynamicType, isVoidType } from '../astUtils/reflection';
 import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
 
 export class VoidType extends BscType {
     constructor(
@@ -7,6 +8,8 @@ export class VoidType extends BscType {
     ) {
         super();
     }
+
+    public readonly kind = BscTypeKind.VoidType;
 
     public static instance = new VoidType('void');
 

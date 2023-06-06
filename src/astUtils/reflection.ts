@@ -3,33 +3,34 @@ import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpre
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { BscFile, File, TypedefProvider } from '../interfaces';
-import { InvalidType } from '../types/InvalidType';
-import { VoidType } from '../types/VoidType';
+import type { InvalidType } from '../types/InvalidType';
+import type { VoidType } from '../types/VoidType';
 import { InternalWalkMode } from './visitors';
-import { FunctionType } from '../types/FunctionType';
-import { StringType } from '../types/StringType';
-import { BooleanType } from '../types/BooleanType';
+import type { FunctionType } from '../types/FunctionType';
+import type { StringType } from '../types/StringType';
+import type { BooleanType } from '../types/BooleanType';
 import { IntegerType } from '../types/IntegerType';
 import { LongIntegerType } from '../types/LongIntegerType';
 import { FloatType } from '../types/FloatType';
 import { DoubleType } from '../types/DoubleType';
-import { ClassType } from '../types/ClassType';
+import type { ClassType } from '../types/ClassType';
 import type { Scope } from '../Scope';
 import type { XmlScope } from '../XmlScope';
-import { DynamicType } from '../types/DynamicType';
+import type { DynamicType } from '../types/DynamicType';
 import type { InterfaceType } from '../types/InterfaceType';
 import type { ObjectType } from '../types/ObjectType';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
+import { AstNodeKind } from '../parser/AstNode';
 import type { TypePropertyReferenceType, ReferenceType } from '../types/ReferenceType';
 import type { EnumMemberType, EnumType } from '../types/EnumType';
-import type { NamespaceType } from '../types/NameSpaceType';
 import type { UnionType } from '../types/UnionType';
 import type { UninitializedType } from '../types/UninitializedType';
 import type { ArrayType } from '../types/ArrayType';
 import type { InheritableType } from '../types/InheritableType';
+import { BscTypeKind } from '../types/BscTypeKind';
+import type { NamespaceType } from '../types/NamespaceType';
 
 // File reflection
-
 export function isBrsFile(file: (BscFile | File)): file is BrsFile {
     return file?.constructor.name === 'BrsFile';
 }
@@ -46,7 +47,7 @@ export function isXmlScope(scope: (Scope)): scope is XmlScope {
 // Statements reflection
 
 /**
- * Determine if the variable is a descendent of the Statement base class.
+ * Determine if the variablvalue is a descendent of the Statement base class.
  * Due to performance restrictions, this expects all statements to
  * directly extend Statement or FunctionStatement,
  * so it only checks the immediate parent's class name.
@@ -60,76 +61,76 @@ export function isBody(element: AstNode | undefined): element is Body {
     return element?.constructor?.name === 'Body';
 }
 export function isAssignmentStatement(element: AstNode | undefined): element is AssignmentStatement {
-    return element?.constructor?.name === 'AssignmentStatement';
+    return element?.kind === AstNodeKind.AssignmentStatement;
 }
 export function isBlock(element: AstNode | undefined): element is Block {
     return element?.constructor?.name === 'Block';
 }
 export function isExpressionStatement(element: AstNode | undefined): element is ExpressionStatement {
-    return element?.constructor?.name === 'ExpressionStatement';
+    return element?.kind === AstNodeKind.ExpressionStatement;
 }
 export function isCommentStatement(element: AstNode | undefined): element is CommentStatement {
-    return element?.constructor?.name === 'CommentStatement';
+    return element?.kind === AstNodeKind.CommentStatement;
 }
 export function isExitForStatement(element: AstNode | undefined): element is ExitForStatement {
-    return element?.constructor?.name === 'ExitForStatement';
+    return element?.kind === AstNodeKind.ExitForStatement;
 }
 export function isExitWhileStatement(element: AstNode | undefined): element is ExitWhileStatement {
-    return element?.constructor?.name === 'ExitWhileStatement';
+    return element?.kind === AstNodeKind.ExitWhileStatement;
 }
 export function isFunctionStatement(element: AstNode | undefined): element is FunctionStatement {
-    return element?.constructor?.name === 'FunctionStatement';
+    return element?.kind === AstNodeKind.FunctionStatement;
 }
 export function isIfStatement(element: AstNode | undefined): element is IfStatement {
-    return element?.constructor?.name === 'IfStatement';
+    return element?.kind === AstNodeKind.IfStatement;
 }
 export function isIncrementStatement(element: AstNode | undefined): element is IncrementStatement {
-    return element?.constructor?.name === 'IncrementStatement';
+    return element?.kind === AstNodeKind.IncrementStatement;
 }
 export function isPrintStatement(element: AstNode | undefined): element is PrintStatement {
-    return element?.constructor?.name === 'PrintStatement';
+    return element?.kind === AstNodeKind.PrintStatement;
 }
 export function isGotoStatement(element: AstNode | undefined): element is GotoStatement {
-    return element?.constructor?.name === 'GotoStatement';
+    return element?.kind === AstNodeKind.GotoStatement;
 }
 export function isLabelStatement(element: AstNode | undefined): element is LabelStatement {
-    return element?.constructor?.name === 'LabelStatement';
+    return element?.kind === AstNodeKind.LabelStatement;
 }
 export function isReturnStatement(element: AstNode | undefined): element is ReturnStatement {
-    return element?.constructor?.name === 'ReturnStatement';
+    return element?.kind === AstNodeKind.ReturnStatement;
 }
 export function isEndStatement(element: AstNode | undefined): element is EndStatement {
-    return element?.constructor?.name === 'EndStatement';
+    return element?.kind === AstNodeKind.EndStatement;
 }
 export function isStopStatement(element: AstNode | undefined): element is StopStatement {
-    return element?.constructor?.name === 'StopStatement';
+    return element?.kind === AstNodeKind.StopStatement;
 }
 export function isForStatement(element: AstNode | undefined): element is ForStatement {
-    return element?.constructor?.name === 'ForStatement';
+    return element?.kind === AstNodeKind.ForStatement;
 }
 export function isForEachStatement(element: AstNode | undefined): element is ForEachStatement {
-    return element?.constructor?.name === 'ForEachStatement';
+    return element?.kind === AstNodeKind.ForEachStatement;
 }
 export function isWhileStatement(element: AstNode | undefined): element is WhileStatement {
-    return element?.constructor?.name === 'WhileStatement';
+    return element?.kind === AstNodeKind.WhileStatement;
 }
 export function isDottedSetStatement(element: AstNode | undefined): element is DottedSetStatement {
-    return element?.constructor?.name === 'DottedSetStatement';
+    return element?.kind === AstNodeKind.DottedSetStatement;
 }
 export function isIndexedSetStatement(element: AstNode | undefined): element is IndexedSetStatement {
-    return element?.constructor?.name === 'IndexedSetStatement';
+    return element?.kind === AstNodeKind.IndexedSetStatement;
 }
 export function isLibraryStatement(element: AstNode | undefined): element is LibraryStatement {
-    return element?.constructor?.name === 'LibraryStatement';
+    return element?.kind === AstNodeKind.LibraryStatement;
 }
 export function isNamespaceStatement(element: AstNode | undefined): element is NamespaceStatement {
-    return element?.constructor?.name === 'NamespaceStatement';
+    return element?.kind === AstNodeKind.NamespaceStatement;
 }
 export function isClassStatement(element: AstNode | undefined): element is ClassStatement {
-    return element?.constructor?.name === 'ClassStatement';
+    return element?.kind === AstNodeKind.ClassStatement;
 }
 export function isImportStatement(element: AstNode | undefined): element is ImportStatement {
-    return element?.constructor?.name === 'ImportStatement';
+    return element?.kind === AstNodeKind.ImportStatement;
 }
 export function isMethodStatement(element: AstNode | undefined): element is MethodStatement {
     const name = element?.constructor.name;
@@ -152,39 +153,39 @@ export function isClassFieldStatement(element: AstNode | undefined): element is 
     return isFieldStatement(element);
 }
 export function isInterfaceStatement(element: AstNode | undefined): element is InterfaceStatement {
-    return element?.constructor.name === 'InterfaceStatement';
+    return element?.kind === AstNodeKind.InterfaceStatement;
 }
 export function isInterfaceMethodStatement(element: AstNode | undefined): element is InterfaceMethodStatement {
-    return element?.constructor.name === 'InterfaceMethodStatement';
+    return element?.kind === AstNodeKind.InterfaceMethodStatement;
 }
 export function isInterfaceFieldStatement(element: AstNode | undefined): element is InterfaceFieldStatement {
-    return element?.constructor.name === 'InterfaceFieldStatement';
+    return element?.kind === AstNodeKind.InterfaceFieldStatement;
 }
 export function isEnumStatement(element: AstNode | undefined): element is EnumStatement {
-    return element?.constructor.name === 'EnumStatement';
+    return element?.kind === AstNodeKind.EnumStatement;
 }
 export function isEnumMemberStatement(element: AstNode | undefined): element is EnumMemberStatement {
-    return element?.constructor.name === 'EnumMemberStatement';
+    return element?.kind === AstNodeKind.EnumMemberStatement;
 }
 export function isConstStatement(element: AstNode | undefined): element is ConstStatement {
-    return element?.constructor.name === 'ConstStatement';
+    return element?.kind === AstNodeKind.ConstStatement;
 }
 export function isContinueStatement(element: AstNode | undefined): element is ContinueStatement {
-    return element?.constructor.name === 'ContinueStatement';
+    return element?.kind === AstNodeKind.ContinueStatement;
 }
 export function isTryCatchStatement(element: AstNode | undefined): element is TryCatchStatement {
-    return element?.constructor.name === 'TryCatchStatement';
+    return element?.kind === AstNodeKind.TryCatchStatement;
 }
 export function isCatchStatement(element: AstNode | undefined): element is CatchStatement {
-    return element?.constructor.name === 'CatchStatement';
+    return element?.kind === AstNodeKind.CatchStatement;
 }
 export function isThrowStatement(element: AstNode | undefined): element is ThrowStatement {
-    return element?.constructor.name === 'ThrowStatement';
+    return element?.kind === AstNodeKind.ThrowStatement;
 }
 
 // Expressions reflection
 /**
- * Determine if the variable is a descendent of the Expression base class.
+ * Determine if the variablvalue is a descendent of the Expression base class.
  * Due to performance restrictions, this expects all statements to directly extend Expression,
  * so it only checks the immediate parent's class name. For example:
  * this will work for StringLiteralExpression -> Expression,
@@ -196,144 +197,144 @@ export function isExpression(element: AstNode | undefined): element is Expressio
 }
 
 export function isBinaryExpression(element: AstNode | undefined): element is BinaryExpression {
-    return element?.constructor.name === 'BinaryExpression';
+    return element?.kind === AstNodeKind.BinaryExpression;
 }
 export function isCallExpression(element: AstNode | undefined): element is CallExpression {
-    return element?.constructor.name === 'CallExpression';
+    return element?.kind === AstNodeKind.CallExpression;
 }
 export function isFunctionExpression(element: AstNode | undefined): element is FunctionExpression {
-    return element?.constructor.name === 'FunctionExpression';
+    return element?.kind === AstNodeKind.FunctionExpression;
 }
 export function isDottedGetExpression(element: AstNode | undefined): element is DottedGetExpression {
-    return element?.constructor.name === 'DottedGetExpression';
+    return element?.kind === AstNodeKind.DottedGetExpression;
 }
 export function isXmlAttributeGetExpression(element: AstNode | undefined): element is XmlAttributeGetExpression {
-    return element?.constructor.name === 'XmlAttributeGetExpression';
+    return element?.kind === AstNodeKind.XmlAttributeGetExpression;
 }
 export function isIndexedGetExpression(element: AstNode | undefined): element is IndexedGetExpression {
-    return element?.constructor.name === 'IndexedGetExpression';
+    return element?.kind === AstNodeKind.IndexedGetExpression;
 }
 export function isGroupingExpression(element: AstNode | undefined): element is GroupingExpression {
-    return element?.constructor.name === 'GroupingExpression';
+    return element?.kind === AstNodeKind.GroupingExpression;
 }
 export function isLiteralExpression(element: AstNode | undefined): element is LiteralExpression {
-    return element?.constructor.name === 'LiteralExpression';
+    return element?.kind === AstNodeKind.LiteralExpression;
 }
 export function isEscapedCharCodeLiteralExpression(element: AstNode | undefined): element is EscapedCharCodeLiteralExpression {
-    return element?.constructor.name === 'EscapedCharCodeLiteralExpression';
+    return element?.kind === AstNodeKind.EscapedCharCodeLiteralExpression;
 }
 export function isArrayLiteralExpression(element: AstNode | undefined): element is ArrayLiteralExpression {
-    return element?.constructor.name === 'ArrayLiteralExpression';
+    return element?.kind === AstNodeKind.ArrayLiteralExpression;
 }
 export function isAALiteralExpression(element: AstNode | undefined): element is AALiteralExpression {
-    return element?.constructor.name === 'AALiteralExpression';
+    return element?.kind === AstNodeKind.AALiteralExpression;
 }
 export function isAAMemberExpression(element: AstNode | undefined): element is AAMemberExpression {
-    return element?.constructor.name === 'AAMemberExpression';
+    return element?.kind === AstNodeKind.AAMemberExpression;
 }
 export function isUnaryExpression(element: AstNode | undefined): element is UnaryExpression {
-    return element?.constructor.name === 'UnaryExpression';
+    return element?.kind === AstNodeKind.UnaryExpression;
 }
 export function isVariableExpression(element: AstNode | undefined): element is VariableExpression {
-    return element?.constructor.name === 'VariableExpression';
+    return element?.kind === AstNodeKind.VariableExpression;
 }
 export function isSourceLiteralExpression(element: AstNode | undefined): element is SourceLiteralExpression {
-    return element?.constructor.name === 'SourceLiteralExpression';
+    return element?.kind === AstNodeKind.SourceLiteralExpression;
 }
 export function isNewExpression(element: AstNode | undefined): element is NewExpression {
-    return element?.constructor.name === 'NewExpression';
+    return element?.kind === AstNodeKind.NewExpression;
 }
 export function isCallfuncExpression(element: AstNode | undefined): element is CallfuncExpression {
-    return element?.constructor.name === 'CallfuncExpression';
+    return element?.kind === AstNodeKind.CallfuncExpression;
 }
 export function isTemplateStringQuasiExpression(element: AstNode | undefined): element is TemplateStringQuasiExpression {
-    return element?.constructor.name === 'TemplateStringQuasiExpression';
+    return element?.kind === AstNodeKind.TemplateStringQuasiExpression;
 }
 export function isTemplateStringExpression(element: AstNode | undefined): element is TemplateStringExpression {
-    return element?.constructor.name === 'TemplateStringExpression';
+    return element?.kind === AstNodeKind.TemplateStringExpression;
 }
 export function isTaggedTemplateStringExpression(element: AstNode | undefined): element is TaggedTemplateStringExpression {
-    return element?.constructor.name === 'TaggedTemplateStringExpression';
+    return element?.kind === AstNodeKind.TaggedTemplateStringExpression;
 }
 export function isFunctionParameterExpression(element: AstNode | undefined): element is FunctionParameterExpression {
-    return element?.constructor.name === 'FunctionParameterExpression';
+    return element?.kind === AstNodeKind.FunctionParameterExpression;
 }
 export function isAnnotationExpression(element: AstNode | undefined): element is AnnotationExpression {
-    return element?.constructor.name === 'AnnotationExpression';
+    return element?.kind === AstNodeKind.AnnotationExpression;
 }
 export function isTypedefProvider(element: any): element is TypedefProvider {
     return 'getTypedef' in element;
 }
 export function isTypeExpression(element: any): element is TypeExpression {
-    return element?.constructor.name === 'TypeExpression';
+    return element?.kind === AstNodeKind.TypeExpression;
 }
 export function isTypeCastExpression(element: any): element is TypeCastExpression {
-    return element?.constructor.name === 'TypeCastExpression';
+    return element?.kind === AstNodeKind.TypeCastExpression;
 }
 
 // BscType reflection
 export function isStringType(value: any): value is StringType {
-    return value?.constructor.name === StringType.name;
+    return value?.kind === BscTypeKind.StringType;
 }
-export function isFunctionType(e: any): e is FunctionType {
-    return e?.constructor.name === FunctionType.name;
+export function isFunctionType(value: any): value is FunctionType {
+    return value?.kind === BscTypeKind.FunctionType;
 }
-export function isBooleanType(e: any): e is BooleanType {
-    return e?.constructor.name === BooleanType.name;
+export function isBooleanType(value: any): value is BooleanType {
+    return value?.kind === BscTypeKind.BooleanType;
 }
-export function isIntegerType(e: any): e is IntegerType {
-    return e?.constructor.name === IntegerType.name;
+export function isIntegerType(value: any): value is IntegerType {
+    return value?.kind === BscTypeKind.IntegerType;
 }
-export function isLongIntegerType(e: any): e is LongIntegerType {
-    return e?.constructor.name === LongIntegerType.name;
+export function isLongIntegerType(value: any): value is LongIntegerType {
+    return value?.kind === BscTypeKind.LongIntegerType;
 }
-export function isFloatType(e: any): e is FloatType {
-    return e?.constructor.name === FloatType.name;
+export function isFloatType(value: any): value is FloatType {
+    return value?.kind === BscTypeKind.FloatType;
 }
-export function isDoubleType(e: any): e is DoubleType {
-    return e?.constructor.name === DoubleType.name;
+export function isDoubleType(value: any): value is DoubleType {
+    return value?.kind === BscTypeKind.DoubleType;
 }
-export function isInvalidType(e: any): e is InvalidType {
-    return e?.constructor.name === InvalidType.name;
+export function isInvalidType(value: any): value is InvalidType {
+    return value?.kind === BscTypeKind.InvalidType;
 }
-export function isVoidType(e: any): e is VoidType {
-    return e?.constructor.name === VoidType.name;
+export function isVoidType(value: any): value is VoidType {
+    return value?.kind === BscTypeKind.VoidType;
 }
-export function isClassType(e: any): e is ClassType {
-    return e?.constructor.name === ClassType.name;
+export function isClassType(value: any): value is ClassType {
+    return value?.kind === BscTypeKind.ClassType;
 }
-export function isDynamicType(e: any): e is DynamicType {
-    return e?.constructor.name === DynamicType.name;
+export function isDynamicType(value: any): value is DynamicType {
+    return value?.kind === BscTypeKind.DynamicType;
 }
-export function isInterfaceType(e: any): e is InterfaceType {
-    return e?.constructor.name === 'InterfaceType';
+export function isInterfaceType(value: any): value is InterfaceType {
+    return value?.kind === BscTypeKind.InterfaceType;
 }
-export function isObjectType(e: any): e is ObjectType {
-    return e?.constructor.name === 'ObjectType';
+export function isObjectType(value: any): value is ObjectType {
+    return value?.kind === BscTypeKind.ObjectType;
 }
-export function isReferenceType(e: any): e is ReferenceType {
-    return e?.__reflection?.name === 'ReferenceType';
+export function isReferenceType(value: any): value is ReferenceType {
+    return value?.__reflection?.name === 'ReferenceType';
 }
-export function isEnumType(e: any): e is EnumType {
-    return e?.constructor.name === 'EnumType';
+export function isEnumType(value: any): value is EnumType {
+    return value?.kind === BscTypeKind.EnumType;
 }
-export function isEnumMemberType(e: any): e is EnumMemberType {
-    return e?.constructor.name === 'EnumMemberType';
+export function isEnumMemberType(value: any): value is EnumMemberType {
+    return value?.kind === BscTypeKind.EnumMemberType;
 }
-export function isTypePropertyReferenceType(e: any): e is TypePropertyReferenceType {
-    return e?.__reflection?.name === 'TypePropertyReferenceType';
+export function isTypePropertyReferenceType(value: any): value is TypePropertyReferenceType {
+    return value?.__reflection?.name === 'TypePropertyReferenceType';
 }
-export function isNamespaceType(e: any): e is NamespaceType {
-    return e?.constructor.name === 'NamespaceType';
+export function isNamespaceType(value: any): value is NamespaceType {
+    return value?.kind === BscTypeKind.NamespaceType;
 }
-export function isUnionType(e: any): e is UnionType {
-    return e?.constructor.name === 'UnionType';
+export function isUnionType(value: any): value is UnionType {
+    return value?.kind === BscTypeKind.UnionType;
 }
-export function isUninitializedType(e: any): e is UninitializedType {
-    return e?.constructor.name === 'UninitializedType';
+export function isUninitializedType(value: any): value is UninitializedType {
+    return value?.kind === BscTypeKind.UninitializedType;
 }
-export function isArrayType(e: any): e is ArrayType {
-    return e?.constructor.name === 'ArrayType';
+export function isArrayType(value: any): value is ArrayType {
+    return value?.kind === BscTypeKind.ArrayType;
 }
 
 export function isInheritableType(target): target is InheritableType {
@@ -346,21 +347,21 @@ const numberConstructorNames = [
     FloatType.name,
     DoubleType.name
 ];
-export function isNumberType(e: any): e is IntegerType | LongIntegerType | FloatType | DoubleType {
-    return numberConstructorNames.includes(e?.constructor.name);
+export function isNumberType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType {
+    return numberConstructorNames.includes(value?.constructor.name);
 }
 
 // Literal reflection
 
-export function isLiteralInvalid(e: any): e is LiteralExpression & { type: InvalidType } {
-    return isLiteralExpression(e) && isInvalidType(e.getType());
+export function isLiteralInvalid(value: any): value is LiteralExpression & { type: InvalidType } {
+    return isLiteralExpression(value) && isInvalidType(value.getType());
 }
-export function isLiteralBoolean(e: any): e is LiteralExpression & { type: BooleanType } {
-    return isLiteralExpression(e) && isBooleanType(e.getType());
+export function isLiteralBoolean(value: any): value is LiteralExpression & { type: BooleanType } {
+    return isLiteralExpression(value) && isBooleanType(value.getType());
 }
-export function isLiteralString(e: any): e is LiteralExpression & { type: StringType } {
-    return isLiteralExpression(e) && isStringType(e.getType());
+export function isLiteralString(value: any): value is LiteralExpression & { type: StringType } {
+    return isLiteralExpression(value) && isStringType(value.getType());
 }
-export function isLiteralNumber(e: any): e is LiteralExpression & { type: IntegerType | LongIntegerType | FloatType | DoubleType } {
-    return isLiteralExpression(e) && isNumberType(e.getType());
+export function isLiteralNumber(value: any): value is LiteralExpression & { type: IntegerType | LongIntegerType | FloatType | DoubleType } {
+    return isLiteralExpression(value) && isNumberType(value.getType());
 }

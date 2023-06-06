@@ -7,6 +7,7 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
         cwd: projectPath,
         createPackage: false,
         copyToStaging: false,
+        enableTypeValidation: false,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
         logLevel: 'error'

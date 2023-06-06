@@ -16,7 +16,7 @@ import { TypeChainEntry } from '../interfaces';
 import type { BscType } from '../types/BscType';
 import { SymbolTypeFlags } from '../SymbolTable';
 import { FunctionType } from '../types/FunctionType';
-import { Expression } from './AstNode';
+import { AstNodeKind, Expression } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
 import { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
@@ -37,6 +37,8 @@ export class BinaryExpression extends Expression {
         super();
         this.range = util.createRangeFromPositions(this.left.range.start, this.right.range.end);
     }
+
+    public readonly kind = AstNodeKind.BinaryExpression;
 
     public readonly range: Range;
 
@@ -91,6 +93,8 @@ export class CallExpression extends Expression {
         super();
         this.range = util.createBoundingRange(this.callee, this.openingParen, ...args, this.closingParen);
     }
+
+    public readonly kind = AstNodeKind.CallExpression;
 
     public readonly range: Range;
 
@@ -172,6 +176,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
     }
+
+    public readonly kind = AstNodeKind.FunctionExpression;
 
     /**
      * Get the name of the wrapping namespace (if it exists)
@@ -361,6 +367,8 @@ export class FunctionParameterExpression extends Expression {
         super();
     }
 
+    public readonly kind = AstNodeKind.FunctionParameterExpression;
+
     public getType(options: GetTypeOptions) {
         return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlags.typetime }) ??
             this.defaultValue?.getType({ ...options, flags: SymbolTypeFlags.runtime }) ??
@@ -438,6 +446,8 @@ export class DottedGetExpression extends Expression {
         this.range = util.createBoundingRange(this.obj, this.dot, this.name);
     }
 
+    public readonly kind = AstNodeKind.DottedGetExpression;
+
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
@@ -493,6 +503,8 @@ export class XmlAttributeGetExpression extends Expression {
         this.range = util.createBoundingRange(this.obj, this.at, this.name);
     }
 
+    public readonly kind = AstNodeKind.XmlAttributeGetExpression;
+
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
@@ -524,6 +536,8 @@ export class IndexedGetExpression extends Expression {
         super();
         this.range = util.createBoundingRange(this.obj, this.openingSquare, this.questionDotToken, this.openingSquare, this.index, this.closingSquare);
     }
+
+    public readonly kind = AstNodeKind.IndexedGetExpression;
 
     public readonly range: Range;
 
@@ -557,6 +571,8 @@ export class GroupingExpression extends Expression {
         this.range = util.createBoundingRange(this.tokens.left, this.expression, this.tokens.right);
     }
 
+    public readonly kind = AstNodeKind.GroupingExpression;
+
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
@@ -584,13 +600,14 @@ export class LiteralExpression extends Expression {
     ) {
         super();
     }
-
-    public getType(options?: GetTypeOptions) {
-        return util.tokenToBscType(this.token);
-    }
+    public readonly kind = AstNodeKind.LiteralExpression;
 
     public get range() {
         return this.token.range;
+    }
+
+    public getType(options?: GetTypeOptions) {
+        return util.tokenToBscType(this.token);
     }
 
     transpile(state: BrsTranspileState) {
@@ -630,6 +647,9 @@ export class EscapedCharCodeLiteralExpression extends Expression {
         super();
         this.range = token.range;
     }
+
+    public readonly kind = AstNodeKind.EscapedCharCodeLiteralExpression;
+
     readonly range: Range;
 
     transpile(state: BrsTranspileState) {
@@ -653,6 +673,8 @@ export class ArrayLiteralExpression extends Expression {
         super();
         this.range = util.createBoundingRange(this.open, ...this.elements, this.close);
     }
+
+    public readonly kind = AstNodeKind.ArrayLiteralExpression;
 
     public readonly range: Range;
 
@@ -722,7 +744,10 @@ export class AAMemberExpression extends Expression {
         this.range = util.createBoundingRange(this.keyToken, this.colonToken, this.value);
     }
 
+    public readonly kind = AstNodeKind.AAMemberExpression;
+
     public range: Range;
+
     public commaToken?: Token;
 
     transpile(state: BrsTranspileState) {
@@ -749,6 +774,8 @@ export class AALiteralExpression extends Expression {
         super();
         this.range = util.createBoundingRange(this.open, ...this.elements, this.close);
     }
+
+    public readonly kind = AstNodeKind.AALiteralExpression;
 
     public readonly range: Range;
 
@@ -854,6 +881,8 @@ export class UnaryExpression extends Expression {
         this.range = util.createBoundingRange(this.operator, this.right);
     }
 
+    public readonly kind = AstNodeKind.UnaryExpression;
+
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
@@ -878,6 +907,8 @@ export class VariableExpression extends Expression {
         super();
         this.range = this.name?.range;
     }
+
+    public readonly kind = AstNodeKind.VariableExpression;
 
     public readonly range: Range;
 
@@ -933,6 +964,8 @@ export class SourceLiteralExpression extends Expression {
     }
 
     public readonly range: Range;
+
+    public readonly kind = AstNodeKind.SourceLiteralExpression;
 
     private getFunctionName(state: BrsTranspileState, parseMode: ParseMode) {
         let func = state.file.getFunctionScopeAtPosition(this.token.range.start).func;
@@ -1014,6 +1047,10 @@ export class NewExpression extends Expression {
         this.range = util.createBoundingRange(this.newKeyword, this.call);
     }
 
+    public readonly kind = AstNodeKind.NewExpression;
+
+    public readonly range: Range;
+
     /**
      * The name of the class to initialize (with optional namespace prefixed)
      */
@@ -1022,8 +1059,6 @@ export class NewExpression extends Expression {
         //either a VariableExpression or a DottedGet
         return this.call.callee as (VariableExpression | DottedGetExpression);
     }
-
-    public readonly range: Range;
 
     public transpile(state: BrsTranspileState) {
         const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
@@ -1066,6 +1101,8 @@ export class CallfuncExpression extends Expression {
             closingParen
         );
     }
+
+    public readonly kind = AstNodeKind.CallfuncExpression;
 
     public readonly range: Range;
 
@@ -1132,6 +1169,9 @@ export class TemplateStringQuasiExpression extends Expression {
             ...expressions
         );
     }
+
+    public readonly kind = AstNodeKind.TemplateStringQuasiExpression;
+
     readonly range: Range;
 
     transpile(state: BrsTranspileState, skipEmptyStrings = true) {
@@ -1174,6 +1214,8 @@ export class TemplateStringExpression extends Expression {
             closingBacktick
         );
     }
+
+    public readonly kind = AstNodeKind.TemplateStringExpression;
 
     public readonly range: Range;
 
@@ -1267,6 +1309,8 @@ export class TaggedTemplateStringExpression extends Expression {
         );
     }
 
+    public readonly kind = AstNodeKind.TaggedTemplateStringExpression;
+
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
@@ -1339,8 +1383,12 @@ export class AnnotationExpression extends Expression {
         );
     }
 
-    public name: string;
+    public readonly kind = AstNodeKind.AnnotationExpression;
+
     public range: Range;
+
+    public name: string;
+
     public call: CallExpression;
 
     /**
@@ -1387,6 +1435,8 @@ export class TernaryExpression extends Expression {
             alternate
         );
     }
+
+    public readonly kind = AstNodeKind.TernaryExpression;
 
     public range: Range;
 
@@ -1471,6 +1521,9 @@ export class NullCoalescingExpression extends Expression {
             alternate
         );
     }
+
+    public readonly kind = AstNodeKind.NullCoalescingExpression;
+
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
@@ -1549,6 +1602,8 @@ export class RegexLiteralExpression extends Expression {
     ) {
         super();
     }
+
+    public readonly kind = AstNodeKind.RegexLiteralExpression;
 
     public get range() {
         return this.tokens?.regexLiteral?.range;
@@ -1640,6 +1695,8 @@ export class TypeExpression extends Expression implements TypedefProvider {
         this.range = expression?.range;
     }
 
+    public readonly kind = AstNodeKind.TypeExpression;
+
     public range: Range;
 
     public transpile(state: BrsTranspileState): TranspileResult {
@@ -1672,7 +1729,6 @@ export class TypeExpression extends Expression implements TypedefProvider {
 
 }
 
-
 export class TypeCastExpression extends Expression {
     constructor(
         public obj: Expression,
@@ -1686,6 +1742,8 @@ export class TypeCastExpression extends Expression {
             this.typeExpression
         );
     }
+
+    public readonly kind = AstNodeKind.TypeCastExpression;
 
     public range: Range;
 

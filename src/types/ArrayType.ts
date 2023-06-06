@@ -1,11 +1,15 @@
 import { isArrayType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
 
 export class ArrayType extends BscType {
     constructor(...innerTypes: BscType[]) {
         super();
         this.innerTypes = innerTypes;
     }
+
+    public readonly kind = BscTypeKind.ArrayType;
+
     public innerTypes: BscType[] = [];
 
     public isTypeCompatible(targetType: BscType) {

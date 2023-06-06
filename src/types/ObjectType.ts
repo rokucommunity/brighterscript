@@ -2,6 +2,7 @@ import { SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType, isInheritableType, isObjectType, isUnionType } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
 import { DynamicType } from './DynamicType';
 
 export class ObjectType extends BscType {
@@ -10,6 +11,8 @@ export class ObjectType extends BscType {
     ) {
         super();
     }
+
+    public readonly kind = BscTypeKind.ObjectType;
 
     public isTypeCompatible(targetType: BscType) {
         if (isUnionType(targetType)) {
