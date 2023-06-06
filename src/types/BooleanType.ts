@@ -1,5 +1,6 @@
 import { isBooleanType, isDynamicType } from '../astUtils/reflection';
 import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
 
 export class BooleanType extends BscType {
     constructor(
@@ -7,6 +8,8 @@ export class BooleanType extends BscType {
     ) {
         super();
     }
+
+    public readonly kind = BscTypeKind.BooleanType;
 
     public static instance = new BooleanType('boolean');
 

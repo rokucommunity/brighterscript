@@ -1,5 +1,6 @@
 import { isDynamicType, isStringType } from '../astUtils/reflection';
 import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
 
 export class StringType extends BscType {
     constructor(
@@ -7,6 +8,8 @@ export class StringType extends BscType {
     ) {
         super();
     }
+
+    public readonly kind = BscTypeKind.StringType;
 
     /**
      * A static instance that can be used to reduce memory and constructor costs, since there's nothing unique about this

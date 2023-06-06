@@ -15,6 +15,7 @@ import type { BscType } from '../types/BscType';
  * A BrightScript AST node
  */
 export abstract class AstNode {
+    public abstract kind: AstNodeKind;
     /**
      *  The starting and ending location of the node.
      */
@@ -145,4 +146,76 @@ export abstract class Expression extends AstNode {
      * When being considered by the walk visitor, this describes what type of element the current class is.
      */
     public visitMode = InternalWalkMode.visitExpressions;
+}
+
+export enum AstNodeKind {
+    Body = 'Body',
+    BinaryExpression = 'BinaryExpression',
+    CallExpression = 'CallExpression',
+    FunctionExpression = 'FunctionExpression',
+    FunctionParameterExpression = 'FunctionParameterExpression',
+    NamespacedVariableNameExpression = 'NamespacedVariableNameExpression',
+    DottedGetExpression = 'DottedGetExpression',
+    XmlAttributeGetExpression = 'XmlAttributeGetExpression',
+    IndexedGetExpression = 'IndexedGetExpression',
+    GroupingExpression = 'GroupingExpression',
+    LiteralExpression = 'LiteralExpression',
+    EscapedCharCodeLiteralExpression = 'EscapedCharCodeLiteralExpression',
+    ArrayLiteralExpression = 'ArrayLiteralExpression',
+    AAMemberExpression = 'AAMemberExpression',
+    AALiteralExpression = 'AALiteralExpression',
+    UnaryExpression = 'UnaryExpression',
+    VariableExpression = 'VariableExpression',
+    SourceLiteralExpression = 'SourceLiteralExpression',
+    NewExpression = 'NewExpression',
+    CallfuncExpression = 'CallfuncExpression',
+    TemplateStringQuasiExpression = 'TemplateStringQuasiExpression',
+    TemplateStringExpression = 'TemplateStringExpression',
+    TaggedTemplateStringExpression = 'TaggedTemplateStringExpression',
+    AnnotationExpression = 'AnnotationExpression',
+    TernaryExpression = 'TernaryExpression',
+    NullCoalescingExpression = 'NullCoalescingExpression',
+    RegexLiteralExpression = 'RegexLiteralExpression',
+    EmptyStatement = 'EmptyStatement',
+    AssignmentStatement = 'AssignmentStatement',
+    ExpressionStatement = 'ExpressionStatement',
+    CommentStatement = 'CommentStatement',
+    ExitForStatement = 'ExitForStatement',
+    ExitWhileStatement = 'ExitWhileStatement',
+    FunctionStatement = 'FunctionStatement',
+    IfStatement = 'IfStatement',
+    IncrementStatement = 'IncrementStatement',
+    PrintStatement = 'PrintStatement',
+    DimStatement = 'DimStatement',
+    GotoStatement = 'GotoStatement',
+    LabelStatement = 'LabelStatement',
+    ReturnStatement = 'ReturnStatement',
+    EndStatement = 'EndStatement',
+    StopStatement = 'StopStatement',
+    ForStatement = 'ForStatement',
+    ForEachStatement = 'ForEachStatement',
+    WhileStatement = 'WhileStatement',
+    DottedSetStatement = 'DottedSetStatement',
+    IndexedSetStatement = 'IndexedSetStatement',
+    LibraryStatement = 'LibraryStatement',
+    NamespaceStatement = 'NamespaceStatement',
+    ImportStatement = 'ImportStatement',
+    InterfaceStatement = 'InterfaceStatement',
+    InterfaceFieldStatement = 'InterfaceFieldStatement',
+    InterfaceMethodStatement = 'InterfaceMethodStatement',
+    ClassStatement = 'ClassStatement',
+    MethodStatement = 'MethodStatement',
+    ClassMethodStatement = 'ClassMethodStatement',
+    FieldStatement = 'FieldStatement',
+    ClassFieldStatement = 'ClassFieldStatement',
+    TryCatchStatement = 'TryCatchStatement',
+    CatchStatement = 'CatchStatement',
+    ThrowStatement = 'ThrowStatement',
+    EnumStatement = 'EnumStatement',
+    EnumMemberStatement = 'EnumMemberStatement',
+    ConstStatement = 'ConstStatement',
+    ContinueStatement = 'ContinueStatement',
+    Block = 'Block',
+    TypeExpression = 'TypeExpression',
+    TypeCastExpression = 'TypeCastExpression'
 }

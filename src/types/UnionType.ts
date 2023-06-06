@@ -3,6 +3,7 @@ import { isDynamicType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
 import { findTypeUnion, getUniqueType } from './helpers';
+import { BscTypeKind } from './BscTypeKind';
 
 export function unionTypeFactory(types: BscType[]) {
     return new UnionType(types);
@@ -14,6 +15,8 @@ export class UnionType extends BscType {
     ) {
         super(joinTypesString(types));
     }
+
+    public readonly kind = BscTypeKind.UnionType;
 
     public addType(type: BscType) {
         this.types.push(type);

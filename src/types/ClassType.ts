@@ -1,5 +1,6 @@
 import { isClassType, isDynamicType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
 import { InheritableType } from './InheritableType';
 
 export class ClassType extends InheritableType {
@@ -7,6 +8,8 @@ export class ClassType extends InheritableType {
     constructor(public name: string, public readonly superClass?: BscType) {
         super(name, superClass);
     }
+
+    public readonly kind = BscTypeKind.ClassType;
 
     public isTypeCompatible(targetType: BscType) {
         if (this.isEqual(targetType)) {

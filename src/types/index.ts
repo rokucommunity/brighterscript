@@ -13,7 +13,7 @@ export * from './IntegerType';
 export * from './InterfaceType';
 export * from './InvalidType';
 export * from './LongIntegerType';
-export * from './NameSpaceType';
+export * from './NamespaceType';
 export * from './ObjectType';
 export * from './ReferenceType';
 export * from './StringType';

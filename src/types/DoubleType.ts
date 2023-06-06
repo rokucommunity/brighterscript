@@ -1,5 +1,6 @@
 import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType } from '../astUtils/reflection';
 import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
 
 
 export class DoubleType extends BscType {
@@ -8,6 +9,8 @@ export class DoubleType extends BscType {
     ) {
         super();
     }
+
+    public readonly kind = BscTypeKind.DoubleType;
 
     public static instance = new DoubleType('double');
 

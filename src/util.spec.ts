@@ -9,7 +9,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { tempDir, rootDir } from './testHelpers.spec';
 import { TypeChainEntry } from './interfaces';
 import { ClassType } from './types/ClassType';
-import { NamespaceType } from './types/NameSpaceType';
+import { NamespaceType } from './types/NamespaceType';
 import { ReferenceType } from './types/ReferenceType';
 import { SymbolTypeFlags } from './SymbolTable';
 

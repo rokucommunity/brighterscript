@@ -5,11 +5,11 @@ import type { SymbolTypeFlags } from '../SymbolTable';
 import { isDynamicType, isReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
+import { BscTypeKind } from './BscTypeKind';
 
 export function referenceTypeFactory(memberKey: string, fullName, flags: SymbolTypeFlags, tableProvider: SymbolTypeGetterProvider) {
     return new ReferenceType(memberKey, fullName, flags, tableProvider);
 }
-
 
 export class ReferenceType extends BscType {
 
@@ -150,6 +150,8 @@ export class ReferenceType extends BscType {
             }
         });
     }
+
+    public readonly kind = BscTypeKind.ReferenceType;
 
     /**
      * Resolves the type based on the original name and the table provider
