@@ -10,7 +10,6 @@ import { LongIntegerType } from '../types/LongIntegerType';
 import { StringType } from '../types/StringType';
 import util from '../util';
 import type { TranspileState } from './TranspileState';
-import { FunctionType } from '../types/FunctionType';
 
 export interface SGToken {
     text: string;
@@ -457,13 +456,6 @@ export class SGInterfaceField extends SGElement {
     set alwaysNotify(value: string) {
         this.setAttributeValue('alwaysNotify', value);
     }
-
-    /**
-     * Get the `BscType` instance that represents the type for this interface field
-     */
-    getType() {
-        return getBscTypeFromSGFieldType(this.type);
-    }
 }
 
 export enum SGFieldType {
@@ -528,13 +520,6 @@ export class SGInterfaceFunction extends SGElement {
     }
     set name(value: string) {
         this.setAttributeValue('name', value);
-    }
-
-    get functionType(): FunctionType {
-        const funcType = new FunctionType(new DynamicType());
-        funcType.name = this.name;
-        // TODO TYPES: Need to get parameter count/type for these functions for @callFunc usage
-        return funcType;
     }
 }
 
@@ -683,7 +668,7 @@ export class SGComponent extends SGElement {
         return members as Readonly<typeof members>;
     }
 
-    public get scripts() {
+    public get scriptElements() {
         return this.getElementsByTagName<SGScript>('script');
     }
 
@@ -710,6 +695,16 @@ export class SGComponent extends SGElement {
         return this.getElementsByTagName<SGCustomization>('customization');
     }
 
+    /**
+     * Specifies the name of the component, that allows you to create the component in your application.
+     * For example, if the name of the component is `CastMemberInfo`, you could create instances of the component declaratively
+     * in a child node element of a component `<children>` element (`<CastMemberInfo/>`), or using BrightScript in a `<script>`
+     * element (`createObject("roSGNode","CastMemberInfo")`).
+     *
+     * The name attribute is case-sensitive. You cannot successfully create or declare a component unless the component name exactly
+     *  matches the name attribute, including case. Also be aware that two components with the exact same name in the same application
+     * components directory will have undefined and generally undesirable results if you attempt to create a component object with that name in the application.
+     */
     get name() {
         return this.getAttributeValue('name');
     }
@@ -717,6 +712,13 @@ export class SGComponent extends SGElement {
         this.setAttributeValue('name', value);
     }
 
+    /**
+     * Specifies the name of the built-in or extended SceneGraph scene or node class whose functionality is extended by this component.
+     *
+     * For example, `extends="Group"` specifies that the component has all of the functionality of the Group node class (it can have child nodes, has translation/scale/rotation fields, and so forth).
+     *
+     * By default, a component extends the Group node class.
+     */
     get extends() {
         return this.getAttributeValue('extends');
     }
@@ -724,12 +726,24 @@ export class SGComponent extends SGElement {
         this.setAttributeValue('extends', value);
     }
 
-    //TODO verify this is the right name
+    /**
+     * Specifies the ID of a node declared in the XML file to have the initial remote control focus when the component is instantiated.
+     */
     get initialFocus() {
         return this.getAttributeValue('initialFocus');
     }
     set initialFocus(value: string) {
         this.setAttributeValue('initialFocus', value);
+    }
+
+    /**
+     * Specifies the version of the SceneGraph API. The default is 1.0 if not specified.
+     */
+    get version() {
+        return this.getAttributeValue('version');
+    }
+    set version(value: string) {
+        this.setAttributeValue('version', value);
     }
 
     /**

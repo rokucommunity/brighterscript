@@ -19,7 +19,7 @@ export class XmlFilePreTranspileProcessor {
         this.injectScriptImports();
 
         //transform any brighterscript `type` attributes to `brightscript`
-        for (const script of this.event.file.ast?.component?.scripts ?? []) {
+        for (const script of this.event.file.ast?.component?.scriptElements ?? []) {
             const type = script.getAttribute('type');
             if (/text\/brighterscript/i.test(type?.value)) {
                 this.event.editor.setProperty(
