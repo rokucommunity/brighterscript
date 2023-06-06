@@ -1,9 +1,10 @@
 import { URI } from 'vscode-uri';
-import { isBrsFile, isLiteralExpression, isNamespaceStatement, isXmlScope } from '../../astUtils/reflection';
+import { isBinaryExpression, isBrsFile, isLiteralExpression, isNamespaceStatement, isTypeExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
+import { SymbolTypeFlags } from '../../SymbolTable';
 import type { EnumStatement, NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
@@ -11,9 +12,10 @@ import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
-import type { Expression } from '../../parser/AstNode';
+import type { AstNode, Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
+import { TokenKind } from '../../lexer/TokenKind';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -54,19 +56,31 @@ export class ScopeValidator {
         });
     }
 
+
+    private checkIfUsedAsTypeExpression(expression: AstNode): boolean {
+        //TODO: this is much faster than node.findAncestor(), but will not work for "complicated" type expressions
+        // like UnionTypes
+        if (isTypeExpression(expression) ||
+            isTypeExpression(expression.parent)) {
+            return true;
+        }
+        if (isBinaryExpression(expression.parent)) {
+            let currentExpr: AstNode = expression.parent;
+            while (isBinaryExpression(currentExpr) && currentExpr.operator.kind === TokenKind.Or) {
+                currentExpr = currentExpr.parent;
+            }
+            return isTypeExpression(currentExpr);
+        }
+        return false;
+    }
+
     private expressionsByFile = new Cache<BrsFile, Readonly<ExpressionInfo>[]>();
     private iterateFileExpressions(file: BrsFile) {
         const { scope } = this.event;
         //build an expression collection ONCE per file
         const expressionInfos = this.expressionsByFile.getOrAdd(file, () => {
             const result: DeepWriteable<ExpressionInfo[]> = [];
-            const expressions = [
-                ...file.parser.references.expressions,
-                //all class "extends <whatever>" expressions
-                ...file.parser.references.classStatements.map(x => x.parentClassName?.expression),
-                //all interface "extends <whatever>" expressions
-                ...file.parser.references.interfaceStatements.map(x => x.parentInterfaceName?.expression)
-            ];
+            const expressions = [...file.parser.references.expressions];
             for (let expression of expressions) {
                 if (!expression) {
                     continue;
@@ -88,25 +102,74 @@ export class ScopeValidator {
 
         outer:
         for (const info of expressionInfos) {
-            const symbolTable = info.expression.getSymbolTable();
-            const firstPart = info.parts[0];
             const firstNamespacePart = info.parts[0].name.text;
             const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
             //get the namespace container (accounting for namespace-relative as well)
             const namespaceContainer = scope.getNamespace(firstNamespacePartLower, info.enclosingNamespaceNameLower);
+            const isUsedAsType = this.checkIfUsedAsTypeExpression(info.expression);
+            let symbolType = SymbolTypeFlags.runtime;
+            let oppositeSymbolType = SymbolTypeFlags.typetime;
+            if (isUsedAsType) {
+                // This is used in a TypeExpression - only look up types from SymbolTable
+                symbolType = SymbolTypeFlags.typetime;
+                oppositeSymbolType = SymbolTypeFlags.runtime;
+            }
 
-            //flag all unknown left-most variables
-            if (
-                !symbolTable?.hasSymbol(firstPart.name?.text) &&
-                !namespaceContainer
-            ) {
-                this.addMultiScopeDiagnostic({
-                    file: file as BscFile,
-                    ...DiagnosticMessages.cannotFindName(firstPart.name?.text),
-                    range: firstPart.name.range
+            if (scope.program.options.enableTypeValidation) {
+                // Do a complete type check on all DottedGet and Variable expressions
+                // this will create a diagnostic if an invalid member is accessed
+                const typeChain = [];
+                let exprType = info.expression.getType({
+                    flags: symbolType,
+                    typeChain: typeChain
                 });
-                //skip to the next expression
-                continue;
+
+                if (!exprType || !exprType.isResolvable()) {
+                    if (info.expression.getType({ flags: oppositeSymbolType })?.isResolvable()) {
+                        const oppoSiteTypeChain = [];
+                        const invalidlyUsedResolvedType = info.expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain });
+                        const typeChainScan = util.processTypeChain(oppoSiteTypeChain);
+                        if (isUsedAsType) {
+                            this.addMultiScopeDiagnostic({
+                                ...DiagnosticMessages.itemCannotBeUsedAsType(typeChainScan.fullChainName),
+                                range: info.expression.range,
+                                file: file
+                            }, 'When used in scope');
+                        } else {
+                            this.addMultiScopeDiagnostic({
+                                ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedType.toString()),
+                                range: info.expression.range,
+                                file: file
+                            }, 'When used in scope');
+                        }
+                        continue;
+                    }
+
+                    const typeChainScan = util.processTypeChain(typeChain);
+                    this.addMultiScopeDiagnostic({
+                        file: file as BscFile,
+                        ...DiagnosticMessages.cannotFindName(typeChainScan.missingItemName, typeChainScan.fullNameOfMissingItem),
+                        range: typeChainScan.range
+                    });
+                    //skip to the next expression
+                    continue;
+                }
+            } else {
+                //flag all unknown left-most variables only
+                const symbolTable = info.expression.getSymbolTable();
+                const firstPart = info.parts[0];
+                if (
+                    !symbolTable?.hasSymbol(firstPart.name?.text, symbolType) &&
+                    !namespaceContainer
+                ) {
+                    this.addMultiScopeDiagnostic({
+                        file: file as BscFile,
+                        ...DiagnosticMessages.cannotFindName(firstPart.name?.text),
+                        range: firstPart.name.range
+                    });
+                    //skip to the next expression
+                    continue;
+                }
             }
 
             const enumStatement = scope.getEnum(firstNamespacePartLower, info.enclosingNamespaceNameLower);
@@ -132,6 +195,7 @@ export class ScopeValidator {
                 if (
                     !scope.getEnumMap().has(entityNameLower) &&
                     !scope.getClassMap().has(entityNameLower) &&
+                    !scope.getInterfaceMap().has(entityNameLower) &&
                     !scope.getConstMap().has(entityNameLower) &&
                     !scope.getCallableByName(entityNameLower) &&
                     !scope.getNamespace(entityNameLower, info.enclosingNamespaceNameLower)
@@ -162,6 +226,15 @@ export class ScopeValidator {
                     continue outer;
                 }
             }
+            //if the full expression is just an enum name, this is an illegal statement because enums don't exist at runtime
+            if (!isUsedAsType && enumStatement && info.parts.length === 1) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.itemCannotBeUsedAsVariable('enum'),
+                    range: info.expression.range,
+                    file: file
+                }, 'When used in scope');
+            }
+
             //if the full expression is a namespace path, this is an illegal statement because namespaces don't exist at runtme
             if (scope.getNamespace(entityNameLower, info.enclosingNamespaceNameLower)) {
                 this.addMultiScopeDiagnostic({

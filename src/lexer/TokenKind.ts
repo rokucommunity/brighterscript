@@ -616,6 +616,12 @@ export const DeclarableTypes = [
     TokenKind.Function
 ];
 
+/** List of TokenKind that will not break parsing a TypeExpression in Brighterscript*/
+export const AllowedTypeIdentifiers = [
+    ...AllowedProperties
+];
+
+
 /**
  * The tokens that might preceed a regex literal
  */

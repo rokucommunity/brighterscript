@@ -1030,15 +1030,14 @@ describe('BrsFile BrighterScript classes', () => {
                 public owner as Person
             end class
             class Duck extends Bird
-                public age = 12.2 'should be integer but is float
+                public age = 12.2 'should be integer, but a float can be assigned to an int
                 public name = 12 'should be string but is integer
                 public owner as string
             end class
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.cannotFindType('Person'),
-            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'age', 'float', 'integer'),
+            DiagnosticMessages.cannotFindName('Person'),
             DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'name', 'integer', 'string'),
             DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'owner', 'string', 'Person')
         ]);
@@ -1178,9 +1177,12 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             `);
             program.validate();
-            expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird')
-            ]);
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird'),
+                relatedInformation: [{
+                    message: `Not defined in scope 'source'`
+                }]
+            }]);
         });
 
         it('namespaced parent class from inside namespace', () => {
@@ -1199,12 +1201,9 @@ describe('BrsFile BrighterScript classes', () => {
                 end namespace
             `);
             program.validate();
-            expectDiagnostics(program, [{
-                ...DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird'),
-                relatedInformation: [{
-                    message: `Not defined in scope 'source'`
-                }]
-            }]);
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird').message
+            ]);
         });
     });
 
