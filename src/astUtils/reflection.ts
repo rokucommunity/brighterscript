@@ -265,10 +265,10 @@ export function isTypedefProvider(element: any): element is TypedefProvider {
     return 'getTypedef' in element;
 }
 export function isTypeExpression(element: any): element is TypeExpression {
-    return element?.constructor.name === 'TypeExpression';
+    return element?.kind === AstNodeKind.TypeExpression;
 }
 export function isTypeCastExpression(element: any): element is TypeCastExpression {
-    return element?.constructor.name === 'TypeCastExpression';
+    return element?.kind === AstNodeKind.TypeCastExpression;
 }
 
 // BscType reflection

@@ -1,5 +1,5 @@
 import type { Expression } from '../parser/AstNode';
-import type { CallExpression, CallfuncExpression, NewExpression } from '../parser/Expression';
+import type { CallExpression, CallfuncExpression, NewExpression, VariableExpression } from '../parser/Expression';
 import type { ClassStatement, NamespaceStatement } from '../parser/Statement';
 import { isCallExpression, isCallfuncExpression, isVariableExpression, isDottedGetExpression, isClassStatement, isNewExpression } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
@@ -66,11 +66,11 @@ export class CallExpressionInfo {
             this.newExpression = callExpression.parent;
         }
         if (isCallfuncExpression(callExpression)) {
-            this.name = callExpression.methodName.text;
+            this.name = (callExpression as CallfuncExpression).methodName.text;
         } else if (isVariableExpression(callExpression.callee)) {
             this.name = callExpression.callee.name.text;
         } else if (isVariableExpression(callExpression)) {
-            this.name = callExpression.name.text;
+            this.name = (callExpression as VariableExpression).name.text;
         } else if (isDottedGetExpression(callExpression.callee)) {
             this.name = callExpression.callee.name.text;
             if (isDottedGetExpression(callExpression.callee) && isVariableExpression(callExpression.callee.obj)) {
@@ -116,7 +116,7 @@ export class CallExpressionInfo {
             }
         }
 
-        return callExpression;
+        return callExpression as CallExpression;
     }
 
     ascertainType(): CallExpressionType {

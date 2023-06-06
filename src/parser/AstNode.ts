@@ -215,5 +215,7 @@ export enum AstNodeKind {
     EnumMemberStatement = 63,
     ConstStatement = 64,
     ContinueStatement = 65,
-    Block = 66
+    Block = 66,
+    TypeExpression = 67,
+    TypeCastExpression = 68
 }

@@ -29,7 +29,6 @@ import { VoidType } from '../types/VoidType';
 import { FunctionType } from '../types/FunctionType';
 
 export class EmptyStatement extends Statement {
-    kind = AstNodeKind.EmptyStatement;
     constructor(
         /**
          * Create a negative range to indicate this is an interpolated location
@@ -38,6 +37,8 @@ export class EmptyStatement extends Statement {
     ) {
         super();
     }
+
+    public readonly kind = AstNodeKind.EmptyStatement;
 
     transpile(state: BrsTranspileState) {
         return [];
@@ -51,12 +52,13 @@ export class EmptyStatement extends Statement {
  * This is a top-level statement. Consider this the root of the AST
  */
 export class Body extends Statement implements TypedefProvider {
-    kind = AstNodeKind.Body;
     constructor(
         public statements: Statement[] = []
     ) {
         super();
     }
+
+    public readonly kind = AstNodeKind.Body;
 
     public symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
 
@@ -123,7 +125,6 @@ export class Body extends Statement implements TypedefProvider {
 }
 
 export class AssignmentStatement extends Statement {
-    kind = AstNodeKind.AssignmentStatement;
     constructor(
         public equals: Token,
         public name: Identifier,
@@ -134,6 +135,8 @@ export class AssignmentStatement extends Statement {
         super();
         this.range = util.createBoundingRange(name, equals, value);
     }
+
+    public readonly kind = AstNodeKind.AssignmentStatement;
 
     public readonly range: Range;
 
@@ -174,7 +177,6 @@ export class AssignmentStatement extends Statement {
 }
 
 export class Block extends Statement {
-    kind = AstNodeKind.Block;
     constructor(
         readonly statements: Statement[],
         readonly startingRange: Range
@@ -185,6 +187,8 @@ export class Block extends Statement {
             ...(statements ?? [])
         );
     }
+
+    public readonly kind = AstNodeKind.Block;
 
     public readonly range: Range;
 
@@ -229,13 +233,14 @@ export class Block extends Statement {
 }
 
 export class ExpressionStatement extends Statement {
-    kind = AstNodeKind.ExpressionStatement;
     constructor(
         readonly expression: Expression
     ) {
         super();
         this.range = this.expression.range;
     }
+
+    public readonly kind = AstNodeKind.ExpressionStatement;
 
     public readonly range: Range;
 
@@ -251,7 +256,6 @@ export class ExpressionStatement extends Statement {
 }
 
 export class CommentStatement extends Statement implements Expression, TypedefProvider {
-    kind = AstNodeKind.CommentStatement;
     constructor(
         public comments: Token[]
     ) {
@@ -263,6 +267,8 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
             );
         }
     }
+
+    public readonly kind = AstNodeKind.CommentStatement;
 
     public range: Range;
 
@@ -298,7 +304,6 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
 }
 
 export class ExitForStatement extends Statement {
-    kind = AstNodeKind.ExitForStatement;
     constructor(
         readonly tokens: {
             exitFor: Token;
@@ -307,6 +312,8 @@ export class ExitForStatement extends Statement {
         super();
         this.range = this.tokens.exitFor.range;
     }
+
+    public readonly kind = AstNodeKind.ExitForStatement;
 
     public readonly range: Range;
 
@@ -323,7 +330,6 @@ export class ExitForStatement extends Statement {
 }
 
 export class ExitWhileStatement extends Statement {
-    kind = AstNodeKind.ExitWhileStatement;
     constructor(
         readonly tokens: {
             exitWhile: Token;
@@ -332,6 +338,8 @@ export class ExitWhileStatement extends Statement {
         super();
         this.range = this.tokens.exitWhile.range;
     }
+
+    public readonly kind = AstNodeKind.ExitWhileStatement;
 
     public readonly range: Range;
 
@@ -347,7 +355,6 @@ export class ExitWhileStatement extends Statement {
 }
 
 export class FunctionStatement extends Statement implements TypedefProvider {
-    kind = AstNodeKind.FunctionStatement;
     constructor(
         public name: Identifier,
         public func: FunctionExpression
@@ -355,6 +362,8 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         super();
         this.range = this.func.range;
     }
+
+    public readonly kind = AstNodeKind.FunctionStatement as AstNodeKind;
 
     public readonly range: Range;
 
@@ -420,7 +429,6 @@ export class FunctionStatement extends Statement implements TypedefProvider {
 }
 
 export class IfStatement extends Statement {
-    kind = AstNodeKind.IfStatement;
     constructor(
         readonly tokens: {
             if: Token;
@@ -444,6 +452,9 @@ export class IfStatement extends Statement {
             tokens.endIf
         );
     }
+
+    public readonly kind = AstNodeKind.IfStatement;
+
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
@@ -536,7 +547,6 @@ export class IfStatement extends Statement {
 }
 
 export class IncrementStatement extends Statement {
-    kind = AstNodeKind.IncrementStatement;
     constructor(
         readonly value: Expression,
         readonly operator: Token
@@ -547,6 +557,8 @@ export class IncrementStatement extends Statement {
             operator
         );
     }
+
+    public readonly kind = AstNodeKind.IncrementStatement;
 
     public readonly range: Range;
 
@@ -578,13 +590,12 @@ export interface PrintSeparatorSpace extends Token {
  * Represents a `print` statement within BrightScript.
  */
 export class PrintStatement extends Statement {
-    kind = AstNodeKind.PrintStatement;
     /**
-         * Creates a new internal representation of a BrightScript `print` statement.
-         * @param tokens the tokens for this statement
-         * @param tokens.print a print token
-         * @param expressions an array of expressions or `PrintSeparator`s to be evaluated and printed.
-         */
+     * Creates a new internal representation of a BrightScript `print` statement.
+     * @param tokens the tokens for this statement
+     * @param tokens.print a print token
+     * @param expressions an array of expressions or `PrintSeparator`s to be evaluated and printed.
+     */
     constructor(
         readonly tokens: {
             print: Token;
@@ -597,6 +608,8 @@ export class PrintStatement extends Statement {
             ...(expressions ?? [])
         );
     }
+
+    public readonly kind = AstNodeKind.PrintStatement;
 
     public readonly range: Range;
 
@@ -631,7 +644,6 @@ export class PrintStatement extends Statement {
 }
 
 export class DimStatement extends Statement {
-    kind = AstNodeKind.DimStatement;
     constructor(
         public dimToken: Token,
         public identifier?: Identifier,
@@ -648,6 +660,9 @@ export class DimStatement extends Statement {
             closingSquare
         );
     }
+
+    public readonly kind = AstNodeKind.DimStatement;
+
     public range: Range;
 
     public transpile(state: BrsTranspileState) {
@@ -678,7 +693,6 @@ export class DimStatement extends Statement {
 }
 
 export class GotoStatement extends Statement {
-    kind = AstNodeKind.GotoStatement;
     constructor(
         readonly tokens: {
             goto: Token;
@@ -691,6 +705,8 @@ export class GotoStatement extends Statement {
             tokens.label
         );
     }
+
+    public readonly kind = AstNodeKind.GotoStatement;
 
     public readonly range: Range;
 
@@ -708,7 +724,6 @@ export class GotoStatement extends Statement {
 }
 
 export class LabelStatement extends Statement {
-    kind = AstNodeKind.LabelStatement;
     constructor(
         readonly tokens: {
             identifier: Token;
@@ -721,6 +736,8 @@ export class LabelStatement extends Statement {
             tokens.colon
         );
     }
+
+    public readonly kind = AstNodeKind.LabelStatement;
 
     public readonly range: Range;
 
@@ -738,7 +755,6 @@ export class LabelStatement extends Statement {
 }
 
 export class ReturnStatement extends Statement {
-    kind = AstNodeKind.ReturnStatement;
     constructor(
         readonly tokens: {
             return: Token;
@@ -751,6 +767,8 @@ export class ReturnStatement extends Statement {
             value
         );
     }
+
+    public readonly kind = AstNodeKind.ReturnStatement;
 
     public readonly range: Range;
 
@@ -774,7 +792,6 @@ export class ReturnStatement extends Statement {
 }
 
 export class EndStatement extends Statement {
-    kind = AstNodeKind.EndStatement;
     constructor(
         readonly tokens: {
             end: Token;
@@ -783,6 +800,8 @@ export class EndStatement extends Statement {
         super();
         this.range = tokens.end.range;
     }
+
+    public readonly kind = AstNodeKind.EndStatement;
 
     public readonly range: Range;
 
@@ -798,7 +817,6 @@ export class EndStatement extends Statement {
 }
 
 export class StopStatement extends Statement {
-    kind = AstNodeKind.StopStatement;
     constructor(
         readonly tokens: {
             stop: Token;
@@ -807,6 +825,8 @@ export class StopStatement extends Statement {
         super();
         this.range = tokens?.stop?.range;
     }
+
+    public readonly kind = AstNodeKind.StopStatement;
 
     public readonly range: Range;
 
@@ -822,7 +842,6 @@ export class StopStatement extends Statement {
 }
 
 export class ForStatement extends Statement {
-    kind = AstNodeKind.ForStatement;
     constructor(
         public forToken: Token,
         public counterDeclaration: AssignmentStatement,
@@ -845,6 +864,8 @@ export class ForStatement extends Statement {
             endForToken
         );
     }
+
+    public readonly kind = AstNodeKind.ForStatement;
 
     public readonly range: Range;
 
@@ -908,7 +929,6 @@ export class ForStatement extends Statement {
 }
 
 export class ForEachStatement extends Statement {
-    kind = AstNodeKind.ForEachStatement;
     constructor(
         readonly tokens: {
             forEach: Token;
@@ -929,6 +949,8 @@ export class ForEachStatement extends Statement {
             tokens.endFor
         );
     }
+
+    public readonly kind = AstNodeKind.ForEachStatement;
 
     public readonly range: Range;
 
@@ -978,7 +1000,6 @@ export class ForEachStatement extends Statement {
 }
 
 export class WhileStatement extends Statement {
-    kind = AstNodeKind.WhileStatement;
     constructor(
         readonly tokens: {
             while: Token;
@@ -995,6 +1016,8 @@ export class WhileStatement extends Statement {
             tokens.endWhile
         );
     }
+
+    public readonly kind = AstNodeKind.WhileStatement;
 
     public readonly range: Range;
 
@@ -1037,7 +1060,6 @@ export class WhileStatement extends Statement {
 }
 
 export class DottedSetStatement extends Statement {
-    kind = AstNodeKind.DottedSetStatement;
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
@@ -1052,6 +1074,8 @@ export class DottedSetStatement extends Statement {
             value
         );
     }
+
+    public readonly kind = AstNodeKind.DottedSetStatement;
 
     public readonly range: Range;
 
@@ -1082,7 +1106,6 @@ export class DottedSetStatement extends Statement {
 }
 
 export class IndexedSetStatement extends Statement {
-    kind = AstNodeKind.IndexedSetStatement;
     constructor(
         readonly obj: Expression,
         readonly index: Expression,
@@ -1099,6 +1122,8 @@ export class IndexedSetStatement extends Statement {
             value
         );
     }
+
+    public readonly kind = AstNodeKind.IndexedSetStatement;
 
     public readonly range: Range;
 
@@ -1134,7 +1159,6 @@ export class IndexedSetStatement extends Statement {
 }
 
 export class LibraryStatement extends Statement implements TypedefProvider {
-    kind = AstNodeKind.LibraryStatement;
     constructor(
         readonly tokens: {
             library: Token;
@@ -1147,6 +1171,8 @@ export class LibraryStatement extends Statement implements TypedefProvider {
             this.tokens.filePath
         );
     }
+
+    public readonly kind = AstNodeKind.LibraryStatement;
 
     public readonly range: Range;
 
@@ -1175,7 +1201,6 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 }
 
 export class NamespaceStatement extends Statement implements TypedefProvider {
-    kind = AstNodeKind.NamespaceStatement;
     constructor(
         public keyword: Token,
         // this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
@@ -1187,6 +1212,8 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         this.name = this.getName(ParseMode.BrighterScript);
         this.symbolTable = new SymbolTable(`NamespaceStatement: '${this.name}'`, () => this.parent?.getSymbolTable());
     }
+
+    public readonly kind = AstNodeKind.NamespaceStatement;
 
     /**
      * The string name for this namespace
@@ -1264,7 +1291,6 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
 }
 
 export class ImportStatement extends Statement implements TypedefProvider {
-    kind = AstNodeKind.ImportStatement;
     constructor(
         readonly importToken: Token,
         readonly filePathToken: Token
@@ -1286,8 +1312,11 @@ export class ImportStatement extends Statement implements TypedefProvider {
             );
         }
     }
-    public filePath: string;
+    public readonly kind = AstNodeKind.ImportStatement;
+
     public range: Range;
+
+    public filePath: string;
 
     transpile(state: BrsTranspileState) {
         //The xml files are responsible for adding the additional script imports, but
@@ -1318,7 +1347,6 @@ export class ImportStatement extends Statement implements TypedefProvider {
 }
 
 export class InterfaceStatement extends Statement implements TypedefProvider {
-    kind = AstNodeKind.InterfaceStatement;
     constructor(
         interfaceToken: Token,
         name: Identifier,
@@ -1341,6 +1369,8 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             this.tokens.endInterface
         );
     }
+
+    public readonly kind = AstNodeKind.InterfaceStatement;
 
     public tokens = {} as {
         interface: Token;
@@ -1495,7 +1525,6 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
 }
 
 export class InterfaceFieldStatement extends Statement implements TypedefProvider {
-    kind = AstNodeKind.InterfaceFieldStatement;
     public transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('Method not implemented.');
     }
@@ -1513,6 +1542,8 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
             this.typeExpression
         );
     }
+
+    public readonly kind = AstNodeKind.InterfaceFieldStatement;
 
     public range: Range;
 
@@ -1562,7 +1593,6 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
 //TODO: there is much that is similar with this and FunctionExpression.
 //It would be nice to refactor this so there is less duplicated code
 export class InterfaceMethodStatement extends Statement implements TypedefProvider {
-    kind = AstNodeKind.InterfaceMethodStatement;
     public transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('Method not implemented.');
     }
@@ -1582,6 +1612,8 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         this.tokens.rightParen = rightParen;
         this.tokens.as = asToken;
     }
+
+    public readonly kind = AstNodeKind.InterfaceMethodStatement;
 
     public get range() {
         return util.createBoundingRange(
@@ -1670,8 +1702,6 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
 }
 
 export class ClassStatement extends Statement implements TypedefProvider {
-
-    kind = AstNodeKind.ClassStatement;
     constructor(
         readonly classKeyword: Token,
         /**
@@ -1706,6 +1736,8 @@ export class ClassStatement extends Statement implements TypedefProvider {
         );
     }
 
+    public readonly kind = AstNodeKind.ClassStatement;
+
     /**
      * Get the name of the wrapping namespace (if it exists)
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
@@ -1713,7 +1745,6 @@ export class ClassStatement extends Statement implements TypedefProvider {
     public get namespaceName() {
         return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
     }
-
 
     public getName(parseMode: ParseMode) {
         const name = this.name?.text;
@@ -2081,7 +2112,6 @@ const accessModifiers = [
     TokenKind.Private
 ];
 export class MethodStatement extends FunctionStatement {
-    kind = AstNodeKind.MethodStatement;
     constructor(
         modifiers: Token | Token[],
         name: Identifier,
@@ -2102,6 +2132,8 @@ export class MethodStatement extends FunctionStatement {
             func
         );
     }
+
+    public readonly kind = AstNodeKind.MethodStatement as AstNodeKind;
 
     public modifiers: Token[] = [];
 
@@ -2269,8 +2301,6 @@ export class MethodStatement extends FunctionStatement {
 export class ClassMethodStatement extends MethodStatement { }
 
 export class FieldStatement extends Statement implements TypedefProvider {
-
-    kind = AstNodeKind.FieldStatement;
     constructor(
         readonly accessModifier?: Token,
         readonly name?: Identifier,
@@ -2289,6 +2319,8 @@ export class FieldStatement extends Statement implements TypedefProvider {
             initialValue
         );
     }
+
+    public readonly kind = AstNodeKind.FieldStatement;
 
     /**
      * Derive a ValueKind from the type token, or the initial value.
@@ -2352,7 +2384,6 @@ export type MemberStatement = FieldStatement | MethodStatement;
 export type ClassMemberStatement = MemberStatement;
 
 export class TryCatchStatement extends Statement {
-    kind = AstNodeKind.TryCatchStatement;
     constructor(
         public tokens: {
             try: Token;
@@ -2369,6 +2400,8 @@ export class TryCatchStatement extends Statement {
             tokens.endTry
         );
     }
+
+    public readonly kind = AstNodeKind.TryCatchStatement;
 
     public readonly range: Range;
 
@@ -2394,7 +2427,6 @@ export class TryCatchStatement extends Statement {
 }
 
 export class CatchStatement extends Statement {
-    kind = AstNodeKind.CatchStatement;
     constructor(
         public tokens: {
             catch: Token;
@@ -2409,6 +2441,8 @@ export class CatchStatement extends Statement {
             catchBranch
         );
     }
+
+    public readonly kind = AstNodeKind.CatchStatement;
 
     public range: Range;
 
@@ -2429,7 +2463,6 @@ export class CatchStatement extends Statement {
 }
 
 export class ThrowStatement extends Statement {
-    kind = AstNodeKind.ThrowStatement;
     constructor(
         public throwToken: Token,
         public expression?: Expression
@@ -2440,6 +2473,9 @@ export class ThrowStatement extends Statement {
             expression
         );
     }
+
+    public readonly kind = AstNodeKind.ThrowStatement;
+
     public range: Range;
 
     public transpile(state: BrsTranspileState) {
@@ -2470,8 +2506,6 @@ export class ThrowStatement extends Statement {
 
 
 export class EnumStatement extends Statement implements TypedefProvider {
-
-    kind = AstNodeKind.EnumStatement;
     constructor(
         public tokens: {
             enum: Token;
@@ -2484,8 +2518,9 @@ export class EnumStatement extends Statement implements TypedefProvider {
         this.body = this.body ?? [];
     }
 
-    public symbolTable = new SymbolTable('Enum');
+    public readonly kind = AstNodeKind.EnumStatement;
 
+    public symbolTable = new SymbolTable('Enum');
 
     public get range(): Range {
         return util.createBoundingRange(
@@ -2638,8 +2673,6 @@ export class EnumStatement extends Statement implements TypedefProvider {
 }
 
 export class EnumMemberStatement extends Statement implements TypedefProvider {
-
-    kind = AstNodeKind.EnumMemberStatement;
     public constructor(
         public tokens: {
             name: Identifier;
@@ -2650,12 +2683,7 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         super();
     }
 
-    /**
-     * The name of the member
-     */
-    public get name() {
-        return this.tokens.name.text;
-    }
+    public readonly kind = AstNodeKind.EnumMemberStatement;
 
     public get range() {
         return util.createBoundingRange(
@@ -2663,6 +2691,13 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
             this.tokens.equal,
             this.value
         );
+    }
+
+    /**
+     * The name of the member
+     */
+    public get name() {
+        return this.tokens.name.text;
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {
@@ -2696,8 +2731,6 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
 }
 
 export class ConstStatement extends Statement implements TypedefProvider {
-
-    kind = AstNodeKind.ConstStatement;
     public constructor(
         public tokens: {
             const: Token;
@@ -2709,6 +2742,8 @@ export class ConstStatement extends Statement implements TypedefProvider {
         super();
         this.range = util.createBoundingRange(this.tokens.const, this.tokens.name, this.tokens.equals, this.value);
     }
+
+    public readonly kind = AstNodeKind.ConstStatement;
 
     public range: Range;
 
@@ -2764,7 +2799,6 @@ export class ConstStatement extends Statement implements TypedefProvider {
 }
 
 export class ContinueStatement extends Statement {
-    kind = AstNodeKind.ContinueStatement;
     constructor(
         public tokens: {
             continue: Token;
@@ -2777,6 +2811,8 @@ export class ContinueStatement extends Statement {
             tokens.loopType
         );
     }
+
+    public readonly kind = AstNodeKind.ContinueStatement;
 
     public range: Range;
 
