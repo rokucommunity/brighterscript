@@ -5,9 +5,11 @@ import { CancellationTokenSource } from 'vscode-languageserver';
 import { InternalWalkMode } from '../astUtils/visitors';
 import type { SymbolTable } from '../SymbolTable';
 import type { BrsTranspileState } from './BrsTranspileState';
-import type { TranspileResult } from '../interfaces';
+import type { GetTypeOptions, TranspileResult } from '../interfaces';
 import type { AnnotationExpression } from './Expression';
 import util from '../util';
+import { DynamicType } from '../types/DynamicType';
+import type { BscType } from '../types/BscType';
 
 /**
  * A BrightScript AST node
@@ -105,6 +107,13 @@ export abstract class AstNode {
                 return node.findChildAtPosition(position, options) ?? node;
             }
         }, options);
+    }
+
+    /**
+     * Get the BscType of this node.
+     */
+    public getType(options: GetTypeOptions): BscType {
+        return DynamicType.instance;
     }
 
     /**

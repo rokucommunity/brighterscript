@@ -13,25 +13,27 @@ import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
-import type { FunctionExpression, VariableExpression } from '../parser/Expression';
-import type { ClassStatement, FunctionStatement, NamespaceStatement, AssignmentStatement, MethodStatement, FieldStatement } from '../parser/Statement';
+import type { FunctionExpression, TypeExpression, VariableExpression } from '../parser/Expression';
+import type { ClassStatement, FunctionStatement, NamespaceStatement, MethodStatement, FieldStatement, AssignmentStatement } from '../parser/Statement';
 import type { Program } from '../Program';
 import { DynamicType } from '../types/DynamicType';
-import { FunctionType } from '../types/FunctionType';
-import { VoidType } from '../types/VoidType';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
-import type { BscType } from '../types/BscType';
+import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement, isCallExpression, isFunctionExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
-
+import { SymbolTypeFlags } from '../SymbolTable';
+import type { BscType } from '../types/BscType';
+import { ClassType } from '../types/ClassType';
+import { createIdentifier } from '../astUtils/creators';
+import { FunctionType } from '../types/FunctionType';
+import { VoidType } from '../types/VoidType';
 /**
  * Holds all details about this file within the scope of the whole program
  */
@@ -460,11 +462,18 @@ export class BrsFile {
 
             //add every parameter
             for (let param of func.parameters) {
+                let paramType;
                 scope.variableDeclarations.push({
                     nameRange: param.name.range,
                     lineIndex: param.name.range.start.line,
                     name: param.name.text,
-                    type: param.type
+                    getType: () => {
+                        if (this.program.options.enableTypeValidation) {
+                            return param.getType({ flags: SymbolTypeFlags.typetime });
+                        }
+                        paramType = paramType ?? this.getBscTypeFromTypeExpression(param.typeExpression);
+                        return paramType;
+                    }
                 });
             }
 
@@ -475,7 +484,7 @@ export class BrsFile {
                         nameRange: stmt.item.range,
                         lineIndex: stmt.item.range.start.line,
                         name: stmt.item.text,
-                        type: new DynamicType()
+                        getType: () => DynamicType.instance //TODO: Infer types from array
                     });
                 },
                 LabelStatement: (stmt) => {
@@ -506,38 +515,64 @@ export class BrsFile {
 
             //skip variable declarations that are outside of any scope
             if (scope) {
+                let assignmentType;
                 scope.variableDeclarations.push({
                     nameRange: statement.name.range,
                     lineIndex: statement.name.range.start.line,
                     name: statement.name.text,
-                    type: this.getBscTypeFromAssignment(statement, scope)
+                    getType: () => {
+                        if (this.program.options.enableTypeValidation) {
+                            return statement.getType({ flags: SymbolTypeFlags.runtime });
+                        }
+                        assignmentType = assignmentType ?? this.getBscTypeFromAssignment(statement, scope);
+                        return assignmentType;
+                    }
                 });
             }
         }
     }
 
+    /**
+     * Short circuit full `node.getType()` calls - used when enhancedTypeValidation is false
+     */
+    private getBscTypeFromTypeExpression(typeExpr: TypeExpression, defaultValue?: Expression): BscType {
+        const typeAsString = typeExpr?.getName();
+        if (typeAsString) {
+            return util.tokenToBscType(createIdentifier(typeAsString, typeExpr.range)) ?? new ClassType(typeAsString);
+        }
+        if (isLiteralExpression(defaultValue)) {
+            return defaultValue.getType({ flags: SymbolTypeFlags.typetime });
+        }
+        return DynamicType.instance;
+    }
+
+    private getFunctionTypeFromFuncExpr(expression: FunctionExpression, name: string): FunctionType {
+        let functionType = new FunctionType(this.getBscTypeFromTypeExpression(expression.returnTypeExpression));
+        functionType.isSub = expression.functionType.text === 'sub';
+        if (functionType.isSub) {
+            functionType.returnType = new VoidType();
+        }
+
+        functionType.setName(name);
+        for (let param of expression.parameters) {
+            let isOptional = !!param.defaultValue;
+            functionType.addParameter(param.name.text, this.getBscTypeFromTypeExpression(param.typeExpression, param.defaultValue), isOptional);
+        }
+        return functionType;
+    }
+
+    /**
+     * Short circuit full `node.getType()` calls - used when enhancedTypeValidation is false
+     */
     private getBscTypeFromAssignment(assignment: AssignmentStatement, scope: FunctionScope): BscType {
+        const getTypeOptions = { flags: SymbolTypeFlags.runtime };
         try {
             //function
             if (isFunctionExpression(assignment.value)) {
-                let functionType = new FunctionType(assignment.value.returnType);
-                functionType.isSub = assignment.value.functionType.text === 'sub';
-                if (functionType.isSub) {
-                    functionType.returnType = new VoidType();
-                }
-
-                functionType.setName(assignment.name.text);
-                for (let param of assignment.value.parameters) {
-                    let isOptional = !!param.defaultValue;
-                    //TODO compute optional parameters
-                    functionType.addParameter(param.name.text, param.type, isOptional);
-                }
-                return functionType;
-
+                return this.getFunctionTypeFromFuncExpr(assignment.value, assignment.name.text);
                 //literal
             } else if (isLiteralExpression(assignment.value)) {
-                return assignment.value.type;
-
+                return assignment.value.getType(getTypeOptions);
                 //function call
             } else if (isCallExpression(assignment.value)) {
                 let calleeName = (assignment.value.callee as any)?.name?.text;
@@ -550,13 +585,13 @@ export class BrsFile {
             } else if (isVariableExpression(assignment.value)) {
                 let variableName = assignment.value?.name?.text;
                 let variable = scope.getVariableByName(variableName);
-                return variable.type;
+                return variable.getType();
             }
         } catch (e) {
             //do nothing. Just return dynamic
         }
         //fallback to dynamic
-        return new DynamicType();
+        return DynamicType.instance;
     }
 
     private getCallableByName(name: string) {
@@ -574,26 +609,25 @@ export class BrsFile {
     private findCallables() {
         for (let statement of this.parser.references.functionStatements ?? []) {
 
-            let functionType = new FunctionType(statement.func.returnType);
-            functionType.setName(statement.name.text);
-            functionType.isSub = statement.func.functionType.text.toLowerCase() === 'sub';
-            if (functionType.isSub) {
-                functionType.returnType = new VoidType();
-            }
-
             //extract the parameters
             let params = [] as CallableParam[];
             for (let param of statement.func.parameters) {
+                const paramType = this.program.options.enableTypeValidation
+                    ? param.getType({ flags: SymbolTypeFlags.typetime })
+                    : this.getBscTypeFromTypeExpression(param.typeExpression, param.defaultValue);
+
                 let callableParam = {
                     name: param.name.text,
-                    type: param.type,
+                    type: paramType,
                     isOptional: !!param.defaultValue,
                     isRestArgument: false
                 };
                 params.push(callableParam);
-                let isOptional = !!param.defaultValue;
-                functionType.addParameter(callableParam.name, callableParam.type, isOptional);
             }
+
+            const funcType = this.program.options.enableTypeValidation
+                ? statement.getType({ flags: SymbolTypeFlags.typetime })
+                : this.getFunctionTypeFromFuncExpr(statement.func, statement.name.text);
 
             this.callables.push({
                 isSub: statement.func.functionType.text.toLowerCase() === 'sub',
@@ -602,7 +636,7 @@ export class BrsFile {
                 file: this,
                 params: params,
                 range: statement.func.range,
-                type: functionType,
+                type: funcType,
                 getName: statement.getName.bind(statement),
                 hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
                 functionStatement: statement
@@ -642,7 +676,7 @@ export class BrsFile {
                     if (isLiteralExpression(arg)) {
                         args.push({
                             range: arg.range,
-                            type: arg.type,
+                            type: arg.getType(),
                             text: arg.token.text,
                             expression: arg,
                             typeToken: undefined
@@ -886,7 +920,7 @@ export class BrsFile {
                 names[variable.name.toLowerCase()] = true;
                 result.push({
                     label: variable.name,
-                    kind: isFunctionType(variable.type) ? CompletionItemKind.Function : CompletionItemKind.Variable
+                    kind: isFunctionType(variable.getType()) ? CompletionItemKind.Function : CompletionItemKind.Variable
                 });
             }
 
@@ -894,7 +928,7 @@ export class BrsFile {
                 //include the first part of namespaces
                 let namespaces = scope.getAllNamespaceStatements();
                 for (let stmt of namespaces) {
-                    let firstPart = stmt.nameExpression.getNameParts().shift();
+                    let firstPart = util.getAllDottedGetParts(stmt.nameExpression).shift().text;
                     //skip duplicate namespace names
                     if (names[firstPart.toLowerCase()]) {
                         continue;

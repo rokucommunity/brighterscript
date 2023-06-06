@@ -1,13 +1,14 @@
 import type { Range } from 'vscode-languageserver-protocol';
 import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isCallExpression, isCustomType, isNamespaceStatement, isNewExpression } from '../../astUtils/reflection';
+import { isCallExpression, isClassType, isNamespaceStatement, isNewExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnGetSemanticTokensEvent } from '../../interfaces';
 import type { Locatable } from '../../lexer/Token';
 import { ParseMode } from '../../parser/Parser';
 import type { NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
+import { SymbolTypeFlags } from '../../SymbolTable';
 
 export class BrsFileSemanticTokensProcessor {
     public constructor(
@@ -34,13 +35,13 @@ export class BrsFileSemanticTokensProcessor {
 
         //classes used in function param types
         for (const func of this.event.file.parser.references.functionExpressions) {
-            for (const parm of func.parameters) {
-                if (isCustomType(parm.type)) {
-                    const namespace = parm.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            for (const param of func.parameters) {
+                if (isClassType(param.getType({ flags: SymbolTypeFlags.typetime }))) {
+                    const namespace = param.findAncestor<NamespaceStatement>(isNamespaceStatement);
                     classes.push({
-                        className: parm.typeToken.text,
+                        className: util.getAllDottedGetParts(param.typeExpression.expression).map(x => x.text).join('.'),
                         namespaceName: namespace?.getName(ParseMode.BrighterScript),
-                        range: parm.typeToken.range
+                        range: param.typeExpression.range
                     });
                 }
             }

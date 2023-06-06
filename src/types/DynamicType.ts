@@ -1,11 +1,19 @@
-import type { BscType } from './BscType';
+import type { GetTypeOptions } from '../interfaces';
+import { isDynamicType } from '../astUtils/reflection';
+import { BscType } from './BscType';
 
-export class DynamicType implements BscType {
+export class DynamicType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
+    ) {
+        super();
+    }
 
     public static readonly instance = new DynamicType();
+
+    get returnType() {
+        return DynamicType.instance;
+    }
 
     public isAssignableTo(targetType: BscType) {
         //everything can be dynamic, so as long as a type is provided, this is true
@@ -15,7 +23,7 @@ export class DynamicType implements BscType {
     /**
      * The dynamic type is convertible to everything.
      */
-    public isConvertibleTo(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType) {
         //everything can be dynamic, so as long as a type is provided, this is true
         return !!targetType;
     }
@@ -27,4 +35,13 @@ export class DynamicType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    public isEqual(targetType: BscType) {
+        return isDynamicType(targetType);
+    }
+
+    getMemberType(memberName: string, options: GetTypeOptions) {
+        return DynamicType.instance;
+    }
 }
+

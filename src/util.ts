@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TypeChainEntry, TypeChainProcessResult } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -26,15 +26,15 @@ import type { DottedGetExpression, VariableExpression } from './parser/Expressio
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isFunctionParameterExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isNewExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isFunctionParameterExpression, isGroupingExpression, isIndexedGetExpression, isLiteralExpression, isNewExpression, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
-import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { Expression, Statement } from './parser/AstNode';
+import { createIdentifier } from './astUtils/creators';
 
 export class Util {
     public clearConsole() {
@@ -345,6 +345,7 @@ export class Util {
         config.allowBrighterScriptInBrightScript = config.allowBrighterScriptInBrightScript === true ? true : false;
         config.emitDefinitions = config.emitDefinitions === true ? true : false;
         config.removeParameterTypes = config.removeParameterTypes === true ? true : false;
+        config.enableTypeValidation = config.enableTypeValidation === true ? true : false;
         if (typeof config.logLevel === 'string') {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
         }
@@ -1004,37 +1005,37 @@ export class Util {
     /**
      * Convert a token into a BscType
      */
-    public tokenToBscType(token: Token, allowCustomType = true) {
+    public tokenToBscType(token: Token) {
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (token.kind) {
             case TokenKind.Boolean:
                 return new BooleanType(token.text);
             case TokenKind.True:
             case TokenKind.False:
-                return new BooleanType();
+                return BooleanType.instance;
             case TokenKind.Double:
                 return new DoubleType(token.text);
             case TokenKind.DoubleLiteral:
-                return new DoubleType();
+                return DoubleType.instance;
             case TokenKind.Dynamic:
                 return new DynamicType(token.text);
             case TokenKind.Float:
                 return new FloatType(token.text);
             case TokenKind.FloatLiteral:
-                return new FloatType();
+                return FloatType.instance;
             case TokenKind.Function:
                 //TODO should there be a more generic function type without a signature that's assignable to all other function types?
                 return new FunctionType(new DynamicType(token.text));
             case TokenKind.Integer:
                 return new IntegerType(token.text);
             case TokenKind.IntegerLiteral:
-                return new IntegerType();
+                return IntegerType.instance;
             case TokenKind.Invalid:
                 return new InvalidType(token.text);
             case TokenKind.LongInteger:
                 return new LongIntegerType(token.text);
             case TokenKind.LongIntegerLiteral:
-                return new LongIntegerType();
+                return LongIntegerType.instance;
             case TokenKind.Object:
                 return new ObjectType(token.text);
             case TokenKind.String:
@@ -1043,7 +1044,7 @@ export class Util {
             case TokenKind.TemplateStringExpressionBegin:
             case TokenKind.TemplateStringExpressionEnd:
             case TokenKind.TemplateStringQuasi:
-                return new StringType();
+                return StringType.instance;
             case TokenKind.Void:
                 return new VoidType(token.text);
             case TokenKind.Identifier:
@@ -1052,6 +1053,8 @@ export class Util {
                         return new BooleanType(token.text);
                     case 'double':
                         return new DoubleType(token.text);
+                    case 'dynamic':
+                        return new DynamicType(token.text);
                     case 'float':
                         return new FloatType(token.text);
                     case 'function':
@@ -1068,9 +1071,6 @@ export class Util {
                         return new StringType(token.text);
                     case 'void':
                         return new VoidType(token.text);
-                }
-                if (allowCustomType) {
-                    return new CustomType(token.text);
                 }
         }
     }
@@ -1360,19 +1360,38 @@ export class Util {
             } else if (isDottedGetExpression(nextPart)) {
                 parts.push(nextPart?.name);
                 nextPart = nextPart.obj;
-            } else if (isNamespacedVariableNameExpression(nextPart)) {
+            } else if (isCallExpression(nextPart)) {
+                nextPart = nextPart.callee;
+            } else if (isTypeExpression(nextPart)) {
                 nextPart = nextPart.expression;
             } else if (isVariableExpression(nextPart)) {
                 parts.push(nextPart?.name);
                 break;
+            } else if (isLiteralExpression(nextPart)) {
+                parts.push(nextPart?.token as Identifier);
+                break;
+            } else if (isIndexedGetExpression(nextPart)) {
+                nextPart = nextPart.obj;
             } else if (isFunctionParameterExpression(nextPart)) {
                 return [nextPart.name];
+            } else if (isGroupingExpression(nextPart)) {
+                parts.push(createIdentifier('()', nextPart.range));
+                break;
             } else {
                 //we found a non-DottedGet expression, so return because this whole operation is invalid.
                 return undefined;
             }
         }
         return parts.reverse();
+    }
+
+    public getAllDottedGetPartsAsString(node: Expression | Statement, parseMode = ParseMode.BrighterScript) {
+        const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
+        const hello = this.getAllDottedGetParts(node)?.map(part => part.text).join(sep);
+        if (!hello) {
+            console.log(node);
+        }
+        return hello;
     }
 
     /**
@@ -1388,7 +1407,7 @@ export class Util {
             } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
                 nextPart = nextPart.callee;
 
-            } else if (isNamespacedVariableNameExpression(nextPart)) {
+            } else if (isTypeExpression(nextPart)) {
                 nextPart = nextPart.expression;
             } else {
                 break;
@@ -1421,7 +1440,7 @@ export class Util {
                 nextPart = nextPart.call.callee;
                 parts = [];
 
-            } else if (isNamespacedVariableNameExpression(nextPart)) {
+            } else if (isTypeExpression(nextPart)) {
                 nextPart = nextPart.expression;
 
             } else if (isVariableExpression(nextPart)) {
@@ -1475,6 +1494,38 @@ export class Util {
                 range: this.createRange(0, 0, 0, Number.MAX_VALUE)
             }]);
         }
+    }
+
+    public processTypeChain(typeChain: TypeChainEntry[]): TypeChainProcessResult {
+        let fullChainName = '';
+        let fullErrorName = '';
+        let missingItemName = '';
+        let previousTypeName = '';
+        let parentTypeName = '';
+        let errorRange: Range;
+        for (let i = 0; i < typeChain.length; i++) {
+            const chainItem = typeChain[i];
+            if (i > 0) {
+                fullChainName += '.';
+            }
+            fullChainName += chainItem.name;
+            parentTypeName = previousTypeName;
+            fullErrorName = previousTypeName ? `${previousTypeName}.${chainItem.name}` : chainItem.name;
+            previousTypeName = chainItem.type.toString();
+            missingItemName = chainItem.name;
+            if (!chainItem.isResolved) {
+                errorRange = chainItem.range;
+                break;
+            }
+        }
+        return {
+            missingItemName: missingItemName,
+            missingItemParentTypeName: parentTypeName,
+            fullNameOfMissingItem: fullErrorName,
+            fullChainName: fullChainName,
+            range: errorRange
+
+        };
     }
 }
 

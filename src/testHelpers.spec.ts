@@ -13,6 +13,7 @@ import type { CodeWithSourceMap } from 'source-map';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
+import type { BscType } from './types/BscType';
 
 export const tempDir = s`${__dirname}/../.tmp`;
 export const rootDir = s`${tempDir}/rootDir`;
@@ -137,10 +138,11 @@ export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Par
  * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
  * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
-export function expectDiagnosticsIncludes(arg: DiagnosticCollection, expected: Array<PartialDiagnostic | string | number>) {
+export function expectDiagnosticsIncludes(arg: DiagnosticCollection, expected: PartialDiagnostic | string | number | Array<PartialDiagnostic | string | number>) {
+    let actualExpected = Array.isArray(expected) ? expected : [expected];
     const actualDiagnostics = getDiagnostics(arg);
     const expectedDiagnostics =
-        expected.map(x => {
+        actualExpected.map(x => {
             let result = x;
             if (typeof x === 'string') {
                 result = { message: x };
@@ -361,4 +363,11 @@ export function mapToObject<T>(map: Map<any, T>) {
         result[key] = value;
     }
     return result;
+}
+
+/**
+ * Test that a type is what was expected
+ */
+export function expectTypeToBe(someType: BscType, expectedTypeClass: any) {
+    expect(someType?.constructor?.name).to.eq(expectedTypeClass.name);
 }

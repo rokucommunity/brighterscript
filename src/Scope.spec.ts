@@ -6,11 +6,20 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
-import { expectDiagnostics, expectZeroDiagnostics, trim } from './testHelpers.spec';
+import { expectDiagnostics, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import type { OnScopeValidateEvent } from './interfaces';
+import { SymbolTypeFlags } from './SymbolTable';
+import { EnumMemberType } from './types/EnumType';
+import { ClassType } from './types/ClassType';
+import { BooleanType } from './types/BooleanType';
+import { StringType } from './types/StringType';
+import { IntegerType } from './types/IntegerType';
+import { DynamicType } from './types/DynamicType';
+import { ObjectType } from './types/ObjectType';
+import { FloatType } from './types/FloatType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -72,13 +81,16 @@ describe('Scope', () => {
         const symbolTable = file.parser.references.namespaceStatements[1].body.getSymbolTable();
         //the symbol table should contain the relative names for all items in this namespace across the entire scope
         expect(
-            symbolTable.hasSymbol('Beta')
+            // eslint-disable-next-line no-bitwise
+            symbolTable.hasSymbol('Beta', SymbolTypeFlags.runtime | SymbolTypeFlags.typetime)
         ).to.be.true;
         expect(
-            symbolTable.hasSymbol('Charlie')
+            // eslint-disable-next-line no-bitwise
+            symbolTable.hasSymbol('Charlie', SymbolTypeFlags.runtime | SymbolTypeFlags.typetime)
         ).to.be.true;
         expect(
-            symbolTable.hasSymbol('createBeta')
+            // eslint-disable-next-line no-bitwise
+            symbolTable.hasSymbol('createBeta', SymbolTypeFlags.runtime)
         ).to.be.true;
 
         expectZeroDiagnostics(program);
@@ -496,8 +508,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectDiagnostics(program, [{
-                ...DiagnosticMessages.cannotFindName('subname', 'Name1.subname'),
-                range: util.createRange(2, 26, 2, 33)
+                ...DiagnosticMessages.cannotFindName('subname', 'Name1.subname')
             }]);
         });
 
@@ -1139,6 +1150,29 @@ describe('Scope', () => {
             expect(plugin.afterScopeValidate.calledWith(compScope)).to.be.true;
         });
 
+        it('supports parameter types in functions in AA literals defined in other scope', () => {
+            program.setFile('source/util.brs', `
+                function getObj() as object
+                    aa = {
+                        name: "test"
+                        addInts: function(a = 1 as integer, b =-1 as integer) as integer
+                            return a + b
+                        end function
+                    }
+                end function
+            `);
+            program.setFile('components/comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp" extends="Scene">
+                    <script uri="comp.brs"/>
+                    <script uri="pkg:/source/util.brs"/>
+                </component>
+            `);
+            program.setFile(s`components/comp.brs`, ``);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         describe('custom types', () => {
             it('detects an unknown function return type', () => {
                 program.setFile(`source/main.bs`, `
@@ -1166,8 +1200,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.invalidFunctionReturnType('unknownType').message,
-                    DiagnosticMessages.invalidFunctionReturnType('unknownType').message
+                    DiagnosticMessages.cannotFindName('unknownType').message,
+                    DiagnosticMessages.cannotFindName('unknownType').message
                 ]);
             });
 
@@ -1189,8 +1223,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message,
-                    DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message
+                    DiagnosticMessages.cannotFindName('unknownType').message,
+                    DiagnosticMessages.cannotFindName('unknownType').message
                 ]);
             });
 
@@ -1208,8 +1242,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindType('unknownType').message,
-                    DiagnosticMessages.cannotFindType('unknownType').message
+                    DiagnosticMessages.cannotFindName('unknownType').message,
+                    DiagnosticMessages.cannotFindName('unknownType').message
                 ]);
             });
 
@@ -1339,6 +1373,50 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
+            it('finds custom types from same namespace defined in different file', () => {
+                program.setFile(`source/klass.bs`, `
+                    namespace MyNamespace
+                        class Klass
+                        end class
+                    end namespace
+                `);
+
+                program.setFile(`source/otherklass.bs`, `
+                    namespace MyNamespace
+                        class OtherKlass
+                            function beClassy() as Klass
+                              return new Klass()
+                            end function
+                        end class
+                    end namespace
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds custom types from same namespace defined in different file when using full Namespace', () => {
+                program.setFile(`source/klass.bs`, `
+                    namespace MyNamespace
+                        class Klass
+                        end class
+                    end namespace
+                `);
+
+                program.setFile(`source/otherklass.bs`, `
+                    namespace MyNamespace
+                        class OtherKlass
+                            function beClassy() as MyNamespace.Klass
+                            end function
+                        end class
+                    end namespace
+
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
             it('detects missing custom types from current namespaces', () => {
                 program.setFile(`source/main.bs`, `
                     namespace MyNamespace
@@ -1352,7 +1430,7 @@ describe('Scope', () => {
                 program.validate();
 
                 expectDiagnostics(program, [
-                    DiagnosticMessages.invalidFunctionReturnType('UnknownType').message
+                    DiagnosticMessages.cannotFindName('UnknownType').message
                 ]);
             });
 
@@ -1399,8 +1477,9 @@ describe('Scope', () => {
                 program.validate();
 
                 expectDiagnostics(program, [
-                    DiagnosticMessages.invalidFunctionReturnType('MyNamespace.UnknownType')
+                    DiagnosticMessages.cannotFindName('UnknownType').message
                 ]);
+                expect(program.getDiagnostics()[0]?.data?.fullName).to.eq('MyNamespace.UnknownType');
             });
 
             it('scopes types to correct scope', () => {
@@ -1433,7 +1512,7 @@ describe('Scope', () => {
                 program.validate();
 
                 expectDiagnostics(program, [
-                    DiagnosticMessages.invalidFunctionReturnType('MyClass').message
+                    DiagnosticMessages.cannotFindName('MyClass').message
                 ]);
             });
 
@@ -1466,37 +1545,470 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
 
             });
+
+            it('finds correctly types a variable with type from different file', () => {
+                program.setFile(`source/main.bs`, `
+                    sub main()
+                        thing = new MyKlass()
+                        useKlass(thing)
+                    end sub
+
+                    sub useKlass(thing as MyKlass)
+                        print thing
+                    end sub
+                `);
+                program.setFile(`source/MyKlass.bs`, `
+                    class MyKlass
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
         });
-    });
+        describe('enhanced typing', () => {
+            beforeEach(() => {
+                program.options.enableTypeValidation = true;
+            });
 
-    describe('inheritance', () => {
-        it('inherits callables from parent', () => {
-            program = new Program({ rootDir: rootDir });
+            describe('runtime vs typetime', () => {
+                it('detects invalidly using a class member as a parameter type', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub a(num as myClass.member)
+                    end sub
 
-            program.setFile('components/child.xml', trim`
+                    class MyClass
+                        member as integer
+                    end class
+
+                `);
+                    program.validate();
+                    expectDiagnostics(program, [
+                        DiagnosticMessages.itemCannotBeUsedAsType('myClass.member').message
+                    ]);
+                });
+
+                it('detects invalidly using an EnumMember as a parameter type', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub a(num as MyNameSpace.SomeEnum.memberA)
+                    end sub
+
+                    namespace MyNameSpace
+                        enum SomeEnum
+                            memberA
+                            memberB
+                        end enum
+                    end namespace
+                `);
+                    program.validate();
+                    expectDiagnostics(program, [
+                        DiagnosticMessages.itemCannotBeUsedAsType('MyNameSpace.SomeEnum.memberA').message
+                    ]);
+                });
+
+                it('detects a member of a nested namespace', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub a(num as NSExistsA.NSExistsB.Klass)
+                    end sub
+
+                    namespace NSExistsA.NSExistsB
+                        class Klass
+                        end class
+                    end namespace
+                `);
+                    program.validate();
+                    expectZeroDiagnostics(program);
+                });
+
+                it('detects an unknown member of a nested namespace', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub a(num as NSExistsA.NSExistsB.NSDoesNotExistC.Klass)
+                    end sub
+
+                    namespace NSExistsA.NSExistsB
+                        class Klass
+                        end class
+                    end namespace
+                `);
+                    program.validate();
+
+                    expectDiagnostics(program, [
+                        DiagnosticMessages.cannotFindName('NSDoesNotExistC', 'NSExistsA.NSExistsB.NSDoesNotExistC').message
+                    ]);
+                });
+
+                it('allows a class to extend from a class in another namespace and file', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub fn(myFace as Villain)
+                        print myFace.coin
+                    end sub
+
+                    class Villain extends MyKlasses.twoFace
+                        name as string
+                    end class
+                `);
+                    program.setFile(`source/extra.bs`, `
+                    namespace MyKlasses
+                        class twoFace
+                            coin as string
+                        end class
+                    end namespace
+                `);
+                    program.validate();
+                    expectZeroDiagnostics(program);
+                });
+
+
+                it('resolves a const in a namespace', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub a()
+                        print NSExistsA.SOME_CONST
+                    end sub
+
+                    namespace NSExistsA
+                        const SOME_CONST = 3.14
+                    end namespace
+                `);
+                    program.validate();
+                    expectZeroDiagnostics(program);
+                });
+
+                it('resolves namespaces with relative references', () => {
+                    program.setFile(`source/main.bs`, `
+                    namespace NameA
+                        sub fn1()
+                            'fully qualified-relative references are allowed
+                            print NameA.API_URL
+                            'namespace-relative references are allowed as well
+                            print API_URL
+                        end sub
+
+                        const API_URL = "http://some.url.com"
+                    end namespace
+                `);
+                    program.validate();
+                    expectZeroDiagnostics(program);
+                });
+
+                it('resolves nested namespaces with relative references', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub main()
+                        print NameA.A_VAL
+                        print NameA.NameB.B_VAL
+                        print NameA.NameB.NameC.C_VAL
+                        print SOME_CONST
+                    end sub
+                    namespace NameA
+                        sub fnA()
+                            print NameA.A_VAL
+                            print A_VAL
+                        end sub
+                        namespace NameB
+                            sub fnB()
+                                print NameA.NameB.B_VAL
+                                print B_VAL
+                            end sub
+                            namespace NameC
+                                sub fnC()
+                                   print NameA.NameB.NameC.C_VAL
+                                   print C_VAL
+                                end sub
+                                const C_VAL = "C"
+                            end namespace
+                            const B_VAL = "B"
+                        end namespace
+                        const A_VAL="A"
+                    end namespace
+                    const SOME_CONST = "hello"
+                `);
+                    program.validate();
+                    expectZeroDiagnostics(program);
+                });
+
+                it('resolves namespaces defined in different locations', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub main()
+                        print NameA.A_VAL
+                        print NameA.funcA()
+                        print NameA.makeClass().value
+                    end sub
+                    namespace NameA
+                        const A_VAL="A"
+                    end namespace
+                    namespace NameA
+                        function funcA() as integer
+                            return 17
+                        end function
+                    end namespace
+                    namespace NameA
+                        function makeClass() as SomeKlass
+                            return new SomeKlass()
+                        end function
+                    end namespace
+                    namespace NameA
+                        class SomeKlass
+                            value = 3.14
+                        end class
+                    end namespace
+                `);
+                    program.validate();
+                    expectZeroDiagnostics(program);
+                });
+
+                it('resolves deep namespaces defined in different locations', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub main()
+                        print NameA.NameB.B_VAL
+                        print NameA.NameB.funcB()
+                        print NameA.makeClassA().value
+                        print NameA.NameB.makeClassB().value
+                    end sub
+                    namespace NameA
+                        namespace NameB
+                            const B_VAL="B"
+                        end namespace
+                    end namespace
+                    namespace NameA.NameB
+                        function funcB() as integer
+                            return 17
+                        end function
+                    end namespace
+                    namespace NameA
+                        function makeClassA() as NameA.NameB.SomeKlass
+                            return new NameA.NameB.SomeKlass()
+                        end function
+                    end namespace
+                    namespace NameA
+                        namespace NameB
+                            function makeClassB() as SomeKlass
+                                return new SomeKlass()
+                            end function
+                        end namespace
+                    end namespace
+                    namespace NameA.NameB
+                        class SomeKlass
+                            value = 3.14
+                        end class
+                    end namespace
+                `);
+                    program.validate();
+                    expectZeroDiagnostics(program);
+                });
+
+                it('allows dot-references to properties on results of global callables', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub fn()
+                        print CreateObject("roSgNode", "Node").id
+                    end sub
+                `);
+                    program.validate();
+                    expectZeroDiagnostics(program);
+                });
+
+                it('allows dot-references to functions on results of global callables', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub fn()
+                        print CreateObject("roDateTime").asSeconds()
+                    end sub
+                `);
+                    program.validate();
+                    expectZeroDiagnostics(program);
+                });
+
+                it('finds unknown members of primitive types', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub fn(input as SomeKlass)
+                        piValue = input.getPi().noMethod()
+                    end sub
+
+                    class SomeKlass
+                        function getPi() as float
+                            return 3.14
+                        end function
+                    end class
+                `);
+                    program.validate();
+                    //TODO: ideally, if this is a primitive type, we should know all the possible members
+                    // This *SHOULD* be an error, but currently, during Runtime, an unknown member (from DottedtGetExpression) is returned as Dynamic.instance
+                    expectZeroDiagnostics(program);
+                });
+
+
+                it('finds members of arrays', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub fn(input as SomeKlass)
+                        numValue = input.getOtherKlasses()[2].num
+                        print numValue
+                    end sub
+
+                    class OtherKlass
+                      num = 1
+                    end class
+
+                    class SomeKlass
+                        function getPi() as float
+                            return 3.14
+                        end function
+
+                        function getOtherKlasses()
+                            return [new OtherKlass(), new OtherKlass(), new OtherKlass()]
+                        end function
+                    end class
+                `);
+                    program.validate();
+                    //TODO: When array types are available, check that `numValue` is an integer
+                    expectZeroDiagnostics(program);
+                });
+
+            });
+
+            describe('interfaces', () => {
+                it('allows using interfaces as types', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub fn(myFace as iFace)
+                    end sub
+
+                    interface iFace
+                        name as string
+                    end interface
+                `);
+                    program.validate();
+                    expectZeroDiagnostics(program);
+                });
+
+                it('disallows using interface members as types', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub fn(myFaceName as iFace.name)
+                    end sub
+
+                    interface iFace
+                        name as string
+                    end interface
+                `);
+                    program.validate();
+                    expectDiagnostics(program, [
+                        DiagnosticMessages.itemCannotBeUsedAsType('iFace.name').message
+                    ]);
+                });
+
+                it('allows accessing interface members in code', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub fn(myFace as iFace)
+                        print myFace.name
+                    end sub
+
+                    interface iFace
+                        name as string
+                    end interface
+                `);
+                    program.validate();
+                    expectZeroDiagnostics(program);
+                });
+
+                it('allows accessing an interface member from a super interface', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub fn(myFace as iFace)
+                        print myFace.coin
+                    end sub
+
+                    interface iFace extends twoFace
+                        name as string
+                    end interface
+
+                    interface twoFace
+                        coin as string
+                    end interface
+                `);
+                    program.validate();
+                    expectZeroDiagnostics(program);
+                });
+
+                it('allows an interface to extend from an interface in another namespace and file', () => {
+                    program.setFile(`source/main.bs`, `
+                    sub fn(myFace as iFace)
+                        print myFace.coin
+                    end sub
+
+                    interface iFace extends MyInterfaces.twoFace
+                        name as string
+                    end interface
+                `);
+                    program.setFile(`source/interfaces.bs`, `
+                    namespace MyInterfaces
+                        interface twoFace
+                            coin as string
+                        end interface
+                    end namespace
+                `);
+                    program.validate();
+                    expectZeroDiagnostics(program);
+                });
+
+            });
+
+
+            it('should accept global callables returning objects', () => {
+                program.setFile(`source/main.brs`, `
+                sub main()
+                    screen = CreateObject("roSGScreen")
+                    port = CreateObject("roMessagePort")
+                    scene = screen.CreateScene("MyMainScene")
+                    screen.setMessagePort(port)
+                    screen.show()
+                    while(true)
+                        msg     = wait(0, port)
+                        msgType = type(msg)
+
+                        if type(msg) = "roInputEvent"
+                            if msg.IsInput()
+                                info = msg.GetInfo()
+                                if info.DoesExist("mediaType")
+                                    mediaType = info.mediaType
+                                    print mediaType
+                                end if
+                            end if
+                        end if
+                    end while
+                end sub
+            `);
+                program.setFile('components/MyMainScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyMainScene" extends="Scene">
+                </component>
+            `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
+
+        describe('inheritance', () => {
+            it('inherits callables from parent', () => {
+                program = new Program({ rootDir: rootDir });
+
+                program.setFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="child" extends="parent">
                     <script uri="child.brs"/>
                 </component>
             `);
-            program.setFile(s`components/child.brs`, ``);
-            program.validate();
-            let childScope = program.getComponentScope('child');
-            expect(childScope.getAllCallables().map(x => x.callable.name)).not.to.include('parentSub');
+                program.setFile(s`components/child.brs`, ``);
+                program.validate();
+                let childScope = program.getComponentScope('child');
+                expect(childScope.getAllCallables().map(x => x.callable.name)).not.to.include('parentSub');
 
-            program.setFile('components/parent.xml', trim`
+                program.setFile('components/parent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="parent" extends="Scene">
                     <script uri="parent.brs"/>
                 </component>
             `);
-            program.setFile(s`components/parent.brs`, `
+                program.setFile(s`components/parent.brs`, `
                 sub parentSub()
                 end sub
             `);
-            program.validate();
+                program.validate();
 
-            expect(childScope.getAllCallables().map(x => x.callable.name)).to.include('parentSub');
+                expect(childScope.getAllCallables().map(x => x.callable.name)).to.include('parentSub');
+            });
         });
     });
 
@@ -1585,6 +2097,336 @@ describe('Scope', () => {
                 'test.foo2',
                 'foo3'
             ]);
+        });
+    });
+
+    describe('symbolTable lookups with enhanced typing', () => {
+        beforeEach(() => {
+            program.options.enableTypeValidation = true;
+        });
+        const mainFileContents = `
+            sub main()
+                population = Animals.getPopulation()
+                print population
+                flyBoy = new Animals.Bird()
+                flyBoysWings = flyBoy.hasWings
+                flyBoysSkin = flyBoy.skin
+                fido = new Animals.Dog()
+                fidoBark = fido.bark()
+                chimp = new Animals.Ape()
+                chimpHasLegs = chimp.hasLegs
+                chimpSpeed = chimp.getRunSpeed()
+                fidoSpeed = fido.getRunSpeed()
+                skin = Animals.SkinType.fur
+            end sub
+         `;
+
+        const animalFileContents = `
+            namespace Animals
+                function getPopulation() as integer
+                    return 10
+                end function
+
+                class Creature
+                    skin as Animals.SkinType
+                end class
+
+                class Bird extends Creature
+                    hasWings = true
+                    skin = Animals.SkinType.feathers
+                end class
+
+                class Mammal extends Creature
+                    hasLegs = true
+                    legCount as integer
+                    skin = Animals.SkinType.fur
+
+                    function getRunSpeed() as integer
+                        speed = m.legCount * 10
+                        return speed
+                    end function
+                end class
+
+                class Dog extends Mammal
+                    legCount = 4
+                    function bark() as string
+                        return "woof"
+                    end function
+                end class
+
+                class Ape extends Mammal
+                    legCount = 2
+                end class
+
+                enum SkinType
+                    feathers
+                    fur
+                end enum
+            end namespace
+        `;
+
+        it('finds correct return type for class methods', () => {
+            const mainFile = program.setFile('source/main.bs', `
+                sub main()
+                    fooInstance = new Foo()
+                    myNum = fooInstance.getNum()
+                end sub
+
+                class Foo
+                    function getNum() as integer
+                        return 1
+                    end function
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 10));
+            const sourceScope = program.getScopeByName('source');
+            expect(sourceScope).to.exist;
+            expect(mainFnScope).to.exist;
+            sourceScope.linkSymbolTable();
+            const mainSymbolTable = mainFnScope.symbolTable;
+            expectTypeToBe(mainSymbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type, ClassType);
+            expect(mainSymbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Foo');
+            let myNumType = mainSymbolTable.getSymbolType('myNum', { flags: SymbolTypeFlags.runtime });
+            expectTypeToBe(myNumType, IntegerType);
+        });
+
+        it('finds correct parameter type with default value enums are used', () => {
+            const mainFile = program.setFile('source/main.bs', `
+                sub paint(colorChoice = Color.red)
+                    paintColor = colorChoice
+                    print paintColor
+                end sub
+
+                enum Color
+                    red
+                    blue
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 25));
+            const sourceScope = program.getScopeByName('source');
+            expect(sourceScope).to.exist;
+            expect(mainFnScope).to.exist;
+            sourceScope.linkSymbolTable();
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('paintColor', SymbolTypeFlags.runtime)[0].type, EnumMemberType);
+        });
+
+        it('finds correct class field type with default value enums are used', () => {
+            const mainFile = program.setFile('source/main.bs', `
+                sub main()
+                    foo = new Paint()
+                    paintColor = foo.colorType
+                    print paintColor
+                end sub
+
+                class Paint
+                    colorType = Color.red
+                end class
+
+                enum Color
+                    red
+                    blue
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 25));
+            const sourceScope = program.getScopeByName('source');
+            expect(sourceScope).to.exist;
+            expect(mainFnScope).to.exist;
+            //sourceScope.linkSymbolTable();
+            let mainScopeSymbolTable = mainFnScope.symbolTable;
+            let paintType = mainScopeSymbolTable.getSymbolType('paintColor', { flags: SymbolTypeFlags.runtime });
+            expectTypeToBe(paintType, EnumMemberType);
+        });
+
+
+        it('finds correct type for namespaced lookups', () => {
+            const mainFile = program.setFile('source/main.bs', mainFileContents);
+            program.setFile('source/animals.bs', animalFileContents);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(7, 23));
+            const sourceScope = program.getScopeByName('source');
+            expect(sourceScope).to.exist;
+            sourceScope.linkSymbolTable();
+            expect(mainFnScope).to.exist;
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('skin', SymbolTypeFlags.runtime)[0].type, EnumMemberType);
+
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlags.runtime)[0].type, ClassType);
+            expect(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Animals.Bird');
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoysWings', SymbolTypeFlags.runtime)[0].type, BooleanType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoysSkin', SymbolTypeFlags.runtime)[0].type, EnumMemberType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlags.runtime)[0].type, ClassType);
+            expect(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Animals.Dog');
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoBark', SymbolTypeFlags.runtime)[0].type, StringType);
+        });
+
+        it('finds correct type for members of classes with super classes', () => {
+            const mainFile = program.setFile('source/main.bs', mainFileContents);
+            program.setFile('source/animals.bs', animalFileContents);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(7, 23));
+            const sourceScope = program.getScopeByName('source');
+            expect(sourceScope).to.exist;
+            sourceScope.linkSymbolTable();
+            expect(mainFnScope).to.exist;
+            const chimpType = mainFnScope.symbolTable.getSymbol('chimp', SymbolTypeFlags.runtime)[0].type;
+            expectTypeToBe(chimpType, ClassType);
+            expectTypeToBe((chimpType as ClassType).superClass, ClassType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('chimpHasLegs', SymbolTypeFlags.runtime)[0].type, BooleanType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('chimpSpeed', SymbolTypeFlags.runtime)[0].type, IntegerType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoSpeed', SymbolTypeFlags.runtime)[0].type, IntegerType);
+        });
+
+        it('finds correct types for method calls', () => {
+            const mainFile = program.setFile('source/main.bs', `
+                sub main()
+                    myVal = (new NameA.Klass()).getNumObj().num
+                end sub
+
+                namespace NameA
+                    class Klass
+                        function getNumObj() as NumObj
+                            return new NumObj()
+                        end function
+                    end class
+
+                    class NumObj
+                        num = 2
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+            const sourceScope = program.getScopeByName('source');
+            expect(sourceScope).to.exist;
+            sourceScope.linkSymbolTable();
+            expect(mainFnScope).to.exist;
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('myVal', SymbolTypeFlags.runtime)[0].type, IntegerType);
+        });
+
+        it('finds correct types for self-referencing variables', () => {
+            const mainFile = program.setFile('source/main.bs', `
+                sub main()
+                    dt = CreateObject("roDateTime")
+                    hours = dt.GetHours()
+                    hours = hours
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+            const sourceScope = program.getScopeByName('source');
+            expect(sourceScope).to.exist;
+            sourceScope.linkSymbolTable();
+            expect(mainFnScope).to.exist;
+            const getTypeOptions = { flags: SymbolTypeFlags.runtime };
+            let dtType = mainFnScope.symbolTable.getSymbolType('dt', getTypeOptions);
+            expectTypeToBe(dtType, ObjectType);
+            let hoursType = mainFnScope.symbolTable.getSymbolType('hours', getTypeOptions);
+            expectTypeToBe(hoursType, DynamicType);
+        });
+
+        describe('union types', () => {
+
+            it('should find actual members correctly', () => {
+                const mainFile = program.setFile('source/main.bs', `
+                    sub printName(thing as Person or Pet)
+                        name = thing.name
+                        print name
+                    end sub
+
+                    class Person
+                        name as string
+                        age as integer
+                    end class
+
+                    class Pet
+                        name as string
+                        legs as integer
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope).to.exist;
+                sourceScope.linkSymbolTable();
+                expect(mainFnScope).to.exist;
+                const mainSymbolTable = mainFnScope.symbolTable;
+                expectTypeToBe(mainSymbolTable.getSymbolType('name', { flags: SymbolTypeFlags.runtime }), StringType);
+            });
+
+            it('should have an error when a non union member is accessed', () => {
+                const mainFile = program.setFile('source/main.bs', `
+                    sub printLegs(thing as Person or Pet)
+                        print thing.legs
+                    end sub
+
+                    class Person
+                        name as string
+                        age as integer
+                    end class
+
+                    class Pet
+                        name as string
+                        legs as integer
+                    end class
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('legs').message
+                ]);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope).to.exist;
+                sourceScope.linkSymbolTable();
+                expect(mainFnScope).to.exist;
+            });
+
+        });
+
+        describe('type casts', () => {
+            it('should use type casts to determine the types of symbols', () => {
+                const mainFile = program.setFile('source/main.bs', `
+                    sub main(thing)
+                        value = thing as float
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                sourceScope.linkSymbolTable();
+                let mainSymbolTable = mainFnScope.symbolTable;
+                expectTypeToBe(mainSymbolTable.getSymbol('value', SymbolTypeFlags.runtime)[0].type, FloatType);
+            });
+
+
+            it('should allow type casts in dotted get statements', () => {
+                const mainFile = program.setFile('source/main.bs', `
+                    sub main(thing)
+                        value = (thing as MyThing).name
+                    end sub
+
+                    interface MyThing
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                sourceScope.linkSymbolTable();
+                let mainSymbolTable = mainFnScope.symbolTable;
+                expectTypeToBe(mainSymbolTable.getSymbol('value', SymbolTypeFlags.runtime)[0].type, StringType);
+            });
         });
     });
 });
