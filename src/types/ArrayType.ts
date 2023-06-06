@@ -1,40 +1,26 @@
-import type { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
+import { isArrayType, isDynamicType, isObjectType } from '../astUtils/reflection';
+import { BscType } from './BscType';
 
-export class ArrayType implements BscType {
+export class ArrayType extends BscType {
     constructor(...innerTypes: BscType[]) {
+        super();
         this.innerTypes = innerTypes;
     }
     public innerTypes: BscType[] = [];
 
-    public isAssignableTo(targetType: BscType) {
-        if (targetType instanceof DynamicType) {
+    public isTypeCompatible(targetType: BscType) {
+
+        if (isDynamicType(targetType)) {
             return true;
-        } else if (!(targetType instanceof ArrayType)) {
+        } else if (isObjectType(targetType)) {
+            return true;
+        } else if (!isArrayType(targetType)) {
             return false;
         }
-        //this array type is assignable to the target IF
-        //1. all of the types in this array are present in the target
-        outer: for (let innerType of this.innerTypes) {
-            //find this inner type in the target
-
-            // eslint-disable-next-line no-unreachable-loop
-            for (let targetInnerType of targetType.innerTypes) {
-                //TODO is this loop correct? It ends after 1 iteration but we might need to do more iterations
-
-                if (innerType.isAssignableTo(targetInnerType)) {
-                    continue outer;
-                }
-
-                //our array contains a type that the target array does not...so these arrays are different
-                return false;
-            }
+        if (this.isEqual(targetType)) {
+            return true;
         }
-        return true;
-    }
-
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+        return false;
     }
 
     public toString() {
@@ -43,5 +29,21 @@ export class ArrayType implements BscType {
 
     public toTypeString(): string {
         return 'object';
+    }
+
+    public isEqual(targetType: BscType): boolean {
+        //TODO: figure out array type equality later
+        if (isArrayType(targetType)) {
+            if (targetType.innerTypes.length !== this.innerTypes.length) {
+                return false;
+            }
+            for (let i = 0; i < this.innerTypes.length; i++) {
+                if (!this.innerTypes[i].isEqual(targetType.innerTypes[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
     }
 }

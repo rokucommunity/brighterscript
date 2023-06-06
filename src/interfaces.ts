@@ -14,6 +14,7 @@ import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
 import type { Token } from './lexer/Token';
+import type { SymbolTypeFlags } from './SymbolTable';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -136,7 +137,7 @@ export interface File {
 
 export interface VariableDeclaration {
     name: string;
-    type: BscType;
+    getType: () => BscType;
     /**
      * The range for the variable name
      */
@@ -406,3 +407,25 @@ export interface FileLink<T> {
     item: T;
     file: BrsFile;
 }
+
+export interface GetTypeOptions {
+    flags: SymbolTypeFlags;
+    typeChain?: TypeChainEntry[];
+}
+
+export class TypeChainEntry {
+    constructor(public name: string, public type: BscType, public range: Range) {
+    }
+    get isResolved() {
+        return this.type?.isResolvable();
+    }
+}
+
+export interface TypeChainProcessResult {
+    missingItemName: string;
+    missingItemParentTypeName: string;
+    fullNameOfMissingItem: string;
+    fullChainName: string;
+    range: Range;
+}
+

@@ -1,15 +1,27 @@
 import type { Range } from 'vscode-languageserver';
 import type { BscType } from './types/BscType';
+import type { GetTypeOptions } from './interfaces';
+import type { CacheVerifier } from './CacheVerifier';
+import type { ReferenceType } from './types/ReferenceType';
+import type { UnionType } from './types/UnionType';
+import { getUniqueType } from './types/helpers';
+import { isReferenceType } from './astUtils/reflection';
+
+export enum SymbolTypeFlags {
+    runtime = 1,
+    typetime = 2
+}
 
 /**
  * Stores the types associated with variables and functions in the Brighterscript code
  * Can be part of a hierarchy, so lookups can reference parent scopes
  */
-export class SymbolTable {
+export class SymbolTable implements SymbolTypeGetter {
     constructor(
         public name: string,
         parentProvider?: SymbolTableProvider
     ) {
+        this.resetTypeCache();
         if (parentProvider) {
             this.pushParentProvider(parentProvider);
         }
@@ -22,6 +34,17 @@ export class SymbolTable {
     private symbolMap = new Map<string, BscSymbol[]>();
 
     private parentProviders = [] as SymbolTableProvider[];
+
+    private cacheToken: string;
+
+    private typeCache: Array<Map<string, BscType>>;
+
+
+    static cacheVerifier: CacheVerifier;
+
+    static ReferenceTypeFactory: (memberKey: string, fullName, flags: SymbolTypeFlags, tableProvider: SymbolTypeGetterProvider) => ReferenceType;
+    static UnionTypeFactory: (types: BscType[]) => UnionType;
+
 
     /**
      * Push a function that will provide a parent SymbolTable when requested
@@ -65,11 +88,34 @@ export class SymbolTable {
      * If the identifier is not in this table, it will check the parent
      *
      * @param name the name to lookup
-     * @param searchParent should we look to our parent if we don't have the symbol?
+     * @param bitFlags flags to match (See SymbolTypeFlags)
      * @returns true if this symbol is in the symbol table
      */
-    hasSymbol(name: string, searchParent = true): boolean {
-        return !!this.getSymbol(name, searchParent);
+    hasSymbol(name: string, bitFlags: SymbolTypeFlags): boolean {
+        let currentTable: SymbolTable = this;
+        const key = name?.toLowerCase();
+        let result: BscSymbol[];
+        do {
+            // look in our map first
+            if ((result = currentTable.symbolMap.get(key))) {
+                // eslint-disable-next-line no-bitwise
+                if (result.find(symbol => symbol.flags & bitFlags)) {
+                    return true;
+                }
+            }
+
+            //look through any sibling maps next
+            for (let sibling of currentTable.siblings) {
+                if ((result = sibling.symbolMap.get(key))) {
+                    // eslint-disable-next-line no-bitwise
+                    if (result.find(symbol => symbol.flags & bitFlags)) {
+                        return true;
+                    }
+                }
+            }
+            currentTable = currentTable.parent;
+        } while (currentTable);
+        return false;
     }
 
     /**
@@ -77,32 +123,40 @@ export class SymbolTable {
      * If the identifier is not in this table, it will check the parent
      *
      * @param  name the name to lookup
-     * @param searchParent should we look to our parent if we don't have the symbol?
+     * @param bitFlags flags to match
      * @returns An array of BscSymbols - one for each time this symbol had a type implicitly defined
      */
-    getSymbol(name: string, searchParent = true): BscSymbol[] {
-        const key = name.toLowerCase();
+    getSymbol(name: string, bitFlags: SymbolTypeFlags): BscSymbol[] {
+        let currentTable: SymbolTable = this;
+        const key = name?.toLowerCase();
         let result: BscSymbol[];
-        // look in our map first
-        if ((result = this.symbolMap.get(key))) {
-            return result;
-        }
-        //look through any sibling maps next
-        for (let sibling of this.siblings) {
-            if ((result = sibling.symbolMap.get(key))) {
-                return result;
+        do {
+            // look in our map first
+            if ((result = currentTable.symbolMap.get(key))) {
+                // eslint-disable-next-line no-bitwise
+                result = result.filter(symbol => symbol.flags & bitFlags);
+                if (result.length > 0) {
+                    return result;
+                }
             }
-        }
-        // ask our parent for a symbol
-        if (searchParent && (result = this.parent?.getSymbol(key))) {
-            return result;
-        }
+            //look through any sibling maps next
+            for (let sibling of currentTable.siblings) {
+                if ((result = sibling.symbolMap.get(key))) {
+                    // eslint-disable-next-line no-bitwise
+                    result = result.filter(symbol => symbol.flags & bitFlags);
+                    if (result.length > 0) {
+                        return result;
+                    }
+                }
+            }
+            currentTable = currentTable.parent;
+        } while (currentTable);
     }
 
     /**
      * Adds a new symbol to the table
      */
-    addSymbol(name: string, range: Range, type: BscType) {
+    addSymbol(name: string, range: Range, type: BscType, bitFlags: SymbolTypeFlags) {
         const key = name.toLowerCase();
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);
@@ -110,9 +164,38 @@ export class SymbolTable {
         this.symbolMap.get(key).push({
             name: name,
             range: range,
-            type: type
+            type: type,
+            flags: bitFlags
         });
     }
+
+    getSymbolTypes(name: string, bitFlags: SymbolTypeFlags): BscType[] {
+        const symbolArray = this.getSymbol(name, bitFlags);
+        if (!symbolArray) {
+            return undefined;
+        }
+        return symbolArray.map(symbol => symbol.type);
+
+    }
+
+
+    getSymbolType(name: string, options: GetSymbolTypeOptions): BscType {
+        let resolvedType = this.getCachedType(name, options);
+        const doSetCache = !resolvedType;
+        const originalIsReferenceType = isReferenceType(resolvedType);
+        if (!resolvedType || originalIsReferenceType) {
+            resolvedType = getUniqueType(this.getSymbolTypes(name, options.flags), SymbolTable.UnionTypeFactory);
+        }
+        if (!resolvedType && SymbolTable.ReferenceTypeFactory && options.fullName && options.tableProvider) {
+            resolvedType = SymbolTable.ReferenceTypeFactory(name, options.fullName, options.flags, options.tableProvider);
+        }
+        const newNonReferenceType = originalIsReferenceType && !isReferenceType(resolvedType);
+        if ((doSetCache || newNonReferenceType) && resolvedType) {
+            this.setCachedType(name, resolvedType, options);
+        }
+        return resolvedType;
+    }
+
 
     /**
      * Adds all the symbols from another table to this one
@@ -124,10 +207,77 @@ export class SymbolTable {
                 this.addSymbol(
                     symbol.name,
                     symbol.range,
-                    symbol.type
+                    symbol.type,
+                    symbol.flags
                 );
             }
         }
+    }
+
+    /**
+     * Get list of symbols declared directly in this SymbolTable (excludes parent SymbolTable).
+     */
+    public getOwnSymbols(): BscSymbol[] {
+        return [].concat(...this.symbolMap.values());
+    }
+
+    /**
+     * Get list of all symbols declared in this SymbolTable (includes parent SymbolTable).
+     */
+    public getAllSymbols(bitFlags: SymbolTypeFlags): BscSymbol[] {
+        let symbols = this.getOwnSymbols();
+        //look through any sibling maps next
+        for (let sibling of this.siblings) {
+            symbols = symbols.concat(sibling.getAllSymbols(bitFlags));
+        }
+        if (this.parent) {
+            symbols = symbols.concat(this.parent.getAllSymbols(bitFlags));
+        }
+        // eslint-disable-next-line no-bitwise
+        return symbols.filter(symbol => symbol.flags & bitFlags);
+    }
+
+
+    private resetTypeCache() {
+        this.typeCache = [
+            undefined,
+            new Map<string, BscType>(), //SymbolTypeFlags.runtime
+            new Map<string, BscType>(), //SymbolTypeFlags.typetime
+            new Map<string, BscType>() //SymbolTypeFlags.runtime & SymbolTypeFlags.typetime
+        ];
+        this.cacheToken = SymbolTable.cacheVerifier?.getToken();
+    }
+
+
+    getCachedType(name: string, options: GetTypeOptions): BscType {
+        if (SymbolTable.cacheVerifier) {
+            if (!SymbolTable.cacheVerifier?.checkToken(this.cacheToken)) {
+                // we have a bad token
+                this.resetTypeCache();
+                return;
+            }
+        } else {
+            // no cache verifier
+            return;
+        }
+        return this.typeCache[options.flags]?.get(name.toLowerCase());
+    }
+
+
+    setCachedType(name: string, type: BscType, options: GetTypeOptions) {
+        if (!type) {
+            return;
+        }
+        if (SymbolTable.cacheVerifier) {
+            if (!SymbolTable.cacheVerifier?.checkToken(this.cacheToken)) {
+                // we have a bad token - remove all other caches
+                this.resetTypeCache();
+            }
+        } else {
+            // no cache verifier
+            return;
+        }
+        return this.typeCache[options.flags]?.set(name.toLowerCase(), type);
     }
 
     /**
@@ -136,11 +286,14 @@ export class SymbolTable {
     private toJSON() {
         return {
             name: this.name,
+            siblings: [...this.siblings].map(sibling => sibling.toJSON()),
             parent: this.parent?.toJSON(),
             symbols: [
                 ...new Set(
                     [...this.symbolMap.entries()].map(([key, symbols]) => {
-                        return symbols.map(x => x.name);
+                        return symbols.map(x => {
+                            return { name: x.name, type: x.type?.toString() };
+                        });
                     }).flat().sort()
                 )
             ]
@@ -152,9 +305,25 @@ export interface BscSymbol {
     name: string;
     range: Range;
     type: BscType;
+    flags: SymbolTypeFlags;
+}
+
+export interface SymbolTypeGetter {
+    getSymbolType(name: string, options: GetSymbolTypeOptions): BscType;
 }
 
 /**
  * A function that returns a symbol table.
  */
 export type SymbolTableProvider = () => SymbolTable;
+
+/**
+ * A function that returns a symbol types getter - smaller interface used in types
+ */
+export type SymbolTypeGetterProvider = () => SymbolTypeGetter;
+
+
+export interface GetSymbolTypeOptions extends GetTypeOptions {
+    fullName?: string;
+    tableProvider?: SymbolTableProvider;
+}

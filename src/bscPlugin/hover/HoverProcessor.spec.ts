@@ -82,7 +82,7 @@ describe('HoverProcessor', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(util.createRange(1, 25, 1, 29));
-            expect(hover.contents).to.eql(fence('function Main(count? as dynamic) as dynamic'));
+            expect(hover.contents).to.eql(fence('function Main(count? as integer) as dynamic'));
         });
 
         it('finds variable function hover in same scope', () => {
@@ -218,6 +218,110 @@ describe('HoverProcessor', () => {
             let hover = program.getHover('source/main.bs', util.createPosition(2, 43))[0];
             expect(hover?.range).to.eql(util.createRange(2, 40, 2, 50));
             expect(hover?.contents).to.eql(fence('const name.sp.a.c.e.SOME_VALUE = true'));
+        });
+
+        it('finds namespaced class types', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    myKlass = new name.Klass()
+                    runNoop(myKlass)
+                end sub
+
+                sub runNoop(myKlass as name.Klass)
+                    myKlass.noop()
+                end sub
+
+                namespace name
+                    class Klass
+                        sub noop()
+                        end sub
+                    end class
+                end namespace
+            `);
+            program.validate();
+            // run|Noop(myKlass)
+            let hover = program.getHover('source/main.bs', util.createPosition(3, 24))[0];
+            expect(hover?.range).to.eql(util.createRange(3, 20, 3, 27));
+            expect(hover?.contents).to.eql(fence('sub runNoop(myKlass as name.Klass) as void'));
+            // myKl|ass.noop()
+            hover = program.getHover('source/main.bs', util.createPosition(7, 25))[0];
+            expect(hover?.range).to.eql(util.createRange(7, 20, 7, 27));
+            expect(hover?.contents).to.eql(fence('myKlass as name.Klass'));
+            //  sub no|op()
+            hover = program.getHover('source/main.bs', util.createPosition(12, 31))[0];
+            // Unfortunately, we can't get hover details on class members yet
+            // TODO: Add hover ability on class members
+            expect(hover).to.be.undefined;
+        });
+
+        it('finds types properly', () => {
+            program.setFile('source/main.bs', `
+                class Person
+                end class
+
+                sub doWork(age as integer, name as string, guy as Person)
+                end sub
+            `);
+            program.validate();
+            // a|ge as integer
+            let hover = program.getHover('source/main.bs', util.createPosition(4, 29))[0];
+            expect(hover?.range).to.eql(util.createRange(4, 27, 4, 30));
+            expect(hover?.contents).to.eql(fence('age as integer'));
+            // age as int|eger
+            hover = program.getHover('source/main.bs', util.createPosition(4, 39))[0];
+            // no hover on base types
+            expect(hover).to.be.undefined;
+            // n|ame as string
+            hover = program.getHover('source/main.bs', util.createPosition(4, 46))[0];
+            expect(hover?.range).to.eql(util.createRange(4, 43, 4, 47));
+            expect(hover?.contents).to.eql(fence('name as string'));
+            // name as st|ring
+            hover = program.getHover('source/main.bs', util.createPosition(4, 54))[0];
+            // no hover on base types
+            expect(hover).to.be.undefined;
+            // gu|y as Person
+            hover = program.getHover('source/main.bs', util.createPosition(4, 60))[0];
+            expect(hover?.range).to.eql(util.createRange(4, 59, 4, 62));
+            expect(hover?.contents).to.eql(fence('guy as Person'));
+            // guy as Pe|rson
+            hover = program.getHover('source/main.bs', util.createPosition(4, 69))[0];
+            //TODO: Add hover on custom types (classes, interfaces, enums, etc.)
+            expect(hover).to.be.undefined;
+        });
+
+        it('finds types from assignments defined in different file, with enhancedTypeValidation', () => {
+            program.options.enableTypeValidation = true;
+            program.setFile(`source/main.bs`, `
+                sub main()
+                    thing = new MyKlass()
+                    useKlass(thing)
+                    someVal = getValue()
+                    print someVal
+                end sub
+
+                sub useKlass(thing as MyKlass)
+                    print thing
+                end sub
+            `);
+            program.setFile(`source/MyKlass.bs`, `
+                class MyKlass
+                end class
+            `);
+
+            program.setFile(`source/util.bs`, `
+                function getValue() as string
+                    return "hello"
+                end function
+            `);
+            program.validate();
+            //th|ing = new MyKlass()
+            let hover = program.getHover('source/main.bs', util.createPosition(2, 24))[0];
+            expect(hover?.range).to.eql(util.createRange(2, 20, 2, 25));
+            expect(hover?.contents).to.eql(fence('thing as MyKlass'));
+            //print some|Val
+            hover = program.getHover('source/main.bs', util.createPosition(5, 31))[0];
+            expect(hover?.range).to.eql(util.createRange(5, 26, 5, 33));
+            expect(hover?.contents).to.eql(fence('someVal as string'));
         });
     });
 });

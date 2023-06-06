@@ -11,6 +11,8 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
 ## Overview
 
+**WARNING: this is the v0.66.0 branch with experimental features**
+
 The BrighterScript language provides new features and syntax enhancements to Roku's BrightScript language. Because the language is a superset of BrightScript, the parser and associated tools (VSCode integration, cli, etc...) work with standard BrightScript (.brs) files. This means you will get benefits (as described in the following section) from using the BrighterScript compiler, whether your project contains BrighterScript (.bs) files or not. The BrighterScript language transpiles to standard BrightScript, so your code is fully compatible with all roku devices.
 
 ## Features
@@ -539,6 +541,12 @@ If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify a
 Type: `boolean`
 
 Allow BrighterScript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
+
+#### `enableTypeValidation`
+
+Type: `boolean`
+
+Performs additional validation on all declared and inferred types, such as checking member accesses in Classes and Interfaces, verifying that Namespace members exist when accessed, etc.
 
 ## Ignore errors and warnings on a per-line basis
 In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:

@@ -16,7 +16,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim } from '../testHelpers.spec';
+import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
 import { ImportStatement } from '../parser/Statement';
@@ -98,6 +98,30 @@ describe('BrsFile', () => {
             ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
             range: util.createRange(5, 22, 5, 40)
         }]);
+    });
+
+    it('flags enums used as variables', () => {
+        program.setFile('source/main.bs', `
+            enum Foo
+                bar
+                baz
+            end enum
+
+            sub main()
+                print getFooValue()
+                print getFoo()
+            end sub
+
+            function getFoo() as Foo
+                return Foo ' Error - cannot return an enum, just an enum value
+            end function
+
+            function getFooValue() as Foo
+                return Foo.bar
+            end function
+        `);
+        program.validate();
+        expectDiagnostics(program, [DiagnosticMessages.itemCannotBeUsedAsVariable('enum').message]);
     });
 
     it('supports the third parameter in CreateObject', () => {
@@ -1404,6 +1428,21 @@ describe('BrsFile', () => {
             `);
             expectZeroDiagnostics(file);
         });
+
+        it('supports parameter types in functions in AA literals', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    aa = {
+                        name: "test"
+                        addInts: function(a as integer, b as integer) as integer
+                            return a + b
+                        end function
+                    }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('findCallables', () => {
@@ -1475,7 +1514,7 @@ describe('BrsFile', () => {
                 isOptional: true,
                 isRestArgument: false
             });
-            expect(callable.params[0].type).instanceof(DynamicType);
+            expect(callable.params[0].type).instanceof(IntegerType);
         });
 
         it('finds parameter types', () => {
@@ -1524,15 +1563,15 @@ describe('BrsFile', () => {
                 return { type: arg.type, range: arg.range, text: arg.text };
             });
             expect(argsMap).to.eql([{
-                type: new StringType(),
+                type: StringType.instance,
                 range: util.createRange(2, 32, 2, 38),
                 text: '"name"'
             }, {
-                type: new IntegerType(),
+                type: IntegerType.instance,
                 range: util.createRange(2, 40, 2, 42),
                 text: '12'
             }, {
-                type: new BooleanType(),
+                type: BooleanType.instance,
                 range: util.createRange(2, 44, 2, 48),
                 text: 'true'
             }]);
@@ -1659,21 +1698,21 @@ describe('BrsFile', () => {
                 lineIndex: 2,
                 name: 'sayHi'
             });
-            expect(file.functionScopes[0].variableDeclarations[0].type).instanceof(FunctionType);
+            expect(file.functionScopes[0].variableDeclarations[0].getType()).instanceof(FunctionType);
 
             expect(file.functionScopes[1].variableDeclarations).to.be.length(1);
             expect(file.functionScopes[1].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
                 lineIndex: 3,
                 name: 'age'
             });
-            expect(file.functionScopes[1].variableDeclarations[0].type).instanceof(IntegerType);
+            expect(file.functionScopes[1].variableDeclarations[0].getType()).instanceof(IntegerType);
 
             expect(file.functionScopes[2].variableDeclarations).to.be.length(1);
             expect(file.functionScopes[2].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
                 lineIndex: 7,
                 name: 'name'
             });
-            expect(file.functionScopes[2].variableDeclarations[0].type).instanceof(StringType);
+            expect(file.functionScopes[2].variableDeclarations[0].getType()).instanceof(StringType);
         });
 
         it('finds variable declarations inside of if statements', () => {
@@ -1699,29 +1738,34 @@ describe('BrsFile', () => {
                     return "bob"
                 end function
             `);
+            // Types are only guaranteed after validation
+            program.validate();
+            expectZeroDiagnostics(program);
 
             expect(file.functionScopes[0].variableDeclarations).to.be.length(1);
             expect(file.functionScopes[0].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
                 lineIndex: 2,
                 name: 'myName'
             });
-            expect(file.functionScopes[0].variableDeclarations[0].type).instanceof(StringType);
+            expectTypeToBe(file.functionScopes[0].variableDeclarations[0].getType(), StringType);
         });
 
         it('finds variable type from other variable', () => {
-            file.parse(`
+            let file = program.setFile('source/main.brs', `
                 sub Main()
                    name = "bob"
                    nameCopy = name
                 end sub
             `);
+            // Types are only guaranteed after validation
+            program.validate();
 
             expect(file.functionScopes[0].variableDeclarations).to.be.length(2);
             expect(file.functionScopes[0].variableDeclarations[1]).to.deep.include(<VariableDeclaration>{
                 lineIndex: 3,
                 name: 'nameCopy'
             });
-            expect(file.functionScopes[0].variableDeclarations[1].type).instanceof(StringType);
+            expectTypeToBe(file.functionScopes[0].variableDeclarations[1].getType(), StringType);
         });
 
         it('sets proper range for functions', () => {
@@ -1818,7 +1862,7 @@ describe('BrsFile', () => {
             expect(hover.range).to.eql(Range.create(1, 25, 1, 29));
             expect(hover.contents).to.equal([
                 '```brightscript',
-                'function Main(count? as dynamic) as dynamic',
+                'function Main(count? as integer) as dynamic',
                 '```'
             ].join('\n'));
         });
@@ -1840,7 +1884,7 @@ describe('BrsFile', () => {
             expect(hover.range).to.eql(Range.create(2, 25, 2, 29));
             expect(hover.contents).to.equal([
                 '```brightscript',
-                'function Main(count? as dynamic) as dynamic',
+                'function Main(count? as integer) as dynamic',
                 '```'
             ].join('\n'));
         });
@@ -2854,11 +2898,11 @@ describe('BrsFile', () => {
                 sub bar(obj as SomeKlass)
                 end sub
             `, `
-                function foo() as object
+                function foo() as dynamic
                     return SomeKlass()
                 end function
 
-                sub bar(obj as object)
+                sub bar(obj as dynamic)
                 end sub
             `);
         });

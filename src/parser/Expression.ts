@@ -10,15 +10,21 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
-import type { TranspileResult, TypedefProvider } from '../interfaces';
-import { VoidType } from '../types/VoidType';
-import { DynamicType } from '../types/DynamicType';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
+import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
+import { TypeChainEntry } from '../interfaces';
 import type { BscType } from '../types/BscType';
+import { SymbolTypeFlags } from '../SymbolTable';
 import { FunctionType } from '../types/FunctionType';
 import { AstNodeKind, Expression } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
 import { SourceNode } from 'source-map';
+import type { TranspileState } from './TranspileState';
+import { StringType } from '../types/StringType';
+import { DynamicType } from '../types/DynamicType';
+import { VoidType } from '../types/VoidType';
+import { TypePropertyReferenceType } from '../types/ReferenceType';
+import { UnionType } from '../types/UnionType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -51,7 +57,24 @@ export class BinaryExpression extends Expression {
             walk(this, 'right', visitor, options);
         }
     }
+
+
+    public getType(options: GetTypeOptions): BscType {
+        const operatorKind = this.operator.kind;
+        if (options.flags & SymbolTypeFlags.typetime) {
+            // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+            switch (operatorKind) {
+                case TokenKind.Or:
+                    return new UnionType([this.left.getType(options), this.right.getType(options)]);
+                //TODO: Intersection Types?, eg. case TokenKind.And:
+            }
+        }
+        //TODO: figure out result type on +, *, or, and, etc!
+        return DynamicType.instance;
+    }
+
 }
+
 
 export class CallExpression extends Expression {
     kind = AstNodeKind.CallExpression;
@@ -116,6 +139,20 @@ export class CallExpression extends Expression {
             walkArray(this.args, visitor, options, this);
         }
     }
+
+    getType(options: GetTypeOptions) {
+        const calleeType = this.callee.getType(options);
+        if (isNewExpression(this.parent)) {
+            return calleeType;
+        }
+        if (isFunctionType(calleeType) && (!isReferenceType(calleeType.returnType) || calleeType.returnType.isResolvable())) {
+            return calleeType.returnType;
+        }
+        if (!isReferenceType(calleeType) && (calleeType as any).returnType?.isResolvable()) {
+            return (calleeType as any).returnType;
+        }
+        return new TypePropertyReferenceType(calleeType, 'returnType');
+    }
 }
 
 export class FunctionExpression extends Expression implements TypedefProvider {
@@ -128,16 +165,9 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly leftParen: Token,
         readonly rightParen: Token,
         readonly asToken?: Token,
-        readonly returnTypeToken?: Token
+        readonly returnTypeExpression?: TypeExpression
     ) {
         super();
-        if (this.returnTypeToken) {
-            this.returnType = util.tokenToBscType(this.returnTypeToken);
-        } else if (this.functionType.text.toLowerCase() === 'sub') {
-            this.returnType = new VoidType();
-        } else {
-            this.returnType = DynamicType.instance;
-        }
 
         //if there's a body, and it doesn't have a SymbolTable, assign one
         if (this.body && !this.body.symbolTable) {
@@ -145,11 +175,6 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
     }
-
-    /**
-     * The type this function returns
-     */
-    public returnType: BscType;
 
     /**
      * Get the name of the wrapping namespace (if it exists)
@@ -204,7 +229,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             ...this.parameters,
             this.rightParen,
             this.asToken,
-            this.returnTypeToken,
+            this.returnTypeExpression,
             this.end
         );
     }
@@ -248,7 +273,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 state.transpileToken(this.asToken),
                 ' ',
                 //return type
-                state.sourceNode(this.returnTypeToken, this.returnType.toTypeString())
+                ...this.returnTypeExpression.transpile(state)
             );
         }
         if (includeBody) {
@@ -288,7 +313,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 //as <ReturnType>
                 ...(this.asToken ? [
                     ' as ',
-                    this.returnTypeToken?.text
+                    ...this.returnTypeExpression.getTypedef(state)
                 ] : []),
                 '\n',
                 state.indent(),
@@ -302,7 +327,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walkArray(this.parameters, visitor, options, this);
-
+            walk(this, 'returnTypeExpression', visitor, options);
             //This is the core of full-program walking...it allows us to step into sub functions
             if (options.walkMode & InternalWalkMode.recurseChildFunctions) {
                 walk(this, 'body', visitor, options);
@@ -310,13 +335,21 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
     }
 
-    getFunctionType(): FunctionType {
-        let functionType = new FunctionType(this.returnType);
-        functionType.isSub = this.functionType.text === 'sub';
-        for (let param of this.parameters) {
-            functionType.addParameter(param.name.text, param.type, !!param.typeToken);
+    public getType(options: GetTypeOptions): FunctionType {
+        //if there's a defined return type, use that
+        let returnType = this.returnTypeExpression?.getType(options);
+        const isSub = this.functionType.kind === TokenKind.Sub;
+        //if we don't have a return type and this is a sub, set the return type to `void`. else use `dynamic`
+        if (!returnType) {
+            returnType = isSub ? VoidType.instance : DynamicType.instance;
         }
-        return functionType;
+
+        const resultType = new FunctionType(returnType);
+        resultType.isSub = isSub;
+        for (let param of this.parameters) {
+            resultType.addParameter(param.name.text, param.getType(options), !!param.defaultValue);
+        }
+        return resultType;
     }
 }
 
@@ -324,25 +357,25 @@ export class FunctionParameterExpression extends Expression {
     kind = AstNodeKind.FunctionParameterExpression;
     constructor(
         public name: Identifier,
-        public typeToken?: Token,
+        public equalToken?: Token,
         public defaultValue?: Expression,
-        public asToken?: Token
+        public asToken?: Token,
+        public typeExpression?: TypeExpression
     ) {
         super();
-        if (typeToken) {
-            this.type = util.tokenToBscType(typeToken);
-        } else {
-            this.type = new DynamicType();
-        }
     }
 
-    public type: BscType;
+    public getType(options: GetTypeOptions) {
+        return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlags.typetime }) ??
+            this.defaultValue?.getType({ ...options, flags: SymbolTypeFlags.runtime }) ??
+            DynamicType.instance;
+    }
 
     public get range(): Range {
         return util.createBoundingRange(
             this.name,
             this.asToken,
-            this.typeToken,
+            this.typeExpression,
             this.defaultValue
         );
     }
@@ -362,7 +395,9 @@ export class FunctionParameterExpression extends Expression {
             result.push(' ');
             result.push(state.transpileToken(this.asToken));
             result.push(' ');
-            result.push(state.sourceNode(this.typeToken, this.type.toTypeString()));
+            result.push(
+                ...(this.typeExpression?.transpile(state) ?? [])
+            );
         }
 
         return result;
@@ -380,65 +415,16 @@ export class FunctionParameterExpression extends Expression {
             //type declaration
             ...(this.asToken ? [
                 ' as ',
-                this.typeToken?.text
+                ...(this.typeExpression?.getTypedef(state) ?? [''])
             ] : [])
         ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         // eslint-disable-next-line no-bitwise
-        if (this.defaultValue && options.walkMode & InternalWalkMode.walkExpressions) {
-            walk(this, 'defaultValue', visitor, options);
-        }
-    }
-}
-
-export class NamespacedVariableNameExpression extends Expression {
-    kind = AstNodeKind.NamespacedVariableNameExpression;
-    constructor(
-        //if this is a `DottedGetExpression`, it must be comprised only of `VariableExpression`s
-        readonly expression: DottedGetExpression | VariableExpression
-    ) {
-        super();
-        this.range = expression.range;
-    }
-    range: Range;
-
-    transpile(state: BrsTranspileState) {
-        return [
-            state.sourceNode(this, this.getName(ParseMode.BrightScript))
-        ];
-    }
-
-    public getNameParts() {
-        let parts = [] as string[];
-        if (isVariableExpression(this.expression)) {
-            parts.push(this.expression.name.text);
-        } else {
-            let expr = this.expression;
-
-            parts.push(expr.name.text);
-
-            while (isVariableExpression(expr) === false) {
-                expr = expr.obj as DottedGetExpression;
-                parts.unshift(expr.name.text);
-            }
-        }
-        return parts;
-    }
-
-    getName(parseMode: ParseMode) {
-        if (parseMode === ParseMode.BrighterScript) {
-            return this.getNameParts().join('.');
-        } else {
-            return this.getNameParts().join('_');
-        }
-    }
-
-    walk(visitor: WalkVisitor, options: WalkOptions) {
-        this.expression?.link();
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            walk(this, 'expression', visitor, options);
+            walk(this, 'defaultValue', visitor, options);
+            walk(this, 'typeExpression', visitor, options);
         }
     }
 }
@@ -462,7 +448,9 @@ export class DottedGetExpression extends Expression {
     transpile(state: BrsTranspileState) {
         //if the callee starts with a namespace name, transpile the name
         if (state.file.calleeStartsWithNamespace(this)) {
-            return new NamespacedVariableNameExpression(this as DottedGetExpression | VariableExpression).transpile(state);
+            return [
+                state.sourceNode(this, this.getName(ParseMode.BrightScript))
+            ];
         } else {
             return [
                 ...this.obj.transpile(state),
@@ -476,6 +464,23 @@ export class DottedGetExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'obj', visitor, options);
         }
+    }
+
+    getType(options: GetTypeOptions) {
+        const objType = this.obj?.getType(options);
+        const result = objType?.getMemberType(this.name?.text, options);
+        options.typeChain?.push(new TypeChainEntry(this.name?.text, result, this.range));
+        if (result || options.flags & SymbolTypeFlags.typetime) {
+            // All types should be known at typetime
+            return result;
+        }
+        // It is possible at runtime that a value has been added dynamically to an object, or something
+        // TODO: maybe have a strict flag on this?
+        return DynamicType.instance;
+    }
+
+    getName(parseMode: ParseMode) {
+        return util.getAllDottedGetPartsAsString(this, parseMode);
     }
 
 }
@@ -575,6 +580,10 @@ export class GroupingExpression extends Expression {
             walk(this, 'expression', visitor, options);
         }
     }
+
+    getType(options: GetTypeOptions) {
+        return this.expression.getType(options);
+    }
 }
 
 export class LiteralExpression extends Expression {
@@ -583,17 +592,15 @@ export class LiteralExpression extends Expression {
         public token: Token
     ) {
         super();
-        this.type = util.tokenToBscType(token);
+    }
+
+    public getType(options?: GetTypeOptions) {
+        return util.tokenToBscType(this.token);
     }
 
     public get range() {
         return this.token.range;
     }
-
-    /**
-     * The (data) type of this expression
-     */
-    public type: BscType;
 
     transpile(state: BrsTranspileState) {
         let text: string;
@@ -601,7 +608,7 @@ export class LiteralExpression extends Expression {
             //wrap quasis with quotes (and escape inner quotemarks)
             text = `"${this.token.text.replace(/"/g, '""')}"`;
 
-        } else if (isStringType(this.type)) {
+        } else if (this.token.kind === TokenKind.StringLiteral) {
             text = this.token.text;
             //add trailing quotemark if it's missing. We will have already generated a diagnostic for this.
             if (text.endsWith('"') === false) {
@@ -739,6 +746,10 @@ export class AAMemberExpression extends Expression {
         walk(this, 'value', visitor, options);
     }
 
+    getType(options: GetTypeOptions): BscType {
+        return this.value.getType(options);
+    }
+
 }
 
 export class AALiteralExpression extends Expression {
@@ -829,6 +840,22 @@ export class AALiteralExpression extends Expression {
             walkArray(this.elements, visitor, options, this);
         }
     }
+
+    getType(options: GetTypeOptions): BscType {
+        return super.getType(options);
+
+        // TODO: create an AssocArray type, and populate its members:
+        /*
+        const resultType = new AssocArrayType();
+        for (const element of this.elements) {
+            if (isAAMemberExpression(element)) {
+                resultType.addMember(element.keyToken.text, element.range, element.getType(options), SymbolTypeFlags.runtime);
+            }
+
+        }
+        return resultType;
+        */
+    }
 }
 
 export class UnaryExpression extends Expression {
@@ -897,6 +924,18 @@ export class VariableExpression extends Expression {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+
+    getType(options: GetTypeOptions) {
+        let resultType: BscType = util.tokenToBscType(this.name);
+        const nameKey = this.name.text;
+        if (!resultType) {
+            const symbolTable = this.getSymbolTable();
+            resultType = symbolTable.getSymbolType(nameKey, { ...options, fullName: nameKey, tableProvider: () => this.getSymbolTable() });
+        }
+        options.typeChain?.push(new TypeChainEntry(nameKey, resultType, this.range));
+        return resultType;
     }
 }
 
@@ -997,8 +1036,8 @@ export class NewExpression extends Expression {
      */
     public get className() {
         //the parser guarantees the callee of a new statement's call object will be
-        //a NamespacedVariableNameExpression
-        return this.call.callee as NamespacedVariableNameExpression;
+        //either a VariableExpression or a DottedGet
+        return this.call.callee as (VariableExpression | DottedGetExpression);
     }
 
     public readonly range: Range;
@@ -1018,6 +1057,10 @@ export class NewExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'call', visitor, options);
         }
+    }
+
+    getType(options: GetTypeOptions) {
+        return this.call.getType(options);
     }
 }
 
@@ -1088,6 +1131,10 @@ export class CallfuncExpression extends Expression {
             walkArray(this.args, visitor, options, this);
         }
     }
+
+    getType(options: GetTypeOptions) {
+        return this.callee.getType(options);
+    }
 }
 
 /**
@@ -1150,6 +1197,10 @@ export class TemplateStringExpression extends Expression {
 
     public readonly range: Range;
 
+    public getType(options: GetTypeOptions) {
+        return StringType.instance;
+    }
+
     transpile(state: BrsTranspileState) {
         if (this.quasis.length === 1 && this.expressions.length === 0) {
             return this.quasis[0].transpile(state);
@@ -1181,7 +1232,7 @@ export class TemplateStringExpression extends Expression {
                 //skip the toString wrapper around certain expressions
                 if (
                     isEscapedCharCodeLiteralExpression(expression) ||
-                    (isLiteralExpression(expression) && isStringType(expression.type))
+                    (isLiteralExpression(expression) && isStringType(expression.getType()))
                 ) {
                     add(
                         ...expression.transpile(state)
@@ -1596,9 +1647,84 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
 }
 
 function numberExpressionToValue(expr: LiteralExpression, operator = '') {
-    if (isIntegerType(expr.type) || isLongIntegerType(expr.type)) {
+    if (isIntegerType(expr.getType()) || isLongIntegerType(expr.getType())) {
         return parseInt(operator + expr.token.text);
     } else {
         return parseFloat(operator + expr.token.text);
+    }
+}
+
+export class TypeExpression extends Expression implements TypedefProvider {
+    constructor(
+        /**
+         * The standard AST expression that represents the type for this TypeExpression.
+         */
+        public expression: Expression
+    ) {
+        super();
+        this.range = expression?.range;
+    }
+
+    public range: Range;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [this.getType({ flags: SymbolTypeFlags.typetime }).toTypeString()];
+    }
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        return this.expression.getType({ ...options, flags: SymbolTypeFlags.typetime });
+    }
+
+    getTypedef(state: TranspileState): (string | SourceNode)[] {
+        // TypeDefs should pass through any valid type names
+        return this.expression.transpile(state as BrsTranspileState);
+    }
+
+    getName(parseMode = ParseMode.BrighterScript): string {
+        //TODO: this may not support Complex Types, eg. generics or Unions
+        return util.getAllDottedGetPartsAsString(this.expression, parseMode);
+    }
+
+    getNameParts(): string[] {
+        //TODO: really, this code is only used to get Namespaces. It could be more clear.
+        return util.getAllDottedGetParts(this.expression).map(x => x.text);
+    }
+
+}
+
+
+export class TypeCastExpression extends Expression {
+    constructor(
+        public obj: Expression,
+        public asToken?: Token,
+        public typeExpression?: TypeExpression
+    ) {
+        super();
+        this.range = util.createBoundingRange(
+            this.obj,
+            this.asToken,
+            this.typeExpression
+        );
+    }
+
+    public range: Range;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return this.obj.transpile(state);
+    }
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'obj', visitor, options);
+            walk(this, 'typeExpression', visitor, options);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        return this.typeExpression.getType(options);
     }
 }

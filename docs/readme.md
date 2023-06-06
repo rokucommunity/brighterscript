@@ -108,3 +108,10 @@ second line text`
 ```brighterscript
 authStatus = user <> invalid ? "logged in" : "not logged in"
 ```
+
+## [Union Types](union-types.md)
+```brighterscript
+sub log(data as string or number)
+    print data.toStr()
+end sub
+```

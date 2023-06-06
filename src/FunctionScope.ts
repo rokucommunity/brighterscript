@@ -51,4 +51,7 @@ export class FunctionScope {
         }
     }
 
+    get symbolTable() {
+        return this.func.body.getSymbolTable();
+    }
 }
