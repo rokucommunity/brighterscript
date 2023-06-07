@@ -496,7 +496,7 @@ A map of error codes and severity levels that will override diagnostics' severit
       ```jsonc
       "diagnosticSeverityOverrides": {
         "1011": "error",       //raise a warning to an error
-        "BSLINT1001": "warn" //oops we have lots of those to fix... later
+        "LINT1001": "warn" //oops we have lots of those to fix... later
       }
       ```
 

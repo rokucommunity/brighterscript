@@ -602,6 +602,23 @@ describe('EnumStatement', () => {
             `);
         });
 
+        it('recognizes namespace-relative enums', () => {
+            program.setFile('source/main.bs', `
+                namespace MyNamespace
+                    enum MyEnum
+                        val1
+                        val2
+                    end enum
+
+                    function foo() as integer
+                        return MyEnum.val1
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('replaces enum values from separate file with literals', () => {
             program.setFile('source/enum.bs', `
                 enum CharacterType
