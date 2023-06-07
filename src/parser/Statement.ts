@@ -11,7 +11,7 @@ import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
 import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
-import { SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTable';
 import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { SourceNode } from 'source-map';
@@ -1515,10 +1515,10 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         const resultType = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
 
         for (const statement of this.methods) {
-            resultType.addMember(statement?.tokens.name?.text, statement?.range, statement?.getType(options), SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.tokens.name?.text, statement?.range, statement?.getType(options), SymbolTypeFlag.runtime);
         }
         for (const statement of this.fields) {
-            resultType.addMember(statement?.tokens.name?.text, statement?.range, statement.getType(options), SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.tokens.name?.text, statement?.range, statement.getType(options), SymbolTypeFlag.runtime);
         }
         return resultType;
     }
@@ -2097,10 +2097,10 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         for (const statement of this.methods) {
             const funcType = statement?.func.getType(options);
-            resultType.addMember(statement?.name?.text, statement?.range, funcType, SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.name?.text, statement?.range, funcType, SymbolTypeFlag.runtime);
         }
         for (const statement of this.fields) {
-            resultType.addMember(statement?.name?.text, statement?.range, statement.getType(options), SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.name?.text, statement?.range, statement.getType(options), SymbolTypeFlag.runtime);
         }
         return resultType;
     }
@@ -2327,8 +2327,8 @@ export class FieldStatement extends Statement implements TypedefProvider {
      * Defaults to `DynamicType`
      */
     getType(options: GetTypeOptions) {
-        return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlags.typetime }) ??
-            this.initialValue?.getType({ ...options, flags: SymbolTypeFlags.runtime }) ?? DynamicType.instance;
+        return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime }) ??
+            this.initialValue?.getType({ ...options, flags: SymbolTypeFlag.runtime }) ?? DynamicType.instance;
     }
 
     public readonly range: Range;
@@ -2348,7 +2348,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
                 );
             }
 
-            let type = this.getType({ flags: SymbolTypeFlags.typetime });
+            let type = this.getType({ flags: SymbolTypeFlag.typetime });
             if (isInvalidType(type) || isVoidType(type)) {
                 type = new DynamicType();
             }
@@ -2665,7 +2665,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
         const resultType = new EnumType(this.fullName);
         resultType.pushMemberProvider(() => this.getSymbolTable());
         for (const statement of this.getMembers()) {
-            resultType.addMember(statement?.tokens?.name?.text, statement?.range, statement.getType(), SymbolTypeFlags.runtime);
+            resultType.addMember(statement?.tokens?.name?.text, statement?.range, statement.getType(), SymbolTypeFlag.runtime);
         }
 
         return resultType;

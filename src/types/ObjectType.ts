@@ -1,4 +1,4 @@
-import { SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTable';
 import { isDynamicType, isInheritableType, isObjectType, isUnionType } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { BscType } from './BscType';
@@ -41,6 +41,6 @@ export class ObjectType extends BscType {
     }
 
     isEqual(otherType: BscType) {
-        return isObjectType(otherType) && this.checkCompatibilityBasedOnMembers(otherType, SymbolTypeFlags.runtime);
+        return isObjectType(otherType) && this.checkCompatibilityBasedOnMembers(otherType, SymbolTypeFlag.runtime);
     }
 }

@@ -14,7 +14,7 @@ import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
 import type { Token } from './lexer/Token';
-import type { SymbolTypeFlags } from './SymbolTable';
+import type { SymbolTypeFlag } from './SymbolTable';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -409,7 +409,7 @@ export interface FileLink<T> {
 }
 
 export interface GetTypeOptions {
-    flags: SymbolTypeFlags;
+    flags: SymbolTypeFlag;
     typeChain?: TypeChainEntry[];
 }
 

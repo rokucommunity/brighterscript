@@ -8,7 +8,7 @@ import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
-import { SymbolTypeFlags } from '../../SymbolTable';
+import { SymbolTypeFlag } from '../../SymbolTable';
 import type { BscType } from '../../types/BscType';
 import { DynamicType } from '../../types/DynamicType';
 import { NamespaceType } from '../../types/NamespaceType';
@@ -50,7 +50,7 @@ export class BrsFileValidator {
             MethodStatement: (node) => {
                 //add the `super` symbol to class methods
                 //Todo:  get the actual type of the parent class
-                node.func.body.symbolTable.addSymbol('super', undefined, DynamicType.instance, SymbolTypeFlags.runtime);
+                node.func.body.symbolTable.addSymbol('super', undefined, DynamicType.instance, SymbolTypeFlag.runtime);
             },
             CallfuncExpression: (node) => {
                 if (node.args.length > 5) {
@@ -66,22 +66,22 @@ export class BrsFileValidator {
                 this.validateEnumDeclaration(node);
 
                 //register this enum declaration
-                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlags.typetime });
+                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlag.typetime });
                 // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, nodeType, SymbolTypeFlags.typetime | SymbolTypeFlags.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
             },
             ClassStatement: (node) => {
                 this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.classKeyword, node.name));
 
                 //register this class
-                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlags.typetime });
+                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlag.typetime });
                 // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, nodeType, SymbolTypeFlags.typetime | SymbolTypeFlags.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
             },
             AssignmentStatement: (node) => {
                 //register this variable
-                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlags.runtime });
-                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, nodeType, SymbolTypeFlags.runtime);
+                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlag.runtime });
+                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, nodeType, SymbolTypeFlag.runtime);
             },
             DottedSetStatement: (node) => {
                 this.validateNoOptionalChainingInVarSet(node, [node.obj]);
@@ -91,7 +91,7 @@ export class BrsFileValidator {
             },
             ForEachStatement: (node) => {
                 //register the for loop variable
-                node.parent.getSymbolTable()?.addSymbol(node.item.text, node.item.range, DynamicType.instance, SymbolTypeFlags.runtime);
+                node.parent.getSymbolTable()?.addSymbol(node.item.text, node.item.range, DynamicType.instance, SymbolTypeFlag.runtime);
             },
             NamespaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.keyword, node.nameExpression));
@@ -105,7 +105,7 @@ export class BrsFileValidator {
                 }
                 const parentSymbolTable = node.parent.getSymbolTable();
                 // eslint-disable-next-line no-bitwise
-                const namespaceTypeFlags = SymbolTypeFlags.runtime | SymbolTypeFlags.typetime;
+                const namespaceTypeFlags = SymbolTypeFlag.runtime | SymbolTypeFlag.typetime;
 
                 //Build namespace types, part by part, if they don't exist
                 //Last one can use the node's `getType()` method
@@ -116,12 +116,12 @@ export class BrsFileValidator {
                     const part = namespaceParts[i];
                     nameSoFar += (i > 0 ? '.' : '') + part;
                     //TODO: is this correct?
-                    nextNamespaceType = currentSymbolTable.getSymbol(part, SymbolTypeFlags.typetime)?.[0]?.type;
+                    nextNamespaceType = currentSymbolTable.getSymbol(part, SymbolTypeFlag.typetime)?.[0]?.type;
 
                     if (!isNamespaceType(nextNamespaceType)) {
                         // if it is the last one, ie, the part that represents this node/namespace.
                         // make sure the namespace's symboltable is a provider for the previous types' member table
-                        nextNamespaceType = (i === namespaceParts.length - 1) ? node.getType({ flags: SymbolTypeFlags.typetime }) : new NamespaceType(nameSoFar);
+                        nextNamespaceType = (i === namespaceParts.length - 1) ? node.getType({ flags: SymbolTypeFlag.typetime }) : new NamespaceType(nameSoFar);
                         currentSymbolTable.addSymbol(part, node.nameExpression.range, nextNamespaceType, namespaceTypeFlags);
 
                     }
@@ -137,14 +137,14 @@ export class BrsFileValidator {
             },
             FunctionStatement: (node) => {
                 this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.functionType, node.name));
-                const funcType = node.getType({ flags: SymbolTypeFlags.typetime });
+                const funcType = node.getType({ flags: SymbolTypeFlag.typetime });
 
                 if (node.name?.text) {
                     node.parent.getSymbolTable().addSymbol(
                         node.name.text,
                         node.name.range,
                         funcType,
-                        SymbolTypeFlags.runtime
+                        SymbolTypeFlag.runtime
                     );
                 }
 
@@ -155,7 +155,7 @@ export class BrsFileValidator {
                         node.name.text,
                         node.name.range,
                         funcType,
-                        SymbolTypeFlags.runtime
+                        SymbolTypeFlag.runtime
                     );
                     //add the transpiled name for namespaced functions to the root symbol table
                     const transpiledNamespaceFunctionName = node.getName(ParseMode.BrightScript);
@@ -164,39 +164,39 @@ export class BrsFileValidator {
                         transpiledNamespaceFunctionName,
                         node.name.range,
                         funcType,
-                        SymbolTypeFlags.runtime
+                        SymbolTypeFlag.runtime
                     );
                 }
             },
             FunctionExpression: (node) => {
-                if (!node.symbolTable.hasSymbol('m', SymbolTypeFlags.runtime)) {
-                    node.symbolTable.addSymbol('m', undefined, DynamicType.instance, SymbolTypeFlags.runtime);
+                if (!node.symbolTable.hasSymbol('m', SymbolTypeFlag.runtime)) {
+                    node.symbolTable.addSymbol('m', undefined, DynamicType.instance, SymbolTypeFlag.runtime);
                 }
             },
             FunctionParameterExpression: (node) => {
                 const paramName = node.name?.text;
                 const symbolTable = node.getSymbolTable();
-                const nodeType = node.getType({ flags: SymbolTypeFlags.typetime });
-                symbolTable?.addSymbol(paramName, node.name.range, nodeType, SymbolTypeFlags.runtime);
+                const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
+                symbolTable?.addSymbol(paramName, node.name.range, nodeType, SymbolTypeFlag.runtime);
             },
             InterfaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));
 
-                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlags.typetime });
+                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlag.typetime });
                 // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, nodeType, SymbolTypeFlags.runtime | SymbolTypeFlags.typetime);
+                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, nodeType, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
             },
             ConstStatement: (node) => {
                 this.validateDeclarationLocations(node, 'const', () => util.createBoundingRange(node.tokens.const, node.tokens.name));
-                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlags.typetime });
-                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, nodeType, SymbolTypeFlags.runtime);
+                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlag.typetime });
+                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, nodeType, SymbolTypeFlag.runtime);
             },
             CatchStatement: (node) => {
-                node.parent.getSymbolTable().addSymbol(node.exceptionVariable.text, node.exceptionVariable.range, DynamicType.instance, SymbolTypeFlags.runtime);
+                node.parent.getSymbolTable().addSymbol(node.exceptionVariable.text, node.exceptionVariable.range, DynamicType.instance, SymbolTypeFlag.runtime);
             },
             DimStatement: (node) => {
                 if (node.identifier) {
-                    node.parent.getSymbolTable().addSymbol(node.identifier.text, node.identifier.range, DynamicType.instance, SymbolTypeFlags.runtime);
+                    node.parent.getSymbolTable().addSymbol(node.identifier.text, node.identifier.range, DynamicType.instance, SymbolTypeFlag.runtime);
                 }
             },
             ContinueStatement: (node) => {

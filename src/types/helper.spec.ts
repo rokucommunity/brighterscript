@@ -9,7 +9,7 @@ import { StringType } from './StringType';
 import { UnionType, unionTypeFactory } from './UnionType';
 import { findTypeIntersection, findTypeUnion, getUniqueType, getUniqueTypesFromArray } from './helpers';
 import { InterfaceType } from './InterfaceType';
-import { SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTable';
 import { DoubleType } from './DoubleType';
 import { BooleanType } from './BooleanType';
 
@@ -128,12 +128,12 @@ describe('getUniqueType', () => {
 
     it('should return a a union type of two compatible interfaces', () => {
         const iface1 = new InterfaceType('iface1');
-        iface1.addMember('name', null, StringType.instance, SymbolTypeFlags.runtime);
-        iface1.addMember('age', null, IntegerType.instance, SymbolTypeFlags.runtime);
+        iface1.addMember('name', null, StringType.instance, SymbolTypeFlag.runtime);
+        iface1.addMember('age', null, IntegerType.instance, SymbolTypeFlag.runtime);
 
         const iface2 = new InterfaceType('iface2');
-        iface2.addMember('name', null, StringType.instance, SymbolTypeFlags.runtime);
-        iface2.addMember('age', null, IntegerType.instance, SymbolTypeFlags.runtime);
+        iface2.addMember('name', null, StringType.instance, SymbolTypeFlag.runtime);
+        iface2.addMember('age', null, IntegerType.instance, SymbolTypeFlag.runtime);
 
         expect(iface1.isTypeCompatible(iface2)).to.be.true;
         expect(iface2.isTypeCompatible(iface1)).to.be.true;

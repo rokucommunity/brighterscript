@@ -8,7 +8,7 @@ import { ClassStatement } from './Statement';
 import { NewExpression } from './Expression';
 import { StringType } from '../types/StringType';
 import { expectDiagnosticsIncludes } from '../testHelpers.spec';
-import { SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTable';
 
 describe('parser class', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -200,7 +200,7 @@ describe('parser class', () => {
             expect(field.accessModifier.kind).to.equal(TokenKind.Public);
             expect(field.name.text).to.equal('firstName');
             expect(field.as.text).to.equal('as');
-            expect(field.getType({ flags: SymbolTypeFlags.typetime })).to.be.instanceOf(StringType);
+            expect(field.getType({ flags: SymbolTypeFlag.typetime })).to.be.instanceOf(StringType);
         });
 
         it('can be solely an identifier', () => {

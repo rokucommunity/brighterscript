@@ -1,4 +1,4 @@
-import { SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTable';
 import { isDynamicType, isInterfaceType, isUnionType, isInheritableType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -27,7 +27,7 @@ export class InterfaceType extends InheritableType {
             return true;
         }
         if (isInheritableType(targetType) || isUnionType(targetType)) {
-            return this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlags.runtime);
+            return this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime);
         }
         return false;
     }

@@ -13,7 +13,7 @@ import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer/TokenKind';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
-import { SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTable';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -222,11 +222,11 @@ export class BsClassValidator {
                         if (isFieldStatement(member)) {
                             let ancestorMemberType: BscType = new DynamicType();
                             if (isFieldStatement(ancestorAndMember.member)) {
-                                ancestorMemberType = ancestorAndMember.member.getType({ flags: SymbolTypeFlags.typetime });
+                                ancestorMemberType = ancestorAndMember.member.getType({ flags: SymbolTypeFlag.typetime });
                             } else if (isMethodStatement(ancestorAndMember.member)) {
-                                ancestorMemberType = ancestorAndMember.member.func.getType({ flags: SymbolTypeFlags.typetime });
+                                ancestorMemberType = ancestorAndMember.member.func.getType({ flags: SymbolTypeFlag.typetime });
                             }
-                            const childFieldType = member.getType({ flags: SymbolTypeFlags.typetime });
+                            const childFieldType = member.getType({ flags: SymbolTypeFlag.typetime });
                             if (!ancestorMemberType.isTypeCompatible(childFieldType)) {
                                 //flag incompatible child field type to ancestor field type
                                 this.diagnostics.push({

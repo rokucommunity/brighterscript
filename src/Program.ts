@@ -31,7 +31,7 @@ import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import { IntegerType } from './types/IntegerType';
 import { StringType } from './types/StringType';
-import { SymbolTable, SymbolTypeFlags } from './SymbolTable';
+import { SymbolTable, SymbolTypeFlag } from './SymbolTable';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -124,20 +124,20 @@ export class Program {
         //Setup primitive types in global symbolTable
         //TODO: Need to handle Array types
 
-        this.globalScope.symbolTable.addSymbol('boolean', undefined, BooleanType.instance, SymbolTypeFlags.typetime);
-        this.globalScope.symbolTable.addSymbol('double', undefined, DoubleType.instance, SymbolTypeFlags.typetime);
-        this.globalScope.symbolTable.addSymbol('dynamic', undefined, DynamicType.instance, SymbolTypeFlags.typetime);
-        this.globalScope.symbolTable.addSymbol('float', undefined, FloatType.instance, SymbolTypeFlags.typetime);
-        this.globalScope.symbolTable.addSymbol('function', undefined, new FunctionType(DynamicType.instance), SymbolTypeFlags.typetime);
-        this.globalScope.symbolTable.addSymbol('integer', undefined, IntegerType.instance, SymbolTypeFlags.typetime);
-        this.globalScope.symbolTable.addSymbol('longinteger', undefined, LongIntegerType.instance, SymbolTypeFlags.typetime);
-        this.globalScope.symbolTable.addSymbol('object', undefined, new ObjectType(), SymbolTypeFlags.typetime);
-        this.globalScope.symbolTable.addSymbol('string', undefined, StringType.instance, SymbolTypeFlags.typetime);
-        this.globalScope.symbolTable.addSymbol('void', undefined, VoidType.instance, SymbolTypeFlags.typetime);
+        this.globalScope.symbolTable.addSymbol('boolean', undefined, BooleanType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('double', undefined, DoubleType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('dynamic', undefined, DynamicType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('float', undefined, FloatType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('function', undefined, new FunctionType(DynamicType.instance), SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('integer', undefined, IntegerType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('longinteger', undefined, LongIntegerType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('object', undefined, new ObjectType(), SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('string', undefined, StringType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('void', undefined, VoidType.instance, SymbolTypeFlag.typetime);
 
         for (let pair of globalCallableMap) {
             let [key, callable] = pair;
-            this.globalScope.symbolTable.addSymbol(key, undefined, callable.type, SymbolTypeFlags.runtime);
+            this.globalScope.symbolTable.addSymbol(key, undefined, callable.type, SymbolTypeFlag.runtime);
         }
     }
 

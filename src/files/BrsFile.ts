@@ -28,7 +28,7 @@ import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
-import { SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTable';
 import type { BscType } from '../types/BscType';
 import { ClassType } from '../types/ClassType';
 import { createIdentifier } from '../astUtils/creators';
@@ -469,7 +469,7 @@ export class BrsFile {
                     name: param.name.text,
                     getType: () => {
                         if (this.program.options.enableTypeValidation) {
-                            return param.getType({ flags: SymbolTypeFlags.typetime });
+                            return param.getType({ flags: SymbolTypeFlag.typetime });
                         }
                         paramType = paramType ?? this.getBscTypeFromTypeExpression(param.typeExpression);
                         return paramType;
@@ -522,7 +522,7 @@ export class BrsFile {
                     name: statement.name.text,
                     getType: () => {
                         if (this.program.options.enableTypeValidation) {
-                            return statement.getType({ flags: SymbolTypeFlags.runtime });
+                            return statement.getType({ flags: SymbolTypeFlag.runtime });
                         }
                         assignmentType = assignmentType ?? this.getBscTypeFromAssignment(statement, scope);
                         return assignmentType;
@@ -541,7 +541,7 @@ export class BrsFile {
             return util.tokenToBscType(createIdentifier(typeAsString, typeExpr.range)) ?? new ClassType(typeAsString);
         }
         if (isLiteralExpression(defaultValue)) {
-            return defaultValue.getType({ flags: SymbolTypeFlags.typetime });
+            return defaultValue.getType({ flags: SymbolTypeFlag.typetime });
         }
         return DynamicType.instance;
     }
@@ -565,7 +565,7 @@ export class BrsFile {
      * Short circuit full `node.getType()` calls - used when enhancedTypeValidation is false
      */
     private getBscTypeFromAssignment(assignment: AssignmentStatement, scope: FunctionScope): BscType {
-        const getTypeOptions = { flags: SymbolTypeFlags.runtime };
+        const getTypeOptions = { flags: SymbolTypeFlag.runtime };
         try {
             //function
             if (isFunctionExpression(assignment.value)) {
@@ -613,7 +613,7 @@ export class BrsFile {
             let params = [] as CallableParam[];
             for (let param of statement.func.parameters) {
                 const paramType = this.program.options.enableTypeValidation
-                    ? param.getType({ flags: SymbolTypeFlags.typetime })
+                    ? param.getType({ flags: SymbolTypeFlag.typetime })
                     : this.getBscTypeFromTypeExpression(param.typeExpression, param.defaultValue);
 
                 let callableParam = {
@@ -626,7 +626,7 @@ export class BrsFile {
             }
 
             const funcType = this.program.options.enableTypeValidation
-                ? statement.getType({ flags: SymbolTypeFlags.typetime })
+                ? statement.getType({ flags: SymbolTypeFlag.typetime })
                 : this.getFunctionTypeFromFuncExpr(statement.func, statement.name.text);
 
             this.callables.push({

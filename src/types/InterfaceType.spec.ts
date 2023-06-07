@@ -7,7 +7,7 @@ import { InterfaceType } from './InterfaceType';
 import { ObjectType } from './ObjectType';
 import { StringType } from './StringType';
 import type { ReferenceType } from './ReferenceType';
-import { SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTable';
 
 describe('InterfaceType', () => {
     describe('toJSString', () => {
@@ -200,7 +200,7 @@ function iface(members: Record<string, BscType>, name?: string, parentType?: Int
     const ifaceType = new InterfaceType(name, parentType);
 
     for (const key in members) {
-        ifaceType.addMember(key, null, members[key], SymbolTypeFlags.runtime);
+        ifaceType.addMember(key, null, members[key], SymbolTypeFlag.runtime);
     }
     return ifaceType;
 }

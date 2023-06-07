@@ -11,7 +11,7 @@ import { TypeChainEntry } from './interfaces';
 import { ClassType } from './types/ClassType';
 import { NamespaceType } from './types/NamespaceType';
 import { ReferenceType } from './types/ReferenceType';
-import { SymbolTypeFlags } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTable';
 
 const sinon = createSandbox();
 
@@ -815,7 +815,7 @@ describe('util', () => {
             const chain = [
                 new TypeChainEntry('AlphaNamespace', new NamespaceType('Alpha'), util.createRange(1, 1, 2, 2)),
                 new TypeChainEntry('BetaProp', new ClassType('Beta'), util.createRange(2, 2, 3, 3)),
-                new TypeChainEntry('CharlieProp', new ReferenceType('Charlie', 'Alpha.Beta.CharlieProp', SymbolTypeFlags.runtime, () => null), util.createRange(3, 3, 4, 4))
+                new TypeChainEntry('CharlieProp', new ReferenceType('Charlie', 'Alpha.Beta.CharlieProp', SymbolTypeFlag.runtime, () => null), util.createRange(3, 3, 4, 4))
             ];
 
             const result = util.processTypeChain(chain);
