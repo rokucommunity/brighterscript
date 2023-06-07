@@ -4,7 +4,7 @@ import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
-import { SymbolTypeFlags } from '../../SymbolTable';
+import { SymbolTypeFlag } from '../../SymbolTable';
 import type { EnumStatement, NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
@@ -107,12 +107,12 @@ export class ScopeValidator {
             //get the namespace container (accounting for namespace-relative as well)
             const namespaceContainer = scope.getNamespace(firstNamespacePartLower, info.enclosingNamespaceNameLower);
             const isUsedAsType = this.checkIfUsedAsTypeExpression(info.expression);
-            let symbolType = SymbolTypeFlags.runtime;
-            let oppositeSymbolType = SymbolTypeFlags.typetime;
+            let symbolType = SymbolTypeFlag.runtime;
+            let oppositeSymbolType = SymbolTypeFlag.typetime;
             if (isUsedAsType) {
                 // This is used in a TypeExpression - only look up types from SymbolTable
-                symbolType = SymbolTypeFlags.typetime;
-                oppositeSymbolType = SymbolTypeFlags.runtime;
+                symbolType = SymbolTypeFlag.typetime;
+                oppositeSymbolType = SymbolTypeFlag.runtime;
             }
 
             if (scope.program.options.enableTypeValidation) {

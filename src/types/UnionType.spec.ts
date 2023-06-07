@@ -4,7 +4,7 @@ import { IntegerType } from './IntegerType';
 import { UnionType } from './UnionType';
 import { FloatType } from './FloatType';
 import { InterfaceType } from './InterfaceType';
-import { SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTable';
 import { BooleanType } from './BooleanType';
 import { expectTypeToBe } from '../testHelpers.spec';
 import { isReferenceType } from '../astUtils/reflection';
@@ -13,14 +13,14 @@ import { isReferenceType } from '../astUtils/reflection';
 describe('UnionType', () => {
     it('can be assigned to by anything that can be assigned to an included type', () => {
         const parentIFace = new InterfaceType('IfaceParent');
-        parentIFace.addMember('name', null, StringType.instance, SymbolTypeFlags.runtime);
+        parentIFace.addMember('name', null, StringType.instance, SymbolTypeFlag.runtime);
         const iFace = new InterfaceType('IfaceChild', parentIFace);
-        iFace.addMember('age', null, IntegerType.instance, SymbolTypeFlags.runtime);
+        iFace.addMember('age', null, IntegerType.instance, SymbolTypeFlag.runtime);
 
         const otheriFaceWithSameMembers = new InterfaceType('OtherIface');
-        otheriFaceWithSameMembers.addMember('name', null, StringType.instance, SymbolTypeFlags.runtime);
-        otheriFaceWithSameMembers.addMember('age', null, IntegerType.instance, SymbolTypeFlags.runtime);
-        otheriFaceWithSameMembers.addMember('height', null, FloatType.instance, SymbolTypeFlags.runtime);
+        otheriFaceWithSameMembers.addMember('name', null, StringType.instance, SymbolTypeFlag.runtime);
+        otheriFaceWithSameMembers.addMember('age', null, IntegerType.instance, SymbolTypeFlag.runtime);
+        otheriFaceWithSameMembers.addMember('height', null, FloatType.instance, SymbolTypeFlag.runtime);
 
         const myUnion = new UnionType([FloatType.instance, iFace, StringType.instance]);
 
@@ -40,15 +40,15 @@ describe('UnionType', () => {
 
     it('can assign to a more general Union with interfaces', () => {
         const parentIFace = new InterfaceType('IfaceParent');
-        parentIFace.addMember('name', null, StringType.instance, SymbolTypeFlags.runtime);
+        parentIFace.addMember('name', null, StringType.instance, SymbolTypeFlag.runtime);
         const iFace = new InterfaceType('IfaceChild', parentIFace);
-        iFace.addMember('age', null, IntegerType.instance, SymbolTypeFlags.runtime);
-        iFace.addMember('height', null, FloatType.instance, SymbolTypeFlags.runtime);
+        iFace.addMember('age', null, IntegerType.instance, SymbolTypeFlag.runtime);
+        iFace.addMember('height', null, FloatType.instance, SymbolTypeFlag.runtime);
         const myUnion = new UnionType([FloatType.instance, iFace, StringType.instance, BooleanType.instance]);
 
         const otheriFaceWithSameMembers = new InterfaceType('OtherIface');
-        otheriFaceWithSameMembers.addMember('name', null, StringType.instance, SymbolTypeFlags.runtime);
-        otheriFaceWithSameMembers.addMember('age', null, IntegerType.instance, SymbolTypeFlags.runtime);
+        otheriFaceWithSameMembers.addMember('name', null, StringType.instance, SymbolTypeFlag.runtime);
+        otheriFaceWithSameMembers.addMember('age', null, IntegerType.instance, SymbolTypeFlag.runtime);
 
         const otherUnion = new UnionType([FloatType.instance, otheriFaceWithSameMembers, StringType.instance]);
 
@@ -58,9 +58,9 @@ describe('UnionType', () => {
 
     it('will get a string representation in order given', () => {
         const iFace1 = new InterfaceType('SomeIface');
-        iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlags.typetime);
-        iFace1.addMember('name', null, StringType.instance, SymbolTypeFlags.typetime);
-        iFace1.addMember('height', null, FloatType.instance, SymbolTypeFlags.typetime);
+        iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlag.typetime);
+        iFace1.addMember('name', null, StringType.instance, SymbolTypeFlag.typetime);
+        iFace1.addMember('height', null, FloatType.instance, SymbolTypeFlag.typetime);
         const myUnion = new UnionType([FloatType.instance, StringType.instance, BooleanType.instance, iFace1]);
 
         expect(myUnion.toString()).to.eq('float or string or boolean or SomeIface');
@@ -69,18 +69,18 @@ describe('UnionType', () => {
     describe('getMemberType', () => {
         it('will find the union of inner types', () => {
             const iFace1 = new InterfaceType('iFace1');
-            iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlags.typetime);
-            iFace1.addMember('name', null, StringType.instance, SymbolTypeFlags.typetime);
-            iFace1.addMember('height', null, FloatType.instance, SymbolTypeFlags.typetime);
+            iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlag.typetime);
+            iFace1.addMember('name', null, StringType.instance, SymbolTypeFlag.typetime);
+            iFace1.addMember('height', null, FloatType.instance, SymbolTypeFlag.typetime);
 
             const iFace2 = new InterfaceType('iFace2');
-            iFace2.addMember('age', null, IntegerType.instance, SymbolTypeFlags.typetime);
-            iFace2.addMember('name', null, StringType.instance, SymbolTypeFlags.typetime);
-            iFace2.addMember('height', null, StringType.instance, SymbolTypeFlags.typetime);
+            iFace2.addMember('age', null, IntegerType.instance, SymbolTypeFlag.typetime);
+            iFace2.addMember('name', null, StringType.instance, SymbolTypeFlag.typetime);
+            iFace2.addMember('height', null, StringType.instance, SymbolTypeFlag.typetime);
 
             const myUnion = new UnionType([iFace1, iFace2]);
 
-            const options = { flags: SymbolTypeFlags.typetime };
+            const options = { flags: SymbolTypeFlag.typetime };
             const ageType = myUnion.getMemberType('age', options);
             expectTypeToBe(ageType, IntegerType);
             const nameType = myUnion.getMemberType('name', options);
@@ -95,16 +95,16 @@ describe('UnionType', () => {
 
         it('will return reference types if any inner type does not include the member', () => {
             const iFace1 = new InterfaceType('iFace1');
-            iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlags.typetime);
-            iFace1.addMember('name', null, StringType.instance, SymbolTypeFlags.typetime);
-            iFace1.addMember('height', null, FloatType.instance, SymbolTypeFlags.typetime);
+            iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlag.typetime);
+            iFace1.addMember('name', null, StringType.instance, SymbolTypeFlag.typetime);
+            iFace1.addMember('height', null, FloatType.instance, SymbolTypeFlag.typetime);
 
             const iFace2 = new InterfaceType('iFace2');
-            iFace2.addMember('age', null, IntegerType.instance, SymbolTypeFlags.typetime);
-            iFace2.addMember('name', null, StringType.instance, SymbolTypeFlags.typetime);
+            iFace2.addMember('age', null, IntegerType.instance, SymbolTypeFlag.typetime);
+            iFace2.addMember('name', null, StringType.instance, SymbolTypeFlag.typetime);
 
             const myUnion = new UnionType([iFace1, iFace2]);
-            const options = { flags: SymbolTypeFlags.typetime };
+            const options = { flags: SymbolTypeFlag.typetime };
             const heightType1 = myUnion.getMemberType('height', options);
             expectTypeToBe(heightType1, UnionType);
             const heightTypes1 = (heightType1 as UnionType).types;
@@ -114,7 +114,7 @@ describe('UnionType', () => {
             expect(isReferenceType(heightTypes1[1])).to.be.true;
             expect(heightTypes1[1].isResolvable()).to.be.false;
 
-            iFace2.addMember('height', null, FloatType.instance, SymbolTypeFlags.typetime);
+            iFace2.addMember('height', null, FloatType.instance, SymbolTypeFlag.typetime);
             const heightType2 = myUnion.getMemberType('height', options);
             expectTypeToBe(heightType2, FloatType);
         });

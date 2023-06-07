@@ -1,6 +1,6 @@
 import type { GetSymbolTypeOptions, SymbolTableProvider } from '../SymbolTable';
 import type { Range } from 'vscode-languageserver';
-import type { SymbolTypeFlags } from '../SymbolTable';
+import type { SymbolTypeFlag } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 
 export abstract class BscType {
@@ -21,7 +21,7 @@ export abstract class BscType {
         this.memberTable.popParentProvider();
     }
 
-    addMember(name: string, range: Range, type: BscType, flags: SymbolTypeFlags) {
+    addMember(name: string, range: Range, type: BscType, flags: SymbolTypeFlag) {
         this.memberTable.addSymbol(name, range, type, flags);
     }
 
@@ -61,7 +61,7 @@ export abstract class BscType {
     }
 
 
-    checkCompatibilityBasedOnMembers(targetType: BscType, flags: SymbolTypeFlags) {
+    checkCompatibilityBasedOnMembers(targetType: BscType, flags: SymbolTypeFlag) {
         let isSuperSet = true;
         const targetSymbols = targetType.memberTable?.getAllSymbols(flags);
         for (const targetSymbol of targetSymbols) {

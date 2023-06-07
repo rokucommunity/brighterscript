@@ -16,7 +16,7 @@ import { BrsFile } from '../files/BrsFile';
 import { Program } from '../Program';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
-import { SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTable';
 import { IntegerType } from '../types/IntegerType';
 import { FloatType } from '../types/FloatType';
 import { StringType } from '../types/StringType';
@@ -1328,7 +1328,7 @@ describe('parser', () => {
             expect(isAssignmentStatement(assignment)).to.be.true;
             expect(isTypeCastExpression(assignment.value)).to.be.true;
             expect(isCallExpression((assignment.value as TypeCastExpression).obj)).to.be.true;
-            expectTypeToBe(assignment.getType({ flags: SymbolTypeFlags.typetime }), IntegerType);
+            expectTypeToBe(assignment.getType({ flags: SymbolTypeFlag.typetime }), IntegerType);
         });
 
         it('allows type casts in the middle of expressions', () => {
@@ -1352,7 +1352,7 @@ describe('parser', () => {
             expect(isGroupingExpression(assignment.value.callee.obj)).to.be.true;
             expect(isTypeCastExpression(assignment.value.callee.obj.expression)).to.be.true;
             //grouping expression is an integer
-            expectTypeToBe(assignment.value.callee.obj.getType({ flags: SymbolTypeFlags.typetime }), IntegerType);
+            expectTypeToBe(assignment.value.callee.obj.getType({ flags: SymbolTypeFlag.typetime }), IntegerType);
         });
 
         it('allows type casts in a function call', () => {
@@ -1376,7 +1376,7 @@ describe('parser', () => {
             expect(isTypeCastExpression(fnCall.args[0])).to.be.true;
             let arg = fnCall.args[0] as TypeCastExpression;
             //argument type is float
-            expectTypeToBe(arg.getType({ flags: SymbolTypeFlags.typetime }), FloatType);
+            expectTypeToBe(arg.getType({ flags: SymbolTypeFlag.typetime }), FloatType);
         });
 
         it('allows multiple type casts', () => {
@@ -1393,7 +1393,7 @@ describe('parser', () => {
             expect(isPrintStatement(print)).to.be.true;
             expect(isTypeCastExpression(print.expressions[0])).to.be.true;
             //argument type is float
-            expectTypeToBe(print.expressions[0].getType({ flags: SymbolTypeFlags.typetime }), StringType);
+            expectTypeToBe(print.expressions[0].getType({ flags: SymbolTypeFlag.typetime }), StringType);
         });
 
         it('flags invalid type cast syntax - multiple as', () => {

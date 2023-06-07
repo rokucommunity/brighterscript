@@ -11,7 +11,7 @@ import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import type { OnScopeValidateEvent } from './interfaces';
-import { SymbolTypeFlags } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTable';
 import { EnumMemberType } from './types/EnumType';
 import { ClassType } from './types/ClassType';
 import { BooleanType } from './types/BooleanType';
@@ -82,15 +82,15 @@ describe('Scope', () => {
         //the symbol table should contain the relative names for all items in this namespace across the entire scope
         expect(
             // eslint-disable-next-line no-bitwise
-            symbolTable.hasSymbol('Beta', SymbolTypeFlags.runtime | SymbolTypeFlags.typetime)
+            symbolTable.hasSymbol('Beta', SymbolTypeFlag.runtime | SymbolTypeFlag.typetime)
         ).to.be.true;
         expect(
             // eslint-disable-next-line no-bitwise
-            symbolTable.hasSymbol('Charlie', SymbolTypeFlags.runtime | SymbolTypeFlags.typetime)
+            symbolTable.hasSymbol('Charlie', SymbolTypeFlag.runtime | SymbolTypeFlag.typetime)
         ).to.be.true;
         expect(
             // eslint-disable-next-line no-bitwise
-            symbolTable.hasSymbol('createBeta', SymbolTypeFlags.runtime)
+            symbolTable.hasSymbol('createBeta', SymbolTypeFlag.runtime)
         ).to.be.true;
 
         expectZeroDiagnostics(program);
@@ -2186,9 +2186,9 @@ describe('Scope', () => {
             expect(mainFnScope).to.exist;
             sourceScope.linkSymbolTable();
             const mainSymbolTable = mainFnScope.symbolTable;
-            expectTypeToBe(mainSymbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type, ClassType);
-            expect(mainSymbolTable.getSymbol('fooInstance', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Foo');
-            let myNumType = mainSymbolTable.getSymbolType('myNum', { flags: SymbolTypeFlags.runtime });
+            expectTypeToBe(mainSymbolTable.getSymbol('fooInstance', SymbolTypeFlag.runtime)[0].type, ClassType);
+            expect(mainSymbolTable.getSymbol('fooInstance', SymbolTypeFlag.runtime)[0].type.toString()).to.eq('Foo');
+            let myNumType = mainSymbolTable.getSymbolType('myNum', { flags: SymbolTypeFlag.runtime });
             expectTypeToBe(myNumType, IntegerType);
         });
 
@@ -2211,7 +2211,7 @@ describe('Scope', () => {
             expect(sourceScope).to.exist;
             expect(mainFnScope).to.exist;
             sourceScope.linkSymbolTable();
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('paintColor', SymbolTypeFlags.runtime)[0].type, EnumMemberType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('paintColor', SymbolTypeFlag.runtime)[0].type, EnumMemberType);
         });
 
         it('finds correct class field type with default value enums are used', () => {
@@ -2239,7 +2239,7 @@ describe('Scope', () => {
             expect(mainFnScope).to.exist;
             //sourceScope.linkSymbolTable();
             let mainScopeSymbolTable = mainFnScope.symbolTable;
-            let paintType = mainScopeSymbolTable.getSymbolType('paintColor', { flags: SymbolTypeFlags.runtime });
+            let paintType = mainScopeSymbolTable.getSymbolType('paintColor', { flags: SymbolTypeFlag.runtime });
             expectTypeToBe(paintType, EnumMemberType);
         });
 
@@ -2254,15 +2254,15 @@ describe('Scope', () => {
             expect(sourceScope).to.exist;
             sourceScope.linkSymbolTable();
             expect(mainFnScope).to.exist;
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('skin', SymbolTypeFlags.runtime)[0].type, EnumMemberType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('skin', SymbolTypeFlag.runtime)[0].type, EnumMemberType);
 
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlags.runtime)[0].type, ClassType);
-            expect(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Animals.Bird');
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoysWings', SymbolTypeFlags.runtime)[0].type, BooleanType);
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoysSkin', SymbolTypeFlags.runtime)[0].type, EnumMemberType);
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlags.runtime)[0].type, ClassType);
-            expect(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlags.runtime)[0].type.toString()).to.eq('Animals.Dog');
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoBark', SymbolTypeFlags.runtime)[0].type, StringType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlag.runtime)[0].type, ClassType);
+            expect(mainFnScope.symbolTable.getSymbol('flyBoy', SymbolTypeFlag.runtime)[0].type.toString()).to.eq('Animals.Bird');
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoysWings', SymbolTypeFlag.runtime)[0].type, BooleanType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('flyBoysSkin', SymbolTypeFlag.runtime)[0].type, EnumMemberType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlag.runtime)[0].type, ClassType);
+            expect(mainFnScope.symbolTable.getSymbol('fido', SymbolTypeFlag.runtime)[0].type.toString()).to.eq('Animals.Dog');
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoBark', SymbolTypeFlag.runtime)[0].type, StringType);
         });
 
         it('finds correct type for members of classes with super classes', () => {
@@ -2275,12 +2275,12 @@ describe('Scope', () => {
             expect(sourceScope).to.exist;
             sourceScope.linkSymbolTable();
             expect(mainFnScope).to.exist;
-            const chimpType = mainFnScope.symbolTable.getSymbol('chimp', SymbolTypeFlags.runtime)[0].type;
+            const chimpType = mainFnScope.symbolTable.getSymbol('chimp', SymbolTypeFlag.runtime)[0].type;
             expectTypeToBe(chimpType, ClassType);
             expectTypeToBe((chimpType as ClassType).superClass, ClassType);
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('chimpHasLegs', SymbolTypeFlags.runtime)[0].type, BooleanType);
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('chimpSpeed', SymbolTypeFlags.runtime)[0].type, IntegerType);
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoSpeed', SymbolTypeFlags.runtime)[0].type, IntegerType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('chimpHasLegs', SymbolTypeFlag.runtime)[0].type, BooleanType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('chimpSpeed', SymbolTypeFlag.runtime)[0].type, IntegerType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('fidoSpeed', SymbolTypeFlag.runtime)[0].type, IntegerType);
         });
 
         it('finds correct types for method calls', () => {
@@ -2308,7 +2308,7 @@ describe('Scope', () => {
             expect(sourceScope).to.exist;
             sourceScope.linkSymbolTable();
             expect(mainFnScope).to.exist;
-            expectTypeToBe(mainFnScope.symbolTable.getSymbol('myVal', SymbolTypeFlags.runtime)[0].type, IntegerType);
+            expectTypeToBe(mainFnScope.symbolTable.getSymbol('myVal', SymbolTypeFlag.runtime)[0].type, IntegerType);
         });
 
         it('finds correct types for self-referencing variables', () => {
@@ -2326,7 +2326,7 @@ describe('Scope', () => {
             expect(sourceScope).to.exist;
             sourceScope.linkSymbolTable();
             expect(mainFnScope).to.exist;
-            const getTypeOptions = { flags: SymbolTypeFlags.runtime };
+            const getTypeOptions = { flags: SymbolTypeFlag.runtime };
             let dtType = mainFnScope.symbolTable.getSymbolType('dt', getTypeOptions);
             expectTypeToBe(dtType, ObjectType);
             let hoursType = mainFnScope.symbolTable.getSymbolType('hours', getTypeOptions);
@@ -2360,7 +2360,7 @@ describe('Scope', () => {
                 sourceScope.linkSymbolTable();
                 expect(mainFnScope).to.exist;
                 const mainSymbolTable = mainFnScope.symbolTable;
-                expectTypeToBe(mainSymbolTable.getSymbolType('name', { flags: SymbolTypeFlags.runtime }), StringType);
+                expectTypeToBe(mainSymbolTable.getSymbolType('name', { flags: SymbolTypeFlag.runtime }), StringType);
             });
 
             it('should have an error when a non union member is accessed', () => {
@@ -2405,7 +2405,7 @@ describe('Scope', () => {
                 const sourceScope = program.getScopeByName('source');
                 sourceScope.linkSymbolTable();
                 let mainSymbolTable = mainFnScope.symbolTable;
-                expectTypeToBe(mainSymbolTable.getSymbol('value', SymbolTypeFlags.runtime)[0].type, FloatType);
+                expectTypeToBe(mainSymbolTable.getSymbol('value', SymbolTypeFlag.runtime)[0].type, FloatType);
             });
 
 
@@ -2425,7 +2425,7 @@ describe('Scope', () => {
                 const sourceScope = program.getScopeByName('source');
                 sourceScope.linkSymbolTable();
                 let mainSymbolTable = mainFnScope.symbolTable;
-                expectTypeToBe(mainSymbolTable.getSymbol('value', SymbolTypeFlags.runtime)[0].type, StringType);
+                expectTypeToBe(mainSymbolTable.getSymbol('value', SymbolTypeFlag.runtime)[0].type, StringType);
             });
         });
     });

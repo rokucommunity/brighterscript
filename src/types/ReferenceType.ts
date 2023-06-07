@@ -1,13 +1,13 @@
 import type { GetTypeOptions } from '../interfaces';
 import type { CacheVerifierProvider } from '../CacheVerifier';
 import type { GetSymbolTypeOptions, SymbolTypeGetterProvider } from '../SymbolTable';
-import type { SymbolTypeFlags } from '../SymbolTable';
+import type { SymbolTypeFlag } from '../SymbolTable';
 import { isDynamicType, isReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 import { BscTypeKind } from './BscTypeKind';
 
-export function referenceTypeFactory(memberKey: string, fullName, flags: SymbolTypeFlags, tableProvider: SymbolTypeGetterProvider) {
+export function referenceTypeFactory(memberKey: string, fullName, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) {
     return new ReferenceType(memberKey, fullName, flags, tableProvider);
 }
 
@@ -20,7 +20,7 @@ export class ReferenceType extends BscType {
      * @param flags is this type available at typetime, runtime, etc.
      * @param tableProvider function that returns a SymbolTable that we use for the lookup.
      */
-    constructor(public memberKey: string, public fullName, public flags: SymbolTypeFlags, private tableProvider: SymbolTypeGetterProvider, private cacheVerifierProvider?: CacheVerifierProvider) {
+    constructor(public memberKey: string, public fullName, public flags: SymbolTypeFlag, private tableProvider: SymbolTypeGetterProvider, private cacheVerifierProvider?: CacheVerifierProvider) {
         super(memberKey);
         // eslint-disable-next-line no-constructor-return
         return new Proxy(this, {

@@ -7,7 +7,7 @@ import type { UnionType } from './types/UnionType';
 import { getUniqueType } from './types/helpers';
 import { isReferenceType } from './astUtils/reflection';
 
-export enum SymbolTypeFlags {
+export enum SymbolTypeFlag {
     runtime = 1,
     typetime = 2
 }
@@ -42,7 +42,7 @@ export class SymbolTable implements SymbolTypeGetter {
 
     static cacheVerifier: CacheVerifier;
 
-    static ReferenceTypeFactory: (memberKey: string, fullName, flags: SymbolTypeFlags, tableProvider: SymbolTypeGetterProvider) => ReferenceType;
+    static ReferenceTypeFactory: (memberKey: string, fullName, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) => ReferenceType;
     static UnionTypeFactory: (types: BscType[]) => UnionType;
 
 
@@ -91,7 +91,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * @param bitFlags flags to match (See SymbolTypeFlags)
      * @returns true if this symbol is in the symbol table
      */
-    hasSymbol(name: string, bitFlags: SymbolTypeFlags): boolean {
+    hasSymbol(name: string, bitFlags: SymbolTypeFlag): boolean {
         let currentTable: SymbolTable = this;
         const key = name?.toLowerCase();
         let result: BscSymbol[];
@@ -126,7 +126,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * @param bitFlags flags to match
      * @returns An array of BscSymbols - one for each time this symbol had a type implicitly defined
      */
-    getSymbol(name: string, bitFlags: SymbolTypeFlags): BscSymbol[] {
+    getSymbol(name: string, bitFlags: SymbolTypeFlag): BscSymbol[] {
         let currentTable: SymbolTable = this;
         const key = name?.toLowerCase();
         let result: BscSymbol[];
@@ -156,7 +156,7 @@ export class SymbolTable implements SymbolTypeGetter {
     /**
      * Adds a new symbol to the table
      */
-    addSymbol(name: string, range: Range, type: BscType, bitFlags: SymbolTypeFlags) {
+    addSymbol(name: string, range: Range, type: BscType, bitFlags: SymbolTypeFlag) {
         const key = name.toLowerCase();
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);
@@ -169,7 +169,7 @@ export class SymbolTable implements SymbolTypeGetter {
         });
     }
 
-    getSymbolTypes(name: string, bitFlags: SymbolTypeFlags): BscType[] {
+    getSymbolTypes(name: string, bitFlags: SymbolTypeFlag): BscType[] {
         const symbolArray = this.getSymbol(name, bitFlags);
         if (!symbolArray) {
             return undefined;
@@ -224,7 +224,7 @@ export class SymbolTable implements SymbolTypeGetter {
     /**
      * Get list of all symbols declared in this SymbolTable (includes parent SymbolTable).
      */
-    public getAllSymbols(bitFlags: SymbolTypeFlags): BscSymbol[] {
+    public getAllSymbols(bitFlags: SymbolTypeFlag): BscSymbol[] {
         let symbols = this.getOwnSymbols();
         //look through any sibling maps next
         for (let sibling of this.siblings) {
@@ -305,7 +305,7 @@ export interface BscSymbol {
     name: string;
     range: Range;
     type: BscType;
-    flags: SymbolTypeFlags;
+    flags: SymbolTypeFlag;
 }
 
 export interface SymbolTypeGetter {

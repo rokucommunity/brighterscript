@@ -14,7 +14,7 @@ import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCa
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import type { BscType } from '../types/BscType';
-import { SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTable';
 import { FunctionType } from '../types/FunctionType';
 import { AstNodeKind, Expression } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
@@ -62,7 +62,7 @@ export class BinaryExpression extends Expression {
 
     public getType(options: GetTypeOptions): BscType {
         const operatorKind = this.operator.kind;
-        if (options.flags & SymbolTypeFlags.typetime) {
+        if (options.flags & SymbolTypeFlag.typetime) {
             // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
             switch (operatorKind) {
                 case TokenKind.Or:
@@ -370,8 +370,8 @@ export class FunctionParameterExpression extends Expression {
     public readonly kind = AstNodeKind.FunctionParameterExpression;
 
     public getType(options: GetTypeOptions) {
-        return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlags.typetime }) ??
-            this.defaultValue?.getType({ ...options, flags: SymbolTypeFlags.runtime }) ??
+        return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime }) ??
+            this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime }) ??
             DynamicType.instance;
     }
 
@@ -475,7 +475,7 @@ export class DottedGetExpression extends Expression {
         const objType = this.obj?.getType(options);
         const result = objType?.getMemberType(this.name?.text, options);
         options.typeChain?.push(new TypeChainEntry(this.name?.text, result, this.range));
-        if (result || options.flags & SymbolTypeFlags.typetime) {
+        if (result || options.flags & SymbolTypeFlag.typetime) {
             // All types should be known at typetime
             return result;
         }
@@ -1700,7 +1700,7 @@ export class TypeExpression extends Expression implements TypedefProvider {
     public range: Range;
 
     public transpile(state: BrsTranspileState): TranspileResult {
-        return [this.getType({ flags: SymbolTypeFlags.typetime }).toTypeString()];
+        return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];
     }
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
@@ -1709,7 +1709,7 @@ export class TypeExpression extends Expression implements TypedefProvider {
     }
 
     public getType(options: GetTypeOptions): BscType {
-        return this.expression.getType({ ...options, flags: SymbolTypeFlags.typetime });
+        return this.expression.getType({ ...options, flags: SymbolTypeFlag.typetime });
     }
 
     getTypedef(state: TranspileState): (string | SourceNode)[] {

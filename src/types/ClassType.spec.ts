@@ -6,7 +6,7 @@ import { expectTypeToBe } from '../testHelpers.spec';
 import { ReferenceType } from './ReferenceType';
 import { isReferenceType } from '../astUtils/reflection';
 import { IntegerType } from './IntegerType';
-import { SymbolTypeFlags } from '../SymbolTable';
+import { SymbolTypeFlag } from '../SymbolTable';
 
 describe('ClassType', () => {
 
@@ -40,33 +40,33 @@ describe('ClassType', () => {
 
     it('will look in super classes for members', () => {
         const superKlass = new ClassType('SuperKlass');
-        superKlass.addMember('title', null, StringType.instance, SymbolTypeFlags.runtime);
+        superKlass.addMember('title', null, StringType.instance, SymbolTypeFlag.runtime);
         const subKlass = new ClassType('SubKlass', superKlass);
-        expectTypeToBe(subKlass.getMemberType('title', { flags: SymbolTypeFlags.runtime }), StringType);
+        expectTypeToBe(subKlass.getMemberType('title', { flags: SymbolTypeFlag.runtime }), StringType);
     });
 
     it('allow ReferenceTypes as super classes', () => {
         const myTable = new SymbolTable('test');
-        const futureSuperKlass = new ReferenceType('SuperKlass', 'SuperKlass', SymbolTypeFlags.typetime, () => myTable);
+        const futureSuperKlass = new ReferenceType('SuperKlass', 'SuperKlass', SymbolTypeFlag.typetime, () => myTable);
         const subKlass = new ClassType('SubKlass', futureSuperKlass);
         expect(subKlass.isResolvable()).to.be.false;
         const superKlass = new ClassType('SuperKlass');
-        myTable.addSymbol('SuperKlass', null, superKlass, SymbolTypeFlags.typetime);
+        myTable.addSymbol('SuperKlass', null, superKlass, SymbolTypeFlag.typetime);
         expect(subKlass.isResolvable()).to.be.true;
     });
 
     it('allows members of future super classes to be resolved', () => {
         const myTable = new SymbolTable('test');
-        const futureSuperKlass = new ReferenceType('SuperKlass', 'SuperKlass', SymbolTypeFlags.typetime, () => myTable);
+        const futureSuperKlass = new ReferenceType('SuperKlass', 'SuperKlass', SymbolTypeFlag.typetime, () => myTable);
         const subKlass = new ClassType('SubKlass', futureSuperKlass);
         expect(subKlass.isResolvable()).to.be.false;
-        const futureTitleType = subKlass.getMemberType('title', { flags: SymbolTypeFlags.runtime });
+        const futureTitleType = subKlass.getMemberType('title', { flags: SymbolTypeFlag.runtime });
         expect(isReferenceType(futureTitleType)).to.be.true;
         expect(futureTitleType.isResolvable()).to.be.false;
         const superKlass = new ClassType('SuperKlass');
-        superKlass.addMember('title', null, StringType.instance, SymbolTypeFlags.runtime);
+        superKlass.addMember('title', null, StringType.instance, SymbolTypeFlag.runtime);
         // eslint-disable-next-line no-bitwise
-        myTable.addSymbol('SuperKlass', null, superKlass, SymbolTypeFlags.typetime | SymbolTypeFlags.runtime);
+        myTable.addSymbol('SuperKlass', null, superKlass, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
         expect(futureTitleType.isResolvable()).to.be.true;
         expectTypeToBe(futureTitleType, StringType);
     });
@@ -75,8 +75,8 @@ describe('ClassType', () => {
         it('includes superclass members', () => {
             const superKlass = new ClassType('SuperKlass');
             const subKlass = new ClassType('SubKlass', superKlass);
-            superKlass.addMember('name', null, StringType.instance, SymbolTypeFlags.runtime);
-            superKlass.addMember('age', null, IntegerType.instance, SymbolTypeFlags.runtime);
+            superKlass.addMember('name', null, StringType.instance, SymbolTypeFlag.runtime);
+            superKlass.addMember('age', null, IntegerType.instance, SymbolTypeFlag.runtime);
 
             expect((subKlass as any).toJSString).to.exist;
             expect((subKlass as any).toJSString()).to.equal('{ age: integer; name: string; }');

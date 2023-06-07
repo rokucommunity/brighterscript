@@ -3,7 +3,7 @@ import { ParseMode } from '../../Parser';
 import { parse } from '../../Parser.spec';
 import { expectTypeToBe, expectZeroDiagnostics } from '../../../testHelpers.spec';
 import { isFunctionStatement, isReferenceType, isTypeExpression } from '../../../astUtils/reflection';
-import { SymbolTypeFlags } from '../../../SymbolTable';
+import { SymbolTypeFlag } from '../../../SymbolTable';
 import { IntegerType } from '../../../types/IntegerType';
 import { StringType } from '../../../types/StringType';
 import { UnionType } from '../../../types/UnionType';
@@ -27,9 +27,9 @@ describe('TypeExpressions', () => {
             for (const param of funcStmt.func.parameters) {
                 expect(isTypeExpression(param.typeExpression)).to.be.true;
             }
-            expectTypeToBe(funcStmt.func.parameters[0].getType({ flags: SymbolTypeFlags.typetime }), IntegerType);
-            expectTypeToBe(funcStmt.func.parameters[1].getType({ flags: SymbolTypeFlags.typetime }), StringType);
-            expect(isReferenceType(funcStmt.func.parameters[2].getType({ flags: SymbolTypeFlags.typetime }))).to.be.true;
+            expectTypeToBe(funcStmt.func.parameters[0].getType({ flags: SymbolTypeFlag.typetime }), IntegerType);
+            expectTypeToBe(funcStmt.func.parameters[1].getType({ flags: SymbolTypeFlag.typetime }), StringType);
+            expect(isReferenceType(funcStmt.func.parameters[2].getType({ flags: SymbolTypeFlag.typetime }))).to.be.true;
 
         } else {
             assert.fail(`expected ${funcStmt} to be FunctionStatement`);
@@ -49,7 +49,7 @@ describe('TypeExpressions', () => {
         if (isFunctionStatement(funcStmt)) {
             expect(funcStmt.func.parameters.length).to.eq(1);
             expect(isTypeExpression(funcStmt.func.parameters[0].typeExpression)).to.be.true;
-            const p1Type = funcStmt.func.parameters[0].getType({ flags: SymbolTypeFlags.typetime });
+            const p1Type = funcStmt.func.parameters[0].getType({ flags: SymbolTypeFlag.typetime });
             expectTypeToBe(p1Type, UnionType);
             expect(p1Type.toString()).to.eq('integer or Namespaced.SomeType or string');
         } else {
@@ -70,7 +70,7 @@ describe('TypeExpressions', () => {
         if (isFunctionStatement(funcStmt)) {
             expect(funcStmt.func.parameters.length).to.eq(1);
             expect(isTypeExpression(funcStmt.func.parameters[0].typeExpression)).to.be.true;
-            const p1Type = funcStmt.func.parameters[0].getType({ flags: SymbolTypeFlags.typetime });
+            const p1Type = funcStmt.func.parameters[0].getType({ flags: SymbolTypeFlag.typetime });
             expectTypeToBe(p1Type, UnionType);
             expect(p1Type.toString()).to.eq('Alpha or Beta or Charlie or Delta');
         } else {
@@ -91,7 +91,7 @@ describe('TypeExpressions', () => {
         if (isFunctionStatement(funcStmt)) {
             expect(funcStmt.func.parameters.length).to.eq(1);
             expect(isTypeExpression(funcStmt.func.parameters[0].typeExpression)).to.be.true;
-            const p1Type = funcStmt.func.parameters[0].getType({ flags: SymbolTypeFlags.typetime });
+            const p1Type = funcStmt.func.parameters[0].getType({ flags: SymbolTypeFlag.typetime });
             expectTypeToBe(p1Type, UnionType);
             expect(p1Type.toString()).to.eq('NS1.Alpha or NS1.NS2.Beta or NS1.NS2.NS3.Charlie or Delta');
         } else {
@@ -113,8 +113,8 @@ describe('TypeExpressions', () => {
             expect(funcStmt.func.parameters.length).to.eq(2);
             expect(isTypeExpression(funcStmt.func.parameters[0].typeExpression)).to.be.true;
             expect(isTypeExpression(funcStmt.func.parameters[1].typeExpression)).to.be.true;
-            const p1Type = funcStmt.func.parameters[0].getType({ flags: SymbolTypeFlags.typetime });
-            const p2Type = funcStmt.func.parameters[1].getType({ flags: SymbolTypeFlags.typetime });
+            const p1Type = funcStmt.func.parameters[0].getType({ flags: SymbolTypeFlag.typetime });
+            const p2Type = funcStmt.func.parameters[1].getType({ flags: SymbolTypeFlag.typetime });
             expectTypeToBe(p1Type, UnionType);
             expect(p1Type.toString()).to.eq('Alpha or Beta or Charlie');
             expectTypeToBe(p2Type, UnionType);
