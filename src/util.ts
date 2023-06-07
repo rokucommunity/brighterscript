@@ -29,7 +29,6 @@ import { TokenKind } from './lexer/TokenKind';
 import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isFunctionParameterExpression, isGroupingExpression, isIndexedGetExpression, isLiteralExpression, isNewExpression, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
-import type { SGAttribute } from './parser/SGTypes';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -1181,23 +1180,6 @@ export class Util {
     }
 
     /**
-     * Creates a new SGAttribute object, but keeps the existing Range references (since those shouldn't ever get changed directly)
-     */
-    public cloneSGAttribute(attr: SGAttribute, value: string) {
-        return {
-            key: {
-                text: attr.key.text,
-                range: attr.range
-            },
-            value: {
-                text: value,
-                range: attr.value.range
-            },
-            range: attr.range
-        } as SGAttribute;
-    }
-
-    /**
      * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
      */
     public standardizePath(thePath: string) {
@@ -1493,6 +1475,17 @@ export class Util {
                 file: file,
                 range: this.createRange(0, 0, 0, Number.MAX_VALUE)
             }]);
+        }
+    }
+
+    /**
+     * Find the index of the last item in the array that matches.
+     */
+    public findLastIndex<T>(array: T[], matcher: (T) => boolean) {
+        for (let i = array.length - 1; i >= 0; i--) {
+            if (matcher(array[i])) {
+                return i;
+            }
         }
     }
 

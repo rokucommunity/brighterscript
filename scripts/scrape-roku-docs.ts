@@ -298,7 +298,7 @@ class Runner {
                                 const arg = call.args[i];
                                 let paramName = `param${i}`;
                                 if (isVariableExpression(arg)) {
-                                    paramName = arg.getName(ParseMode.BrightScript)
+                                    paramName = arg.getName(ParseMode.BrightScript);
                                 }
                                 signature.params.push({
                                     name: paramName,
@@ -311,7 +311,7 @@ class Runner {
                             component.constructors.push(signature);
                         }
                     } else if (match[1]) {
-                        const signature = this.getConstructorSignature(name, match[1])
+                        const signature = this.getConstructorSignature(name, match[1]);
 
                         if (signature) {
                             component.constructors.push(signature);
@@ -332,7 +332,7 @@ class Runner {
     }
 
     private getConstructorSignature(componentName: string, sourceCode: string) {
-        const foundParamTexts = this.findParamTexts(sourceCode)
+        const foundParamTexts = this.findParamTexts(sourceCode);
 
         if (foundParamTexts && foundParamTexts[0].toLowerCase() === componentName.toLowerCase()) {
             const signature = {
@@ -797,6 +797,7 @@ function deepSearch<T = any>(object, key, predicate): T {
         return object;
     }
 
+    // eslint-disable-next-line @typescript-eslint/prefer-for-of
     for (let i = 0; i < Object.keys(object).length; i++) {
         let value = object[Object.keys(object)[i]];
         if (typeof value === 'object' && value) {
@@ -1078,16 +1079,16 @@ class TokenManager {
     }
 
     /**
-    * Find any `is deprecated` text between the specified items
-    */
+     * Find any `is deprecated` text between the specified items
+     */
     public getDeprecatedDescription(startToken: Token, endToken: Token) {
         const deprecatedDescription = this.find<marked.Tokens.Text>(x => !!/is\s*deprecated/i.exec(x?.text), startToken, endToken)?.text;
         return deprecatedDescription;
     }
 
     /**
-    * Sets `deprecatedDescription` and `isDeprecated` on passed in entity if `deprecated` is mentioned between the two tokens
-    */
+     * Sets `deprecatedDescription` and `isDeprecated` on passed in entity if `deprecated` is mentioned between the two tokens
+     */
     public setDeprecatedData(entity: PossiblyDeprecated, startToken: Token, endToken: Token) {
         entity.deprecatedDescription = this.getDeprecatedDescription(startToken, endToken);
         if (entity.deprecatedDescription) {

@@ -3,25 +3,27 @@ import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticCodeMap, diagnosticCodes } from '../DiagnosticMessages';
-import type { FunctionScope } from '../FunctionScope';
-import type { Callable, BsDiagnostic, File, FileReference, FunctionCall, CommentFlag } from '../interfaces';
+import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag, BscFile } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
-import SGParser, { rangeFromTokenValue } from '../parser/SGParser';
+import SGParser from '../parser/SGParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import type { DependencyGraph } from '../DependencyGraph';
 import type { SGToken } from '../parser/SGTypes';
-import { SGScript } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';
+import type { FunctionScope } from '../FunctionScope';
 
 export class XmlFile {
     constructor(
+        /**
+         * The absolute path to the source file on disk (e.g. '/usr/you/projects/RokuApp/source/main.brs' or 'c:/projects/RokuApp/source/main.brs').
+         */
         public srcPath: string,
         /**
-         * The absolute path to the file, relative to the pkg
+         * The absolute path to the file on-device (i.e. 'source/main.brs') without the leading `pkg:/`
          */
         public pkgPath: string,
         public program: Program
@@ -151,7 +153,7 @@ export class XmlFile {
     public fileRange: Range;
 
     /**
-     * A collection of diagnostics related to this file
+     * Diagnostics for this file
      */
     public diagnostics = [] as BsDiagnostic[];
 
@@ -182,9 +184,19 @@ export class XmlFile {
     }
 
     /**
-     * Does this file need to be transpiled?
+     * Does this file need to be transpiled? Auto-calculated based on file contents, but can be overridden by setting the value explicitly
      */
-    public needsTranspiled = false;
+    public get needsTranspiled() {
+        //needsTranspiled should be true if an import is brighterscript
+        return this._needsTranspiled || this.ast?.componentElement?.scriptElements?.some(
+            script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
+        );
+    }
+    public set needsTranspiled(value: boolean) {
+        this._needsTranspiled = value;
+    }
+
+    private _needsTranspiled = false;
 
     /**
      * The AST for this file
@@ -210,13 +222,7 @@ export class XmlFile {
             ...diagnostic,
             file: this
         }));
-
         this.getCommentFlags(this.parser.tokens as any[]);
-
-        //needsTranspiled should be true if an import is brighterscript
-        this.needsTranspiled = this.needsTranspiled || this.ast.component?.scripts?.some(
-            script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
-        );
     }
 
     /**
@@ -238,7 +244,8 @@ export class XmlFile {
                 processor.tryAdd(
                     //remove the close comment symbol
                     token.image.replace(/\-\-\>$/, ''),
-                    rangeFromTokenValue(token)
+                    //technically this range is 3 characters longer due to the removed `-->`, but that probably doesn't matter
+                    this.parser.rangeFromToken(token)
                 );
             }
         }
@@ -336,7 +343,7 @@ export class XmlFile {
     /**
      * Determines if this xml file has a reference to the specified file (or if it's itself)
      */
-    public doesReferenceFile(file: File) {
+    public doesReferenceFile(file: BscFile) {
         return this.cache.getOrAdd(`doesReferenceFile: ${file.pkgPath}`, () => {
             if (file === this) {
                 return true;
@@ -360,6 +367,7 @@ export class XmlFile {
 
     /**
      * Get all available completions for the specified position
+     * @param position the position to get completions
      */
     public getCompletions(position: Position): CompletionItem[] {
         let scriptImport = util.getScriptImportAtPosition(this.scriptTagImports, position);
@@ -417,7 +425,7 @@ export class XmlFile {
      * and only includes the ones that are not found on the parent.
      * If no parent is found, all imports are returned
      */
-    private getMissingImportsForTranspile() {
+    public getMissingImportsForTranspile() {
         let ownImports = this.getAvailableScriptImports();
         //add the bslib path to ownImports, it'll get filtered down below
         ownImports.push(this.program.bslibPkgPath);
@@ -464,27 +472,10 @@ export class XmlFile {
     public transpile(): CodeWithSourceMap {
         const state = new TranspileState(this.srcPath, this.program.options);
 
-        const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
-            const script = new SGScript();
-            script.uri = util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'));
-            return script;
-        });
-
         let transpileResult: SourceNode | undefined;
 
-        if (this.needsTranspiled || extraImportScripts.length > 0) {
-            //temporarily add the missing imports as script tags
-            const originalScripts = this.ast.component?.scripts ?? [];
-            this.ast.component.scripts = [
-                ...originalScripts,
-                ...extraImportScripts
-            ];
-
+        if (this.needsTranspiled) {
             transpileResult = new SourceNode(null, null, state.srcPath, this.parser.ast.transpile(state));
-
-            //restore the original scripts array
-            this.ast.component.scripts = originalScripts;
-
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location
             transpileResult = util.simpleMap(state.srcPath, this.fileContents);

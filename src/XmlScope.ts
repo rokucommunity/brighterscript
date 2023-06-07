@@ -7,7 +7,7 @@ import type { Program } from './Program';
 import util from './util';
 import { isXmlFile } from './astUtils/reflection';
 import { SGFieldTypes } from './parser/SGTypes';
-import type { SGTag } from './parser/SGTypes';
+import type { SGElement } from './parser/SGTypes';
 
 export class XmlScope extends Scope {
     constructor(
@@ -52,25 +52,26 @@ export class XmlScope extends Scope {
     }
 
     private diagnosticValidateInterface(callableContainerMap: CallableContainerMap) {
-        if (!this.xmlFile.parser.ast?.component?.api) {
+        if (!this.xmlFile.parser.ast?.componentElement?.interfaceElement) {
             return;
         }
-        const { api } = this.xmlFile.parser.ast.component;
+        const iface = this.xmlFile.parser.ast.componentElement.interfaceElement;
+
         //validate functions
-        for (const fun of api.functions) {
-            const name = fun.name;
+        for (const func of iface.functions) {
+            const name = func.name;
             if (!name) {
-                this.diagnosticMissingAttribute(fun, 'name');
+                this.diagnosticMissingAttribute(func, 'name');
             } else if (!callableContainerMap.has(name.toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlFunctionNotFound(name),
-                    range: fun.getAttribute('name').value.range,
+                    range: func.getAttribute('name').tokens.value.range,
                     file: this.xmlFile
                 });
             }
         }
         //validate fields
-        for (const field of api.fields) {
+        for (const field of iface.fields) {
             const { id, type } = field;
             if (!id) {
                 this.diagnosticMissingAttribute(field, 'id');
@@ -82,18 +83,17 @@ export class XmlScope extends Scope {
             } else if (!SGFieldTypes.includes(type.toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlInvalidFieldType(type),
-                    range: field.getAttribute('type').value.range,
+                    range: field.getAttribute('type').tokens.value.range,
                     file: this.xmlFile
                 });
             }
         }
     }
 
-    private diagnosticMissingAttribute(tag: SGTag, name: string) {
-        const { text, range } = tag.tag;
+    private diagnosticMissingAttribute(tag: SGElement, name: string) {
         this.diagnostics.push({
-            ...DiagnosticMessages.xmlTagMissingAttribute(text, name),
-            range: range,
+            ...DiagnosticMessages.xmlTagMissingAttribute(tag.tokens.startTagName.text, name),
+            range: tag.tokens.startTagName.range,
             file: this.xmlFile
         });
     }

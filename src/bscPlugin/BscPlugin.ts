@@ -6,6 +6,7 @@ import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { HoverProcessor } from './hover/HoverProcessor';
 import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
 import { BrsFilePreTranspileProcessor } from './transpile/BrsFilePreTranspileProcessor';
+import { XmlFilePreTranspileProcessor } from './transpile/XmlFilePreTranspileProcessor';
 import { BrsFileValidator } from './validation/BrsFileValidator';
 import { ProgramValidator } from './validation/ProgramValidator';
 import { ScopeValidator } from './validation/ScopeValidator';
@@ -55,6 +56,8 @@ export class BscPlugin implements CompilerPlugin {
     public beforeFileTranspile(event: BeforeFileTranspileEvent) {
         if (isBrsFile(event.file)) {
             return new BrsFilePreTranspileProcessor(event as any).process();
+        } else if (isXmlFile(event.file)) {
+            return new XmlFilePreTranspileProcessor(event as any).process();
         }
     }
 }
