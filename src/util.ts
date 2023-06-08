@@ -1516,7 +1516,6 @@ export class Util {
             fullNameOfMissingItem: fullErrorName,
             fullChainName: fullChainName,
             range: errorRange
-
         };
     }
 }
