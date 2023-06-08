@@ -20,6 +20,7 @@ import { IntegerType } from './types/IntegerType';
 import { DynamicType } from './types/DynamicType';
 import { ObjectType } from './types/ObjectType';
 import { FloatType } from './types/FloatType';
+import { NamespaceType } from './types/NamespaceType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -2426,6 +2427,44 @@ describe('Scope', () => {
                 sourceScope.linkSymbolTable();
                 let mainSymbolTable = mainFnScope.symbolTable;
                 expectTypeToBe(mainSymbolTable.getSymbol('value', SymbolTypeFlag.runtime)[0].type, StringType);
+            });
+        });
+
+
+        describe('multiple nested namespaces', () => {
+
+            it('should be able to define deep namespaces in any order', () => {
+                let utilFile = program.setFile('source/util.bs', `
+                    function getData()
+                        return alpha.beta.gamma.value1 + alpha.beta.gamma.delta.deltaValue +  alpha.beta.gamma.value2
+                    end function
+
+                    namespace alpha.beta.gamma.delta
+                        const deltaValue = 50
+                    end namespace
+
+                    namespace alpha.beta.gamma
+                        const value1 = 300
+                        const value2 = 400
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const getDataFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = getDataFnScope.symbolTable;
+                const getTypeOptions = { flags: SymbolTypeFlag.runtime };
+                let alphaType = symbolTable.getSymbolType('alpha', getTypeOptions);
+                let betaType = alphaType.getMemberType('beta', getTypeOptions);
+                let gammaType = betaType.getMemberType('gamma', getTypeOptions);
+                let value1Type = gammaType.getMemberType('value1', getTypeOptions);
+                let deltaType = gammaType.getMemberType('delta', getTypeOptions);
+                let deltaValueType = deltaType.getMemberType('deltaValue', getTypeOptions);
+                expectTypeToBe(alphaType, NamespaceType);
+                expectTypeToBe(betaType, NamespaceType);
+                expectTypeToBe(gammaType, NamespaceType);
+                expectTypeToBe(value1Type, IntegerType);
+                expectTypeToBe(deltaType, NamespaceType);
+                expectTypeToBe(deltaValueType, IntegerType);
             });
         });
     });
