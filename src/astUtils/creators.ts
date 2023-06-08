@@ -157,13 +157,6 @@ export function createMethodStatement(name: string, kind: TokenKind.Sub | TokenK
     );
 }
 
-/**
- * @deprecated use `createMethodStatement`
- */
-export function createClassMethodStatement(name: string, kind: TokenKind.Sub | TokenKind.Function = TokenKind.Function, accessModifier?: Token) {
-    return createMethodStatement(name, kind, [accessModifier]);
-}
-
 export function createCall(callee: Expression, args?: Expression[]) {
     return new CallExpression(
         callee,

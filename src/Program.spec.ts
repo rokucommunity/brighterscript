@@ -1589,23 +1589,12 @@ describe('Program', () => {
         });
     });
 
-    describe('getFileByPkgPath', () => {
-        it('finds file in source folder', () => {
-            expect(program.getFileByPkgPath(s`source/main.brs`)).not.to.exist;
-            expect(program.getFileByPkgPath(s`source/main2.brs`)).not.to.exist;
-            program.setFile('source/main2.brs', '');
-            program.setFile('source/main.brs', '');
-            expect(program.getFileByPkgPath(s`source/main.brs`)).to.exist;
-            expect(program.getFileByPkgPath(s`source/main2.brs`)).to.exist;
-        });
-    });
-
     describe('removeFiles', () => {
         it('removes files by absolute paths', () => {
             program.setFile('source/main.brs', '');
-            expect(program.getFileByPkgPath(s`source/main.brs`)).to.exist;
+            expect(program.getFile(s`source/main.brs`)).to.exist;
             program.removeFiles([`${rootDir}/source/main.brs`]);
-            expect(program.getFileByPkgPath(s`source/main.brs`)).not.to.exist;
+            expect(program.getFile(s`source/main.brs`)).not.to.exist;
         });
     });
 

@@ -1,4 +1,4 @@
-import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement } from '../parser/Statement';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement } from '../parser/Statement';
 import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypeExpression, TypeCastExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
@@ -133,24 +133,10 @@ export function isImportStatement(element: AstNode | undefined): element is Impo
     return element?.kind === AstNodeKind.ImportStatement;
 }
 export function isMethodStatement(element: AstNode | undefined): element is MethodStatement {
-    const name = element?.constructor.name;
-    return name === 'MethodStatement' || name === 'ClassMethodStatement';
-}
-/**
- * @deprecated use `isMethodStatement`
- */
-export function isClassMethodStatement(element: AstNode | undefined): element is ClassMethodStatement {
-    return isMethodStatement(element);
+    return element?.kind === AstNodeKind.MethodStatement;
 }
 export function isFieldStatement(element: AstNode | undefined): element is FieldStatement {
-    const name = element?.constructor.name;
-    return name === 'FieldStatement' || name === 'ClassFieldStatement';
-}
-/**
- * @deprecated use `isFieldStatement`
- */
-export function isClassFieldStatement(element: AstNode | undefined): element is ClassFieldStatement {
-    return isFieldStatement(element);
+    return element?.kind === AstNodeKind.FieldStatement;
 }
 export function isInterfaceStatement(element: AstNode | undefined): element is InterfaceStatement {
     return element?.kind === AstNodeKind.InterfaceStatement;

@@ -71,7 +71,6 @@ export class ProgramBuilder {
         if (!file) {
             file = {
                 pkgPath: this.program.getPkgPath(srcPath),
-                pathAbsolute: srcPath, //keep this for backwards-compatibility. TODO remove in v1
                 srcPath: srcPath,
                 getDiagnostics: () => {
                     return [<any>diagnostic];

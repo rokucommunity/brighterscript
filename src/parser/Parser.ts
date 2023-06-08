@@ -3083,7 +3083,7 @@ export class Parser {
             ClassStatement: s => {
                 this._references.classStatements.push(s);
             },
-            ClassFieldStatement: s => {
+            FieldStatement: s => {
                 if (s.initialValue) {
                     this._references.expressions.add(s.initialValue);
                 }

@@ -49,10 +49,6 @@ const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bs
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
 
 export interface SourceObj {
-    /**
-     * @deprecated use `srcPath` instead
-     */
-    pathAbsolute: string;
     srcPath: string;
     source: string;
     definitions?: string;
@@ -415,25 +411,6 @@ export class Program {
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
-     * @param srcPath the file path relative to the root dir
-     * @param fileContents the file contents
-     * @deprecated use `setFile` instead
-     */
-    public addOrReplaceFile<T extends BscFile>(srcPath: string, fileContents: string): T;
-    /**
-     * Load a file into the program. If that file already exists, it is replaced.
-     * @param fileEntry an object that specifies src and dest for the file.
-     * @param fileContents the file contents. If not provided, the file will be loaded from disk
-     * @deprecated use `setFile` instead
-     */
-    public addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
-    public addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
-        return this.setFile<T>(fileParam as any, fileContents);
-    }
-
-    /**
-     * Load a file into the program. If that file already exists, it is replaced.
-     * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
      * @param srcDestOrPkgPath the absolute path, the pkg path (i.e. `pkg:/path/to/file.brs`), or the destPath (i.e. `path/to/file.brs` relative to `pkg:/`)
      * @param fileContents the file contents
      */
@@ -469,8 +446,6 @@ export class Program {
                 }
 
                 let sourceObj: SourceObj = {
-                    //TODO remove `pathAbsolute` in v1
-                    pathAbsolute: srcPath,
                     srcPath: srcPath,
                     source: fileContents
                 };
@@ -499,8 +474,6 @@ export class Program {
                 );
 
                 let sourceObj: SourceObj = {
-                    //TODO remove `pathAbsolute` in v1
-                    pathAbsolute: srcPath,
                     srcPath: srcPath,
                     source: fileContents
                 };
@@ -613,42 +586,6 @@ export class Program {
     }
 
     /**
-     * Find the file by its absolute path. This is case INSENSITIVE, since
-     * Roku is a case insensitive file system. It is an error to have multiple files
-     * with the same path with only case being different.
-     * @param srcPath the absolute path to the file
-     * @deprecated use `getFile` instead, which auto-detects the path type
-     */
-    public getFileByPathAbsolute<T extends BrsFile | XmlFile>(srcPath: string) {
-        srcPath = s`${srcPath}`;
-        for (let filePath in this.files) {
-            if (filePath.toLowerCase() === srcPath.toLowerCase()) {
-                return this.files[filePath] as T;
-            }
-        }
-    }
-
-    /**
-     * Get a list of files for the given (platform-normalized) pkgPath array.
-     * Missing files are just ignored.
-     * @deprecated use `getFiles` instead, which auto-detects the path types
-     */
-    public getFilesByPkgPaths<T extends BscFile[]>(pkgPaths: string[]) {
-        return pkgPaths
-            .map(pkgPath => this.getFileByPkgPath(pkgPath))
-            .filter(file => file !== undefined) as T;
-    }
-
-    /**
-     * Get a file with the specified (platform-normalized) pkg path.
-     * If not found, return undefined
-     * @deprecated use `getFile` instead, which auto-detects the path type
-     */
-    public getFileByPkgPath<T extends BscFile>(pkgPath: string) {
-        return this.pkgMap[pkgPath.toLowerCase()] as T;
-    }
-
-    /**
      * Remove a set of files from the program
      * @param srcPaths can be an array of srcPath or destPath strings
      * @param normalizePath should this function repair and standardize the filePaths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
@@ -723,8 +660,6 @@ export class Program {
                         program: this,
                         file: file
                     });
-                    //call file.validate() IF the file has that function defined
-                    file.validate?.();
                     file.isValidated = true;
 
                     this.plugins.emit('afterFileValidate', file);

@@ -8,7 +8,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
-import { createVisitor, WalkMode } from '../astUtils/visitors';
+import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
 import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
@@ -98,14 +98,6 @@ export class CallExpression extends Expression {
 
     public readonly range: Range;
 
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
-     */
-    public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
-    }
-
     transpile(state: BrsTranspileState, nameOverride?: string) {
         let result = [];
 
@@ -180,22 +172,6 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     public readonly kind = AstNodeKind.FunctionExpression;
 
     /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
-     */
-    public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
-    }
-
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isFunctionExpression)` instead.
-     */
-    public get parentFunction() {
-        return this.findAncestor<FunctionExpression>(isFunctionExpression);
-    }
-
-    /**
      * The list of function calls that are declared within this function scope. This excludes CallExpressions
      * declared in child functions
      */
@@ -205,22 +181,6 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      * If this function is part of a FunctionStatement, this will be set. Otherwise this will be undefined
      */
     public functionStatement?: FunctionStatement;
-
-    /**
-     * A list of all child functions declared directly within this function
-     * @deprecated use `.walk(createVisitor({ FunctionExpression: ()=>{}), { walkMode: WalkMode.visitAllRecursive })` instead
-     */
-    public get childFunctionExpressions() {
-        const expressions = [] as FunctionExpression[];
-        this.walk(createVisitor({
-            FunctionExpression: (expression) => {
-                expressions.push(expression);
-            }
-        }), {
-            walkMode: WalkMode.visitAllRecursive
-        });
-        return expressions;
-    }
 
     /**
      * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
@@ -967,13 +927,32 @@ export class SourceLiteralExpression extends Expression {
 
     public readonly kind = AstNodeKind.SourceLiteralExpression;
 
+    /**
+     * Find the index of the function in its parent
+     */
+    private findFunctionIndex(parentFunction: FunctionExpression, func: FunctionExpression) {
+        let index = -1;
+        parentFunction.findChild((node) => {
+            if (isFunctionExpression(node)) {
+                index++;
+                if (node === func) {
+                    return true;
+                }
+            }
+        }, {
+            walkMode: WalkMode.visitAllRecursive
+        });
+        return index;
+    }
+
     private getFunctionName(state: BrsTranspileState, parseMode: ParseMode) {
         let func = state.file.getFunctionScopeAtPosition(this.token.range.start).func;
         let nameParts = [];
-        while (func.parentFunction) {
-            let index = func.parentFunction.childFunctionExpressions.indexOf(func);
+        let parentFunction: FunctionExpression;
+        while ((parentFunction = func.findAncestor<FunctionExpression>(isFunctionExpression))) {
+            let index = this.findFunctionIndex(parentFunction, func);
             nameParts.unshift(`anon${index}`);
-            func = func.parentFunction;
+            func = parentFunction;
         }
         //get the index of this function in its parent
         nameParts.unshift(
@@ -1106,13 +1085,6 @@ export class CallfuncExpression extends Expression {
 
     public readonly range: Range;
 
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
-     */
-    public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
-    }
 
     public transpile(state: BrsTranspileState) {
         let result = [];

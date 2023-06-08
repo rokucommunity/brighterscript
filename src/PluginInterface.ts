@@ -8,14 +8,6 @@ export type Arguments<T> = [T] extends [(...args: infer U) => any]
     : [T] extends [void] ? [] : [T];
 
 export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> {
-
-    /**
-     * @deprecated use the `options` parameter pattern instead
-     */
-    constructor(
-        plugins: CompilerPlugin[],
-        logger: Logger
-    );
     constructor(
         plugins: CompilerPlugin[],
         options: {
