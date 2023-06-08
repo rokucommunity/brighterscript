@@ -41,7 +41,7 @@ end function
 
 ## Validation
 
-When the `enhancedTypeValidation` option flag is enabled, a diagnostic error will be raised when a member is accessed that is not a member of ALL of the types of a union.
+When the `enableTypeValidation` option flag is enabled, a diagnostic error will be raised when a member is accessed that is not a member of ALL of the types of a union.
 
 In the example above, accessing `response.status` is fine, because it is in all of the types of the union. Accessing `response.data` would raise an error, because it's not in the `Error` interface.
 
