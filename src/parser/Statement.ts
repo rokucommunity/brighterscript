@@ -2069,19 +2069,21 @@ export class MethodStatement extends FunctionStatement {
             return;
         }
 
-        //find the first non-comment statement
-        let firstStatement = this.func.body.statements.find(x => !isCommentStatement(x));
-        //if the first statement is a call to super, quit here
-        if (
+        //check whether any calls to super exist
+        let containsSuperCall =
+        this.func.body.statements.findIndex((x) => {
             //is a call statement
-            isExpressionStatement(firstStatement) && isCallExpression(firstStatement.expression) &&
+            return isExpressionStatement(x) && isCallExpression(x.expression) &&
             //is a call to super
-            util.findBeginningVariableExpression(firstStatement?.expression.callee as any).name.text.toLowerCase() === 'super'
-        ) {
+            util.findBeginningVariableExpression(x.expression.callee as any).name.text.toLowerCase() === 'super';
+        }) !== -1;
+
+        //if a call to super exists, quit here
+        if (containsSuperCall) {
             return;
         }
 
-        //this is a child class, and the first statement isn't a call to super. Inject one
+        //this is a child class, and the constructor doesn't contain a call to super. Inject one
         const superCall = new ExpressionStatement(
             new CallExpression(
                 new VariableExpression(
