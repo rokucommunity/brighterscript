@@ -519,7 +519,7 @@ export class BrsFile {
     }
 
     /**
-     * Short circuit full `node.getType()` calls - used when enhancedTypeValidation is false
+     * Short circuit full `node.getType()` calls - used when enableTypeValidation is false
      */
     private getBscTypeFromTypeExpression(typeExpr: TypeExpression, defaultValue?: Expression): BscType {
         const typeAsString = typeExpr?.getName();
@@ -548,7 +548,7 @@ export class BrsFile {
     }
 
     /**
-     * Short circuit full `node.getType()` calls - used when enhancedTypeValidation is false
+     * Short circuit full `node.getType()` calls - used when enableTypeValidation is false
      */
     private getBscTypeFromAssignment(assignment: AssignmentStatement, scope: FunctionScope): BscType {
         const getTypeOptions = { flags: SymbolTypeFlag.runtime };

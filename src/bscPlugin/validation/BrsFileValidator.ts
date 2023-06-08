@@ -115,8 +115,8 @@ export class BrsFileValidator {
                 for (let i = 0; i < namespaceParts.length; i++) {
                     const part = namespaceParts[i];
                     nameSoFar += (i > 0 ? '.' : '') + part;
-                    //TODO: is this correct?
-                    nextNamespaceType = currentSymbolTable.getSymbol(part, SymbolTypeFlag.typetime)?.[0]?.type;
+
+                    nextNamespaceType = currentSymbolTable.getSymbolType(part, { flags: SymbolTypeFlag.typetime });
 
                     if (!isNamespaceType(nextNamespaceType)) {
                         // if it is the last one, ie, the part that represents this node/namespace.
@@ -125,11 +125,13 @@ export class BrsFileValidator {
                         currentSymbolTable.addSymbol(part, node.nameExpression.range, nextNamespaceType, namespaceTypeFlags);
 
                     }
-                    // this type already exists!
+                    // this type already exists, and is a NameSpaceType
                     if (i === namespaceParts.length - 1) {
-                        // something could have previously been added to the the type's memberTable, which is just as valid as adding it to the namespaceStatement's symboltable
-                        //
-                        node.getSymbolTable().addSibling(nextNamespaceType.memberTable);
+                        // Since functions/consts, etc defined in this namespace are added to
+                        // the NamespaceStatement's symbol table, we need to make sure
+                        // that symbol table is a sibling of this type's member table
+                        // so member table lookups will find them
+                        nextNamespaceType.memberTable.addSibling(node.getSymbolTable());
                     }
 
                     currentSymbolTable = nextNamespaceType.memberTable;

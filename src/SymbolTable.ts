@@ -141,9 +141,7 @@ export class SymbolTable implements SymbolTypeGetter {
             }
             //look through any sibling maps next
             for (let sibling of currentTable.siblings) {
-                if ((result = sibling.symbolMap.get(key))) {
-                    // eslint-disable-next-line no-bitwise
-                    result = result.filter(symbol => symbol.flags & bitFlags);
+                if ((result = sibling.getSymbol(key, bitFlags))) {
                     if (result.length > 0) {
                         return result;
                     }
