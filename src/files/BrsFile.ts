@@ -69,17 +69,6 @@ export class BrsFile {
     }
 
     /**
-     * The absolute path to the source location for this file
-     * @deprecated use `srcPath` instead
-     */
-    public get pathAbsolute() {
-        return this.srcPath;
-    }
-    public set pathAbsolute(value) {
-        this.srcPath = value;
-    }
-
-    /**
      * The parseMode used for the parser for this file
      */
     public parseMode = ParseMode.BrightScript;
@@ -367,13 +356,6 @@ export class BrsFile {
     }
 
     /**
-     * @deprecated logic has moved into BrsFileValidator, this is now an empty function
-     */
-    public validate() {
-
-    }
-
-    /**
      * Find a class. This scans all scopes for this file, and returns the first matching class that is found.
      * Returns undefined if not found.
      * @param className - The class name, including the namespace of the class if possible
@@ -450,7 +432,9 @@ export class BrsFile {
 
             //find parent function, and add this scope to it if found
             {
-                let parentScope = this.scopesByFunc.get(func.parentFunction);
+                let parentScope = this.scopesByFunc.get(
+                    func.findAncestor<FunctionExpression>(isFunctionExpression)
+                );
 
                 //add this child scope to its parent
                 if (parentScope) {
@@ -511,7 +495,9 @@ export class BrsFile {
         for (let statement of assignmentStatements) {
 
             //find this statement's function scope
-            let scope = this.scopesByFunc.get(statement.containingFunction);
+            let scope = this.scopesByFunc.get(
+                statement.findAncestor<FunctionExpression>(isFunctionExpression)
+            );
 
             //skip variable declarations that are outside of any scope
             if (scope) {
@@ -1616,8 +1602,8 @@ export class BrsFile {
             }
         };
         file.parser.ast.walk(createVisitor({
-            ClassMethodStatement: statementHandler,
-            ClassFieldStatement: fieldStatementHandler
+            MethodStatement: statementHandler,
+            FieldStatement: fieldStatementHandler
         }), {
             walkMode: WalkMode.visitStatements
         });

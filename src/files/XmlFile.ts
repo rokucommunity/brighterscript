@@ -36,17 +36,6 @@ export class XmlFile {
         ];
     }
 
-    /**
-     * The absolute path to the source location for this file
-     * @deprecated use `srcPath` instead
-     */
-    public get pathAbsolute() {
-        return this.srcPath;
-    }
-    public set pathAbsolute(value) {
-        this.srcPath = value;
-    }
-
     private cache = new Cache();
 
     /**
@@ -223,13 +212,6 @@ export class XmlFile {
             file: this
         }));
         this.getCommentFlags(this.parser.tokens as any[]);
-    }
-
-    /**
-     * @deprecated logic has moved into XmlFileValidator, this is now an empty function
-     */
-    public validate() {
-
     }
 
     /**

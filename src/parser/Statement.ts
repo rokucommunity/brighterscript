@@ -9,7 +9,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
+import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { SymbolTypeFlag } from '../SymbolTable';
 import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
@@ -139,14 +139,6 @@ export class AssignmentStatement extends Statement {
     public readonly kind = AstNodeKind.AssignmentStatement;
 
     public readonly range: Range;
-
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isFunctionExpression)` instead.
-     */
-    public get containingFunction() {
-        return this.findAncestor<FunctionExpression>(isFunctionExpression);
-    }
 
     transpile(state: BrsTranspileState) {
         //if the value is a compound assignment, just transpile the expression itself
@@ -379,14 +371,6 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         } else {
             return this.name.text;
         }
-    }
-
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
-     */
-    public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
     }
 
     transpile(state: BrsTranspileState) {
@@ -1381,14 +1365,6 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
 
     public range: Range;
 
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
-     */
-    public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
-    }
-
     public get fields(): InterfaceFieldStatement[] {
         return this.body.filter(x => isInterfaceFieldStatement(x)) as InterfaceFieldStatement[];
     }
@@ -1737,14 +1713,6 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     public readonly kind = AstNodeKind.ClassStatement;
-
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
-     */
-    public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
-    }
 
     public getName(parseMode: ParseMode) {
         const name = this.name?.text;
@@ -2295,10 +2263,6 @@ export class MethodStatement extends FunctionStatement {
         }
     }
 }
-/**
- * @deprecated use `MethodStatement`
- */
-export class ClassMethodStatement extends MethodStatement { }
 
 export class FieldStatement extends Statement implements TypedefProvider {
     constructor(
@@ -2371,17 +2335,8 @@ export class FieldStatement extends Statement implements TypedefProvider {
         }
     }
 }
-/**
- * @deprecated use `FieldStatement`
- */
-export class ClassFieldStatement extends FieldStatement { }
 
 export type MemberStatement = FieldStatement | MethodStatement;
-
-/**
- * @deprecated use `MemberStatement`
- */
-export type ClassMemberStatement = MemberStatement;
 
 export class TryCatchStatement extends Statement {
     constructor(
@@ -2529,14 +2484,6 @@ export class EnumStatement extends Statement implements TypedefProvider {
             ...this.body,
             this.tokens.endEnum
         );
-    }
-
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
-     */
-    public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
     }
 
     public getMembers() {

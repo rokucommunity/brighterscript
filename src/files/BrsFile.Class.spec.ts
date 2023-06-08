@@ -876,7 +876,7 @@ describe('BrsFile BrighterScript classes', () => {
 
     it('detects indirect circular extends', () => {
         //direct
-        program.addOrReplaceFile('source/Indirect.bs', `
+        program.setFile('source/Indirect.bs', `
             class Parent extends Grandchild
             end class
 
