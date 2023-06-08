@@ -88,13 +88,10 @@ export class ProgramBuilder {
         ];
     }
 
-    public async run(options: BsConfig) {
-        this.logger.logLevel = options.logLevel as LogLevel;
-
-        if (this.isRunning) {
-            throw new Error('Server is already running');
-        }
-        this.isRunning = true;
+    /**
+     * Load the project and all the files, but don't run the validation, transpile, or watch cycles
+     */
+    public async load(options: BsConfig) {
         try {
             this.options = util.normalizeAndResolveConfig(options);
             if (this.options.project) {
@@ -124,6 +121,17 @@ export class ProgramBuilder {
 
         //parse every file in the entire project
         await this.loadAllFilesAST();
+    }
+
+    public async run(options: BsConfig) {
+        this.logger.logLevel = options.logLevel as LogLevel;
+
+        if (this.isRunning) {
+            throw new Error('Server is already running');
+        }
+        this.isRunning = true;
+
+        await this.load(options);
 
         if (this.options.watch) {
             this.logger.log('Starting compilation in watch mode...');

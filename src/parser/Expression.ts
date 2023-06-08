@@ -434,7 +434,7 @@ export class DottedGetExpression extends Expression {
     getType(options: GetTypeOptions) {
         const objType = this.obj?.getType(options);
         const result = objType?.getMemberType(this.name?.text, options);
-        options.typeChain?.push(new TypeChainEntry(this.name?.text, result, this.range));
+        options.typeChain?.push(new TypeChainEntry(this.name?.text, result, this.name?.range ?? this.range));
         if (result || options.flags & SymbolTypeFlag.typetime) {
             // All types should be known at typetime
             return result;
