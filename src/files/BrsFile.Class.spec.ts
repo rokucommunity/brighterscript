@@ -298,6 +298,45 @@ describe('BrsFile BrighterScript classes', () => {
             `);
         });
 
+        it('does not inject a call to super if one exists', () => {
+            testTranspile(`
+                class Animal
+                end class
+                class Duck extends Animal
+                    sub new()
+                        print "I am a statement which does not use m"
+                        super()
+                    end sub
+                end class
+            `, `
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = sub()
+                    end sub
+                    return instance
+                end function
+                function Animal()
+                    instance = __Animal_builder()
+                    instance.new()
+                    return instance
+                end function
+                function __Duck_builder()
+                    instance = __Animal_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub()
+                        print "I am a statement which does not use m"
+                        m.super0_new()
+                    end sub
+                    return instance
+                end function
+                function Duck()
+                    instance = __Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+            `);
+        });
+
         it('handles class inheritance inferred constructor calls', () => {
             testTranspile(`
                 class Animal
