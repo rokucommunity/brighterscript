@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
+### Changed
+ - all the type tracking stuff!
+
+
+
 ## [0.65.1](https://github.com/rokucommunity/brighterscript/compare/v0.65.0...v0.65.1) - 2023-06-09
 ### Fixed
  - injection of duplicate super calls into classes ([#823](https://github.com/rokucommunity/brighterscript/pull/823))
