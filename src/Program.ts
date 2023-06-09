@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, BeforeFileParseEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -203,7 +203,10 @@ export class Program {
 
     protected addScope(scope: Scope) {
         this.scopes[scope.name] = scope;
-        this.plugins.emit('afterScopeCreate', scope);
+        this.plugins.emit('afterScopeCreate', {
+            program: this,
+            scope: scope
+        });
     }
 
     /**
@@ -445,18 +448,22 @@ export class Program {
                     this.dependencyGraph.addDependency('scope:source', brsFile.dependencyGraphKey);
                 }
 
-                let sourceObj: SourceObj = {
+                let beforeFileParseEvent: BeforeFileParseEvent = {
+                    program: this,
                     srcPath: srcPath,
                     source: fileContents
                 };
-                this.plugins.emit('beforeFileParse', sourceObj);
+                this.plugins.emit('beforeFileParse', beforeFileParseEvent);
 
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
-                    brsFile.parse(sourceObj.source);
+                    brsFile.parse(beforeFileParseEvent.source);
                 });
 
                 //notify plugins that this file has finished parsing
-                this.plugins.emit('afterFileParse', brsFile);
+                this.plugins.emit('afterFileParse', {
+                    program: this,
+                    file: brsFile
+                });
 
                 file = brsFile;
 
@@ -473,18 +480,22 @@ export class Program {
                     new XmlFile(srcPath, pkgPath, this)
                 );
 
-                let sourceObj: SourceObj = {
+                let event: BeforeFileParseEvent = {
+                    program: this,
                     srcPath: srcPath,
                     source: fileContents
                 };
-                this.plugins.emit('beforeFileParse', sourceObj);
+                this.plugins.emit('beforeFileParse', event);
 
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
-                    xmlFile.parse(sourceObj.source);
+                    xmlFile.parse(event.source);
                 });
 
                 //notify plugins that this file has finished parsing
-                this.plugins.emit('afterFileParse', xmlFile);
+                this.plugins.emit('afterFileParse', {
+                    program: this,
+                    file: xmlFile
+                });
 
                 file = xmlFile;
 
@@ -606,17 +617,25 @@ export class Program {
 
         let file = this.getFile(filePath, normalizePath);
         if (file) {
-            this.plugins.emit('beforeFileDispose', file);
+            const fileDisposeEvent = {
+                program: this,
+                file: file
+            };
+            this.plugins.emit('beforeFileDispose', fileDisposeEvent);
 
             //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
             let scope = this.scopes[file.pkgPath];
             if (scope) {
-                this.plugins.emit('beforeScopeDispose', scope);
+                const scopeDisposeEvent = {
+                    program: this,
+                    scope: scope
+                };
+                this.plugins.emit('beforeScopeDispose', scopeDisposeEvent);
                 scope.dispose();
                 //notify dependencies of this scope that it has been removed
                 this.dependencyGraph.remove(scope.dependencyGraphKey);
                 delete this.scopes[file.pkgPath];
-                this.plugins.emit('afterScopeDispose', scope);
+                this.plugins.emit('afterScopeDispose', scopeDisposeEvent);
             }
             //remove the file from the program
             this.unassignFile(file);
@@ -634,7 +653,7 @@ export class Program {
             }
             //dispose file
             file?.dispose();
-            this.plugins.emit('afterFileDispose', file);
+            this.plugins.emit('afterFileDispose', fileDisposeEvent);
         }
     }
 
@@ -644,25 +663,26 @@ export class Program {
     public validate() {
         this.logger.time(LogLevel.log, ['Validating project'], () => {
             this.diagnostics = [];
-            this.plugins.emit('beforeProgramValidate', this);
+            const programValidateEvent = {
+                program: this
+            };
+            this.plugins.emit('beforeProgramValidate', programValidateEvent);
 
             //validate every file
             for (const file of Object.values(this.files)) {
                 //for every unvalidated file, validate it
                 if (!file.isValidated) {
-                    this.plugins.emit('beforeFileValidate', {
+                    const validateFileEvent = {
                         program: this,
                         file: file
-                    });
+                    };
+                    this.plugins.emit('beforeFileValidate', validateFileEvent);
 
                     //emit an event to allow plugins to contribute to the file validation process
-                    this.plugins.emit('onFileValidate', {
-                        program: this,
-                        file: file
-                    });
+                    this.plugins.emit('onFileValidate', validateFileEvent);
                     file.isValidated = true;
 
-                    this.plugins.emit('afterFileValidate', file);
+                    this.plugins.emit('afterFileValidate', validateFileEvent);
                 }
             }
 
@@ -677,7 +697,7 @@ export class Program {
 
             this.detectDuplicateComponentNames();
 
-            this.plugins.emit('afterProgramValidate', this);
+            this.plugins.emit('afterProgramValidate', programValidateEvent);
         });
     }
 
@@ -1172,7 +1192,11 @@ export class Program {
 
         const astEditor = new AstEditor();
 
-        this.plugins.emit('beforeProgramTranspile', this, entries, astEditor);
+        this.plugins.emit('beforeProgramTranspile', {
+            program: this,
+            entries: entries,
+            editor: astEditor
+        });
         return {
             entries: entries,
             getOutputPath: getOutputPath,
@@ -1249,7 +1273,11 @@ export class Program {
     }
 
     private afterProgramTranspile(entries: TranspileObj[], astEditor: AstEditor) {
-        this.plugins.emit('afterProgramTranspile', this, entries, astEditor);
+        this.plugins.emit('afterProgramTranspile', {
+            program: this,
+            entries: entries,
+            editor: astEditor
+        });
         astEditor.undoAll();
     }
 

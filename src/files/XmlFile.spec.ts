@@ -40,7 +40,8 @@ describe('XmlFile', () => {
             const expected = 'OtherName';
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
-                afterFileParse: (file) => {
+                afterFileParse: (event) => {
+                    const file = event.file as XmlFile;
                     if (isXmlFile(file) && file.parser.ast.rootElement?.attributes?.[0]?.value) {
                         file.parser.ast.rootElement.attributes[0].value = expected;
                     }
@@ -643,9 +644,9 @@ describe('XmlFile', () => {
         it(`honors the 'needsTranspiled' flag when set in 'afterFileParse'`, () => {
             program.plugins.add({
                 name: 'test',
-                afterFileParse: (file) => {
+                afterFileParse: (event) => {
                     //enable transpile for every file
-                    file.needsTranspiled = true;
+                    event.file.needsTranspiled = true;
                 }
             });
             const file = program.setFile('components/file.xml', trim`
@@ -965,7 +966,7 @@ describe('XmlFile', () => {
             });
             program.plugins.add({
                 name: 'Transform plugins',
-                afterFileParse: file => validateXml(file as XmlFile)
+                afterFileParse: event => validateXml(event.file as XmlFile)
             });
             file = program.setFile<XmlFile>('components/component.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -989,10 +990,10 @@ describe('XmlFile', () => {
     it('plugin diagnostics work for xml files', () => {
         program.plugins.add({
             name: 'Xml diagnostic test',
-            afterFileParse: (file) => {
-                if (file.srcPath.endsWith('.xml')) {
-                    file.addDiagnostics([{
-                        file: file,
+            afterFileParse: (event) => {
+                if (event.file.srcPath.endsWith('.xml')) {
+                    event.file.addDiagnostics([{
+                        file: event.file,
                         message: 'Test diagnostic',
                         range: Range.create(0, 0, 0, 0),
                         code: 9999

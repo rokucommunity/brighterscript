@@ -16,9 +16,9 @@ describe('PluginInterface', () => {
             name: 'allows adding a plugin',
             beforePublish: beforePublish
         };
-        pluginInterface.emit('beforePublish', undefined, []);
+        pluginInterface.emit('beforePublish', { builder: undefined, program: undefined, files: [] });
         pluginInterface.add(plugin);
-        pluginInterface.emit('beforePublish', undefined, []);
+        pluginInterface.emit('beforePublish', { builder: undefined, program: undefined, files: [] });
         expect(beforePublish.callCount).to.equal(1);
     });
 
@@ -39,7 +39,8 @@ describe('PluginInterface', () => {
         };
         pluginInterface.add(plugin);
         pluginInterface.add(plugin);
-        pluginInterface.emit('beforePublish', undefined, []);
+        pluginInterface.emit('beforePublish', { builder: undefined, program: undefined, files: [] });
+
         expect(beforePublish.callCount).to.equal(1);
         pluginInterface.remove(plugin);
         expect(pluginInterface.has(plugin)).to.be.false;
@@ -52,10 +53,10 @@ describe('PluginInterface', () => {
             beforePublish: beforePublish
         };
         pluginInterface.add(plugin);
-        pluginInterface.emit('beforePublish', undefined, []);
+        pluginInterface.emit('beforePublish', { builder: undefined, program: undefined, files: [] });
         expect(beforePublish.callCount).to.equal(1);
         pluginInterface.remove(plugin);
-        pluginInterface.emit('beforePublish', undefined, []);
+        pluginInterface.emit('beforePublish', { builder: undefined, program: undefined, files: [] });
         expect(beforePublish.callCount).to.equal(1);
     });
 });

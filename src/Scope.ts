@@ -698,19 +698,19 @@ export class Scope {
 
             //get a list of all callables, indexed by their lower case names
             let callableContainerMap = util.getCallableContainersByLowerName(callables);
-            let files = this.getOwnFiles();
 
             //Since statements from files are shared across multiple scopes, we need to link those statements to the current scope
             this.linkSymbolTable();
-            this.program.plugins.emit('beforeScopeValidate', this, files, callableContainerMap);
-
-            this.program.plugins.emit('onScopeValidate', {
+            const scopeValidateEvent = {
                 program: this.program,
                 scope: this
-            });
+            };
+            this.program.plugins.emit('beforeScopeValidate', scopeValidateEvent);
+
+            this.program.plugins.emit('onScopeValidate', scopeValidateEvent);
             this._validate(callableContainerMap);
 
-            this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
+            this.program.plugins.emit('afterScopeValidate', scopeValidateEvent);
             //unlink all symbol tables from this scope (so they don't accidentally stick around)
             this.unlinkSymbolTable();
 

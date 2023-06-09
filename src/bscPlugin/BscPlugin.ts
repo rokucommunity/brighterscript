@@ -1,6 +1,5 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent } from '../interfaces';
-import type { Program } from '../Program';
+import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, AfterProgramValidateEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { HoverProcessor } from './hover/HoverProcessor';
@@ -47,8 +46,8 @@ export class BscPlugin implements CompilerPlugin {
         this.scopeValidator.processEvent(event);
     }
 
-    public afterProgramValidate(program: Program) {
-        new ProgramValidator(program).process();
+    public afterProgramValidate(event: AfterProgramValidateEvent) {
+        new ProgramValidator(event).process();
         //release memory once the validation cycle has finished
         this.scopeValidator.reset();
     }
