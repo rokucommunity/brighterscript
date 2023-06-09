@@ -2466,6 +2466,68 @@ describe('Scope', () => {
                 expectTypeToBe(deltaType, NamespaceType);
                 expectTypeToBe(deltaValueType, IntegerType);
             });
+
+            it('should be able to define deep namespaces in multiple files', () => {
+                program.setFile('source/util.bs', `
+                    function getData()
+                        return alpha.beta.gamma.sayHello(alpha.values.value1)
+                    end function
+
+                    namespace alpha.beta.gamma
+                        function sayHello(num as integer)
+                            return "hello " + num.toStr()
+                        end function
+                    end namespace
+                `);
+                program.setFile('source/values.bs', `
+                    namespace alpha.values
+                        const value1 = 300
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('should allow access to underscored version of namespace members in different file', () => {
+                program.setFile('source/main.bs', `
+                    sub printPi()
+                        print alpha_util_getPi().toStr()
+                    end sub
+                `);
+                program.setFile('source/util.bs', `
+                    namespace alpha.util
+                        function getPi() as float
+                            return 3.14
+                        end function
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('resolves deep namespaces defined in different locations', () => {
+                program.setFile(`source/main.bs`, `
+                sub main()
+                    print NameA.NameB.makeClassB().value
+                end sub
+
+                namespace NameA
+                    namespace NameB
+                        function makeClassB() as SomeKlass
+                            return new SomeKlass()
+                        end function
+                    end namespace
+                end namespace
+                namespace NameA.NameB
+                    class SomeKlass
+                        value = 3.14
+                    end class
+                end namespace
+            `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
         });
     });
 });
