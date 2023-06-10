@@ -73,7 +73,9 @@ export class SymbolTable implements SymbolTypeGetter {
      * Add a sibling symbol table (which will be inspected first before walking upward to the parent
      */
     public addSibling(sibling: SymbolTable) {
-        this.siblings.add(sibling);
+        if (!this.siblings.has(sibling)) {
+            this.siblings.add(sibling);
+        }
     }
 
     /**

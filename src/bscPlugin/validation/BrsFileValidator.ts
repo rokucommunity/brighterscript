@@ -1,4 +1,4 @@
-import { isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isNamespaceType, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -11,7 +11,6 @@ import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStat
 import { SymbolTypeFlag } from '../../SymbolTable';
 import type { BscType } from '../../types/BscType';
 import { DynamicType } from '../../types/DynamicType';
-import { NamespaceType } from '../../types/NamespaceType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
 
@@ -95,47 +94,7 @@ export class BrsFileValidator {
             },
             NamespaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.keyword, node.nameExpression));
-
-                // Since namespaces are accessed via a DottedGetExpression, we need to build the types for
-                // the top level namespace, all the way down.
-                const namespaceParts = node.name.split('.');
-                const topLevel = namespaceParts[0];
-                if (!topLevel) {
-                    return;
-                }
-                const parentSymbolTable = node.parent.getSymbolTable();
-                // eslint-disable-next-line no-bitwise
-                const namespaceTypeFlags = SymbolTypeFlag.runtime | SymbolTypeFlag.typetime;
-
-                //Build namespace types, part by part, if they don't exist
-                //Last one can use the node's `getType()` method
-                let nameSoFar = '';
-                let nextNamespaceType: BscType;
-                let currentSymbolTable = parentSymbolTable;
-                for (let i = 0; i < namespaceParts.length; i++) {
-                    const part = namespaceParts[i];
-                    nameSoFar += (i > 0 ? '.' : '') + part;
-
-                    nextNamespaceType = currentSymbolTable.getSymbolType(part, { flags: SymbolTypeFlag.typetime });
-
-                    if (!isNamespaceType(nextNamespaceType)) {
-                        // if it is the last one, ie, the part that represents this node/namespace.
-                        // make sure the namespace's symboltable is a provider for the previous types' member table
-                        nextNamespaceType = (i === namespaceParts.length - 1) ? node.getType({ flags: SymbolTypeFlag.typetime }) : new NamespaceType(nameSoFar);
-                        currentSymbolTable.addSymbol(part, node.nameExpression.range, nextNamespaceType, namespaceTypeFlags);
-
-                    }
-                    // this type already exists, and is a NameSpaceType
-                    if (i === namespaceParts.length - 1) {
-                        // Since functions/consts, etc defined in this namespace are added to
-                        // the NamespaceStatement's symbol table, we need to make sure
-                        // that symbol table is a sibling of this type's member table
-                        // so member table lookups will find them
-                        nextNamespaceType.memberTable.addSibling(node.getSymbolTable());
-                    }
-
-                    currentSymbolTable = nextNamespaceType.memberTable;
-                }
+                //Namespace Types are added at the Scope level - This is handled when the SymbolTables get linked
             },
             FunctionStatement: (node) => {
                 this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.functionType, node.name));

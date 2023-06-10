@@ -17,9 +17,11 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isEnumMemberStatement, isNamespaceStatement } from './astUtils/reflection';
-import { SymbolTable } from './SymbolTable';
+import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isNamespaceType, isReferenceType } from './astUtils/reflection';
+import { SymbolTable, SymbolTypeFlag } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
+import type { BscType } from './types/BscType';
+import { NamespaceType } from './types/NamespaceType';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -764,19 +766,58 @@ export class Scope {
      * This will only rebuilt if the symbol table has not been built before
      */
     public linkSymbolTable() {
+        const allNameSpaces: NamespaceStatement[] = [];
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
                 file.parser.symbolTable.pushParentProvider(() => this.symbolTable);
+                allNameSpaces.push(...file.parser.references.namespaceStatements);
+            }
+        }
 
-                //link each NamespaceStatement's SymbolTable with the aggregate NamespaceLookup SymbolTable
-                for (const namespace of file.parser.references.namespaceStatements) {
-                    const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
-                    namespace.getSymbolTable().addSibling(
-                        this.namespaceLookup.get(namespaceNameLower).symbolTable
-                    );
+        //Add namespace aggregates to namespace member tables
+        for (const namespace of allNameSpaces) {
+            //link each NamespaceType member table with the aggregate NamespaceLookup SymbolTable
+            let fullNamespaceName = namespace.getName(ParseMode.BrighterScript);
+            let namespaceParts = fullNamespaceName.split('.');
+
+            // eslint-disable-next-line no-bitwise
+            let getSymbolFlags = { flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime };
+            let currentNSType: BscType = null;
+            let nameSoFar = '';
+
+            for (const nsNamePart of namespaceParts) {
+                // for each section of the namespace name, add it as either a top level symbol (if it is the first part)
+                // or as a member to the containing namespace.
+                let previousNSType = currentNSType;
+                currentNSType = currentNSType === null
+                    ? this.symbolTable.getSymbolType(nsNamePart, getSymbolFlags)
+                    : currentNSType.getMemberType(nsNamePart, getSymbolFlags);
+                nameSoFar = nameSoFar === '' ? nsNamePart : `${nameSoFar}.${nsNamePart}`;
+                let isFinalNamespace = nameSoFar.toLowerCase() === fullNamespaceName.toLowerCase();
+                if (!isNamespaceType(currentNSType)) {
+                    if (!currentNSType || isReferenceType(currentNSType)) {
+                        currentNSType = isFinalNamespace
+                            ? namespace.getType(getSymbolFlags)
+                            : new NamespaceType(nameSoFar);
+                        if (previousNSType) {
+                            // adding as a member of existing NS
+                            previousNSType.addMember(nsNamePart, namespace.range, currentNSType, getSymbolFlags.flags);
+                        } else {
+                            this.symbolTable.addSymbol(nsNamePart, namespace.range, currentNSType, getSymbolFlags.flags);
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                // Now the namespace type is built, add the aggregate as a sibling
+                let aggregateNSSymbolTable = this.namespaceLookup.get(nameSoFar.toLowerCase()).symbolTable;
+                currentNSType.memberTable.addSibling(aggregateNSSymbolTable);
+                if (isFinalNamespace) {
+                    namespace.body.getSymbolTable().addSibling(aggregateNSSymbolTable);
                 }
             }
         }
+
         this.program.typeCacheVerifier.generateToken();
     }
 
