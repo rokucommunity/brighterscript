@@ -6,7 +6,6 @@ import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { TranspileObj } from './Program';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { URI } from 'vscode-uri';
@@ -19,7 +18,6 @@ import { Logger } from './Logger';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
 import type { LiteralExpression } from './parser/Expression';
-import type { AstEditor } from './astUtils/AstEditor';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
@@ -1951,11 +1949,11 @@ describe('Program', () => {
             //replace all strings with "goodbye world"
             program.plugins.add({
                 name: 'TestPlugin',
-                beforeProgramTranspile: (program: Program, entries: TranspileObj[], editor: AstEditor) => {
+                beforeProgramTranspile: (event) => {
                     file.ast.walk(createVisitor({
                         LiteralExpression: (literal) => {
                             literalExpression = literal;
-                            editor.setProperty(literal.token, 'text', '"goodbye world"');
+                            event.editor.setProperty(literal.token, 'text', '"goodbye world"');
                         }
                     }), {
                         walkMode: WalkMode.visitExpressionsRecursive

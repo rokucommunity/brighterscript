@@ -5,7 +5,7 @@ import type { XmlFile } from './files/XmlFile';
 import type { FunctionScope } from './FunctionScope';
 import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
-import type { Program, SourceObj, TranspileObj } from './Program';
+import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { FunctionStatement } from './parser/Statement';
 import type { Expression } from './parser/AstNode';
@@ -184,23 +184,21 @@ export interface CommentFlag {
     codes: DiagnosticCode[] | null;
 }
 
-type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
-
 export type CompilerPluginFactory = () => CompilerPlugin;
 
 export interface CompilerPlugin {
     name: string;
     //program events
-    beforeProgramCreate?: (builder: ProgramBuilder) => void;
-    beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterProgramCreate?: (program: Program) => void;
-    beforeProgramValidate?: (program: Program) => void;
-    afterProgramValidate?: (program: Program) => void;
-    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
-    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    beforeProgramCreate?: PluginHandler<BeforeProgramCreateEvent>;
+    afterProgramCreate?: PluginHandler<AfterProgramCreateEvent>;
+    beforePrepublish?: PluginHandler<BeforePrepublishEvent>;
+    afterPrepublish?: PluginHandler<AfterPrepublishEvent>;
+    beforePublish?: PluginHandler<BeforePublishEvent>;
+    afterPublish?: PluginHandler<AfterPublishEvent>;
+    beforeProgramValidate?: PluginHandler<BeforeProgramValidateEvent>;
+    afterProgramValidate?: PluginHandler<AfterProgramValidateEvent>;
+    beforeProgramTranspile?: PluginHandler<BeforeProgramTranspileEvent>;
+    afterProgramTranspile?: PluginHandler<AfterProgramTranspileEvent>;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
 
     /**
@@ -231,15 +229,15 @@ export interface CompilerPlugin {
 
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
-    afterScopeCreate?: (scope: Scope) => void;
-    beforeScopeDispose?: (scope: Scope) => void;
-    afterScopeDispose?: (scope: Scope) => void;
-    beforeScopeValidate?: ValidateHandler;
+    afterScopeCreate?: PluginHandler<AfterScopeCreateEvent>;
+    beforeScopeDispose?: PluginHandler<BeforeScopeDisposeEvent>;
+    afterScopeDispose?: PluginHandler<AfterScopeDisposeEvent>;
+    beforeScopeValidate?: PluginHandler<BeforeScopeValidateEvent>;
     onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
-    afterScopeValidate?: ValidateHandler;
+    afterScopeValidate?: PluginHandler<BeforeScopeValidateEvent>;
     //file events
-    beforeFileParse?: (source: SourceObj) => void;
-    afterFileParse?: (file: BscFile) => void;
+    beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
+    afterFileParse?: PluginHandler<AfterFileParseEvent>;
     /**
      * Called before each file is validated
      */
@@ -251,13 +249,45 @@ export interface CompilerPlugin {
     /**
      * Called after each file is validated
      */
-    afterFileValidate?: (file: BscFile) => void;
+    afterFileValidate?: PluginHandler<AfterFileValidateEvent>;
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
-    beforeFileDispose?: (file: BscFile) => void;
-    afterFileDispose?: (file: BscFile) => void;
+    beforeFileDispose?: PluginHandler<BeforeFileDisposeEvent>;
+    afterFileDispose?: PluginHandler<AfterFileDisposeEvent>;
 }
 export type PluginHandler<T, R = void> = (event: T) => R;
+
+export interface BeforeProgramCreateEvent {
+    builder: ProgramBuilder;
+}
+export interface AfterProgramCreateEvent {
+    builder: ProgramBuilder;
+    program: Program;
+}
+export interface BeforePrepublishEvent {
+    builder: ProgramBuilder;
+    program: Program;
+    files: FileObj[];
+}
+export type AfterPrepublishEvent = BeforePrepublishEvent;
+
+export interface BeforePublishEvent {
+    builder: ProgramBuilder;
+    program: Program;
+    files: FileObj[];
+}
+export type AfterPublishEvent = BeforePublishEvent;
+export interface BeforeProgramValidateEvent {
+    program: Program;
+}
+export type AfterProgramValidateEvent = BeforeProgramValidateEvent;
+
+export interface BeforeProgramTranspileEvent {
+    program: Program;
+    entries: TranspileEntry[];
+    editor: AstEditor;
+}
+export type AfterProgramTranspileEvent = BeforeProgramTranspileEvent;
 
 export interface OnGetCodeActionsEvent {
     program: Program;
@@ -303,6 +333,34 @@ export interface Hover {
 export type BeforeProvideHoverEvent = ProvideHoverEvent;
 export type AfterProvideHoverEvent = ProvideHoverEvent;
 
+export interface AfterScopeCreateEvent {
+    program: Program;
+    scope: Scope;
+}
+export interface BeforeScopeDisposeEvent {
+    program: Program;
+    scope: Scope;
+}
+export interface AfterScopeDisposeEvent {
+    program: Program;
+    scope: Scope;
+}
+export interface BeforeScopeValidateEvent {
+    program: Program;
+    scope: Scope;
+}
+export type AfterScopeValidateEvent = BeforeScopeValidateEvent;
+
+export interface BeforeFileParseEvent {
+    program: Program;
+    srcPath: string;
+    source: string;
+}
+export interface AfterFileParseEvent {
+    program: Program;
+    file: BscFile;
+}
+
 export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
     /**
      * The program this file is from
@@ -322,14 +380,16 @@ export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
     semanticTokens: SemanticToken[];
 }
 
-export interface BeforeFileValidateEvent<T extends BscFile = BscFile> {
-    program: Program;
-    file: T;
-}
-
+export type BeforeFileValidateEvent = OnFileValidateEvent;
 export interface OnFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
+}
+export type AfterFileValidateEvent = OnFileValidateEvent;
+
+export interface TranspileEntry {
+    file: BscFile;
+    outputPath: string;
 }
 
 export interface OnScopeValidateEvent {
@@ -378,6 +438,12 @@ export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
     editor: Editor;
 }
 
+export interface BeforeFileDisposeEvent {
+    program: Program;
+    file: BscFile;
+}
+export type AfterFileDisposeEvent = BeforeFileDisposeEvent;
+
 export interface SemanticToken {
     range: Range;
     tokenType: SemanticTokenTypes;
@@ -386,7 +452,6 @@ export interface SemanticToken {
      */
     tokenModifiers?: SemanticTokenModifiers[];
 }
-
 export interface TypedefProvider {
     getTypedef(state: TranspileState): Array<SourceNode | string>;
 }
