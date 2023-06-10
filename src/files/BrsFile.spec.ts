@@ -3467,7 +3467,7 @@ describe('BrsFile', () => {
                     return {
                         name: 'lower-file-name',
                         afterFileParse: (evt) => {
-                            evt._customProp = true;
+                            evt.file._customProp = true;
                         }
                     };
                 }

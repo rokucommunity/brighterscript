@@ -145,7 +145,10 @@ export class ProgramBuilder {
     protected createProgram() {
         const program = new Program(this.options, undefined, this.plugins);
 
-        this.plugins.emit('afterProgramCreate', program);
+        this.plugins.emit('afterProgramCreate', {
+            builder: this,
+            program: program
+        });
         return program;
     }
 
@@ -161,7 +164,9 @@ export class ProgramBuilder {
             this.plugins.add(plugin);
         }
 
-        this.plugins.emit('beforeProgramCreate', this);
+        this.plugins.emit('beforeProgramCreate', {
+            builder: this
+        });
     }
 
     /**
@@ -417,8 +422,12 @@ export class ProgramBuilder {
                     filteredFileMap.push(fileEntry);
                 }
             }
-
-            this.plugins.emit('beforePrepublish', this, filteredFileMap);
+            const prepublishEvent = {
+                builder: this,
+                program: this.program,
+                files: filteredFileMap
+            };
+            this.plugins.emit('beforePrepublish', prepublishEvent);
 
             await this.logger.time(LogLevel.log, ['Copying to staging directory'], async () => {
                 //prepublish all non-program-loaded files to staging
@@ -428,15 +437,20 @@ export class ProgramBuilder {
                 });
             });
 
-            this.plugins.emit('afterPrepublish', this, filteredFileMap);
-            this.plugins.emit('beforePublish', this, fileMap);
+            this.plugins.emit('afterPrepublish', prepublishEvent);
+            const publishEvent = {
+                builder: this,
+                program: this.program,
+                files: fileMap
+            };
+            this.plugins.emit('beforePublish', publishEvent);
 
             await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
                 //transpile any brighterscript files
                 await this.program.transpile(fileMap, options.stagingDir);
             });
 
-            this.plugins.emit('afterPublish', this, fileMap);
+            this.plugins.emit('afterPublish', publishEvent);
         });
     }
 

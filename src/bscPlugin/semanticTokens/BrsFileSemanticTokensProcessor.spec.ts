@@ -7,7 +7,6 @@ import { expectZeroDiagnostics } from '../../testHelpers.spec';
 import { util } from '../../util';
 import { rootDir } from '../../testHelpers.spec';
 
-
 describe('BrsFileSemanticTokensProcessor', () => {
     let program: Program;
     beforeEach(() => {

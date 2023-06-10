@@ -1135,20 +1135,22 @@ describe('Scope', () => {
                 afterScopeValidate: sinon.spy()
             });
             program.validate();
-            const scopeNames = program.getScopes().map(x => x.name).filter(x => x !== 'global').sort();
+            let scopeNames = program.getScopes().map(x => x.name).filter(x => x !== 'global').sort();
 
+            const scopes = plugin.beforeScopeValidate.getCalls().map(x => x.args[0].scope);
             expect(plugin.beforeScopeValidate.callCount).to.equal(2);
-            expect(plugin.beforeScopeValidate.calledWith(sourceScope)).to.be.true;
-            expect(plugin.beforeScopeValidate.calledWith(compScope)).to.be.true;
+            expect(scopes).to.include(sourceScope);
+            expect(scopes).to.include(compScope);
 
             expect(plugin.onScopeValidate.callCount).to.equal(2);
             expect(plugin.onScopeValidate.getCalls().map(
                 x => (x.args[0] as OnScopeValidateEvent).scope.name
             ).sort()).to.eql(scopeNames);
 
+            scopeNames = program.getScopes().map(x => x.name).filter(x => x !== 'global').sort();
             expect(plugin.afterScopeValidate.callCount).to.equal(2);
-            expect(plugin.afterScopeValidate.calledWith(sourceScope)).to.be.true;
-            expect(plugin.afterScopeValidate.calledWith(compScope)).to.be.true;
+            expect(scopes).to.include(sourceScope);
+            expect(scopes).to.include(compScope);
         });
 
         it('supports parameter types in functions in AA literals defined in other scope', () => {
