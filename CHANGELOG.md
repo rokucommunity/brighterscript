@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.66.0-alpha.1](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.0...v0.66.0-alpha.1) - 2023-06-11
+### Changed
+ - plugin event structures (all events now take a single event object instead of ordered params)
+### Fixed
+ - bugs with namespaces across files having their members missing during validation
+
+
+
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
