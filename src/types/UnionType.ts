@@ -44,6 +44,9 @@ export class UnionType extends BscType {
                 return {
                     getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                         return getUniqueType(findTypeUnion(this.getMemberTypeFromInnerTypes(name, options)), unionTypeFactory);
+                    },
+                    setCachedType: (innerName: string, innerType: BscType, innerOptions: GetTypeOptions) => {
+                        // TODO: is this even cachable? This is a NO-OP for now, and it shouldn't hurt anything
                     }
                 };
             });

@@ -20,6 +20,3 @@ export class CacheVerifier {
         return token === this.currentToken;
     }
 }
-
-
-export type CacheVerifierProvider = () => CacheVerifier;

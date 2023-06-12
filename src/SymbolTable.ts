@@ -196,6 +196,13 @@ export class SymbolTable implements SymbolTypeGetter {
         return resolvedType;
     }
 
+    setSymbolTypeCache(name: string, resolvedType: BscType, options: GetSymbolTypeOptions) {
+        if (resolvedType) {
+            this.setCachedType(name, resolvedType, options);
+        }
+        return resolvedType;
+    }
+
 
     /**
      * Adds all the symbols from another table to this one
@@ -277,6 +284,11 @@ export class SymbolTable implements SymbolTypeGetter {
             // no cache verifier
             return;
         }
+        let existingCachedValue = this.typeCache[options.flags]?.get(name.toLowerCase());
+        if (isReferenceType(type) && !isReferenceType(existingCachedValue)) {
+            // No need to overwrite a non-referenceType with a referenceType
+            return;
+        }
         return this.typeCache[options.flags]?.set(name.toLowerCase(), type);
     }
 
@@ -310,6 +322,7 @@ export interface BscSymbol {
 
 export interface SymbolTypeGetter {
     getSymbolType(name: string, options: GetSymbolTypeOptions): BscType;
+    setCachedType(name: string, resolvedType: BscType, options: GetSymbolTypeOptions);
 }
 
 /**

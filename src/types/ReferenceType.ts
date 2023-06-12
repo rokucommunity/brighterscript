@@ -1,5 +1,4 @@
 import type { GetTypeOptions } from '../interfaces';
-import type { CacheVerifierProvider } from '../CacheVerifier';
 import type { GetSymbolTypeOptions, SymbolTypeGetterProvider } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTable';
 import { isDynamicType, isReferenceType } from '../astUtils/reflection';
@@ -20,7 +19,7 @@ export class ReferenceType extends BscType {
      * @param flags is this type available at typetime, runtime, etc.
      * @param tableProvider function that returns a SymbolTable that we use for the lookup.
      */
-    constructor(public memberKey: string, public fullName, public flags: SymbolTypeFlag, private tableProvider: SymbolTypeGetterProvider, private cacheVerifierProvider?: CacheVerifierProvider) {
+    constructor(public memberKey: string, public fullName, public flags: SymbolTypeFlag, private tableProvider: SymbolTypeGetterProvider) {
         super(memberKey);
         // eslint-disable-next-line no-constructor-return
         return new Proxy(this, {
@@ -92,7 +91,7 @@ export class ReferenceType extends BscType {
                                 return memberTypeReference;
 
                             }
-                            memberTypeReference = new ReferenceType(memberName, this.makeMemberFullName(memberName), options.flags, this.futureMemberTableProvider, this.cacheVerifierProvider);
+                            memberTypeReference = new ReferenceType(memberName, this.makeMemberFullName(memberName), options.flags, this.futureMemberTableProvider);
                             this.memberTypeReferences.set(refLookUp, memberTypeReference);
                             return memberTypeReference;
                         };
@@ -168,17 +167,25 @@ export class ReferenceType extends BscType {
             return;
         }
         if (isReferenceType(resolvedType)) {
-            if (this.referenceChain.has(resolvedType)) {
-                // this is a circular reference
-                this.circRefCount++;
+            // If this is a referenceType, keep digging down until we have a non reference Type.
+            while (isReferenceType(resolvedType)) {
+                if (this.referenceChain.has(resolvedType)) {
+                    // this is a circular reference
+                    this.circRefCount++;
+                }
+                if (this.circRefCount > 1) {
+                    //It is possible that we could properly resolve the case that one reference points to itself
+                    //see test: '[Scope][symbolTable lookups with enhanced typing][finds correct class field type with default value enums are used]
+                    return;
+                }
+                this.referenceChain.add(resolvedType);
+                resolvedType = (resolvedType as any).getTarget();
+
             }
-            if (this.circRefCount > 1) {
-                //It is possible that we could properly resolve the case that one reference points to itself
-                //see test: '[Scope][symbolTable lookups with enhanced typing][finds correct class field type with default value enums are used]
-                return;
-            }
-            this.referenceChain.add(resolvedType);
-        } else {
+            this.tableProvider().setCachedType(this.memberKey, resolvedType, { flags: this.flags });
+        }
+
+        if (!isReferenceType(resolvedType)) {
             this.circRefCount = 0;
             this.referenceChain.clear();
         }
@@ -206,6 +213,12 @@ export class ReferenceType extends BscType {
                 const resolvedType = this.resolve();
                 if (resolvedType) {
                     return resolvedType.getMemberType(innerName, innerOptions);
+                }
+            },
+            setCachedType: (innerName: string, innerResolvedType: BscType, options: GetSymbolTypeOptions) => {
+                const resolvedType = this.resolve();
+                if (resolvedType) {
+                    resolvedType.memberTable.setCachedType(innerName, innerResolvedType, options);
                 }
             }
         };
@@ -245,6 +258,9 @@ export class TypePropertyReferenceType extends BscType {
                                 return {
                                     getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                                         return this.outerType?.[this.propertyName]?.getMemberType(innerName, innerOptions);
+                                    },
+                                    setCachedType: (innerName: string, innerType: BscType, innerOptions: GetTypeOptions) => {
+                                        return this.outerType?.[this.propertyName]?.memberTable.setCachedType(innerName, innerType, innerOptions);
                                     }
                                 };
                             });
