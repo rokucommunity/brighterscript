@@ -149,7 +149,7 @@ export class BrsFileValidator {
             },
             ConstStatement: (node) => {
                 this.validateDeclarationLocations(node, 'const', () => util.createBoundingRange(node.tokens.const, node.tokens.name));
-                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlag.typetime });
+                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlag.runtime });
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, nodeType, SymbolTypeFlag.runtime);
             },
             CatchStatement: (node) => {

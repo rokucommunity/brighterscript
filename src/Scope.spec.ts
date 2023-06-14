@@ -6,7 +6,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
-import { expectDiagnostics, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
@@ -2530,6 +2530,74 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
+        });
+
+        describe('const values', () => {
+            it('should allow const values to be composed of other const values from namespaces', () => {
+                program.setFile('source/constants.bs', `
+                    const pi = alpha.beta.pi
+                    const two = alpha.gamma.two
+                    const twoPi = two * pi
+                `);
+                program.setFile('source/ns.bs', `
+                    namespace alpha.beta
+                        const pi = 3.14
+                    end namespace
+
+                    namespace alpha.gamma
+                        const two = 2
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('should show an error when an invalid value is references', () => {
+                program.setFile('source/constants.bs', `
+                    const pi = alpha.beta.pi
+                    const two = alpha.gamma.two
+                    const twoPi = two * pi
+                `);
+                program.setFile('source/ns.bs', `
+                    namespace alpha.beta
+                        const pi = 3.14
+                    end namespace
+
+                    namespace alpha.gamma
+                        const three = 3
+                    end namespace
+                `);
+                program.validate();
+                expectDiagnosticsIncludes(program, [
+                    DiagnosticMessages.cannotFindName('two', 'alpha.gamma.two').message
+                ]);
+            });
+        });
+
+        it('should be able to reference multiple properties of a class that is itself a property', () => {
+            program.setFile('source/main.bs', `
+                sub process(dataObj as alpha.media.MediaObject)
+                    stream = dataObj.stream
+                    url = stream.url
+                    isLive = stream.live
+                end sub
+            `);
+            program.setFile('source/media.bs', `
+                namespace alpha.media
+                    class MediaObject
+                        stream as MediaStream
+                    end class
+                end namespace
+
+                namespace alpha.media
+                    class MediaStream
+                        url as string
+                        live as boolean
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 });
