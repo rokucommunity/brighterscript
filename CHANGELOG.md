@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.66.0-alpha.2](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.1...v0.66.0-alpha.2) - 2023-06-14
+### Fixed
+- Fixes some issues related to Classes as Properties and Consts validation ([#826](https://github.com/rokucommunity/brighterscript/pull/826))
+  - Fixes when a Class is a Property of another class, and being unable to resolve it
+  - Fixes issue with Consts value looking at a typetime value of the RHS
+  - Does a better job of caching symbol lookups on memberTables
+
+
+
 ## [0.66.0-alpha.1](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.0...v0.66.0-alpha.1) - 2023-06-11
 ### Changed
  - plugin event structures (all events now take a single event object instead of ordered params)
