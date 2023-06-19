@@ -26,7 +26,7 @@ import type { DottedGetExpression, VariableExpression } from './parser/Expressio
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isFunctionParameterExpression, isGroupingExpression, isIndexedGetExpression, isLiteralExpression, isNewExpression, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAssignmentStatement, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isExpression, isFloatType, isFunctionParameterExpression, isGroupingExpression, isIndexedGetExpression, isIntegerType, isInvalidType, isLiteralExpression, isLongIntegerType, isNewExpression, isStringType, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -34,6 +34,7 @@ import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { Expression, Statement } from './parser/AstNode';
 import { createIdentifier } from './astUtils/creators';
+import type { BscType } from './types';
 
 export class Util {
     public clearConsole() {
@@ -1072,6 +1073,114 @@ export class Util {
                 }
         }
     }
+
+    public isNumberType(targetType: BscType): boolean {
+        return isIntegerType(targetType) ||
+            isFloatType(targetType) ||
+            isDoubleType(targetType) ||
+            isLongIntegerType(targetType);
+    }
+
+    /**
+     * Return the type of the result of a binary operator
+     */
+    public binaryOperatorResultType(leftType: BscType, operator: Token, rightType: BscType): BscType {
+        let hasDouble = isDoubleType(leftType) || isDoubleType(rightType);
+        let hasFloat = isFloatType(leftType) || isFloatType(rightType);
+        let hasLongInteger = isLongIntegerType(leftType) || isLongIntegerType(rightType);
+        let hasInvalid = isInvalidType(leftType) || isInvalidType(rightType);
+        let bothNumbers = this.isNumberType(leftType) && this.isNumberType(rightType);
+        let bothStrings = isStringType(leftType) && isStringType(rightType);
+        let bothBoolean = isBooleanType(leftType) && isBooleanType(rightType);
+        let eitherBooleanOrNum = (this.isNumberType(leftType) || isBooleanType(leftType)) && (this.isNumberType(rightType) || isBooleanType(rightType));
+
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+        switch (operator.kind) {
+            // Math operators
+            case TokenKind.Plus:
+                if (bothStrings) {
+                    // "string" + "string" is the only binary expression allowed with strings
+                    return StringType.instance;
+                }
+            // eslint-disable-next-line no-fallthrough
+            case TokenKind.Minus:
+            case TokenKind.Star:
+            case TokenKind.Mod:
+                if (bothNumbers) {
+                    if (hasDouble) {
+                        return DoubleType.instance;
+                    } else if (hasFloat) {
+                        return FloatType.instance;
+
+                    } else if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                }
+                break;
+            case TokenKind.Forwardslash:
+                if (bothNumbers) {
+                    if (hasDouble) {
+                        return DoubleType.instance;
+                    } else if (hasFloat) {
+                        return FloatType.instance;
+
+                    } else if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    return FloatType.instance;
+                }
+                break;
+            case TokenKind.Caret:
+                if (bothNumbers) {
+                    if (hasDouble || hasLongInteger) {
+                        return DoubleType.instance;
+                    } else if (hasFloat) {
+                        return FloatType.instance;
+                    }
+                    return IntegerType.instance;
+                }
+                break;
+            // Bitshift operators
+            case TokenKind.LeftShift:
+            case TokenKind.RightShift:
+                if (bothNumbers) {
+                    if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    // Bitshifts are allowed with non-integer numerics
+                    // but will always truncate to ints
+                    return IntegerType.instance;
+                }
+                break;
+            // Comparison operators
+            // All comparison operators result in boolean
+            case TokenKind.Equal:
+            case TokenKind.LessGreater:
+                // = and <> can accept invalid
+                if (hasInvalid || bothStrings || eitherBooleanOrNum) {
+                    return BooleanType.instance;
+                }
+                break;
+            case TokenKind.Greater:
+            case TokenKind.Less:
+            case TokenKind.GreaterEqual:
+            case TokenKind.LessEqual:
+                if (bothStrings || bothNumbers) {
+                    return BooleanType.instance;
+                }
+                break;
+            // Logical operators
+            case TokenKind.Or:
+            case TokenKind.And:
+                if (eitherBooleanOrNum) {
+                    return BooleanType.instance;
+                }
+                break;
+        }
+        return DynamicType.instance;
+    }
+
 
     /**
      * Get the extension for the given file path. Basically the part after the final dot, except for

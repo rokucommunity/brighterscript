@@ -69,8 +69,12 @@ export class BinaryExpression extends Expression {
                     return new UnionType([this.left.getType(options), this.right.getType(options)]);
                 //TODO: Intersection Types?, eg. case TokenKind.And:
             }
+        } else if (options.flags & SymbolTypeFlag.runtime) {
+            return util.binaryOperatorResultType(
+                this.left.getType(options),
+                this.operator,
+                this.right.getType(options));
         }
-        //TODO: figure out result type on +, *, or, and, etc!
         return DynamicType.instance;
     }
 
