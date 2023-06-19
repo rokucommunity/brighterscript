@@ -2599,5 +2599,29 @@ describe('Scope', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        describe('binary expressions', () => {
+            it('should set symbols with correct types', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    sub process()
+                        s = "hello" + "world"
+                        exp = 2^3
+                        num = 3.14 + 3.14
+                        bool = true or false
+                        notEq = {} <> invalid
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('s', opts), StringType);
+                expectTypeToBe(symbolTable.getSymbolType('exp', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('num', opts), FloatType);
+                expectTypeToBe(symbolTable.getSymbolType('bool', opts), BooleanType);
+                expectTypeToBe(symbolTable.getSymbolType('notEq', opts), BooleanType);
+            });
+        });
     });
 });
