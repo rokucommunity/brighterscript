@@ -2600,8 +2600,8 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
-        describe('binary expressions', () => {
-            it('should set symbols with correct types', () => {
+        describe('binary and unary expressions', () => {
+            it('should set symbols with correct types from binary expressions', () => {
                 let mainFile = program.setFile('source/main.bs', `
                     sub process()
                         s = "hello" + "world"
@@ -2621,6 +2621,36 @@ describe('Scope', () => {
                 expectTypeToBe(symbolTable.getSymbolType('num', opts), FloatType);
                 expectTypeToBe(symbolTable.getSymbolType('bool', opts), BooleanType);
                 expectTypeToBe(symbolTable.getSymbolType('notEq', opts), BooleanType);
+            });
+
+            it('should set symbols with correct types from unary expressions', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    sub process(boolVal as boolean, intVal as integer)
+                        a = not boolVal
+                        b = not true
+                        c = not intVal
+                        d = not 3.14
+
+                        e = -34
+                        f = -3.14
+                        g = -intVal
+                        h = - (-f)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('a', opts), BooleanType);
+                expectTypeToBe(symbolTable.getSymbolType('b', opts), BooleanType);
+                expectTypeToBe(symbolTable.getSymbolType('c', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('d', opts), IntegerType);
+
+                expectTypeToBe(symbolTable.getSymbolType('e', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('f', opts), FloatType);
+                expectTypeToBe(symbolTable.getSymbolType('g', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('h', opts), FloatType);
             });
         });
     });

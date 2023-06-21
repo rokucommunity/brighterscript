@@ -918,4 +918,27 @@ describe('util', () => {
             expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Or), IntegerType.instance), DynamicType);
         });
     });
+
+    describe('unaryOperatorResultType', () => {
+        it('returns the correct type for minus operation', () => {
+            let minus = createToken(TokenKind.Minus);
+            expectTypeToBe(util.unaryOperatorResultType(minus, IntegerType.instance), IntegerType);
+            expectTypeToBe(util.unaryOperatorResultType(minus, FloatType.instance), FloatType);
+            expectTypeToBe(util.unaryOperatorResultType(minus, BooleanType.instance), DynamicType);
+            expectTypeToBe(util.unaryOperatorResultType(minus, DoubleType.instance), DoubleType);
+            expectTypeToBe(util.unaryOperatorResultType(minus, StringType.instance), DynamicType);
+        });
+
+        describe('unaryOperatorResultType', () => {
+            it('returns the correct type for not operation', () => {
+                let notToken = createToken(TokenKind.Not);
+                expectTypeToBe(util.unaryOperatorResultType(notToken, IntegerType.instance), IntegerType);
+                expectTypeToBe(util.unaryOperatorResultType(notToken, FloatType.instance), IntegerType);
+                expectTypeToBe(util.unaryOperatorResultType(notToken, BooleanType.instance), BooleanType);
+                expectTypeToBe(util.unaryOperatorResultType(notToken, DoubleType.instance), IntegerType);
+                expectTypeToBe(util.unaryOperatorResultType(notToken, StringType.instance), DynamicType);
+                expectTypeToBe(util.unaryOperatorResultType(notToken, LongIntegerType.instance), LongIntegerType);
+            });
+        });
+    });
 });

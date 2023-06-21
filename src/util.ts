@@ -1091,7 +1091,6 @@ export class Util {
         let hasInvalid = isInvalidType(leftType) || isInvalidType(rightType);
         let bothNumbers = this.isNumberType(leftType) && this.isNumberType(rightType);
         let bothStrings = isStringType(leftType) && isStringType(rightType);
-        let bothBoolean = isBooleanType(leftType) && isBooleanType(rightType);
         let eitherBooleanOrNum = (this.isNumberType(leftType) || isBooleanType(leftType)) && (this.isNumberType(rightType) || isBooleanType(rightType));
 
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
@@ -1181,6 +1180,34 @@ export class Util {
         return DynamicType.instance;
     }
 
+    /**
+     * Return the type of the result of a binary operator
+     */
+    public unaryOperatorResultType(operator: Token, exprType: BscType): BscType {
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+        switch (operator.kind) {
+            // Math operators
+            case TokenKind.Minus:
+                if (this.isNumberType(exprType)) {
+                    // a negative number will be the same type, eg, double->double, int->int, etc.
+                    return exprType;
+                }
+                break;
+            case TokenKind.Not:
+                if (isBooleanType(exprType)) {
+                    return BooleanType.instance;
+                } else if (this.isNumberType(exprType)) {
+                    //numbers can be "notted"
+                    // by default they go to ints, except longints, which stay that way
+                    if (isLongIntegerType(exprType)) {
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                }
+                break;
+        }
+        return DynamicType.instance;
+    }
 
     /**
      * Get the extension for the given file path. Basically the part after the final dot, except for

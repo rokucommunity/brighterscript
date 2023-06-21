@@ -25,6 +25,7 @@ import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
 import { TypePropertyReferenceType } from '../types/ReferenceType';
 import { UnionType } from '../types/UnionType';
+import { BooleanType } from '../types';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -861,6 +862,10 @@ export class UnaryExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'right', visitor, options);
         }
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        return util.unaryOperatorResultType(this.operator, this.right.getType(options));
     }
 }
 
