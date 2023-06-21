@@ -163,6 +163,10 @@ export class AssignmentStatement extends Statement {
     }
 
     getType(options: GetTypeOptions) {
+        // TODO: Do we still need this.typeExpression?
+
+        // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
+        // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
         const rhs = this.value.getType(options);
         return rhs;
     }
@@ -2186,12 +2190,12 @@ export class MethodStatement extends FunctionStatement {
 
         //check whether any calls to super exist
         let containsSuperCall =
-        this.func.body.statements.findIndex((x) => {
-            //is a call statement
-            return isExpressionStatement(x) && isCallExpression(x.expression) &&
-            //is a call to super
-            util.findBeginningVariableExpression(x.expression.callee as any).name.text.toLowerCase() === 'super';
-        }) !== -1;
+            this.func.body.statements.findIndex((x) => {
+                //is a call statement
+                return isExpressionStatement(x) && isCallExpression(x.expression) &&
+                    //is a call to super
+                    util.findBeginningVariableExpression(x.expression.callee as any).name.text.toLowerCase() === 'super';
+            }) !== -1;
 
         //if a call to super exists, quit here
         if (containsSuperCall) {

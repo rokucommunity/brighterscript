@@ -21,6 +21,8 @@ import { DynamicType } from './types/DynamicType';
 import { ObjectType } from './types/ObjectType';
 import { FloatType } from './types/FloatType';
 import { NamespaceType } from './types/NamespaceType';
+import { DoubleType } from './types/DoubleType';
+import { UnionType } from './types';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -2651,6 +2653,59 @@ describe('Scope', () => {
                 expectTypeToBe(symbolTable.getSymbolType('f', opts), FloatType);
                 expectTypeToBe(symbolTable.getSymbolType('g', opts), IntegerType);
                 expectTypeToBe(symbolTable.getSymbolType('h', opts), FloatType);
+            });
+        });
+
+        describe('assignment expressions', () => {
+            it('should set correct type on simple equals', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    sub process(intVal as integer, dblVal as double, strVal as string)
+                        a = intVal
+                        b = dblVal
+                        c = strVal
+                        d = {}
+                        f = m.foo
+                        e = true
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('a', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('b', opts), DoubleType);
+                expectTypeToBe(symbolTable.getSymbolType('c', opts), StringType);
+                expectTypeToBe(symbolTable.getSymbolType('d', opts), DynamicType);
+                expectTypeToBe(symbolTable.getSymbolType('f', opts), DynamicType);
+                expectTypeToBe(symbolTable.getSymbolType('e', opts), BooleanType);
+            });
+
+            it('should set correct type on compound equals', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    sub process(intVal as integer, dblVal as double, strVal as string)
+                        a = intVal
+                        a += 4
+                        b = dblVal
+                        b *= 23
+                        c = strVal
+                        c += "hello world"
+                        d = 3.14
+                        d \= 3 ' integer division -> d could be either a float or int
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('a', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('b', opts), DoubleType);
+                expectTypeToBe(symbolTable.getSymbolType('c', opts), StringType);
+                const dType = symbolTable.getSymbolType('d', opts);
+                expectTypeToBe(dType, UnionType);
+                expect((dType as UnionType).types).to.include(FloatType.instance);
+                expect((dType as UnionType).types).to.include(IntegerType.instance);
             });
         });
     });

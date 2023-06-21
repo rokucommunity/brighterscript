@@ -25,7 +25,6 @@ import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
 import { TypePropertyReferenceType } from '../types/ReferenceType';
 import { UnionType } from '../types/UnionType';
-import { BooleanType } from '../types';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 

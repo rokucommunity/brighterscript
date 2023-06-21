@@ -1083,6 +1083,7 @@ export class Util {
 
     /**
      * Return the type of the result of a binary operator
+     * Note: compound assignments (eg. +=) internally use a binary expression, so that's why TokenKind.PlusEqual, etc. are here too
      */
     public binaryOperatorResultType(leftType: BscType, operator: Token, rightType: BscType): BscType {
         let hasDouble = isDoubleType(leftType) || isDoubleType(rightType);
@@ -1097,13 +1098,16 @@ export class Util {
         switch (operator.kind) {
             // Math operators
             case TokenKind.Plus:
+            case TokenKind.PlusEqual:
                 if (bothStrings) {
                     // "string" + "string" is the only binary expression allowed with strings
                     return StringType.instance;
                 }
             // eslint-disable-next-line no-fallthrough
             case TokenKind.Minus:
+            case TokenKind.MinusEqual:
             case TokenKind.Star:
+            case TokenKind.StarEqual:
             case TokenKind.Mod:
                 if (bothNumbers) {
                     if (hasDouble) {
@@ -1118,6 +1122,7 @@ export class Util {
                 }
                 break;
             case TokenKind.Forwardslash:
+            case TokenKind.ForwardslashEqual:
                 if (bothNumbers) {
                     if (hasDouble) {
                         return DoubleType.instance;
@@ -1128,6 +1133,15 @@ export class Util {
                         return LongIntegerType.instance;
                     }
                     return FloatType.instance;
+                }
+                break;
+            case TokenKind.Backslash:
+            case TokenKind.BackslashEqual:
+                if (bothNumbers) {
+                    if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
                 }
                 break;
             case TokenKind.Caret:
@@ -1142,7 +1156,9 @@ export class Util {
                 break;
             // Bitshift operators
             case TokenKind.LeftShift:
+            case TokenKind.LeftShiftEqual:
             case TokenKind.RightShift:
+            case TokenKind.RightShiftEqual:
                 if (bothNumbers) {
                     if (hasLongInteger) {
                         return LongIntegerType.instance;
