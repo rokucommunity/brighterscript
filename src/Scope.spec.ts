@@ -2722,6 +2722,7 @@ describe('Scope', () => {
                 const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('x', opts), IntegerType);
                 expectTypeToBe(symbolTable.getSymbolType('result', opts), FloatType);
             });
         });
