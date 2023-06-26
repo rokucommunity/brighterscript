@@ -2189,13 +2189,12 @@ export class MethodStatement extends FunctionStatement {
         }
 
         //check whether any calls to super exist
-        let containsSuperCall =
-            this.func.body.statements.findIndex((x) => {
-                //is a call statement
-                return isExpressionStatement(x) && isCallExpression(x.expression) &&
-                    //is a call to super
-                    util.findBeginningVariableExpression(x.expression.callee as any).name.text.toLowerCase() === 'super';
-            }) !== -1;
+        let containsSuperCall = this.func.body.statements.findIndex((x) => {
+            //is a call statement
+            return isExpressionStatement(x) && isCallExpression(x.expression) &&
+                //is a call to super
+                util.findBeginningVariableExpression(x.expression.callee as any).name.text.toLowerCase() === 'super';
+        }) !== -1;
 
         //if a call to super exists, quit here
         if (containsSuperCall) {
