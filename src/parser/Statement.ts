@@ -1606,6 +1606,12 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             this.returnTypeExpression
         );
     }
+    /**
+     * Get the name of this method.
+     */
+    public getName(parseMode: ParseMode) {
+        return this.tokens.name.text;
+    }
 
     public tokens = {} as {
         functionType: Token;
