@@ -70,7 +70,9 @@ class DocCompiler {
         while (this.nextLine !== undefined) {
             this.advance();
             if (this.currentLine.includes('```')) {
-                await this.processCodeBlock();
+                try {
+                    await this.processCodeBlock();
+                } catch { }
             }
         }
 
