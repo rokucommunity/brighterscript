@@ -1,8 +1,8 @@
 import { SourceNode } from 'source-map';
-import { isBrsFile, isCallExpression, isClassStatement, isClassType, isFunctionStatement, isFunctionType, isInterfaceMethodStatement, isInterfaceStatement, isInterfaceType, isMethodStatement, isNewExpression, isTypeExpression, isXmlFile } from '../../astUtils/reflection';
+import { isBrsFile, isClassType, isFunctionType, isInterfaceType, isNewExpression, isTypeExpression, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
-import type { GetTypeOptions, Hover, ProvideHoverEvent, TypeChainEntry, TypeChainProcessResult } from '../../interfaces';
+import type { Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
 import type { Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import { BrsTranspileState } from '../../parser/BrsTranspileState';
