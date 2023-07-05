@@ -10,7 +10,7 @@ import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
 import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
-import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
+import { TypeChainEntry, type GetTypeOptions, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { SymbolTypeFlag } from '../SymbolTable';
 import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
@@ -167,7 +167,8 @@ export class AssignmentStatement extends Statement {
 
         // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
         // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
-        const rhs = this.value.getType(options);
+        const rhs = this.value.getType({ ...options, typeChain: undefined });
+        options.typeChain?.push(new TypeChainEntry(this.name.text, rhs, this.name.range));
         return rhs;
     }
 }
@@ -1493,13 +1494,15 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         const superIface = this.parentInterfaceName?.getType(options) as InterfaceType;
 
         const resultType = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
-
         for (const statement of this.methods) {
-            resultType.addMember(statement?.tokens.name?.text, statement?.range, statement?.getType(options), SymbolTypeFlag.runtime);
+            const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
+            resultType.addMember(statement?.tokens.name?.text, statement?.range, memberType, SymbolTypeFlag.runtime);
         }
         for (const statement of this.fields) {
-            resultType.addMember(statement?.tokens.name?.text, statement?.range, statement.getType(options), SymbolTypeFlag.runtime);
+            const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
+            resultType.addMember(statement?.tokens.name?.text, statement?.range, memberType, SymbolTypeFlag.runtime);
         }
+        options.typeChain?.push(new TypeChainEntry(this.getName(ParseMode.BrighterScript), resultType, this.range));
         return resultType;
     }
 }
@@ -1669,7 +1672,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         return result;
     }
 
-    public getType(options): FunctionType {
+    public getType(options: GetTypeOptions): FunctionType {
         //if there's a defined return type, use that
         let returnType = this.returnTypeExpression?.getType(options);
         const isSub = this.tokens.functionType.kind === TokenKind.Sub;
@@ -1683,6 +1686,13 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         for (let param of this.params) {
             resultType.addParameter(param.name.text, param.getType(options), !!param.defaultValue);
         }
+        if (options.typeChain) {
+            // need Interface type for type chain
+            this.parent?.getType(options);
+        }
+        let funcName = this.getName(ParseMode.BrighterScript);
+        resultType.setName(funcName);
+        options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, this.range));
         return resultType;
     }
 }
@@ -2074,12 +2084,14 @@ export class ClassStatement extends Statement implements TypedefProvider {
         const resultType = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
 
         for (const statement of this.methods) {
-            const funcType = statement?.func.getType(options);
+            const funcType = statement?.func.getType({ ...options, typeChain: undefined }); //no typechain needed
             resultType.addMember(statement?.name?.text, statement?.range, funcType, SymbolTypeFlag.runtime);
         }
         for (const statement of this.fields) {
-            resultType.addMember(statement?.name?.text, statement?.range, statement.getType(options), SymbolTypeFlag.runtime);
+            const fieldType = statement.getType({ ...options, typeChain: undefined }); //no typechain needed
+            resultType.addMember(statement?.name?.text, statement?.range, fieldType, SymbolTypeFlag.runtime);
         }
+        options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, this.range));
         return resultType;
     }
 }

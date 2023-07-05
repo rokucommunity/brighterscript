@@ -487,9 +487,9 @@ export class TypeChainEntry {
 }
 
 export interface TypeChainProcessResult {
-    missingItemName: string;
-    missingItemParentTypeName: string;
-    fullNameOfMissingItem: string;
+    itemName: string;
+    itemParentTypeName: string;
+    fullNameOfItem: string;
     fullChainName: string;
     range: Range;
 }

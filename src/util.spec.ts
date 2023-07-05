@@ -822,10 +822,10 @@ describe('util', () => {
             ];
 
             const result = util.processTypeChain(chain);
-            expect(result.missingItemName).to.eql('CharlieProp');
+            expect(result.itemName).to.eql('CharlieProp');
             expect(result.fullChainName).to.eql('AlphaNamespace.BetaProp.CharlieProp');
-            expect(result.missingItemParentTypeName).to.eql('Beta');
-            expect(result.fullNameOfMissingItem).to.eql('Beta.CharlieProp');
+            expect(result.itemParentTypeName).to.eql('Beta');
+            expect(result.fullNameOfItem).to.eql('Beta.CharlieProp');
             expect(result.range).to.eql(util.createRange(3, 3, 4, 4));
         });
     });

@@ -289,8 +289,15 @@ describe('HoverProcessor', () => {
             expect(hover).to.be.undefined;
         });
 
-        it('finds types from assignments defined in different file, with enableTypeValidation', () => {
+
+    });
+
+    describe('BrsFile - enableTypeValidation', () => {
+        beforeEach(() => {
             program.options.enableTypeValidation = true;
+        });
+
+        it('finds types from assignments defined in different file', () => {
             program.setFile(`source/main.bs`, `
                 sub main()
                     thing = new MyKlass()
@@ -317,17 +324,11 @@ describe('HoverProcessor', () => {
             //th|ing = new MyKlass()
             let hover = program.getHover('source/main.bs', util.createPosition(2, 24))[0];
             expect(hover?.range).to.eql(util.createRange(2, 20, 2, 25));
-            expect(hover?.contents).to.eql(fence('thing as MyKlass'));
+            expect(hover?.contents).to.eql([fence('thing as MyKlass')]);
             //print some|Val
             hover = program.getHover('source/main.bs', util.createPosition(5, 31))[0];
             expect(hover?.range).to.eql(util.createRange(5, 26, 5, 33));
-            expect(hover?.contents).to.eql(fence('someVal as string'));
-        });
-    });
-
-    describe('BrsFile - enableTypeValidation', () => {
-        beforeEach(() => {
-            program.options.enableTypeValidation = true;
+            expect(hover?.contents).to.eql([fence('someVal as string')]);
         });
 
         it('works for param types', () => {
@@ -578,8 +579,7 @@ describe('HoverProcessor', () => {
             expect(hover?.contents).to.eql([fence('class Person')]);
         });
 
-        it('finds types from assignments defined in different file, with enableTypeValidation', () => {
-            program.options.enableTypeValidation = true;
+        it('finds types from assignments defined in different file', () => {
             program.setFile(`source/main.bs`, `
                 sub main()
                     thing = new MyKlass()
@@ -590,10 +590,12 @@ describe('HoverProcessor', () => {
 
                 sub useKlass(thing as MyKlass)
                     print thing
+                    print thing.myNumber
                 end sub
             `);
             program.setFile(`source/MyKlass.bs`, `
                 class MyKlass
+                    myNumber as integer
                 end class
             `);
 
@@ -603,14 +605,66 @@ describe('HoverProcessor', () => {
                 end function
             `);
             program.validate();
-            //th|ing = new MyKlass()
             let hover = program.getHover('source/main.bs', util.createPosition(2, 24))[0];
             expect(hover?.range).to.eql(util.createRange(2, 20, 2, 25));
             expect(hover?.contents).to.eql([fence('thing as MyKlass')]);
+            //thing = new MyK|lass()
+            hover = program.getHover('source/main.bs', util.createPosition(2, 35))[0];
+            expect(hover?.range).to.eql(util.createRange(2, 32, 2, 39));
+            expect(hover?.contents).to.eql([fence('class MyKlass')]);
             //print some|Val
             hover = program.getHover('source/main.bs', util.createPosition(5, 31))[0];
             expect(hover?.range).to.eql(util.createRange(5, 26, 5, 33));
             expect(hover?.contents).to.eql([fence('someVal as string')]);
+            //print thi|ng
+            hover = program.getHover('source/main.bs', util.createPosition(9, 29))[0];
+            expect(hover?.range).to.eql(util.createRange(9, 26, 9, 31));
+            expect(hover?.contents).to.eql([fence('thing as MyKlass')]);
+            //print thing.myI|nteger
+            hover = program.getHover('source/main.bs', util.createPosition(10, 34))[0];
+            expect(hover?.range).to.eql(util.createRange(10, 32, 10, 40));
+            expect(hover?.contents).to.eql([fence('MyKlass.myNumber as integer')]);
+        });
+
+        it('hovers of functions include comments', () => {
+            program.setFile(`source/main.bs`, `
+                sub main()
+                    thing = new MyKlass()
+                    useKlass(thing)
+                end sub
+
+                ' Prints a MyKlass.name
+                sub useKlass(thing as MyKlass)
+                    print thing.getName()
+                end sub
+
+                ' A sample class
+                class MyKlass
+                    name as string
+
+                    ' Gets the name of this thing
+                    function getName() as string
+                        return m.name
+                    end function
+
+                    ' Wraps another function
+                    function getNameWrap() as string
+                        return m.getName()
+                    end function
+                end class
+            `);
+            program.validate();
+            let commentSep = `\n***\n`;
+            //th|ing = new MyKlass()
+            let hover = program.getHover('source/main.bs', util.createPosition(2, 24))[0];
+            expect(hover?.contents).to.eql([fence('thing as MyKlass')]);
+            //use|Klass(thing)
+            hover = program.getHover('source/main.bs', util.createPosition(3, 24))[0];
+            expect(hover?.contents).to.eql([`${fence('sub useKlass(thing as MyKlass) as void')}${commentSep} Prints a MyKlass.name`]);
+            //print thing.getN|ame()
+            hover = program.getHover('source/main.bs', util.createPosition(8, 37))[0];
+            // TODO: Add comments for class methods/properties
+            expect(hover?.contents).to.eql([`${fence('function MyKlass.getName() as string')}`]);
         });
     });
 });

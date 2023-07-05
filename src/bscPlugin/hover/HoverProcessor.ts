@@ -1,8 +1,8 @@
 import { SourceNode } from 'source-map';
-import { isBrsFile, isClassStatement, isClassType, isFunctionStatement, isFunctionType, isInterfaceMethodStatement, isInterfaceStatement, isInterfaceType, isMethodStatement, isTypeExpression, isXmlFile } from '../../astUtils/reflection';
+import { isBrsFile, isCallExpression, isClassStatement, isClassType, isFunctionStatement, isFunctionType, isInterfaceMethodStatement, isInterfaceStatement, isInterfaceType, isMethodStatement, isNewExpression, isTypeExpression, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
-import type { GetTypeOptions, Hover, ProvideHoverEvent } from '../../interfaces';
+import type { GetTypeOptions, Hover, ProvideHoverEvent, TypeChainEntry, TypeChainProcessResult } from '../../interfaces';
 import type { Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import { BrsTranspileState } from '../../parser/BrsTranspileState';
@@ -164,17 +164,8 @@ export class HoverProcessor {
         }
     }
 
-    private getFunctionTypeHover(token: Token, expression: Expression, expressionType: FunctionType, scope: Scope, getTypeOptions: GetTypeOptions) {
+    private getFunctionTypeHover(token: Token, expression: Expression, expressionType: FunctionType, scope: Scope) {
         const lowerTokenText = token.text.toLowerCase();
-        let funcName = token.text;
-        if (isFunctionStatement(expression.parent) || isMethodStatement(expression.parent) || isInterfaceMethodStatement(expression.parent)) {
-
-            funcName = expression.parent.getName(ParseMode.BrighterScript);
-            if (isClassStatement(expression.parent.parent) || isInterfaceStatement(expression.parent.parent)) {
-                funcName = `${expression.parent.parent.getType(getTypeOptions).toString()}.${funcName}`;
-            }
-        }
-        expressionType.setName(funcName);
         let result = fence(expressionType.toString());
 
         // only look for callables when they aren't inside a type expression
@@ -182,6 +173,7 @@ export class HoverProcessor {
         let callable = scope.getCallableByName(lowerTokenText);
         if (callable) {
             // We can find the start token of the function definition, use it to add docs.
+            // TODO: Add comment lookups for class methods!
             result = this.buildContentsWithDocs(result, callable.functionStatement?.func?.functionType);
         }
         return result;
@@ -240,12 +232,16 @@ export class HoverProcessor {
                 }
                 const isInTypeExpression = expression?.findAncestor(isTypeExpression);
                 const typeFlag = isInTypeExpression ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
-                let exprType = expression.getType({ flags: typeFlag });
-
-                let hoverContent = fence(`${token.text} as ${exprType.toString()}`);
+                const typeChain: TypeChainEntry[] = [];
+                const exprType = expression.getType({ flags: typeFlag, typeChain: typeChain });
+                const processedTypeChain = util.processTypeChain(typeChain);
+                const fullName = processedTypeChain.fullNameOfItem || token.text;
+                const useCustomTypeHover = isInTypeExpression || expression?.findAncestor(isNewExpression);
+                let hoverContent = fence(`${fullName} as ${exprType.toString()}`);
                 if (isFunctionType(exprType)) {
-                    hoverContent = this.getFunctionTypeHover(token, expression, exprType, scope, { flags: typeFlag });
-                } else if (isInTypeExpression && (isClassType(exprType) || isInterfaceType(exprType))) {
+                    exprType.setName(fullName);
+                    hoverContent = this.getFunctionTypeHover(token, expression, exprType, scope);
+                } else if (useCustomTypeHover && (isClassType(exprType) || isInterfaceType(exprType))) {
                     hoverContent = this.getCustomTypeHover(exprType, scope);
                 }
 
