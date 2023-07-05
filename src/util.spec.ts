@@ -7,6 +7,7 @@ import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { tempDir, rootDir } from './testHelpers.spec';
+import { Program } from './Program';
 
 const sinon = createSandbox();
 
@@ -35,6 +36,31 @@ describe('util', () => {
         it('retains original drive casing for windows', () => {
             expect(util.uriToPath(`file:///C:${path.sep}something`)).to.equal(`C:${path.sep}something`);
             expect(util.uriToPath(`file:///c:${path.sep}something`)).to.equal(`c:${path.sep}something`);
+        });
+    });
+
+    describe('diagnosticIsSuppressed', () => {
+        it('does not crash when diagnostic is missing location information', () => {
+            const program = new Program({});
+            const file = program.setFile('source/main.brs', '');
+            const diagnostic = {
+                file: file,
+                message: 'crash',
+                //important part of the test. range must be missing
+                range: undefined
+            };
+
+            file.commentFlags.push({
+                affectedRange: util.createRange(1, 2, 3, 4),
+                codes: [1, 2, 3],
+                file: file,
+                range: util.createRange(1, 2, 3, 4)
+            });
+            file.diagnostics.push(diagnostic);
+
+            util.diagnosticIsSuppressed(diagnostic);
+
+            //test passes if there's no crash
         });
     });
 
