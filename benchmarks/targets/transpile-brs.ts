@@ -1,4 +1,7 @@
-module.exports = async (suite, name, brighterscript, projectPath, options) => {
+import type { TargetOptions } from '../target-runner';
+
+module.exports = async (options: TargetOptions) => {
+    const { suite, name, version, fullName, brighterscript, projectPath, suiteOptions } = options;
     const { ProgramBuilder } = brighterscript;
 
     const builder = new ProgramBuilder();
@@ -23,9 +26,9 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
         console.log('[transpile-brs] No brs|bs|d.bs files found in program');
         return;
     }
-    suite.add(name, () => {
+    suite.add(fullName, () => {
         for (const x of files) {
             x.transpile();
         }
-    }, options);
+    }, suiteOptions);
 };
