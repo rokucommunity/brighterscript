@@ -484,6 +484,11 @@ export class LanguageServer {
         return undefined;
     }
 
+    /**
+     * A unique project counter to help distinguish log entries in lsp mode
+     */
+    private projectCounter = 0;
+
     private async createProject(projectPath: string, workspacePath = projectPath) {
         workspacePath ??= projectPath;
         let project = this.projects.find((x) => x.projectPath === projectPath);
@@ -493,6 +498,7 @@ export class LanguageServer {
         }
 
         let builder = new ProgramBuilder();
+        builder.logger.prefix = `[prj${this.projectCounter++}]`;
 
         //flush diagnostics every time the program finishes validating
         builder.plugins.add({
