@@ -220,7 +220,7 @@ const runner = new Runner(options as any);
 runner.run();
 
 function execSync(command: string, options: ExecSyncOptions = {}) {
-    console.log(`Executing '${command}'`);
+    // console.log(`Executing '${command}'`);
     return childProcess.execSync(command, { stdio: 'inherit', cwd: cwd, ...options });
 }
 
