@@ -717,7 +717,8 @@ export class BrsFile {
                     name: functionName,
                     nameRange: util.createRange(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
                     //TODO keep track of parameters
-                    args: args
+                    args: args,
+                    expression: expression
                 };
                 this.functionCalls.push(functionCall);
             }

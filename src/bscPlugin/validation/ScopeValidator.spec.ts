@@ -1,0 +1,509 @@
+import * as sinonImport from 'sinon';
+import { DiagnosticMessages } from '../../DiagnosticMessages';
+import { Program } from '../../Program';
+import { expectDiagnostics, expectZeroDiagnostics } from '../../testHelpers.spec';
+import { expect } from 'chai';
+
+describe('ScopeValidator', () => {
+
+    let sinon = sinonImport.createSandbox();
+    let rootDir = process.cwd();
+    let program: Program;
+    beforeEach(() => {
+        program = new Program({
+            rootDir: rootDir
+        });
+        program.createSourceScope();
+    });
+    afterEach(() => {
+        sinon.restore();
+        program.dispose();
+    });
+
+    describe('function call validation with enableTypeValidation', () => {
+
+        beforeEach(() => {
+            program.options.enableTypeValidation = true;
+        });
+
+        describe('mismatchArgumentCount', () => {
+            it('detects calling functions with too many arguments', () => {
+                program.setFile('source/file.brs', `
+                sub a()
+                end sub
+                sub b()
+                    a(1)
+                end sub
+            `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.mismatchArgumentCount(0, 1).message
+                ]);
+            });
+
+            it('detects calling class constructors with too many arguments', () => {
+                program.setFile('source/main.bs', `
+                    function noop0()
+                    end function
+
+                    function noop1(p1)
+                    end function
+
+                    sub main()
+                       noop0(1)
+                       noop1(1,2)
+                       noop1()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.mismatchArgumentCount(0, 1),
+                    DiagnosticMessages.mismatchArgumentCount(1, 2),
+                    DiagnosticMessages.mismatchArgumentCount(1, 0)
+                ]);
+            });
+
+            it('detects calling functions with too few arguments', () => {
+                program.setFile('source/file.brs', `
+                    sub a(name)
+                    end sub
+                    sub b()
+                        a()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.mismatchArgumentCount(1, 0)
+                ]);
+            });
+
+            it('allows skipping optional parameter', () => {
+                program.setFile('source/file.brs', `
+                    sub a(name="Bob")
+                    end sub
+                    sub b()
+                        a()
+                    end sub
+                `);
+                program.validate();
+                //should have an error
+                expectZeroDiagnostics(program);
+            });
+
+            it('shows expected parameter range in error message', () => {
+                program.setFile('source/file.brs', `
+                    sub a(age, name="Bob")
+                    end sub
+                    sub b()
+                        a()
+                    end sub
+                `);
+                program.validate();
+                //should have an error
+                expectDiagnostics(program, [
+                    DiagnosticMessages.mismatchArgumentCount('1-2', 0)
+                ]);
+            });
+
+            it('handles expressions as arguments to a function', () => {
+                program.setFile('source/file.brs', `
+                    sub a(age, name="Bob")
+                    end sub
+                    sub b()
+                        a("cat" + "dog" + "mouse")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('Catches extra arguments for expressions as arguments to a function', () => {
+                program.setFile('source/file.brs', `
+                    sub a(age)
+                    end sub
+                    sub b()
+                        a(m.lib.movies[0], 1)
+                    end sub
+                `);
+                program.validate();
+                //should have an error
+                expectDiagnostics(program, [
+                    DiagnosticMessages.mismatchArgumentCount(1, 2)
+                ]);
+            });
+        });
+
+        describe('argumentTypeMismatch', () => {
+            it('Catches argument type mismatches on function calls', () => {
+                program.setFile('source/file.brs', `
+                    sub a(age as integer)
+                    end sub
+                    sub b()
+                        a("hello")
+                    end sub
+                `);
+                program.validate();
+                //should have an error
+                expect(program.getDiagnostics().map(x => x.message)).to.include(
+                    DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+                );
+            });
+
+            it('Catches argument type mismatches on function calls for functions defined in another file', () => {
+                program.setFile('source/file.brs', `
+                    sub a(age as integer)
+                    end sub
+                `);
+                program.setFile('source/file2.brs', `
+                    sub b()
+                        a("hello")
+                        foo = "foo"
+                        a(foo)
+                    end sub
+                `);
+                program.validate();
+                //should have an error
+                expect(program.getDiagnostics().map(x => x.message)).to.include(
+                    DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+                );
+            });
+
+            it('catches argument type mismatches on function calls within namespaces', () => {
+                program.setFile('source/file.bs', `
+                    namespace Name.Space
+                        sub a(param as integer)
+                            print param
+                        end sub
+
+                        sub b()
+                            a("hello")
+                            foo = "foo"
+                            a(foo)
+                        end sub
+                    end namespace
+                    `);
+                program.validate();
+                //should have an error
+                expect(program.getDiagnostics().map(x => x.message)).to.include(
+                    DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+                );
+            });
+
+            it('catches argument type mismatches on function calls as arguments', () => {
+                program.setFile('source/file1.bs', `
+                        sub a(param as string)
+                            print param
+                        end sub
+
+                        function getNum() as integer
+                            return 1
+                        end function
+
+                        sub b()
+                            a(getNum())
+                        end sub
+                    `);
+                program.validate();
+                //should have an error
+                expect(program.getDiagnostics().map(x => x.message)).to.include(
+                    DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
+                );
+            });
+
+
+            it('catches argument type mismatches on function calls within namespaces across files', () => {
+                program.setFile('source/file1.bs', `
+                    namespace Name.Space
+                        function getNum() as integer
+                            return 1
+                        end function
+
+                        function getStr() as string
+                            return "hello"
+                        end function
+                    end namespace
+                    `);
+                program.setFile('source/file2.bs', `
+                    namespace Name.Space
+                        sub needsInt(param as integer)
+                            print param
+                        end sub
+
+                        sub someFunc()
+                            needsInt(getStr())
+                            needsInt(getNum())
+                        end sub
+                    end namespace
+                    `);
+                program.validate();
+                //should have an error
+                expect(program.getDiagnostics().length).to.equal(1);
+                expect(program.getDiagnostics().map(x => x.message)).to.include(
+                    DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+                );
+            });
+
+            it('correctly validates correct parameters that are class members', () => {
+                program.setFile('source/main.bs', `
+                class PiHolder
+                    pi = 3.14
+                    function getPi() as float
+                        return m.pi
+                    end function
+                end class
+
+                sub takesFloat(fl as float)
+                end sub
+
+                sub someFunc()
+                    holder = new PiHolder()
+                    takesFloat(holder.pi)
+                    takesFloat(holder.getPI())
+                end sub`);
+                program.validate();
+                //should have no error
+                expectZeroDiagnostics(program);
+            });
+
+            it('correctly validates wrong parameters that are class members', () => {
+                program.setFile('source/main.bs', `
+                class PiHolder
+                    pi = 3.14
+                    name = "hello"
+                    function getPi() as float
+                        return m.pi
+                    end function
+                end class
+
+                sub takesFloat(fl as float)
+                end sub
+
+                sub someFunc()
+                    holder = new PiHolder()
+                    takesFloat(holder.name)
+                    takesFloat(Str(holder.getPI()))
+                end sub`);
+                program.validate();
+                //should have error: holder.name is string
+                expect(program.getDiagnostics().length).to.equal(2);
+                expect(program.getDiagnostics().map(x => x.message)).to.include(
+                    DiagnosticMessages.argumentTypeMismatch('string', 'float').message
+                );
+            });
+
+            it('correctly validates correct parameters that are interface members', () => {
+                program.setFile('source/main.bs', `
+                interface IPerson
+                    height as float
+                    name as string
+                    function getWeight() as float
+                    function getAddress() as string
+                end interface
+
+                sub takesFloat(fl as float)
+                end sub
+
+                sub someFunc(person as IPerson)
+                    takesFloat(person.height)
+                    takesFloat(person.getWeight())
+                end sub`);
+                program.validate();
+                //should have no error
+                expectZeroDiagnostics(program);
+            });
+
+            it('correctly validates wrong parameters that are interface members', () => {
+                program.setFile('source/main.bs', `
+                    interface IPerson
+                        isAlive as boolean
+                        function getAddress() as string
+                    end interface
+
+                    sub takesFloat(fl as float)
+                    end sub
+
+                    sub someFunc(person as IPerson)
+                        takesFloat(person.isAlive)
+                        takesFloat(person.getAddress())
+                    end sub
+                `);
+                program.validate();
+                //should have 2 errors: person.name is string (not float) and person.getAddress() is object (not float)
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('boolean', 'float').message,
+                    DiagnosticMessages.argumentTypeMismatch('string', 'float').message
+                ]);
+            });
+
+            it('`as object` param allows all types', () => {
+                program.setFile('source/main.bs', `
+                    sub takesObject(obj as Object)
+                    end sub
+
+                    sub main()
+                        takesObject(true)
+                        takesObject(1)
+                        takesObject(1.2)
+                        takesObject(1.2#)
+                        takesObject("text")
+                        takesObject({})
+                        takesObject([])
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows conversions for arguments', () => {
+                program.setFile('source/main.bs', `
+                sub takesFloat(fl as float)
+                end sub
+
+                sub someFunc()
+                    takesFloat(1)
+                end sub`);
+                program.validate();
+                //should have no error
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows subclasses as arguments', () => {
+                program.setFile('source/main.bs', `
+
+                class Animal
+                end class
+
+                class Dog extends Animal
+                end class
+
+                class Retriever extends Dog
+                end class
+
+                class Lab extends Retriever
+                end class
+
+                sub takesAnimal(thing as Animal)
+                end sub
+
+                sub someFunc()
+                    fido = new Lab()
+                    takesAnimal(fido)
+                end sub`);
+                program.validate();
+                //should have no error
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows subclasses from namespaces as arguments', () => {
+                program.setFile('source/main.bs', `
+
+                class Outside
+                end class
+
+                class ChildOutExtendsInside extends NS.Inside
+                end class
+
+                namespace NS
+                    class Inside
+                    end class
+
+                    class ChildInExtendsOutside extends Outside
+                    end class
+
+                    class ChildInExtendsInside extends Inside
+                        sub methodTakesInside(i as Inside)
+                        end sub
+                    end class
+
+                    sub takesInside(klass as Inside)
+                    end sub
+
+                    sub testFuncInNamespace()
+                        takesOutside(new Outside())
+                        takesOutside(new NS.ChildInExtendsOutside())
+
+                        ' These call NS.takesInside
+                        takesInside(new NS.Inside())
+                        takesInside(new Inside())
+                        takesInside(new NS.ChildInExtendsInside())
+                        takesInside(new ChildInExtendsInside())
+                        takesInside(new ChildOutExtendsInside())
+
+                        child = new ChildInExtendsInside()
+                        child.methodTakesInside(new Inside())
+                        child.methodTakesInside(new ChildInExtendsInside())
+                        child.methodTakesInside(new ChildOutExtendsInside())
+                    end sub
+
+                end namespace
+
+                sub takesOutside(klass as Outside)
+                end sub
+
+                sub takesInside(klass as NS.Inside)
+                end sub
+
+                sub testFunc()
+                    takesOutside(new Outside())
+                    takesOutside(new NS.ChildInExtendsOutside())
+
+                    takesInside(new NS.Inside())
+                    takesInside(new NS.ChildInExtendsInside())
+                    takesInside(new ChildOutExtendsInside())
+
+                    NS.takesInside(new NS.Inside())
+                    NS.takesInside(new NS.ChildInExtendsInside())
+                    NS.takesInside(new ChildOutExtendsInside())
+
+                    child = new NS.ChildInExtendsInside()
+                    child.methodTakesInside(new NS.Inside())
+                    child.methodTakesInside(new NS.ChildInExtendsInside())
+                    child.methodTakesInside(new ChildOutExtendsInside())
+                end sub`);
+                program.validate();
+                //should have no error
+                expectZeroDiagnostics(program);
+            });
+
+            it('respects union types', () => {
+                program.setFile('source/main.bs', `
+                sub takesStringOrKlass(p as string or Klass)
+                end sub
+
+                class Klass
+                end class
+
+                sub someFunc()
+                    myKlass = new Klass()
+                    takesStringOrKlass("test")
+                    takesStringOrKlass(myKlass)
+                    takesStringOrKlass(1)
+                end sub`);
+                program.validate();
+                //should have error when passed an integer
+                expect(program.getDiagnostics().length).to.equal(1);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('integer', 'string or Klass').message
+                ]);
+            });
+
+
+            it('validates functions assigned to variables', () => {
+                program.setFile('source/main.bs', `
+                sub someFunc()
+                    myFunc = function(i as integer, s as string)
+                        print i+1
+                        print s.len()
+                    end function
+                    myFunc("hello", 2)
+                end sub`);
+                program.validate();
+                //should have error when passed incorrect types
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('string', 'integer').message,
+                    DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
+                ]);
+            });
+        });
+    });
+});

@@ -732,7 +732,10 @@ export class Scope {
 
         //do many per-file checks
         this.enumerateBrsFiles((file) => {
-            this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
+            if (!this.program.options.enableTypeValidation) {
+                //TODO: this is replaced by ScopeValidator.validateFunctionCalls() when enableTypeValidation is true
+                this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
+            }
             this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
