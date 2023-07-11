@@ -147,6 +147,7 @@ class Runner {
 
                 execSync(`npx ts-node target-runner.ts "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.options.project}" "${this.options.quick}" "${this.options.profile}" "${(this.options.config ?? '{}').replaceAll('\"', '\\"')}"`, {
                     env: {
+                        ...process.env,
                         'NODE_OPTIONS': `--max-old-space-size=${MAX_OLD_SPACE}`
                     }
                 });
