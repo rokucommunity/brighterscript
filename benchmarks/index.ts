@@ -146,6 +146,7 @@ class Runner {
 
                 execSync(`npx ts-node target-runner.ts "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.options.project}" "${this.options.quick}" "${this.options.profile}"`, {
                     env: {
+                        ...process.env,
                         'NODE_OPTIONS': `--max-old-space-size=${MAX_OLD_SPACE}`
                     }
                 });
@@ -219,7 +220,7 @@ const runner = new Runner(options as any);
 runner.run();
 
 function execSync(command: string, options: ExecSyncOptions = {}) {
-    // console.log(`Executing '${command}'`);
+    console.log(`Executing '${command}'`);
     return childProcess.execSync(command, { stdio: 'inherit', cwd: cwd, ...options });
 }
 
