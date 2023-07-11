@@ -498,7 +498,9 @@ export class LanguageServer {
         }
 
         let builder = new ProgramBuilder();
-        builder.logger.prefix = `[prj${this.projectCounter++}]`;
+        const projectNumber = this.projectCounter++;
+        builder.logger.prefix = `[prj${projectNumber}]`;
+        builder.logger.log(`Created project #${projectNumber} for: "${projectPath}"`);
 
         //flush diagnostics every time the program finishes validating
         builder.plugins.add({
