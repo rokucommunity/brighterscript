@@ -1190,8 +1190,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         // this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
         public nameExpression: Expression,
         public body: Body,
-        public endKeyword: Token,
-        public parentNamespace: NamespaceStatement
+        public endKeyword: Token
     ) {
         super();
         this.name = this.getName(ParseMode.BrighterScript);
@@ -1225,9 +1224,8 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     public getName(parseMode: ParseMode) {
         const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
         let name = util.getAllDottedGetPartsAsString(this.nameExpression, parseMode);
-
-        if (this.parentNamespace) {
-            name = this.parentNamespace.getName(parseMode) + sep + name;
+        if ((this.parent as Body)?.parent?.kind === AstNodeKind.NamespaceStatement) {
+            name = (this.parent.parent as NamespaceStatement).getName(parseMode) + sep + name;
         }
         return name;
     }
@@ -1235,8 +1233,8 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     public getNameParts() {
         let parts = util.getAllDottedGetParts(this.nameExpression);
 
-        if (this.parentNamespace) {
-            parts = this.parentNamespace.getNameParts().concat(parts);
+        if ((this.parent as Body)?.parent?.kind === AstNodeKind.NamespaceStatement) {
+            parts = (this.parent.parent as NamespaceStatement).getNameParts().concat(parts);
         }
         return parts;
     }
