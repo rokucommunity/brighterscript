@@ -786,19 +786,19 @@ export class Scope {
         //Add namespace aggregates to namespace member tables
         for (const namespace of allNameSpaces) {
             //link each NamespaceType member table with the aggregate NamespaceLookup SymbolTable
-            let fullNamespaceName = namespace.getName(ParseMode.BrighterScript);
-            let namespaceParts = fullNamespaceName.split('.');
-
+            let namespaceParts = namespace.getNameParts();
+            let fullNamespaceName = namespaceParts.map(part => part.text).join('.');
             // eslint-disable-next-line no-bitwise
             let getSymbolFlags = { flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime };
             let currentNSType: BscType = null;
             let nameSoFar = '';
 
             const symbolTable = this.symbolTable;
-            for (const nsNamePart of namespaceParts) {
+            for (const nsNamePartToken of namespaceParts) {
                 // for each section of the namespace name, add it as either a top level symbol (if it is the first part)
                 // or as a member to the containing namespace.
                 let previousNSType = currentNSType;
+                const nsNamePart = nsNamePartToken.text;
                 currentNSType = currentNSType === null
                     ? symbolTable.getSymbolType(nsNamePart, getSymbolFlags)
                     : currentNSType.getMemberType(nsNamePart, getSymbolFlags);
