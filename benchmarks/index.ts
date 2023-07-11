@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 const cwd = __dirname;
 const tempDir = path.join(cwd, '.tmp');
-let nodeArgs = ['--max-old-space-size=8192'];
+let MAX_OLD_SPACE = 8192;
 
 clean();
 execSync('npm install');
@@ -97,7 +97,7 @@ class Runner {
      */
     prepare() {
         const dependencies = {};
-        console.log(`benchmark: using versions: ${this.options.versions}`);
+        console.log(`benchmark: using versions: ${this.options.versions.join(', ')}`);
         for (let i = 0; i < this.options.versions.length; i++) {
             const version = this.options.versions[i];
             const name = `brighterscript${i + 1}`;
@@ -144,7 +144,11 @@ class Runner {
                     cwd: cwd
                 });
 
-                execSync(`node ${nodeArgs.join(' ')} target-runner.js "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.options.project}" "${this.options.quick}" "${this.options.profile}"`);
+                execSync(`npx ts-node target-runner.ts "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.options.project}" "${this.options.quick}" "${this.options.profile}"`, {
+                    env: {
+                        'NODE_OPTIONS': `--max-old-space-size=${MAX_OLD_SPACE}`
+                    }
+                });
                 if (this.options.profile) {
                     const logFile = fastGlob.sync('isolate-*.log', {
                         cwd: cwd
@@ -157,7 +161,7 @@ class Runner {
     }
 }
 
-let targets = fsExtra.readdirSync('./targets').map(x => x.replace('.js', ''));
+let targets = fsExtra.readdirSync('./targets').map(x => x.replace(/\.(js|ts)/, ''));
 
 let options = yargs
     .usage('$0', 'bsc benchmark tool')
@@ -215,6 +219,7 @@ const runner = new Runner(options as any);
 runner.run();
 
 function execSync(command: string, options: ExecSyncOptions = {}) {
+    // console.log(`Executing '${command}'`);
     return childProcess.execSync(command, { stdio: 'inherit', cwd: cwd, ...options });
 }
 

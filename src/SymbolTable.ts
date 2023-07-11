@@ -190,7 +190,7 @@ export class SymbolTable implements SymbolTypeGetter {
             resolvedType = SymbolTable.ReferenceTypeFactory(name, options.fullName, options.flags, options.tableProvider);
         }
         const newNonReferenceType = originalIsReferenceType && !isReferenceType(resolvedType);
-        if ((doSetCache || newNonReferenceType) && resolvedType) {
+        if (doSetCache || newNonReferenceType || resolvedType) {
             this.setCachedType(name, resolvedType, options);
         }
         return resolvedType;
