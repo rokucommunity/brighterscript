@@ -203,6 +203,7 @@ export class SymbolTable implements SymbolTypeGetter {
         //look at parent
         return this.parent?.getSymbolType(name, options);
     }
+
     getSymbolType(name: string, options: GetSymbolTypeOptions): BscType {
         let resolvedType = this.getCachedType(name, options);
         const doSetCache = !resolvedType;
