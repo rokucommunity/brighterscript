@@ -136,7 +136,7 @@ export class ProgramBuilder {
     }
 
     protected createProgram() {
-        const program = new Program(this.options, undefined, this.plugins);
+        const program = new Program(this.options, this.logger, this.plugins);
 
         this.plugins.emit('afterProgramCreate', program);
         return program;
