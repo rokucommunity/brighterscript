@@ -709,7 +709,7 @@ export class Util {
         const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
         for (let flag of diagnostic.file?.commentFlags ?? []) {
             //this diagnostic is affected by this flag
-            if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
+            if (diagnostic.range && this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
                 //if the flag acts upon this diagnostic's code
                 if (flag.codes === null || flag.codes.includes(diagnosticCode)) {
                     return true;
