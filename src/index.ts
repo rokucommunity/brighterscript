@@ -27,3 +27,4 @@ export * from './astUtils/xml';
 export * from './astUtils/AstEditor';
 export * from './SymbolTable';
 export * from './types';
+export * from './Cache';
