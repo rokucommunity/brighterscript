@@ -22,6 +22,15 @@ import { SymbolTable, SymbolTypeFlag } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
 import type { BscType } from './types/BscType';
 import { NamespaceType } from './types/NamespaceType';
+import { referenceTypeFactory } from './types/ReferenceType';
+import { unionTypeFactory } from './types/UnionType';
+
+/**
+ * Assign some few factories to the SymbolTable to prevent cyclical imports. This file seems like the most intuitive place to do the linking
+ * since Scope will be used by pretty much everything
+ */
+SymbolTable.referenceTypeFactory = referenceTypeFactory;
+SymbolTable.unionTypeFactory = unionTypeFactory;
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -785,12 +794,13 @@ export class Scope {
             let currentNSType: BscType = null;
             let nameSoFar = '';
 
+            const symbolTable = this.symbolTable;
             for (const nsNamePart of namespaceParts) {
                 // for each section of the namespace name, add it as either a top level symbol (if it is the first part)
                 // or as a member to the containing namespace.
                 let previousNSType = currentNSType;
                 currentNSType = currentNSType === null
-                    ? this.symbolTable.getSymbolType(nsNamePart, getSymbolFlags)
+                    ? symbolTable.getSymbolType(nsNamePart, getSymbolFlags)
                     : currentNSType.getMemberType(nsNamePart, getSymbolFlags);
                 nameSoFar = nameSoFar === '' ? nsNamePart : `${nameSoFar}.${nsNamePart}`;
                 let isFinalNamespace = nameSoFar.toLowerCase() === fullNamespaceName.toLowerCase();
@@ -803,7 +813,7 @@ export class Scope {
                             // adding as a member of existing NS
                             previousNSType.addMember(nsNamePart, namespace.range, currentNSType, getSymbolFlags.flags);
                         } else {
-                            this.symbolTable.addSymbol(nsNamePart, namespace.range, currentNSType, getSymbolFlags.flags);
+                            symbolTable.addSymbol(nsNamePart, namespace.range, currentNSType, getSymbolFlags.flags);
                         }
                     } else {
                         break;
@@ -818,7 +828,7 @@ export class Scope {
             }
         }
 
-        this.program.typeCacheVerifier.generateToken();
+        SymbolTable.cacheVerifier.generateToken();
     }
 
     public unlinkSymbolTable() {
