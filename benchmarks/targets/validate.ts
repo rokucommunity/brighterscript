@@ -13,7 +13,8 @@ module.exports = async (options: TargetOptions) => {
         enableTypeValidation: false,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
-        logLevel: 'error'
+        logLevel: 'error',
+        ...options.additionalConfig
     } as any);
     if (Object.keys(builder.program.files).length === 0) {
         throw new Error('No files found in program');

@@ -13,7 +13,8 @@ module.exports = async (options: TargetOptions) => {
         copyToStaging: false,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
-        logLevel: 'error'
+        logLevel: 'error',
+        ...options.additionalConfig
     });
     //collect all the brighterscript files
     const brsFiles = Object.values(builder.program.files).filter(x => x.extension === '.brs' || x.extension === '.bs') as Array<BrsFile>;

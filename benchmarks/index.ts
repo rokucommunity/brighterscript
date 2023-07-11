@@ -22,6 +22,7 @@ interface RunnerOptions {
     quick: boolean;
     profile: boolean;
     tar: boolean;
+    config: string;
 }
 class Runner {
     constructor(
@@ -144,7 +145,7 @@ class Runner {
                     cwd: cwd
                 });
 
-                execSync(`npx ts-node target-runner.ts "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.options.project}" "${this.options.quick}" "${this.options.profile}"`, {
+                execSync(`npx ts-node target-runner.ts "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.options.project}" "${this.options.quick}" "${this.options.profile}" "${(this.options.config ?? '{}').replaceAll('\"', '\\"')}"`, {
                     env: {
                         'NODE_OPTIONS': `--max-old-space-size=${MAX_OLD_SPACE}`
                     }
@@ -204,6 +205,11 @@ let options = yargs
         type: 'boolean',
         description: 'use a npm-packed tarball for local files instead of using the files directly',
         default: true
+    })
+    .option('config', {
+        type: 'string',
+        description: 'add additional BsConfig settings as JSON - eg. \'{"enableTypeValidation":true}\'',
+        default: '{}'
     })
     .strict()
     .check(argv => {

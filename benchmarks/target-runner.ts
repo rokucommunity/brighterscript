@@ -16,6 +16,7 @@ const bscAlias = process.argv[idx++];
 const projectPath = process.argv[idx++];
 const quick = JSON.parse(process.argv[idx++]);
 const profile = JSON.parse(process.argv[idx++]);
+const config = JSON.parse(process.argv[idx++]);
 
 const profileTitle = `${target}@${version}`;
 
@@ -88,7 +89,8 @@ const addTargetTestFunction = require(path.join(__dirname, 'targets', target));
             projectPath: projectPath,
             suiteOptions: {
                 // minTime: quick ? undefined : 3.5
-            }
+            },
+            additionalConfig: config
         })
     );
 
@@ -104,4 +106,5 @@ export interface TargetOptions {
     brighterscript: typeof import('../src');
     projectPath: string;
     suiteOptions: Benchmark.Options;
+    additionalConfig: Record<string, unknown>;
 }
