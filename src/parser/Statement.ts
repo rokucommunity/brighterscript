@@ -1190,7 +1190,8 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         // this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
         public nameExpression: Expression,
         public body: Body,
-        public endKeyword: Token
+        public endKeyword: Token,
+        public parentNamespace: NamespaceStatement
     ) {
         super();
         this.name = this.getName(ParseMode.BrighterScript);
@@ -1222,14 +1223,22 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     public getName(parseMode: ParseMode) {
-        const parentNamespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
         const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
         let name = util.getAllDottedGetPartsAsString(this.nameExpression, parseMode);
 
-        if (parentNamespace) {
-            name = parentNamespace.getName(parseMode) + sep + name;
+        if (this.parentNamespace) {
+            name = this.parentNamespace.getName(parseMode) + sep + name;
         }
         return name;
+    }
+
+    public getNameParts() {
+        let parts = util.getAllDottedGetParts(this.nameExpression);
+
+        if (this.parentNamespace) {
+            parts = this.parentNamespace.getNameParts().concat(parts);
+        }
+        return parts;
     }
 
     transpile(state: BrsTranspileState) {
@@ -2186,12 +2195,12 @@ export class MethodStatement extends FunctionStatement {
 
         //check whether any calls to super exist
         let containsSuperCall =
-        this.func.body.statements.findIndex((x) => {
-            //is a call statement
-            return isExpressionStatement(x) && isCallExpression(x.expression) &&
-            //is a call to super
-            util.findBeginningVariableExpression(x.expression.callee as any).name.text.toLowerCase() === 'super';
-        }) !== -1;
+            this.func.body.statements.findIndex((x) => {
+                //is a call statement
+                return isExpressionStatement(x) && isCallExpression(x.expression) &&
+                    //is a call to super
+                    util.findBeginningVariableExpression(x.expression.callee as any).name.text.toLowerCase() === 'super';
+            }) !== -1;
 
         //if a call to super exists, quit here
         if (containsSuperCall) {

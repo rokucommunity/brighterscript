@@ -141,6 +141,7 @@ export class Parser {
 
     private _references = new References();
 
+    private currentNameSpaceStack: NamespaceStatement[] = [];
     /**
      * Invalidates (clears) the references collection. This should be called anytime the AST has been manipulated.
      */
@@ -1290,11 +1291,15 @@ export class Parser {
 
         let name = this.identifyingExpression();
         //set the current namespace name
-        let result = new NamespaceStatement(keyword, name, null, null);
+        const nameSpaceStackLength = this.currentNameSpaceStack.length;
+        let currentNameSpace: NamespaceStatement = nameSpaceStackLength > 0 ? this.currentNameSpaceStack[nameSpaceStackLength - 1] : null;
+        let result = new NamespaceStatement(keyword, name, null, null, currentNameSpace);
 
+        this.currentNameSpaceStack.push(result);
         this.globalTerminators.push([TokenKind.EndNamespace]);
         let body = this.body();
         this.globalTerminators.pop();
+        this.currentNameSpaceStack.pop();
 
         let endKeyword: Token;
         if (this.check(TokenKind.EndNamespace)) {
