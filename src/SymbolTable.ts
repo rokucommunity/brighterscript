@@ -181,12 +181,35 @@ export class SymbolTable implements SymbolTypeGetter {
         return symbolArray.map(symbol => symbol.type);
     }
 
+    private getSymbolTypeRecursive(name: string, options: GetSymbolTypeOptions) {
+        const key = name?.toLowerCase();
+        let symbolsResult: BscSymbol[];
+        let typeResult: BscType;
+        // look in our map first
+        if ((symbolsResult = this.symbolMap.get(key))) {
+            // eslint-disable-next-line no-bitwise
+            symbolsResult = symbolsResult.filter(symbol => symbol.flags & options.flags);
+            if (symbolsResult.length > 0) {
+                return getUniqueType(symbolsResult.map(symbol => symbol.type), SymbolTable.unionTypeFactory);
+            }
+        }
+        //look through any sibling maps next
+        for (let sibling of this.siblings) {
+            typeResult = sibling.getSymbolType(key, options);
+            if (typeResult) {
+                return typeResult;
+            }
+        }
+        //look at parent
+        return this.parent?.getSymbolType(name, options);
+    }
+
     getSymbolType(name: string, options: GetSymbolTypeOptions): BscType {
         let resolvedType = this.getCachedType(name, options);
         const doSetCache = !resolvedType;
         const originalIsReferenceType = isReferenceType(resolvedType);
         if (!resolvedType || originalIsReferenceType) {
-            resolvedType = getUniqueType(this.getSymbolTypes(name, options.flags), SymbolTable.unionTypeFactory);
+            resolvedType = this.getSymbolTypeRecursive(name, options);
         }
         if (!resolvedType && options.fullName && options.tableProvider) {
             resolvedType = SymbolTable.referenceTypeFactory(name, options.fullName, options.flags, options.tableProvider);
