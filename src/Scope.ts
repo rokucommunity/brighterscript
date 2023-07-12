@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/dot-notation */
 import type { CompletionItem, Position, Range, Location } from 'vscode-languageserver';
 import * as path from 'path';
 import { CompletionItemKind } from 'vscode-languageserver';
@@ -770,6 +771,11 @@ export class Scope {
     }
 
     /**
+     * A list of functions that will be called whenever `unlinkSymbolTable` is called
+     */
+    private linkSymbolTableDisposables = [];
+
+    /**
      * Builds the current symbol table for the scope, by merging the tables for all the files in this scope.
      * Also links all file symbols tables to this new table
      * This will only rebuilt if the symbol table has not been built before
@@ -777,16 +783,18 @@ export class Scope {
     public linkSymbolTable() {
         SymbolTable.cacheVerifier.generateToken();
 
-        const allNameSpaces: NamespaceStatement[] = [];
+        const allNamespaces: NamespaceStatement[] = [];
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
-                file.parser.symbolTable.pushParentProvider(() => this.symbolTable);
-                allNameSpaces.push(...file.parser.references.namespaceStatements);
+                this.linkSymbolTableDisposables.push(
+                    file.parser.symbolTable.pushParentProvider(() => this.symbolTable)
+                );
+                allNamespaces.push(...file.parser.references.namespaceStatements);
             }
         }
 
         //Add namespace aggregates to namespace member tables
-        for (const namespace of allNameSpaces) {
+        for (const namespace of allNamespaces) {
             //link each NamespaceType member table with the aggregate NamespaceLookup SymbolTable
             let namespaceParts = namespace.getNameParts();
             let fullNamespaceName = namespaceParts[0].text;
@@ -794,7 +802,7 @@ export class Scope {
                 fullNamespaceName += '.' + namespaceParts[i].text;
             }
             // eslint-disable-next-line no-bitwise
-            let getSymbolFlags = { flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime };
+            let getTypeOptions = { flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime };
             let currentNSType: BscType = null;
             let nameSoFar = '';
 
@@ -805,20 +813,20 @@ export class Scope {
                 let previousNSType = currentNSType;
                 const nsNamePart = nsNamePartToken.text;
                 currentNSType = currentNSType === null
-                    ? symbolTable.getSymbolType(nsNamePart, getSymbolFlags)
-                    : currentNSType.getMemberType(nsNamePart, getSymbolFlags);
+                    ? symbolTable.getSymbolType(nsNamePart, getTypeOptions)
+                    : currentNSType.getMemberType(nsNamePart, getTypeOptions);
                 nameSoFar = nameSoFar === '' ? nsNamePart : `${nameSoFar}.${nsNamePart}`;
                 let isFinalNamespace = nameSoFar.toLowerCase() === fullNamespaceName.toLowerCase();
                 if (!isNamespaceType(currentNSType)) {
                     if (!currentNSType || isReferenceType(currentNSType)) {
                         currentNSType = isFinalNamespace
-                            ? namespace.getType(getSymbolFlags)
+                            ? namespace.getType(getTypeOptions)
                             : new NamespaceType(nameSoFar);
                         if (previousNSType) {
                             // adding as a member of existing NS
-                            previousNSType.addMember(nsNamePart, namespace.range, currentNSType, getSymbolFlags.flags);
+                            previousNSType.addMember(nsNamePart, namespace.range, currentNSType, getTypeOptions.flags);
                         } else {
-                            symbolTable.addSymbol(nsNamePart, namespace.range, currentNSType, getSymbolFlags.flags);
+                            symbolTable.addSymbol(nsNamePart, namespace.range, currentNSType, getTypeOptions.flags);
                         }
                     } else {
                         break;
@@ -827,28 +835,24 @@ export class Scope {
 
                 // Now the namespace type is built, add the aggregate as a sibling
                 let aggregateNSSymbolTable = this.namespaceLookup.get(nameSoFar.toLowerCase()).symbolTable;
-                currentNSType.memberTable.addSibling(aggregateNSSymbolTable);
+                this.linkSymbolTableDisposables.push(
+                    currentNSType.memberTable.addSibling(aggregateNSSymbolTable)
+                );
+
                 if (isFinalNamespace) {
-                    namespace.body.getSymbolTable().addSibling(aggregateNSSymbolTable);
-                }
-            }
-        }
-
-    }
-
-    public unlinkSymbolTable() {
-        for (let file of this.getOwnFiles()) {
-            if (isBrsFile(file)) {
-                file.parser?.symbolTable.popParentProvider();
-
-                for (const namespace of file.parser.references.namespaceStatements) {
-                    const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
-                    namespace.getSymbolTable().removeSibling(
-                        this.namespaceLookup.get(namespaceNameLower).symbolTable
+                    this.linkSymbolTableDisposables.push(
+                        namespace.getSymbolTable().addSibling(aggregateNSSymbolTable)
                     );
                 }
             }
         }
+    }
+
+    public unlinkSymbolTable() {
+        for (const dispose of this.linkSymbolTableDisposables) {
+            dispose();
+        }
+        this.linkSymbolTableDisposables = [];
     }
 
     private detectVariableNamespaceCollisions(file: BrsFile) {

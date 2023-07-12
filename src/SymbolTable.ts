@@ -55,6 +55,9 @@ export class SymbolTable implements SymbolTypeGetter {
      */
     public pushParentProvider(provider: SymbolTableProvider) {
         this.parentProviders.push(provider);
+        return () => {
+            this.popParentProvider();
+        };
     }
 
     /**
@@ -77,9 +80,10 @@ export class SymbolTable implements SymbolTypeGetter {
      * Add a sibling symbol table (which will be inspected first before walking upward to the parent
      */
     public addSibling(sibling: SymbolTable) {
-        if (!this.siblings.has(sibling)) {
-            this.siblings.add(sibling);
-        }
+        this.siblings.add(sibling);
+        return () => {
+            this.siblings.delete(sibling);
+        };
     }
 
     /**
