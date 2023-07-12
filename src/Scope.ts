@@ -775,6 +775,8 @@ export class Scope {
      * This will only rebuilt if the symbol table has not been built before
      */
     public linkSymbolTable() {
+        SymbolTable.cacheVerifier.generateToken();
+
         const allNameSpaces: NamespaceStatement[] = [];
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
@@ -787,7 +789,10 @@ export class Scope {
         for (const namespace of allNameSpaces) {
             //link each NamespaceType member table with the aggregate NamespaceLookup SymbolTable
             let namespaceParts = namespace.getNameParts();
-            let fullNamespaceName = namespaceParts.map(part => part.text).join('.');
+            let fullNamespaceName = namespaceParts[0].text;
+            for (let i = 1; i < namespaceParts.length; i++) {
+                fullNamespaceName += '.' + namespaceParts[i].text;
+            }
             // eslint-disable-next-line no-bitwise
             let getSymbolFlags = { flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime };
             let currentNSType: BscType = null;
@@ -819,6 +824,7 @@ export class Scope {
                         break;
                     }
                 }
+
                 // Now the namespace type is built, add the aggregate as a sibling
                 let aggregateNSSymbolTable = this.namespaceLookup.get(nameSoFar.toLowerCase()).symbolTable;
                 currentNSType.memberTable.addSibling(aggregateNSSymbolTable);
@@ -828,7 +834,6 @@ export class Scope {
             }
         }
 
-        SymbolTable.cacheVerifier.generateToken();
     }
 
     public unlinkSymbolTable() {
