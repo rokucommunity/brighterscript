@@ -358,7 +358,7 @@ export class Program {
     /**
      * roku filesystem is case INsensitive, so find the scope by key case insensitive
      */
-    public getScopeByName(scopeName: string) {
+    public getScopeByName(scopeName: string): Scope {
         if (!scopeName) {
             return undefined;
         }
