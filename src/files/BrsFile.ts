@@ -27,7 +27,7 @@ import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
-import type { AstNode, Expression, Statement } from '../parser/AstNode';
+import { type AstNode, type Expression, type Statement } from '../parser/AstNode';
 import { SymbolTypeFlag } from '../SymbolTable';
 import type { BscType } from '../types/BscType';
 import { ClassType } from '../types/ClassType';
@@ -1087,7 +1087,7 @@ export class BrsFile {
             //NameA
             //NameA.NameB
             //NameA.NameB.NameC
-            if (namespace.fullName.toLowerCase() === closestParentNamespaceName) {
+            if (namespace.fullNameLower === closestParentNamespaceName) {
                 //add all of this namespace's immediate child namespaces, bearing in mind if we are after a new keyword
                 for (let [, ns] of namespace.namespaces) {
                     if (!newToken || ns.statements.find((s) => isClassStatement(s))) {
@@ -1285,7 +1285,7 @@ export class BrsFile {
                 let scopes = this.program.getScopesForFile(this);
                 for (let scope of scopes) {
                     let namespace = scope.namespaceLookup.get(namespaceName.toLowerCase());
-                    if (namespace.functionStatements[lowerCalleeName]) {
+                    if (namespace.functionStatements.has(lowerCalleeName)) {
                         return true;
                     }
                 }

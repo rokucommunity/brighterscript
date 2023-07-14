@@ -364,8 +364,8 @@ export class Program {
         }
         //most scopes are xml file pkg paths. however, the ones that are not are single names like "global" and "scope",
         //so it's safe to run the standardizePkgPath method
-        scopeName = s`${scopeName}`;
-        let key = Object.keys(this.scopes).find(x => x.toLowerCase() === scopeName.toLowerCase());
+        scopeName = s`${scopeName.toLowerCase()}`;
+        let key = Object.keys(this.scopes).find(x => x.toLowerCase() === scopeName);
         return this.scopes[key];
     }
 
