@@ -21,6 +21,7 @@ import { DynamicType } from './types/DynamicType';
 import { ObjectType } from './types/ObjectType';
 import { FloatType } from './types/FloatType';
 import { NamespaceType } from './types/NamespaceType';
+import { isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -2598,6 +2599,44 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+    });
+
+    describe('unlinkSymbolTable', () => {
+        it('properly removes sibling symbol tables', () => {
+            const file = program.setFile<BrsFile>('source/lib.bs', `
+                namespace alpha.beta.charlie
+                    function delta()
+                    end function
+                end namespace
+
+                namespace alpha.beta.charlie
+                    function echo()
+                    end function
+                end namespace
+            `);
+            const scope = program.getScopeByName('source');
+
+            scope.linkSymbolTable();
+
+            const opts = { flags: 3 as SymbolTypeFlag };
+            const symbolTables = [
+                file.ast.findChild(x => isFunctionStatement(x) && x.name.text === 'delta').findAncestor(x => isNamespaceStatement(x)).getSymbolTable(),
+                scope.symbolTable.getSymbolType('alpha', opts).memberTable,
+                scope.symbolTable.getSymbolType('alpha', opts).getMemberType('beta', opts).memberTable,
+                scope.symbolTable.getSymbolType('alpha', opts).getMemberType('beta', opts).getMemberType('charlie', opts).memberTable
+            ];
+
+            symbolTables.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
+            scope.unlinkSymbolTable();
+            symbolTables.forEach(x => expect(x['siblings'].size).to.eql(0, `${x.name} has wrong number of siblings`));
+
+            //do it again, make sure we don't end up with additional siblings
+
+            scope.linkSymbolTable();
+            symbolTables.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
+            scope.unlinkSymbolTable();
+            symbolTables.forEach(x => expect(x['siblings'].size).to.eql(0, `${x.name} has wrong number of siblings`));
         });
     });
 });

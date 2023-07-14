@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/dot-notation */
 import type { CompletionItem, Position, Range, Location } from 'vscode-languageserver';
 import * as path from 'path';
 import { CompletionItemKind } from 'vscode-languageserver';
@@ -22,6 +23,16 @@ import { SymbolTable, SymbolTypeFlag } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
 import type { BscType } from './types/BscType';
 import { NamespaceType } from './types/NamespaceType';
+import { referenceTypeFactory } from './types/ReferenceType';
+import { unionTypeFactory } from './types/UnionType';
+import type { Identifier } from './lexer/Token';
+
+/**
+ * Assign some few factories to the SymbolTable to prevent cyclical imports. This file seems like the most intuitive place to do the linking
+ * since Scope will be used by pretty much everything
+ */
+SymbolTable.referenceTypeFactory = referenceTypeFactory;
+SymbolTable.unionTypeFactory = unionTypeFactory;
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -169,7 +180,7 @@ export class Scope {
     public getEnumMemberFileLink(enumMemberName: string, containingNamespace?: string): FileLink<EnumStatement | EnumMemberStatement> {
         let lowerNameParts = enumMemberName?.toLowerCase()?.split('.');
         let memberName = lowerNameParts?.splice(lowerNameParts.length - 1, 1)?.[0];
-        let lowerName = lowerNameParts?.join('.').toLowerCase();
+        let lowerName = lowerNameParts?.join('.');
         const enumMap = this.getEnumMap();
 
         let enumeration = enumMap.get(
@@ -259,10 +270,10 @@ export class Scope {
             this.enumerateBrsFiles((file) => {
                 if (isBrsFile(file)) {
                     for (let cls of file.parser.references.classStatements) {
-                        const lowerClassName = cls.getName(ParseMode.BrighterScript)?.toLowerCase();
+                        const className = cls.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
-                        if (lowerClassName) {
-                            map.set(lowerClassName, { item: cls, file: file });
+                        if (className) {
+                            map.set(className.toLowerCase(), { item: cls, file: file });
                         }
                     }
                 }
@@ -281,10 +292,10 @@ export class Scope {
             this.enumerateBrsFiles((file) => {
                 if (isBrsFile(file)) {
                     for (let iface of file.parser.references.interfaceStatements) {
-                        const lowerIfaceName = iface.getName(ParseMode.BrighterScript)?.toLowerCase();
+                        const ifaceName = iface.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
-                        if (lowerIfaceName) {
-                            map.set(lowerIfaceName, { item: iface, file: file });
+                        if (ifaceName) {
+                            map.set(ifaceName.toLowerCase(), { item: iface, file: file });
                         }
                     }
                 }
@@ -302,10 +313,9 @@ export class Scope {
             const map = new Map<string, FileLink<EnumStatement>>();
             this.enumerateBrsFiles((file) => {
                 for (let enumStmt of file.parser.references.enumStatements) {
-                    const lowerEnumName = enumStmt.fullName.toLowerCase();
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
-                    if (lowerEnumName) {
-                        map.set(lowerEnumName, { item: enumStmt, file: file });
+                    if (enumStmt.fullName) {
+                        map.set(enumStmt.fullName.toLowerCase(), { item: enumStmt, file: file });
                     }
                 }
             });
@@ -322,10 +332,9 @@ export class Scope {
             const map = new Map<string, FileLink<ConstStatement>>();
             this.enumerateBrsFiles((file) => {
                 for (let stmt of file.parser.references.constStatements) {
-                    const lowerEnumName = stmt.fullName.toLowerCase();
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
-                    if (lowerEnumName) {
-                        map.set(lowerEnumName, { item: stmt, file: file });
+                    if (stmt.fullName) {
+                        map.set(stmt.fullName.toLowerCase(), { item: stmt, file: file });
                     }
                 }
             });
@@ -582,25 +591,41 @@ export class Scope {
         let namespaceLookup = new Map<string, NamespaceContainer>();
         this.enumerateBrsFiles((file) => {
             for (let namespaceStatement of file.parser.references.namespaceStatements) {
-                //TODO should we handle non-brighterscript?
-                let name = namespaceStatement.getName(ParseMode.BrighterScript);
-                let nameParts = name.split('.');
+                let nameParts = namespaceStatement.getNameParts();
 
-                let loopName = null;
+                let loopName: string = null;
+                let lowerLoopName: string = null;
+                let parentNameLower: string = null;
+
                 //ensure each namespace section is represented in the results
                 //(so if the namespace name is A.B.C, this will make an entry for "A", an entry for "A.B", and an entry for "A.B.C"
-                for (let part of nameParts) {
-                    loopName = loopName === null ? part : `${loopName}.${part}`;
-                    let lowerLoopName = loopName.toLowerCase();
+                for (let i = 0; i < nameParts.length; i++) {
+
+                    let part = nameParts[i];
+                    let lowerPartName = part.text.toLowerCase();
+
+                    if (i === 0) {
+                        loopName = part.text;
+                        lowerLoopName = lowerPartName;
+                    } else {
+                        parentNameLower = lowerLoopName;
+                        loopName += '.' + part.text;
+                        lowerLoopName += '.' + lowerPartName;
+                    }
+
                     if (!namespaceLookup.has(lowerLoopName)) {
                         namespaceLookup.set(lowerLoopName, {
                             file: file,
                             fullName: loopName,
+                            fullNameLower: lowerLoopName,
+                            parentNameLower: parentNameLower,
+                            nameParts: nameParts.slice(0, i),
                             nameRange: namespaceStatement.nameExpression.range,
-                            lastPartName: part,
+                            lastPartName: part.text,
+                            lastPartNameLower: lowerPartName,
                             namespaces: new Map(),
-                            classStatements: {},
-                            functionStatements: {},
+                            classStatements: new Map(),
+                            functionStatements: new Map(),
                             enumStatements: new Map(),
                             constStatements: new Map(),
                             statements: [],
@@ -608,13 +633,13 @@ export class Scope {
                         });
                     }
                 }
-                let ns = namespaceLookup.get(name.toLowerCase());
+                let ns = namespaceLookup.get(lowerLoopName);
                 ns.statements.push(...namespaceStatement.body.statements);
                 for (let statement of namespaceStatement.body.statements) {
                     if (isClassStatement(statement) && statement.name) {
-                        ns.classStatements[statement.name.text.toLowerCase()] = statement;
+                        ns.classStatements.set(statement.name.text.toLowerCase(), statement);
                     } else if (isFunctionStatement(statement) && statement.name) {
-                        ns.functionStatements[statement.name.text.toLowerCase()] = statement;
+                        ns.functionStatements.set(statement.name.text.toLowerCase(), statement);
                     } else if (isEnumStatement(statement) && statement.fullName) {
                         ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
                     } else if (isConstStatement(statement) && statement.fullName) {
@@ -628,14 +653,9 @@ export class Scope {
 
             //associate child namespaces with their parents
             for (let [, ns] of namespaceLookup) {
-                let parts = ns.fullName.split('.');
-
-                if (parts.length > 1) {
-                    //remove the last part
-                    parts.pop();
-                    let parentName = parts.join('.');
-                    const parent = namespaceLookup.get(parentName.toLowerCase());
-                    parent.namespaces.set(ns.lastPartName.toLowerCase(), ns);
+                if (ns.parentNameLower) {
+                    const parent = namespaceLookup.get(ns.parentNameLower);
+                    parent.namespaces.set(ns.lastPartNameLower, ns);
                 }
             }
         });
@@ -761,79 +781,90 @@ export class Scope {
     }
 
     /**
+     * A list of functions that will be called whenever `unlinkSymbolTable` is called
+     */
+    private linkSymbolTableDisposables = [];
+
+    /**
      * Builds the current symbol table for the scope, by merging the tables for all the files in this scope.
      * Also links all file symbols tables to this new table
      * This will only rebuilt if the symbol table has not been built before
      */
     public linkSymbolTable() {
-        const allNameSpaces: NamespaceStatement[] = [];
+        SymbolTable.cacheVerifier.generateToken();
+
+        const allNamespaces: NamespaceStatement[] = [];
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
-                file.parser.symbolTable.pushParentProvider(() => this.symbolTable);
-                allNameSpaces.push(...file.parser.references.namespaceStatements);
+                this.linkSymbolTableDisposables.push(
+                    file.parser.symbolTable.pushParentProvider(() => this.symbolTable)
+                );
+                allNamespaces.push(...file.parser.references.namespaceStatements);
             }
         }
 
         //Add namespace aggregates to namespace member tables
-        for (const namespace of allNameSpaces) {
+        for (const namespace of allNamespaces) {
             //link each NamespaceType member table with the aggregate NamespaceLookup SymbolTable
-            let fullNamespaceName = namespace.getName(ParseMode.BrighterScript);
-            let namespaceParts = fullNamespaceName.split('.');
-
+            let namespaceParts = namespace.getNameParts();
+            let fullNamespaceName = namespaceParts[0].text;
+            for (let i = 1; i < namespaceParts.length; i++) {
+                fullNamespaceName += '.' + namespaceParts[i].text;
+            }
             // eslint-disable-next-line no-bitwise
-            let getSymbolFlags = { flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime };
+            let getTypeOptions = { flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime };
             let currentNSType: BscType = null;
             let nameSoFar = '';
 
-            for (const nsNamePart of namespaceParts) {
+            const symbolTable = this.symbolTable;
+            for (const nsNamePartToken of namespaceParts) {
                 // for each section of the namespace name, add it as either a top level symbol (if it is the first part)
                 // or as a member to the containing namespace.
                 let previousNSType = currentNSType;
+                const nsNamePart = nsNamePartToken.text;
+
                 currentNSType = currentNSType === null
-                    ? this.symbolTable.getSymbolType(nsNamePart, getSymbolFlags)
-                    : currentNSType.getMemberType(nsNamePart, getSymbolFlags);
+                    ? symbolTable.getSymbolType(nsNamePart, getTypeOptions)
+                    : currentNSType.getMemberType(nsNamePart, getTypeOptions);
+
                 nameSoFar = nameSoFar === '' ? nsNamePart : `${nameSoFar}.${nsNamePart}`;
                 let isFinalNamespace = nameSoFar.toLowerCase() === fullNamespaceName.toLowerCase();
                 if (!isNamespaceType(currentNSType)) {
                     if (!currentNSType || isReferenceType(currentNSType)) {
                         currentNSType = isFinalNamespace
-                            ? namespace.getType(getSymbolFlags)
+                            ? namespace.getType(getTypeOptions)
                             : new NamespaceType(nameSoFar);
                         if (previousNSType) {
                             // adding as a member of existing NS
-                            previousNSType.addMember(nsNamePart, namespace.range, currentNSType, getSymbolFlags.flags);
+                            previousNSType.addMember(nsNamePart, namespace.range, currentNSType, getTypeOptions.flags);
                         } else {
-                            this.symbolTable.addSymbol(nsNamePart, namespace.range, currentNSType, getSymbolFlags.flags);
+                            symbolTable.addSymbol(nsNamePart, namespace.range, currentNSType, getTypeOptions.flags);
                         }
                     } else {
                         break;
                     }
                 }
-                // Now the namespace type is built, add the aggregate as a sibling
+
+                // Now that the namespace type is built, add the aggregate as a sibling
                 let aggregateNSSymbolTable = this.namespaceLookup.get(nameSoFar.toLowerCase()).symbolTable;
-                currentNSType.memberTable.addSibling(aggregateNSSymbolTable);
+                this.linkSymbolTableDisposables.push(
+                    currentNSType.memberTable.addSibling(aggregateNSSymbolTable)
+                );
+
                 if (isFinalNamespace) {
-                    namespace.body.getSymbolTable().addSibling(aggregateNSSymbolTable);
-                }
-            }
-        }
-
-        this.program.typeCacheVerifier.generateToken();
-    }
-
-    public unlinkSymbolTable() {
-        for (let file of this.getOwnFiles()) {
-            if (isBrsFile(file)) {
-                file.parser?.symbolTable.popParentProvider();
-
-                for (const namespace of file.parser.references.namespaceStatements) {
-                    const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
-                    namespace.getSymbolTable().removeSibling(
-                        this.namespaceLookup.get(namespaceNameLower).symbolTable
+                    this.linkSymbolTableDisposables.push(
+                        namespace.getSymbolTable().addSibling(aggregateNSSymbolTable)
                     );
                 }
             }
         }
+    }
+
+    public unlinkSymbolTable() {
+        for (const dispose of this.linkSymbolTableDisposables) {
+            dispose();
+        }
+        this.linkSymbolTableDisposables = [];
     }
 
     private detectVariableNamespaceCollisions(file: BrsFile) {
@@ -1272,11 +1303,15 @@ export class Scope {
 interface NamespaceContainer {
     file: BscFile;
     fullName: string;
+    fullNameLower: string;
+    parentNameLower: string;
+    nameParts: Identifier[];
     nameRange: Range;
     lastPartName: string;
+    lastPartNameLower: string;
     statements: Statement[];
-    classStatements: Record<string, ClassStatement>;
-    functionStatements: Record<string, FunctionStatement>;
+    classStatements: Map<string, ClassStatement>;
+    functionStatements: Map<string, FunctionStatement>;
     enumStatements: Map<string, EnumStatement>;
     constStatements: Map<string, ConstStatement>;
     namespaces: Map<string, NamespaceContainer>;

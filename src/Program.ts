@@ -31,7 +31,7 @@ import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import { IntegerType } from './types/IntegerType';
 import { StringType } from './types/StringType';
-import { SymbolTable, SymbolTypeFlag } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTable';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -40,9 +40,6 @@ import { FunctionType } from './types/FunctionType';
 import { LongIntegerType } from './types/LongIntegerType';
 import { ObjectType } from './types/ObjectType';
 import { VoidType } from './types/VoidType';
-import { CacheVerifier } from './CacheVerifier';
-import { referenceTypeFactory } from './types/ReferenceType';
-import { unionTypeFactory } from './types/UnionType';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
@@ -89,8 +86,6 @@ export class Program {
 
     public logger: Logger;
 
-    public typeCacheVerifier = new CacheVerifier();
-
     private createGlobalScope() {
         //create the 'global' scope
         this.globalScope = new Scope('global', this, 'scope:global');
@@ -106,11 +101,6 @@ export class Program {
         this.globalScope.getDiagnostics = () => [];
         //TODO we might need to fix this because the isValidated clears stuff now
         (this.globalScope as any).isValidated = true;
-
-        // Adds a factory to SymbolTable so it can create ReferenceTypes
-        SymbolTable.ReferenceTypeFactory = referenceTypeFactory;
-        SymbolTable.cacheVerifier = this.typeCacheVerifier;
-        SymbolTable.UnionTypeFactory = unionTypeFactory;
     }
 
     /**
@@ -368,14 +358,14 @@ export class Program {
     /**
      * roku filesystem is case INsensitive, so find the scope by key case insensitive
      */
-    public getScopeByName(scopeName: string) {
+    public getScopeByName(scopeName: string): Scope {
         if (!scopeName) {
             return undefined;
         }
         //most scopes are xml file pkg paths. however, the ones that are not are single names like "global" and "scope",
         //so it's safe to run the standardizePkgPath method
-        scopeName = s`${scopeName}`;
-        let key = Object.keys(this.scopes).find(x => x.toLowerCase() === scopeName.toLowerCase());
+        scopeName = s`${scopeName.toLowerCase()}`;
+        let key = Object.keys(this.scopes).find(x => x.toLowerCase() === scopeName);
         return this.scopes[key];
     }
 

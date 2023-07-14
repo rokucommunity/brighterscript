@@ -12,7 +12,7 @@ import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
-import type { AstNode, Expression } from '../../parser/AstNode';
+import { type AstNode, type Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import { TokenKind } from '../../lexer/TokenKind';
@@ -58,8 +58,7 @@ export class ScopeValidator {
 
 
     private checkIfUsedAsTypeExpression(expression: AstNode): boolean {
-        //TODO: this is much faster than node.findAncestor(), but will not work for "complicated" type expressions
-        // like UnionTypes
+        //TODO: this is much faster than node.findAncestor(), but will not work for "complicated" type expressions like UnionTypes
         if (isTypeExpression(expression) ||
             isTypeExpression(expression.parent)) {
             return true;
@@ -93,6 +92,7 @@ export class ScopeValidator {
                     result.push({
                         parts: parts,
                         expression: expression,
+                        isUsedAsType: this.checkIfUsedAsTypeExpression(expression),
                         enclosingNamespaceNameLower: expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase()
                     });
                 }
@@ -106,10 +106,10 @@ export class ScopeValidator {
             const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
             //get the namespace container (accounting for namespace-relative as well)
             const namespaceContainer = scope.getNamespace(firstNamespacePartLower, info.enclosingNamespaceNameLower);
-            const isUsedAsType = this.checkIfUsedAsTypeExpression(info.expression);
+
             let symbolType = SymbolTypeFlag.runtime;
             let oppositeSymbolType = SymbolTypeFlag.typetime;
-            if (isUsedAsType) {
+            if (info.isUsedAsType) {
                 // This is used in a TypeExpression - only look up types from SymbolTable
                 symbolType = SymbolTypeFlag.typetime;
                 oppositeSymbolType = SymbolTypeFlag.runtime;
@@ -129,7 +129,7 @@ export class ScopeValidator {
                         const oppoSiteTypeChain = [];
                         const invalidlyUsedResolvedType = info.expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain });
                         const typeChainScan = util.processTypeChain(oppoSiteTypeChain);
-                        if (isUsedAsType) {
+                        if (info.isUsedAsType) {
                             this.addMultiScopeDiagnostic({
                                 ...DiagnosticMessages.itemCannotBeUsedAsType(typeChainScan.fullChainName),
                                 range: info.expression.range,
@@ -227,7 +227,7 @@ export class ScopeValidator {
                 }
             }
             //if the full expression is just an enum name, this is an illegal statement because enums don't exist at runtime
-            if (!isUsedAsType && enumStatement && info.parts.length === 1) {
+            if (!info.isUsedAsType && enumStatement && info.parts.length === 1) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.itemCannotBeUsedAsVariable('enum'),
                     range: info.expression.range,
@@ -446,5 +446,10 @@ interface ExpressionInfo {
      * The full namespace name that encloses this expression
      */
     enclosingNamespaceNameLower?: string;
+    /**
+     * Determine if this expression is used as a type. This can be cached as part of the expression info since it only depends on AST syntax,
+     * and does not depend on types from the scope
+     */
+    isUsedAsType: boolean;
 }
 type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };

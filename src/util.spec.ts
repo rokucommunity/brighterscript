@@ -13,6 +13,7 @@ import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
 import { ReferenceType } from './types/ReferenceType';
 import { SymbolTypeFlag } from './SymbolTable';
+import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
 
 const sinon = createSandbox();
 
@@ -41,6 +42,26 @@ describe('util', () => {
         it('retains original drive casing for windows', () => {
             expect(util.uriToPath(`file:///C:${path.sep}something`)).to.equal(`C:${path.sep}something`);
             expect(util.uriToPath(`file:///c:${path.sep}something`)).to.equal(`c:${path.sep}something`);
+        });
+    });
+
+    describe('getAllDottedGetPartsAsString', () => {
+        it('returns undefined when no value found', () => {
+            expect(
+                util.getAllDottedGetPartsAsString(undefined)
+            ).to.eql(undefined);
+        });
+
+        it('returns var name', () => {
+            expect(
+                util.getAllDottedGetPartsAsString(createVariableExpression('alpha'))
+            ).to.eql('alpha');
+        });
+
+        it('returns dotted get name', () => {
+            expect(
+                util.getAllDottedGetPartsAsString(createDottedIdentifier(['alpha', 'beta']))
+            ).to.eql('alpha.beta');
         });
     });
 

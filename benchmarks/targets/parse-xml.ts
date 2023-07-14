@@ -12,11 +12,12 @@ module.exports = async (options: TargetOptions) => {
         copyToStaging: false,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
-        logLevel: 'error'
+        logLevel: 'error',
+        ...options.additionalConfig
     });
     //collect all the XML file contents
     const xmlFiles = Object.values(builder.program.files).filter(x => x.extension === '.xml').map(x => ({
-        srcPath: x.srcPath ?? x.pathAbsolute,
+        srcPath: x.srcPath ?? (x as any).pathAbsolute,
         pkgPath: x.pkgPath,
         fileContents: x.fileContents
     }));

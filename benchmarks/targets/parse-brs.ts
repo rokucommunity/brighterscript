@@ -12,7 +12,8 @@ module.exports = async (options: TargetOptions) => {
         copyToStaging: false,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
-        logLevel: 'error'
+        logLevel: 'error',
+        ...options.additionalConfig
     });
     //collect all the brs file contents
     const files = Object.values(builder.program.files).filter(x => ['.brs', '.bs', '.d.bs'].includes(x.extension)).map(x => ({
@@ -27,7 +28,7 @@ module.exports = async (options: TargetOptions) => {
     const setFileFuncName = builder.program['setFile'] ? 'setFile' : 'addOrReplaceFile';
 
     suite.add(fullName, (deferred) => {
-        const promises = [];
+        const promises: unknown[] = [];
         for (const file of files) {
             promises.push(
                 builder.program[setFileFuncName](file.pkgPath, file.fileContents)
