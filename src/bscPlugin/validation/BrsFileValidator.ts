@@ -48,8 +48,15 @@ export class BrsFileValidator {
         const visitor = createVisitor({
             MethodStatement: (node) => {
                 //add the `super` symbol to class methods
-                //Todo:  get the actual type of the parent class
-                node.func.body.symbolTable.addSymbol('super', undefined, DynamicType.instance, SymbolTypeFlag.runtime);
+                let superType: BscType = DynamicType.instance;
+                if (isClassStatement(node.parent) && node.parent.hasParentClass()) {
+                    if (this.event.program.options.enableTypeValidation) {
+                        const parentClassType = node.parent.parentClassName.getType({ flags: SymbolTypeFlag.typetime });
+                        const methodName = node.getName(ParseMode.BrighterScript);
+                        superType = parentClassType.getMemberType(methodName, { flags: SymbolTypeFlag.runtime });
+                    }
+                    node.func.body.symbolTable.addSymbol('super', undefined, superType, SymbolTypeFlag.runtime);
+                }
             },
             CallfuncExpression: (node) => {
                 if (node.args.length > 5) {
@@ -98,7 +105,7 @@ export class BrsFileValidator {
             },
             FunctionStatement: (node) => {
                 this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.functionType, node.name));
-                const funcType = node.getType({ flags: SymbolTypeFlag.typetime });
+                const funcType = this.getTypeFromNode(node, { flags: SymbolTypeFlag.typetime });
 
                 if (node.name?.text) {
                     node.parent.getSymbolTable().addSymbol(
@@ -137,7 +144,7 @@ export class BrsFileValidator {
             FunctionParameterExpression: (node) => {
                 const paramName = node.name?.text;
                 const symbolTable = node.getSymbolTable();
-                const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
+                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlag.typetime });
                 symbolTable?.addSymbol(paramName, node.name.range, nodeType, SymbolTypeFlag.runtime);
             },
             InterfaceStatement: (node) => {

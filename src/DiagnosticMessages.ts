@@ -729,6 +729,11 @@ export let DiagnosticMessages = {
         message: `'${typeText}' cannot be used as a type`,
         code: 1140,
         severity: DiagnosticSeverity.Error
+    }),
+    argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string) => ({
+        message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'`,
+        code: 1141,
+        severity: DiagnosticSeverity.Error
     })
 };
 

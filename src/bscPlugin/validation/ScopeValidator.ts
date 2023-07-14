@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isBinaryExpression, isBrsFile, isLiteralExpression, isNamespaceStatement, isTypeExpression, isXmlScope } from '../../astUtils/reflection';
+import { isBinaryExpression, isBrsFile, isFunctionType, isLiteralExpression, isNamespaceStatement, isTypeExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -52,6 +52,9 @@ export class ScopeValidator {
             if (isBrsFile(file)) {
                 this.iterateFileExpressions(file);
                 this.validateCreateObjectCalls(file);
+                if (this.event.program.options.enableTypeValidation) {
+                    this.validateFunctionCalls(file);
+                }
             }
         });
     }
@@ -386,6 +389,63 @@ export class ScopeValidator {
                         ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),
                         range: call.range
                     });
+                }
+            }
+        }
+        this.event.scope.addDiagnostics(diagnostics);
+    }
+
+    /**
+    * Detect calls to functions with the incorrect number of parameters, or wrong types of arguments
+    */
+    private validateFunctionCalls(file: BscFile) {
+        const diagnostics: BsDiagnostic[] = [];
+
+        //validate all function calls
+        for (let expCall of file.functionCalls) {
+            const funcType = expCall.expression?.callee?.getType({ flags: SymbolTypeFlag.runtime });
+            if (funcType?.isResolvable() && isFunctionType(funcType)) {
+                funcType.setName(expCall.name);
+
+                //get min/max parameter count for callable
+                let minParams = 0;
+                let maxParams = 0;
+                for (let param of funcType.params) {
+                    maxParams++;
+                    //optional parameters must come last, so we can assume that minParams won't increase once we hit
+                    //the first isOptional
+                    if (param.isOptional !== true) {
+                        minParams++;
+                    }
+                }
+                let expCallArgCount = expCall.args.length;
+                if (expCall.args.length > maxParams || expCall.args.length < minParams) {
+                    let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
+                    diagnostics.push({
+                        ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
+                        range: expCall.nameRange,
+                        //TODO detect end of expression call
+                        file: file
+                    });
+                }
+                let paramIndex = 0;
+                for (let arg of expCall.args) {
+                    const argType = arg.expression.getType({ flags: SymbolTypeFlag.runtime });
+
+                    const paramType = funcType.params[paramIndex]?.type;
+                    if (!paramType) {
+                        // unable to find a paramType -- maybe there are more args than params
+                        break;
+                    }
+                    if (!paramType?.isTypeCompatible(argType)) {
+                        diagnostics.push({
+                            ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), paramType.toString()),
+                            range: arg.expression.range,
+                            //TODO detect end of expression call
+                            file: file
+                        });
+                    }
+                    paramIndex++;
                 }
             }
         }
