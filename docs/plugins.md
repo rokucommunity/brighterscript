@@ -69,6 +69,7 @@ Full compiler lifecycle:
         - `afterFileTranspile`
     - `afterProgramTranspile`
 - `afterPublish`
+- `beforeProgramDispose`
 
 ### Language server
 
@@ -158,6 +159,7 @@ export interface CompilerPlugin {
     afterProgramValidate?: (program: Program) => void;
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    beforeProgramDispose?: (program: Program) => void;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
 
     /**
