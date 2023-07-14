@@ -1,7 +1,7 @@
 import type { Range } from 'vscode-languageserver';
 import type { BscType } from './types/BscType';
 import type { GetTypeOptions } from './interfaces';
-import type { CacheVerifier } from './CacheVerifier';
+import { CacheVerifier } from './CacheVerifier';
 import type { ReferenceType } from './types/ReferenceType';
 import type { UnionType } from './types/UnionType';
 import { getUniqueType } from './types/helpers';
@@ -39,18 +39,25 @@ export class SymbolTable implements SymbolTypeGetter {
 
     private typeCache: Array<Map<string, BscType>>;
 
+    /**
+     * Used to invalidate the cache for all symbol tables.
+     *
+     * This is not the most optimized solution as cache will be shared across all instances of SymbolTable across all programs,
+     * but this is the easiest way to handle nested/linked symbol table cache management so we can optimize this in the future some time...
+     */
+    static cacheVerifier = new CacheVerifier();
 
-    static cacheVerifier: CacheVerifier;
-
-    static ReferenceTypeFactory: (memberKey: string, fullName, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) => ReferenceType;
-    static UnionTypeFactory: (types: BscType[]) => UnionType;
-
+    static referenceTypeFactory: (memberKey: string, fullName, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) => ReferenceType;
+    static unionTypeFactory: (types: BscType[]) => UnionType;
 
     /**
      * Push a function that will provide a parent SymbolTable when requested
      */
     public pushParentProvider(provider: SymbolTableProvider) {
         this.parentProviders.push(provider);
+        return () => {
+            this.popParentProvider();
+        };
     }
 
     /**
@@ -73,9 +80,10 @@ export class SymbolTable implements SymbolTypeGetter {
      * Add a sibling symbol table (which will be inspected first before walking upward to the parent
      */
     public addSibling(sibling: SymbolTable) {
-        if (!this.siblings.has(sibling)) {
-            this.siblings.add(sibling);
-        }
+        this.siblings.add(sibling);
+        return () => {
+            this.siblings.delete(sibling);
+        };
     }
 
     /**
@@ -143,7 +151,8 @@ export class SymbolTable implements SymbolTypeGetter {
             }
             //look through any sibling maps next
             for (let sibling of currentTable.siblings) {
-                if ((result = sibling.getSymbol(key, bitFlags))) {
+                result = sibling.getSymbol(key, bitFlags);
+                if (result) {
                     if (result.length > 0) {
                         return result;
                     }
@@ -169,28 +178,26 @@ export class SymbolTable implements SymbolTypeGetter {
         });
     }
 
-    getSymbolTypes(name: string, bitFlags: SymbolTypeFlag): BscType[] {
+    public getSymbolTypes(name: string, bitFlags: SymbolTypeFlag): BscType[] {
         const symbolArray = this.getSymbol(name, bitFlags);
         if (!symbolArray) {
             return undefined;
         }
         return symbolArray.map(symbol => symbol.type);
-
     }
-
 
     getSymbolType(name: string, options: GetSymbolTypeOptions): BscType {
         let resolvedType = this.getCachedType(name, options);
         const doSetCache = !resolvedType;
         const originalIsReferenceType = isReferenceType(resolvedType);
         if (!resolvedType || originalIsReferenceType) {
-            resolvedType = getUniqueType(this.getSymbolTypes(name, options.flags), SymbolTable.UnionTypeFactory);
+            resolvedType = getUniqueType(this.getSymbolTypes(name, options.flags), SymbolTable.unionTypeFactory);
         }
-        if (!resolvedType && SymbolTable.ReferenceTypeFactory && options.fullName && options.tableProvider) {
-            resolvedType = SymbolTable.ReferenceTypeFactory(name, options.fullName, options.flags, options.tableProvider);
+        if (!resolvedType && options.fullName && options.tableProvider) {
+            resolvedType = SymbolTable.referenceTypeFactory(name, options.fullName, options.flags, options.tableProvider);
         }
         const newNonReferenceType = originalIsReferenceType && !isReferenceType(resolvedType);
-        if ((doSetCache || newNonReferenceType) && resolvedType) {
+        if (doSetCache || newNonReferenceType || resolvedType) {
             this.setCachedType(name, resolvedType, options);
         }
         return resolvedType;
@@ -244,7 +251,6 @@ export class SymbolTable implements SymbolTypeGetter {
         return symbols.filter(symbol => symbol.flags & bitFlags);
     }
 
-
     private resetTypeCache() {
         this.typeCache = [
             undefined,
@@ -254,7 +260,6 @@ export class SymbolTable implements SymbolTypeGetter {
         ];
         this.cacheToken = SymbolTable.cacheVerifier?.getToken();
     }
-
 
     getCachedType(name: string, options: GetTypeOptions): BscType {
         if (SymbolTable.cacheVerifier) {
@@ -269,7 +274,6 @@ export class SymbolTable implements SymbolTypeGetter {
         }
         return this.typeCache[options.flags]?.get(name.toLowerCase());
     }
-
 
     setCachedType(name: string, type: BscType, options: GetTypeOptions) {
         if (!type) {

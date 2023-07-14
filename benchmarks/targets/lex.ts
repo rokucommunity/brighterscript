@@ -1,4 +1,7 @@
-module.exports = async (suite, name, brighterscript, projectPath, options) => {
+import type { TargetOptions } from '../target-runner';
+
+module.exports = async (options: TargetOptions) => {
+    const { suite, name, version, fullName, brighterscript, projectPath, suiteOptions } = options;
     const { ProgramBuilder, Lexer } = brighterscript;
 
     const builder = new ProgramBuilder();
@@ -9,16 +12,17 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
         copyToStaging: false,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
-        logLevel: 'error'
+        logLevel: 'error',
+        ...options.additionalConfig
     });
     //collect all the brighterscript files
     const brsFiles = Object.values(builder.program.files).filter(x => x.extension === '.brs' || x.extension === '.bs');
     if (brsFiles.length === 0) {
         throw new Error('No files found in program');
     }
-    suite.add(name, () => {
+    suite.add(fullName, () => {
         for (let brsFile of brsFiles) {
             Lexer.scan(brsFile.fileContents);
         }
-    }, options);
+    }, suiteOptions);
 };

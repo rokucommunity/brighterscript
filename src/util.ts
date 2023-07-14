@@ -22,19 +22,21 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { DottedGetExpression, VariableExpression } from './parser/Expression';
+import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, NewExpression, TypeExpression, VariableExpression, XmlAttributeGetExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAssignmentStatement, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isExpression, isFloatType, isFunctionParameterExpression, isGroupingExpression, isIndexedGetExpression, isIntegerType, isInvalidType, isLiteralExpression, isLongIntegerType, isNewExpression, isStringType, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isExpression, isFloatType, isIndexedGetExpression, isIntegerType, isInvalidType, isLongIntegerType, isStringType, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { Expression, Statement } from './parser/AstNode';
+import type { AstNode } from './parser/AstNode';
+import { AstNodeKind, type Expression, type Statement } from './parser/AstNode';
 import { createIdentifier } from './astUtils/creators';
-import type { BscType } from './types';
+import type { BscType } from './types/BscType';
+import type { AssignmentStatement } from './parser/Statement';
 
 export class Util {
     public clearConsole() {
@@ -1484,47 +1486,71 @@ export class Util {
      * @param node any ast expression
      * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
      */
-    public getAllDottedGetParts(node: Expression | Statement): Identifier[] | undefined {
+    public getAllDottedGetParts(node: AstNode): Identifier[] | undefined {
+        //this is a hot function and has been optimized. Don't rewrite unless necessary
         const parts: Identifier[] = [];
         let nextPart = node;
-        while (nextPart) {
-            if (isAssignmentStatement(node)) {
-                return [node.name];
-            } else if (isDottedGetExpression(nextPart)) {
-                parts.push(nextPart?.name);
-                nextPart = nextPart.obj;
-            } else if (isCallExpression(nextPart)) {
-                nextPart = nextPart.callee;
-            } else if (isTypeExpression(nextPart)) {
-                nextPart = nextPart.expression;
-            } else if (isVariableExpression(nextPart)) {
-                parts.push(nextPart?.name);
-                break;
-            } else if (isLiteralExpression(nextPart)) {
-                parts.push(nextPart?.token as Identifier);
-                break;
-            } else if (isIndexedGetExpression(nextPart)) {
-                nextPart = nextPart.obj;
-            } else if (isFunctionParameterExpression(nextPart)) {
-                return [nextPart.name];
-            } else if (isGroupingExpression(nextPart)) {
-                parts.push(createIdentifier('()', nextPart.range));
-                break;
-            } else {
-                //we found a non-DottedGet expression, so return because this whole operation is invalid.
-                return undefined;
+        loop: while (nextPart) {
+            switch (nextPart?.kind) {
+                case AstNodeKind.AssignmentStatement:
+                    return [(node as AssignmentStatement).name];
+                case AstNodeKind.DottedGetExpression:
+                    parts.push((nextPart as DottedGetExpression)?.name);
+                    nextPart = (nextPart as DottedGetExpression).obj;
+                    continue;
+                case AstNodeKind.CallExpression:
+                    nextPart = (nextPart as CallExpression).callee;
+                    continue;
+                case AstNodeKind.TypeExpression:
+                    nextPart = (nextPart as TypeExpression).expression;
+                    continue;
+                case AstNodeKind.VariableExpression:
+                    parts.push((nextPart as VariableExpression)?.name);
+                    break loop;
+                case AstNodeKind.LiteralExpression:
+                    parts.push((nextPart as LiteralExpression)?.token as Identifier);
+                    break loop;
+                case AstNodeKind.IndexedGetExpression:
+                    nextPart = (nextPart as IndexedGetExpression).obj;
+                    continue;
+                case AstNodeKind.FunctionParameterExpression:
+                    return [(nextPart as FunctionParameterExpression).name];
+                case AstNodeKind.GroupingExpression:
+                    parts.push(createIdentifier('()', nextPart.range));
+                    break loop;
+                default:
+                    //we found a non-DottedGet expression, so return because this whole operation is invalid.
+                    return undefined;
             }
         }
         return parts.reverse();
     }
 
-    public getAllDottedGetPartsAsString(node: Expression | Statement, parseMode = ParseMode.BrighterScript) {
-        const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
-        const hello = this.getAllDottedGetParts(node)?.map(part => part.text).join(sep);
-        if (!hello) {
-            console.log(node);
+    /**
+     * Given an expression, return all the DottedGet name parts as a string.
+     * Mostly used to convert namespaced item full names to a strings
+     */
+    public getAllDottedGetPartsAsString(node: Expression | Statement, parseMode = ParseMode.BrighterScript): string {
+        //this is a hot function and has been optimized. Don't rewrite unless necessary
+        /* eslint-disable no-var */
+        var sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
+        const parts = this.getAllDottedGetParts(node) ?? [];
+        var result = parts[0]?.text;
+        for (var i = 1; i < parts.length; i++) {
+            result += sep + parts[i].text;
         }
-        return hello;
+        return result;
+        /* eslint-enable no-var */
+    }
+
+    public stringJoin(strings: string[], separator: string) {
+        // eslint-disable-next-line no-var
+        var result = strings[0] ?? '';
+        // eslint-disable-next-line no-var
+        for (var i = 1; i < strings.length; i++) {
+            result += separator + strings[i];
+        }
+        return result;
     }
 
     /**
@@ -1556,35 +1582,37 @@ export class Util {
     public getDottedGetPath(expression: Expression): [VariableExpression, ...DottedGetExpression[]] {
         let parts: Expression[] = [];
         let nextPart = expression;
-        while (nextPart) {
-            if (isDottedGetExpression(nextPart)) {
-                parts.unshift(nextPart);
-                nextPart = nextPart.obj;
-
-            } else if (isIndexedGetExpression(nextPart) || isXmlAttributeGetExpression(nextPart)) {
-                nextPart = nextPart.obj;
-                parts = [];
-
-            } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
-                nextPart = nextPart.callee;
-                parts = [];
-
-            } else if (isNewExpression(nextPart)) {
-                nextPart = nextPart.call.callee;
-                parts = [];
-
-            } else if (isTypeExpression(nextPart)) {
-                nextPart = nextPart.expression;
-
-            } else if (isVariableExpression(nextPart)) {
-                parts.unshift(nextPart);
-                break;
-            } else {
-                parts = [];
-                break;
+        loop: while (nextPart) {
+            switch (nextPart?.kind) {
+                case AstNodeKind.DottedGetExpression:
+                    parts.push(nextPart);
+                    nextPart = (nextPart as DottedGetExpression).obj;
+                    continue;
+                case AstNodeKind.IndexedGetExpression:
+                case AstNodeKind.XmlAttributeGetExpression:
+                    nextPart = (nextPart as IndexedGetExpression | XmlAttributeGetExpression).obj;
+                    parts = [];
+                    continue;
+                case AstNodeKind.CallExpression:
+                case AstNodeKind.CallfuncExpression:
+                    nextPart = (nextPart as CallExpression | CallfuncExpression).callee;
+                    parts = [];
+                    continue;
+                case AstNodeKind.NewExpression:
+                    nextPart = (nextPart as NewExpression).call.callee;
+                    parts = [];
+                    continue;
+                case AstNodeKind.TypeExpression:
+                    nextPart = (nextPart as TypeExpression).expression;
+                    continue;
+                case AstNodeKind.VariableExpression:
+                    parts.push(nextPart);
+                    break loop;
+                default:
+                    return [] as any;
             }
         }
-        return parts as any;
+        return parts.reverse() as any;
     }
 
     /**

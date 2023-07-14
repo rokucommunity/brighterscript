@@ -1,4 +1,7 @@
-module.exports = async (suite, name, brighterscript, projectPath, options) => {
+import type { TargetOptions } from '../target-runner';
+
+module.exports = async (options: TargetOptions) => {
+    const { suite, name, version, fullName, brighterscript, projectPath, suiteOptions } = options;
     const { ProgramBuilder } = brighterscript;
 
     const builder = new ProgramBuilder();
@@ -9,21 +12,24 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
         copyToStaging: false,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
-        logLevel: 'error'
+        logLevel: 'error',
+        ...options.additionalConfig
     });
-    //collect all the XML files
-    const files = Object.values(builder.program.files).filter(x => x.extension === '.xml');
+    //collect all the brs files
+    const files = Object.values(builder.program.files).filter(x => ['.brs', '.bs'].includes(x.extension));
+
     //flag every file for transpilation
     for (const file of files) {
         file.needsTranspiled = true;
     }
+
     if (files.length === 0) {
-        console.log('[xml-transpile] No XML files found in program');
+        console.log('[transpile-brs] No brs|bs|d.bs files found in program');
         return;
     }
-    suite.add(name, () => {
+    suite.add(fullName, () => {
         for (const x of files) {
             x.transpile();
         }
-    }, options);
+    }, suiteOptions);
 };
