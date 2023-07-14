@@ -2639,11 +2639,11 @@ export class EnumStatement extends Statement implements TypedefProvider {
         }
     }
 
-    getType() {
+    getType(options: GetTypeOptions) {
         const resultType = new EnumType(this.fullName);
         resultType.pushMemberProvider(() => this.getSymbolTable());
         for (const statement of this.getMembers()) {
-            resultType.addMember(statement?.tokens?.name?.text, statement?.range, statement.getType(), SymbolTypeFlag.runtime);
+            resultType.addMember(statement?.tokens?.name?.text, statement?.range, statement.getType(options), SymbolTypeFlag.runtime);
         }
 
         return resultType;
@@ -2703,7 +2703,7 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         }
     }
 
-    getType() {
+    getType(options: GetTypeOptions) {
         return new EnumMemberType((this.parent as EnumStatement)?.fullName, this.tokens?.name?.text);
     }
 }

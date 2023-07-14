@@ -29,9 +29,7 @@ export class HoverProcessor {
     public process() {
         let hover: Hover;
         if (isBrsFile(this.event.file)) {
-            hover = this.event.program.options.enableTypeValidation
-                ? this.getTypedBrsFileHover(this.event.file)
-                : this.getBrsFileHover(this.event.file);
+            hover = this.getBrsFileHover(this.event.file);
         } else if (isXmlFile(this.event.file)) {
             hover = this.getXmlFileHover(this.event.file);
         }
@@ -86,84 +84,6 @@ export class HoverProcessor {
         }
     }
 
-    private getBrsFileHover(file: BrsFile): Hover {
-        const scope = this.event.scopes[0];
-        try {
-            scope.linkSymbolTable();
-
-            //get the token at the position
-            let token = file.getTokenAt(this.event.position);
-
-            if (!this.isValidTokenForHover(token)) {
-                return null;
-            }
-
-            const expression = file.getClosestExpression(this.event.position);
-            if (expression) {
-                const constHover = this.getConstHover(token, file, scope, expression);
-                if (constHover) {
-                    return {
-                        contents: constHover,
-                        range: token.range
-                    };
-                }
-            }
-
-            let lowerTokenText = token.text.toLowerCase();
-
-            //look through local variables first
-            {
-                //get the function scope for this position (if exists)
-                let functionScope = file.getFunctionScopeAtPosition(this.event.position);
-                if (functionScope) {
-                    //find any variable with this name
-                    for (const varDeclaration of functionScope.variableDeclarations) {
-                        //we found a variable declaration with this token text!
-                        if (varDeclaration.name.toLowerCase() === lowerTokenText) {
-                            let typeText: string;
-                            const varDeclarationType = varDeclaration.getType();
-                            if (isFunctionType(varDeclarationType)) {
-                                varDeclarationType.setName(varDeclaration.name);
-                                typeText = varDeclarationType.toString();
-                            } else {
-                                typeText = `${varDeclaration.name} as ${varDeclarationType.toString()}`;
-                            }
-                            return {
-                                range: token.range,
-                                //append the variable name to the front for scope
-                                contents: fence(typeText)
-                            };
-                        }
-                    }
-                    const labelHover = this.getLabelHover(token, functionScope);
-                    if (labelHover) {
-                        return {
-                            range: token.range,
-                            contents: labelHover
-                        };
-                    }
-                }
-            }
-
-            //look through all callables in relevant scopes
-            if (!expression?.findAncestor(isTypeExpression)) {
-                // only look for callables when they aren't inside a type expression
-                // this was a problem for the function `string()` as it is a type AND a function https://developer.roku.com/en-ca/docs/references/brightscript/language/global-string-functions.md#stringn-as-integer-str-as-string--as-string
-                for (let scope of this.event.scopes) {
-                    let callable = scope.getCallableByName(lowerTokenText);
-                    if (callable) {
-                        return {
-                            range: token.range,
-                            contents: this.buildContentsWithDocs(fence(callable.type.toString()), callable.functionStatement?.func?.functionType)
-                        };
-                    }
-                }
-            }
-        } finally {
-            scope?.unlinkSymbolTable();
-        }
-    }
-
     private getFunctionTypeHover(token: Token, expression: Expression, expressionType: FunctionType, scope: Scope) {
         const lowerTokenText = token.text.toLowerCase();
         let result = fence(expressionType.toString());
@@ -202,7 +122,7 @@ export class HoverProcessor {
         return result;
     }
 
-    private getTypedBrsFileHover(file: BrsFile): Hover {
+    private getBrsFileHover(file: BrsFile): Hover {
         //get the token at the position
         let token = file.getTokenAt(this.event.position);
 

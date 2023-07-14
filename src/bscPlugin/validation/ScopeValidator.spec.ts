@@ -20,29 +20,23 @@ describe('ScopeValidator', () => {
         program.dispose();
     });
 
-    describe('function call validation with enableTypeValidation', () => {
-
-        beforeEach(() => {
-            program.options.enableTypeValidation = true;
-        });
-
-        describe('mismatchArgumentCount', () => {
-            it('detects calling functions with too many arguments', () => {
-                program.setFile('source/file.brs', `
+    describe('mismatchArgumentCount', () => {
+        it('detects calling functions with too many arguments', () => {
+            program.setFile('source/file.brs', `
                 sub a()
                 end sub
                 sub b()
                     a(1)
                 end sub
             `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.mismatchArgumentCount(0, 1).message
-                ]);
-            });
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(0, 1).message
+            ]);
+        });
 
-            it('detects calling class constructors with too many arguments', () => {
-                program.setFile('source/main.bs', `
+        it('detects calling class constructors with too many arguments', () => {
+            program.setFile('source/main.bs', `
                     function noop0()
                     end function
 
@@ -55,121 +49,121 @@ describe('ScopeValidator', () => {
                        noop1()
                     end sub
                 `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.mismatchArgumentCount(0, 1),
-                    DiagnosticMessages.mismatchArgumentCount(1, 2),
-                    DiagnosticMessages.mismatchArgumentCount(1, 0)
-                ]);
-            });
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(0, 1),
+                DiagnosticMessages.mismatchArgumentCount(1, 2),
+                DiagnosticMessages.mismatchArgumentCount(1, 0)
+            ]);
+        });
 
-            it('detects calling functions with too few arguments', () => {
-                program.setFile('source/file.brs', `
+        it('detects calling functions with too few arguments', () => {
+            program.setFile('source/file.brs', `
                     sub a(name)
                     end sub
                     sub b()
                         a()
                     end sub
                 `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.mismatchArgumentCount(1, 0)
-                ]);
-            });
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(1, 0)
+            ]);
+        });
 
-            it('allows skipping optional parameter', () => {
-                program.setFile('source/file.brs', `
+        it('allows skipping optional parameter', () => {
+            program.setFile('source/file.brs', `
                     sub a(name="Bob")
                     end sub
                     sub b()
                         a()
                     end sub
                 `);
-                program.validate();
-                //should have an error
-                expectZeroDiagnostics(program);
-            });
+            program.validate();
+            //should have an error
+            expectZeroDiagnostics(program);
+        });
 
-            it('shows expected parameter range in error message', () => {
-                program.setFile('source/file.brs', `
+        it('shows expected parameter range in error message', () => {
+            program.setFile('source/file.brs', `
                     sub a(age, name="Bob")
                     end sub
                     sub b()
                         a()
                     end sub
                 `);
-                program.validate();
-                //should have an error
-                expectDiagnostics(program, [
-                    DiagnosticMessages.mismatchArgumentCount('1-2', 0)
-                ]);
-            });
+            program.validate();
+            //should have an error
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount('1-2', 0)
+            ]);
+        });
 
-            it('handles expressions as arguments to a function', () => {
-                program.setFile('source/file.brs', `
+        it('handles expressions as arguments to a function', () => {
+            program.setFile('source/file.brs', `
                     sub a(age, name="Bob")
                     end sub
                     sub b()
                         a("cat" + "dog" + "mouse")
                     end sub
                 `);
-                program.validate();
-                expectZeroDiagnostics(program);
-            });
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
 
-            it('Catches extra arguments for expressions as arguments to a function', () => {
-                program.setFile('source/file.brs', `
+        it('Catches extra arguments for expressions as arguments to a function', () => {
+            program.setFile('source/file.brs', `
                     sub a(age)
                     end sub
                     sub b()
                         a(m.lib.movies[0], 1)
                     end sub
                 `);
-                program.validate();
-                //should have an error
-                expectDiagnostics(program, [
-                    DiagnosticMessages.mismatchArgumentCount(1, 2)
-                ]);
-            });
+            program.validate();
+            //should have an error
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(1, 2)
+            ]);
         });
+    });
 
-        describe('argumentTypeMismatch', () => {
-            it('Catches argument type mismatches on function calls', () => {
-                program.setFile('source/file.brs', `
+    describe('argumentTypeMismatch', () => {
+        it('Catches argument type mismatches on function calls', () => {
+            program.setFile('source/file.brs', `
                     sub a(age as integer)
                     end sub
                     sub b()
                         a("hello")
                     end sub
                 `);
-                program.validate();
-                //should have an error
-                expect(program.getDiagnostics().map(x => x.message)).to.include(
-                    DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
-                );
-            });
+            program.validate();
+            //should have an error
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            );
+        });
 
-            it('Catches argument type mismatches on function calls for functions defined in another file', () => {
-                program.setFile('source/file.brs', `
+        it('Catches argument type mismatches on function calls for functions defined in another file', () => {
+            program.setFile('source/file.brs', `
                     sub a(age as integer)
                     end sub
                 `);
-                program.setFile('source/file2.brs', `
+            program.setFile('source/file2.brs', `
                     sub b()
                         a("hello")
                         foo = "foo"
                         a(foo)
                     end sub
                 `);
-                program.validate();
-                //should have an error
-                expect(program.getDiagnostics().map(x => x.message)).to.include(
-                    DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
-                );
-            });
+            program.validate();
+            //should have an error
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            );
+        });
 
-            it('catches argument type mismatches on function calls within namespaces', () => {
-                program.setFile('source/file.bs', `
+        it('catches argument type mismatches on function calls within namespaces', () => {
+            program.setFile('source/file.bs', `
                     namespace Name.Space
                         sub a(param as integer)
                             print param
@@ -182,15 +176,15 @@ describe('ScopeValidator', () => {
                         end sub
                     end namespace
                     `);
-                program.validate();
-                //should have an error
-                expect(program.getDiagnostics().map(x => x.message)).to.include(
-                    DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
-                );
-            });
+            program.validate();
+            //should have an error
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            );
+        });
 
-            it('catches argument type mismatches on function calls as arguments', () => {
-                program.setFile('source/file1.bs', `
+        it('catches argument type mismatches on function calls as arguments', () => {
+            program.setFile('source/file1.bs', `
                         sub a(param as string)
                             print param
                         end sub
@@ -203,16 +197,16 @@ describe('ScopeValidator', () => {
                             a(getNum())
                         end sub
                     `);
-                program.validate();
-                //should have an error
-                expect(program.getDiagnostics().map(x => x.message)).to.include(
-                    DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
-                );
-            });
+            program.validate();
+            //should have an error
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
+            );
+        });
 
 
-            it('catches argument type mismatches on function calls within namespaces across files', () => {
-                program.setFile('source/file1.bs', `
+        it('catches argument type mismatches on function calls within namespaces across files', () => {
+            program.setFile('source/file1.bs', `
                     namespace Name.Space
                         function getNum() as integer
                             return 1
@@ -223,7 +217,7 @@ describe('ScopeValidator', () => {
                         end function
                     end namespace
                     `);
-                program.setFile('source/file2.bs', `
+            program.setFile('source/file2.bs', `
                     namespace Name.Space
                         sub needsInt(param as integer)
                             print param
@@ -235,16 +229,16 @@ describe('ScopeValidator', () => {
                         end sub
                     end namespace
                     `);
-                program.validate();
-                //should have an error
-                expect(program.getDiagnostics().length).to.equal(1);
-                expect(program.getDiagnostics().map(x => x.message)).to.include(
-                    DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
-                );
-            });
+            program.validate();
+            //should have an error
+            expect(program.getDiagnostics().length).to.equal(1);
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            );
+        });
 
-            it('correctly validates correct parameters that are class members', () => {
-                program.setFile('source/main.bs', `
+        it('correctly validates correct parameters that are class members', () => {
+            program.setFile('source/main.bs', `
                 class PiHolder
                     pi = 3.14
                     function getPi() as float
@@ -260,13 +254,13 @@ describe('ScopeValidator', () => {
                     takesFloat(holder.pi)
                     takesFloat(holder.getPI())
                 end sub`);
-                program.validate();
-                //should have no error
-                expectZeroDiagnostics(program);
-            });
+            program.validate();
+            //should have no error
+            expectZeroDiagnostics(program);
+        });
 
-            it('correctly validates wrong parameters that are class members', () => {
-                program.setFile('source/main.bs', `
+        it('correctly validates wrong parameters that are class members', () => {
+            program.setFile('source/main.bs', `
                 class PiHolder
                     pi = 3.14
                     name = "hello"
@@ -283,16 +277,16 @@ describe('ScopeValidator', () => {
                     takesFloat(holder.name)
                     takesFloat(Str(holder.getPI()))
                 end sub`);
-                program.validate();
-                //should have error: holder.name is string
-                expect(program.getDiagnostics().length).to.equal(2);
-                expect(program.getDiagnostics().map(x => x.message)).to.include(
-                    DiagnosticMessages.argumentTypeMismatch('string', 'float').message
-                );
-            });
+            program.validate();
+            //should have error: holder.name is string
+            expect(program.getDiagnostics().length).to.equal(2);
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('string', 'float').message
+            );
+        });
 
-            it('correctly validates correct parameters that are interface members', () => {
-                program.setFile('source/main.bs', `
+        it('correctly validates correct parameters that are interface members', () => {
+            program.setFile('source/main.bs', `
                 interface IPerson
                     height as float
                     name as string
@@ -307,13 +301,13 @@ describe('ScopeValidator', () => {
                     takesFloat(person.height)
                     takesFloat(person.getWeight())
                 end sub`);
-                program.validate();
-                //should have no error
-                expectZeroDiagnostics(program);
-            });
+            program.validate();
+            //should have no error
+            expectZeroDiagnostics(program);
+        });
 
-            it('correctly validates wrong parameters that are interface members', () => {
-                program.setFile('source/main.bs', `
+        it('correctly validates wrong parameters that are interface members', () => {
+            program.setFile('source/main.bs', `
                     interface IPerson
                         isAlive as boolean
                         function getAddress() as string
@@ -327,16 +321,16 @@ describe('ScopeValidator', () => {
                         takesFloat(person.getAddress())
                     end sub
                 `);
-                program.validate();
-                //should have 2 errors: person.name is string (not float) and person.getAddress() is object (not float)
-                expectDiagnostics(program, [
-                    DiagnosticMessages.argumentTypeMismatch('boolean', 'float').message,
-                    DiagnosticMessages.argumentTypeMismatch('string', 'float').message
-                ]);
-            });
+            program.validate();
+            //should have 2 errors: person.name is string (not float) and person.getAddress() is object (not float)
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('boolean', 'float').message,
+                DiagnosticMessages.argumentTypeMismatch('string', 'float').message
+            ]);
+        });
 
-            it('`as object` param allows all types', () => {
-                program.setFile('source/main.bs', `
+        it('`as object` param allows all types', () => {
+            program.setFile('source/main.bs', `
                     sub takesObject(obj as Object)
                     end sub
 
@@ -350,25 +344,25 @@ describe('ScopeValidator', () => {
                         takesObject([])
                     end sub
                 `);
-                program.validate();
-                expectZeroDiagnostics(program);
-            });
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
 
-            it('allows conversions for arguments', () => {
-                program.setFile('source/main.bs', `
+        it('allows conversions for arguments', () => {
+            program.setFile('source/main.bs', `
                 sub takesFloat(fl as float)
                 end sub
 
                 sub someFunc()
                     takesFloat(1)
                 end sub`);
-                program.validate();
-                //should have no error
-                expectZeroDiagnostics(program);
-            });
+            program.validate();
+            //should have no error
+            expectZeroDiagnostics(program);
+        });
 
-            it('allows subclasses as arguments', () => {
-                program.setFile('source/main.bs', `
+        it('allows subclasses as arguments', () => {
+            program.setFile('source/main.bs', `
 
                 class Animal
                 end class
@@ -389,13 +383,13 @@ describe('ScopeValidator', () => {
                     fido = new Lab()
                     takesAnimal(fido)
                 end sub`);
-                program.validate();
-                //should have no error
-                expectZeroDiagnostics(program);
-            });
+            program.validate();
+            //should have no error
+            expectZeroDiagnostics(program);
+        });
 
-            it('allows subclasses from namespaces as arguments', () => {
-                program.setFile('source/main.bs', `
+        it('allows subclasses from namespaces as arguments', () => {
+            program.setFile('source/main.bs', `
 
                 class Outside
                 end class
@@ -460,13 +454,13 @@ describe('ScopeValidator', () => {
                     child.methodTakesInside(new NS.ChildInExtendsInside())
                     child.methodTakesInside(new ChildOutExtendsInside())
                 end sub`);
-                program.validate();
-                //should have no error
-                expectZeroDiagnostics(program);
-            });
+            program.validate();
+            //should have no error
+            expectZeroDiagnostics(program);
+        });
 
-            it('respects union types', () => {
-                program.setFile('source/main.bs', `
+        it('respects union types', () => {
+            program.setFile('source/main.bs', `
                 sub takesStringOrKlass(p as string or Klass)
                 end sub
 
@@ -479,17 +473,17 @@ describe('ScopeValidator', () => {
                     takesStringOrKlass(myKlass)
                     takesStringOrKlass(1)
                 end sub`);
-                program.validate();
-                //should have error when passed an integer
-                expect(program.getDiagnostics().length).to.equal(1);
-                expectDiagnostics(program, [
-                    DiagnosticMessages.argumentTypeMismatch('integer', 'string or Klass').message
-                ]);
-            });
+            program.validate();
+            //should have error when passed an integer
+            expect(program.getDiagnostics().length).to.equal(1);
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('integer', 'string or Klass').message
+            ]);
+        });
 
 
-            it('validates functions assigned to variables', () => {
-                program.setFile('source/main.bs', `
+        it('validates functions assigned to variables', () => {
+            program.setFile('source/main.bs', `
                 sub someFunc()
                     myFunc = function(i as integer, s as string)
                         print i+1
@@ -497,13 +491,12 @@ describe('ScopeValidator', () => {
                     end function
                     myFunc("hello", 2)
                 end sub`);
-                program.validate();
-                //should have error when passed incorrect types
-                expectDiagnostics(program, [
-                    DiagnosticMessages.argumentTypeMismatch('string', 'integer').message,
-                    DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
-                ]);
-            });
+            program.validate();
+            //should have error when passed incorrect types
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message,
+                DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
+            ]);
         });
     });
 });

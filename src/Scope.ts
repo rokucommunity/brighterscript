@@ -752,10 +752,6 @@ export class Scope {
 
         //do many per-file checks
         this.enumerateBrsFiles((file) => {
-            if (!this.program.options.enableTypeValidation) {
-                //TODO: this is replaced by ScopeValidator.validateFunctionCalls() when enableTypeValidation is true
-                this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
-            }
             this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
@@ -962,43 +958,6 @@ export class Scope {
         let validator = new BsClassValidator();
         validator.validate(this);
         this.diagnostics.push(...validator.diagnostics);
-    }
-
-    /**
-     * Detect calls to functions with the incorrect number of parameters
-     */
-    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
-        //validate all function calls
-        for (let expCall of file.functionCalls) {
-            let callableContainersWithThisName = callableContainersByLowerName.get(expCall.name.toLowerCase());
-
-            //use the first item from callablesByLowerName, because if there are more, that's a separate error
-            let knownCallableContainer = callableContainersWithThisName ? callableContainersWithThisName[0] : undefined;
-
-            if (knownCallableContainer) {
-                //get min/max parameter count for callable
-                let minParams = 0;
-                let maxParams = 0;
-                for (let param of knownCallableContainer.callable.params) {
-                    maxParams++;
-                    //optional parameters must come last, so we can assume that minParams won't increase once we hit
-                    //the first isOptional
-                    if (param.isOptional !== true) {
-                        minParams++;
-                    }
-                }
-                let expCallArgCount = expCall.args.length;
-                if (expCall.args.length > maxParams || expCall.args.length < minParams) {
-                    let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
-                        range: expCall.nameRange,
-                        //TODO detect end of expression call
-                        file: file
-                    });
-                }
-            }
-        }
     }
 
     /**

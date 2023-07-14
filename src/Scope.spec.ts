@@ -401,7 +401,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectDiagnostics(program, [{
-                ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
+                ...DiagnosticMessages.cannotFindName('Charlie'),
                 range: util.createRange(6, 32, 6, 39)
             }, {
                 ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
@@ -446,7 +446,7 @@ describe('Scope', () => {
             program.validate();
             expectDiagnostics(program, [{
                 //print |lineHeight|
-                message: DiagnosticMessages.itemCannotBeUsedAsVariable('namespace').message,
+                message: DiagnosticMessages.cannotFindName('lineHeight').message,
                 range: util.createRange(3, 30, 3, 40)
             }]);
         });
@@ -818,7 +818,7 @@ describe('Scope', () => {
                     sayMyName = function(name as string)
                     end function
 
-                    sayMyName()
+                    sayMyName("John Doe")
                 end sub`
             );
             program.validate();
@@ -1571,14 +1571,10 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
         });
-        describe('enhanced typing', () => {
-            beforeEach(() => {
-                program.options.enableTypeValidation = true;
-            });
 
-            describe('runtime vs typetime', () => {
-                it('detects invalidly using a class member as a parameter type', () => {
-                    program.setFile(`source/main.bs`, `
+        describe('runtime vs typetime', () => {
+            it('detects invalidly using a class member as a parameter type', () => {
+                program.setFile(`source/main.bs`, `
                     sub a(num as myClass.member)
                     end sub
 
@@ -1587,14 +1583,14 @@ describe('Scope', () => {
                     end class
 
                 `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.itemCannotBeUsedAsType('myClass.member').message
-                    ]);
-                });
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.itemCannotBeUsedAsType('myClass.member').message
+                ]);
+            });
 
-                it('detects invalidly using an EnumMember as a parameter type', () => {
-                    program.setFile(`source/main.bs`, `
+            it('detects invalidly using an EnumMember as a parameter type', () => {
+                program.setFile(`source/main.bs`, `
                     sub a(num as MyNameSpace.SomeEnum.memberA)
                     end sub
 
@@ -1605,14 +1601,14 @@ describe('Scope', () => {
                         end enum
                     end namespace
                 `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.itemCannotBeUsedAsType('MyNameSpace.SomeEnum.memberA').message
-                    ]);
-                });
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.itemCannotBeUsedAsType('MyNameSpace.SomeEnum.memberA').message
+                ]);
+            });
 
-                it('detects a member of a nested namespace', () => {
-                    program.setFile(`source/main.bs`, `
+            it('detects a member of a nested namespace', () => {
+                program.setFile(`source/main.bs`, `
                     sub a(num as NSExistsA.NSExistsB.Klass)
                     end sub
 
@@ -1621,12 +1617,12 @@ describe('Scope', () => {
                         end class
                     end namespace
                 `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
-                });
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
 
-                it('detects an unknown member of a nested namespace', () => {
-                    program.setFile(`source/main.bs`, `
+            it('detects an unknown member of a nested namespace', () => {
+                program.setFile(`source/main.bs`, `
                     sub a(num as NSExistsA.NSExistsB.NSDoesNotExistC.Klass)
                     end sub
 
@@ -1635,15 +1631,15 @@ describe('Scope', () => {
                         end class
                     end namespace
                 `);
-                    program.validate();
+                program.validate();
 
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.cannotFindName('NSDoesNotExistC', 'NSExistsA.NSExistsB.NSDoesNotExistC').message
-                    ]);
-                });
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('NSDoesNotExistC', 'NSExistsA.NSExistsB.NSDoesNotExistC').message
+                ]);
+            });
 
-                it('allows a class to extend from a class in another namespace and file', () => {
-                    program.setFile(`source/main.bs`, `
+            it('allows a class to extend from a class in another namespace and file', () => {
+                program.setFile(`source/main.bs`, `
                     sub fn(myFace as Villain)
                         print myFace.coin
                     end sub
@@ -1652,20 +1648,20 @@ describe('Scope', () => {
                         name as string
                     end class
                 `);
-                    program.setFile(`source/extra.bs`, `
+                program.setFile(`source/extra.bs`, `
                     namespace MyKlasses
                         class twoFace
                             coin as string
                         end class
                     end namespace
                 `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
-                });
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
 
 
-                it('resolves a const in a namespace', () => {
-                    program.setFile(`source/main.bs`, `
+            it('resolves a const in a namespace', () => {
+                program.setFile(`source/main.bs`, `
                     sub a()
                         print NSExistsA.SOME_CONST
                     end sub
@@ -1674,12 +1670,12 @@ describe('Scope', () => {
                         const SOME_CONST = 3.14
                     end namespace
                 `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
-                });
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
 
-                it('resolves namespaces with relative references', () => {
-                    program.setFile(`source/main.bs`, `
+            it('resolves namespaces with relative references', () => {
+                program.setFile(`source/main.bs`, `
                     namespace NameA
                         sub fn1()
                             'fully qualified-relative references are allowed
@@ -1691,12 +1687,12 @@ describe('Scope', () => {
                         const API_URL = "http://some.url.com"
                     end namespace
                 `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
-                });
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
 
-                it('resolves nested namespaces with relative references', () => {
-                    program.setFile(`source/main.bs`, `
+            it('resolves nested namespaces with relative references', () => {
+                program.setFile(`source/main.bs`, `
                     sub main()
                         print NameA.A_VAL
                         print NameA.NameB.B_VAL
@@ -1726,12 +1722,12 @@ describe('Scope', () => {
                     end namespace
                     const SOME_CONST = "hello"
                 `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
-                });
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
 
-                it('resolves namespaces defined in different locations', () => {
-                    program.setFile(`source/main.bs`, `
+            it('resolves namespaces defined in different locations', () => {
+                program.setFile(`source/main.bs`, `
                     sub main()
                         print NameA.A_VAL
                         print NameA.funcA()
@@ -1756,12 +1752,12 @@ describe('Scope', () => {
                         end class
                     end namespace
                 `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
-                });
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
 
-                it('resolves deep namespaces defined in different locations', () => {
-                    program.setFile(`source/main.bs`, `
+            it('resolves deep namespaces defined in different locations', () => {
+                program.setFile(`source/main.bs`, `
                     sub main()
                         print NameA.NameB.B_VAL
                         print NameA.NameB.funcB()
@@ -1796,32 +1792,32 @@ describe('Scope', () => {
                         end class
                     end namespace
                 `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
-                });
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
 
-                it('allows dot-references to properties on results of global callables', () => {
-                    program.setFile(`source/main.bs`, `
+            it('allows dot-references to properties on results of global callables', () => {
+                program.setFile(`source/main.bs`, `
                     sub fn()
                         print CreateObject("roSgNode", "Node").id
                     end sub
                 `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
-                });
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
 
-                it('allows dot-references to functions on results of global callables', () => {
-                    program.setFile(`source/main.bs`, `
+            it('allows dot-references to functions on results of global callables', () => {
+                program.setFile(`source/main.bs`, `
                     sub fn()
                         print CreateObject("roDateTime").asSeconds()
                     end sub
                 `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
-                });
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
 
-                it('finds unknown members of primitive types', () => {
-                    program.setFile(`source/main.bs`, `
+            it('finds unknown members of primitive types', () => {
+                program.setFile(`source/main.bs`, `
                     sub fn(input as SomeKlass)
                         piValue = input.getPi().noMethod()
                     end sub
@@ -1832,15 +1828,15 @@ describe('Scope', () => {
                         end function
                     end class
                 `);
-                    program.validate();
-                    //TODO: ideally, if this is a primitive type, we should know all the possible members
-                    // This *SHOULD* be an error, but currently, during Runtime, an unknown member (from DottedtGetExpression) is returned as Dynamic.instance
-                    expectZeroDiagnostics(program);
-                });
+                program.validate();
+                //TODO: ideally, if this is a primitive type, we should know all the possible members
+                // This *SHOULD* be an error, but currently, during Runtime, an unknown member (from DottedtGetExpression) is returned as Dynamic.instance
+                expectZeroDiagnostics(program);
+            });
 
 
-                it('finds members of arrays', () => {
-                    program.setFile(`source/main.bs`, `
+            it('finds members of arrays', () => {
+                program.setFile(`source/main.bs`, `
                     sub fn(input as SomeKlass)
                         numValue = input.getOtherKlasses()[2].num
                         print numValue
@@ -1860,16 +1856,16 @@ describe('Scope', () => {
                         end function
                     end class
                 `);
-                    program.validate();
-                    //TODO: When array types are available, check that `numValue` is an integer
-                    expectZeroDiagnostics(program);
-                });
-
+                program.validate();
+                //TODO: When array types are available, check that `numValue` is an integer
+                expectZeroDiagnostics(program);
             });
 
-            describe('interfaces', () => {
-                it('allows using interfaces as types', () => {
-                    program.setFile(`source/main.bs`, `
+        });
+
+        describe('interfaces', () => {
+            it('allows using interfaces as types', () => {
+                program.setFile(`source/main.bs`, `
                     sub fn(myFace as iFace)
                     end sub
 
@@ -1877,12 +1873,12 @@ describe('Scope', () => {
                         name as string
                     end interface
                 `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
-                });
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
 
-                it('disallows using interface members as types', () => {
-                    program.setFile(`source/main.bs`, `
+            it('disallows using interface members as types', () => {
+                program.setFile(`source/main.bs`, `
                     sub fn(myFaceName as iFace.name)
                     end sub
 
@@ -1890,14 +1886,14 @@ describe('Scope', () => {
                         name as string
                     end interface
                 `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.itemCannotBeUsedAsType('iFace.name').message
-                    ]);
-                });
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.itemCannotBeUsedAsType('iFace.name').message
+                ]);
+            });
 
-                it('allows accessing interface members in code', () => {
-                    program.setFile(`source/main.bs`, `
+            it('allows accessing interface members in code', () => {
+                program.setFile(`source/main.bs`, `
                     sub fn(myFace as iFace)
                         print myFace.name
                     end sub
@@ -1906,12 +1902,12 @@ describe('Scope', () => {
                         name as string
                     end interface
                 `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
-                });
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
 
-                it('allows accessing an interface member from a super interface', () => {
-                    program.setFile(`source/main.bs`, `
+            it('allows accessing an interface member from a super interface', () => {
+                program.setFile(`source/main.bs`, `
                     sub fn(myFace as iFace)
                         print myFace.coin
                     end sub
@@ -1924,12 +1920,12 @@ describe('Scope', () => {
                         coin as string
                     end interface
                 `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
-                });
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
 
-                it('allows an interface to extend from an interface in another namespace and file', () => {
-                    program.setFile(`source/main.bs`, `
+            it('allows an interface to extend from an interface in another namespace and file', () => {
+                program.setFile(`source/main.bs`, `
                     sub fn(myFace as iFace)
                         print myFace.coin
                     end sub
@@ -1938,22 +1934,22 @@ describe('Scope', () => {
                         name as string
                     end interface
                 `);
-                    program.setFile(`source/interfaces.bs`, `
+                program.setFile(`source/interfaces.bs`, `
                     namespace MyInterfaces
                         interface twoFace
                             coin as string
                         end interface
                     end namespace
                 `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
-                });
-
+                program.validate();
+                expectZeroDiagnostics(program);
             });
 
+        });
 
-            it('should accept global callables returning objects', () => {
-                program.setFile(`source/main.brs`, `
+
+        it('should accept global callables returning objects', () => {
+            program.setFile(`source/main.brs`, `
                 sub main()
                     screen = CreateObject("roSGScreen")
                     port = CreateObject("roMessagePort")
@@ -1976,15 +1972,15 @@ describe('Scope', () => {
                     end while
                 end sub
             `);
-                program.setFile('components/MyMainScene.xml', trim`
+            program.setFile('components/MyMainScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="MyMainScene" extends="Scene">
                 </component>
             `);
-                program.validate();
-                expectZeroDiagnostics(program);
-            });
+            program.validate();
+            expectZeroDiagnostics(program);
         });
+
 
         describe('inheritance', () => {
             it('inherits callables from parent', () => {
@@ -2107,9 +2103,7 @@ describe('Scope', () => {
     });
 
     describe('symbolTable lookups with enhanced typing', () => {
-        beforeEach(() => {
-            program.options.enableTypeValidation = true;
-        });
+
         const mainFileContents = `
             sub main()
                 population = Animals.getPopulation()
