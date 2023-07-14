@@ -1369,7 +1369,7 @@ export class Program {
     private _manifest: Map<string, string>;
 
     public dispose() {
-        this.plugins.emit('beforeProgramDispose', this);
+        this.plugins.emit('beforeProgramDispose', { program: this });
 
         for (let filePath in this.files) {
             this.files[filePath].dispose();
