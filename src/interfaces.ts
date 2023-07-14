@@ -378,7 +378,7 @@ export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
     editor: Editor;
 }
 
-interface BeforeProgramDisposeEvent {
+export interface BeforeProgramDisposeEvent {
     program: Program;
 }
 
