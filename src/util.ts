@@ -1671,7 +1671,7 @@ export class Util {
     public processTypeChain(typeChain: TypeChainEntry[]): TypeChainProcessResult {
         let fullChainName = '';
         let fullErrorName = '';
-        let missingItemName = '';
+        let itemName = '';
         let previousTypeName = '';
         let parentTypeName = '';
         let errorRange: Range;
@@ -1684,16 +1684,16 @@ export class Util {
             parentTypeName = previousTypeName;
             fullErrorName = previousTypeName ? `${previousTypeName}.${chainItem.name}` : chainItem.name;
             previousTypeName = chainItem.type.toString();
-            missingItemName = chainItem.name;
+            itemName = chainItem.name;
             if (!chainItem.isResolved) {
                 errorRange = chainItem.range;
                 break;
             }
         }
         return {
-            missingItemName: missingItemName,
-            missingItemParentTypeName: parentTypeName,
-            fullNameOfMissingItem: fullErrorName,
+            itemName: itemName,
+            itemParentTypeName: parentTypeName,
+            fullNameOfItem: fullErrorName,
             fullChainName: fullChainName,
             range: errorRange
         };
