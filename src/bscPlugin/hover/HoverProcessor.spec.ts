@@ -289,8 +289,7 @@ describe('HoverProcessor', () => {
             expect(hover).to.be.undefined;
         });
 
-        it('finds types from assignments defined in different file, with enableTypeValidation', () => {
-            program.options.enableTypeValidation = true;
+        it('finds types from assignments defined in different file', () => {
             program.setFile(`source/main.bs`, `
                 sub main()
                     thing = new MyKlass()

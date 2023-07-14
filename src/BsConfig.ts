@@ -169,10 +169,4 @@ export interface BsConfig {
      * @default false
      */
     allowBrighterScriptInBrightScript?: boolean;
-
-    /**
-     * Do full type checking & validation based on declared and inferred types.
-     * @default false
-     */
-    enableTypeValidation?: boolean;
 }

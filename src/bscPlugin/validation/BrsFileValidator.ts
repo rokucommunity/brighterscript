@@ -2,14 +2,13 @@ import { isBody, isClassStatement, isCommentStatement, isConstStatement, isDotte
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { GetTypeOptions, OnFileValidateEvent } from '../../interfaces';
+import type { OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTable';
-import type { BscType } from '../../types/BscType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
@@ -29,17 +28,6 @@ export class BrsFileValidator {
             this.validateImportStatements();
         }
     }
-
-    /**
-     *  Wrapper for getting the type from an expression, so we can use a program option to just return a default Dynamic type
-     */
-    private getTypeFromNode(node: AstNode, options?: GetTypeOptions): BscType {
-        if (this.event.program.options.enableTypeValidation) {
-            return node.getType(options);
-        }
-        return DynamicType.instance;
-    }
-
 
     /**
      * Walk the full AST
@@ -65,7 +53,7 @@ export class BrsFileValidator {
                 this.validateEnumDeclaration(node);
 
                 //register this enum declaration
-                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlag.typetime });
+                const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
                 // eslint-disable-next-line no-bitwise
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
             },
@@ -73,13 +61,13 @@ export class BrsFileValidator {
                 this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.classKeyword, node.name));
 
                 //register this class
-                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlag.typetime });
+                const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
                 // eslint-disable-next-line no-bitwise
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
             },
             AssignmentStatement: (node) => {
                 //register this variable
-                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlag.runtime });
+                const nodeType = node.getType({ flags: SymbolTypeFlag.runtime });
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, nodeType, SymbolTypeFlag.runtime);
             },
             DottedSetStatement: (node) => {
@@ -143,13 +131,13 @@ export class BrsFileValidator {
             InterfaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));
 
-                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlag.typetime });
+                const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
                 // eslint-disable-next-line no-bitwise
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, nodeType, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
             },
             ConstStatement: (node) => {
                 this.validateDeclarationLocations(node, 'const', () => util.createBoundingRange(node.tokens.const, node.tokens.name));
-                const nodeType = this.getTypeFromNode(node, { flags: SymbolTypeFlag.runtime });
+                const nodeType = node.getType({ flags: SymbolTypeFlag.runtime });
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, nodeType, SymbolTypeFlag.runtime);
             },
             CatchStatement: (node) => {
