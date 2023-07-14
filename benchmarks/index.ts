@@ -209,7 +209,7 @@ let options = yargs
     })
     .option('config', {
         type: 'string',
-        description: 'add additional BsConfig settings as JSON - eg. \'{"removeParameterTypes":true}\'',
+        description: 'add additional BsConfig settings as JSON - eg. \'{"enableTypeValidation":true}\'',
         default: '{}'
     })
     .strict()
