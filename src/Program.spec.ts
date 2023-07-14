@@ -2875,6 +2875,16 @@ describe('Program', () => {
             expect(plugin.onFileValidate.callCount).to.equal(1);
             expect(plugin.afterFileValidate.callCount).to.equal(1);
         });
+
+        it('emits program dispose event', () => {
+            const plugin = {
+                name: 'test',
+                beforeProgramDispose: sinon.spy()
+            };
+            program.plugins.add(plugin);
+            program.dispose();
+            expect(plugin.beforeProgramDispose.callCount).to.equal(1);
+        });
     });
 
     describe('getScopesForFile', () => {
