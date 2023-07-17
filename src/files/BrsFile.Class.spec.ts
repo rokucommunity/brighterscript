@@ -473,6 +473,9 @@ describe('BrsFile BrighterScript classes', () => {
                 class Animal
                     sub new(name as string)
                     end sub
+
+                    sub DoSomething()
+                    end sub
                 end class
 
                 class Duck extends Animal
@@ -485,6 +488,8 @@ describe('BrsFile BrighterScript classes', () => {
                 function __Animal_builder()
                     instance = {}
                     instance.new = sub(name as string)
+                    end sub
+                    instance.DoSomething = sub()
                     end sub
                     return instance
                 end function

@@ -1,5 +1,5 @@
 import { SymbolTypeFlag } from '../SymbolTable';
-import { isDynamicType, isInheritableType, isObjectType, isUnionType } from '../astUtils/reflection';
+import { isObjectType } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -15,15 +15,8 @@ export class ObjectType extends BscType {
     public readonly kind = BscTypeKind.ObjectType;
 
     public isTypeCompatible(targetType: BscType) {
-        if (isUnionType(targetType)) {
-            return targetType.checkAllMemberTypes((type) => type.isTypeCompatible(this));
-        } else if (isObjectType(targetType) ||
-            isDynamicType(targetType) ||
-            isInheritableType(targetType)
-        ) {
-            return true;
-        }
-        return false;
+        //Brightscript allows anything passed "as object", so as long as a type is provided, this is true
+        return !!targetType;
     }
 
     public toString() {

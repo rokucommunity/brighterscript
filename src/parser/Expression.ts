@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import type { BscType } from '../types/BscType';
@@ -69,8 +69,12 @@ export class BinaryExpression extends Expression {
                     return new UnionType([this.left.getType(options), this.right.getType(options)]);
                 //TODO: Intersection Types?, eg. case TokenKind.And:
             }
+        } else if (options.flags & SymbolTypeFlag.runtime) {
+            return util.binaryOperatorResultType(
+                this.left.getType(options),
+                this.operator,
+                this.right.getType(options));
         }
-        //TODO: figure out result type on +, *, or, and, etc!
         return DynamicType.instance;
     }
 
@@ -300,7 +304,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
     public getType(options: GetTypeOptions): FunctionType {
         //if there's a defined return type, use that
-        let returnType = this.returnTypeExpression?.getType(options);
+        let returnType = this.returnTypeExpression?.getType({ ...options, typeChain: undefined });
         const isSub = this.functionType.kind === TokenKind.Sub;
         //if we don't have a return type and this is a sub, set the return type to `void`. else use `dynamic`
         if (!returnType) {
@@ -310,8 +314,23 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         const resultType = new FunctionType(returnType);
         resultType.isSub = isSub;
         for (let param of this.parameters) {
-            resultType.addParameter(param.name.text, param.getType(options), !!param.defaultValue);
+            resultType.addParameter(param.name.text, param.getType({ ...options, typeChain: undefined }), !!param.defaultValue);
         }
+        // Figure out this function's name if we can
+        let funcName = '';
+        if (isMethodStatement(this.parent) || isInterfaceMethodStatement(this.parent)) {
+            funcName = this.parent.getName(ParseMode.BrighterScript);
+            if (options.typeChain) {
+                // Get the typechain info from the parent class
+                this.parent.parent?.getType(options);
+            }
+        } else if (isFunctionStatement(this.parent)) {
+            funcName = this.parent.getName(ParseMode.BrighterScript);
+        }
+        if (funcName) {
+            resultType.setName(funcName);
+        }
+        options.typeChain?.push(new TypeChainEntry(funcName, resultType, this.range));
         return resultType;
     }
 }
@@ -330,9 +349,11 @@ export class FunctionParameterExpression extends Expression {
     public readonly kind = AstNodeKind.FunctionParameterExpression;
 
     public getType(options: GetTypeOptions) {
-        return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime }) ??
-            this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime }) ??
+        const paramType = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
+            this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined }) ??
             DynamicType.instance;
+        options.typeChain?.push(new TypeChainEntry(this.name.text, paramType, this.range));
+        return paramType;
     }
 
     public get range(): Range {
@@ -857,6 +878,10 @@ export class UnaryExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'right', visitor, options);
         }
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        return util.unaryOperatorResultType(this.operator, this.right.getType(options));
     }
 }
 

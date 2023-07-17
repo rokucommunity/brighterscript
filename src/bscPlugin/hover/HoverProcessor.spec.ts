@@ -82,7 +82,7 @@ describe('HoverProcessor', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(util.createRange(1, 25, 1, 29));
-            expect(hover.contents).to.eql(fence('function Main(count? as integer) as dynamic'));
+            expect(hover.contents).to.eql([fence('function Main(count? as integer) as dynamic')]);
         });
 
         it('finds variable function hover in same scope', () => {
@@ -94,11 +94,11 @@ describe('HoverProcessor', () => {
                     sayMyName()
                 end sub
             `);
-
+            program.validate();
             let hover = program.getHover(file.srcPath, util.createPosition(5, 24))[0];
 
             expect(hover.range).to.eql(util.createRange(5, 20, 5, 29));
-            expect(hover.contents).to.eql(fence('sub sayMyName(name as string) as void'));
+            expect(hover.contents).to.eql([fence('sub sayMyName(name as string) as void')]);
         });
 
         it('finds function hover in file scope', () => {
@@ -108,22 +108,17 @@ describe('HoverProcessor', () => {
                 end sub
 
                 sub sayMyName()
-
                 end sub
             `);
-
+            program.validate();
+            //sayM|yName()
             let hover = program.getHover(file.srcPath, util.createPosition(2, 25))[0];
 
             expect(hover.range).to.eql(util.createRange(2, 20, 2, 29));
-            expect(hover.contents).to.eql(fence('sub sayMyName() as void'));
+            expect(hover.contents).to.eql([fence('sub sayMyName() as void')]);
         });
 
         it('finds function hover in scope', () => {
-            let rootDir = process.cwd();
-            program = new Program({
-                rootDir: rootDir
-            });
-
             let mainFile = program.setFile('source/main.brs', `
                 sub Main()
                     sayMyName()
@@ -138,8 +133,8 @@ describe('HoverProcessor', () => {
             program.validate();
 
             let hover = program.getHover(mainFile.srcPath, util.createPosition(2, 25))[0];
-            expect(hover?.range).to.eql(util.createRange(2, 20, 2, 29));
-            expect(hover?.contents).to.eql(fence('sub sayMyName(name as string) as void'));
+            expect(hover.range).to.eql(util.createRange(2, 20, 2, 29));
+            expect(hover.contents).to.eql([fence('sub sayMyName(name as string) as void')]);
         });
 
         it('finds top-level constant value', () => {
@@ -153,7 +148,7 @@ describe('HoverProcessor', () => {
             // print SOM|E_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(2, 29))[0];
             expect(hover?.range).to.eql(util.createRange(2, 26, 2, 36));
-            expect(hover?.contents).to.eql(fence('const SOME_VALUE = true'));
+            expect(hover?.contents).to.eql([fence('const SOME_VALUE = true')]);
         });
 
         it('finds top-level constant in assignment expression', () => {
@@ -168,7 +163,7 @@ describe('HoverProcessor', () => {
             // value += SOME|_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(3, 33))[0];
             expect(hover?.range).to.eql(util.createRange(3, 29, 3, 39));
-            expect(hover?.contents).to.eql(fence('const SOME_VALUE = "value"'));
+            expect(hover?.contents).to.eql([fence('const SOME_VALUE = "value"')]);
         });
 
         it('finds namespaced constant in assignment expression', () => {
@@ -185,7 +180,7 @@ describe('HoverProcessor', () => {
             // value += SOME|_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(3, 47))[0];
             expect(hover?.range).to.eql(util.createRange(3, 43, 3, 53));
-            expect(hover?.contents).to.eql(fence('const someNamespace.SOME_VALUE = "value"'));
+            expect(hover?.contents).to.eql([fence('const someNamespace.SOME_VALUE = "value"')]);
         });
 
         it('finds namespaced constant value', () => {
@@ -201,7 +196,7 @@ describe('HoverProcessor', () => {
             // print name.SOM|E_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(2, 34))[0];
             expect(hover?.range).to.eql(util.createRange(2, 31, 2, 41));
-            expect(hover?.contents).to.eql(fence('const name.SOME_VALUE = true'));
+            expect(hover?.contents).to.eql([fence('const name.SOME_VALUE = true')]);
         });
 
         it('finds deep namespaced constant value', () => {
@@ -217,7 +212,7 @@ describe('HoverProcessor', () => {
             // print name.sp.a.c.e.SOM|E_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(2, 43))[0];
             expect(hover?.range).to.eql(util.createRange(2, 40, 2, 50));
-            expect(hover?.contents).to.eql(fence('const name.sp.a.c.e.SOME_VALUE = true'));
+            expect(hover?.contents).to.eql([fence('const name.sp.a.c.e.SOME_VALUE = true')]);
         });
 
         it('finds namespaced class types', () => {
@@ -242,16 +237,14 @@ describe('HoverProcessor', () => {
             // run|Noop(myKlass)
             let hover = program.getHover('source/main.bs', util.createPosition(3, 24))[0];
             expect(hover?.range).to.eql(util.createRange(3, 20, 3, 27));
-            expect(hover?.contents).to.eql(fence('sub runNoop(myKlass as name.Klass) as void'));
+            expect(hover?.contents).to.eql([fence('sub runNoop(myKlass as name.Klass) as void')]);
             // myKl|ass.noop()
             hover = program.getHover('source/main.bs', util.createPosition(7, 25))[0];
             expect(hover?.range).to.eql(util.createRange(7, 20, 7, 27));
-            expect(hover?.contents).to.eql(fence('myKlass as name.Klass'));
+            expect(hover?.contents).to.eql([fence('myKlass as name.Klass')]);
             //  sub no|op()
             hover = program.getHover('source/main.bs', util.createPosition(12, 31))[0];
-            // Unfortunately, we can't get hover details on class members yet
-            // TODO: Add hover ability on class members
-            expect(hover).to.be.undefined;
+            expect(hover?.contents).to.eql([fence('sub name.Klass.noop() as void')]);
         });
 
         it('finds types properly', () => {
@@ -266,7 +259,7 @@ describe('HoverProcessor', () => {
             // a|ge as integer
             let hover = program.getHover('source/main.bs', util.createPosition(4, 29))[0];
             expect(hover?.range).to.eql(util.createRange(4, 27, 4, 30));
-            expect(hover?.contents).to.eql(fence('age as integer'));
+            expect(hover?.contents).to.eql([fence('age as integer')]);
             // age as int|eger
             hover = program.getHover('source/main.bs', util.createPosition(4, 39))[0];
             // no hover on base types
@@ -274,7 +267,7 @@ describe('HoverProcessor', () => {
             // n|ame as string
             hover = program.getHover('source/main.bs', util.createPosition(4, 46))[0];
             expect(hover?.range).to.eql(util.createRange(4, 43, 4, 47));
-            expect(hover?.contents).to.eql(fence('name as string'));
+            expect(hover?.contents).to.eql([fence('name as string')]);
             // name as st|ring
             hover = program.getHover('source/main.bs', util.createPosition(4, 54))[0];
             // no hover on base types
@@ -282,11 +275,10 @@ describe('HoverProcessor', () => {
             // gu|y as Person
             hover = program.getHover('source/main.bs', util.createPosition(4, 60))[0];
             expect(hover?.range).to.eql(util.createRange(4, 59, 4, 62));
-            expect(hover?.contents).to.eql(fence('guy as Person'));
+            expect(hover?.contents).to.eql([fence('guy as Person')]);
             // guy as Pe|rson
             hover = program.getHover('source/main.bs', util.createPosition(4, 69))[0];
-            //TODO: Add hover on custom types (classes, interfaces, enums, etc.)
-            expect(hover).to.be.undefined;
+            expect(hover?.contents).to.eql([fence('class Person')]);
         });
 
         it('finds types from assignments defined in different file', () => {
@@ -316,11 +308,52 @@ describe('HoverProcessor', () => {
             //th|ing = new MyKlass()
             let hover = program.getHover('source/main.bs', util.createPosition(2, 24))[0];
             expect(hover?.range).to.eql(util.createRange(2, 20, 2, 25));
-            expect(hover?.contents).to.eql(fence('thing as MyKlass'));
+            expect(hover?.contents).to.eql([fence('thing as MyKlass')]);
             //print some|Val
             hover = program.getHover('source/main.bs', util.createPosition(5, 31))[0];
             expect(hover?.range).to.eql(util.createRange(5, 26, 5, 33));
-            expect(hover?.contents).to.eql(fence('someVal as string'));
+            expect(hover?.contents).to.eql([fence('someVal as string')]);
+        });
+
+        it('hovers of functions include comments', () => {
+            program.setFile(`source/main.bs`, `
+                sub main()
+                    thing = new MyKlass()
+                    useKlass(thing)
+                end sub
+
+                ' Prints a MyKlass.name
+                sub useKlass(thing as MyKlass)
+                    print thing.getName()
+                end sub
+
+                ' A sample class
+                class MyKlass
+                    name as string
+
+                    ' Gets the name of this thing
+                    function getName() as string
+                        return m.name
+                    end function
+
+                    ' Wraps another function
+                    function getNameWrap() as string
+                        return m.getName()
+                    end function
+                end class
+            `);
+            program.validate();
+            let commentSep = `\n***\n`;
+            //th|ing = new MyKlass()
+            let hover = program.getHover('source/main.bs', util.createPosition(2, 24))[0];
+            expect(hover?.contents).to.eql([fence('thing as MyKlass')]);
+            //use|Klass(thing)
+            hover = program.getHover('source/main.bs', util.createPosition(3, 24))[0];
+            expect(hover?.contents).to.eql([`${fence('sub useKlass(thing as MyKlass) as void')}${commentSep} Prints a MyKlass.name`]);
+            //print thing.getN|ame()
+            hover = program.getHover('source/main.bs', util.createPosition(8, 37))[0];
+            // TODO: Add comments for class methods/properties
+            expect(hover?.contents).to.eql([`${fence('function MyKlass.getName() as string')}`]);
         });
     });
 });

@@ -11,6 +11,8 @@ export class InvalidType extends BscType {
 
     public readonly kind = BscTypeKind.InvalidType;
 
+    public static instance = new InvalidType('invalid');
+
     public isTypeCompatible(targetType: BscType) {
         return (
             isInvalidType(targetType) ||

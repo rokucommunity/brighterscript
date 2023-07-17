@@ -36,8 +36,11 @@ export class BrsFileValidator {
         const visitor = createVisitor({
             MethodStatement: (node) => {
                 //add the `super` symbol to class methods
-                //Todo:  get the actual type of the parent class
-                node.func.body.symbolTable.addSymbol('super', undefined, DynamicType.instance, SymbolTypeFlag.runtime);
+                if (isClassStatement(node.parent) && node.parent.hasParentClass()) {
+                    //Todo:  get the actual type of the parent class
+                    // Maybe? const parentClassType = node.parent.parentClassName.getType({ flags: SymbolTypeFlag.typetime });
+                    node.func.body.symbolTable.addSymbol('super', undefined, DynamicType.instance, SymbolTypeFlag.runtime);
+                }
             },
             CallfuncExpression: (node) => {
                 if (node.args.length > 5) {

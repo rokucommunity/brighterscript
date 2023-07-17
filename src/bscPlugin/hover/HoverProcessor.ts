@@ -1,13 +1,23 @@
 import { SourceNode } from 'source-map';
-import { isBrsFile, isFunctionType, isTypeExpression, isXmlFile } from '../../astUtils/reflection';
+import { isBrsFile, isClassType, isFunctionType, isInterfaceType, isNewExpression, isTypeExpression, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
-import type { Hover, ProvideHoverEvent } from '../../interfaces';
+import type { Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
 import type { Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import { BrsTranspileState } from '../../parser/BrsTranspileState';
 import { ParseMode } from '../../parser/Parser';
 import util from '../../util';
+import { SymbolTypeFlag } from '../../SymbolTable';
+import type { Expression } from '../../parser/AstNode';
+import type { Scope } from '../../Scope';
+import type { FunctionScope } from '../../FunctionScope';
+import type { FunctionType } from '../../types/FunctionType';
+import type { ClassType } from '../../types/ClassType';
+import type { InterfaceType } from '../../types/InterfaceType';
+
+
+const fence = (code: string) => util.mdFence(code, 'brightscript');
 
 export class HoverProcessor {
     public constructor(
@@ -40,97 +50,131 @@ export class HoverProcessor {
         return parts.join('\n');
     }
 
+    private isValidTokenForHover(token: Token) {
+        let hoverTokenTypes = [
+            TokenKind.Identifier,
+            TokenKind.Function,
+            TokenKind.EndFunction,
+            TokenKind.Sub,
+            TokenKind.EndSub
+        ];
+
+        //throw out invalid tokens and the wrong kind of tokens
+        return (token && hoverTokenTypes.includes(token.kind));
+    }
+
+    private getConstHover(token: Token, file: BrsFile, scope: Scope, expression: Expression) {
+        let containingNamespace = file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
+        const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
+
+        //find a constant with this name
+        const constant = scope?.getConstFileLink(fullName, containingNamespace);
+        if (constant) {
+            const constantValue = new SourceNode(null, null, null, constant.item.value.transpile(new BrsTranspileState(file))).toString();
+            return this.buildContentsWithDocs(fence(`const ${constant.item.fullName} = ${constantValue}`), constant.item.tokens.const);
+        }
+    }
+
+    private getLabelHover(token: Token, functionScope: FunctionScope) {
+        let lowerTokenText = token.text.toLowerCase();
+        for (const labelStatement of functionScope.labelStatements) {
+            if (labelStatement.name.toLocaleLowerCase() === lowerTokenText) {
+                return fence(`${labelStatement.name}: label`);
+            }
+        }
+    }
+
+    private getFunctionTypeHover(token: Token, expression: Expression, expressionType: FunctionType, scope: Scope) {
+        const lowerTokenText = token.text.toLowerCase();
+        let result = fence(expressionType.toString());
+
+        // only look for callables when they aren't inside a type expression
+        // this was a problem for the function `string()` as it is a type AND a function https://developer.roku.com/en-ca/docs/references/brightscript/language/global-string-functions.md#stringn-as-integer-str-as-string--as-string
+        let callable = scope.getCallableByName(lowerTokenText);
+        if (callable) {
+            // We can find the start token of the function definition, use it to add docs.
+            // TODO: Add comment lookups for class methods!
+            result = this.buildContentsWithDocs(result, callable.functionStatement?.func?.functionType);
+        }
+        return result;
+    }
+
+    private getCustomTypeHover(expressionType: ClassType | InterfaceType, scope: Scope) {
+        let declarationText = '';
+        let exprTypeString = expressionType.toString();
+        let firstToken: Token;
+        if (isClassType(expressionType)) {
+            let entityStmt = scope.getClass(exprTypeString.toLowerCase());
+            firstToken = entityStmt?.classKeyword;
+            declarationText = firstToken?.text ?? TokenKind.Class;
+
+        } else if (isInterfaceType(expressionType)) {
+            let entityStmt = scope.getInterface(exprTypeString.toLowerCase());
+            firstToken = entityStmt.tokens.interface;
+            declarationText = firstToken?.text ?? TokenKind.Interface;
+
+        }
+        let result = fence(`${declarationText} ${exprTypeString}`);
+        if (firstToken) {
+            // We can find the start token of the declaration, use it to add docs.
+            result = this.buildContentsWithDocs(result, firstToken);
+        }
+        return result;
+    }
+
     private getBrsFileHover(file: BrsFile): Hover {
-        const scope = this.event.scopes[0];
-        try {
-            scope.linkSymbolTable();
-            const fence = (code: string) => util.mdFence(code, 'brightscript');
-            //get the token at the position
-            let token = file.getTokenAt(this.event.position);
+        //get the token at the position
+        let token = file.getTokenAt(this.event.position);
 
-            let hoverTokenTypes = [
-                TokenKind.Identifier,
-                TokenKind.Function,
-                TokenKind.EndFunction,
-                TokenKind.Sub,
-                TokenKind.EndSub
-            ];
+        if (!this.isValidTokenForHover(token)) {
+            return null;
+        }
 
-            //throw out invalid tokens and the wrong kind of tokens
-            if (!token || !hoverTokenTypes.includes(token.kind)) {
-                return null;
-            }
+        const hoverContents: string[] = [];
+        for (let scope of this.event.scopes) {
+            try {
+                scope.linkSymbolTable();
 
-            const expression = file.getClosestExpression(this.event.position);
-            if (expression) {
-                let containingNamespace = file.getNamespaceStatementForPosition(expression.range.start)?.getName(ParseMode.BrighterScript);
-                const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
-
-                //find a constant with this name
-                const constant = scope?.getConstFileLink(fullName, containingNamespace);
-                if (constant) {
-                    const constantValue = new SourceNode(null, null, null, constant.item.value.transpile(new BrsTranspileState(file))).toString();
-                    return {
-                        contents: this.buildContentsWithDocs(fence(`const ${constant.item.fullName} = ${constantValue}`), constant.item.tokens.const),
-                        range: token.range
-                    };
+                const expression = file.getClosestExpression(this.event.position);
+                const constHover = this.getConstHover(token, file, scope, expression);
+                if (constHover) {
+                    hoverContents.push(constHover);
+                    continue;
                 }
-            }
-
-            let lowerTokenText = token.text.toLowerCase();
-
-            //look through local variables first
-            {
                 //get the function scope for this position (if exists)
                 let functionScope = file.getFunctionScopeAtPosition(this.event.position);
                 if (functionScope) {
-                    //find any variable with this name
-                    for (const varDeclaration of functionScope.variableDeclarations) {
-                        //we found a variable declaration with this token text!
-                        if (varDeclaration.name.toLowerCase() === lowerTokenText) {
-                            let typeText: string;
-                            const varDeclarationType = varDeclaration.getType();
-                            if (isFunctionType(varDeclarationType)) {
-                                varDeclarationType.setName(varDeclaration.name);
-                                typeText = varDeclarationType.toString();
-                            } else {
-                                typeText = `${varDeclaration.name} as ${varDeclarationType.toString()}`;
-                            }
-                            return {
-                                range: token.range,
-                                //append the variable name to the front for scope
-                                contents: fence(typeText)
-                            };
-                        }
-                    }
-                    for (const labelStatement of functionScope.labelStatements) {
-                        if (labelStatement.name.toLocaleLowerCase() === lowerTokenText) {
-                            return {
-                                range: token.range,
-                                contents: fence(`${labelStatement.name}: label`)
-                            };
-                        }
+                    const labelHover = this.getLabelHover(token, functionScope);
+                    if (labelHover) {
+                        hoverContents.push(labelHover);
+                        continue;
                     }
                 }
-            }
+                const isInTypeExpression = expression?.findAncestor(isTypeExpression);
+                const typeFlag = isInTypeExpression ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
+                const typeChain: TypeChainEntry[] = [];
+                const exprType = expression.getType({ flags: typeFlag, typeChain: typeChain });
+                const processedTypeChain = util.processTypeChain(typeChain);
+                const fullName = processedTypeChain.fullNameOfItem || token.text;
+                const useCustomTypeHover = isInTypeExpression || expression?.findAncestor(isNewExpression);
+                let hoverContent = fence(`${fullName} as ${exprType.toString()}`);
+                if (isFunctionType(exprType)) {
+                    exprType.setName(fullName);
+                    hoverContent = this.getFunctionTypeHover(token, expression, exprType, scope);
+                } else if (useCustomTypeHover && (isClassType(exprType) || isInterfaceType(exprType))) {
+                    hoverContent = this.getCustomTypeHover(exprType, scope);
+                }
 
-            //look through all callables in relevant scopes
-            if (!expression?.findAncestor(isTypeExpression)) {
-                // only look for callables when they aren't inside a type expression
-                // this was a problem for the function `string()` as it is a type AND a function https://developer.roku.com/en-ca/docs/references/brightscript/language/global-string-functions.md#stringn-as-integer-str-as-string--as-string
-                for (let scope of this.event.scopes) {
-                    let callable = scope.getCallableByName(lowerTokenText);
-                    if (callable) {
-                        return {
-                            range: token.range,
-                            contents: this.buildContentsWithDocs(fence(callable.type.toString()), callable.functionStatement?.func?.functionType)
-                        };
-                    }
-                }
+                hoverContents.push(hoverContent);
+
+            } finally {
+                scope?.unlinkSymbolTable();
             }
-        } finally {
-            scope?.unlinkSymbolTable();
         }
+        return {
+            range: token.range,
+            contents: hoverContents
+        };
     }
 
     /**

@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isIndexedGetExpression, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isExpression, isFloatType, isIndexedGetExpression, isIntegerType, isInvalidType, isLongIntegerType, isStringType, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -35,6 +35,7 @@ import type { XmlFile } from './files/XmlFile';
 import type { AstNode } from './parser/AstNode';
 import { AstNodeKind, type Expression, type Statement } from './parser/AstNode';
 import { createIdentifier } from './astUtils/creators';
+import type { BscType } from './types/BscType';
 import type { AssignmentStatement } from './parser/Statement';
 
 export class Util {
@@ -1074,6 +1075,157 @@ export class Util {
         }
     }
 
+    public isNumberType(targetType: BscType): boolean {
+        return isIntegerType(targetType) ||
+            isFloatType(targetType) ||
+            isDoubleType(targetType) ||
+            isLongIntegerType(targetType);
+    }
+
+    /**
+     * Return the type of the result of a binary operator
+     * Note: compound assignments (eg. +=) internally use a binary expression, so that's why TokenKind.PlusEqual, etc. are here too
+     */
+    public binaryOperatorResultType(leftType: BscType, operator: Token, rightType: BscType): BscType {
+        let hasDouble = isDoubleType(leftType) || isDoubleType(rightType);
+        let hasFloat = isFloatType(leftType) || isFloatType(rightType);
+        let hasLongInteger = isLongIntegerType(leftType) || isLongIntegerType(rightType);
+        let hasInvalid = isInvalidType(leftType) || isInvalidType(rightType);
+        let bothNumbers = this.isNumberType(leftType) && this.isNumberType(rightType);
+        let bothStrings = isStringType(leftType) && isStringType(rightType);
+        let eitherBooleanOrNum = (this.isNumberType(leftType) || isBooleanType(leftType)) && (this.isNumberType(rightType) || isBooleanType(rightType));
+
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+        switch (operator.kind) {
+            // Math operators
+            case TokenKind.Plus:
+            case TokenKind.PlusEqual:
+                if (bothStrings) {
+                    // "string" + "string" is the only binary expression allowed with strings
+                    return StringType.instance;
+                }
+            // eslint-disable-next-line no-fallthrough
+            case TokenKind.Minus:
+            case TokenKind.MinusEqual:
+            case TokenKind.Star:
+            case TokenKind.StarEqual:
+            case TokenKind.Mod:
+                if (bothNumbers) {
+                    if (hasDouble) {
+                        return DoubleType.instance;
+                    } else if (hasFloat) {
+                        return FloatType.instance;
+
+                    } else if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                }
+                break;
+            case TokenKind.Forwardslash:
+            case TokenKind.ForwardslashEqual:
+                if (bothNumbers) {
+                    if (hasDouble) {
+                        return DoubleType.instance;
+                    } else if (hasFloat) {
+                        return FloatType.instance;
+
+                    } else if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    return FloatType.instance;
+                }
+                break;
+            case TokenKind.Backslash:
+            case TokenKind.BackslashEqual:
+                if (bothNumbers) {
+                    if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                }
+                break;
+            case TokenKind.Caret:
+                if (bothNumbers) {
+                    if (hasDouble || hasLongInteger) {
+                        return DoubleType.instance;
+                    } else if (hasFloat) {
+                        return FloatType.instance;
+                    }
+                    return IntegerType.instance;
+                }
+                break;
+            // Bitshift operators
+            case TokenKind.LeftShift:
+            case TokenKind.LeftShiftEqual:
+            case TokenKind.RightShift:
+            case TokenKind.RightShiftEqual:
+                if (bothNumbers) {
+                    if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    // Bitshifts are allowed with non-integer numerics
+                    // but will always truncate to ints
+                    return IntegerType.instance;
+                }
+                break;
+            // Comparison operators
+            // All comparison operators result in boolean
+            case TokenKind.Equal:
+            case TokenKind.LessGreater:
+                // = and <> can accept invalid
+                if (hasInvalid || bothStrings || eitherBooleanOrNum) {
+                    return BooleanType.instance;
+                }
+                break;
+            case TokenKind.Greater:
+            case TokenKind.Less:
+            case TokenKind.GreaterEqual:
+            case TokenKind.LessEqual:
+                if (bothStrings || bothNumbers) {
+                    return BooleanType.instance;
+                }
+                break;
+            // Logical operators
+            case TokenKind.Or:
+            case TokenKind.And:
+                if (eitherBooleanOrNum) {
+                    return BooleanType.instance;
+                }
+                break;
+        }
+        return DynamicType.instance;
+    }
+
+    /**
+     * Return the type of the result of a binary operator
+     */
+    public unaryOperatorResultType(operator: Token, exprType: BscType): BscType {
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+        switch (operator.kind) {
+            // Math operators
+            case TokenKind.Minus:
+                if (this.isNumberType(exprType)) {
+                    // a negative number will be the same type, eg, double->double, int->int, etc.
+                    return exprType;
+                }
+                break;
+            case TokenKind.Not:
+                if (isBooleanType(exprType)) {
+                    return BooleanType.instance;
+                } else if (this.isNumberType(exprType)) {
+                    //numbers can be "notted"
+                    // by default they go to ints, except longints, which stay that way
+                    if (isLongIntegerType(exprType)) {
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                }
+                break;
+        }
+        return DynamicType.instance;
+    }
+
     /**
      * Get the extension for the given file path. Basically the part after the final dot, except for
      * `d.bs` which is treated as single extension
@@ -1518,7 +1670,7 @@ export class Util {
     public processTypeChain(typeChain: TypeChainEntry[]): TypeChainProcessResult {
         let fullChainName = '';
         let fullErrorName = '';
-        let missingItemName = '';
+        let itemName = '';
         let previousTypeName = '';
         let parentTypeName = '';
         let errorRange: Range;
@@ -1531,16 +1683,16 @@ export class Util {
             parentTypeName = previousTypeName;
             fullErrorName = previousTypeName ? `${previousTypeName}.${chainItem.name}` : chainItem.name;
             previousTypeName = chainItem.type.toString();
-            missingItemName = chainItem.name;
+            itemName = chainItem.name;
             if (!chainItem.isResolved) {
                 errorRange = chainItem.range;
                 break;
             }
         }
         return {
-            missingItemName: missingItemName,
-            missingItemParentTypeName: parentTypeName,
-            fullNameOfMissingItem: fullErrorName,
+            itemName: itemName,
+            itemParentTypeName: parentTypeName,
+            fullNameOfItem: fullErrorName,
             fullChainName: fullChainName,
             range: errorRange
         };

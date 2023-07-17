@@ -6,13 +6,16 @@ import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { tempDir, rootDir } from './testHelpers.spec';
+import { tempDir, rootDir, expectTypeToBe } from './testHelpers.spec';
 import { Program } from './Program';
 import { TypeChainEntry } from './interfaces';
 import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
 import { ReferenceType } from './types/ReferenceType';
 import { SymbolTypeFlag } from './SymbolTable';
+import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InvalidType, LongIntegerType, StringType } from './types';
+import { TokenKind } from './lexer/TokenKind';
+import { createToken } from './astUtils/creators';
 import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
 
 const sinon = createSandbox();
@@ -866,11 +869,123 @@ describe('util', () => {
             ];
 
             const result = util.processTypeChain(chain);
-            expect(result.missingItemName).to.eql('CharlieProp');
+            expect(result.itemName).to.eql('CharlieProp');
             expect(result.fullChainName).to.eql('AlphaNamespace.BetaProp.CharlieProp');
-            expect(result.missingItemParentTypeName).to.eql('Beta');
-            expect(result.fullNameOfMissingItem).to.eql('Beta.CharlieProp');
+            expect(result.itemParentTypeName).to.eql('Beta');
+            expect(result.fullNameOfItem).to.eql('Beta.CharlieProp');
             expect(result.range).to.eql(util.createRange(3, 3, 4, 4));
+        });
+    });
+
+    describe('binaryOperatorResultType', () => {
+        it('returns the correct type for math operations', () => {
+            // String + String is string
+            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Plus), StringType.instance), StringType);
+            // string plus anything else is an error - return dynamic
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), StringType.instance), DynamicType);
+
+            // Plus
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Plus), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            // Subtract
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Minus), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Minus), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Minus), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Minus), IntegerType.instance), IntegerType);
+            // Multiply
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Star), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Star), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Star), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Star), IntegerType.instance), IntegerType);
+            // Mod
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Mod), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Mod), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Mod), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Mod), IntegerType.instance), IntegerType);
+            // Divide
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Forwardslash), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Forwardslash), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Forwardslash), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Forwardslash), IntegerType.instance), FloatType); // int/int -> float
+            // Exponent
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Caret), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Caret), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Caret), LongIntegerType.instance), DoubleType);// long^int -> Double, int^long -> Double
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Caret), IntegerType.instance), IntegerType);
+        });
+
+        it('returns the correct type for Bitshift operations', () => {
+            // <<
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LeftShift), FloatType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LeftShift), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
+            // >>
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.RightShift), FloatType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.RightShift), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
+        });
+
+        it('returns the correct type for Comparison operations', () => {
+            // =
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Equal), FloatType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Equal), LongIntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Equal), IntegerType.instance), BooleanType); // = accepts invalid
+            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Equal), IntegerType.instance), DynamicType); // only one string is not accepted
+            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Equal), StringType.instance), BooleanType); // both strings is accepted
+            // <>
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType); // <> accepts invalid
+            // > - does not accept invalid
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Greater), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Greater), FloatType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Greater), LongIntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Greater), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Greater), IntegerType.instance), DynamicType);
+            // etc. - all should be boolean
+        });
+
+        it('returns the correct type for Logical operations', () => {
+            // and
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.And), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.And), FloatType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.And), BooleanType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(BooleanType.instance, createToken(TokenKind.And), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.And), IntegerType.instance), DynamicType); // invalid not accepted
+            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.And), IntegerType.instance), DynamicType); // strings are not accepted
+            // or
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Or), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), FloatType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), LongIntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Or), IntegerType.instance), DynamicType);
+        });
+    });
+
+    describe('unaryOperatorResultType', () => {
+        it('returns the correct type for minus operation', () => {
+            let minus = createToken(TokenKind.Minus);
+            expectTypeToBe(util.unaryOperatorResultType(minus, IntegerType.instance), IntegerType);
+            expectTypeToBe(util.unaryOperatorResultType(minus, FloatType.instance), FloatType);
+            expectTypeToBe(util.unaryOperatorResultType(minus, BooleanType.instance), DynamicType);
+            expectTypeToBe(util.unaryOperatorResultType(minus, DoubleType.instance), DoubleType);
+            expectTypeToBe(util.unaryOperatorResultType(minus, StringType.instance), DynamicType);
+        });
+
+        describe('unaryOperatorResultType', () => {
+            it('returns the correct type for not operation', () => {
+                let notToken = createToken(TokenKind.Not);
+                expectTypeToBe(util.unaryOperatorResultType(notToken, IntegerType.instance), IntegerType);
+                expectTypeToBe(util.unaryOperatorResultType(notToken, FloatType.instance), IntegerType);
+                expectTypeToBe(util.unaryOperatorResultType(notToken, BooleanType.instance), BooleanType);
+                expectTypeToBe(util.unaryOperatorResultType(notToken, DoubleType.instance), IntegerType);
+                expectTypeToBe(util.unaryOperatorResultType(notToken, StringType.instance), DynamicType);
+                expectTypeToBe(util.unaryOperatorResultType(notToken, LongIntegerType.instance), LongIntegerType);
+            });
         });
     });
 });

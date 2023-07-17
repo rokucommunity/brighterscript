@@ -21,6 +21,8 @@ import { DynamicType } from './types/DynamicType';
 import { ObjectType } from './types/ObjectType';
 import { FloatType } from './types/FloatType';
 import { NamespaceType } from './types/NamespaceType';
+import { DoubleType } from './types/DoubleType';
+import { UnionType } from './types/UnionType';
 import { isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
 
 describe('Scope', () => {
@@ -816,7 +818,7 @@ describe('Scope', () => {
                     sayMyName = function(name as string)
                     end function
 
-                    sayMyName()
+                    sayMyName("John Doe")
                 end sub`
             );
             program.validate();
@@ -2593,6 +2595,131 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        describe('binary and unary expressions', () => {
+            it('should set symbols with correct types from binary expressions', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    sub process()
+                        s = "hello" + "world"
+                        exp = 2^3
+                        num = 3.14 + 3.14
+                        bool = true or false
+                        notEq = {} <> invalid
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('s', opts), StringType);
+                expectTypeToBe(symbolTable.getSymbolType('exp', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('num', opts), FloatType);
+                expectTypeToBe(symbolTable.getSymbolType('bool', opts), BooleanType);
+                expectTypeToBe(symbolTable.getSymbolType('notEq', opts), BooleanType);
+            });
+
+            it('should set symbols with correct types from unary expressions', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    sub process(boolVal as boolean, intVal as integer)
+                        a = not boolVal
+                        b = not true
+                        c = not intVal
+                        d = not 3.14
+
+                        e = -34
+                        f = -3.14
+                        g = -intVal
+                        h = - (-f)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('a', opts), BooleanType);
+                expectTypeToBe(symbolTable.getSymbolType('b', opts), BooleanType);
+                expectTypeToBe(symbolTable.getSymbolType('c', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('d', opts), IntegerType);
+
+                expectTypeToBe(symbolTable.getSymbolType('e', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('f', opts), FloatType);
+                expectTypeToBe(symbolTable.getSymbolType('g', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('h', opts), FloatType);
+            });
+        });
+
+        describe('assignment expressions', () => {
+            it('should set correct type on simple equals', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    sub process(intVal as integer, dblVal as double, strVal as string)
+                        a = intVal
+                        b = dblVal
+                        c = strVal
+                        d = {}
+                        f = m.foo
+                        e = true
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('a', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('b', opts), DoubleType);
+                expectTypeToBe(symbolTable.getSymbolType('c', opts), StringType);
+                expectTypeToBe(symbolTable.getSymbolType('d', opts), DynamicType);
+                expectTypeToBe(symbolTable.getSymbolType('f', opts), DynamicType);
+                expectTypeToBe(symbolTable.getSymbolType('e', opts), BooleanType);
+            });
+
+            it('should set correct type on compound equals', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    sub process(intVal as integer, dblVal as double, strVal as string)
+                        a = intVal
+                        a += 4
+                        b = dblVal
+                        b *= 23
+                        c = strVal
+                        c += "hello world"
+                        d = 3.14
+                        d \= 3 ' integer division -> d could be either a float or int
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('a', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('b', opts), DoubleType);
+                expectTypeToBe(symbolTable.getSymbolType('c', opts), StringType);
+                const dType = symbolTable.getSymbolType('d', opts);
+                expectTypeToBe(dType, UnionType);
+                expect((dType as UnionType).types).to.include(FloatType.instance);
+                expect((dType as UnionType).types).to.include(IntegerType.instance);
+            });
+
+            it('should work for a multiple binary expressions', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    function process(intVal as integer)
+                        x = (intVal * 2) + 1 + 3^8 + intVal + (3 - 9)  ' should be int
+                        result = 3.5 ' float
+                        result *= (x + 1.123 * 3) ' -> float
+                        return result
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('x', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('result', opts), FloatType);
+            });
         });
     });
 

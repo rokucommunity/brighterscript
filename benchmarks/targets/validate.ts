@@ -10,7 +10,6 @@ module.exports = async (options: TargetOptions) => {
         cwd: projectPath,
         createPackage: false,
         copyToStaging: false,
-        enableTypeValidation: false,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
         logLevel: 'error',

@@ -15,6 +15,7 @@ import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
 import type { Token } from './lexer/Token';
 import type { SymbolTypeFlag } from './SymbolTable';
+import type { CallExpression } from './parser/Expression';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -68,6 +69,7 @@ export interface FunctionCall {
      * The full range of this function call (from the start of the function name to its closing paren)
      */
     range: Range;
+    expression: CallExpression;
     functionScope: FunctionScope;
     file: File;
     name: string;
@@ -487,9 +489,9 @@ export class TypeChainEntry {
 }
 
 export interface TypeChainProcessResult {
-    missingItemName: string;
-    missingItemParentTypeName: string;
-    fullNameOfMissingItem: string;
+    itemName: string;
+    itemParentTypeName: string;
+    fullNameOfItem: string;
     fullChainName: string;
     range: Range;
 }
