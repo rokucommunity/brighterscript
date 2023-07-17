@@ -1616,7 +1616,7 @@ describe('Program', () => {
             program.setFile('source/main.brs', `
                 sub A()
                     'call with wrong param count
-                    B(1,2,3)
+                    B("one", "two")
 
                     'call unknown function
                     C()
