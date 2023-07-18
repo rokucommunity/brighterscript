@@ -128,6 +128,68 @@ describe('ScopeValidator', () => {
     });
 
     describe('argumentTypeMismatch', () => {
+
+        it('treats string enums as strings when assigned to string vars', () => {
+            program.setFile('source/file.bs', `
+                sub main()
+                    printDirection(Direction.up)
+                end sub
+
+                sub printDirection(theDirection as string)
+                    print theDirection
+                end sub
+
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not treat strings as a string enum', () => {
+            program.setFile('source/file.bs', `
+                sub main()
+                    printDirection("up")
+                end sub
+
+                sub printDirection(theDirection as Direction)
+                    print theDirection
+                end sub
+
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('string', 'Direction')
+            ]);
+        });
+
+        it('supports passing enum type as enum type', () => {
+            program.setFile('source/file.bs', `
+                sub test(theDirection as Direction)
+                    printDirection(theDirection)
+                end sub
+
+                sub printDirection(theDirection as Direction)
+                    print theDirection
+                end sub
+
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+            ]);
+        });
+
         it('Catches argument type mismatches on function calls', () => {
             program.setFile('source/file.brs', `
                     sub a(age as integer)

@@ -1,10 +1,15 @@
 import { isDynamicType, isEnumMemberType, isEnumType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
+import { DynamicType } from './DynamicType';
 
 export class EnumType extends BscType {
     constructor(
-        public name: string
+        public name: string,
+        /**
+         * The runtime type for this enum (i.e. what type the value will be transpiled into)
+         */
+        public underlyingType: BscType = DynamicType.instance
     ) {
         super(name);
     }
@@ -36,7 +41,11 @@ export class EnumType extends BscType {
 export class EnumMemberType extends BscType {
     constructor(
         public enumName: string,
-        public memberName: string
+        public memberName: string,
+        /**
+         * The runtime type for this enum (i.e. what type the value will be transpiled into)
+         */
+        public underlyingType: BscType = DynamicType.instance
     ) {
         super(`${enumName}.${memberName}`);
     }

@@ -2640,9 +2640,14 @@ export class EnumStatement extends Statement implements TypedefProvider {
     }
 
     getType(options: GetTypeOptions) {
-        const resultType = new EnumType(this.fullName);
+        const members = this.getMembers();
+
+        const resultType = new EnumType(
+            this.fullName,
+            members[0]?.getType(options)
+        );
         resultType.pushMemberProvider(() => this.getSymbolTable());
-        for (const statement of this.getMembers()) {
+        for (const statement of members) {
             resultType.addMember(statement?.tokens?.name?.text, statement?.range, statement.getType(options), SymbolTypeFlag.runtime);
         }
 
@@ -2704,7 +2709,11 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
     }
 
     getType(options: GetTypeOptions) {
-        return new EnumMemberType((this.parent as EnumStatement)?.fullName, this.tokens?.name?.text);
+        return new EnumMemberType(
+            (this.parent as EnumStatement)?.fullName,
+            this.tokens?.name?.text,
+            this.value?.getType(options)
+        );
     }
 }
 
