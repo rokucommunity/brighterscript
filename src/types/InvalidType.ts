@@ -1,4 +1,4 @@
-import { isDynamicType, isInvalidType } from '../astUtils/reflection';
+import { isDynamicType, isInvalidType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 
@@ -16,7 +16,8 @@ export class InvalidType extends BscType {
     public isTypeCompatible(targetType: BscType) {
         return (
             isInvalidType(targetType) ||
-            isDynamicType(targetType)
+            isDynamicType(targetType) ||
+            isObjectType(targetType)
         );
     }
 

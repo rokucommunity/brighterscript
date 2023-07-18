@@ -1,7 +1,6 @@
-import { isFunctionType } from '../astUtils/reflection';
+import { isDynamicType, isFunctionType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
-import { DynamicType } from './DynamicType';
 
 export class FunctionType extends BscType {
     constructor(
@@ -39,7 +38,10 @@ export class FunctionType extends BscType {
     }
 
     public isTypeCompatible(targetType: BscType) {
-        if (targetType instanceof DynamicType) {
+        if (
+            isDynamicType(targetType) ||
+            isObjectType(targetType)
+        ) {
             return true;
         }
         return this.isEqual(targetType);

@@ -1,4 +1,4 @@
-import { isBooleanType, isDynamicType } from '../astUtils/reflection';
+import { isBooleanType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 
@@ -16,7 +16,8 @@ export class BooleanType extends BscType {
     public isTypeCompatible(targetType: BscType) {
         return (
             isBooleanType(targetType) ||
-            isDynamicType(targetType)
+            isDynamicType(targetType) ||
+            isObjectType(targetType)
         );
     }
 

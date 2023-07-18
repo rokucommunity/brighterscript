@@ -1,5 +1,5 @@
 import type { GetTypeOptions } from '../interfaces';
-import { isDynamicType, isUnionType } from '../astUtils/reflection';
+import { isDynamicType, isObjectType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
 import { findTypeUnion, getUniqueType } from './helpers';
@@ -55,7 +55,7 @@ export class UnionType extends BscType {
     }
 
     isTypeCompatible(targetType: BscType): boolean {
-        if (isDynamicType(targetType)) {
+        if (isDynamicType(targetType) || isObjectType(targetType)) {
             return true;
         }
         if (isUnionType(targetType)) {
