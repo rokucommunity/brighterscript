@@ -1,7 +1,6 @@
 import { isDynamicType, isFunctionType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
-import { DynamicType } from './DynamicType';
 
 export class FunctionType extends BscType {
     constructor(
