@@ -1,4 +1,4 @@
-import { isDynamicType, isEnumMemberType, isEnumType } from '../astUtils/reflection';
+import { isDynamicType, isEnumMemberType, isEnumType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { DynamicType } from './DynamicType';
@@ -19,6 +19,7 @@ export class EnumType extends BscType {
     public isTypeCompatible(targetType: BscType) {
         return (
             isDynamicType(targetType) ||
+            isObjectType(targetType) ||
             this.isEqual(targetType) ||
             (isEnumMemberType(targetType) && targetType?.enumName.toLowerCase() === this.name.toLowerCase())
         );

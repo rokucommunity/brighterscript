@@ -128,6 +128,106 @@ describe('ScopeValidator', () => {
     });
 
     describe('argumentTypeMismatch', () => {
+        it('param `as object` supports all known types', () => {
+            program.setFile('source/file.bs', `
+                sub main()
+                    consoleLog(Direction.up)
+                    consoleLog(true)
+                    consoleLog(main)
+                    consoleLog(1.2)
+                    consoleLog({} as Video)
+                    consoleLog("test")
+                end sub
+
+                sub consoleLog(thing as object)
+                    print thing
+                end sub
+
+                interface Video
+                    url as string
+                end interface
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('`as object` var can be passed to various param types', () => {
+            program.setFile('source/file.bs', `
+                sub main()
+                    obj = {} as object
+
+                    printBoolean(obj)
+                    printClass(obj)
+                    printDouble(obj)
+                    printEnum(obj)
+                    printFloat(obj)
+                    printFunction(obj)
+                    printInteger(obj)
+                    printInterface(obj)
+                    printLongInteger(obj)
+                    printString(obj)
+                end sub
+
+                sub printBoolean(value as boolean)
+                    print value
+                end sub
+
+                class Person
+                    name as string
+                end class
+
+                sub printClass(value as Person)
+                    print value
+                end sub
+
+                sub printDouble(value as double)
+                    print value
+                end sub
+
+                enum Direction
+                    up = "up"
+                end enum
+
+                sub printEnum(value as Direction)
+                    print value
+                end sub
+
+                sub printFloat(value as float)
+                    print value
+                end sub
+
+                sub printFunction(value as function)
+                    print value
+                end sub
+
+                interface Video
+                    url as string
+                end interface
+
+                sub printInterface(value as Video)
+                    print value
+                end sub
+
+                sub printInteger(value as integer)
+                    print value
+                end sub
+
+                sub printLongInteger(value as LongInteger)
+                    print value
+                end sub
+
+                sub printString(value as string)
+                    print value
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
 
         it('treats string enums as strings when assigned to string vars', () => {
             program.setFile('source/file.bs', `

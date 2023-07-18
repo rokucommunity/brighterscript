@@ -1,5 +1,5 @@
 import { SymbolTypeFlag } from '../SymbolTable';
-import { isDynamicType, isInterfaceType, isUnionType, isInheritableType } from '../astUtils/reflection';
+import { isDynamicType, isInterfaceType, isUnionType, isInheritableType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { InheritableType } from './InheritableType';
@@ -15,11 +15,11 @@ export class InterfaceType extends InheritableType {
     public readonly kind = BscTypeKind.InterfaceType;
 
     public isTypeCompatible(targetType: BscType) {
-        //TODO: We need to make sure that things don't get assigned to built-in types
-        if (this.isEqual(targetType)) {
+        if (isDynamicType(targetType) || isObjectType(targetType)) {
             return true;
         }
-        if (isDynamicType(targetType)) {
+        //TODO: We need to make sure that things don't get assigned to built-in types
+        if (this.isEqual(targetType)) {
             return true;
         }
         const ancestorTypes = this.getAncestorTypeList();

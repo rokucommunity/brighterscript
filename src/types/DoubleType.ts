@@ -1,4 +1,4 @@
-import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType } from '../astUtils/reflection';
+import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 
@@ -17,6 +17,7 @@ export class DoubleType extends BscType {
     public isTypeCompatible(targetType: BscType) {
         return (
             isDynamicType(targetType) ||
+            isObjectType(targetType) ||
             isIntegerType(targetType) ||
             isFloatType(targetType) ||
             isDoubleType(targetType) ||

@@ -1,4 +1,4 @@
-import { isDynamicType, isVoidType } from '../astUtils/reflection';
+import { isDynamicType, isObjectType, isVoidType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 
@@ -16,7 +16,8 @@ export class VoidType extends BscType {
     public isTypeCompatible(targetType: BscType) {
         return (
             isVoidType(targetType) ||
-            isDynamicType(targetType)
+            isDynamicType(targetType) ||
+            isObjectType(targetType)
         );
     }
 
