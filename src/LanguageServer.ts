@@ -46,6 +46,7 @@ import { KeyedThrottler } from './KeyedThrottler';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { isBrsFile } from './astUtils/reflection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
+import { BuildStatusTracker } from './BuildStatusTracker';
 
 export class LanguageServer {
     private connection = undefined as Connection;
@@ -96,11 +97,15 @@ export class LanguageServer {
         return this.validateThrottler.run(this.boundValidateAll);
     }
 
+    private buildStatusTracker: BuildStatusTracker;
+
     //run the server
     public run() {
         // Create a connection for the server. The connection uses Node's IPC as a transport.
         // Also include all preview / proposed LSP features.
         this.connection = this.createConnection();
+
+        this.buildStatusTracker = new BuildStatusTracker(this.connection);
 
         //listen to all of the output log events and pipe them into the debug channel in the extension
         this.loggerSubscription = Logger.subscribe((text) => {
@@ -310,44 +315,48 @@ export class LanguageServer {
      * Leave existing projects alone if they are not affected by these changes
      */
     private async syncProjects() {
-        const workspacePaths = await this.getWorkspacePaths();
-        let projectPaths = (await Promise.all(
-            workspacePaths.map(async workspacePath => {
-                const projectPaths = await this.getProjectPaths(workspacePath);
-                return projectPaths.map(projectPath => ({
-                    projectPath: projectPath,
-                    workspacePath: workspacePath
-                }));
-            })
-        )).flat(1);
+        await this.buildStatusTracker.run(this as any, async () => {
 
-        //delete projects not represented in the list
-        for (const project of this.getProjects()) {
-            if (!projectPaths.find(x => x.projectPath === project.projectPath)) {
-                this.removeProject(project);
+            const workspacePaths = await this.getWorkspacePaths();
+            let projectPaths = (await Promise.all(
+                workspacePaths.map(async workspacePath => {
+                    const projectPaths = await this.getProjectPaths(workspacePath);
+                    return projectPaths.map(projectPath => ({
+                        projectPath: projectPath,
+                        workspacePath: workspacePath
+                    }));
+                })
+            )).flat(1);
+
+            //delete projects not represented in the list
+            for (const project of this.getProjects()) {
+                if (!projectPaths.find(x => x.projectPath === project.projectPath)) {
+                    this.removeProject(project);
+                }
             }
-        }
 
-        //exclude paths to projects we already have
-        projectPaths = projectPaths.filter(x => {
-            //only keep this project path if there's not a project with that path
-            return !this.projects.find(project => project.projectPath === x.projectPath);
+            //exclude paths to projects we already have
+            projectPaths = projectPaths.filter(x => {
+                //only keep this project path if there's not a project with that path
+                return !this.projects.find(project => project.projectPath === x.projectPath);
+            });
+
+            //dedupe by project path
+            projectPaths = [
+                ...projectPaths.reduce(
+                    (acc, x) => acc.set(x.projectPath, x),
+                    new Map<string, typeof projectPaths[0]>()
+                ).values()
+            ];
+
+            //create missing projects
+            await Promise.all(
+                projectPaths.map(x => this.createProject(x.projectPath, x.workspacePath))
+            );
+            //flush diagnostics
+            await this.sendDiagnostics();
+
         });
-
-        //dedupe by project path
-        projectPaths = [
-            ...projectPaths.reduce(
-                (acc, x) => acc.set(x.projectPath, x),
-                new Map<string, typeof projectPaths[0]>()
-            ).values()
-        ];
-
-        //create missing projects
-        await Promise.all(
-            projectPaths.map(x => this.createProject(x.projectPath, x.workspacePath))
-        );
-        //flush diagnostics
-        await this.sendDiagnostics();
     }
 
     /**
@@ -412,7 +421,6 @@ export class LanguageServer {
             await this.initialProjectsCreated;
         }
 
-        let status: string;
         for (let project of this.getProjects()) {
             try {
                 await project.firstRunPromise;
@@ -424,7 +432,6 @@ export class LanguageServer {
                 this.sendCriticalFailure(`BrighterScript language server failed to start: \n${e.message}`);
             }
         }
-        this.connection.sendNotification('build-status', status ? status : 'success');
     }
 
     /**
@@ -484,12 +491,18 @@ export class LanguageServer {
         return undefined;
     }
 
+
     /**
      * A unique project counter to help distinguish log entries in lsp mode
      */
     private projectCounter = 0;
 
-    private async createProject(projectPath: string, workspacePath = projectPath) {
+    /**
+     * @param projectPath path to the project
+     * @param workspacePath path to the workspace in which all project should reside or are referenced by
+     * @param projectNumber an optional project number to assign to the project. Used when reloading projects that should keep the same number
+     */
+    private async createProject(projectPath: string, workspacePath = projectPath, projectNumber?: number) {
         workspacePath ??= projectPath;
         let project = this.projects.find((x) => x.projectPath === projectPath);
         //skip this project if we already have it
@@ -498,7 +511,7 @@ export class LanguageServer {
         }
 
         let builder = new ProgramBuilder();
-        const projectNumber = this.projectCounter++;
+        projectNumber ??= this.projectCounter++;
         builder.logger.prefix = `[prj${projectNumber}]`;
         builder.logger.log(`Created project #${projectNumber} for: "${projectPath}"`);
 
@@ -528,22 +541,12 @@ export class LanguageServer {
             configFilePath = undefined;
         }
 
-        let firstRunPromise = builder.run({
-            cwd: cwd,
-            project: configFilePath,
-            watch: false,
-            createPackage: false,
-            deploy: false,
-            copyToStaging: false,
-            showDiagnosticsInConsole: false
-        });
-        firstRunPromise.catch((err) => {
-            console.error(err);
-        });
+        const firstRunDeferred = new Deferred<any>();
 
         let newProject: Project = {
+            projectNumber: projectNumber,
             builder: builder,
-            firstRunPromise: firstRunPromise,
+            firstRunPromise: firstRunDeferred.promise,
             projectPath: projectPath,
             workspacePath: workspacePath,
             isFirstRunComplete: false,
@@ -554,22 +557,35 @@ export class LanguageServer {
 
         this.projects.push(newProject);
 
-        await firstRunPromise.then(() => {
+        try {
+            await this.buildStatusTracker.run(project, async () => {
+                await builder.run({
+                    cwd: cwd,
+                    project: configFilePath,
+                    watch: false,
+                    createPackage: false,
+                    deploy: false,
+                    copyToStaging: false,
+                    showDiagnosticsInConsole: false
+                });
+            });
             newProject.isFirstRunComplete = true;
             newProject.isFirstRunSuccessful = true;
-        }).catch(() => {
+            firstRunDeferred.resolve();
+        } catch (e) {
+            builder.logger.error(e);
+            firstRunDeferred.reject(e);
             newProject.isFirstRunComplete = true;
             newProject.isFirstRunSuccessful = false;
-        }).then(() => {
-            //if we found a deprecated brsconfig.json, add a diagnostic warning the user
-            if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
-                builder.addDiagnostic(configFilePath, {
-                    ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
-                    range: util.createRange(0, 0, 0, 0)
-                });
-                return this.sendDiagnostics();
-            }
-        });
+        }
+        //if we found a deprecated brsconfig.json, add a diagnostic warning the user
+        if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
+            builder.addDiagnostic(configFilePath, {
+                ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
+                range: util.createRange(0, 0, 0, 0)
+            });
+            return this.sendDiagnostics();
+        }
     }
 
     private async createStandaloneFileProject(srcPath: string) {
@@ -619,6 +635,7 @@ export class LanguageServer {
         });
 
         let newProject: Project = {
+            projectNumber: this.projectCounter++,
             builder: builder,
             firstRunPromise: firstRunPromise,
             projectPath: srcPath,
@@ -740,7 +757,7 @@ export class LanguageServer {
                     this.removeProject(project);
 
                     //create a new workspace/brs program
-                    await this.createProject(project.projectPath, project.workspacePath);
+                    await this.createProject(project.projectPath, project.workspacePath, project.projectNumber);
 
                     //handle temp workspace
                 } else {
@@ -837,8 +854,6 @@ export class LanguageServer {
     private async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
         //ensure programs are initialized
         await this.waitAllProjectFirstRuns();
-
-        this.connection.sendNotification('build-status', 'building');
 
         let projects = this.getProjects();
 
@@ -1101,7 +1116,14 @@ export class LanguageServer {
 
             //validate all programs
             await Promise.all(
-                projects.map((x) => x.builder.program.validate())
+                projects.map((project) => {
+                    return this.buildStatusTracker.run(project, () => {
+
+                        project.builder.program.validate();
+                        return project;
+
+                    });
+                })
             );
         } catch (e: any) {
             this.connection.console.error(e);
@@ -1287,6 +1309,10 @@ export class LanguageServer {
 }
 
 export interface Project {
+    /**
+     * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
+     */
+    projectNumber: number;
     firstRunPromise: Promise<any>;
     builder: ProgramBuilder;
     /**
