@@ -239,6 +239,7 @@ module.exports = {
     {
         files: ['benchmarks/**/*.ts'],
         rules: {
+            '@typescript-eslint/dot-notation': 'off',
             '@typescript-eslint/no-unnecessary-type-assertion': 'off',
             '@typescript-eslint/no-non-null-assertion': 'off',
             'camelcase': 'off'

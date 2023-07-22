@@ -1,6 +1,6 @@
 {
   "name": "brighterscript",
-  "version": "0.65.0",
+  "version": "0.65.2",
   "description": "A superset of Roku's BrightScript language.",
   "scripts": {
     "preversion": "npm run build && npm run lint && npm run test",
@@ -147,6 +147,7 @@
     "roku-deploy": "^3.10.2",
     "serialize-error": "^7.0.1",
     "source-map": "^0.7.4",
+    "v8-profiler-next": "^1.9.0",
     "vscode-languageserver": "7.0.0",
     "vscode-languageserver-protocol": "3.16.0",
     "vscode-languageserver-textdocument": "^1.0.1",
