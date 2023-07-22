@@ -37,7 +37,7 @@ export class Logger {
     }
     private _logLevel = LogLevel.log;
 
-    private getTimestamp() {
+    public getTimestamp() {
         return '[' + chalk.grey(moment().format(`hh:mm:ss:SSSS A`)) + ']';
     }
 

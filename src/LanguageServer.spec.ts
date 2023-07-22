@@ -17,7 +17,7 @@ import { isBrsFile, isLiteralString } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
 import { URI } from 'vscode-uri';
-import { BuildStatusTracker } from './BuildStatusTracker';
+import { BusyStatusTracker } from './BusyStatusTracker';
 
 const sinon = createSandbox();
 
@@ -77,7 +77,7 @@ describe('LanguageServer', () => {
     beforeEach(() => {
         sinon.restore();
         server = new LanguageServer();
-        server['buildStatusTracker'] = new BuildStatusTracker(connection as any);
+        server['busyStatusTracker'] = new BusyStatusTracker();
         workspaceFolders = [workspacePath];
 
         vfs = {};

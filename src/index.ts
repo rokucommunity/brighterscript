@@ -25,4 +25,5 @@ export * from './astUtils/reflection';
 export * from './astUtils/creators';
 export * from './astUtils/xml';
 export * from './astUtils/AstEditor';
-export * from './BuildStatusTracker';
+export * from './BusyStatusTracker';
+export * from './Logger';

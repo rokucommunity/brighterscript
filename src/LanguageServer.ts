@@ -46,7 +46,8 @@ import { KeyedThrottler } from './KeyedThrottler';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { isBrsFile } from './astUtils/reflection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
-import { BuildStatusTracker } from './BuildStatusTracker';
+import type { BusyStatus } from './BusyStatusTracker';
+import { BusyStatusTracker } from './BusyStatusTracker';
 
 export class LanguageServer {
     private connection = undefined as Connection;
@@ -97,7 +98,7 @@ export class LanguageServer {
         return this.validateThrottler.run(this.boundValidateAll);
     }
 
-    private buildStatusTracker: BuildStatusTracker;
+    public busyStatusTracker = new BusyStatusTracker();
 
     //run the server
     public run() {
@@ -105,7 +106,10 @@ export class LanguageServer {
         // Also include all preview / proposed LSP features.
         this.connection = this.createConnection();
 
-        this.buildStatusTracker = new BuildStatusTracker(this.connection);
+        // Send the current status of the busyStatusTracker anytime it changes
+        this.busyStatusTracker.on('change', (status) => {
+            this.sendBusyStatus(status);
+        });
 
         //listen to all of the output log events and pipe them into the debug channel in the extension
         this.loggerSubscription = Logger.subscribe((text) => {
@@ -180,6 +184,18 @@ export class LanguageServer {
 
         // Listen on the connection
         this.connection.listen();
+    }
+
+    private busyStatusIndex = -1;
+    private sendBusyStatus(status: BusyStatus) {
+        this.busyStatusIndex = ++this.busyStatusIndex <= 0 ? 0 : this.busyStatusIndex;
+
+        this.connection.sendNotification(NotificationName.busyStatus, {
+            status: status,
+            timestamp: Date.now(),
+            index: this.busyStatusIndex,
+            activeRuns: [...this.busyStatusTracker.activeRuns]
+        });
     }
 
     /**
@@ -268,6 +284,7 @@ export class LanguageServer {
      * Scan the workspace for all `bsconfig.json` files. If at least one is found, then only folders who have bsconfig.json are returned.
      * If none are found, then the workspaceFolder itself is treated as a project
      */
+    @TrackBusyStatus
     private async getProjectPaths(workspaceFolder: string) {
         const excludes = (await this.getWorkspaceExcludeGlobs(workspaceFolder)).map(x => s`!${x}`);
         const files = await rokuDeploy.getFilePaths([
@@ -314,49 +331,46 @@ export class LanguageServer {
      * Handle situations where bsconfig.json files were added or removed (to elevate/lower workspaceFolder projects accordingly)
      * Leave existing projects alone if they are not affected by these changes
      */
+    @TrackBusyStatus
     private async syncProjects() {
-        await this.buildStatusTracker.run(this as any, async () => {
+        const workspacePaths = await this.getWorkspacePaths();
+        let projectPaths = (await Promise.all(
+            workspacePaths.map(async workspacePath => {
+                const projectPaths = await this.getProjectPaths(workspacePath);
+                return projectPaths.map(projectPath => ({
+                    projectPath: projectPath,
+                    workspacePath: workspacePath
+                }));
+            })
+        )).flat(1);
 
-            const workspacePaths = await this.getWorkspacePaths();
-            let projectPaths = (await Promise.all(
-                workspacePaths.map(async workspacePath => {
-                    const projectPaths = await this.getProjectPaths(workspacePath);
-                    return projectPaths.map(projectPath => ({
-                        projectPath: projectPath,
-                        workspacePath: workspacePath
-                    }));
-                })
-            )).flat(1);
-
-            //delete projects not represented in the list
-            for (const project of this.getProjects()) {
-                if (!projectPaths.find(x => x.projectPath === project.projectPath)) {
-                    this.removeProject(project);
-                }
+        //delete projects not represented in the list
+        for (const project of this.getProjects()) {
+            if (!projectPaths.find(x => x.projectPath === project.projectPath)) {
+                this.removeProject(project);
             }
+        }
 
-            //exclude paths to projects we already have
-            projectPaths = projectPaths.filter(x => {
-                //only keep this project path if there's not a project with that path
-                return !this.projects.find(project => project.projectPath === x.projectPath);
-            });
-
-            //dedupe by project path
-            projectPaths = [
-                ...projectPaths.reduce(
-                    (acc, x) => acc.set(x.projectPath, x),
-                    new Map<string, typeof projectPaths[0]>()
-                ).values()
-            ];
-
-            //create missing projects
-            await Promise.all(
-                projectPaths.map(x => this.createProject(x.projectPath, x.workspacePath))
-            );
-            //flush diagnostics
-            await this.sendDiagnostics();
-
+        //exclude paths to projects we already have
+        projectPaths = projectPaths.filter(x => {
+            //only keep this project path if there's not a project with that path
+            return !this.projects.find(project => project.projectPath === x.projectPath);
         });
+
+        //dedupe by project path
+        projectPaths = [
+            ...projectPaths.reduce(
+                (acc, x) => acc.set(x.projectPath, x),
+                new Map<string, typeof projectPaths[0]>()
+            ).values()
+        ];
+
+        //create missing projects
+        await Promise.all(
+            projectPaths.map(x => this.createProject(x.projectPath, x.workspacePath))
+        );
+        //flush diagnostics
+        await this.sendDiagnostics();
     }
 
     /**
@@ -373,6 +387,7 @@ export class LanguageServer {
      * Called when the client has finished initializing
      */
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onInitialized() {
         let projectCreatedDeferred = new Deferred();
         this.initialProjectsCreated = projectCreatedDeferred.promise;
@@ -502,6 +517,7 @@ export class LanguageServer {
      * @param workspacePath path to the workspace in which all project should reside or are referenced by
      * @param projectNumber an optional project number to assign to the project. Used when reloading projects that should keep the same number
      */
+    @TrackBusyStatus
     private async createProject(projectPath: string, workspacePath = projectPath, projectNumber?: number) {
         workspacePath ??= projectPath;
         let project = this.projects.find((x) => x.projectPath === projectPath);
@@ -558,16 +574,14 @@ export class LanguageServer {
         this.projects.push(newProject);
 
         try {
-            await this.buildStatusTracker.run(project, async () => {
-                await builder.run({
-                    cwd: cwd,
-                    project: configFilePath,
-                    watch: false,
-                    createPackage: false,
-                    deploy: false,
-                    copyToStaging: false,
-                    showDiagnosticsInConsole: false
-                });
+            await builder.run({
+                cwd: cwd,
+                project: configFilePath,
+                watch: false,
+                createPackage: false,
+                deploy: false,
+                copyToStaging: false,
+                showDiagnosticsInConsole: false
             });
             newProject.isFirstRunComplete = true;
             newProject.isFirstRunSuccessful = true;
@@ -670,6 +684,7 @@ export class LanguageServer {
      * Provide a list of completion items based on the current cursor position
      */
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onCompletion(params: TextDocumentPositionParams) {
         //ensure programs are initialized
         await this.waitAllProjectFirstRuns();
@@ -706,6 +721,7 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onCodeAction(params: CodeActionParams) {
         //ensure programs are initialized
         await this.waitAllProjectFirstRuns();
@@ -851,6 +867,7 @@ export class LanguageServer {
      * file types are watched (.brs,.bs,.xml,manifest, and any json/text/image files)
      */
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
         //ensure programs are initialized
         await this.waitAllProjectFirstRuns();
@@ -938,7 +955,7 @@ export class LanguageServer {
                 projects.map((project) => this.handleFileChanges(project, changes))
             );
         }
-        this.connection.sendNotification('build-status', 'success');
+
     }
 
     /**
@@ -1072,6 +1089,7 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async validateTextDocument(event: TextDocumentChangeEvent<TextDocument>): Promise<void> {
         const { document } = event;
         //ensure programs are initialized
@@ -1083,8 +1101,6 @@ export class LanguageServer {
 
             //throttle file processing. first call is run immediately, and then the last call is processed.
             await this.keyedThrottler.run(filePath, () => {
-
-                this.connection.sendNotification('build-status', 'building');
 
                 let documentText = document.getText();
                 for (const project of this.getProjects()) {
@@ -1107,6 +1123,7 @@ export class LanguageServer {
         }
     }
 
+    @TrackBusyStatus
     private async validateAll() {
         try {
             //synchronize parsing for open files that were included/excluded from projects
@@ -1117,23 +1134,18 @@ export class LanguageServer {
             //validate all programs
             await Promise.all(
                 projects.map((project) => {
-                    return this.buildStatusTracker.run(project, () => {
-
-                        project.builder.program.validate();
-                        return project;
-
-                    });
+                    project.builder.program.validate();
+                    return project;
                 })
             );
         } catch (e: any) {
             this.connection.console.error(e);
             this.sendCriticalFailure(`Critical error validating project: ${e.message}${e.stack ?? ''}`);
         }
-
-        this.connection.sendNotification('build-status', 'success');
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     public async onWorkspaceSymbol(params: WorkspaceSymbolParams) {
         await this.waitAllProjectFirstRuns();
 
@@ -1154,6 +1166,7 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     public async onDocumentSymbol(params: DocumentSymbolParams) {
         await this.waitAllProjectFirstRuns();
 
@@ -1169,6 +1182,7 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onDefinition(params: TextDocumentPositionParams) {
         await this.waitAllProjectFirstRuns();
 
@@ -1184,6 +1198,7 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onSignatureHelp(params: SignatureHelpParams) {
         await this.waitAllProjectFirstRuns();
 
@@ -1218,6 +1233,7 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onReferences(params: ReferenceParams) {
         await this.waitAllProjectFirstRuns();
 
@@ -1233,16 +1249,23 @@ export class LanguageServer {
         return results.filter((r) => r);
     }
 
+    private onValidateSettled() {
+        return Promise.all([
+            //wait for the validator to start running (or timeout if it never did)
+            this.validateThrottler.onRunOnce(100),
+            //wait for the validator to stop running (or resolve immediately if it's already idle)
+            this.validateThrottler.onIdleOnce(true)
+        ]);
+    }
+
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onFullSemanticTokens(params: SemanticTokensParams) {
         await this.waitAllProjectFirstRuns();
-        await Promise.all([
-            //wait for the file to settle (in case there are multiple file changes in quick succession)
-            this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true),
-            // wait for the validation to finish before providing semantic tokens. program.validate() populates and then caches AstNode.parent properties.
-            // If we don't wait, then fetching semantic tokens can cause some invalid cache
-            this.validateThrottler.onIdleOnce(false)
-        ]);
+        //wait for the file to settle (in case there are multiple file changes in quick succession)
+        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+        //wait for the validation cycle to settle
+        await this.onValidateSettled();
 
         const srcPath = util.uriToPath(params.textDocument.uri);
         for (const project of this.projects) {
@@ -1281,6 +1304,7 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     public async onExecuteCommand(params: ExecuteCommandParams) {
         await this.waitAllProjectFirstRuns();
         if (params.command === CustomCommands.TranspileFile) {
@@ -1333,6 +1357,10 @@ export enum CustomCommands {
     TranspileFile = 'TranspileFile'
 }
 
+export enum NotificationName {
+    busyStatus = 'busyStatus'
+}
+
 /**
  * Wraps a method. If there's an error (either sync or via a promise),
  * this appends the error's stack trace at the end of the error message so that the connection will
@@ -1361,5 +1389,19 @@ function AddStackToErrorMessage(target: any, propertyKey: string, descriptor: Pr
             }
             throw e;
         }
+    };
+}
+
+/**
+ * An annotation used to wrap the method in a busyStatus tracking call
+ */
+function TrackBusyStatus(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+    let originalMethod = descriptor.value;
+
+    //wrapping the original method
+    descriptor.value = function value(this: LanguageServer, ...args: any[]) {
+        return this.busyStatusTracker.run(() => {
+            return originalMethod.apply(this, args);
+        }, originalMethod.name);
     };
 }
