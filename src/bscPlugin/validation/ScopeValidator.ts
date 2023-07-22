@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isBinaryExpression, isBrsFile, isFunctionType, isLiteralExpression, isNamespaceStatement, isTypeExpression, isTypedFunctionType, isXmlScope } from '../../astUtils/reflection';
+import { isBinaryExpression, isBrsFile, isLiteralExpression, isNamespaceStatement, isTypeExpression, isTypedFunctionType, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
