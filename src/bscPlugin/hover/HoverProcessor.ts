@@ -1,5 +1,5 @@
 import { SourceNode } from 'source-map';
-import { isBrsFile, isClassType, isFunctionType, isInterfaceType, isNewExpression, isTypeExpression, isXmlFile } from '../../astUtils/reflection';
+import { isBrsFile, isClassType, isFunctionType, isInterfaceType, isNewExpression, isTypeExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
@@ -12,7 +12,7 @@ import { SymbolTypeFlag } from '../../SymbolTable';
 import type { Expression } from '../../parser/AstNode';
 import type { Scope } from '../../Scope';
 import type { FunctionScope } from '../../FunctionScope';
-import type { FunctionType } from '../../types/FunctionType';
+import type { TypedFunctionType } from '../../types/TypedFunctionType';
 import type { ClassType } from '../../types/ClassType';
 import type { InterfaceType } from '../../types/InterfaceType';
 
@@ -84,7 +84,7 @@ export class HoverProcessor {
         }
     }
 
-    private getFunctionTypeHover(token: Token, expression: Expression, expressionType: FunctionType, scope: Scope) {
+    private getFunctionTypeHover(token: Token, expression: Expression, expressionType: TypedFunctionType, scope: Scope) {
         const lowerTokenText = token.text.toLowerCase();
         let result = fence(expressionType.toString());
 
@@ -158,7 +158,7 @@ export class HoverProcessor {
                 const fullName = processedTypeChain.fullNameOfItem || token.text;
                 const useCustomTypeHover = isInTypeExpression || expression?.findAncestor(isNewExpression);
                 let hoverContent = fence(`${fullName} as ${exprType.toString()}`);
-                if (isFunctionType(exprType)) {
+                if (isTypedFunctionType(exprType)) {
                     exprType.setName(fullName);
                     hoverContent = this.getFunctionTypeHover(token, expression, exprType, scope);
                 } else if (useCustomTypeHover && (isClassType(exprType) || isInterfaceType(exprType))) {

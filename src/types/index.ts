@@ -6,7 +6,7 @@ export * from './DoubleType';
 export * from './DynamicType';
 export * from './EnumType';
 export * from './FloatType';
-export * from './FunctionType';
+export * from './TypedFunctionType';
 export * from './helpers';
 export * from './InheritableType';
 export * from './IntegerType';

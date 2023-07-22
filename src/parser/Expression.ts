@@ -10,12 +10,12 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallableType, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import type { BscType } from '../types/BscType';
 import { SymbolTypeFlag } from '../SymbolTable';
-import { FunctionType } from '../types/FunctionType';
+import { TypedFunctionType } from '../types/TypedFunctionType';
 import { AstNodeKind, Expression } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
 import { SourceNode } from 'source-map';
@@ -143,7 +143,7 @@ export class CallExpression extends Expression {
         if (isNewExpression(this.parent)) {
             return calleeType;
         }
-        if (isFunctionType(calleeType) && (!isReferenceType(calleeType.returnType) || calleeType.returnType.isResolvable())) {
+        if (isCallableType(calleeType) && (!isReferenceType(calleeType.returnType) || calleeType.returnType.isResolvable())) {
             return calleeType.returnType;
         }
         if (!isReferenceType(calleeType) && (calleeType as any).returnType?.isResolvable()) {
@@ -302,7 +302,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
     }
 
-    public getType(options: GetTypeOptions): FunctionType {
+    public getType(options: GetTypeOptions): TypedFunctionType {
         //if there's a defined return type, use that
         let returnType = this.returnTypeExpression?.getType({ ...options, typeChain: undefined });
         const isSub = this.functionType.kind === TokenKind.Sub;
@@ -311,7 +311,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             returnType = isSub ? VoidType.instance : DynamicType.instance;
         }
 
-        const resultType = new FunctionType(returnType);
+        const resultType = new TypedFunctionType(returnType);
         resultType.isSub = isSub;
         for (let param of this.parameters) {
             resultType.addParameter(param.name.text, param.getType({ ...options, typeChain: undefined }), !!param.defaultValue);
