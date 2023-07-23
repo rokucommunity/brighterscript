@@ -14,7 +14,6 @@ import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
 import { FloatType } from './types/FloatType';
-import { TypedFunctionType } from './types/TypedFunctionType';
 import { IntegerType } from './types/IntegerType';
 import { InvalidType } from './types/InvalidType';
 import { LongIntegerType } from './types/LongIntegerType';
@@ -1058,7 +1057,7 @@ export class Util {
                     case 'float':
                         return new FloatType(token.text);
                     case 'function':
-                        return new TypedFunctionType(new DynamicType(token.text));
+                        return new FunctionType(token.text);
                     case 'integer':
                         return new IntegerType(token.text);
                     case 'invalid':
