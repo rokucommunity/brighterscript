@@ -5,11 +5,11 @@ import { ProgramBuilder } from './ProgramBuilder';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import util from './util';
 import { LanguageServer } from './LanguageServer';
-import * as v8Profiler from 'v8-profiler-next';
 import chalk from 'chalk';
 
 import * as fsExtra from 'fs-extra';
 import * as readline from 'readline';
+import { execSync } from 'child_process';
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -114,8 +114,17 @@ async function finalize(exitCode: number, builder?: ProgramBuilder) {
     process.exit(exitCode);
 }
 
+let v8Profiler;
+
 function initProfiling() {
     if (options.profile) {
+        console.log('Installing v8-profiler-next');
+        execSync('npm install v8-profiler-next@^1.9.0', {
+            stdio: 'inherit',
+            cwd: `${__dirname}/../`
+        });
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        v8Profiler = require('v8-profiler-next');
         // set generateType 1 to generate new format for cpuprofile parsing in vscode.
         v8Profiler.setGenerateType(1);
         v8Profiler.startProfiling(profileTitle, true);
