@@ -6,7 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.65.3](https://github.com/rokucommunity/brighterscript/compare/v0.65.2...0.65.3) - 2023-07-22
+## [0.65.4](https://github.com/rokucommunity/brighterscript/compare/v0.65.3...v0.65.4) - 2023-07-24
+### Changed
+ - Install `v8-profiler-next` on demand instead of being a dependency ([#854](https://github.com/rokucommunity/brighterscript/pull/854))
+
+
+
+## [0.65.3](https://github.com/rokucommunity/brighterscript/compare/v0.65.2...v0.65.3) - 2023-07-22
 ### Changed
  - Show busy spinner for lsp builds. Remove `build-status` event in favor of new `busy-status` ([#852](https://github.com/rokucommunity/brighterscript/pull/852))
  - upgrade to [roku-deploy@3.10.3](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3103---2023-07-22). Notable changes since 3.10.2:
