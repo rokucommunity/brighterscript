@@ -14,7 +14,6 @@ import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
 import { FloatType } from './types/FloatType';
-import { FunctionType } from './types/FunctionType';
 import { IntegerType } from './types/IntegerType';
 import { InvalidType } from './types/InvalidType';
 import { LongIntegerType } from './types/LongIntegerType';
@@ -37,6 +36,7 @@ import { AstNodeKind, type Expression, type Statement } from './parser/AstNode';
 import { createIdentifier } from './astUtils/creators';
 import type { BscType } from './types/BscType';
 import type { AssignmentStatement } from './parser/Statement';
+import { FunctionType } from './types/FunctionType';
 
 export class Util {
     public clearConsole() {
@@ -1024,8 +1024,7 @@ export class Util {
             case TokenKind.FloatLiteral:
                 return FloatType.instance;
             case TokenKind.Function:
-                //TODO should there be a more generic function type without a signature that's assignable to all other function types?
-                return new FunctionType(new DynamicType(token.text));
+                return new FunctionType(token.text);
             case TokenKind.Integer:
                 return new IntegerType(token.text);
             case TokenKind.IntegerLiteral:
@@ -1058,7 +1057,7 @@ export class Util {
                     case 'float':
                         return new FloatType(token.text);
                     case 'function':
-                        return new FunctionType(new DynamicType(token.text));
+                        return new FunctionType(token.text);
                     case 'integer':
                         return new IntegerType(token.text);
                     case 'invalid':

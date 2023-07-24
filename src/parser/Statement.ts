@@ -26,7 +26,7 @@ import { NamespaceType } from '../types/NamespaceType';
 import { InterfaceType } from '../types/InterfaceType';
 import type { BscType } from '../types/BscType';
 import { VoidType } from '../types/VoidType';
-import { FunctionType } from '../types/FunctionType';
+import { TypedFunctionType } from '../types/TypedFunctionType';
 
 export class EmptyStatement extends Statement {
     constructor(
@@ -1679,7 +1679,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         return result;
     }
 
-    public getType(options: GetTypeOptions): FunctionType {
+    public getType(options: GetTypeOptions): TypedFunctionType {
         //if there's a defined return type, use that
         let returnType = this.returnTypeExpression?.getType(options);
         const isSub = this.tokens.functionType.kind === TokenKind.Sub;
@@ -1688,7 +1688,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             returnType = isSub ? VoidType.instance : DynamicType.instance;
         }
 
-        const resultType = new FunctionType(returnType);
+        const resultType = new TypedFunctionType(returnType);
         resultType.isSub = isSub;
         for (let param of this.params) {
             resultType.addParameter(param.name.text, param.getType(options), !!param.defaultValue);

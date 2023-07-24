@@ -36,10 +36,10 @@ import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
 import { FloatType } from './types/FloatType';
-import { FunctionType } from './types/FunctionType';
 import { LongIntegerType } from './types/LongIntegerType';
 import { ObjectType } from './types/ObjectType';
 import { VoidType } from './types/VoidType';
+import { FunctionType } from './types/FunctionType';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
@@ -114,7 +114,7 @@ export class Program {
         this.globalScope.symbolTable.addSymbol('double', undefined, DoubleType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('dynamic', undefined, DynamicType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('float', undefined, FloatType.instance, SymbolTypeFlag.typetime);
-        this.globalScope.symbolTable.addSymbol('function', undefined, new FunctionType(DynamicType.instance), SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('function', undefined, new FunctionType(), SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('integer', undefined, IntegerType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('longinteger', undefined, LongIntegerType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('object', undefined, new ObjectType(), SymbolTypeFlag.typetime);

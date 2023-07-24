@@ -9,7 +9,7 @@ import { StringType } from './StringType';
 import { FloatType } from './FloatType';
 import { ClassType } from './ClassType';
 import { isTypePropertyReferenceType, isReferenceType } from '../astUtils/reflection';
-import { FunctionType } from './FunctionType';
+import { TypedFunctionType } from './TypedFunctionType';
 import { NamespaceType } from './NamespaceType';
 
 const runtimeFlag = SymbolTypeFlag.runtime;
@@ -78,13 +78,13 @@ describe('ReferenceType', () => {
 describe('PropertyReferenceType', () => {
 
     it('can be checked with reflection', () => {
-        const func = new FunctionType(StringType.instance);
+        const func = new TypedFunctionType(StringType.instance);
         const propRef = new TypePropertyReferenceType(func, 'returnType');
         expect(isTypePropertyReferenceType(propRef)).to.be.true;
     });
 
     it('can resolve a FunctionType.returnType', () => {
-        const func = new FunctionType(StringType.instance);
+        const func = new TypedFunctionType(StringType.instance);
         const propRef = new TypePropertyReferenceType(func, 'returnType');
         expectTypeToBe(propRef, StringType);
     });
@@ -97,7 +97,7 @@ describe('PropertyReferenceType', () => {
         // `ref` will resolve to DynamicType, and its returnType is DynamicType.Instance
         expectTypeToBe(propRef, DynamicType);
         // Set ref to resolve to a function
-        table.addSymbol('someFunc', null, new FunctionType(IntegerType.instance), SymbolTypeFlag.runtime);
+        table.addSymbol('someFunc', null, new TypedFunctionType(IntegerType.instance), SymbolTypeFlag.runtime);
         expectTypeToBe(propRef, IntegerType);
     });
 
@@ -112,10 +112,10 @@ describe('PropertyReferenceType', () => {
         // Set fnRef to resolve to a function that returns a complex type
         const klassType = new ClassType('Klass');
         klassType.addMember('myNum', null, IntegerType.instance, SymbolTypeFlag.runtime);
-        table.addSymbol('someFunc', null, new FunctionType(klassType), SymbolTypeFlag.runtime);
+        table.addSymbol('someFunc', null, new TypedFunctionType(klassType), SymbolTypeFlag.runtime);
 
         // returnPropRef = someFunc().myNum
-        expectTypeToBe(fnRef, FunctionType);
+        expectTypeToBe(fnRef, TypedFunctionType);
         expectTypeToBe(returnRef, ClassType);
         expectTypeToBe(returnPropRef, IntegerType);
     });

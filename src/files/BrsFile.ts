@@ -22,7 +22,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement, isFunctionExpression } from '../astUtils/reflection';
+import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement, isFunctionExpression, isCallableType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -812,7 +812,7 @@ export class BrsFile {
                 names[variable.name.toLowerCase()] = true;
                 result.push({
                     label: variable.name,
-                    kind: isFunctionType(variable.getType()) ? CompletionItemKind.Function : CompletionItemKind.Variable
+                    kind: isCallableType(variable.getType()) ? CompletionItemKind.Function : CompletionItemKind.Variable
                 });
             }
 

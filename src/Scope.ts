@@ -18,7 +18,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isNamespaceType, isReferenceType } from './astUtils/reflection';
+import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isEnumStatement, isFunctionStatement, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isCallableType } from './astUtils/reflection';
 import { SymbolTable, SymbolTypeFlag } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
 import type { BscType } from './types/BscType';
@@ -973,7 +973,7 @@ export class Scope {
                 const lowerVarName = varName.toLowerCase();
 
                 //if the var is a function
-                if (isFunctionType(varDeclaration.getType())) {
+                if (isCallableType(varDeclaration.getType())) {
                     //local var function with same name as stdlib function
                     if (
                         //has same name as stdlib

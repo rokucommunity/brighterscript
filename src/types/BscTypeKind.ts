@@ -8,6 +8,7 @@ export enum BscTypeKind {
     EnumMemberType = 'EnumMemberType',
     FloatType = 'FloatType',
     FunctionType = 'FunctionType',
+    TypedFunctionType = 'TypedFunctionType',
     IntegerType = 'IntegerType',
     InterfaceType = 'InterfaceType',
     InvalidType = 'InvalidType',

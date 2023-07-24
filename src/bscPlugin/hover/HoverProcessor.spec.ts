@@ -355,5 +355,26 @@ describe('HoverProcessor', () => {
             // TODO: Add comments for class methods/properties
             expect(hover?.contents).to.eql([`${fence('function MyKlass.getName() as string')}`]);
         });
+
+        it('finds functions as params', () => {
+            program.setFile('source/main.brs', `
+                function getStrLength(name as string) as integer
+                    return len(name)
+                end function
+
+                sub tryManyParams(someFunc as function)
+                    print someFunc(1, 2, "hello", "world")
+                end sub
+
+                sub test()
+                    tryManyParams(getStrLength)
+                end sub
+            `);
+            program.validate();
+            // print some|Func(1, 2, "hello", "world")
+            let hover = program.getHover('source/main.brs', util.createPosition(6, 31))[0];
+            expect(hover?.range).to.eql(util.createRange(6, 26, 6, 34));
+            expect(hover?.contents).to.eql([fence('someFunc as function')]);
+        });
     });
 });

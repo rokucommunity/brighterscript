@@ -6,6 +6,7 @@ import type { BscFile, File, TypedefProvider } from '../interfaces';
 import type { InvalidType } from '../types/InvalidType';
 import type { VoidType } from '../types/VoidType';
 import { InternalWalkMode } from './visitors';
+import type { TypedFunctionType } from '../types/TypedFunctionType';
 import type { FunctionType } from '../types/FunctionType';
 import type { StringType } from '../types/StringType';
 import type { BooleanType } from '../types/BooleanType';
@@ -29,6 +30,7 @@ import type { ArrayType } from '../types/ArrayType';
 import type { InheritableType } from '../types/InheritableType';
 import { BscTypeKind } from '../types/BscTypeKind';
 import type { NamespaceType } from '../types/NamespaceType';
+import type { BaseFunctionType } from '../types/BaseFunctionType';
 
 // File reflection
 export function isBrsFile(file: (BscFile | File)): file is BrsFile {
@@ -262,6 +264,9 @@ export function isTypeCastExpression(element: any): element is TypeCastExpressio
 export function isStringType(value: any): value is StringType {
     return value?.kind === BscTypeKind.StringType;
 }
+export function isTypedFunctionType(value: any): value is TypedFunctionType {
+    return value?.kind === BscTypeKind.TypedFunctionType;
+}
 export function isFunctionType(value: any): value is FunctionType {
     return value?.kind === BscTypeKind.FunctionType;
 }
@@ -325,6 +330,10 @@ export function isArrayType(value: any): value is ArrayType {
 
 export function isInheritableType(target): target is InheritableType {
     return isClassType(target) || isInterfaceType(target);
+}
+
+export function isCallableType(target): target is BaseFunctionType {
+    return isFunctionType(target) || isTypedFunctionType(target);
 }
 
 const numberConstructorNames = [

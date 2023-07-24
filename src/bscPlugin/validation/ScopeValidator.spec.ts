@@ -125,6 +125,18 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.mismatchArgumentCount(1, 2)
             ]);
         });
+
+
+        it('allows any number of parameters in a function used as an argument', () => {
+            program.setFile('source/file.brs', `
+                    sub tryManyParams(someFunc as function)
+                        someFunc(1, 2, "hello", "world")
+                    end sub
+                `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('argumentTypeMismatch', () => {
@@ -202,6 +214,7 @@ describe('ScopeValidator', () => {
 
                 sub printFunction(value as function)
                     print value
+                    print value(1)
                 end sub
 
                 interface Video
@@ -658,6 +671,60 @@ describe('ScopeValidator', () => {
             expectDiagnostics(program, [
                 DiagnosticMessages.argumentTypeMismatch('string', 'integer').message,
                 DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
+            ]);
+        });
+
+        it('allows any parameter types in a function passed as an argument', () => {
+            program.setFile('source/file.brs', `
+                    function getStrLength(name as string) as integer
+                        return len(name)
+                    end function
+
+                    sub tryManyParams(someFunc as function)
+                        print someFunc(1, 2, "hello", "world")
+                    end sub
+
+                    sub test()
+                        tryManyParams(getStrLength)
+                    end sub
+                `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows a inline function as an argument of type function', () => {
+            program.setFile('source/file.brs', `
+                    sub tryManyParams(someFunc as function)
+                        print someFunc(1, 2, "hello", "world")
+                    end sub
+
+                    sub test()
+                        tryManyParams(sub (i as integer)
+                            print i
+                        end sub)
+                    end sub
+                `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates when a non-function is used as an argument expecting a function', () => {
+            program.setFile('source/file.brs', `
+                    sub tryManyParams(someFunc as function)
+                        print someFunc(1, 2, "hello", "world")
+                    end sub
+
+                    sub test()
+                        notAFunction = 3.14
+                        tryManyParams(notAFunction)
+                    end sub
+                `);
+            program.validate();
+            //should have an error that the argument is not a function
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('float', 'function').message
             ]);
         });
     });

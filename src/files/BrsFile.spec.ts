@@ -5,7 +5,7 @@ import type { Callable, CommentFlag, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
 import { BooleanType } from '../types/BooleanType';
 import { DynamicType } from '../types/DynamicType';
-import { FunctionType } from '../types/FunctionType';
+import { TypedFunctionType } from '../types/TypedFunctionType';
 import { IntegerType } from '../types/IntegerType';
 import { StringType } from '../types/StringType';
 import { BrsFile } from './BrsFile';
@@ -1107,6 +1107,7 @@ describe('BrsFile', () => {
             file.parse(`
                 sub Main()
                     doWork = function(callback as function)
+                        callback()
                     end function
                 end sub
             `);
@@ -1698,7 +1699,7 @@ describe('BrsFile', () => {
                 lineIndex: 2,
                 name: 'sayHi'
             });
-            expect(file.functionScopes[0].variableDeclarations[0].getType()).instanceof(FunctionType);
+            expect(file.functionScopes[0].variableDeclarations[0].getType()).instanceof(TypedFunctionType);
 
             expect(file.functionScopes[1].variableDeclarations).to.be.length(1);
             expect(file.functionScopes[1].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{

@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isBinaryExpression, isBrsFile, isFunctionType, isLiteralExpression, isNamespaceStatement, isTypeExpression, isXmlScope } from '../../astUtils/reflection';
+import { isBinaryExpression, isBrsFile, isLiteralExpression, isNamespaceStatement, isTypeExpression, isTypedFunctionType, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -384,7 +384,7 @@ export class ScopeValidator {
         //validate all function calls
         for (let expCall of file.functionCalls) {
             const funcType = expCall.expression?.callee?.getType({ flags: SymbolTypeFlag.runtime });
-            if (funcType?.isResolvable() && isFunctionType(funcType)) {
+            if (funcType?.isResolvable() && isTypedFunctionType(funcType)) {
                 funcType.setName(expCall.name);
 
                 //get min/max parameter count for callable
