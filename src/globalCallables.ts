@@ -11,6 +11,7 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import util from './util';
+import { UnionType } from './types/UnionType';
 
 export let globalFile = new BrsFile('global', 'global', null);
 globalFile.parse('');
@@ -561,7 +562,7 @@ Normally non-ASCII characters are escaped in the output string as "\\uXXXX" wher
             isOptional: false
         }, {
             name: 'flags',
-            type: new StringType(),
+            type: new UnionType([IntegerType.instance, StringType.instance]),
             isOptional: true
         }]
     }, {
@@ -825,6 +826,13 @@ let programStatementFunctions = [
     }, {
         name: 'Roku_Ads',
         shortDescription: 'The main entry point for instantiating the ad interface. This object manages ad server requests, parses ad structure, schedules and renders ads, and triggers tracking beacons.\n\nThe Roku ad parser/renderer object returned has global scope because it is meant to represent interaction with external resources (the ad server and any tracking services) that have persistence and state independent of the ad rendering within a client application.',
+        type: new TypedFunctionType(new ObjectType()),
+        file: globalFile,
+        params: []
+        //TODO this is a temporary fix for library imported files. Eventually this should be moved into `Roku_Event_Dispatcher.brs` and handled by the `Library` statement
+    }, {
+        name: 'Roku_Event_Dispatcher',
+        shortDescription: 'Use the Roku Event Dispatcher in your channel\'s authentication workflow to send authentication events. See: https://developer.roku.com/docs/developer-program/discovery/search/prioritizing-authenticated-channels-in-roku-search.md',
         type: new TypedFunctionType(new ObjectType()),
         file: globalFile,
         params: []

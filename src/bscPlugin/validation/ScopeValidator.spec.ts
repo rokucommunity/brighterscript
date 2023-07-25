@@ -727,5 +727,39 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.argumentTypeMismatch('float', 'function').message
             ]);
         });
+
+        it('allows any variable to passed as argument to an untyped param with default type invalid', () => {
+            program.setFile('source/util.brs', `
+                sub doSomething(x = invalid)
+                    print x
+                end sub
+
+                sub tests()
+                    doSomething(1)
+                    doSomething(1.1)
+                    doSomething("Hello")
+                    doSomething(true)
+                    doSomething({test: true})
+                end sub
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+    });
+
+    describe('cannotFindName', () => {
+
+        it('finds variables from assignments from member functions of primitive types', () => {
+            program.setFile('source/util.brs', `
+                function lcaseTrim(str)
+                    trimmedLowerStr = lcase(str).trim()
+                    print trimmedLowerStr
+                end function
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
     });
 });

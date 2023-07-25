@@ -21,6 +21,20 @@ describe('globalCallables', () => {
             program.setFile('source/main.brs', `
                 sub main()
                     adIface = Roku_Ads()
+                    print adIface
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
+    describe('Roku_Event_Dispatcher', () => {
+        it('exists', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    red = Roku_Event_Dispatcher()
+                    print red
                 end sub
             `);
             program.validate();

@@ -1981,6 +1981,18 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('should correctly validate formatJson', () => {
+            program.setFile(`source/main.brs`, `
+                sub main()
+                    obj = {hello: "world"}
+                    print formatJson(obj) ' 2nd param not included
+                    print formatJson(obj, 0) ' 2nd param as integer
+                    print formatJson(obj, "0") ' 2nd param as string
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
 
         describe('inheritance', () => {
             it('inherits callables from parent', () => {
