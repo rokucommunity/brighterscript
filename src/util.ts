@@ -25,7 +25,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isExpression, isFloatType, isIndexedGetExpression, isIntegerType, isInvalidType, isLongIntegerType, isStringType, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isDynamicType, isExpression, isFloatType, isIndexedGetExpression, isIntegerType, isInvalidType, isLongIntegerType, isStringType, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -1030,7 +1030,7 @@ export class Util {
             case TokenKind.IntegerLiteral:
                 return IntegerType.instance;
             case TokenKind.Invalid:
-                return new InvalidType(token.text);
+                return DynamicType.instance; // TODO: use InvalidType better new InvalidType(token.text);
             case TokenKind.LongInteger:
                 return new LongIntegerType(token.text);
             case TokenKind.LongIntegerLiteral:
@@ -1061,7 +1061,7 @@ export class Util {
                     case 'integer':
                         return new IntegerType(token.text);
                     case 'invalid':
-                        return new InvalidType(token.text);
+                        return DynamicType.instance; // TODO: use InvalidType better new InvalidType(token.text);
                     case 'longinteger':
                         return new LongIntegerType(token.text);
                     case 'object':
@@ -1090,6 +1090,7 @@ export class Util {
         let hasFloat = isFloatType(leftType) || isFloatType(rightType);
         let hasLongInteger = isLongIntegerType(leftType) || isLongIntegerType(rightType);
         let hasInvalid = isInvalidType(leftType) || isInvalidType(rightType);
+        let hasDynamic = isDynamicType(leftType) || isDynamicType(rightType);
         let bothNumbers = this.isNumberType(leftType) && this.isNumberType(rightType);
         let bothStrings = isStringType(leftType) && isStringType(rightType);
         let eitherBooleanOrNum = (this.isNumberType(leftType) || isBooleanType(leftType)) && (this.isNumberType(rightType) || isBooleanType(rightType));
@@ -1172,8 +1173,8 @@ export class Util {
             // All comparison operators result in boolean
             case TokenKind.Equal:
             case TokenKind.LessGreater:
-                // = and <> can accept invalid
-                if (hasInvalid || bothStrings || eitherBooleanOrNum) {
+                // = and <> can accept invalid / dynamic
+                if (hasDynamic || hasInvalid || bothStrings || eitherBooleanOrNum) {
                     return BooleanType.instance;
                 }
                 break;
