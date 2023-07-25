@@ -828,6 +828,13 @@ let programStatementFunctions = [
         type: new TypedFunctionType(new ObjectType()),
         file: globalFile,
         params: []
+        //TODO this is a temporary fix for library imported files. Eventually this should be moved into `Roku_Event_Dispatcher.brs` and handled by the `Library` statement
+    }, {
+        name: 'Roku_Event_Dispatcher',
+        shortDescription: 'Use the Roku Event Dispatcher in your channel\'s authentication workflow to send authentication events. See: https://developer.roku.com/docs/developer-program/discovery/search/prioritizing-authenticated-channels-in-roku-search.md',
+        type: new TypedFunctionType(new ObjectType()),
+        file: globalFile,
+        params: []
     }, { //TODO Same as the Roku_Ads.brs (RAF) library above, the following functions are from the 'v30/bslCore.brs' library
         name: 'bslBrightScriptErrorCodes',
         shortDescription: 'Returns an roAssociativeArray with name value pairs of the error name and corresponding integer value, for example ERR_OKAY = &hFF.',
