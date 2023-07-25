@@ -11,6 +11,7 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import util from './util';
+import { UnionType } from './types/UnionType';
 
 export let globalFile = new BrsFile('global', 'global', null);
 globalFile.parse('');
@@ -561,7 +562,7 @@ Normally non-ASCII characters are escaped in the output string as "\\uXXXX" wher
             isOptional: false
         }, {
             name: 'flags',
-            type: new StringType(),
+            type: new UnionType([IntegerType.instance, StringType.instance]),
             isOptional: true
         }]
     }, {
