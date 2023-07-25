@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.66.0-alpha.3](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.2...v0.66.0-alpha.3) - 2023-07-24
+## Fixed
+- performance fixes ([#834](https://github.com/rokucommunity/brighterscript/pull/834))
+- remove enable type validation option ([#846](https://github.com/rokucommunity/brighterscript/pull/846))
+- BinaryExpression and UnaryExpression infer resultant types ([#827](https://github.com/rokucommunity/brighterscript/pull/827))
+- improve hover to use symbol tables ([#828](https://github.com/rokucommunity/brighterscript/pull/828))
+- fix issue with enums not being properly treated as their underlying types when passed to functions ([#849](https://github.com/rokucommunity/brighterscript/pull/849))
+- object type wider support ([#850](https://github.com/rokucommunity/brighterscript/pull/850))
+- functions as params ([#853](https://github.com/rokucommunity/brighterscript/pull/853))
+
+
+
 ## [0.66.0-alpha.2](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.1...v0.66.0-alpha.2) - 2023-06-14
 ### Fixed
 - Fixes some issues related to Classes as Properties and Consts validation ([#826](https://github.com/rokucommunity/brighterscript/pull/826))
