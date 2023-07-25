@@ -728,7 +728,7 @@ describe('ScopeValidator', () => {
             ]);
         });
 
-        it('allows any variable to passed as rg to an untyped param with default type invalid', () => {
+        it('allows any variable to passed as argument to an untyped param with default type invalid', () => {
             program.setFile('source/util.brs', `
                 sub doSomething(x = invalid)
                     print x
