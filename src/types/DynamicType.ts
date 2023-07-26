@@ -2,6 +2,7 @@ import type { GetTypeOptions } from '../interfaces';
 import { isDynamicType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
 export class DynamicType extends BscType {
     constructor(
@@ -48,3 +49,4 @@ export class DynamicType extends BscType {
     }
 }
 
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('dynamic', DynamicType.instance);

@@ -3,6 +3,7 @@ import { isObjectType } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { DynamicType } from './DynamicType';
 
 export class ObjectType extends BscType {
@@ -37,3 +38,6 @@ export class ObjectType extends BscType {
         return isObjectType(otherType) && this.checkCompatibilityBasedOnMembers(otherType, SymbolTypeFlag.runtime);
     }
 }
+
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('object', new ObjectType('object'));
