@@ -1718,6 +1718,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     ) {
         super();
         this.body = this.body ?? [];
+        this.symbolTable = new SymbolTable(`ClassStatement: '${this.name?.text}'`, () => this.parent?.getSymbolTable());
 
         for (let statement of this.body) {
             if (isMethodStatement(statement)) {

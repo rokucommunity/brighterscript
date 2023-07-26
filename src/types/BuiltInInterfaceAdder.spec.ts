@@ -20,6 +20,7 @@ describe('BuiltInInterfaceAdder', () => {
         expectTypeToBe(myType.getMemberType('trim', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
         expectTypeToBe(myType.getMemberType('split', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
         expectTypeToBe(myType.getMemberType('getString', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
+        expectTypeToBe(myType.getMemberType('replace', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
     });
 
     it('should add members to IntegerType', () => {
