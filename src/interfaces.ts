@@ -201,6 +201,7 @@ export interface CompilerPlugin {
     afterProgramValidate?: PluginHandler<AfterProgramValidateEvent>;
     beforeProgramTranspile?: PluginHandler<BeforeProgramTranspileEvent>;
     afterProgramTranspile?: PluginHandler<AfterProgramTranspileEvent>;
+    beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
 
     /**
@@ -445,6 +446,9 @@ export interface BeforeFileDisposeEvent {
     file: BscFile;
 }
 export type AfterFileDisposeEvent = BeforeFileDisposeEvent;
+export interface BeforeProgramDisposeEvent {
+    program: Program;
+}
 
 export interface SemanticToken {
     range: Range;

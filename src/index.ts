@@ -28,3 +28,5 @@ export * from './astUtils/AstEditor';
 export * from './SymbolTable';
 export * from './types';
 export * from './Cache';
+export * from './BusyStatusTracker';
+export * from './Logger';

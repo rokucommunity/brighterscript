@@ -193,10 +193,6 @@ export class Program {
 
     protected addScope(scope: Scope) {
         this.scopes[scope.name] = scope;
-        this.plugins.emit('afterScopeCreate', {
-            program: this,
-            scope: scope
-        });
     }
 
     /**
@@ -496,6 +492,11 @@ export class Program {
                 //register this compoent now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
 
+                //notify plugins that the scope is created and the component is registered
+                this.plugins.emit('afterScopeCreate', {
+                    program: this,
+                    scope: scope
+                });
             } else {
                 //TODO do we actually need to implement this? Figure out how to handle img paths
                 // let genericFile = this.files[srcPath] = <any>{
@@ -583,6 +584,10 @@ export class Program {
             const sourceScope = new Scope('source', this, 'scope:source');
             sourceScope.attachDependencyGraph(this.dependencyGraph);
             this.addScope(sourceScope);
+            this.plugins.emit('afterScopeCreate', {
+                program: this,
+                scope: sourceScope
+            });
         }
     }
 
@@ -1366,6 +1371,8 @@ export class Program {
     private _manifest: Map<string, string>;
 
     public dispose() {
+        this.plugins.emit('beforeProgramDispose', { program: this });
+
         for (let filePath in this.files) {
             this.files[filePath].dispose();
         }
