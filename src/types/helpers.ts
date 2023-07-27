@@ -1,4 +1,4 @@
-import { isAnyReferenceType, isDynamicType, isInheritableType, isUnionType } from '../astUtils/reflection';
+import { isAnyReferenceType, isDynamicType, isInheritableType, isReferenceType, isUnionType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[]) {
@@ -114,8 +114,14 @@ export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
  * @returns either the singular most general type, if there is one, otherwise a UnionType of the most general types
  */
 export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscType[]) => BscType): BscType {
+    if (!types || types.length === 0) {
+        return undefined;
+    }
+    if (types.length === 1) {
+        return types[0];
+    }
     types = types?.map(type => {
-        if (!isAnyReferenceType(type) && isUnionType(type)) {
+        if (!isReferenceType(type) && isUnionType(type)) {
             return type.types;
         }
         return type;

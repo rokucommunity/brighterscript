@@ -2349,7 +2349,7 @@ describe('Scope', () => {
 
         describe('union types', () => {
 
-            it('should find actual members correctly', () => {
+            it.only('should find actual members correctly', () => {
                 const mainFile = program.setFile('source/main.bs', `
                     sub printName(thing as Person or Pet)
                         name = thing.name

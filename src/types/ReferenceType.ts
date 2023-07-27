@@ -40,7 +40,7 @@ export class ReferenceType extends BscType {
                 if (propName === 'isResolvable') {
                     return () => {
                         let resultSoFar = this.resolve();
-                        while (isReferenceType(resultSoFar)) {
+                        while (resultSoFar && isReferenceType(resultSoFar)) {
                             resultSoFar = (resultSoFar as any).getTarget();
                         }
                         return !!resultSoFar;
@@ -169,7 +169,7 @@ export class ReferenceType extends BscType {
         }
         if (isAnyReferenceType(resolvedType)) {
             // If this is a referenceType, keep digging down until we have a non reference Type.
-            while (isAnyReferenceType(resolvedType)) {
+            while (resolvedType && isAnyReferenceType(resolvedType)) {
                 if (this.referenceChain.has(resolvedType)) {
                     // this is a circular reference
                     this.circRefCount++;
@@ -181,12 +181,11 @@ export class ReferenceType extends BscType {
                 }
                 this.referenceChain.add(resolvedType);
                 resolvedType = (resolvedType as any).getTarget();
-
             }
             this.tableProvider().setCachedType(this.memberKey, resolvedType, { flags: this.flags });
         }
 
-        if (!isAnyReferenceType(resolvedType)) {
+        if (resolvedType && !isAnyReferenceType(resolvedType)) {
             this.circRefCount = 0;
             this.referenceChain.clear();
         }
@@ -304,6 +303,8 @@ export class TypePropertyReferenceType extends BscType {
  * are ReferenceTypes
  */
 export class BinaryOperatorReferenceType extends BscType {
+    cachedType: BscType;
+
     constructor(public leftType: BscType, public operator: Token, public rightType: BscType, binaryOpResolver: (lType: BscType, operator: Token, rType: BscType) => BscType) {
         super(operator.text);
         // eslint-disable-next-line no-constructor-return
@@ -311,23 +312,42 @@ export class BinaryOperatorReferenceType extends BscType {
             get: (target, propName, receiver) => {
 
                 if (propName === '__reflection') {
-                    // Cheeky way to get `isTypePropertyReferenceType` reflection to work
+                    // Cheeky way to get `BinaryOperatorReferenceType` reflection to work
                     return { name: 'BinaryOperatorReferenceType' };
                 }
-                let resultType: BscType = DynamicType.instance;
-                if ((isAnyReferenceType(this.leftType) && !this.leftType.isResolvable()) ||
-                    (isAnyReferenceType(this.rightType) && !this.rightType.isResolvable())
-                ) {
-                    if (propName === 'isResolvable') {
-                        return () => false;
-                    }
-                    if (propName === 'getTarget') {
-                        return () => undefined;
-                    }
-                } else {
-                    resultType = binaryOpResolver(this.leftType, this.operator, this.rightType);
-                }
 
+
+                let resultType: BscType = this.cachedType ?? DynamicType.instance;
+                if (!this.cachedType) {
+                    //debug console.log('checking resolves', (this.leftType as any).kind, (this.leftType as any).__reflection, (this.leftType as any).memberkey, this.operator.text, (this.rightType as any).kind, (this.rightType as any).__reflection, (this.rightType as any).memberkey);
+                    if (isAnyReferenceType(this.leftType)) {
+                        //debug console.log('left side is reference');
+                    }
+                    if (isAnyReferenceType(this.rightType)) {
+                        //debug console.log('right side is reference');
+                    }
+                    if ((isAnyReferenceType(this.leftType) && !this.leftType.isResolvable()) ||
+                        (isAnyReferenceType(this.rightType) && !this.rightType.isResolvable())
+                    ) {
+                        if (propName !== 'kind' && propName !== 'memberKey') {
+                            //debug console.log('Not resolvable! ', propName);
+                        }
+                        if (propName === 'isResolvable') {
+                            return () => false;
+                        }
+                        if (propName === 'getTarget') {
+                            return () => undefined;
+                        }
+                    } else {
+                        if (propName !== 'kind') {
+                            //debug 'Resolvable! ', propName);
+                        }
+
+                        resultType = binaryOpResolver(this.leftType, this.operator, this.rightType);
+                        this.cachedType = resultType;
+                    }
+
+                }
                 if (resultType) {
                     const result = Reflect.get(resultType, propName, resultType);
                     return result;

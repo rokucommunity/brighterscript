@@ -70,6 +70,7 @@ export class BinaryExpression extends Expression {
                 //TODO: Intersection Types?, eg. case TokenKind.And:
             }
         } else if (options.flags & SymbolTypeFlag.runtime) {
+            //debug console.log(this.left.kind, this.operator.text, this.right.kind);
             return util.binaryOperatorResultType(
                 this.left.getType(options),
                 this.operator,
