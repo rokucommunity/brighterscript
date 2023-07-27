@@ -77,7 +77,6 @@ export class ScopeValidator {
     private expressionsByFile = new Cache<BrsFile, Readonly<ExpressionInfo>[]>();
     private iterateFileExpressions(file: BrsFile) {
         const { scope } = this.event;
-        //debug console.log('Validating ', file.srcPath);
         //build an expression collection ONCE per file
         const expressionInfos = this.expressionsByFile.getOrAdd(file, () => {
             const result: DeepWriteable<ExpressionInfo[]> = [];
@@ -124,7 +123,6 @@ export class ScopeValidator {
                 flags: symbolType,
                 typeChain: typeChain
             });
-            //debug 'validating', info.parts.map(p => p.name.text).join('.'));
             if (!exprType || !exprType.isResolvable()) {
                 if (info.expression.getType({ flags: oppositeSymbolType })?.isResolvable()) {
                     const oppoSiteTypeChain = [];
