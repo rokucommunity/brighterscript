@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.66.0-alpha.4](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.3...v0.66.0-alpha.4) - 2023-07-26
+### Changed
+ - all changes from [v0.65.4](https://github.com/rokucommunity/brighterscript/compare/v0.65.3...v0.65.4)
+### Fixes
+ - assignment from return of member functions of primitive types ([#855](https://github.com/rokucommunity/brighterscript/pull/855))
+ - using invalid as a default param value (now sets type to dynamic) ([#855](https://github.com/rokucommunity/brighterscript/pull/855))
+ - missing `Roku_Event_Dispatcher()` global callable (from library `Roku_Event_Dispatcher.brs`) ([#855](https://github.com/rokucommunity/brighterscript/pull/855))
+ - `FormatJson()` function signature ([#855](https://github.com/rokucommunity/brighterscript/pull/855))
+
+
+
 ## [0.66.0-alpha.3](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.2...v0.66.0-alpha.3) - 2023-07-24
 ## Fixed
 - performance fixes ([#834](https://github.com/rokucommunity/brighterscript/pull/834))
@@ -38,6 +49,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+
+
+
+## [0.65.4](https://github.com/rokucommunity/brighterscript/compare/v0.65.3...v0.65.4) - 2023-07-24
+### Changed
+ - Install `v8-profiler-next` on demand instead of being a dependency ([#854](https://github.com/rokucommunity/brighterscript/pull/854))
+
+
+
+## [0.65.3](https://github.com/rokucommunity/brighterscript/compare/v0.65.2...v0.65.3) - 2023-07-22
+### Changed
+ - Show busy spinner for lsp builds. Remove `build-status` event in favor of new `busy-status` ([#852](https://github.com/rokucommunity/brighterscript/pull/852))
+ - upgrade to [roku-deploy@3.10.3](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3103---2023-07-22). Notable changes since 3.10.2:
+     - Bump word-wrap from 1.2.3 to 1.2.4 ([roku-deploy#117](https://github.com/rokucommunity/roku-deploy/pull/117))
+ - Bump word-wrap from 1.2.3 to 1.2.4 ([#851](https://github.com/rokucommunity/brighterscript/pull/851))
+
+
+
+## [0.65.2](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.65.2) - 2023-07-17
+### Added
+ - beforeProgramDispose event ([#844](https://github.com/rokucommunity/brighterscript/pull/844)), ([#845](https://github.com/rokucommunity/brighterscript/pull/845))
+ - profiling support to the cli via the `--profile` flag ([#833](https://github.com/rokucommunity/brighterscript/pull/833))
+### Changed
+ - Make component ready on afterScopeCreate ([#843](https://github.com/rokucommunity/brighterscript/pull/843))
+ - Add project index to language server log entries ([#836](https://github.com/rokucommunity/brighterscript/pull/836))
+ - Prevent crashing when diagnostic is missing range. ([#832](https://github.com/rokucommunity/brighterscript/pull/832))
+ - Prevent crash when diagnostic is missing range ([#831](https://github.com/rokucommunity/brighterscript/pull/831))
+ - Add baseline interface docs ([#829](https://github.com/rokucommunity/brighterscript/pull/829))
 
 
 

@@ -37,7 +37,7 @@ export class Deferred<T = void> {
     /**
      * Resolve the promise
      */
-    public resolve(value: T) {
+    public resolve(value?: T) {
         if (this._isCompleted) {
             throw new Error('Already completed.');
         }
