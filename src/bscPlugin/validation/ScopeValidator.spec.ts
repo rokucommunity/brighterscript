@@ -774,6 +774,19 @@ describe('ScopeValidator', () => {
             //should have no errors
             expectZeroDiagnostics(program);
         });
+
+        it('validates union types of all compatible types as arg - when some don not work', () => {
+            program.setFile('source/util.brs', `
+                sub printIntNum(maybeNum as float or string)
+                    print cInt(maybeNum)
+                end sub
+            `);
+            program.validate();
+            //should have no errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('float or string', 'float').message
+            ]);
+        });
     });
 
     describe('cannotFindName', () => {
