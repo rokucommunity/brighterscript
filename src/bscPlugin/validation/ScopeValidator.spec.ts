@@ -746,6 +746,130 @@ describe('ScopeValidator', () => {
             //should have no errors
             expectZeroDiagnostics(program);
         });
+
+        it('allows function calls of built-in members of primitives', () => {
+            program.setFile('source/util.brs', `
+                sub doSomething()
+                    myStr = "Hello World"
+                    myStr = myStr.replace("World", "You")
+                    print myStr
+                end sub
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates function calls of built-in members of primitives', () => {
+            program.setFile('source/util.brs', `
+                sub doSomething()
+                    myStr = "Hello World"
+                    notAString = 3.14
+                    myStr = myStr.replace("World", notAString)
+                    print myStr
+                end sub
+            `);
+            program.validate();
+            //should have error - 2nd param should be a string, not a float
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('float', 'string').message
+            ]);
+        });
+
+        it('validates method calls of classes', () => {
+            program.setFile('source/util.bs', `
+                class Klass
+                    sub test(input as string)
+                    end sub
+                end class
+
+                sub doSomething()
+                    k = new Klass()
+                    k.test(3.14)
+                end sub
+            `);
+            program.validate();
+            //should have error - param should be a string, not a float
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('float', 'string').message
+            ]);
+        });
+
+        it('validates inside method calls of classes', () => {
+            program.setFile('source/util.bs', `
+                class Klass
+                    sub test(input as string)
+                    end sub
+
+                    sub otherTest()
+                        m.test(3.14)
+                    end sub
+                end class
+            `);
+            program.validate();
+            //should have error - param should be a string, not a float
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('float', 'string').message
+            ]);
+        });
+
+        it('validates calls of a constructor', () => {
+            program.setFile('source/util.bs', `
+                class Klass
+                   sub new(name as string)
+                   end sub
+                end class
+
+                sub createKlass()
+                    k = new Klass(3.14)
+                end sub
+            `);
+            program.validate();
+            //should have error - param should be a string, not a float
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('float', 'string').message
+            ]);
+        });
+
+        it('validates super calls in a constructor', () => {
+            program.setFile('source/util.bs', `
+                class Klass
+                   sub new(name as string)
+                   end sub
+                end class
+
+                class SubKlass extends Klass
+                    sub new()
+                        super(3.14)
+                    end sub
+                end class
+            `);
+            program.validate();
+            //should have error - param should be a string, not a float
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('float', 'string').message
+            ]);
+        });
+
+        it('validates super calls in a class methods', () => {
+            program.setFile('source/util.bs', `
+                class Klass
+                   sub test(name as string)
+                   end sub
+                end class
+
+                class SubKlass extends Klass
+                    sub test2()
+                        super.test(3.14)
+                    end sub
+                end class
+            `);
+            program.validate();
+            //should have error - param should be a string, not a float
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('float', 'string').message
+            ]);
+        });
     });
 
     describe('cannotFindName', () => {

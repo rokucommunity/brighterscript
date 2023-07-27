@@ -2,11 +2,13 @@ import type { GetSymbolTypeOptions, SymbolTableProvider } from '../SymbolTable';
 import type { Range } from 'vscode-languageserver';
 import type { SymbolTypeFlag } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
 export abstract class BscType {
 
     public readonly memberTable: SymbolTable;
     protected __identifier: string;
+    protected hasAddedBuiltInInterfaces = false;
 
     constructor(name = '') {
         this.__identifier = `${this.constructor.name}${name ? ': ' + name : ''}`;
@@ -21,11 +23,16 @@ export abstract class BscType {
         this.memberTable.popParentProvider();
     }
 
+    getBuiltInMemberTable(): SymbolTable {
+        return this.memberTable;
+    }
+
     addMember(name: string, range: Range, type: BscType, flags: SymbolTypeFlag) {
         this.memberTable.addSymbol(name, range, type, flags);
     }
 
     getMemberType(name: string, options: GetSymbolTypeOptions) {
+        this.addBuiltInInterfaces();
         return this.memberTable.getSymbolType(name, options);
     }
 
@@ -75,6 +82,13 @@ export abstract class BscType {
             }
         }
         return isSuperSet;
+    }
+
+    addBuiltInInterfaces() {
+        if (!this.hasAddedBuiltInInterfaces) {
+            BuiltInInterfaceAdder.addBuiltInInterfacesToType(this);
+        }
+        this.hasAddedBuiltInInterfaces = true;
     }
 }
 

@@ -1,6 +1,7 @@
 import { isDynamicType, isObjectType, isVoidType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
 export class VoidType extends BscType {
     constructor(
@@ -33,3 +34,5 @@ export class VoidType extends BscType {
         return isVoidType(targetType);
     }
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('void', VoidType.instance);

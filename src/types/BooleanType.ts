@@ -1,8 +1,7 @@
 import { isBooleanType, isDynamicType, isObjectType } from '../astUtils/reflection';
-import type { GetTypeOptions } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
-import { DynamicType } from './DynamicType';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
 export class BooleanType extends BscType {
     constructor(
@@ -34,9 +33,6 @@ export class BooleanType extends BscType {
     isEqual(targetType: BscType): boolean {
         return isBooleanType(targetType);
     }
-
-    getMemberType(memberName: string, options: GetTypeOptions) {
-        //TODO: this should really add the appropriate interface methods from roku-types
-        return DynamicType.instance;
-    }
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('boolean', BooleanType.instance);
