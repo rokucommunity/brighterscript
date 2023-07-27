@@ -710,7 +710,7 @@ class Runner {
 
 
     private fixFunctionParams(text: string): string {
-        return text.replaceAll('to As String', 'toValue as String');
+        return text.replace(/to as /ig, 'toValue as ');
     }
 
     private getMethod(text: string) {
