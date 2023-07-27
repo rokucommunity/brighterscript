@@ -32,7 +32,7 @@ export class BuiltInInterfaceAdder {
             throw `Unknown Roku component '${componentName}'`;
         }
         if (!this.typedFunctionFactory) {
-            throw `Unable to build typed functions - no typed function factory`;
+            throw new Error('Unable to build typed functions - no typed function factory');
         }
 
         for (const iface of builtInComponent.interfaces) {
