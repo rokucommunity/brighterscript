@@ -29,10 +29,10 @@ export class BuiltInInterfaceAdder {
         }
         const builtInComponent = components[componentName.toLowerCase()];
         if (!builtInComponent) {
-            throw `Unknown Roku component '${componentName}'`;
+            throw new Error(`Unknown Roku component '${componentName}'`);
         }
         if (!this.typedFunctionFactory) {
-            throw new Error('Unable to build typed functions - no typed function factory');
+            throw new Error(`Unable to build typed functions - no typed function factory`);
         }
 
         for (const iface of builtInComponent.interfaces) {
@@ -52,7 +52,7 @@ export class BuiltInInterfaceAdder {
     private static getPrimitiveType(typeName: string): BscType {
         const returnType = this.primitiveTypeInstanceCache.get(typeName.toLowerCase());
         if (!returnType) {
-            throw `Unable to find type instance '${typeName}'`;
+            throw new Error(`Unable to find type instance '${typeName}'`);
         }
         return returnType;
     }
