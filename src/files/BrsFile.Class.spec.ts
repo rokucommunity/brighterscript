@@ -155,7 +155,7 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
                 class Duck extends Bird
-                    sub new()
+                    sub new(name)
                         thing = { m: "m"}
                         print thing.m
                         name = "Donald" + "Duck"
@@ -170,23 +170,25 @@ describe('BrsFile BrighterScript classes', () => {
         it('allows non-`m` expressions and statements before the super call', () => {
             program.setFile('source/main.bs', `
                 class Bird
-                    sub new(name)
+                    name as string
+                    sub new(name as string)
+                        m.name = name
                     end sub
                 end class
                 class Duck extends Bird
                     sub new()
                         m.name = m.name + "Duck"
-                        super()
+                        super("Flappy")
                     end sub
                 end class
             `);
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
-                range: Range.create(7, 24, 7, 25)
+                range: Range.create(9, 24, 9, 25)
             }, {
                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
-                range: Range.create(7, 33, 7, 34)
+                range: Range.create(9, 33, 9, 34)
             }]);
         });
     });
@@ -217,14 +219,14 @@ describe('BrsFile BrighterScript classes', () => {
                 class Animal
                     species1 = "Animal"
                     sub new()
-                        print "From Animal: " + m.species
+                        print "From Animal: " + m.species1
                     end sub
                 end class
                 class Duck extends Animal
                     species2 = "Duck"
                     sub new()
                         super()
-                        print "From Duck: " + m.species
+                        print "From Duck: " + m.species2
                     end sub
                 end class
             `, `
@@ -232,7 +234,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance = {}
                     instance.new = sub()
                         m.species1 = "Animal"
-                        print "From Animal: " + m.species
+                        print "From Animal: " + m.species1
                     end sub
                     return instance
                 end function
@@ -247,7 +249,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new = sub()
                         m.super0_new()
                         m.species2 = "Duck"
-                        print "From Duck: " + m.species
+                        print "From Duck: " + m.species2
                     end sub
                     return instance
                 end function

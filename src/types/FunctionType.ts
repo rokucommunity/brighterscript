@@ -3,6 +3,7 @@ import { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isUnionTypeCompatible } from './helpers';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
 export class FunctionType extends BaseFunctionType {
     constructor(public typeText?: string) {
@@ -11,9 +12,7 @@ export class FunctionType extends BaseFunctionType {
 
     public readonly kind = BscTypeKind.FunctionType;
 
-
     public static instance = new FunctionType('function');
-
 
     public isTypeCompatible(targetType: BscType) {
         if (
@@ -43,3 +42,5 @@ export class FunctionType extends BaseFunctionType {
         return false;
     }
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('function', new FunctionType());

@@ -3,6 +3,7 @@ import { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isUnionTypeCompatible } from './helpers';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
 export class TypedFunctionType extends BaseFunctionType {
     constructor(
@@ -86,3 +87,7 @@ export class TypedFunctionType extends BaseFunctionType {
         return false;
     }
 }
+
+BuiltInInterfaceAdder.typedFunctionFactory = (returnType: BscType) => {
+    return new TypedFunctionType(returnType);
+};

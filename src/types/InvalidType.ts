@@ -2,6 +2,7 @@ import { isDynamicType, isInvalidType, isObjectType } from '../astUtils/reflecti
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isUnionTypeCompatible } from './helpers';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
 export class InvalidType extends BscType {
     constructor(
@@ -35,3 +36,5 @@ export class InvalidType extends BscType {
         return isInvalidType(targetType);
     }
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('invalid', InvalidType.instance);

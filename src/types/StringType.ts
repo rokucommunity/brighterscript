@@ -1,9 +1,8 @@
 import { isDynamicType, isEnumMemberType, isEnumType, isObjectType, isStringType } from '../astUtils/reflection';
-import type { GetTypeOptions } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
-import { DynamicType } from './DynamicType';
 import { isUnionTypeCompatible } from './helpers';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
 export class StringType extends BscType {
     constructor(
@@ -43,9 +42,6 @@ export class StringType extends BscType {
     public isEqual(targetType: BscType): boolean {
         return isStringType(targetType);
     }
-
-    getMemberType(memberName: string, options: GetTypeOptions) {
-        //TODO: this should really add the appropriate interface methods from roku-types
-        return DynamicType.instance;
-    }
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('string', StringType.instance);

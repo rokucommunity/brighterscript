@@ -1,5 +1,4 @@
 import { isDynamicType, isEnumMemberType, isEnumType, isObjectType } from '../astUtils/reflection';
-import type { GetTypeOptions } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { DynamicType } from './DynamicType';
@@ -84,10 +83,5 @@ export class EnumMemberType extends BscType {
         return isEnumMemberType(targetType) &&
             targetType?.enumName.toLowerCase() === this.enumName.toLowerCase() &&
             targetType?.memberName.toLowerCase() === this.memberName.toLowerCase();
-    }
-
-    getMemberType(memberName: string, options: GetTypeOptions) {
-        //TODO: this should really add the appropriate interface methods from roku-types
-        return DynamicType.instance;
     }
 }

@@ -37,9 +37,8 @@ export class BrsFileValidator {
             MethodStatement: (node) => {
                 //add the `super` symbol to class methods
                 if (isClassStatement(node.parent) && node.parent.hasParentClass()) {
-                    //Todo:  get the actual type of the parent class
-                    // Maybe? const parentClassType = node.parent.parentClassName.getType({ flags: SymbolTypeFlag.typetime });
-                    node.func.body.symbolTable.addSymbol('super', undefined, DynamicType.instance, SymbolTypeFlag.runtime);
+                    const parentClassType = node.parent.parentClassName.getType({ flags: SymbolTypeFlag.typetime });
+                    node.func.body.symbolTable.addSymbol('super', undefined, parentClassType, SymbolTypeFlag.runtime);
                 }
             },
             CallfuncExpression: (node) => {
@@ -65,6 +64,7 @@ export class BrsFileValidator {
 
                 //register this class
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
+                node.getSymbolTable().addSymbol('m', undefined, nodeType, SymbolTypeFlag.runtime);
                 // eslint-disable-next-line no-bitwise
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
             },

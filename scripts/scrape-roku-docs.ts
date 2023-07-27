@@ -16,6 +16,7 @@ import * as he from 'he';
 import * as deepmerge from 'deepmerge';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
 import { isVariableExpression } from '../src/astUtils/reflection';
+import { SymbolTypeFlag } from '../src';
 
 type Token = marked.Token;
 
@@ -491,11 +492,6 @@ class Runner {
 
     private async buildNodes() {
         const docs = this.flatten(this.references.SceneGraph);
-        docs.push({
-            categoryName: '',
-            path: '/docs/references/scenegraph/dynamic-voice-keyboard-nodes/rsg-palette.md',
-            name: 'RSGPalette'
-        });
 
         for (let i = 0; i < docs.length; i++) {
             const doc = docs[i];
@@ -712,15 +708,21 @@ class Runner {
         return symbolName?.replaceAll(/[\[\]\\]/g, '');
     }
 
+
+    private fixFunctionParams(text: string): string {
+        return text.replace(/to as /ig, 'toValue as ');
+    }
+
     private getMethod(text: string) {
         // var state = new TranspileState(new BrsFile('', '', new Program({}));
-        const { statements } = Parser.parse(`function ${this.sanitizeMarkdownSymbol(text)}\nend function`);
+        const functionSignatureToParse = `function ${this.fixFunctionParams(this.sanitizeMarkdownSymbol(text))}\nend function`;
+        const { statements } = Parser.parse(functionSignatureToParse);
         if (statements.length > 0) {
             const func = statements[0] as FunctionStatement;
             const signature = {
                 name: func.name?.text,
                 params: [],
-                returnType: func.func.returnTypeToken?.text ?? 'Void'
+                returnType: func.func.returnTypeExpression?.getType({ flags: SymbolTypeFlag.typetime })?.toTypeString() ?? 'Void'
             } as Func;
 
 
@@ -734,6 +736,8 @@ class Runner {
                 }
             }
             return signature;
+        } else {
+            console.error('Could not parse method', functionSignatureToParse);
         }
 
     }
@@ -778,7 +782,12 @@ function saveCache() {
 async function getJson(url: string) {
     if (!cache[url]) {
         console.log('Fetching from web', url);
-        cache[url] = (await phin(url)).body.toString();
+        cache[url] = (await phin({
+            url: url,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+            }
+        })).body.toString();
         saveCache();
     } else {
         console.log('Fetching from cache', url);
@@ -912,9 +921,13 @@ class TokenManager {
     public tokens: marked.TokensList;
 
     public async process(url: string) {
-        this.html = (await getJson(url)).content;
-        this.markdown = turndownService.turndown(this.html);
-        this.tokens = marked.lexer(this.markdown);
+        try {
+            this.html = (await getJson(url)).content;
+            this.markdown = turndownService.turndown(this.html);
+            this.tokens = marked.lexer(this.markdown);
+        } catch (e) {
+            console.error('Unable to process url: ', url);
+        }
         return this;
     }
 

@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isBinaryExpression, isBrsFile, isLiteralExpression, isNamespaceStatement, isTypeExpression, isTypedFunctionType, isXmlScope } from '../../astUtils/reflection';
+import { isBinaryExpression, isBrsFile, isClassType, isLiteralExpression, isNamespaceStatement, isTypeExpression, isTypedFunctionType, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -13,15 +13,17 @@ import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { type AstNode, type Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, CallExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import { TokenKind } from '../../lexer/TokenKind';
+import { WalkMode, createVisitor } from '../../astUtils/visitors';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
  */
-const platformNodeNames = new Set(Object.values(nodes).map(x => x.name.toLowerCase()));
-const platformComponentNames = new Set(Object.values(components).map(x => x.name.toLowerCase()));
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+const platformNodeNames = nodes ? new Set((Object.values(nodes) as { name: string }[]).map(x => x?.name.toLowerCase())) : new Set();
+const platformComponentNames = components ? new Set((Object.values(components) as { name: string }[]).map(x => x?.name.toLowerCase())) : new Set();
 
 /**
  * A validator that handles all scope validations for a program validation cycle.
@@ -52,7 +54,13 @@ export class ScopeValidator {
             if (isBrsFile(file)) {
                 this.iterateFileExpressions(file);
                 this.validateCreateObjectCalls(file);
-                this.validateFunctionCalls(file);
+                file.ast.walk(createVisitor({
+                    CallExpression: (functionCall) => {
+                        this.validateFunctionCall(file, functionCall);
+                    }
+                }), {
+                    walkMode: WalkMode.visitExpressionsRecursive
+                });
             }
         });
     }
@@ -377,56 +385,58 @@ export class ScopeValidator {
     /**
      * Detect calls to functions with the incorrect number of parameters, or wrong types of arguments
      */
-    private validateFunctionCalls(file: BscFile) {
+    private validateFunctionCall(file: BrsFile, expression: CallExpression) {
         const diagnostics: BsDiagnostic[] = [];
+        const getTypeOptions = { flags: SymbolTypeFlag.runtime };
+        let funcType = expression?.callee?.getType(getTypeOptions);
+        if (funcType?.isResolvable() && isClassType(funcType)) {
+            // We're calling a class - get the constructor
+            funcType = funcType.getMemberType('new', getTypeOptions);
+        }
+        if (funcType?.isResolvable() && isTypedFunctionType(funcType)) {
+            //funcType.setName(expression.callee. .name);
 
-        //validate all function calls
-        for (let expCall of file.functionCalls) {
-            const funcType = expCall.expression?.callee?.getType({ flags: SymbolTypeFlag.runtime });
-            if (funcType?.isResolvable() && isTypedFunctionType(funcType)) {
-                funcType.setName(expCall.name);
-
-                //get min/max parameter count for callable
-                let minParams = 0;
-                let maxParams = 0;
-                for (let param of funcType.params) {
-                    maxParams++;
-                    //optional parameters must come last, so we can assume that minParams won't increase once we hit
-                    //the first isOptional
-                    if (param.isOptional !== true) {
-                        minParams++;
-                    }
+            //get min/max parameter count for callable
+            let minParams = 0;
+            let maxParams = 0;
+            for (let param of funcType.params) {
+                maxParams++;
+                //optional parameters must come last, so we can assume that minParams won't increase once we hit
+                //the first isOptional
+                if (param.isOptional !== true) {
+                    minParams++;
                 }
-                let expCallArgCount = expCall.args.length;
-                if (expCall.args.length > maxParams || expCall.args.length < minParams) {
-                    let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
+            }
+            let expCallArgCount = expression.args.length;
+            if (expCallArgCount > maxParams || expCallArgCount < minParams) {
+                let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
+                diagnostics.push({
+                    ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
+                    range: expression.callee.range,
+                    //TODO detect end of expression call
+                    file: file
+                });
+            }
+            let paramIndex = 0;
+            for (let arg of expression.args) {
+                const argType = arg.getType({ flags: SymbolTypeFlag.runtime });
+
+                const paramType = funcType.params[paramIndex]?.type;
+                if (!paramType) {
+                    // unable to find a paramType -- maybe there are more args than params
+                    break;
+                }
+                if (!paramType?.isTypeCompatible(argType)) {
                     diagnostics.push({
-                        ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
-                        range: expCall.nameRange,
+                        ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), paramType.toString()),
+                        range: arg.range,
                         //TODO detect end of expression call
                         file: file
                     });
                 }
-                let paramIndex = 0;
-                for (let arg of expCall.args) {
-                    const argType = arg.expression.getType({ flags: SymbolTypeFlag.runtime });
-
-                    const paramType = funcType.params[paramIndex]?.type;
-                    if (!paramType) {
-                        // unable to find a paramType -- maybe there are more args than params
-                        break;
-                    }
-                    if (!paramType?.isTypeCompatible(argType)) {
-                        diagnostics.push({
-                            ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), paramType.toString()),
-                            range: arg.expression.range,
-                            //TODO detect end of expression call
-                            file: file
-                        });
-                    }
-                    paramIndex++;
-                }
+                paramIndex++;
             }
+
         }
         this.event.scope.addDiagnostics(diagnostics);
     }

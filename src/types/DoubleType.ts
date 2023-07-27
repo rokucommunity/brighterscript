@@ -1,10 +1,9 @@
 import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType, isObjectType } from '../astUtils/reflection';
-import type { GetTypeOptions } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
-import { DynamicType } from './DynamicType';
 import { isUnionTypeCompatible } from './helpers';
 
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
 export class DoubleType extends BscType {
     constructor(
@@ -40,8 +39,6 @@ export class DoubleType extends BscType {
         return isDoubleType(targetType);
     }
 
-    getMemberType(memberName: string, options: GetTypeOptions) {
-        //TODO: this should really add the appropriate interface methods from roku-types
-        return DynamicType.instance;
-    }
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('double', DoubleType.instance);
