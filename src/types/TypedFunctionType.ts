@@ -2,6 +2,7 @@ import { isDynamicType, isObjectType, isTypedFunctionType } from '../astUtils/re
 import { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
+import { isUnionTypeCompatible } from './helpers';
 
 export class TypedFunctionType extends BaseFunctionType {
     constructor(
@@ -41,7 +42,8 @@ export class TypedFunctionType extends BaseFunctionType {
     public isTypeCompatible(targetType: BscType) {
         if (
             isDynamicType(targetType) ||
-            isObjectType(targetType)
+            isObjectType(targetType) ||
+            isUnionTypeCompatible(this, targetType)
         ) {
             return true;
         }

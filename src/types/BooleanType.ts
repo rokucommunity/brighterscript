@@ -3,6 +3,7 @@ import type { GetTypeOptions } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { DynamicType } from './DynamicType';
+import { isUnionTypeCompatible } from './helpers';
 
 export class BooleanType extends BscType {
     constructor(
@@ -19,7 +20,8 @@ export class BooleanType extends BscType {
         return (
             isBooleanType(targetType) ||
             isDynamicType(targetType) ||
-            isObjectType(targetType)
+            isObjectType(targetType) ||
+            isUnionTypeCompatible(this, targetType)
         );
     }
 

@@ -1,6 +1,7 @@
 import { isDynamicType, isInvalidType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
+import { isUnionTypeCompatible } from './helpers';
 
 export class InvalidType extends BscType {
     constructor(
@@ -17,7 +18,8 @@ export class InvalidType extends BscType {
         return (
             isInvalidType(targetType) ||
             isDynamicType(targetType) ||
-            isObjectType(targetType)
+            isObjectType(targetType) ||
+            isUnionTypeCompatible(this, targetType)
         );
     }
 

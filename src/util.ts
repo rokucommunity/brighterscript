@@ -1082,8 +1082,6 @@ export class Util {
     }
 
 
-    private refCount = 0;
-
     /**
      * Return the type of the result of a binary operator
      * Note: compound assignments (eg. +=) internally use a binary expression, so that's why TokenKind.PlusEqual, etc. are here too
@@ -1091,18 +1089,10 @@ export class Util {
     public binaryOperatorResultType(leftType: BscType, operator: Token, rightType: BscType): BscType {
         if ((isAnyReferenceType(leftType) && !leftType.isResolvable()) ||
             (isAnyReferenceType(rightType) && !rightType.isResolvable())) {
-            this.refCount++;
-            if (this.refCount > 10) {
-                //debug `binaryOperatorResultType error`, leftType.toString(), rightType.toString());
-                this.refCount = 0;
-                return DynamicType.instance;
-            }
             return new BinaryOperatorReferenceType(leftType, operator, rightType, (lhs, op, rhs) => {
-
                 return this.binaryOperatorResultType(lhs, op, rhs);
             });
         }
-        this.refCount = 0;
         let hasDouble = isDoubleType(leftType) || isDoubleType(rightType);
         let hasFloat = isFloatType(leftType) || isFloatType(rightType);
         let hasLongInteger = isLongIntegerType(leftType) || isLongIntegerType(rightType);

@@ -3,6 +3,7 @@ import type { GetTypeOptions } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { DynamicType } from './DynamicType';
+import { isUnionTypeCompatible } from './helpers';
 
 export class FloatType extends BscType {
     constructor(
@@ -22,7 +23,8 @@ export class FloatType extends BscType {
             isIntegerType(targetType) ||
             isFloatType(targetType) ||
             isDoubleType(targetType) ||
-            isLongIntegerType(targetType)
+            isLongIntegerType(targetType) ||
+            isUnionTypeCompatible(this, targetType)
         );
 
     }

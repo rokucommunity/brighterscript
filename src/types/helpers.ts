@@ -1,4 +1,4 @@
-import { isAnyReferenceType, isDynamicType, isInheritableType, isReferenceType, isUnionType } from '../astUtils/reflection';
+import { isAnyReferenceType, isDynamicType, isInheritableType, isUnionType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[]) {
@@ -117,11 +117,8 @@ export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscTyp
     if (!types || types.length === 0) {
         return undefined;
     }
-    if (types.length === 1) {
-        return types[0];
-    }
     types = types?.map(type => {
-        if (!isReferenceType(type) && isUnionType(type)) {
+        if (!isAnyReferenceType(type) && isUnionType(type)) {
             return type.types;
         }
         return type;
@@ -135,4 +132,17 @@ export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscTyp
         return generalizedTypes[0];
     }
     return unionTypeFactory(generalizedTypes);
+}
+
+
+export function isUnionTypeCompatible(thisType: BscType, maybeUnionType: BscType): boolean {
+    if (isUnionType(maybeUnionType)) {
+        for (const innerType of maybeUnionType.types) {
+            if (!thisType.isTypeCompatible(innerType)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return false;
 }

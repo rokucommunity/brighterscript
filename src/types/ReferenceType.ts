@@ -316,22 +316,11 @@ export class BinaryOperatorReferenceType extends BscType {
                     return { name: 'BinaryOperatorReferenceType' };
                 }
 
-
                 let resultType: BscType = this.cachedType ?? DynamicType.instance;
                 if (!this.cachedType) {
-                    //debug console.log('checking resolves', (this.leftType as any).kind, (this.leftType as any).__reflection, (this.leftType as any).memberkey, this.operator.text, (this.rightType as any).kind, (this.rightType as any).__reflection, (this.rightType as any).memberkey);
-                    if (isAnyReferenceType(this.leftType)) {
-                        //debug console.log('left side is reference');
-                    }
-                    if (isAnyReferenceType(this.rightType)) {
-                        //debug console.log('right side is reference');
-                    }
                     if ((isAnyReferenceType(this.leftType) && !this.leftType.isResolvable()) ||
                         (isAnyReferenceType(this.rightType) && !this.rightType.isResolvable())
                     ) {
-                        if (propName !== 'kind' && propName !== 'memberKey') {
-                            //debug console.log('Not resolvable! ', propName);
-                        }
                         if (propName === 'isResolvable') {
                             return () => false;
                         }
@@ -339,10 +328,6 @@ export class BinaryOperatorReferenceType extends BscType {
                             return () => undefined;
                         }
                     } else {
-                        if (propName !== 'kind') {
-                            //debug 'Resolvable! ', propName);
-                        }
-
                         resultType = binaryOpResolver(this.leftType, this.operator, this.rightType);
                         this.cachedType = resultType;
                     }

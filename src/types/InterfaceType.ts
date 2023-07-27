@@ -3,6 +3,7 @@ import { isDynamicType, isInterfaceType, isUnionType, isInheritableType, isObjec
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { InheritableType } from './InheritableType';
+import { isUnionTypeCompatible } from './helpers';
 
 export class InterfaceType extends InheritableType {
     public constructor(
@@ -15,7 +16,7 @@ export class InterfaceType extends InheritableType {
     public readonly kind = BscTypeKind.InterfaceType;
 
     public isTypeCompatible(targetType: BscType) {
-        if (isDynamicType(targetType) || isObjectType(targetType)) {
+        if (isDynamicType(targetType) || isObjectType(targetType) || isUnionTypeCompatible(this, targetType)) {
             return true;
         }
         //TODO: We need to make sure that things don't get assigned to built-in types

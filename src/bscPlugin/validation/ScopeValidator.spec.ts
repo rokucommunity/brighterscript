@@ -746,6 +746,34 @@ describe('ScopeValidator', () => {
             //should have no errors
             expectZeroDiagnostics(program);
         });
+
+        it('allows calling future function and save to same variable', () => {
+            program.setFile('source/util.brs', `
+                function getSomeInt() as integer
+                    numVal = getUntypedNum()
+                    numVal = cInt(numVal)
+                    return numVal
+                end function
+
+                function getUntypedNum()
+                    return 1
+                end function
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows union types of all compatible types as arg', () => {
+            program.setFile('source/util.brs', `
+                sub printIntNum(num as float or double or integer)
+                    print cInt(num)
+                end sub
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('cannotFindName', () => {

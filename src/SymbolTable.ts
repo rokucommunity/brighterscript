@@ -187,8 +187,6 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     getSymbolType(name: string, options: GetSymbolTypeOptions): BscType {
-
-        //debug console.log('-'.repeat(SymbolTable.indent), this.name, 'getSymbolType', name);
         let resolvedType = this.getCachedType(name, options);
         const doSetCache = !resolvedType;
         const originalIsReferenceType = isAnyReferenceType(resolvedType);
