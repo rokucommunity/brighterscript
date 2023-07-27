@@ -761,5 +761,18 @@ describe('ScopeValidator', () => {
             //should have no errors
             expectZeroDiagnostics(program);
         });
+
+        it('validates when lhs of compound assignment does not exist', () => {
+            program.setFile('source/util.brs', `
+                sub main()
+                    expected += chr(10) + " version=""2.0"""
+                end sub
+            `);
+            program.validate();
+            //should have error - cannot find "expected"
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('expected').message
+            ]);
+        });
     });
 });

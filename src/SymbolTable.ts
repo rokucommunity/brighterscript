@@ -5,7 +5,7 @@ import { CacheVerifier } from './CacheVerifier';
 import type { ReferenceType } from './types/ReferenceType';
 import type { UnionType } from './types/UnionType';
 import { getUniqueType } from './types/helpers';
-import { isReferenceType } from './astUtils/reflection';
+import { isAnyReferenceType, isReferenceType } from './astUtils/reflection';
 
 export enum SymbolTypeFlag {
     runtime = 1,
@@ -189,14 +189,14 @@ export class SymbolTable implements SymbolTypeGetter {
     getSymbolType(name: string, options: GetSymbolTypeOptions): BscType {
         let resolvedType = this.getCachedType(name, options);
         const doSetCache = !resolvedType;
-        const originalIsReferenceType = isReferenceType(resolvedType);
+        const originalIsReferenceType = isAnyReferenceType(resolvedType);
         if (!resolvedType || originalIsReferenceType) {
             resolvedType = getUniqueType(this.getSymbolTypes(name, options.flags), SymbolTable.unionTypeFactory);
         }
         if (!resolvedType && options.fullName && options.tableProvider) {
             resolvedType = SymbolTable.referenceTypeFactory(name, options.fullName, options.flags, options.tableProvider);
         }
-        const newNonReferenceType = originalIsReferenceType && !isReferenceType(resolvedType);
+        const newNonReferenceType = originalIsReferenceType && !isAnyReferenceType(resolvedType);
         if (doSetCache || newNonReferenceType || resolvedType) {
             this.setCachedType(name, resolvedType, options);
         }

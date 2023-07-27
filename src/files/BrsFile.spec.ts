@@ -2051,6 +2051,7 @@ describe('BrsFile', () => {
         it('escapes quotes in string literals', () => {
             testTranspile(`
                 sub main()
+                    expected = "Hello"
                     expected += chr(10) + " version=""2.0"""
                 end sub
             `);

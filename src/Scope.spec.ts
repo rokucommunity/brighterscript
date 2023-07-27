@@ -559,7 +559,9 @@ describe('Scope', () => {
             program.validate();
             expectDiagnostics(program, [
                 DiagnosticMessages.cannotFindName('constants'),
-                DiagnosticMessages.cannotFindName('API_URL')
+                DiagnosticMessages.cannotFindName('value'),
+                DiagnosticMessages.cannotFindName('API_URL'),
+                DiagnosticMessages.cannotFindName('value')
             ]);
         });
 
@@ -2713,6 +2715,22 @@ describe('Scope', () => {
                 expectTypeToBe(dType, UnionType);
                 expect((dType as UnionType).types).to.include(FloatType.instance);
                 expect((dType as UnionType).types).to.include(IntegerType.instance);
+            });
+
+            it('should set correct type on compound equals with function call', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    function check() as string
+                        test = "hello"
+                        test += lcase("WORLD")
+                        return test
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('test', opts), StringType);
             });
 
             it('should work for a multiple binary expressions', () => {

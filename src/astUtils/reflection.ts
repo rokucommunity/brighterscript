@@ -22,7 +22,7 @@ import type { InterfaceType } from '../types/InterfaceType';
 import type { ObjectType } from '../types/ObjectType';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import { AstNodeKind } from '../parser/AstNode';
-import type { TypePropertyReferenceType, ReferenceType } from '../types/ReferenceType';
+import type { TypePropertyReferenceType, ReferenceType, BinaryOperatorReferenceType } from '../types/ReferenceType';
 import type { EnumMemberType, EnumType } from '../types/EnumType';
 import type { UnionType } from '../types/UnionType';
 import type { UninitializedType } from '../types/UninitializedType';
@@ -315,6 +315,9 @@ export function isEnumMemberType(value: any): value is EnumMemberType {
 export function isTypePropertyReferenceType(value: any): value is TypePropertyReferenceType {
     return value?.__reflection?.name === 'TypePropertyReferenceType';
 }
+export function isBinaryOperatorReferenceType(value: any): value is BinaryOperatorReferenceType {
+    return value?.__reflection?.name === 'BinaryOperatorReferenceType';
+}
 export function isNamespaceType(value: any): value is NamespaceType {
     return value?.kind === BscTypeKind.NamespaceType;
 }
@@ -334,6 +337,11 @@ export function isInheritableType(target): target is InheritableType {
 
 export function isCallableType(target): target is BaseFunctionType {
     return isFunctionType(target) || isTypedFunctionType(target);
+}
+
+export function isAnyReferenceType(target): target is ReferenceType | TypePropertyReferenceType | BinaryOperatorReferenceType {
+    const name = target?.__reflection?.name;
+    return name === 'ReferenceType' || name === 'TypePropertyReferenceType' || name === 'BinaryOperatorReferenceType';
 }
 
 const numberConstructorNames = [
