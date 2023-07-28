@@ -1310,6 +1310,20 @@ describe('parser', () => {
     });
 
     describe('type casts', () => {
+
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(node as dynamic)
+                    print lcase((node as string))
+                end sub
+            `, ParseMode.BrightScript);
+            expect(
+                parser.diagnostics[0]?.message
+            ).to.equal(
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('type cast').message
+            );
+        });
+
         it('allows type casts after function calls', () => {
             let { statements, diagnostics } = parse(`
                 sub main()
