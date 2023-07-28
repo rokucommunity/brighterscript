@@ -15,7 +15,6 @@ import type { FunctionScope } from '../../FunctionScope';
 import type { TypedFunctionType } from '../../types/TypedFunctionType';
 import type { ClassType } from '../../types/ClassType';
 import type { InterfaceType } from '../../types/InterfaceType';
-import { DynamicType } from '../../types';
 
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');
