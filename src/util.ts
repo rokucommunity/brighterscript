@@ -24,7 +24,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isDynamicType, isExpression, isFloatType, isIndexedGetExpression, isIntegerType, isInvalidType, isLongIntegerType, isStringType, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isDynamicType, isExpression, isFloatType, isIndexedGetExpression, isIntegerType, isInvalidType, isLongIntegerType, isReferenceType, isStringType, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -1673,6 +1673,7 @@ export class Util {
         let previousTypeName = '';
         let parentTypeName = '';
         let errorRange: Range;
+        let containsDynamic = false;
         for (let i = 0; i < typeChain.length; i++) {
             const chainItem = typeChain[i];
             if (i > 0) {
@@ -1683,6 +1684,7 @@ export class Util {
             fullErrorName = previousTypeName ? `${previousTypeName}.${chainItem.name}` : chainItem.name;
             previousTypeName = chainItem.type.toString();
             itemName = chainItem.name;
+            containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isReferenceType(chainItem.type));
             if (!chainItem.isResolved) {
                 errorRange = chainItem.range;
                 break;
@@ -1693,7 +1695,8 @@ export class Util {
             itemParentTypeName: parentTypeName,
             fullNameOfItem: fullErrorName,
             fullChainName: fullChainName,
-            range: errorRange
+            range: errorRange,
+            containsDynamic: containsDynamic
         };
     }
 }

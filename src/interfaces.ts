@@ -498,5 +498,6 @@ export interface TypeChainProcessResult {
     fullNameOfItem: string;
     fullChainName: string;
     range: Range;
+    containsDynamic: boolean;
 }
 

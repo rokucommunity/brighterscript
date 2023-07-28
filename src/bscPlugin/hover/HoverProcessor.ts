@@ -15,6 +15,7 @@ import type { FunctionScope } from '../../FunctionScope';
 import type { TypedFunctionType } from '../../types/TypedFunctionType';
 import type { ClassType } from '../../types/ClassType';
 import type { InterfaceType } from '../../types/InterfaceType';
+import { DynamicType } from '../../types';
 
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');
@@ -154,17 +155,21 @@ export class HoverProcessor {
                 const typeFlag = isInTypeExpression ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
                 const typeChain: TypeChainEntry[] = [];
                 const exprType = expression.getType({ flags: typeFlag, typeChain: typeChain });
+
                 const processedTypeChain = util.processTypeChain(typeChain);
                 const fullName = processedTypeChain.fullNameOfItem || token.text;
                 const useCustomTypeHover = isInTypeExpression || expression?.findAncestor(isNewExpression);
-                let hoverContent = fence(`${fullName} as ${exprType.toString()}`);
+
+                // if the type chain has dynamic in it, then just say the token text
+                const exprNameString = !processedTypeChain.containsDynamic ? fullName : token.text;
+
+                let hoverContent = fence(`${exprNameString} as ${exprType.toString()}`);
                 if (isTypedFunctionType(exprType)) {
                     exprType.setName(fullName);
                     hoverContent = this.getFunctionTypeHover(token, expression, exprType, scope);
                 } else if (useCustomTypeHover && (isClassType(exprType) || isInterfaceType(exprType))) {
                     hoverContent = this.getCustomTypeHover(exprType, scope);
                 }
-
                 hoverContents.push(hoverContent);
 
             } finally {

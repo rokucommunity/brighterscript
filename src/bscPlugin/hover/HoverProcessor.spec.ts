@@ -376,5 +376,32 @@ describe('HoverProcessor', () => {
             expect(hover?.range).to.eql(util.createRange(6, 26, 6, 34));
             expect(hover?.contents).to.eql([fence('someFunc as function')]);
         });
+
+        it('keeps unresolved types as type names', () => {
+            const file = program.setFile('source/main.bs', `
+                sub doSomething(thing as UnknownType)
+                    print thing
+                end sub
+            `);
+            program.validate();
+            // print thi|ng
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 30))[0];
+            expect(hover?.range).to.eql(util.createRange(2, 26, 2, 31));
+            expect(hover?.contents).eql([fence('thing as UnknownType')]);
+        });
+
+        it('says members on dynamic are dynamic', () => {
+            const file = program.setFile('source/main.bs', `
+                sub doSomething(thing)
+                    print thing.member
+                end sub
+            `);
+            program.validate();
+
+            // print thing.mem|ber
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 36))[0];
+            expect(hover?.range).to.eql(util.createRange(2, 32, 2, 38));
+            expect(hover?.contents).eql([fence('member as dynamic')]);
+        });
     });
 });
