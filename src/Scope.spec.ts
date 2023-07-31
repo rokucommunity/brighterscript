@@ -4,7 +4,6 @@ import { Position, Range } from 'vscode-languageserver';
 import util, { standardizePath as s } from './util';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
-import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
@@ -2037,16 +2036,6 @@ describe('Scope', () => {
             let file = program.setFile('source/main.brs', '');
             let scope = program.getScopeByName('source');
             expect(scope.getDefinition(file, Position.create(0, 0))).to.be.lengthOf(0);
-        });
-    });
-
-    describe('getCallablesAsCompletions', () => {
-        it('returns documentation when possible', () => {
-            let completions = program.globalScope.getCallablesAsCompletions(ParseMode.BrightScript);
-            //it should find the completions for the global scope
-            expect(completions).to.be.length.greaterThan(0);
-            //it should find documentation for completions
-            expect(completions.filter(x => !!x.documentation)).to.have.length.greaterThan(0);
         });
     });
 

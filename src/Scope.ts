@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/dot-notation */
-import type { CompletionItem, Position, Range, Location } from 'vscode-languageserver';
+import type { Position, Range, Location } from 'vscode-languageserver';
 import * as path from 'path';
-import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -18,7 +17,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isEnumStatement, isFunctionStatement, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isCallableType } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isConstStatement, isEnumStatement, isFunctionStatement, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isCallableType } from './astUtils/reflection';
 import { SymbolTable, SymbolTypeFlag } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
 import type { BscType } from './types/BscType';
@@ -1172,78 +1171,11 @@ export class Scope {
     }
 
     /**
-     * Get all callables as completionItems
-     */
-    public getCallablesAsCompletions(parseMode: ParseMode) {
-        let completions = [] as CompletionItem[];
-        let callables = this.getAllCallables();
-
-        if (parseMode === ParseMode.BrighterScript) {
-            //throw out the namespaced callables (they will be handled by another method)
-            callables = callables.filter(x => x.callable.hasNamespace === false);
-        }
-
-        for (let callableContainer of callables) {
-            completions.push(this.createCompletionFromCallable(callableContainer));
-        }
-        return completions;
-    }
-
-    public createCompletionFromCallable(callableContainer: CallableContainer): CompletionItem {
-        return {
-            label: callableContainer.callable.getName(ParseMode.BrighterScript),
-            kind: CompletionItemKind.Function,
-            detail: callableContainer.callable.shortDescription,
-            documentation: callableContainer.callable.documentation ? { kind: 'markdown', value: callableContainer.callable.documentation } : undefined
-        };
-    }
-
-    public createCompletionFromFunctionStatement(statement: FunctionStatement): CompletionItem {
-        return {
-            label: statement.getName(ParseMode.BrighterScript),
-            kind: CompletionItemKind.Function
-        };
-    }
-
-    /**
      * Get the definition (where was this thing first defined) of the symbol under the position
      */
     public getDefinition(file: BscFile, position: Position): Location[] {
         // Overridden in XMLScope. Brs files use implementation in BrsFile
         return [];
-    }
-
-    /**
-     * Scan all files for property names, and return them as completions
-     */
-    public getPropertyNameCompletions() {
-        let results = [] as CompletionItem[];
-        this.enumerateBrsFiles((file) => {
-            results.push(...file.propertyNameCompletions);
-        });
-        return results;
-    }
-
-    public getAllClassMemberCompletions() {
-        let results = new Map<string, CompletionItem>();
-        let filesSearched = new Set<BscFile>();
-        for (const file of this.getAllFiles()) {
-            if (isXmlFile(file) || filesSearched.has(file)) {
-                continue;
-            }
-            filesSearched.add(file);
-            for (let cs of file.parser.references.classStatements) {
-                for (let s of [...cs.methods, ...cs.fields]) {
-                    if (!results.has(s.name.text) && s.name.text.toLowerCase() !== 'new') {
-                        results.set(s.name.text, {
-                            label: s.name.text,
-                            kind: isMethodStatement(s) ? CompletionItemKind.Method : CompletionItemKind.Field
-                        });
-                    }
-                }
-            }
-        }
-        return results;
     }
 
     /**

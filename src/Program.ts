@@ -1,14 +1,13 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
-import { CompletionItemKind } from 'vscode-languageserver';
+import type { CodeAction, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, BeforeFileParseEvent } from './interfaces';
+import type { BsDiagnostic, File, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, BeforeFileParseEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -1017,62 +1016,6 @@ export class Program {
         }
 
         return file.getReferences(position);
-    }
-
-    /**
-     * Get a list of all script imports, relative to the specified pkgPath
-     * @param sourcePkgPath - the pkgPath of the source that wants to resolve script imports.
-     */
-    public getScriptImportCompletions(sourcePkgPath: string, scriptImport: FileReference) {
-        let lowerSourcePkgPath = sourcePkgPath.toLowerCase();
-
-        let result = [] as CompletionItem[];
-        /**
-         * hashtable to prevent duplicate results
-         */
-        let resultPkgPaths = {} as Record<string, boolean>;
-
-        //restrict to only .brs files
-        for (let key in this.files) {
-            let file = this.files[key];
-            if (
-                //is a BrightScript or BrighterScript file
-                (file.extension === '.bs' || file.extension === '.brs') &&
-                //this file is not the current file
-                lowerSourcePkgPath !== file.pkgPath.toLowerCase()
-            ) {
-                //add the relative path
-                let relativePath = util.getRelativePath(sourcePkgPath, file.pkgPath).replace(/\\/g, '/');
-                let pkgPathStandardized = file.pkgPath.replace(/\\/g, '/');
-                let filePkgPath = `pkg:/${pkgPathStandardized}`;
-                let lowerFilePkgPath = filePkgPath.toLowerCase();
-                if (!resultPkgPaths[lowerFilePkgPath]) {
-                    resultPkgPaths[lowerFilePkgPath] = true;
-
-                    result.push({
-                        label: relativePath,
-                        detail: file.srcPath,
-                        kind: CompletionItemKind.File,
-                        textEdit: {
-                            newText: relativePath,
-                            range: scriptImport.filePathRange
-                        }
-                    });
-
-                    //add the absolute path
-                    result.push({
-                        label: filePkgPath,
-                        detail: file.srcPath,
-                        kind: CompletionItemKind.File,
-                        textEdit: {
-                            newText: filePkgPath,
-                            range: scriptImport.filePathRange
-                        }
-                    });
-                }
-            }
-        }
-        return result;
     }
 
     /**

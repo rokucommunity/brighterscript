@@ -1,7 +1,7 @@
 import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
+import type { Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticCodeMap, diagnosticCodes } from '../DiagnosticMessages';
 import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag, BscFile } from '../interfaces';
 import type { Program } from '../Program';
@@ -345,19 +345,6 @@ export class XmlFile {
             }
             return false;
         });
-    }
-
-    /**
-     * Get all available completions for the specified position
-     * @param position the position to get completions
-     */
-    public getCompletions(position: Position): CompletionItem[] {
-        let scriptImport = util.getScriptImportAtPosition(this.scriptTagImports, position);
-        if (scriptImport) {
-            return this.program.getScriptImportCompletions(this.pkgPath, scriptImport);
-        } else {
-            return [];
-        }
     }
 
     /**
