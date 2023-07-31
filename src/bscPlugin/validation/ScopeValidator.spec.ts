@@ -769,7 +769,7 @@ describe('ScopeValidator', () => {
                 sub printIntNum(num as float or double or integer)
                     print cInt(num)
                 end sub
-                `);
+            `);
             program.validate();
             //should have no errors
             expectZeroDiagnostics(program);
@@ -788,7 +788,7 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('validates union types of all compatible types as arg - when some don not work', () => {
+        it('validates union types of all compatible types as arg - when some do not work', () => {
             program.setFile('source/util.brs', `
                 sub printIntNum(maybeNum as float or string)
                     print cInt(maybeNum)
