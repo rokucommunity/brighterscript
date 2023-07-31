@@ -559,9 +559,7 @@ describe('Scope', () => {
             program.validate();
             expectDiagnostics(program, [
                 DiagnosticMessages.cannotFindName('constants'),
-                DiagnosticMessages.cannotFindName('value'),
-                DiagnosticMessages.cannotFindName('API_URL'),
-                DiagnosticMessages.cannotFindName('value')
+                DiagnosticMessages.cannotFindName('API_URL')
             ]);
         });
 
