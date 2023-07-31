@@ -1681,6 +1681,7 @@ export class Util {
         let previousTypeName = '';
         let parentTypeName = '';
         let errorRange: Range;
+        let containsDynamic = false;
         for (let i = 0; i < typeChain.length; i++) {
             const chainItem = typeChain[i];
             if (i > 0) {
@@ -1691,6 +1692,7 @@ export class Util {
             fullErrorName = previousTypeName ? `${previousTypeName}.${chainItem.name}` : chainItem.name;
             previousTypeName = chainItem.type.toString();
             itemName = chainItem.name;
+            containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
             if (!chainItem.isResolved) {
                 errorRange = chainItem.range;
                 break;
@@ -1701,7 +1703,8 @@ export class Util {
             itemParentTypeName: parentTypeName,
             fullNameOfItem: fullErrorName,
             fullChainName: fullChainName,
-            range: errorRange
+            range: errorRange,
+            containsDynamic: containsDynamic
         };
     }
 }

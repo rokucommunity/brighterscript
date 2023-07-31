@@ -2218,6 +2218,7 @@ export class Parser {
         if (findTypeCast) {
             do {
                 if (this.check(TokenKind.As)) {
+                    this.warnIfNotBrighterScriptMode('type cast');
                     // Check if this expression is wrapped in any type casts
                     // allows for multiple casts:
                     // myVal = foo() as dynamic as string
