@@ -255,7 +255,7 @@ function getTestFileAction(
     action: (file: BscFile) => CodeWithSourceMap,
     scopeGetter: () => [program: Program, rootDir: string]
 ) {
-    return function testFileAction<TFile extends BscFile=BrsFile>(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) {
+    return function testFileAction<TFile extends BscFile = BrsFile>(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
         let file = program.setFile<TFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
@@ -370,4 +370,13 @@ export function mapToObject<T>(map: Map<any, T>) {
  */
 export function expectTypeToBe(someType: BscType, expectedTypeClass: any) {
     expect(someType?.constructor?.name).to.eq(expectedTypeClass.name);
+}
+
+export function stripConsoleColors(inputString) {
+    // Regular expression to match ANSI escape codes for colors
+    // eslint-disable-next-line no-control-regex
+    const colorPattern = /\u001b\[(?:\d*;){0,5}\d*m/g;
+
+    // Remove all occurrences of ANSI escape codes
+    return inputString.replace(colorPattern, '');
 }
