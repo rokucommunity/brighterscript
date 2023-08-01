@@ -88,7 +88,9 @@ export class CompletionsProcessor {
 
     /**
      * Get a list of all script imports, relative to the specified pkgPath
-     * @param sourcePkgPath - the pkgPath of the source that wants to resolve script imports.
+     * @param program - reference to teh program
+     * @param sourcePkgPath - the pkgPath of the source that wants to resolve script imports
+     * @param scriptImport - example script import
      */
     public getScriptImportCompletions(program: Program, sourcePkgPath: string, scriptImport: FileReference) {
         let lowerSourcePkgPath = sourcePkgPath.toLowerCase();
