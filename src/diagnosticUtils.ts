@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import type { BsDiagnostic } from '.';
+import type { Range } from 'vscode-languageserver';
 
 /**
  * Prepare print diagnostic formatting options
@@ -57,7 +58,8 @@ export function printDiagnostic(
     severity: DiagnosticSeverity,
     filePath: string,
     lines: string[],
-    diagnostic: BsDiagnostic
+    diagnostic: BsDiagnostic,
+    relatedInformation?: Array<{ range: Range; filePath: string; message: string }>
 ) {
     let { includeDiagnostic, severityTextMap, typeColor } = options;
 
@@ -91,6 +93,30 @@ export function printDiagnostic(
     console.log(
         getDiagnosticLine(diagnostic, diagnosticLine, typeColor[severity])
     );
+
+    //print related information if present (only first few rows)
+    const relatedInfoList = relatedInformation?.slice(0, 5) ?? [];
+    let indent = '    ';
+    for (let i = 0; i < relatedInfoList.length; i++) {
+        let relatedInfo = relatedInfoList[i];
+        if (i < 5) {
+            console.log('');
+            console.log(
+                indent,
+                chalk.cyan(relatedInfo.filePath ?? '<unknown file>') +
+                ':' +
+                chalk.yellow(
+                    relatedInfo.range
+                        ? (relatedInfo.range.start.line + 1) + ':' + (relatedInfo.range.start.character + 1)
+                        : 'line?:col?'
+                )
+            );
+            console.log(indent, relatedInfo.message);
+        } else {
+            console.log('\n', indent, `...and ${relatedInfoList.length - i + 1} more`);
+            break;
+        }
+    }
     console.log('');
 }
 
@@ -100,7 +126,7 @@ export function getDiagnosticLine(diagnostic: BsDiagnostic, diagnosticLine: stri
     //only print the line information if we have some
     if (diagnostic.range && diagnosticLine) {
         const lineNumberText = chalk.bgWhite(' ' + chalk.black((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
-        const blankLineNumberText = chalk.bgWhite(' ' + chalk.white('_'.repeat((diagnostic.range.start.line + 1).toString().length)) + ' ') + ' ';
+        const blankLineNumberText = chalk.bgWhite(' ' + chalk.white(' '.repeat((diagnostic.range.start.line + 1).toString().length)) + ' ') + ' ';
 
         //remove tabs in favor of spaces to make diagnostic printing more consistent
         let leadingText = diagnosticLine.slice(0, diagnostic.range.start.character);
