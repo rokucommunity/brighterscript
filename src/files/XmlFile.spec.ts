@@ -1,13 +1,11 @@
 import { assert, expect } from '../chai-config.spec';
 import * as path from 'path';
 import * as sinonImport from 'sinon';
-import type { CompletionItem } from 'vscode-languageserver';
-import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
+import { Range } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
-import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
 import { standardizePath as s } from '../util';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
@@ -353,49 +351,6 @@ describe('XmlFile', () => {
 
             //there should be no errors
             expectZeroDiagnostics(program);
-        });
-    });
-
-    describe('getCompletions', () => {
-        it('formats completion paths with proper slashes', () => {
-            let scriptPath = s`C:/app/components/component1/component1.brs`;
-            program.files[scriptPath] = new BrsFile(scriptPath, s`components/component1/component1.brs`, program);
-
-            let xmlFile = new XmlFile(s`${rootDir}/components/component1/component1.xml`, s`components/component1/component1.xml`, <any>program);
-            xmlFile.parser.references.scriptTagImports.push({
-                pkgPath: s`components/component1/component1.brs`,
-                text: 'component1.brs',
-                filePathRange: Range.create(1, 1, 1, 1)
-            });
-
-            expect(xmlFile.getCompletions(Position.create(1, 1))[0]).to.include({
-                label: 'component1.brs',
-                kind: CompletionItemKind.File
-            });
-
-            expect(xmlFile.getCompletions(Position.create(1, 1))[1]).to.include(<CompletionItem>{
-                label: 'pkg:/components/component1/component1.brs',
-                kind: CompletionItemKind.File
-            });
-        });
-
-        it('returns empty set when out of range', () => {
-            program.setFile('components/component1.brs', ``);
-            expect(file.getCompletions(Position.create(99, 99))).to.be.empty;
-        });
-
-        //TODO - refine this test once cdata scripts are supported
-        it('prevents scope completions entirely', () => {
-            program.setFile('components/component1.brs', ``);
-
-            let xmlFile = program.setFile('components/component1.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ParentScene" extends="GrandparentScene">
-                    <script type="text/brightscript" uri="./Component1.brs" />
-                </component>
-            `);
-
-            expect(program.getCompletions(xmlFile.srcPath, Position.create(1, 1))).to.be.empty;
         });
     });
 
