@@ -404,7 +404,7 @@ describe('HoverProcessor', () => {
             expect(hover?.contents).eql([fence('member as dynamic')]);
         });
 
-        it.only('should recognize consistent type after function call in binary op', () => {
+        it('should recognize consistent type after function call in binary op', () => {
             let file = program.setFile('source/main.bs', `
                 function arrayToString(items as object) as string
                     description = "["

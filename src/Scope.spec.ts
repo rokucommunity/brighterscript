@@ -2738,7 +2738,7 @@ describe('Scope', () => {
                 expectTypeToBe(symbolTable.getSymbolType('result', opts), FloatType);
             });
 
-            it.only('should recognize consistent type after function call in binary op', () => {
+            it('should recognize consistent type after function call in binary op', () => {
                 let mainFile = program.setFile('source/main.bs', `
                     function process(items) as string
                         myString = ""
