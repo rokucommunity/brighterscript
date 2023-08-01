@@ -445,7 +445,7 @@ export class ScopeValidator {
                     break;
                 }
                 if (!paramType?.isTypeCompatible(argType)) {
-                    diagnostics.push({
+                    this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), paramType.toString()),
                         range: arg.range,
                         //TODO detect end of expression call
