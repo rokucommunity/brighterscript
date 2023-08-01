@@ -1,6 +1,7 @@
 import { isArrayType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
+import { isUnionTypeCompatible } from './helpers';
 
 export class ArrayType extends BscType {
     constructor(...innerTypes: BscType[]) {
@@ -17,6 +18,8 @@ export class ArrayType extends BscType {
         if (isDynamicType(targetType)) {
             return true;
         } else if (isObjectType(targetType)) {
+            return true;
+        } else if (isUnionTypeCompatible(this, targetType)) {
             return true;
         } else if (!isArrayType(targetType)) {
             return false;

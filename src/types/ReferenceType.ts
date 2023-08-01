@@ -1,10 +1,11 @@
 import type { GetTypeOptions } from '../interfaces';
 import type { GetSymbolTypeOptions, SymbolTypeGetterProvider } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTable';
-import { isDynamicType, isReferenceType } from '../astUtils/reflection';
+import { isAnyReferenceType, isDynamicType, isReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 import { BscTypeKind } from './BscTypeKind';
+import type { Token } from '../lexer/Token';
 
 export function referenceTypeFactory(memberKey: string, fullName, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) {
     return new ReferenceType(memberKey, fullName, flags, tableProvider);
@@ -39,7 +40,7 @@ export class ReferenceType extends BscType {
                 if (propName === 'isResolvable') {
                     return () => {
                         let resultSoFar = this.resolve();
-                        while (isReferenceType(resultSoFar)) {
+                        while (resultSoFar && isReferenceType(resultSoFar)) {
                             resultSoFar = (resultSoFar as any).getTarget();
                         }
                         return !!resultSoFar;
@@ -166,9 +167,9 @@ export class ReferenceType extends BscType {
             // could not find this member
             return;
         }
-        if (isReferenceType(resolvedType)) {
+        if (isAnyReferenceType(resolvedType)) {
             // If this is a referenceType, keep digging down until we have a non reference Type.
-            while (isReferenceType(resolvedType)) {
+            while (resolvedType && isAnyReferenceType(resolvedType)) {
                 if (this.referenceChain.has(resolvedType)) {
                     // this is a circular reference
                     this.circRefCount++;
@@ -180,12 +181,11 @@ export class ReferenceType extends BscType {
                 }
                 this.referenceChain.add(resolvedType);
                 resolvedType = (resolvedType as any).getTarget();
-
             }
             this.tableProvider().setCachedType(this.memberKey, resolvedType, { flags: this.flags });
         }
 
-        if (!isReferenceType(resolvedType)) {
+        if (resolvedType && !isAnyReferenceType(resolvedType)) {
             this.circRefCount = 0;
             this.referenceChain.clear();
         }
@@ -248,7 +248,7 @@ export class TypePropertyReferenceType extends BscType {
                     return { name: 'TypePropertyReferenceType' };
                 }
 
-                if (isReferenceType(this.outerType) && !this.outerType.isResolvable()) {
+                if (isAnyReferenceType(this.outerType) && !this.outerType.isResolvable()) {
                     if (propName === 'getMemberType') {
                         //If we're calling `getMemberType()`, we need it to proxy to using the actual symbol table
                         //So if that symbol is ever populated, the correct type is passed through
@@ -290,6 +290,51 @@ export class TypePropertyReferenceType extends BscType {
 
                 if (inner) {
                     const result = Reflect.set(inner, name, value, inner);
+                    return result;
+                }
+            }
+        });
+    }
+}
+
+
+/**
+ * Use this class for when there is a binary operator and either the left hand side and/or the right hand side
+ * are ReferenceTypes
+ */
+export class BinaryOperatorReferenceType extends BscType {
+    cachedType: BscType;
+
+    constructor(public leftType: BscType, public operator: Token, public rightType: BscType, binaryOpResolver: (lType: BscType, operator: Token, rType: BscType) => BscType) {
+        super(operator.text);
+        // eslint-disable-next-line no-constructor-return
+        return new Proxy(this, {
+            get: (target, propName, receiver) => {
+
+                if (propName === '__reflection') {
+                    // Cheeky way to get `BinaryOperatorReferenceType` reflection to work
+                    return { name: 'BinaryOperatorReferenceType' };
+                }
+
+                let resultType: BscType = this.cachedType ?? DynamicType.instance;
+                if (!this.cachedType) {
+                    if ((isAnyReferenceType(this.leftType) && !this.leftType.isResolvable()) ||
+                        (isAnyReferenceType(this.rightType) && !this.rightType.isResolvable())
+                    ) {
+                        if (propName === 'isResolvable') {
+                            return () => false;
+                        }
+                        if (propName === 'getTarget') {
+                            return () => undefined;
+                        }
+                    } else {
+                        resultType = binaryOpResolver(this.leftType, this.operator, this.rightType);
+                        this.cachedType = resultType;
+                    }
+
+                }
+                if (resultType) {
+                    const result = Reflect.get(resultType, propName, resultType);
                     return result;
                 }
             }

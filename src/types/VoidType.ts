@@ -1,6 +1,7 @@
 import { isDynamicType, isObjectType, isVoidType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
+import { isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
 export class VoidType extends BscType {
@@ -18,7 +19,8 @@ export class VoidType extends BscType {
         return (
             isVoidType(targetType) ||
             isDynamicType(targetType) ||
-            isObjectType(targetType)
+            isObjectType(targetType) ||
+            isUnionTypeCompatible(this, targetType)
         );
     }
 

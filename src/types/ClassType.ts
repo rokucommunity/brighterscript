@@ -4,6 +4,7 @@ import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { InheritableType } from './InheritableType';
+import { isUnionTypeCompatible } from './helpers';
 
 export class ClassType extends InheritableType {
 
@@ -16,7 +17,9 @@ export class ClassType extends InheritableType {
     public isTypeCompatible(targetType: BscType) {
         if (this.isEqual(targetType)) {
             return true;
-        } else if (isDynamicType(targetType) || isObjectType(targetType)) {
+        } else if (isDynamicType(targetType) ||
+            isObjectType(targetType) ||
+            isUnionTypeCompatible(this, targetType)) {
             return true;
         } else if (isClassType(targetType)) {
             return this.isTypeDescendent(targetType);

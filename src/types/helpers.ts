@@ -1,4 +1,4 @@
-import { isDynamicType, isInheritableType, isReferenceType, isUnionType } from '../astUtils/reflection';
+import { isAnyReferenceType, isDynamicType, isInheritableType, isUnionType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[]) {
@@ -64,7 +64,7 @@ export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
         // only one type after filtering
         return [uniqueTypes[0].type];
     }
-    const existingDynamicType = uniqueTypes.find(t => !isReferenceType(t.type) && isDynamicType(t.type));
+    const existingDynamicType = uniqueTypes.find(t => !isAnyReferenceType(t.type) && isDynamicType(t.type));
     if (existingDynamicType) {
         // If it includes dynamic, then the result is dynamic
         return [existingDynamicType.type];
@@ -114,8 +114,11 @@ export function reduceTypesToMostGeneric(types: BscType[]): BscType[] {
  * @returns either the singular most general type, if there is one, otherwise a UnionType of the most general types
  */
 export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscType[]) => BscType): BscType {
+    if (!types || types.length === 0) {
+        return undefined;
+    }
     types = types?.map(type => {
-        if (!isReferenceType(type) && isUnionType(type)) {
+        if (!isAnyReferenceType(type) && isUnionType(type)) {
             return type.types;
         }
         return type;
@@ -129,4 +132,17 @@ export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscTyp
         return generalizedTypes[0];
     }
     return unionTypeFactory(generalizedTypes);
+}
+
+
+export function isUnionTypeCompatible(thisType: BscType, maybeUnionType: BscType): boolean {
+    if (isUnionType(maybeUnionType)) {
+        for (const innerType of maybeUnionType.types) {
+            if (!thisType.isTypeCompatible(innerType)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return false;
 }

@@ -2,6 +2,7 @@ import { isDynamicType, isEnumMemberType, isEnumType, isObjectType } from '../as
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { DynamicType } from './DynamicType';
+import { isUnionTypeCompatible } from './helpers';
 
 export class EnumType extends BscType {
     constructor(
@@ -21,7 +22,8 @@ export class EnumType extends BscType {
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
             this.isEqual(targetType) ||
-            (isEnumMemberType(targetType) && targetType?.enumName.toLowerCase() === this.name.toLowerCase())
+            (isEnumMemberType(targetType) && targetType?.enumName.toLowerCase() === this.name.toLowerCase()) ||
+            isUnionTypeCompatible(this, targetType)
         );
     }
 

@@ -24,7 +24,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isDynamicType, isExpression, isFloatType, isIndexedGetExpression, isIntegerType, isInvalidType, isLongIntegerType, isReferenceType, isStringType, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isDynamicType, isExpression, isFloatType, isIndexedGetExpression, isIntegerType, isInvalidType, isLongIntegerType, isStringType, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -36,6 +36,7 @@ import { createIdentifier } from './astUtils/creators';
 import type { BscType } from './types/BscType';
 import type { AssignmentStatement } from './parser/Statement';
 import { FunctionType } from './types/FunctionType';
+import { BinaryOperatorReferenceType } from './types';
 
 export class Util {
     public clearConsole() {
@@ -1080,11 +1081,18 @@ export class Util {
             isLongIntegerType(targetType);
     }
 
+
     /**
      * Return the type of the result of a binary operator
      * Note: compound assignments (eg. +=) internally use a binary expression, so that's why TokenKind.PlusEqual, etc. are here too
      */
     public binaryOperatorResultType(leftType: BscType, operator: Token, rightType: BscType): BscType {
+        if ((isAnyReferenceType(leftType) && !leftType.isResolvable()) ||
+            (isAnyReferenceType(rightType) && !rightType.isResolvable())) {
+            return new BinaryOperatorReferenceType(leftType, operator, rightType, (lhs, op, rhs) => {
+                return this.binaryOperatorResultType(lhs, op, rhs);
+            });
+        }
         let hasDouble = isDoubleType(leftType) || isDoubleType(rightType);
         let hasFloat = isFloatType(leftType) || isFloatType(rightType);
         let hasLongInteger = isLongIntegerType(leftType) || isLongIntegerType(rightType);
@@ -1684,7 +1692,7 @@ export class Util {
             fullErrorName = previousTypeName ? `${previousTypeName}.${chainItem.name}` : chainItem.name;
             previousTypeName = chainItem.type.toString();
             itemName = chainItem.name;
-            containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isReferenceType(chainItem.type));
+            containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
             if (!chainItem.isResolved) {
                 errorRange = chainItem.range;
                 break;

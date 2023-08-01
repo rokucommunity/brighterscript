@@ -4,13 +4,16 @@ import { SymbolTypeFlag } from '../SymbolTable';
 import { expectTypeToBe } from '../testHelpers.spec';
 import { DynamicType } from './DynamicType';
 import { IntegerType } from './IntegerType';
-import { TypePropertyReferenceType, ReferenceType } from './ReferenceType';
+import { TypePropertyReferenceType, ReferenceType, BinaryOperatorReferenceType } from './ReferenceType';
 import { StringType } from './StringType';
 import { FloatType } from './FloatType';
 import { ClassType } from './ClassType';
 import { isTypePropertyReferenceType, isReferenceType } from '../astUtils/reflection';
 import { TypedFunctionType } from './TypedFunctionType';
 import { NamespaceType } from './NamespaceType';
+import { createToken } from '../astUtils/creators';
+import { TokenKind } from '../lexer/TokenKind';
+import { util } from '../util';
 
 const runtimeFlag = SymbolTypeFlag.runtime;
 
@@ -70,6 +73,19 @@ describe('ReferenceType', () => {
             table.addSymbol('someVar2', null, ref3, SymbolTypeFlag.runtime);
             table.addSymbol('someVar3', null, ref1, SymbolTypeFlag.runtime);
             expectTypeToBe(table.getSymbol('someVar0', SymbolTypeFlag.runtime)[0].type, DynamicType);
+        });
+
+        it('catches circular references in a binary expression', () => {
+            const table = new SymbolTable('test');
+            const ref = new ReferenceType('notHere', 'notHere', runtimeFlag, () => table);
+            const binRef = new BinaryOperatorReferenceType(ref, createToken(TokenKind.Plus), StringType.instance, (l, o, r) => {
+                return util.binaryOperatorResultType(l, o, r);
+            });
+            const binRef2 = new BinaryOperatorReferenceType(ref, createToken(TokenKind.Plus), binRef, (l, o, r) => {
+                return util.binaryOperatorResultType(l, o, r);
+            });
+            table.addSymbol('notHere', null, binRef2, SymbolTypeFlag.runtime);
+            expectTypeToBe(table.getSymbolType('notHere', { flags: SymbolTypeFlag.runtime }), DynamicType);
         });
     });
 
