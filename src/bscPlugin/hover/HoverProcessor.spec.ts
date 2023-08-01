@@ -403,5 +403,43 @@ describe('HoverProcessor', () => {
             expect(hover?.range).to.eql(util.createRange(2, 32, 2, 38));
             expect(hover?.contents).eql([fence('member as dynamic')]);
         });
+
+        it('says members on dynamic are dynamic', () => {
+            const file = program.setFile('source/main.bs', `
+                sub doSomething(thing)
+                    print thing.member
+                end sub
+            `);
+            program.validate();
+
+            // print thing.mem|ber
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 36))[0];
+            expect(hover?.range).to.eql(util.createRange(2, 32, 2, 38));
+            expect(hover?.contents).eql([fence('member as dynamic')]);
+        });
+
+        it.only('should recognize consistent type after function call in binary op', () => {
+            let file = program.setFile('source/main.bs', `
+                function arrayToString(items as object) as string
+                    description = "["
+                    for each item in items
+                        description += utils.toString(item) + ", "
+                    end for
+                    description += "]"
+                    return description
+                end function
+            `);
+            program.setFile('source/utils.bs', `
+                namespace utils
+                    function toString(thing as dynamic) as string
+                        return "hello"
+                    end function
+                end namespace
+            `);
+            program.validate();
+            // return myS|tring
+            let hover = program.getHover(file.srcPath, util.createPosition(7, 31))[0];
+            expect(hover?.contents).eql([fence('description as string')]);
+        });
     });
 });

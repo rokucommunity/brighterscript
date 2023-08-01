@@ -2737,6 +2737,31 @@ describe('Scope', () => {
                 expectTypeToBe(symbolTable.getSymbolType('x', opts), IntegerType);
                 expectTypeToBe(symbolTable.getSymbolType('result', opts), FloatType);
             });
+
+            it.only('should recognize consistent type after function call in binary op', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    function process(items) as string
+                        myString = ""
+                        for each item in items
+                            myString += utils.toString(item) + " "
+                        end for
+                        return myString
+                    end function
+                `);
+                program.setFile('source/utils.bs', `
+                    namespace utils
+                        function toString(thing) as string
+                            return type(thing)
+                        end function
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('myString', opts), StringType);
+            });
         });
     });
 

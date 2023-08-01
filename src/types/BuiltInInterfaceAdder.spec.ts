@@ -10,6 +10,7 @@ import { DoubleType } from './DoubleType';
 import { DynamicType } from './DynamicType';
 import { ClassType } from './ClassType';
 import { ArrayType } from './ArrayType';
+import { expect } from 'chai';
 
 describe('BuiltInInterfaceAdder', () => {
 
@@ -21,6 +22,17 @@ describe('BuiltInInterfaceAdder', () => {
         expectTypeToBe(myType.getMemberType('split', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
         expectTypeToBe(myType.getMemberType('getString', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
         expectTypeToBe(myType.getMemberType('replace', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
+    });
+
+    it('should have correct types for string members', () => {
+        const myType = new StringType();
+        BuiltInInterfaceAdder.addBuiltInInterfacesToType(myType);
+        const leftType = myType.getMemberType('left', { flags: SymbolTypeFlag.runtime });
+        expectTypeToBe(leftType, TypedFunctionType);
+        const leftFuncType = leftType as TypedFunctionType;
+        expect(leftFuncType.params.length).to.equal(1);
+        expectTypeToBe(leftFuncType.params[0].type, IntegerType);
+        expectTypeToBe(leftFuncType.returnType, StringType);
     });
 
     it('should add members to IntegerType', () => {

@@ -41,7 +41,7 @@ export class BuiltInInterfaceAdder {
                 const methodFuncType = this.typedFunctionFactory(returnType);
                 methodFuncType.name = method.name;
                 for (const param of method.params) {
-                    const paramType = this.getPrimitiveType(method.returnType);
+                    const paramType = this.getPrimitiveType(param.type);
                     methodFuncType.addParameter(param.name, paramType, !param.isRequired);
                 }
                 memberTable.addSymbol(method.name, null, methodFuncType, SymbolTypeFlag.runtime);
