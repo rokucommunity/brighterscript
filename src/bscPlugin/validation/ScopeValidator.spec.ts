@@ -911,6 +911,28 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.argumentTypeMismatch('float', 'string').message
             ]);
         });
+
+
+        it('validates a function passed as an arg', () => {
+            program.setFile('source/util.bs', `
+                sub foo()
+                    getPi = function()
+                        return 3.14
+                    end function
+                    bar(getPi)
+                end sub
+
+
+                sub bar(num as integer)
+                    print num
+                end sub
+            `);
+            program.validate();
+            //should have error - param should be a string, not a float
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('function () as dynamic', 'integer').message
+            ]);
+        });
     });
 
     describe('cannotFindName', () => {
