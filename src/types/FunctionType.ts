@@ -2,6 +2,7 @@ import { isCallableType, isDynamicType, isFunctionType, isObjectType } from '../
 import { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
+import { isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
 export class FunctionType extends BaseFunctionType {
@@ -17,7 +18,8 @@ export class FunctionType extends BaseFunctionType {
         if (
             isDynamicType(targetType) ||
             isCallableType(targetType) ||
-            isObjectType(targetType)
+            isObjectType(targetType) ||
+            isUnionTypeCompatible(this, targetType)
         ) {
             return true;
         }

@@ -747,6 +747,34 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('allows calling future function and save to same variable', () => {
+            program.setFile('source/util.brs', `
+                function getSomeInt() as integer
+                    numVal = getUntypedNum()
+                    numVal = cInt(numVal)
+                    return numVal
+                end function
+
+                function getUntypedNum()
+                    return 1
+                end function
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows union types of all compatible types as arg', () => {
+            program.setFile('source/util.brs', `
+                sub printIntNum(num as float or double or integer)
+                    print cInt(num)
+                end sub
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
         it('allows function calls of built-in members of primitives', () => {
             program.setFile('source/util.brs', `
                 sub doSomething()
@@ -758,6 +786,19 @@ describe('ScopeValidator', () => {
             program.validate();
             //should have no errors
             expectZeroDiagnostics(program);
+        });
+
+        it('validates union types of all compatible types as arg - when some do not work', () => {
+            program.setFile('source/util.brs', `
+                sub printIntNum(maybeNum as float or string)
+                    print cInt(maybeNum)
+                end sub
+            `);
+            program.validate();
+            //should have no errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('float or string', 'float').message
+            ]);
         });
 
         it('validates function calls of built-in members of primitives', () => {
@@ -870,6 +911,28 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.argumentTypeMismatch('float', 'string').message
             ]);
         });
+
+
+        it('validates a function passed as an arg', () => {
+            program.setFile('source/util.bs', `
+                sub foo()
+                    getPi = function()
+                        return 3.14
+                    end function
+                    bar(getPi)
+                end sub
+
+
+                sub bar(num as integer)
+                    print num
+                end sub
+            `);
+            program.validate();
+            //should have error - param should be a string, not a float
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('function () as dynamic', 'integer').message
+            ]);
+        });
     });
 
     describe('cannotFindName', () => {
@@ -884,6 +947,19 @@ describe('ScopeValidator', () => {
             program.validate();
             //should have no errors
             expectZeroDiagnostics(program);
+        });
+
+        it('validates when lhs of compound assignment does not exist', () => {
+            program.setFile('source/util.brs', `
+                sub main()
+                    expected += chr(10) + " version=""2.0"""
+                end sub
+            `);
+            program.validate();
+            //should have error - cannot find "expected"
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('expected').message
+            ]);
         });
     });
 });

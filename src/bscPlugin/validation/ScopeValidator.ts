@@ -1,11 +1,11 @@
 import { URI } from 'vscode-uri';
-import { isBinaryExpression, isBrsFile, isClassType, isLiteralExpression, isNamespaceStatement, isTypeExpression, isTypedFunctionType, isXmlScope } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBinaryExpression, isBrsFile, isClassType, isLiteralExpression, isNamespaceStatement, isTypeExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTable';
-import type { EnumStatement, NamespaceStatement } from '../../parser/Statement';
+import type { AssignmentStatement, EnumStatement, NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -17,6 +17,7 @@ import type { VariableExpression, DottedGetExpression, CallExpression } from '..
 import { ParseMode } from '../../parser/Parser';
 import { TokenKind } from '../../lexer/TokenKind';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
+import type { BscType } from '../../types';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -82,6 +83,22 @@ export class ScopeValidator {
         return false;
     }
 
+    private isTypeKnown(exprType: BscType) {
+        let isKnownType = exprType?.isResolvable();
+        return isKnownType;
+    }
+
+    /**
+     * If this is the lhs of an assignment, we don't need to flag it as unresolved
+     */
+    private ignoreUnresolvedAssignmentLHS(expression: Expression, exprType: BscType) {
+        if (!isVariableExpression(expression)) {
+            return false;
+        }
+        const assignmentAncestor: AssignmentStatement = expression?.findAncestor(isAssignmentStatement);
+        return assignmentAncestor?.name === expression?.name && isUnionType(exprType); // the left hand side is not a union, which means it was never assigned
+    }
+
     private expressionsByFile = new Cache<BrsFile, Readonly<ExpressionInfo>[]>();
     private iterateFileExpressions(file: BrsFile) {
         const { scope } = this.event;
@@ -132,7 +149,7 @@ export class ScopeValidator {
                 typeChain: typeChain
             });
 
-            if (!exprType || !exprType.isResolvable()) {
+            if (!this.isTypeKnown(exprType) && !this.ignoreUnresolvedAssignmentLHS(info.expression, exprType)) {
                 if (info.expression.getType({ flags: oppositeSymbolType })?.isResolvable()) {
                     const oppoSiteTypeChain = [];
                     const invalidlyUsedResolvedType = info.expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain });

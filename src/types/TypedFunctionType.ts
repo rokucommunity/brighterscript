@@ -2,6 +2,7 @@ import { isDynamicType, isObjectType, isTypedFunctionType } from '../astUtils/re
 import { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
+import { isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
 export class TypedFunctionType extends BaseFunctionType {
@@ -42,7 +43,8 @@ export class TypedFunctionType extends BaseFunctionType {
     public isTypeCompatible(targetType: BscType) {
         if (
             isDynamicType(targetType) ||
-            isObjectType(targetType)
+            isObjectType(targetType) ||
+            isUnionTypeCompatible(this, targetType)
         ) {
             return true;
         }
@@ -54,7 +56,7 @@ export class TypedFunctionType extends BaseFunctionType {
         for (let param of this.params) {
             paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString()}`);
         }
-        return `${this.isSub ? 'sub' : 'function'} ${this.name}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
+        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
 
     }
 

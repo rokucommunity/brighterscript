@@ -1,6 +1,7 @@
 import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
+import { isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
 export class FloatType extends BscType {
@@ -21,7 +22,8 @@ export class FloatType extends BscType {
             isIntegerType(targetType) ||
             isFloatType(targetType) ||
             isDoubleType(targetType) ||
-            isLongIntegerType(targetType)
+            isLongIntegerType(targetType) ||
+            isUnionTypeCompatible(this, targetType)
         );
 
     }
