@@ -100,6 +100,8 @@ export class ProgramBuilder {
             this.options = util.normalizeAndResolveConfig(options);
             if (this.options.project) {
                 this.logger.log(`Using config file: "${this.options.project}"`);
+            } else if (this.options.noProject) {
+                this.logger.log(`No bsconfig.json file expected because using flag --noProject`);
             } else {
                 this.logger.log(`No bsconfig.json file found, using default options`);
             }

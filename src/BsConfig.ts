@@ -13,6 +13,13 @@ export interface BsConfig {
     project?: string;
 
     /**
+     * An optional parameter
+     * When value is set to 'true' and 'project' is null, no bsconfig.json is expected
+     */
+    noProject?: boolean;
+
+
+    /**
      * Relative or absolute path to another bsconfig.json file that this file should import and then override.
      * Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.
      */

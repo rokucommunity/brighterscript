@@ -30,6 +30,7 @@ let options = yargs
     .option('files', { type: 'array', description: 'The list of files (or globs) to include in your project. Be sure to wrap these in double quotes when using globs.' })
     .option('host', { type: 'string', description: 'The host used when deploying to a Roku.' })
     .option('ignore-error-codes', { type: 'array', description: 'A list of error codes that the compiler should NOT emit, even if encountered.' })
+    .option('no-project', { type: 'boolean', defaultDescription: 'false', description: 'when flag set and also project path is null, no bsconfig.json is expected' })
     .option('log-level', { type: 'string', defaultDescription: '"log"', description: 'The log level. Value can be "error", "warn", "log", "info", "debug".' })
     .option('out-file', { type: 'string', description: 'Path to the zip folder containing the bundled project. Defaults to `./out/[YOUR_ROOT_FOLDER_NAME].zip' })
     .option('password', { type: 'string', description: 'The password for deploying to a Roku.' })
@@ -61,6 +62,11 @@ let options = yargs
 async function main() {
     try {
         initProfiling();
+
+        console.log('main()');
+
+        console.log('options ...');
+        console.log(options);
 
         if (options.lsp) {
             const server = new LanguageServer();
