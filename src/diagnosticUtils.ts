@@ -95,10 +95,11 @@ export function printDiagnostic(
     );
 
     //print related information if present (only first few rows)
-    const relatedInfoList = relatedInformation?.slice(0, 5) ?? [];
+    const relatedInfoList = relatedInformation ?? [];
     let indent = '    ';
     for (let i = 0; i < relatedInfoList.length; i++) {
         let relatedInfo = relatedInfoList[i];
+        //only show the first 5 relatedInfo links
         if (i < 5) {
             console.log('');
             console.log(
