@@ -245,7 +245,7 @@ describe('diagnosticUtils', () => {
                 diagnosticUtils.getDiagnosticLine({ range: range } as any, '1'.repeat(lineLength), color)
             ).to.eql([
                 chalk.bgWhite(' ' + chalk.black((range.start.line + 1).toString()) + ' ') + ' ' + '1'.repeat(lineLength),
-                chalk.bgWhite(' ' + chalk.white('_'.repeat((range.start.line + 1).toString().length)) + ' ') + ' ' + squigglyText.padEnd(lineLength, ' ')
+                chalk.bgWhite(' ' + chalk.white(' '.repeat((range.start.line + 1).toString().length)) + ' ') + ' ' + squigglyText.padEnd(lineLength, ' ')
             ].join('\n'));
         }
 
