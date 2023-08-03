@@ -1,19 +1,20 @@
-import { isBrsFile, isCallableType, isClassStatement, isConstStatement, isEnumStatement, isFieldStatement, isFunctionStatement, isMethodStatement, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isCallableType, isClassStatement, isClassType, isConstStatement, isEnumMemberType, isEnumStatement, isEnumType, isFieldStatement, isFunctionStatement, isIntegerType, isInterfaceType, isMethodStatement, isNamespaceType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { BscFile, CallableContainer, FileLink, FileReference, ProvideCompletionsEvent } from '../../interfaces';
 import { Keywords, TokenKind } from '../../lexer/TokenKind';
 import type { XmlScope } from '../../XmlScope';
 import { util } from '../../util';
 import type { Scope } from '../../Scope';
 import { ParseMode } from '../../parser/Parser';
-import type { CompletionItem, Position } from 'vscode-languageserver';
+import { CompletionItem, Position } from 'vscode-languageserver';
 import { CompletionItemKind, TextEdit } from 'vscode-languageserver';
 import type { ClassStatement, FunctionStatement } from '../../parser/Statement';
-import { SymbolTypeFlag } from '../../SymbolTable';
+import { BscSymbol, SymbolTypeFlag } from '../../SymbolTable';
 import type { XmlFile } from '../../files/XmlFile';
 import type { Program } from '../../Program';
 import type { BrsFile } from '../../files/BrsFile';
 import type { Token } from '../../lexer/Token';
 import type { FunctionScope } from '../../FunctionScope';
+import { BscType } from '../../types';
 
 export class CompletionsProcessor {
     constructor(
@@ -193,117 +194,165 @@ export class CompletionsProcessor {
                 return [];
             }
         }
-
-        const namespaceCompletions = this.getNamespaceCompletions(file, currentToken, scope);
-        if (namespaceCompletions.length > 0) {
-            return [...namespaceCompletions];
-        }
-
-        const enumMemberCompletions = this.getEnumMemberStatementCompletions(file, currentToken, scope);
-        if (enumMemberCompletions.length > 0) {
-            // no other completion is valid in this case
-            return enumMemberCompletions;
-        }
-
-        //determine if cursor is inside a function
-        let functionScope = file.getFunctionScopeAtPosition(position);
-        const classNameCompletions = this.getGlobalClassStatementCompletions(file, currentToken, file.parseMode);
-        if (!functionScope) {
-            //we aren't in any function scope, so return the keyword completions and namespaces
-            if (file.getTokenBefore(currentToken, TokenKind.New)) {
-                // there's a new keyword, so only class types are viable here
-                return [...classNameCompletions];
-            } else {
-                return [
-                    ...KeywordCompletions,
-                    ...classNameCompletions,
-                    ...namespaceCompletions,
-                    ...this.getNonNamespacedEnumStatementCompletions(file, currentToken, scope)
-                ];
-            }
-        }
-
-        const newToken = file.getTokenBefore(currentToken, TokenKind.New);
-        if (newToken) {
-            //we are after a new keyword; so we can only be top-level namespaces or classes at this point
-            result.push(...classNameCompletions);
-            result.push(...namespaceCompletions);
-            return result;
-        }
-
-        if (file.tokenFollows(currentToken, TokenKind.Goto)) {
-            return this.getLabelCompletion(functionScope);
-        }
-
         if (file.isPositionNextToTokenKind(position, TokenKind.Dot)) {
-            const selfClassMemberCompletions = this.getClassMemberCompletions(file, position, currentToken, functionScope, scope);
-            if (selfClassMemberCompletions.size > 0) {
-                return [...selfClassMemberCompletions.values()].filter((i) => i.label !== 'new');
-            }
-
-            if (!this.getClassFromMReference(file, position, currentToken, functionScope)) {
-                //and anything from any class in scope to a non m class
-                let classMemberCompletions = this.getAllClassMemberCompletions(scope);
-                result.push(...classMemberCompletions.values());
-                result.push(...this.getPropertyNameCompletions(scope).filter((i) => !classMemberCompletions.has(i.label)));
-            } else {
-                result.push(...this.getPropertyNameCompletions(scope));
+            const beforeDotToken = file.getTokenBefore(file.getClosestToken(position));
+            for (const scope of this.event.scopes) {
+                scope.linkSymbolTable();
+                const positionBefore = { ...beforeDotToken?.range.end, character: beforeDotToken?.range.end.character - 1 };
+                const expression = file.getClosestExpression(positionBefore);
+                const exprType = expression.getType({ flags: SymbolTypeFlag.runtime });
+                const currentSymbols = exprType.memberTable.getAllSymbols(SymbolTypeFlag.runtime);
+                result.push(...this.getSymbolsCompletion(currentSymbols));
+                scope.unlinkSymbolTable();
             }
         } else {
-            result.push(
-                //include namespaces
-                ...namespaceCompletions,
-                //include class names
-                ...classNameCompletions,
-                //include enums
-                ...this.getNonNamespacedEnumStatementCompletions(file, currentToken, scope),
-                //include constants
-                ...this.getNonNamespacedConstStatementCompletions(file, currentToken, scope),
-                //include the global callables
-                ...this.getCallablesAsCompletions(scope, file.parseMode)
-            );
-
-            //add `m` because that's always valid within a function
-            result.push({
-                label: 'm',
-                kind: CompletionItemKind.Variable
-            });
-            names.m = true;
-
-            result.push(...KeywordCompletions);
-
-            //include local variables
-            let variables = functionScope.variableDeclarations;
-            for (let variable of variables) {
-                //skip duplicate variable names
-                if (names[variable.name.toLowerCase()]) {
-                    continue;
-                }
-                names[variable.name.toLowerCase()] = true;
-                result.push({
-                    label: variable.name,
-                    kind: isCallableType(variable.getType()) ? CompletionItemKind.Function : CompletionItemKind.Variable
-                });
-            }
-
-            if (file.parseMode === ParseMode.BrighterScript) {
-                //include the first part of namespaces
-                let namespaces = scope.getAllNamespaceStatements();
-                for (let stmt of namespaces) {
-                    let firstPart = util.getAllDottedGetParts(stmt.nameExpression).shift().text;
-                    //skip duplicate namespace names
-                    if (names[firstPart.toLowerCase()]) {
-                        continue;
-                    }
-                    names[firstPart.toLowerCase()] = true;
-                    result.push({
-                        label: firstPart,
-                        kind: CompletionItemKind.Module
-                    });
-                }
+            for (const scope of this.event.scopes) {
+                scope.linkSymbolTable();
+                const expression = file.getClosestExpression(this.event.position);
+                const exprSymbTable = expression.getSymbolTable();
+                const currentSymbols = exprSymbTable.getAllSymbols(SymbolTypeFlag.runtime);
+                result.push(...this.getSymbolsCompletion(currentSymbols));
+                scope.unlinkSymbolTable();
             }
         }
+
         return result;
+        /*
+                const namespaceCompletions = this.getNamespaceCompletions(file, currentToken, scope);
+                if (namespaceCompletions.length > 0) {
+                    return [...namespaceCompletions];
+                }
+
+                const enumMemberCompletions = this.getEnumMemberStatementCompletions(file, currentToken, scope);
+                if (enumMemberCompletions.length > 0) {
+                    // no other completion is valid in this case
+                    return enumMemberCompletions;
+                }
+
+                //determine if cursor is inside a function
+                let functionScope = file.getFunctionScopeAtPosition(position);
+                const classNameCompletions = this.getGlobalClassStatementCompletions(file, currentToken, file.parseMode);
+                if (!functionScope) {
+                    //we aren't in any function scope, so return the keyword completions and namespaces
+                    if (file.getTokenBefore(currentToken, TokenKind.New)) {
+                        // there's a new keyword, so only class types are viable here
+                        return [...classNameCompletions];
+                    } else {
+                        return [
+                            ...KeywordCompletions,
+                            ...classNameCompletions,
+                            ...namespaceCompletions,
+                            ...this.getNonNamespacedEnumStatementCompletions(file, currentToken, scope)
+                        ];
+                    }
+                }
+
+                const newToken = file.getTokenBefore(currentToken, TokenKind.New);
+                if (newToken) {
+                    //we are after a new keyword; so we can only be top-level namespaces or classes at this point
+                    result.push(...classNameCompletions);
+                    result.push(...namespaceCompletions);
+                    return result;
+                }
+
+                if (file.tokenFollows(currentToken, TokenKind.Goto)) {
+                    return this.getLabelCompletion(functionScope);
+                }
+
+                if (file.isPositionNextToTokenKind(position, TokenKind.Dot)) {
+                    const selfClassMemberCompletions = this.getClassMemberCompletions(file, position, currentToken, functionScope, scope);
+                    if (selfClassMemberCompletions.size > 0) {
+                        return [...selfClassMemberCompletions.values()].filter((i) => i.label !== 'new');
+                    }
+
+                    if (!this.getClassFromMReference(file, position, currentToken, functionScope)) {
+                        //and anything from any class in scope to a non m class
+                        let classMemberCompletions = this.getAllClassMemberCompletions(scope);
+                        result.push(...classMemberCompletions.values());
+                        result.push(...this.getPropertyNameCompletions(scope).filter((i) => !classMemberCompletions.has(i.label)));
+                    } else {
+                        result.push(...this.getPropertyNameCompletions(scope));
+                    }
+                } else {
+                    result.push(
+                        //include namespaces
+                        ...namespaceCompletions,
+                        //include class names
+                        ...classNameCompletions,
+                        //include enums
+                        ...this.getNonNamespacedEnumStatementCompletions(file, currentToken, scope),
+                        //include constants
+                        ...this.getNonNamespacedConstStatementCompletions(file, currentToken, scope),
+                        //include the global callables
+                        ...this.getCallablesAsCompletions(scope, file.parseMode)
+                    );
+
+                    //add `m` because that's always valid within a function
+                    result.push({
+                        label: 'm',
+                        kind: CompletionItemKind.Variable
+                    });
+                    names.m = true;
+
+                    result.push(...KeywordCompletions);
+
+                    //include local variables
+                    let variables = functionScope.variableDeclarations;
+                    for (let variable of variables) {
+                        //skip duplicate variable names
+                        if (names[variable.name.toLowerCase()]) {
+                            continue;
+                        }
+                        names[variable.name.toLowerCase()] = true;
+                        result.push({
+                            label: variable.name,
+                            kind: isCallableType(variable.getType()) ? CompletionItemKind.Function : CompletionItemKind.Variable
+                        });
+                    }
+
+                    if (file.parseMode === ParseMode.BrighterScript) {
+                        //include the first part of namespaces
+                        let namespaces = scope.getAllNamespaceStatements();
+                        for (let stmt of namespaces) {
+                            let firstPart = util.getAllDottedGetParts(stmt.nameExpression).shift().text;
+                            //skip duplicate namespace names
+                            if (names[firstPart.toLowerCase()]) {
+                                continue;
+                            }
+                            names[firstPart.toLowerCase()] = true;
+                            result.push({
+                                label: firstPart,
+                                kind: CompletionItemKind.Module
+                            });
+                        }
+                    }
+                }
+                return result; */
+    }
+
+    private getSymbolsCompletion(symbols: BscSymbol[]) {
+        return symbols.map(symbol => ({
+            label: symbol.name,
+            kind: this.getCompletionKindFromType(symbol.type)
+        }));
+    }
+
+    private getCompletionKindFromType(type: BscType) {
+        if (isClassType(type)) {
+            return CompletionItemKind.Class;
+        } else if (isCallableType(type)) {
+            return CompletionItemKind.Function;
+        } else if (isInterfaceType(type)) {
+            return CompletionItemKind.Interface;
+        } else if (isEnumType(type)) {
+            return CompletionItemKind.Enum
+        } else if (isEnumMemberType(type)) {
+            return CompletionItemKind.EnumMember
+        } else if (isNamespaceType(type)) {
+            return CompletionItemKind.Module
+        }
+        return CompletionItemKind.Variable;
+
     }
 
     private getLabelCompletion(functionScope: FunctionScope) {

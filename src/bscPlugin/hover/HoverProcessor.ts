@@ -129,13 +129,11 @@ export class HoverProcessor {
         if (!this.isValidTokenForHover(token)) {
             return null;
         }
-
+        const expression = file.getClosestExpression(this.event.position);
         const hoverContents: string[] = [];
         for (let scope of this.event.scopes) {
             try {
                 scope.linkSymbolTable();
-
-                const expression = file.getClosestExpression(this.event.position);
                 const constHover = this.getConstHover(token, file, scope, expression);
                 if (constHover) {
                     hoverContents.push(constHover);

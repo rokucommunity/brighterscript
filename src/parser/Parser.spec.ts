@@ -2,14 +2,14 @@ import { expect, assert } from '../chai-config.spec';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression, TypeCastExpression } from './Expression';
-import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
+import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
 import type { AssignmentStatement, ClassStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAssignmentStatement, isBlock, isCallExpression, isCommentStatement, isDottedGetExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isPrintStatement, isTypeCastExpression } from '../astUtils/reflection';
-import { expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
+import { isAssignmentStatement, isBlock, isCallExpression, isCommentStatement, isDottedGetExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isPrintStatement, isTypeCastExpression, isVariableExpression } from '../astUtils/reflection';
+import { expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
 import { BrsFile } from '../files/BrsFile';
@@ -619,13 +619,98 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(1, 'Error count should be 0');
         });
 
-        it.skip('allows printing object with trailing period', () => {
+        it('allows printing object with trailing period', () => {
             let { tokens } = Lexer.scan(`print a.`);
-            let { statements, diagnostics } = Parser.parse(tokens);
+            let { diagnostics, statements } = Parser.parse(tokens);
             let printStatement = statements[0] as PrintStatement;
-            expect(diagnostics).to.be.empty;
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedPropertyNameAfterPeriod());
+            expect(printStatement).to.be.instanceof(PrintStatement);
+            expect(printStatement.expressions[0]).to.be.instanceof(VariableExpression);
+        });
+
+        it('allows printing object with trailing period with multiple dotted gets', () => {
+            let { tokens } = Lexer.scan(`print a.b.`);
+            let { diagnostics, statements } = Parser.parse(tokens);
+            let printStatement = statements[0] as PrintStatement;
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedPropertyNameAfterPeriod());
             expect(printStatement).to.be.instanceof(PrintStatement);
             expect(printStatement.expressions[0]).to.be.instanceof(DottedGetExpression);
+        });
+
+        describe('incomplete statements in the ast', () => {
+            it('adds variable expressions to the ast', () => {
+                let { tokens } = Lexer.scan(`
+                    function a()
+                        NameA.
+                    end function
+
+                    namespace NameA
+                        sub noop()
+                        end sub
+                    end namespace
+                `);
+                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression());
+                let stmt = statements[0].func.body.statements[0];
+
+                expect(isExpressionStatement(stmt)).to.be.true;
+                expect(isVariableExpression((stmt).expression)).to.be.true;
+                expect(stmt.expression.name.text).to.equal('NameA');
+            });
+
+            it('adds unended call statements', () => {
+                let { tokens } = Lexer.scan(`
+                    function a()
+                        lcase(
+                    end function
+                `);
+                let { statements } = Parser.parse(tokens) as any;
+                let stmt = statements[0].func.body.statements[0];
+
+                expect(isExpressionStatement(stmt)).to.be.true;
+                expect(isCallExpression((stmt).expression)).to.be.true;
+                expect(stmt.expression.callee.name.text).to.equal('lcase');
+            });
+
+            it('adds unended indexed get statements', () => {
+                let { tokens } = Lexer.scan(`
+                    function a()
+                        nums[
+                    end function
+
+                    const nums = [1, 2, 3]
+                `);
+                let { statements } = Parser.parse(tokens) as any;
+                let stmt = statements[0].func.body.statements[0];
+
+                expect(isExpressionStatement(stmt)).to.be.true;
+                expect(isIndexedGetExpression((stmt).expression)).to.be.true;
+                expect(stmt.expression.obj.name.text).to.equal('nums');
+            });
+
+            it('adds dotted gets', () => {
+                let { tokens } = Lexer.scan(`
+                    function foo(a as KlassA)
+                        a.b.
+                    end function
+
+                    class KlassA
+                        b as KlassB
+                    end class
+
+                    class KlassB
+                        sub noop()
+                        end sub
+                    end class
+                `);
+                let { statements } = Parser.parse(tokens) as any;
+                let stmt = statements[0].func.body.statements[0];
+
+                expect(isExpressionStatement(stmt)).to.be.true;
+                expect(isDottedGetExpression((stmt).expression)).to.be.true;
+                expect(stmt.expression.obj.name.text).to.equal('a');
+                expect(stmt.expression.name.text).to.equal('b');
+            });
         });
 
         describe('comments', () => {

@@ -242,7 +242,7 @@ export class SymbolTable implements SymbolTypeGetter {
         let symbols = this.getOwnSymbols();
         //look through any sibling maps next
         for (let sibling of this.siblings) {
-            symbols = symbols.concat(sibling.getAllSymbols(bitFlags));
+            symbols = symbols.concat(sibling.getOwnSymbols());
         }
         if (this.parent) {
             symbols = symbols.concat(this.parent.getAllSymbols(bitFlags));

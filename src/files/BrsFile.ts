@@ -754,8 +754,11 @@ export class BrsFile {
         }
     }
 
-    public getTokenBefore(currentToken: Token, tokenKind: TokenKind): Token {
+    public getTokenBefore(currentToken: Token, tokenKind?: TokenKind): Token {
         const index = this.parser.tokens.indexOf(currentToken);
+        if (!tokenKind) {
+            return this.parser.tokens[index - 1];
+        }
         for (let i = index - 1; i >= 0; i--) {
             currentToken = this.parser.tokens[i];
             if (currentToken.kind === TokenKind.Newline) {

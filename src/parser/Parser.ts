@@ -1956,12 +1956,12 @@ export class Parser {
             return new ExpressionStatement(expr);
         }
 
-        //at this point, it's probably an error. However, we recover a little more gracefully by creating an assignment
+        //at this point, it's probably an error. However, we recover a little more gracefully by creating an inclosing ExpressionStatement
         this.diagnostics.push({
             ...DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression(),
             range: expressionStart.range
         });
-        throw this.lastDiagnosticAsError();
+        return new ExpressionStatement(expr);
     }
 
     private setStatement(): DottedSetStatement | IndexedSetStatement | ExpressionStatement | IncrementStatement | AssignmentStatement {
@@ -2024,7 +2024,8 @@ export class Parser {
 
         //print statements can be empty, so look for empty print conditions
         if (!values.length) {
-            let emptyStringLiteral = createStringLiteral('');
+            const endOfStatementRange = util.createRangeFromPositions(printKeyword.range.end, this.peek()?.range.end);
+            let emptyStringLiteral = createStringLiteral('', endOfStatementRange);
             values.push(emptyStringLiteral);
         }
 
