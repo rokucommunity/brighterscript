@@ -800,7 +800,7 @@ export class Scope {
                 allNamespaces.push(...file.parser.references.namespaceStatements);
             }
         }
-
+        const aggregatesAdded = new Set<string>();
         //Add namespace aggregates to namespace member tables
         for (const namespace of allNamespaces) {
             //link each NamespaceType member table with the aggregate NamespaceLookup SymbolTable
@@ -844,11 +844,15 @@ export class Scope {
                 }
 
                 // Now that the namespace type is built, add the aggregate as a sibling
+                const lowerNameSpace = nameSoFar.toLowerCase();
                 let aggregateNSSymbolTable = this.namespaceLookup.get(nameSoFar.toLowerCase()).symbolTable;
-                this.linkSymbolTableDisposables.push(
-                    currentNSType.memberTable.addSibling(aggregateNSSymbolTable)
-                );
 
+                if (!aggregatesAdded.has(lowerNameSpace)) {
+                    this.linkSymbolTableDisposables.push(
+                        currentNSType.memberTable.addSibling(aggregateNSSymbolTable)
+                    );
+                    aggregatesAdded.add(lowerNameSpace);
+                }
                 if (isFinalNamespace) {
                     this.linkSymbolTableDisposables.push(
                         namespace.getSymbolTable().addSibling(aggregateNSSymbolTable)

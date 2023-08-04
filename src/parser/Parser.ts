@@ -2387,11 +2387,20 @@ export class Parser {
         let newToken = this.advance();
 
         let nameExpr = this.identifyingExpression();
-        let leftParen = this.consume(
+        let leftParen = this.tryConsume(
             DiagnosticMessages.unexpectedToken(this.peek().text),
             TokenKind.LeftParen,
             TokenKind.QuestionLeftParen
         );
+
+        if (!leftParen) {
+            // new expression without a following call expression
+            // wrap the name in an expression
+            const endOfStatementRange = util.createRangeFromPositions(newToken.range.end, this.peek()?.range.end);
+            const exprStmt = nameExpr ?? createStringLiteral('', endOfStatementRange);
+            return new ExpressionStatement(exprStmt);
+        }
+
         let call = this.finishCall(leftParen, nameExpr);
         //pop the call from the  callExpressions list because this is technically something else
         this.callExpressions.pop();

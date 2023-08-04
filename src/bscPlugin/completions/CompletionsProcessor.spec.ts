@@ -13,7 +13,7 @@ import { BrsFile } from '../../files/BrsFile';
 import type { FileObj } from '../../interfaces';
 import * as fsExtra from 'fs-extra';
 
-describe.skip('CompletionsProcessor', () => {
+describe('CompletionsProcessor', () => {
     let program: Program;
     let sinon = createSandbox();
 
@@ -28,7 +28,7 @@ describe.skip('CompletionsProcessor', () => {
         program.dispose();
     });
 
-    describe('getCompletions - Program.spec', () => {
+    describe.only('getCompletions - Program.spec', () => {
         it('includes `for each` variable', () => {
             program.setFile('source/main.brs', `
                 sub main()
@@ -254,13 +254,13 @@ describe.skip('CompletionsProcessor', () => {
         });
 
         it('includes global completions for file with no scope', () => {
-            program.setFile('main.brs', `
+            program.setFile('source/main.brs', `
                 function Main()
                     age = 1
                 end function
             `);
             program.validate();
-            let completions = program.getCompletions('main.brs', Position.create(2, 10));
+            let completions = program.getCompletions('source/main.brs', Position.create(2, 10));
             expect(completions.filter(x => x.label.toLowerCase() === 'abs')).to.be.lengthOf(1);
         });
 
@@ -401,7 +401,7 @@ describe.skip('CompletionsProcessor', () => {
             expect(completions).to.be.lengthOf(2);
         });
 
-        it('get all functions and properties in scope when doing any dotted get on non m ', () => {
+        it.only('get all functions and properties in scope when doing any dotted get on non m ', () => {
             program.setFile('source/main.bs', `
                 sub main()
                     thing.anonPropA = "foo"

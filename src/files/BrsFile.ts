@@ -737,6 +737,10 @@ export class BrsFile {
 
     public isPositionNextToTokenKind(position: Position, tokenKind: TokenKind) {
         const closestToken = this.getClosestToken(position);
+        return this.isTokenNextToTokenKind(closestToken, tokenKind);
+    }
+
+    public isTokenNextToTokenKind(closestToken: Token, tokenKind: TokenKind) {
         const previousToken = this.getPreviousToken(closestToken);
         const previousTokenKind = previousToken?.kind;
         //next to matched token

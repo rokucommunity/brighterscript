@@ -15,6 +15,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { Token } from '../../lexer/Token';
 import type { FunctionScope } from '../../FunctionScope';
 import { BscType } from '../../types';
+import { AstNode } from '../../parser/AstNode';
 
 export class CompletionsProcessor {
     constructor(
@@ -194,25 +195,45 @@ export class CompletionsProcessor {
                 return [];
             }
         }
-        if (file.isPositionNextToTokenKind(position, TokenKind.Dot)) {
+
+        let expression: AstNode;
+        let shouldLookForMembers = false;
+        if (file.isTokenNextToTokenKind(currentToken, TokenKind.Dot)) {
             const beforeDotToken = file.getTokenBefore(file.getClosestToken(position));
-            for (const scope of this.event.scopes) {
-                scope.linkSymbolTable();
-                const expression = file.getClosestExpression(beforeDotToken?.range.end);
-                const exprType = expression.getType({ flags: SymbolTypeFlag.runtime });
-                const currentSymbols = exprType.memberTable.getAllSymbols(SymbolTypeFlag.runtime);
-                result.push(...this.getSymbolsCompletion(currentSymbols));
-                scope.unlinkSymbolTable();
-            }
+            expression = file.getClosestExpression(beforeDotToken?.range.end);
+            shouldLookForMembers = true;
         } else {
-            for (const scope of this.event.scopes) {
-                scope.linkSymbolTable();
-                const expression = file.getClosestExpression(this.event.position);
-                const exprSymbTable = expression.getSymbolTable();
-                const currentSymbols = exprSymbTable.getAllSymbols(SymbolTypeFlag.runtime);
-                result.push(...this.getSymbolsCompletion(currentSymbols));
-                scope.unlinkSymbolTable();
+            expression = file.getClosestExpression(this.event.position);
+        }
+        const tokenBefore = file.getTokenBefore(file.getClosestToken(expression.range.start));
+
+
+        // helper to check get correct symbol tables for look ups
+        function getSymbolTableForLookups() {
+            if (shouldLookForMembers) {
+                return expression.getType({ flags: SymbolTypeFlag.runtime }).memberTable;
             }
+            return expression.getSymbolTable();
+        }
+
+        for (const scope of this.event.scopes) {
+            scope.linkSymbolTable();
+            let currentSymbols = getSymbolTableForLookups().getAllSymbols(SymbolTypeFlag.runtime);
+
+            // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+            switch (tokenBefore.kind) {
+                case TokenKind.New:
+                    //we are after a new keyword; so we can only be namespaces that have a class or classes at this point
+                    currentSymbols = currentSymbols.filter(symbol => isClassType(symbol.type) || this.isNamespaceTypeWithMemberType(symbol.type, isClassType));
+                    break;
+            }
+            result.push(...this.getSymbolsCompletion(currentSymbols));
+            if (shouldLookForMembers && currentSymbols.length === 0) {
+                // could not find members of actual known types.. just try everything
+                result.push(...this.getPropertyNameCompletions(scope),
+                    ...this.getAllClassMemberCompletions(scope).values());
+            }
+            scope.unlinkSymbolTable();
         }
 
         return result;
@@ -344,13 +365,31 @@ export class CompletionsProcessor {
         } else if (isInterfaceType(type)) {
             return CompletionItemKind.Interface;
         } else if (isEnumType(type)) {
-            return CompletionItemKind.Enum
+            return CompletionItemKind.Enum;
         } else if (isEnumMemberType(type)) {
-            return CompletionItemKind.EnumMember
+            return CompletionItemKind.EnumMember;
         } else if (isNamespaceType(type)) {
-            return CompletionItemKind.Module
+            return CompletionItemKind.Module;
         }
         return CompletionItemKind.Variable;
+    }
+
+
+    private isNamespaceTypeWithMemberType(nsType: BscType, predicate: (t: BscType) => boolean): boolean {
+        if (!isNamespaceType(nsType)) {
+            return false;
+        }
+        const members = nsType.memberTable.getAllSymbols(SymbolTypeFlag.runtime);
+        for (const member of members) {
+            if (predicate(member.type)) {
+                return true;
+            } else if (isNamespaceType(member.type)) {
+                if (this.isNamespaceTypeWithMemberType(member.type, predicate)) {
+                    return true;
+                }
+            }
+        }
+        return false;
 
     }
 
