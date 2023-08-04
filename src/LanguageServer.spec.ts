@@ -1108,7 +1108,7 @@ describe('LanguageServer', () => {
         });
     });
 
-    it('semantic tokens request waits until after validation has finished', async () => {
+    it.only('semantic tokens request waits until after validation has finished', async () => {
         fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `
             sub main()
                 print \`hello world\`
@@ -1147,6 +1147,7 @@ describe('LanguageServer', () => {
             getText: () => getContents(),
             uri: uri
         } as TextDocument;
+        server.projects[0].builder.program.getScopeByName('source').invalidate();
 
         const semanticTokensPromise = server['onFullSemanticTokens']({
             textDocument: document
@@ -1155,6 +1156,10 @@ describe('LanguageServer', () => {
             changeWatchedFilesPromise,
             semanticTokensPromise
         ]);
+        // This is the thing that errors.
+        // BrsFileSemanticTokensProcessor.iterateNodes() builds a namespace lookup table (because it calls getNamespace())
+        // However, the namespace aggregate symbol table is incomplete then, because the file has not been validated, and
+        // as a result, the symbol tables of individual namespaces.body are not populated
         expectZeroDiagnostics(server.projects[0].builder.program);
     });
 });

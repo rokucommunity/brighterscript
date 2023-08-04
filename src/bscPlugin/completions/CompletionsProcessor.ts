@@ -198,8 +198,7 @@ export class CompletionsProcessor {
             const beforeDotToken = file.getTokenBefore(file.getClosestToken(position));
             for (const scope of this.event.scopes) {
                 scope.linkSymbolTable();
-                const positionBefore = { ...beforeDotToken?.range.end, character: beforeDotToken?.range.end.character - 1 };
-                const expression = file.getClosestExpression(positionBefore);
+                const expression = file.getClosestExpression(beforeDotToken?.range.end);
                 const exprType = expression.getType({ flags: SymbolTypeFlag.runtime });
                 const currentSymbols = exprType.memberTable.getAllSymbols(SymbolTypeFlag.runtime);
                 result.push(...this.getSymbolsCompletion(currentSymbols));

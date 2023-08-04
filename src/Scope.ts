@@ -628,7 +628,8 @@ export class Scope {
                             enumStatements: new Map(),
                             constStatements: new Map(),
                             statements: [],
-                            symbolTable: new SymbolTable(`Namespace Aggregate: '${loopName}'`, () => this.symbolTable)
+                            // the aggregate symbol table should have no parent. It should include just the symbols of the namespace.
+                            symbolTable: new SymbolTable(`Namespace Aggregate: '${loopName}'`)
                         });
                     }
                 }
@@ -790,7 +791,6 @@ export class Scope {
      */
     public linkSymbolTable() {
         SymbolTable.cacheVerifier.generateToken();
-
         const allNamespaces: NamespaceStatement[] = [];
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {

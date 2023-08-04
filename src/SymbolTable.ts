@@ -231,18 +231,24 @@ export class SymbolTable implements SymbolTypeGetter {
     /**
      * Get list of symbols declared directly in this SymbolTable (excludes parent SymbolTable).
      */
-    public getOwnSymbols(): BscSymbol[] {
-        return [].concat(...this.symbolMap.values());
+    public getOwnSymbols(bitFlags: SymbolTypeFlag): BscSymbol[] {
+        let symbols: BscSymbol[] = [].concat(...this.symbolMap.values());
+        // eslint-disable-next-line no-bitwise
+        symbols = symbols.filter(symbol => symbol.flags & bitFlags);
+        if (this.parent) {
+            symbols = symbols.concat(this.parent.getOwnSymbols(bitFlags));
+        }
+        return symbols;
     }
 
     /**
      * Get list of all symbols declared in this SymbolTable (includes parent SymbolTable).
      */
     public getAllSymbols(bitFlags: SymbolTypeFlag): BscSymbol[] {
-        let symbols = this.getOwnSymbols();
+        let symbols = [].concat(...this.symbolMap.values());
         //look through any sibling maps next
         for (let sibling of this.siblings) {
-            symbols = symbols.concat(sibling.getOwnSymbols());
+            symbols = symbols.concat(sibling.getAllSymbols(bitFlags));
         }
         if (this.parent) {
             symbols = symbols.concat(this.parent.getAllSymbols(bitFlags));
