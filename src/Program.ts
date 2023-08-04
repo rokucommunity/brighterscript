@@ -1188,6 +1188,7 @@ export class Program {
                 outputPath: getOutputPath(file)
             };
         });
+        entries.sort((a, b) => a.file.srcPath < b.file.srcPath ? 1 : -1)
 
         const astEditor = new AstEditor();
 
