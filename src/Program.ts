@@ -136,7 +136,7 @@ export class Program {
 
             //default to the embedded version
         } else {
-            return `source${path.sep}bslib.brs`;
+            return `${this.options.bslibDestinationDir}${path.sep}bslib.brs`;
         }
     }
 
@@ -1244,7 +1244,7 @@ export class Program {
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
         if (!this.getFile(bslibAliasedRokuModulesPkgPath) && !this.getFile(s`source/bslib.brs`)) {
-            promises.push(util.copyBslibToStaging(stagingDir));
+            promises.push(util.copyBslibToStaging(stagingDir, this.options.bslibDestinationDir));
         }
         await Promise.all(promises);
 

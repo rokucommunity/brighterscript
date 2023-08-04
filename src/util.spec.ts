@@ -349,6 +349,16 @@ describe('util', () => {
             let config = util.normalizeAndResolveConfig({ watch: true });
             expect(config.watch).to.be.true;
         });
+
+        it('sets default value for bslibDestinationDir', () => {
+            expect(util.normalizeConfig(<any>{ }).bslibDestinationDir).to.equal('source');
+        });
+
+        it('strips leading and/or trailing slashes from bslibDestinationDir', () => {
+            ['source/opt', '/source/opt', 'source/opt/', '/source/opt/'].forEach(input => {
+                expect(util.normalizeConfig(<any>{ bslibDestinationDir: input }).bslibDestinationDir).to.equal('source/opt');
+            });
+        });
     });
 
     describe('areArraysEqual', () => {
@@ -553,6 +563,16 @@ describe('util', () => {
             expect(
                 /^function bslib_toString\(/mg.exec(
                     fsExtra.readFileSync(`${tempDir}/source/bslib.brs`).toString()
+                )
+            ).not.to.be.null;
+        });
+
+        it('copies from local bslib dependency to optionally specified destination directory', async () => {
+            await util.copyBslibToStaging(tempDir, 'source/opt');
+            expect(fsExtra.pathExistsSync(`${tempDir}/source/opt/bslib.brs`)).to.be.true;
+            expect(
+                /^function bslib_toString\(/mg.exec(
+                    fsExtra.readFileSync(`${tempDir}/source/opt/bslib.brs`).toString()
                 )
             ).not.to.be.null;
         });
