@@ -1187,8 +1187,10 @@ export class Program {
                 file: file,
                 outputPath: getOutputPath(file)
             };
+            //sort the entries to make transpiling more deterministic
+        }).sort((a, b) => {
+            return a.file.srcPath < b.file.srcPath ? -1 : 1;
         });
-        entries.sort((a, b) => a.file.srcPath < b.file.srcPath ? 1 : -1)
 
         const astEditor = new AstEditor();
 
