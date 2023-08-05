@@ -1843,8 +1843,38 @@ describe('Program', () => {
         });
     });
 
-    describe('transpile', () => {
+    it('beforeProgramTranspile sends entries in alphabetical order', () => {
+        program.setFile('source/main.bs', trim`
+            sub main()
+                print "hello world"
+            end sub
+        `);
 
+        program.setFile('source/common.bs', trim`
+            sub getString()
+                return "test"
+            end sub
+        `);
+
+        //send the files out of order
+        const result = program['beforeProgramTranspile']([{
+            src: s`${rootDir}/source/main.bs`,
+            dest: 'source/main.bs'
+        }, {
+            src: s`${rootDir}/source/main.bs`,
+            dest: 'source/main.bs'
+        }], program.options.stagingDir);
+
+        //entries should now be in alphabetic order
+        expect(
+            result.entries.map(x => x.outputPath)
+        ).to.eql([
+            s`${stagingDir}/source/common.brs`,
+            s`${stagingDir}/source/main.brs`
+        ]);
+    });
+
+    describe('transpile', () => {
         it('detects and transpiles files added between beforeProgramTranspile and afterProgramTranspile', async () => {
             program.setFile('source/main.bs', trim`
                 sub main()
