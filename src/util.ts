@@ -505,6 +505,11 @@ export class Util {
      * ```
      */
     public rangesIntersect(a: Range, b: Range) {
+        //stop if the either range is misisng
+        if (!a || !b) {
+            return false;
+        }
+
         // Check if `a` is before `b`
         if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character <= b.start.character)) {
             return false;
@@ -529,6 +534,10 @@ export class Util {
      * ```
      */
     public rangesIntersectOrTouch(a: Range, b: Range) {
+        //stop if the either range is misisng
+        if (!a || !b) {
+            return false;
+        }
         // Check if `a` is before `b`
         if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character < b.start.character)) {
             return false;
@@ -552,6 +561,11 @@ export class Util {
     }
 
     public comparePositionToRange(position: Position, range: Range) {
+        //stop if the either range is misisng
+        if (!position || !range) {
+            return 0;
+        }
+
         if (position.line < range.start.line || (position.line === range.start.line && position.character < range.start.character)) {
             return -1;
         }
