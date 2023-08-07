@@ -297,6 +297,10 @@ export class Util {
     public normalizeAndResolveConfig(config: BsConfig) {
         let result = this.normalizeConfig({});
 
+        if (config?.noProject) {
+            return result;
+        }
+
         result.project = null;
         if (config?.project) {
             result.project = config?.project;
