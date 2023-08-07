@@ -63,11 +63,6 @@ async function main() {
     try {
         initProfiling();
 
-        console.log('main()');
-
-        console.log('options ...');
-        console.log(options);
-
         if (options.lsp) {
             const server = new LanguageServer();
             server.run();
