@@ -13,8 +13,7 @@ export interface BsConfig {
     project?: string;
 
     /**
-     * An optional parameter
-     * When value is set to 'true' and 'project' is null, no bsconfig.json is expected
+     * when set, bsconfig.json loading is disabled
      */
     noProject?: boolean;
 
