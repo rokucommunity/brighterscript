@@ -834,9 +834,9 @@ export class Scope {
                             : new NamespaceType(nameSoFar);
                         if (previousNSType) {
                             // adding as a member of existing NS
-                            previousNSType.addMember(nsNamePart, namespace.range, currentNSType, getTypeOptions.flags);
+                            previousNSType.addMember(nsNamePart, { definingNode: namespace }, currentNSType, getTypeOptions.flags);
                         } else {
-                            symbolTable.addSymbol(nsNamePart, namespace.range, currentNSType, getTypeOptions.flags);
+                            symbolTable.addSymbol(nsNamePart, { definingNode: namespace }, currentNSType, getTypeOptions.flags);
                         }
                     } else {
                         break;

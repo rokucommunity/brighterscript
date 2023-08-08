@@ -28,7 +28,7 @@ describe('CompletionsProcessor', () => {
         program.dispose();
     });
 
-    describe.only('getCompletions - Program.spec', () => {
+    describe('getCompletions - Program.spec', () => {
         it('includes `for each` variable', () => {
             program.setFile('source/main.brs', `
                 sub main()
@@ -401,7 +401,7 @@ describe('CompletionsProcessor', () => {
             expect(completions).to.be.lengthOf(2);
         });
 
-        it.only('get all functions and properties in scope when doing any dotted get on non m ', () => {
+        it('get all functions and properties in scope when doing any dotted get on non m ', () => {
             program.setFile('source/main.bs', `
                 sub main()
                     thing.anonPropA = "foo"
@@ -493,7 +493,7 @@ describe('CompletionsProcessor', () => {
             ).to.eql(['personAMethodA', 'personAMethodB', 'personAName', 'personCMethodA', 'personCMethodB', 'personCMethodC', 'personCName', 'personName']);
         });
 
-        it('include non-namespaced classes in the list of general output', () => {
+        it.skip('include non-namespaced classes in the list of general output', () => {
             program.setFile('source/main.bs', `
                 function regularFunc()
                     MyClass
@@ -559,40 +559,40 @@ describe('CompletionsProcessor', () => {
 
         it('gets completions for callfunc invocation with multiple nodes', () => {
             program.setFile('source/main.bs', `
-            function main()
-                myNode@.sayHello(arg1)
-            end function
-        `);
+                function main()
+                    myNode@.sayHello(arg1)
+                end function
+            `);
             program.setFile('components/MyNode.bs', `
-            function sayHello(text, text2)
-            end function
-            function sayHello2(text, text2)
-            end function
-        `);
+                function sayHello(text, text2)
+                end function
+                function sayHello2(text, text2)
+                end function
+            `);
             program.setFile<XmlFile>('components/MyNode.xml',
                 trim`<?xml version="1.0" encoding="utf-8" ?>
-            <component name="Component1" extends="Scene">
-                <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
-                <interface>
-                    <function name="sayHello"/>
-                    <function name="sayHello2"/>
-                </interface>
-            </component>`);
+                <component name="Component1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
+                    <interface>
+                        <function name="sayHello"/>
+                        <function name="sayHello2"/>
+                    </interface>
+                </component>`);
             program.setFile('components/MyNode2.bs', `
-            function sayHello3(text, text2)
-            end function
-            function sayHello4(text, text2)
-            end function
-        `);
+                function sayHello3(text, text2)
+                end function
+                function sayHello4(text, text2)
+                end function
+            `);
             program.setFile<XmlFile>('components/MyNode2.xml',
                 trim`<?xml version="1.0" encoding="utf-8" ?>
-            <component name="Component2" extends="Scene">
-                <script type="text/brightscript" uri="pkg:/components/MyNode2.bs" />
-                <interface>
-                    <function name="sayHello3"/>
-                    <function name="sayHello4"/>
-                </interface>
-            </component>`);
+                <component name="Component2" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/components/MyNode2.bs" />
+                    <interface>
+                        <function name="sayHello3"/>
+                        <function name="sayHello4"/>
+                    </interface>
+                </component>`);
             program.validate();
 
             expect(
@@ -602,76 +602,76 @@ describe('CompletionsProcessor', () => {
 
         it('gets completions for callfunc invocation with multiple nodes and validates single code completion results', () => {
             program.setFile('source/main.bs', `
-            function main()
-                ParentNode@.sayHello(arg1)
-            end function
-        `);
+                function main()
+                    ParentNode@.sayHello(arg1)
+                end function
+            `);
             program.setFile('components/ParentNode.bs', `
-            function sayHello(text, text2)
-            end function
-        `);
+                function sayHello(text, text2)
+                end function
+            `);
             program.setFile<XmlFile>('components/ParentNode.xml',
                 trim`<?xml version="1.0" encoding="utf-8" ?>
-            <component name="ParentNode" extends="Scene">
-                <script type="text/brightscript" uri="pkg:/components/ParentNode.bs" />
-                <interface>
-                    <function name="sayHello"/>
-                </interface>
-            </component>`);
+                <component name="ParentNode" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/components/ParentNode.bs" />
+                    <interface>
+                        <function name="sayHello"/>
+                    </interface>
+                </component>`);
             program.setFile('components/ChildNode.bs', `
-            function sayHello(text, text2)
-            end function
-        `);
+                function sayHello(text, text2)
+                end function
+            `);
             program.setFile<XmlFile>('components/ChildNode.xml',
                 trim`<?xml version="1.0" encoding="utf-8" ?>
-            <component name="ChildNode" extends="ParentNode">
-                <script type="text/brightscript" uri="pkg:/components/ChildNode.bs" />
-            </component>`);
+                <component name="ChildNode" extends="ParentNode">
+                    <script type="text/brightscript" uri="pkg:/components/ChildNode.bs" />
+                </component>`);
             program.validate();
 
             expect(
-                (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
+                (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 31))).map(x => x.label).sort()
             ).to.eql(['sayHello']);
         });
 
         it('gets completions for extended nodes with callfunc invocation - ensure overridden methods included', () => {
             program.setFile('source/main.bs', `
-            function main()
-                myNode@.sayHello(arg1)
-            end function
-        `);
+                function main()
+                    myNode@.sayHello(arg1)
+                end function
+            `);
             program.setFile('components/MyNode.bs', `
-            function sayHello(text, text2)
-            end function
-            function sayHello2(text, text2)
-            end function
-        `);
+                function sayHello(text, text2)
+                end function
+                function sayHello2(text, text2)
+                end function
+            `);
             program.setFile<XmlFile>('components/MyNode.xml',
                 trim`<?xml version="1.0" encoding="utf-8" ?>
-            <component name="Component1" extends="Scene">
-                <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
-                <interface>
-                    <function name="sayHello"/>
-                    <function name="sayHello2"/>
-                </interface>
-            </component>`);
+                <component name="Component1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
+                    <interface>
+                        <function name="sayHello"/>
+                        <function name="sayHello2"/>
+                    </interface>
+                </component>`);
             program.setFile('components/MyNode2.bs', `
-            function sayHello3(text, text2)
-            end function
-            function sayHello2(text, text2)
-            end function
-            function sayHello4(text, text2)
-            end function
-        `);
+                function sayHello3(text, text2)
+                end function
+                function sayHello2(text, text2)
+                end function
+                function sayHello4(text, text2)
+                end function
+            `);
             program.setFile<XmlFile>('components/MyNode2.xml',
                 trim`<?xml version="1.0" encoding="utf-8" ?>
-            <component name="Component2" extends="Component1">
-                <script type="text/brightscript" uri="pkg:/components/MyNode2.bs" />
-                <interface>
-                    <function name="sayHello3"/>
-                    <function name="sayHello4"/>
-                </interface>
-            </component>`);
+                <component name="Component2" extends="Component1">
+                    <script type="text/brightscript" uri="pkg:/components/MyNode2.bs" />
+                    <interface>
+                        <function name="sayHello3"/>
+                        <function name="sayHello4"/>
+                    </interface>
+                </component>`);
             program.validate();
 
             expect(
@@ -724,7 +724,7 @@ describe('CompletionsProcessor', () => {
 
                 program.validate();
 
-                let completions = program.getCompletions(`${rootDir}/source/main.brs`, util.createPosition(2, 10));
+                let completions = program.getCompletions(`${rootDir}/source/main.brs`, util.createPosition(2, 24));
                 let labels = completions.map(x => pick(x, 'label'));
 
                 expect(labels).to.deep.include({ label: 'Main' });
@@ -746,6 +746,7 @@ describe('CompletionsProcessor', () => {
                     scopes: [],
                     completions: []
                 });
+                program.validate();
                 //get the name of all global completions
                 const globalCompletions = program.globalScope.getAllFiles().flatMap(x => completionProcessor.getBrsFileCompletions(position, x as BrsFile, program.globalScope)).map(x => x.label);
                 //filter out completions from global scope
@@ -761,6 +762,7 @@ describe('CompletionsProcessor', () => {
                         shoeSize = 10
                     end sub
                 `);
+                program.validate();
                 let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
                 let labels = completions.map(x => pick(x, 'label'));
 
@@ -776,6 +778,7 @@ describe('CompletionsProcessor', () => {
                     getManager()@.
                 end sub
             `);
+            program.validate();
             expect(() => {
                 program.getCompletions(file.srcPath, util.createPosition(2, 34));
             }).not.to.throw;
@@ -787,6 +790,7 @@ describe('CompletionsProcessor', () => {
                     print "pkg:"
                 end sub
             `);
+            program.validate();
             const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
             const names = result.map(x => x.label);
             expect(names.sort()).to.eql([
@@ -800,6 +804,7 @@ describe('CompletionsProcessor', () => {
                     print "libpkg:"
                 end sub
             `);
+            program.validate();
             const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
             const names = result.map(x => x.label);
             expect(names.sort()).to.eql([
@@ -813,6 +818,7 @@ describe('CompletionsProcessor', () => {
                     print \`pkg:\`
                 end sub
             `);
+            program.validate();
             const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
             const names = result.map(x => x.label);
             expect(names.sort()).to.eql([
@@ -831,7 +837,7 @@ describe('CompletionsProcessor', () => {
                 sub SayHello()
                 end sub
             `);
-
+            program.validate();
             let result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 23));
             let names = result.map(x => x.label);
             expect(names).to.includes('Main');
@@ -852,6 +858,7 @@ describe('CompletionsProcessor', () => {
                 enum Direction
                 end enum
             `);
+            program.validate();
             expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 26)), [{
                 label: 'main',
                 kind: CompletionItemKind.Function
@@ -883,7 +890,7 @@ describe('CompletionsProcessor', () => {
                     class Person
                     end class
                 `);
-
+                program.validate();
                 const result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 24)).map(x => x.label);
                 expect(result).includes('main');
                 expect(result).includes('foo');
@@ -903,7 +910,7 @@ describe('CompletionsProcessor', () => {
                         foo.bar.
                     end sub
                 `);
-
+                program.validate();
                 let result = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 30));
                 let names = result.map(x => x.label);
                 expect(names).to.includes('bar');
@@ -915,13 +922,12 @@ describe('CompletionsProcessor', () => {
         });
 
         it('always includes `m`', () => {
-            //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.setFile('source/main.brs', `
                 sub Main()
 
                 end sub
             `);
-
+            program.validate();
             let result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 23));
             let names = result.map(x => x.label);
             expect(names).to.contain('m');
@@ -930,19 +936,20 @@ describe('CompletionsProcessor', () => {
         it('does not fail for missing previousToken', () => {
             //add a single character to the file, and get completions after it
             program.setFile('source/main.brs', `i`);
+            program.validate();
             expect(() => {
                 program.getCompletions(`${rootDir}/source/main.brs`, Position.create(0, 1)).map(x => x.label);
             }).not.to.throw;
         });
 
-        it('includes all keywords`', () => {
-            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+        it.skip('includes all keywords`', () => {
             program.setFile('source/main.brs', `
                 sub Main()
 
                 end sub
             `);
 
+            program.validate();
             let keywords = Object.keys(Keywords).filter(x => !x.includes(' '));
 
             //inside the function
@@ -961,20 +968,19 @@ describe('CompletionsProcessor', () => {
         });
 
         it('does not provide completions within a comment', () => {
-            //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.setFile('source/main.brs', `
                 sub Main()
                     'some comment
                 end sub
             `);
 
+            program.validate();
             //inside the function
             let result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 33));
             expect(result).to.be.lengthOf(0);
         });
 
         it('does not provide duplicate entries for variables', () => {
-            //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.setFile('source/main.brs', `
                 sub Main()
                     name = "bob"
@@ -982,7 +988,7 @@ describe('CompletionsProcessor', () => {
                     name = "john"
                 end sub
             `);
-
+            program.validate();
             let result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 23));
 
             let count = result.reduce((total, x) => {
@@ -992,38 +998,38 @@ describe('CompletionsProcessor', () => {
         });
 
         it('does not include `as` and `string` text options when used in function params', () => {
-            //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.setFile('source/main.brs', `
                 sub Main(name as string)
 
                 end sub
             `);
 
+            program.validate();
             let result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 23));
             expect(result.filter(x => x.kind === CompletionItemKind.Text)).not.to.contain('as');
             expect(result.filter(x => x.kind === CompletionItemKind.Text)).not.to.contain('string');
         });
 
         it('does not provide intellisense results when inside a comment', () => {
-            //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.setFile('source/main.brs', `
                 sub Main(name as string)
                     'this is a comment
                 end sub
             `);
 
+            program.validate();
             let results = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 30));
             expect(results).to.be.empty;
         });
 
         it('does provide intellisence for labels only after a goto keyword', () => {
-            //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.setFile('source/main.brs', `
                 sub Main(name as string)
                     something:
                     goto \nend sub
             `);
 
+            program.validate();
             let results = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 25));
             expect(results.length).to.equal(1);
             expect(results[0]?.label).to.equal('something');

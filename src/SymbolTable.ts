@@ -1,6 +1,5 @@
-import type { Range } from 'vscode-languageserver';
 import type { BscType } from './types/BscType';
-import type { GetTypeOptions } from './interfaces';
+import type { ExtraSymbolData, GetTypeOptions } from './interfaces';
 import { CacheVerifier } from './CacheVerifier';
 import type { ReferenceType } from './types/ReferenceType';
 import type { UnionType } from './types/UnionType';
@@ -37,7 +36,7 @@ export class SymbolTable implements SymbolTypeGetter {
 
     private cacheToken: string;
 
-    private typeCache: Array<Map<string, BscType>>;
+    private typeCache: Array<Map<string, TypeCacheEntry>>;
 
     /**
      * Used to invalidate the cache for all symbol tables.
@@ -165,51 +164,51 @@ export class SymbolTable implements SymbolTypeGetter {
     /**
      * Adds a new symbol to the table
      */
-    addSymbol(name: string, range: Range, type: BscType, bitFlags: SymbolTypeFlag) {
+    addSymbol(name: string, data: ExtraSymbolData, type: BscType, bitFlags: SymbolTypeFlag) {
         const key = name.toLowerCase();
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);
         }
         this.symbolMap.get(key).push({
             name: name,
-            range: range,
+            data: data,
             type: type,
             flags: bitFlags
         });
     }
 
-    public getSymbolTypes(name: string, bitFlags: SymbolTypeFlag): BscType[] {
-        const symbolArray = this.getSymbol(name, bitFlags);
+    public getSymbolTypes(name: string, options: GetSymbolTypeOptions): TypeCacheEntry[] {
+        const symbolArray = this.getSymbol(name, options.flags);
         if (!symbolArray) {
             return undefined;
         }
-        return symbolArray.map(symbol => symbol.type);
+        return symbolArray?.map(symbol => ({ type: symbol.type, data: symbol.data }));
     }
 
     getSymbolType(name: string, options: GetSymbolTypeOptions): BscType {
-        let resolvedType = this.getCachedType(name, options);
+        const cacheEntry = this.getCachedType(name, options);
+        let resolvedType = cacheEntry?.type;
         const doSetCache = !resolvedType;
         const originalIsReferenceType = isAnyReferenceType(resolvedType);
+        let data = {} as ExtraSymbolData;
         if (!resolvedType || originalIsReferenceType) {
-            resolvedType = getUniqueType(this.getSymbolTypes(name, options.flags), SymbolTable.unionTypeFactory);
+            const symbolTypes = this.getSymbolTypes(name, options);
+            data = symbolTypes?.[0]?.data;
+            resolvedType = getUniqueType(symbolTypes?.map(symbol => symbol.type), SymbolTable.unionTypeFactory);
         }
         if (!resolvedType && options.fullName && options.tableProvider) {
             resolvedType = SymbolTable.referenceTypeFactory(name, options.fullName, options.flags, options.tableProvider);
         }
         const newNonReferenceType = originalIsReferenceType && !isAnyReferenceType(resolvedType);
         if (doSetCache || newNonReferenceType || resolvedType) {
-            this.setCachedType(name, resolvedType, options);
+            this.setCachedType(name, { type: resolvedType, data: data }, options);
+        }
+        if (options.data) {
+            options.data.definingNode = data?.definingNode;
+            options.data.description = data?.description;
         }
         return resolvedType;
     }
-
-    setSymbolTypeCache(name: string, resolvedType: BscType, options: GetSymbolTypeOptions) {
-        if (resolvedType) {
-            this.setCachedType(name, resolvedType, options);
-        }
-        return resolvedType;
-    }
-
 
     /**
      * Adds all the symbols from another table to this one
@@ -220,7 +219,7 @@ export class SymbolTable implements SymbolTypeGetter {
             for (const symbol of value) {
                 this.addSymbol(
                     symbol.name,
-                    symbol.range,
+                    symbol.data,
                     symbol.type,
                     symbol.flags
                 );
@@ -260,14 +259,14 @@ export class SymbolTable implements SymbolTypeGetter {
     private resetTypeCache() {
         this.typeCache = [
             undefined,
-            new Map<string, BscType>(), //SymbolTypeFlags.runtime
-            new Map<string, BscType>(), //SymbolTypeFlags.typetime
-            new Map<string, BscType>() //SymbolTypeFlags.runtime & SymbolTypeFlags.typetime
+            new Map<string, TypeCacheEntry>(), // SymbolTypeFlags.runtime
+            new Map<string, TypeCacheEntry>(), // SymbolTypeFlags.typetime
+            new Map<string, TypeCacheEntry>() // SymbolTypeFlags.runtime & SymbolTypeFlags.typetime
         ];
         this.cacheToken = SymbolTable.cacheVerifier?.getToken();
     }
 
-    getCachedType(name: string, options: GetTypeOptions): BscType {
+    getCachedType(name: string, options: GetTypeOptions): TypeCacheEntry {
         if (SymbolTable.cacheVerifier) {
             if (!SymbolTable.cacheVerifier?.checkToken(this.cacheToken)) {
                 // we have a bad token
@@ -281,8 +280,8 @@ export class SymbolTable implements SymbolTypeGetter {
         return this.typeCache[options.flags]?.get(name.toLowerCase());
     }
 
-    setCachedType(name: string, type: BscType, options: GetTypeOptions) {
-        if (!type) {
+    setCachedType(name: string, cacheEntry: TypeCacheEntry, options: GetTypeOptions) {
+        if (!cacheEntry) {
             return;
         }
         if (SymbolTable.cacheVerifier) {
@@ -295,11 +294,11 @@ export class SymbolTable implements SymbolTypeGetter {
             return;
         }
         let existingCachedValue = this.typeCache[options.flags]?.get(name.toLowerCase());
-        if (isReferenceType(type) && !isReferenceType(existingCachedValue)) {
+        if (isReferenceType(cacheEntry.type) && !isReferenceType(existingCachedValue)) {
             // No need to overwrite a non-referenceType with a referenceType
             return;
         }
-        return this.typeCache[options.flags]?.set(name.toLowerCase(), type);
+        return this.typeCache[options.flags]?.set(name.toLowerCase(), cacheEntry);
     }
 
     /**
@@ -325,14 +324,14 @@ export class SymbolTable implements SymbolTypeGetter {
 
 export interface BscSymbol {
     name: string;
-    range: Range;
+    data: ExtraSymbolData;
     type: BscType;
     flags: SymbolTypeFlag;
 }
 
 export interface SymbolTypeGetter {
     getSymbolType(name: string, options: GetSymbolTypeOptions): BscType;
-    setCachedType(name: string, resolvedType: BscType, options: GetSymbolTypeOptions);
+    setCachedType(name: string, cacheEntry: TypeCacheEntry, options: GetSymbolTypeOptions);
 }
 
 /**
@@ -349,4 +348,9 @@ export type SymbolTypeGetterProvider = () => SymbolTypeGetter;
 export interface GetSymbolTypeOptions extends GetTypeOptions {
     fullName?: string;
     tableProvider?: SymbolTableProvider;
+}
+
+export interface TypeCacheEntry {
+    type: BscType;
+    data: ExtraSymbolData;
 }

@@ -5,17 +5,18 @@ import type { XmlScope } from '../../XmlScope';
 import { util } from '../../util';
 import type { Scope } from '../../Scope';
 import { ParseMode } from '../../parser/Parser';
-import { CompletionItem, Position } from 'vscode-languageserver';
+import type { CompletionItem, Position } from 'vscode-languageserver';
 import { CompletionItemKind, TextEdit } from 'vscode-languageserver';
 import type { ClassStatement, FunctionStatement } from '../../parser/Statement';
-import { BscSymbol, SymbolTypeFlag } from '../../SymbolTable';
+import type { BscSymbol } from '../../SymbolTable';
+import { SymbolTypeFlag } from '../../SymbolTable';
 import type { XmlFile } from '../../files/XmlFile';
 import type { Program } from '../../Program';
 import type { BrsFile } from '../../files/BrsFile';
 import type { Token } from '../../lexer/Token';
 import type { FunctionScope } from '../../FunctionScope';
-import { BscType } from '../../types';
-import { AstNode } from '../../parser/AstNode';
+import type { BscType } from '../../types';
+import type { AstNode } from '../../parser/AstNode';
 
 export class CompletionsProcessor {
     constructor(
@@ -198,12 +199,23 @@ export class CompletionsProcessor {
 
         let expression: AstNode;
         let shouldLookForMembers = false;
+
+        if (file.tokenFollows(currentToken, TokenKind.Goto)) {
+            let functionScope = file.getFunctionScopeAtPosition(position);
+            return this.getLabelCompletion(functionScope);
+        }
+
+
         if (file.isTokenNextToTokenKind(currentToken, TokenKind.Dot)) {
             const beforeDotToken = file.getTokenBefore(file.getClosestToken(position));
             expression = file.getClosestExpression(beforeDotToken?.range.end);
             shouldLookForMembers = true;
         } else {
             expression = file.getClosestExpression(this.event.position);
+        }
+
+        if (!expression) {
+            return [];
         }
         const tokenBefore = file.getTokenBefore(file.getClosestToken(expression.range.start));
 
@@ -219,7 +231,6 @@ export class CompletionsProcessor {
         for (const scope of this.event.scopes) {
             scope.linkSymbolTable();
             let currentSymbols = getSymbolTableForLookups().getAllSymbols(SymbolTypeFlag.runtime);
-
             // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
             switch (tokenBefore.kind) {
                 case TokenKind.New:
@@ -227,6 +238,11 @@ export class CompletionsProcessor {
                     currentSymbols = currentSymbols.filter(symbol => isClassType(symbol.type) || this.isNamespaceTypeWithMemberType(symbol.type, isClassType));
                     break;
             }
+            if (shouldLookForMembers && isClassType(expression.getType({ flags: SymbolTypeFlag.runtime }))) {
+                // don't return the constructor as a property
+                currentSymbols = currentSymbols.filter((symbol) => symbol.name !== 'new');
+            }
+
             result.push(...this.getSymbolsCompletion(currentSymbols));
             if (shouldLookForMembers && currentSymbols.length === 0) {
                 // could not find members of actual known types.. just try everything

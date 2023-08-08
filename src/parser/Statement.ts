@@ -1502,11 +1502,11 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         const resultType = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
         for (const statement of this.methods) {
             const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
-            resultType.addMember(statement?.tokens.name?.text, statement?.range, memberType, SymbolTypeFlag.runtime);
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, SymbolTypeFlag.runtime);
         }
         for (const statement of this.fields) {
             const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
-            resultType.addMember(statement?.tokens.name?.text, statement?.range, memberType, SymbolTypeFlag.runtime);
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, SymbolTypeFlag.runtime);
         }
         options.typeChain?.push(new TypeChainEntry(this.getName(ParseMode.BrighterScript), resultType, this.range));
         return resultType;
@@ -2092,11 +2092,11 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         for (const statement of this.methods) {
             const funcType = statement?.func.getType({ ...options, typeChain: undefined }); //no typechain needed
-            resultType.addMember(statement?.name?.text, statement?.range, funcType, SymbolTypeFlag.runtime);
+            resultType.addMember(statement?.name?.text, { definingNode: statement }, funcType, SymbolTypeFlag.runtime);
         }
         for (const statement of this.fields) {
             const fieldType = statement.getType({ ...options, typeChain: undefined }); //no typechain needed
-            resultType.addMember(statement?.name?.text, statement?.range, fieldType, SymbolTypeFlag.runtime);
+            resultType.addMember(statement?.name?.text, { definingNode: statement }, fieldType, SymbolTypeFlag.runtime);
         }
         options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, this.range));
         return resultType;
@@ -2648,7 +2648,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
         );
         resultType.pushMemberProvider(() => this.getSymbolTable());
         for (const statement of members) {
-            resultType.addMember(statement?.tokens?.name?.text, statement?.range, statement.getType(options), SymbolTypeFlag.runtime);
+            resultType.addMember(statement?.tokens?.name?.text, { definingNode: statement }, statement.getType(options), SymbolTypeFlag.runtime);
         }
 
         return resultType;

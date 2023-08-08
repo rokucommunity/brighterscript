@@ -1108,7 +1108,7 @@ describe('LanguageServer', () => {
         });
     });
 
-    it.skip('semantic tokens request waits until after validation has finished', async () => {
+    it('semantic tokens request waits until after validation has finished', async () => {
         fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `
             sub main()
                 print \`hello world\`

@@ -562,6 +562,34 @@ export class Util {
     }
 
     /**
+   * Combine all the documentation found before a token (i.e. comment tokens)
+   */
+    public getTokenDocumentation(tokens: Token[], token?: Token) {
+        const comments = [] as Token[];
+        const idx = tokens?.indexOf(token);
+        if (!idx || idx === -1) {
+            return undefined;
+        }
+        for (let i = idx - 1; i >= 0; i--) {
+            const token = tokens[i];
+            //skip whitespace and newline chars
+            if (token.kind === TokenKind.Comment) {
+                comments.push(token);
+            } else if (token.kind === TokenKind.Newline || token.kind === TokenKind.Whitespace) {
+                //skip these tokens
+                continue;
+
+                //any other token means there are no more comments
+            } else {
+                break;
+            }
+        }
+        if (comments.length > 0) {
+            return comments.reverse().map(x => x.text.replace(/^('|rem)/i, '')).join('\n');
+        }
+    }
+
+    /**
      * Parse an xml file and get back a javascript object containing its results
      */
     public parseXml(text: string) {
