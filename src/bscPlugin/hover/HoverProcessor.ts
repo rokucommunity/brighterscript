@@ -1,5 +1,5 @@
 import { SourceNode } from 'source-map';
-import { isBrsFile, isClassStatement, isInheritableType, isInterfaceStatement, isNewExpression, isTypeExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
+import { isBrsFile, isClassStatement, isInheritableType, isInterfaceStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypeExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
@@ -98,25 +98,6 @@ export class HoverProcessor {
             }
         }
     }
-    /*
-        private getFunctionTypeHover(token: Token, expression: Expression, expressionType: TypedFunctionType, scope: Scope, extraData: ExtraSymbolData) {
-            const lowerTokenText = token.text.toLowerCase();
-            let result = fence(expressionType.toString());
-            if (extraData?.description) {
-            } else if (extraData?.definingNode) {
-
-            } else {
-                // only look for callables when they aren't inside a type expression
-                // this was a problem for the function `string()` as it is a type AND a function https://developer.roku.com/en-ca/docs/references/brightscript/language/global-string-functions.md#stringn-as-integer-str-as-string--as-string
-                let callable = scope.getCallableByName(lowerTokenText);
-                if (callable) {
-                    // We can find the start token of the function definition, use it to add docs.
-                    // TODO: Add comment lookups for class methods!
-                    result = this.buildContentsWithDocsFromToken(result, callable.functionStatement?.func?.functionType);
-                }
-            }
-            return result;
-        }*/
 
     private getCustomTypeHover(expressionType: BscType, extraData: ExtraSymbolData) {
         let declarationText = '';
@@ -129,7 +110,12 @@ export class HoverProcessor {
             } else if (isInterfaceStatement(extraData.definingNode)) {
                 firstToken = extraData.definingNode.tokens.interface;
                 declarationText = firstToken?.text ?? TokenKind.Interface;
+            } else if (isNamespaceStatement(extraData.definingNode)) {
+                firstToken = extraData.definingNode.keyword;
+                exprTypeString = extraData.definingNode.getName(ParseMode.BrighterScript);
+                declarationText = firstToken?.text ?? TokenKind.Namespace;
             }
+
 
         }
         const innerText = `${declarationText} ${exprTypeString}`.trim();
@@ -176,6 +162,8 @@ export class HoverProcessor {
                 const useCustomTypeHover = isInTypeExpression || expression?.findAncestor(isNewExpression);
                 let hoverContent = '';
                 if (useCustomTypeHover && isInheritableType(exprType)) {
+                    hoverContent = this.getCustomTypeHover(exprType, extraData);
+                } else if (isNamespaceType(exprType)) {
                     hoverContent = this.getCustomTypeHover(exprType, extraData);
                 } else {
                     const variableName = !isTypedFunctionType(exprType) ? `${exprNameString} as ` : '';

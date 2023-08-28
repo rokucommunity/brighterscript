@@ -281,6 +281,24 @@ describe('HoverProcessor', () => {
             expect(hover?.contents).to.eql([fence('class Person')]);
         });
 
+        it('finds namespaces properly', () => {
+            program.setFile('source/main.bs', `
+                namespace Name1
+                   namespace Name2
+                      const hi = "hello"
+                   end namespace
+                end namespace
+
+                sub doWork()
+                   print Name1.Name2.hi
+                end sub
+            `);
+            program.validate();
+            // print Name1.Nam|e2.hi
+            let hover = program.getHover('source/main.bs', util.createPosition(8, 36))[0];
+            expect(hover?.contents).to.eql([fence('namespace Name1.Name2')]);
+        });
+
         it('finds types hover with comment', () => {
             program.setFile('source/main.bs', `
                 ' this is a class comment
