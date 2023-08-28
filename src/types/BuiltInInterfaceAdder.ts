@@ -2,9 +2,19 @@ import type { BRSInterfaceData } from '../roku-types';
 import { components, interfaces } from '../roku-types';
 import { Cache } from '../Cache';
 import type { TypedFunctionType } from './TypedFunctionType';
+import type { SymbolTable } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTable';
 import type { BscType } from './BscType';
 import { isArrayType, isBooleanType, isCallableType, isClassType, isDoubleType, isEnumMemberType, isEnumType, isFloatType, isIntegerType, isInvalidType, isLongIntegerType, isStringType } from '../astUtils/reflection';
+import type { ExtraSymbolData } from '../interfaces';
+
+
+interface AddSymbolCallData {
+    name: string;
+    data: ExtraSymbolData;
+    type: BscType;
+    flags: SymbolTypeFlag;
+}
 
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
@@ -14,7 +24,15 @@ export class BuiltInInterfaceAdder {
 
     static typedFunctionFactory: (type: BscType) => TypedFunctionType;
 
+    static symbolsToAddCache = new Cache<BscType, AddSymbolCallData[]>();
+
     static addBuiltInInterfacesToType(thisType: BscType) {
+
+        const existingAddSymbolCallParams = this.symbolsToAddCache.get(thisType);
+        if (existingAddSymbolCallParams) {
+            this.addSymbolsToTable(thisType.getBuiltInMemberTable(), existingAddSymbolCallParams);
+            return;
+        }
         const componentName = this.getMatchingRokuComponent(thisType);
         if (!componentName) {
             // No component matches the given type
@@ -34,7 +52,7 @@ export class BuiltInInterfaceAdder {
         if (!this.typedFunctionFactory) {
             throw new Error(`Unable to build typed functions - no typed function factory`);
         }
-
+        const callsForAddSymbol = [] as AddSymbolCallData[];
         for (const iface of builtInComponent.interfaces) {
             for (const method of (interfaces[iface.name.toLowerCase()] as BRSInterfaceData).methods) {
                 const returnType = this.getPrimitiveType(method.returnType);
@@ -44,8 +62,25 @@ export class BuiltInInterfaceAdder {
                     const paramType = this.getPrimitiveType(param.type);
                     methodFuncType.addParameter(param.name, paramType, !param.isRequired);
                 }
-                memberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, SymbolTypeFlag.runtime);
+                callsForAddSymbol.push({
+                    name: method.name,
+                    data: { description: method.description, completionPriority: 1 },
+                    type: methodFuncType,
+                    flags: SymbolTypeFlag.runtime
+                });
             }
+        }
+        this.symbolsToAddCache.set(thisType, callsForAddSymbol);
+        this.addSymbolsToTable(memberTable, callsForAddSymbol);
+    }
+
+    private static addSymbolsToTable(memberTable: SymbolTable, callParams: AddSymbolCallData[]) {
+        if (!memberTable) {
+            return;
+        }
+        for (const callParam of callParams) {
+            memberTable.addSymbol(callParam.name, callParam.data, callParam.type, callParam.flags);
+
         }
     }
 
