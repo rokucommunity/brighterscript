@@ -689,10 +689,15 @@ export class LanguageServer {
         //ensure programs are initialized
         await this.waitAllProjectFirstRuns();
 
+
         let filePath = util.uriToPath(params.textDocument.uri);
 
         //wait until the file has settled
         await this.keyedThrottler.onIdleOnce(filePath, true);
+        // make sure validation is complete
+        await this.validateAllThrottled();
+        //wait for the validation cycle to settle
+        await this.onValidateSettled();
 
         let completions = this
             .getProjects()

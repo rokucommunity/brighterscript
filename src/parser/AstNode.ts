@@ -126,6 +126,21 @@ export abstract class AstNode {
             walkMode: WalkMode.visitAllRecursive
         });
     }
+
+    /**
+     * Walk upward and return the root node
+     */
+    public getRoot() {
+        let node = this as AstNode;
+
+        while (node) {
+            if (!node.parent) {
+                return node;
+            }
+            node = node.parent;
+        }
+    }
+
 }
 
 export abstract class Statement extends AstNode {

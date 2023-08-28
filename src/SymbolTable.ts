@@ -352,5 +352,5 @@ export interface GetSymbolTypeOptions extends GetTypeOptions {
 
 export interface TypeCacheEntry {
     type: BscType;
-    data: ExtraSymbolData;
+    data?: ExtraSymbolData;
 }

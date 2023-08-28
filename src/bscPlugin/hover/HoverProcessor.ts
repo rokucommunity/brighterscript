@@ -1,5 +1,5 @@
 import { SourceNode } from 'source-map';
-import { isBrsFile, isClassStatement, isClassType, isInheritableType, isInterfaceStatement, isNewExpression, isTypeExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
+import { isBrsFile, isClassStatement, isInheritableType, isInterfaceStatement, isNewExpression, isTypeExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
@@ -12,10 +12,7 @@ import { SymbolTypeFlag } from '../../SymbolTable';
 import type { AstNode, Expression } from '../../parser/AstNode';
 import type { Scope } from '../../Scope';
 import type { FunctionScope } from '../../FunctionScope';
-import type { TypedFunctionType } from '../../types/TypedFunctionType';
 import type { BscType } from '../../types';
-import type { ClassStatement } from '../../parser/Statement';
-
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');
 
@@ -101,25 +98,25 @@ export class HoverProcessor {
             }
         }
     }
+    /*
+        private getFunctionTypeHover(token: Token, expression: Expression, expressionType: TypedFunctionType, scope: Scope, extraData: ExtraSymbolData) {
+            const lowerTokenText = token.text.toLowerCase();
+            let result = fence(expressionType.toString());
+            if (extraData?.description) {
+            } else if (extraData?.definingNode) {
 
-    private getFunctionTypeHover(token: Token, expression: Expression, expressionType: TypedFunctionType, scope: Scope, extraData: ExtraSymbolData) {
-        const lowerTokenText = token.text.toLowerCase();
-        let result = fence(expressionType.toString());
-        if (extraData?.description) {
-        } else if (extraData?.definingNode) {
-
-        } else {
-            // only look for callables when they aren't inside a type expression
-            // this was a problem for the function `string()` as it is a type AND a function https://developer.roku.com/en-ca/docs/references/brightscript/language/global-string-functions.md#stringn-as-integer-str-as-string--as-string
-            let callable = scope.getCallableByName(lowerTokenText);
-            if (callable) {
-                // We can find the start token of the function definition, use it to add docs.
-                // TODO: Add comment lookups for class methods!
-                result = this.buildContentsWithDocsFromToken(result, callable.functionStatement?.func?.functionType);
+            } else {
+                // only look for callables when they aren't inside a type expression
+                // this was a problem for the function `string()` as it is a type AND a function https://developer.roku.com/en-ca/docs/references/brightscript/language/global-string-functions.md#stringn-as-integer-str-as-string--as-string
+                let callable = scope.getCallableByName(lowerTokenText);
+                if (callable) {
+                    // We can find the start token of the function definition, use it to add docs.
+                    // TODO: Add comment lookups for class methods!
+                    result = this.buildContentsWithDocsFromToken(result, callable.functionStatement?.func?.functionType);
+                }
             }
-        }
-        return result;
-    }
+            return result;
+        }*/
 
     private getCustomTypeHover(expressionType: BscType, extraData: ExtraSymbolData) {
         let declarationText = '';

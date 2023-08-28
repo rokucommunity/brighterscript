@@ -44,7 +44,7 @@ export class BuiltInInterfaceAdder {
                     const paramType = this.getPrimitiveType(param.type);
                     methodFuncType.addParameter(param.name, paramType, !param.isRequired);
                 }
-                memberTable.addSymbol(method.name, { description: method.description }, methodFuncType, SymbolTypeFlag.runtime);
+                memberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, SymbolTypeFlag.runtime);
             }
         }
     }

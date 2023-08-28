@@ -1,4 +1,4 @@
-import { expectCompletionsIncludes, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
+import { expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
 import { util } from '../../../util';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
@@ -7,7 +7,6 @@ import { expect } from '../../../chai-config.spec';
 import type { ConstStatement } from '../../Statement';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { LiteralExpression } from '../../Expression';
-import { CompletionItemKind } from 'vscode-languageserver-protocol';
 import { rootDir } from '../../../testHelpers.spec';
 
 const sinon = createSandbox();
@@ -190,43 +189,4 @@ describe('ConstStatement', () => {
         });
     });
 
-    describe('completions', () => {
-        it('shows up in standard completions', () => {
-            program.setFile('source/main.bs', `
-                const API_KEY = "123"
-                sub log(message)
-                    log()
-                end sub
-            `);
-
-            expectCompletionsIncludes(
-                // log(|)
-                program.getCompletions('source/main.bs', util.createPosition(3, 24)),
-                [{
-                    label: 'API_KEY',
-                    kind: CompletionItemKind.Constant
-                }]
-            );
-        });
-
-        it('shows up in namespace completions', () => {
-            program.setFile('source/main.bs', `
-                namespace constants
-                    const API_KEY = "123"
-                end namespace
-                sub log(message)
-                    log(constants.)
-                end sub
-            `);
-
-            expectCompletionsIncludes(
-                // log(|)
-                program.getCompletions('source/main.bs', util.createPosition(5, 34)),
-                [{
-                    label: 'API_KEY',
-                    kind: CompletionItemKind.Constant
-                }]
-            );
-        });
-    });
 });

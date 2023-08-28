@@ -232,7 +232,7 @@ export class Parser {
         this.pendingAnnotations = [];
 
         this.ast = this.body();
-
+        this.ast.parser = this;
         //now that we've built the AST, link every node to its parent
         this.ast.link();
         return this;

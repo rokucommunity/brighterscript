@@ -482,6 +482,7 @@ export interface FileLink<T> {
 export interface ExtraSymbolData {
     definingNode?: AstNode;
     description?: string;
+    completionPriority?: number; // teh higher the number, the lower the priority
 }
 
 export interface GetTypeOptions {

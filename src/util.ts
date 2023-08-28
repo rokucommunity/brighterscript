@@ -562,8 +562,8 @@ export class Util {
     }
 
     /**
-   * Combine all the documentation found before a token (i.e. comment tokens)
-   */
+     * Combine all the documentation found before a token (i.e. comment tokens)
+     */
     public getTokenDocumentation(tokens: Token[], token?: Token) {
         const comments = [] as Token[];
         const idx = tokens?.indexOf(token);
