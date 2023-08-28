@@ -585,7 +585,19 @@ export class Util {
             }
         }
         if (comments.length > 0) {
-            return comments.reverse().map(x => x.text.replace(/^('|rem)/i, '')).join('\n');
+            return comments.reverse().map(x => x.text.replace(/^('|rem)/i, '').trim()).map(line => {
+                if (line.startsWith('@')) {
+                    // Handle jsdoc/brightscriptdoc tags specially
+                    // make sure they are on their own markdown line, and add italics
+                    const firstSpaceIndex = line.indexOf(' ');
+                    if (firstSpaceIndex === -1) {
+                        return `\n_${line}_`;
+                    }
+                    const firstWord = line.substring(0, firstSpaceIndex);
+                    return `\n_${firstWord}_ ${line.substring(firstSpaceIndex + 1)}`;
+                }
+                return line;
+            }).join('\n');
         }
     }
 

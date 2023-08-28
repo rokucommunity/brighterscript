@@ -316,10 +316,10 @@ describe('HoverProcessor', () => {
             // gu|y as Person
             let hover = program.getHover('source/main.bs', util.createPosition(7, 60))[0];
             expect(hover?.range).to.eql(util.createRange(7, 59, 7, 62));
-            expect(hover?.contents).to.eql([`${fence('guy as Person')}${commentSep} this is a class comment\n it is more than one line`]);
+            expect(hover?.contents).to.eql([`${fence('guy as Person')}${commentSep}this is a class comment\nit is more than one line`]);
             // guy as Pe|rson
             hover = program.getHover('source/main.bs', util.createPosition(7, 69))[0];
-            expect(hover?.contents).to.eql([`${fence('class Person')}${commentSep} this is a class comment\n it is more than one line`]);
+            expect(hover?.contents).to.eql([`${fence('class Person')}${commentSep}this is a class comment\nit is more than one line`]);
         });
 
         it('finds types from assignments defined in different file', () => {
@@ -387,13 +387,13 @@ describe('HoverProcessor', () => {
             let commentSep = `\n***\n`;
             //th|ing = new MyKlass()
             let hover = program.getHover('source/main.bs', util.createPosition(2, 24))[0];
-            expect(hover?.contents).to.eql([`${fence('thing as MyKlass')}${commentSep} A sample class`]);
+            expect(hover?.contents).to.eql([`${fence('thing as MyKlass')}${commentSep}A sample class`]);
             //use|Klass(thing)
             hover = program.getHover('source/main.bs', util.createPosition(3, 24))[0];
-            expect(hover?.contents).to.eql([`${fence('sub useKlass(thing as MyKlass) as void')}${commentSep} Prints a MyKlass.name`]);
+            expect(hover?.contents).to.eql([`${fence('sub useKlass(thing as MyKlass) as void')}${commentSep}Prints a MyKlass.name`]);
             //print thing.getN|ame()
             hover = program.getHover('source/main.bs', util.createPosition(8, 37))[0];
-            expect(hover?.contents).to.eql([`${fence('function MyKlass.getName() as string')}${commentSep} Gets the name of this thing`]);
+            expect(hover?.contents).to.eql([`${fence('function MyKlass.getName() as string')}${commentSep}Gets the name of this thing`]);
         });
 
         it('finds functions as params', () => {

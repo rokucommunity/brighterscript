@@ -191,6 +191,15 @@ export class HoverProcessor {
         };
     }
 
+    /**
+     * cool function!
+     * a new line
+     * ```
+     * some markdown
+     * ```
+     * @param file teh file blah
+     * @returns a string that
+     */
     private getXmlFileHover(file: XmlFile) {
         //TODO add xml hovers
         return undefined;
