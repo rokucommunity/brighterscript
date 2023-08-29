@@ -1,7 +1,10 @@
 import { isArrayType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
+import type { BuiltInInterfaceOverride } from './BuiltInInterfaceAdder';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { DynamicType } from './DynamicType';
+import { IntegerType } from './IntegerType';
 import { unionTypeFactory } from './UnionType';
 import { getUniqueType, isUnionTypeCompatible } from './helpers';
 
@@ -59,6 +62,29 @@ export class ArrayType extends BscType {
             return true;
         }
         return false;
+    }
+
+    addBuiltInInterfaces() {
+        if (!this.hasAddedBuiltInInterfaces) {
+            const overrideMap = new Map<string, BuiltInInterfaceOverride>();
+            const defaultType = this.defaultType;
+            overrideMap
+                // ifArray
+                .set('peek', { returnType: defaultType })
+                .set('pop', { returnType: defaultType })
+                .set('push', { parameterTypes: [defaultType] })
+                .set('shift', { returnType: defaultType })
+                .set('unshift', { parameterTypes: [defaultType] })
+                .set('append', { parameterTypes: [this] })
+                // ifArrayGet
+                .set('get', { returnType: defaultType })
+                // ifArraySet
+                .set('get', { parameterTypes: [IntegerType.instance, defaultType] })
+                //ifEnum
+                .set('next', { returnType: defaultType });
+            BuiltInInterfaceAdder.addBuiltInInterfacesToType(this, overrideMap);
+        }
+        this.hasAddedBuiltInInterfaces = true;
     }
 }
 

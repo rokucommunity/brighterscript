@@ -2581,7 +2581,13 @@ export class Parser {
         }
 
         //Check if it has square brackets, thus making it an array
-        if (expr && this.options.mode === ParseMode.BrighterScript) {
+        if (expr && this.check(TokenKind.LeftSquareBracket)) {
+            if (this.options.mode === ParseMode.BrightScript) {
+                // typed arrays not allowed in Brightscript
+                this.warnIfNotBrighterScriptMode('typed arrays');
+                return expr;
+            }
+
             // Check if it is an array - that is, if it has `[]` after the type
             // eg. `string[]` or `SomeKlass[]`
             // This is while loop, so it supports multidimensional arrays (eg. integer[][])

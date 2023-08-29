@@ -106,4 +106,13 @@ describe('BuiltInInterfaceAdder', () => {
         BuiltInInterfaceAdder.addBuiltInInterfacesToType(sub);
         expectTypeToBe(sub.getMemberType('clear', { flags: SymbolTypeFlag.runtime }), BooleanType);
     });
+
+
+    it('should respect overrides', () => {
+        const myArray = new ArrayType(IntegerType.instance);
+        const popType = myArray.getMemberType('pop', { flags: SymbolTypeFlag.runtime }) as TypedFunctionType;
+        expectTypeToBe(popType.returnType, IntegerType);
+        const pushType = myArray.getMemberType('push', { flags: SymbolTypeFlag.runtime }) as TypedFunctionType;
+        expectTypeToBe(pushType.params[0].type, IntegerType);
+    });
 });

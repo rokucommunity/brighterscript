@@ -7,6 +7,12 @@ import type { BscType } from './BscType';
 import { isArrayType, isBooleanType, isCallableType, isClassType, isDoubleType, isEnumMemberType, isEnumType, isFloatType, isIntegerType, isInvalidType, isLongIntegerType, isStringType } from '../astUtils/reflection';
 
 
+export interface BuiltInInterfaceOverride {
+    type?: BscType;
+    parameterTypes?: BscType[];
+    returnType?: BscType;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class BuiltInInterfaceAdder {
 
@@ -14,7 +20,7 @@ export class BuiltInInterfaceAdder {
 
     static typedFunctionFactory: (type: BscType) => TypedFunctionType;
 
-    static addBuiltInInterfacesToType(thisType: BscType) {
+    static addBuiltInInterfacesToType(thisType: BscType, overrides?: Map<string, BuiltInInterfaceOverride>) {
         const componentName = this.getMatchingRokuComponent(thisType);
         if (!componentName) {
             // No component matches the given type
@@ -36,12 +42,16 @@ export class BuiltInInterfaceAdder {
         }
 
         for (const iface of builtInComponent.interfaces) {
-            for (const method of (interfaces[iface.name.toLowerCase()] as BRSInterfaceData).methods) {
-                const returnType = this.getPrimitiveType(method.returnType);
+            const lowerIfaceName = iface.name.toLowerCase();
+            for (const method of (interfaces[lowerIfaceName] as BRSInterfaceData).methods) {
+                const override = overrides?.get(method.name.toLowerCase());
+                const returnType = override?.returnType ?? this.getPrimitiveType(method.returnType);
                 const methodFuncType = this.typedFunctionFactory(returnType);
                 methodFuncType.name = method.name;
-                for (const param of method.params) {
-                    const paramType = this.getPrimitiveType(param.type);
+                // eslint-disable-next-line @typescript-eslint/prefer-for-of
+                for (let i = 0; i < method.params.length; i++) {
+                    const param = method.params[i];
+                    const paramType = override?.parameterTypes?.[i] ?? this.getPrimitiveType(param.type);
                     methodFuncType.addParameter(param.name, paramType, !param.isRequired);
                 }
                 memberTable.addSymbol(method.name, null, methodFuncType, SymbolTypeFlag.runtime);

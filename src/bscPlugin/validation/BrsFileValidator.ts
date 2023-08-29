@@ -1,4 +1,4 @@
-import { isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isArrayType, isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -81,7 +81,9 @@ export class BrsFileValidator {
             },
             ForEachStatement: (node) => {
                 //register the for loop variable
-                node.parent.getSymbolTable()?.addSymbol(node.item.text, node.item.range, DynamicType.instance, SymbolTypeFlag.runtime);
+                const loopTargetType = node.target.getType({ flags: SymbolTypeFlag.runtime });
+                const loopVarType = isArrayType(loopTargetType) ? loopTargetType.defaultType : DynamicType.instance;
+                node.parent.getSymbolTable()?.addSymbol(node.item.text, node.item.range, loopVarType, SymbolTypeFlag.runtime);
             },
             NamespaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.keyword, node.nameExpression));

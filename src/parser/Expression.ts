@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallableType, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import type { BscType } from '../types/BscType';
@@ -539,6 +539,15 @@ export class IndexedGetExpression extends Expression {
             walk(this, 'index', visitor, options);
         }
     }
+
+    getType(options: GetTypeOptions): BscType {
+        const objType = this.obj.getType(options);
+        if (isArrayType(objType)) {
+            // This is used on an array. What is the default type of that array?
+            return objType.defaultType;
+        }
+        return super.getType(options);
+    }
 }
 
 export class GroupingExpression extends Expression {
@@ -712,6 +721,11 @@ export class ArrayLiteralExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walkArray(this.elements, visitor, options, this);
         }
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        const innerTypes = this.elements.filter(x => !isCommentStatement(x)).map(expr => expr.getType(options));
+        return new ArrayType(...innerTypes);
     }
 }
 

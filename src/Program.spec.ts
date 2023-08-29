@@ -1706,15 +1706,15 @@ describe('Program', () => {
                         outer([inner(["apple"], 100)], 12)
                     end sub
 
-                    sub outer(name as string, age as integer)
+                    sub outer(name as object, age as integer)
                     end sub
 
-                    sub inner(fruits as object, age as integer)
-                    end sub
+                    function inner(fruits as object, age as integer)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(2, 36, 'sub outer(name as string, age as integer)', 0);
+                assertSignatureHelp(2, 36, 'sub outer(name as object, age as integer)', 0);
             });
 
             it('gets signature info for the outer function - index 1', () => {
@@ -1723,15 +1723,15 @@ describe('Program', () => {
                         outer([inner(["apple"], 100)], 12)
                     end sub
 
-                    sub outer(name as string, age as integer)
+                    sub outer(name as object, age as integer)
                     end sub
 
-                    sub inner(fruits as object, age as integer)
-                    end sub
+                    function inner(fruits as object, age as integer)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(2, 57, 'sub outer(name as string, age as integer)', 1);
+                assertSignatureHelp(2, 57, 'sub outer(name as object, age as integer)', 1);
             });
 
             it('gets signature info for the inner function - name', () => {
@@ -1740,15 +1740,15 @@ describe('Program', () => {
                         outer([inner(["apple"], 100)], 12)
                     end sub
 
-                    sub outer(name as string, age as integer)
+                    sub outer(name as object, age as integer)
                     end sub
 
-                    sub inner(fruits as object, age as integer)
-                    end sub
+                    function inner(fruits as object, age as integer)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(2, 43, 'sub inner(fruits as object, age as integer)', 0);
+                assertSignatureHelp(2, 43, 'function inner(fruits as object, age as integer)', 0);
             });
 
             it('gets signature info for the inner function - param 0', () => {
@@ -1757,15 +1757,15 @@ describe('Program', () => {
                         outer([inner(["apple"], 100)], 12)
                     end sub
 
-                    sub outer(name as string, age as integer)
+                    sub outer(name as object, age as integer)
                     end sub
 
-                    sub inner(fruits as object, age as integer)
-                    end sub
+                    function inner(fruits as object, age as integer)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(2, 51, 'sub inner(fruits as object, age as integer)', 1);
+                assertSignatureHelp(2, 51, 'function inner(fruits as object, age as integer)', 1);
             });
 
             it('gets signature info for the inner function - param 1', () => {
@@ -1774,15 +1774,15 @@ describe('Program', () => {
                         outer([inner(["apple"], 100)], 12)
                     end sub
 
-                    sub outer(name as string, age as integer)
+                    sub outer(name as object, age as integer)
                     end sub
 
-                    sub inner(fruits as object, age as integer)
-                    end sub
+                    function inner(fruits as object, age as integer)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(2, 48, 'sub inner(fruits as object, age as integer)', 1);
+                assertSignatureHelp(2, 48, 'function inner(fruits as object, age as integer)', 1);
             });
         });
 
@@ -1948,16 +1948,16 @@ describe('Program', () => {
                         )], 12)
                     end sub
 
-                    sub sayHello(name as string, age as integer)
+                    sub sayHello(name as object, age as integer)
                     end sub
 
-                    sub getName(fruits as object, age as function)
-                    end sub
+                    function getName(fruits as object, age as function)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
                 for (let i = 34; i < 42; i++) {
-                    assertSignatureHelp(2, i, 'sub sayHello(name as string, age as integer)', 0);
+                    assertSignatureHelp(2, i, 'sub sayHello(name as object, age as integer)', 0);
                 }
             });
 
@@ -1973,15 +1973,15 @@ describe('Program', () => {
                         )], 12)
                     end sub
 
-                    sub sayHello(name as string, age as integer)
+                    sub sayHello(name as object, age as integer)
                     end sub
 
-                    sub getName(fruits as object, age as function)
-                    end sub
+                    function getName(fruits as object, age as function)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(8, 25, 'sub sayHello(name as string, age as integer)', 0);
+                assertSignatureHelp(8, 25, 'sub sayHello(name as object, age as integer)', 0);
             });
 
             it('gets signature info for the outer function - index 1', () => {
@@ -1996,15 +1996,15 @@ describe('Program', () => {
                         )], 12)
                     end sub
 
-                    sub sayHello(name as string, age as integer)
+                    sub sayHello(name as object, age as integer)
                     end sub
 
-                    sub getName(fruits as object, age as function)
-                    end sub
+                    function getName(fruits as object, age as function)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(8, 30, 'sub sayHello(name as string, age as integer)', 1);
+                assertSignatureHelp(8, 30, 'sub sayHello(name as object, age as integer)', 1);
             });
 
             it('gets signature info for the inner function - param 0', () => {
@@ -2019,16 +2019,16 @@ describe('Program', () => {
                         )], 12)
                     end sub
 
-                    sub sayHello(name as string, age as integer)
+                    sub sayHello(name as object, age as integer)
                     end sub
 
-                    sub getName(fruits as object, age as function)
-                    end sub
+                    function getName(fruits as object, age as function)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(3, 31, 'sub getName(fruits as object, age as function)', 0);
-                assertSignatureHelp(4, 31, 'sub getName(fruits as object, age as function)', 0);
+                assertSignatureHelp(3, 31, 'function getName(fruits as object, age as function)', 0);
+                assertSignatureHelp(4, 31, 'function getName(fruits as object, age as function)', 0);
             });
 
             it('gets signature info for the inner function - param 1 - function declartion', () => {
@@ -2043,15 +2043,15 @@ describe('Program', () => {
                         )], 12)
                     end sub
 
-                    sub sayHello(name as string, age as integer)
+                    sub sayHello(name as object, age as integer)
                     end sub
 
-                    sub getName(fruits as object, age as function)
-                    end sub
+                    function getName(fruits as object, age as function)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(5, 31, 'sub getName(fruits as object, age as function)', 1);
+                assertSignatureHelp(5, 31, 'function getName(fruits as object, age as function)', 1);
             });
 
             it('gets signature info for the inner function - param 1 - in anon function', () => {
@@ -2066,15 +2066,15 @@ describe('Program', () => {
                         )], 12)
                     end sub
 
-                    sub sayHello(name as string, age as integer)
+                    sub sayHello(name as object, age as integer)
                     end sub
 
-                    sub getName(fruits as object, age as function)
-                    end sub
+                    function getName(fruits as object, age as function)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(6, 31, 'sub getName(fruits as object, age as function)', 1);
+                assertSignatureHelp(6, 31, 'function getName(fruits as object, age as function)', 1);
             });
         });
 

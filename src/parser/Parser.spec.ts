@@ -20,6 +20,7 @@ import { SymbolTypeFlag } from '../SymbolTable';
 import { IntegerType } from '../types/IntegerType';
 import { FloatType } from '../types/FloatType';
 import { StringType } from '../types/StringType';
+import { ArrayType, UnionType } from '../types';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -1463,125 +1464,70 @@ describe('parser', () => {
         });
     });
 
-
     describe('typed arrays', () => {
 
         it('is not allowed in brightscript mode', () => {
             let parser = parse(`
-                sub main(node as dynamic)
-                    print lcase((node as string))
+                sub main(things as string[])
+                    print things
                 end sub
             `, ParseMode.BrightScript);
-            expect(
-                parser.diagnostics[0]?.message
-            ).to.equal(
-                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('type cast').message
+            expectDiagnosticsIncludes(parser.diagnostics,
+                [DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('typed arrays')]
             );
         });
 
-        it('allows type casts after function calls', () => {
-            let { statements, diagnostics } = parse(`
-                sub main()
-                    value = getValue() as integer
-                end sub
 
-                function getValue()
-                    return 123
+        it('is allowed in brighterscript mode', () => {
+            let { statements, diagnostics } = parse(`
+                sub main(things as string[])
+                    print things
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const paramType = (statements[0] as FunctionStatement).func.parameters[0].getType({ flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(paramType, ArrayType);
+            expectTypeToBe((paramType as ArrayType).defaultType, StringType);
+        });
+
+        it('allows multi dimensional arrays', () => {
+            let { statements, diagnostics } = parse(`
+                sub main(things as string[][])
+                    print things
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const paramType = (statements[0] as FunctionStatement).func.parameters[0].getType({ flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(paramType, ArrayType);
+            expectTypeToBe((paramType as ArrayType).defaultType, ArrayType);
+            expectTypeToBe(((paramType as ArrayType).defaultType as ArrayType).defaultType, StringType);
+        });
+
+        it('allows arrays as return types', () => {
+            let { statements, diagnostics } = parse(`
+                function getFourPrimes() as integer[]
+                    return [2, 3, 5, 7]
                 end function
             `, ParseMode.BrighterScript);
-            expect(diagnostics[0]?.message).not.to.exist;
-            expect(statements[0]).to.be.instanceof(FunctionStatement);
-            let fn = statements[0] as FunctionStatement;
-            expect(fn.func.body.statements).to.exist;
-            let assignment = fn.func.body.statements[0] as AssignmentStatement;
-            expect(isAssignmentStatement(assignment)).to.be.true;
-            expect(isTypeCastExpression(assignment.value)).to.be.true;
-            expect(isCallExpression((assignment.value as TypeCastExpression).obj)).to.be.true;
-            expectTypeToBe(assignment.getType({ flags: SymbolTypeFlag.typetime }), IntegerType);
+            expectZeroDiagnostics(diagnostics);
+            const paramType = (statements[0] as FunctionStatement).func.returnTypeExpression.getType({ flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(paramType, ArrayType);
+            expectTypeToBe((paramType as ArrayType).defaultType, IntegerType);
         });
 
-        it('allows type casts in the middle of expressions', () => {
+        it('allows arrays in union types', () => {
             let { statements, diagnostics } = parse(`
-                sub main()
-                    value = (getValue() as integer).toStr()
-                end sub
-
-                function getValue()
-                    return 123
-                end function
-            `, ParseMode.BrighterScript);
-            expect(diagnostics[0]?.message).not.to.exist;
-            expect(statements[0]).to.be.instanceof(FunctionStatement);
-            let fn = statements[0] as FunctionStatement;
-            expect(fn.func.body.statements).to.exist;
-            let assignment = fn.func.body.statements[0] as any;
-            expect(isAssignmentStatement(assignment)).to.be.true;
-            expect(isCallExpression(assignment.value)).to.be.true;
-            expect(isDottedGetExpression(assignment.value.callee)).to.be.true;
-            expect(isGroupingExpression(assignment.value.callee.obj)).to.be.true;
-            expect(isTypeCastExpression(assignment.value.callee.obj.expression)).to.be.true;
-            //grouping expression is an integer
-            expectTypeToBe(assignment.value.callee.obj.getType({ flags: SymbolTypeFlag.typetime }), IntegerType);
-        });
-
-        it('allows type casts in a function call', () => {
-            let { statements, diagnostics } = parse(`
-                sub main()
-                    print cos(getAngle() as float)
-                end sub
-
-                function getAngle()
-                    return 123
-                end function
-            `, ParseMode.BrighterScript);
-            expect(diagnostics[0]?.message).not.to.exist;
-            expect(statements[0]).to.be.instanceof(FunctionStatement);
-            let fn = statements[0] as FunctionStatement;
-            expect(fn.func.body.statements).to.exist;
-            let print = fn.func.body.statements[0] as any;
-            expect(isPrintStatement(print)).to.be.true;
-            expect(isCallExpression(print.expressions[0])).to.be.true;
-            let fnCall = print.expressions[0] as CallExpression;
-            expect(isTypeCastExpression(fnCall.args[0])).to.be.true;
-            let arg = fnCall.args[0] as TypeCastExpression;
-            //argument type is float
-            expectTypeToBe(arg.getType({ flags: SymbolTypeFlag.typetime }), FloatType);
-        });
-
-        it('allows multiple type casts', () => {
-            let { statements, diagnostics } = parse(`
-                sub main()
-                    print getData() as dynamic as float as string
+                sub foo(x as integer or integer[] or string or string[])
+                  print x
                 end sub
             `, ParseMode.BrighterScript);
-            expect(diagnostics[0]?.message).not.to.exist;
-            expect(statements[0]).to.be.instanceof(FunctionStatement);
-            let fn = statements[0] as FunctionStatement;
-            expect(fn.func.body.statements).to.exist;
-            let print = fn.func.body.statements[0] as any;
-            expect(isPrintStatement(print)).to.be.true;
-            expect(isTypeCastExpression(print.expressions[0])).to.be.true;
-            //argument type is float
-            expectTypeToBe(print.expressions[0].getType({ flags: SymbolTypeFlag.typetime }), StringType);
+            expectZeroDiagnostics(diagnostics);
+            const paramType = (statements[0] as FunctionStatement).func.parameters[0].getType({ flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(paramType, UnionType);
+            expect(paramType.toString().includes('Array<string>')).to.be.true;
+            expect(paramType.toString().includes('Array<integer>')).to.be.true;
         });
 
-        it('flags invalid type cast syntax - multiple as', () => {
-            let { diagnostics } = parse(`
-                sub foo(key)
-                    getData(key as as string)
-                end sub
-            `, ParseMode.BrighterScript);
-            expect(diagnostics[0]?.message).to.exist;
-        });
-
-        it('flags invalid type cast syntax - no type after as', () => {
-            let { diagnostics } = parse(`
-                sub foo(key)
-                    getData(key as)
-                end sub
-            `, ParseMode.BrighterScript);
-            expect(diagnostics[0]?.message).to.exist;
-        });
     });
 });
 
