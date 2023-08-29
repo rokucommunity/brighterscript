@@ -25,6 +25,7 @@ import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
 import { TypePropertyReferenceType } from '../types/ReferenceType';
 import { UnionType } from '../types/UnionType';
+import { ArrayType } from '../types';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -1756,5 +1757,38 @@ export class TypeCastExpression extends Expression {
 
     public getType(options: GetTypeOptions): BscType {
         return this.typeExpression.getType(options);
+    }
+}
+
+export class TypedArrayExpression extends Expression {
+    constructor(
+        public innerType: Expression,
+        public leftBracket: Token,
+        public rightBracket: Token
+    ) {
+        super();
+        this.range = util.createBoundingRange(
+            this.innerType,
+            this.leftBracket,
+            this.rightBracket
+        );
+    }
+
+    public readonly kind = AstNodeKind.ArrayTypeExpression;
+
+    public range: Range;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'innerType', visitor, options);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        return new ArrayType(this.innerType.getType(options));
     }
 }

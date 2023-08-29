@@ -9,7 +9,7 @@ import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement 
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isAssignmentStatement, isBlock, isCallExpression, isCommentStatement, isDottedGetExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isPrintStatement, isTypeCastExpression } from '../astUtils/reflection';
-import { expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
+import { expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
 import { BrsFile } from '../files/BrsFile';
@@ -1310,6 +1310,161 @@ describe('parser', () => {
     });
 
     describe('type casts', () => {
+
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(node as dynamic)
+                    print lcase((node as string))
+                end sub
+            `, ParseMode.BrightScript);
+            expect(
+                parser.diagnostics[0]?.message
+            ).to.equal(
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('type cast').message
+            );
+        });
+
+        it('allows type casts after function calls', () => {
+            let { statements, diagnostics } = parse(`
+                sub main()
+                    value = getValue() as integer
+                end sub
+
+                function getValue()
+                    return 123
+                end function
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            expect(statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = statements[0] as FunctionStatement;
+            expect(fn.func.body.statements).to.exist;
+            let assignment = fn.func.body.statements[0] as AssignmentStatement;
+            expect(isAssignmentStatement(assignment)).to.be.true;
+            expect(isTypeCastExpression(assignment.value)).to.be.true;
+            expect(isCallExpression((assignment.value as TypeCastExpression).obj)).to.be.true;
+            expectTypeToBe(assignment.getType({ flags: SymbolTypeFlag.typetime }), IntegerType);
+        });
+
+        it('allows type casts in the middle of expressions', () => {
+            let { statements, diagnostics } = parse(`
+                sub main()
+                    value = (getValue() as integer).toStr()
+                end sub
+
+                function getValue()
+                    return 123
+                end function
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            expect(statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = statements[0] as FunctionStatement;
+            expect(fn.func.body.statements).to.exist;
+            let assignment = fn.func.body.statements[0] as any;
+            expect(isAssignmentStatement(assignment)).to.be.true;
+            expect(isCallExpression(assignment.value)).to.be.true;
+            expect(isDottedGetExpression(assignment.value.callee)).to.be.true;
+            expect(isGroupingExpression(assignment.value.callee.obj)).to.be.true;
+            expect(isTypeCastExpression(assignment.value.callee.obj.expression)).to.be.true;
+            //grouping expression is an integer
+            expectTypeToBe(assignment.value.callee.obj.getType({ flags: SymbolTypeFlag.typetime }), IntegerType);
+        });
+
+        it('allows type casts in a function call', () => {
+            let { statements, diagnostics } = parse(`
+                sub main()
+                    print cos(getAngle() as float)
+                end sub
+
+                function getAngle()
+                    return 123
+                end function
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            expect(statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = statements[0] as FunctionStatement;
+            expect(fn.func.body.statements).to.exist;
+            let print = fn.func.body.statements[0] as any;
+            expect(isPrintStatement(print)).to.be.true;
+            expect(isCallExpression(print.expressions[0])).to.be.true;
+            let fnCall = print.expressions[0] as CallExpression;
+            expect(isTypeCastExpression(fnCall.args[0])).to.be.true;
+            let arg = fnCall.args[0] as TypeCastExpression;
+            //argument type is float
+            expectTypeToBe(arg.getType({ flags: SymbolTypeFlag.typetime }), FloatType);
+        });
+
+        it('allows multiple type casts', () => {
+            let { statements, diagnostics } = parse(`
+                sub main()
+                    print getData() as dynamic as float as string
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            expect(statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = statements[0] as FunctionStatement;
+            expect(fn.func.body.statements).to.exist;
+            let print = fn.func.body.statements[0] as any;
+            expect(isPrintStatement(print)).to.be.true;
+            expect(isTypeCastExpression(print.expressions[0])).to.be.true;
+            //argument type is float
+            expectTypeToBe(print.expressions[0].getType({ flags: SymbolTypeFlag.typetime }), StringType);
+        });
+
+        it('flags invalid type cast syntax - multiple as', () => {
+            let { diagnostics } = parse(`
+                sub foo(key)
+                    getData(key as as string)
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).to.exist;
+        });
+
+        it('flags invalid type cast syntax - no type after as', () => {
+            let { diagnostics } = parse(`
+                sub foo(key)
+                    getData(key as)
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).to.exist;
+        });
+    });
+
+    describe('union types', () => {
+
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(param as string or integer)
+                    print param
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()]);
+        });
+
+        it('allows union types in parameters', () => {
+            let { diagnostics } = parse(`
+                sub main(param as string or integer)
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows union types in type casts', () => {
+            let { diagnostics } = parse(`
+                sub main(val)
+                    printThing(val as string or integer)
+                end sub
+
+                sub printThing(thing as string or integer)
+                    print thing
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+
+    describe('typed arrays', () => {
 
         it('is not allowed in brightscript mode', () => {
             let parser = parse(`
