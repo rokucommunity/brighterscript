@@ -23,6 +23,7 @@ import { NamespaceType } from './types/NamespaceType';
 import { DoubleType } from './types/DoubleType';
 import { UnionType } from './types/UnionType';
 import { isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
+import { ArrayType } from './types/ArrayType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -2761,6 +2762,92 @@ describe('Scope', () => {
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('myString', opts), StringType);
+            });
+        });
+
+        describe('typed array expressions', () => {
+            it('should set correct type on indexedGet', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    sub first(nums as integer[]) as integer
+                        num = nums[0]
+                        return num
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('num', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('nums', opts), ArrayType);
+            });
+
+            it('should set correct type on indexedGet of multi-dimensional arrays', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    sub first(numsArray as integer[][]) as integer
+                        nums = numsArray[0]
+                        num = nums[0]
+                        return num
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('num', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('nums', opts), ArrayType);
+
+                expectTypeToBe((symbolTable.getSymbolType('numsArray', opts) as any).defaultType, ArrayType);
+                expectTypeToBe((symbolTable.getSymbolType('nums', opts) as any).defaultType, IntegerType);
+            });
+
+
+            it('should set correct type on for loops', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    sub sum(nums as integer[]) as integer
+                        total = 0
+                        for each num in nums
+                            total += num
+                        end for
+                        return total
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('total', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('num', opts), IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('nums', opts), ArrayType);
+            });
+
+            it('should set correct type on array literals', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    sub process()
+                        intArr = [1, 2, 3]
+                        strArr = ["hello", "bronley"]
+                        floatArr = [3.14, 282.23]
+                        unionArr = ["string", 2]
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('intArr', opts), ArrayType);
+                expectTypeToBe((symbolTable.getSymbolType('intArr', opts) as ArrayType).defaultType, IntegerType);
+                expectTypeToBe(symbolTable.getSymbolType('strArr', opts), ArrayType);
+                expectTypeToBe((symbolTable.getSymbolType('strArr', opts) as ArrayType).defaultType, StringType);
+                expectTypeToBe(symbolTable.getSymbolType('floatArr', opts), ArrayType);
+                expectTypeToBe((symbolTable.getSymbolType('floatArr', opts) as ArrayType).defaultType, FloatType);
+                expectTypeToBe(symbolTable.getSymbolType('unionArr', opts), ArrayType);
+                const unionDefaultType = (symbolTable.getSymbolType('unionArr', opts) as ArrayType).defaultType;
+                expectTypeToBe(unionDefaultType, UnionType);
+                expect((unionDefaultType as UnionType).types).to.include(StringType.instance);
+                expect((unionDefaultType as UnionType).types).to.include(IntegerType.instance);
             });
         });
     });

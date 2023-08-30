@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallableType, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import type { BscType } from '../types/BscType';
@@ -25,6 +25,7 @@ import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
 import { TypePropertyReferenceType } from '../types/ReferenceType';
 import { UnionType } from '../types/UnionType';
+import { ArrayType } from '../types';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -538,6 +539,15 @@ export class IndexedGetExpression extends Expression {
             walk(this, 'index', visitor, options);
         }
     }
+
+    getType(options: GetTypeOptions): BscType {
+        const objType = this.obj.getType(options);
+        if (isArrayType(objType)) {
+            // This is used on an array. What is the default type of that array?
+            return objType.defaultType;
+        }
+        return super.getType(options);
+    }
 }
 
 export class GroupingExpression extends Expression {
@@ -711,6 +721,11 @@ export class ArrayLiteralExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walkArray(this.elements, visitor, options, this);
         }
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        const innerTypes = this.elements.filter(x => !isCommentStatement(x)).map(expr => expr.getType(options));
+        return new ArrayType(...innerTypes);
     }
 }
 
@@ -1756,5 +1771,38 @@ export class TypeCastExpression extends Expression {
 
     public getType(options: GetTypeOptions): BscType {
         return this.typeExpression.getType(options);
+    }
+}
+
+export class TypedArrayExpression extends Expression {
+    constructor(
+        public innerType: Expression,
+        public leftBracket: Token,
+        public rightBracket: Token
+    ) {
+        super();
+        this.range = util.createBoundingRange(
+            this.innerType,
+            this.leftBracket,
+            this.rightBracket
+        );
+    }
+
+    public readonly kind = AstNodeKind.ArrayTypeExpression;
+
+    public range: Range;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'innerType', visitor, options);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        return new ArrayType(this.innerType.getType(options));
     }
 }
