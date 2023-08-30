@@ -24,7 +24,7 @@ export class CallExpressionInfo {
     expression?: Expression;
 
     //the contextually relevant callExpression, which relates to it
-    callExpression?: CallExpression;
+    callExpression?: CallExpression | CallfuncExpression;
     type: CallExpressionType;
 
     file: BrsFile;
