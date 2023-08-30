@@ -962,4 +962,99 @@ describe('ScopeValidator', () => {
             ]);
         });
     });
+
+    describe('returnTypeMismatch', () => {
+        it('finds when a function returns a type that is not what was declared', () => {
+            program.setFile('source/util.bs', `
+                function getPi() as float
+                    return "apple" ' get it?
+                end function
+            `);
+            program.validate();
+            //should have error - return value should be a float, not a string
+            expectDiagnostics(program, [
+                DiagnosticMessages.returnTypeMismatch('string', 'float').message
+            ]);
+        });
+
+        it('finds all return statements that do not match', () => {
+            program.setFile('source/util.bs', `
+                function getPi(kind as integer) as float
+                    if kind = 1
+                        return "apple"
+                    else if kind = 2
+                        return false
+                    else if kind = 3
+                        return new Pie("lemon")
+                    end if
+                    return 3.14
+                end function
+
+                class Pie
+                   kind as string
+                   sub new(kind as string)
+                       m.kind = kind
+                   end sub
+                end class
+            `);
+            program.validate();
+            //should have error - return value should be a float, not whatever else
+            expectDiagnostics(program, [
+                DiagnosticMessages.returnTypeMismatch('string', 'float').message,
+                DiagnosticMessages.returnTypeMismatch('boolean', 'float').message,
+                DiagnosticMessages.returnTypeMismatch('Pie', 'float').message
+            ]);
+        });
+
+
+        it('allows returning compatible types', () => {
+            program.setFile('source/util.bs', `
+                function getPi() as float
+                    return 3 ' integers are compatible with floats
+                end function
+
+                function getPie() as Pie
+                    return new Tart("lemon") ' Tart extends Pie
+                end function
+
+                class Pie
+                    kind as string
+                    sub new(kind as string)
+                        m.kind = kind
+                    end sub
+                end class
+
+                class Tart extends Pie
+                    size = "small"
+                end class
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('detects return types on void functions (subs)', () => {
+            program.setFile('source/util.bs', `
+                sub sayHello(name as string)
+                    return "hello " + name ' return should be void in subs
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.returnTypeMismatch('string', 'void').message
+            ]);
+        });
+
+        it('detects return types on void functions', () => {
+            program.setFile('source/util.bs', `
+                function sayHello(name as string) as void
+                    return "hello " + name ' return should be void in subs
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.returnTypeMismatch('string', 'void').message
+            ]);
+        });
+    });
 });

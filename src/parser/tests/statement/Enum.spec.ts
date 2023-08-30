@@ -610,7 +610,7 @@ describe('EnumStatement', () => {
                         val2
                     end enum
 
-                    function foo() as integer
+                    function foo() as MyEnum
                         return MyEnum.val1
                     end function
                 end namespace

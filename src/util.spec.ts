@@ -462,7 +462,16 @@ describe('util', () => {
         });
     });
 
-    describe('compareRangeToPosition', () => {
+    describe('comparePositionToRange', () => {
+        it('does not crash on undefined props', () => {
+            expect(
+                util.comparePositionToRange(null, util.createRange(0, 0, 0, 0))
+            ).to.eql(0);
+            expect(
+                util.comparePositionToRange(util.createPosition(1, 1), null)
+            ).to.eql(0);
+        });
+
         it('correctly compares positions to ranges with one line range line', () => {
             let range = Range.create(1, 10, 1, 15);
             expect(util.comparePositionToRange(Position.create(0, 13), range)).to.equal(-1);
@@ -581,6 +590,15 @@ describe('util', () => {
     });
 
     describe('rangesIntersect', () => {
+        it('does not crash on undefined range', () => {
+            expect(
+                util.rangesIntersect(null, util.createRange(0, 0, 0, 0))
+            ).to.be.false;
+            expect(
+                util.rangesIntersect(util.createRange(0, 0, 0, 0), null)
+            ).to.be.false;
+        });
+
         it('does not match when ranges do not touch (a < b)', () => {
             // AA BB
             expect(util.rangesIntersectOrTouch(
@@ -671,6 +689,15 @@ describe('util', () => {
     });
 
     describe('rangesIntersectOrTouch', () => {
+        it('does not crash on undefined range', () => {
+            expect(
+                util.rangesIntersectOrTouch(null, util.createRange(0, 0, 0, 0))
+            ).to.be.false;
+            expect(
+                util.rangesIntersectOrTouch(util.createRange(0, 0, 0, 0), null)
+            ).to.be.false;
+        });
+
         it('does not match when ranges do not touch (a < b)', () => {
             // AA BB
             expect(util.rangesIntersectOrTouch(

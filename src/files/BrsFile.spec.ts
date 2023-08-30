@@ -1625,7 +1625,7 @@ describe('BrsFile', () => {
                     else if true
                     else if true then
                         if true then
-                            return true
+                            return
                         end if
                     end if
                 end sub

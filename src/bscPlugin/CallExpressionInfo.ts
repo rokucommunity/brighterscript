@@ -24,7 +24,7 @@ export class CallExpressionInfo {
     expression?: Expression;
 
     //the contextually relevant callExpression, which relates to it
-    callExpression?: CallExpression;
+    callExpression?: CallExpression | CallfuncExpression;
     type: CallExpressionType;
 
     file: BrsFile;
@@ -66,7 +66,7 @@ export class CallExpressionInfo {
             this.newExpression = callExpression.parent;
         }
         if (isCallfuncExpression(callExpression)) {
-            this.name = (callExpression as CallfuncExpression).methodName.text;
+            this.name = callExpression.methodName.text;
         } else if (isVariableExpression(callExpression.callee)) {
             this.name = callExpression.callee.name.text;
         } else if (isVariableExpression(callExpression)) {
@@ -94,7 +94,7 @@ export class CallExpressionInfo {
         return util.rangeContains(boundingRange, this.position);
     }
 
-    ascertainCallExpression(): CallExpression {
+    ascertainCallExpression(): CallExpression | CallfuncExpression {
         let expression = this.expression;
         function isCallFuncOrCallExpression(expression: Expression) {
             return isCallfuncExpression(expression) || isCallExpression(expression);
@@ -116,7 +116,7 @@ export class CallExpressionInfo {
             }
         }
 
-        return callExpression as CallExpression;
+        return callExpression;
     }
 
     ascertainType(): CallExpressionType {

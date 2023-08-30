@@ -1,11 +1,11 @@
 import { URI } from 'vscode-uri';
-import { isAssignmentStatement, isBinaryExpression, isBrsFile, isClassType, isLiteralExpression, isNamespaceStatement, isTypeExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBinaryExpression, isBrsFile, isClassType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isTypeExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTable';
-import type { AssignmentStatement, EnumStatement, NamespaceStatement } from '../../parser/Statement';
+import type { AssignmentStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -58,9 +58,13 @@ export class ScopeValidator {
                 file.ast.walk(createVisitor({
                     CallExpression: (functionCall) => {
                         this.validateFunctionCall(file, functionCall);
+                    },
+                    ReturnStatement: (returnStatement) => {
+                        this.validateReturnStatement(file, returnStatement);
                     }
+
                 }), {
-                    walkMode: WalkMode.visitExpressionsRecursive
+                    walkMode: WalkMode.visitAllRecursive
                 });
             }
         });
@@ -459,6 +463,28 @@ export class ScopeValidator {
         this.event.scope.addDiagnostics(diagnostics);
     }
 
+
+    /**
+     * Detect return statements with incompatible types vs. declared return type
+     */
+    private validateReturnStatement(file: BrsFile, returnStmt: ReturnStatement) {
+        const diagnostics: BsDiagnostic[] = [];
+        const getTypeOptions = { flags: SymbolTypeFlag.runtime };
+        let funcType = returnStmt.findAncestor(isFunctionExpression).getType({ flags: SymbolTypeFlag.typetime });
+        if (isTypedFunctionType(funcType)) {
+            const actualReturnType = returnStmt.value?.getType(getTypeOptions);
+            if (actualReturnType && !funcType.returnType.isTypeCompatible(actualReturnType)) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.returnTypeMismatch(actualReturnType.toString(), funcType.returnType.toString()),
+                    range: returnStmt.value.range,
+                    file: file
+                });
+
+            }
+        }
+        this.event.scope.addDiagnostics(diagnostics);
+    }
+
     /**
      * Adds a diagnostic to the first scope for this key. Prevents duplicate diagnostics
      * for diagnostics where scope isn't important. (i.e. CreateObject validations)
@@ -492,7 +518,7 @@ export class ScopeValidator {
         if (isXmlScope(this.event.scope) && this.event.scope.xmlFile?.srcPath) {
             info.location = util.createLocation(
                 URI.file(this.event.scope.xmlFile.srcPath).toString(),
-                util.createRange(0, 0, 0, 10)
+                this.event.scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.range ?? util.createRange(0, 0, 0, 10)
             );
         } else {
             info.location = util.createLocation(
