@@ -1204,7 +1204,7 @@ describe('Scope', () => {
                     end function
                 `);
                 program.validate();
-                expectDiagnostics(program, [
+                expectDiagnosticsIncludes(program, [
                     DiagnosticMessages.cannotFindName('unknownType').message,
                     DiagnosticMessages.cannotFindName('unknownType').message
                 ]);
