@@ -540,6 +540,16 @@ Type: `boolean`
 
 Allow BrighterScript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
 
+#### `bslibDestinationDir`
+
+Type: `string`
+
+Override the destination directory for the bslib.brs file.  Use this if you want
+to customize where the bslib.brs file is located in the staging directory.  Note
+that using a location outside of `source` will break scripts inside `source`
+that depend on bslib.brs.  Defaults to `source`.
+
+
 ## Ignore errors and warnings on a per-line basis
 In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:
  - `bs:disable-next-line`

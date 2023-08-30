@@ -1785,6 +1785,16 @@ describe('Program', () => {
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/bslib.brs`)).is.true;
     });
 
+    it('copies the bslib.brs file to optionally specified directory', async () => {
+        fsExtra.ensureDirSync(program.options.stagingDir);
+        program.options.bslibDestinationDir = 'source/opt';
+        program.validate();
+
+        await program.transpile([], program.options.stagingDir);
+
+        expect(fsExtra.pathExistsSync(s`${stagingDir}/source/opt/bslib.brs`)).is.true;
+    });
+
     describe('getTranspiledFileContents', () => {
         it('fires plugin events', async () => {
             const file = program.setFile('source/main.brs', trim`
@@ -2075,6 +2085,24 @@ describe('Program', () => {
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `);
+        });
+
+        it('uses custom bslib path when specified in .xml file', async () => {
+            program.options.bslibDestinationDir = 'source/opt';
+            program.setFile('components/Component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                </component>
+            `);
+            await program.transpile([], program.options.stagingDir);
+            expect(trimMap(
+                fsExtra.readFileSync(s`${stagingDir}/components/Component1.xml`).toString()
+            )).to.eql(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/source/opt/bslib.brs" />
                 </component>
             `);
         });
