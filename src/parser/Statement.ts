@@ -1192,7 +1192,6 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 export class NamespaceStatement extends Statement implements TypedefProvider {
     constructor(
         public keyword: Token,
-        // this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
         public nameExpression: VariableExpression | DottedGetExpression,
         public body: Body,
         public endKeyword: Token
