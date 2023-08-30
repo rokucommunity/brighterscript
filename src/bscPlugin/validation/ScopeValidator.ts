@@ -66,7 +66,6 @@ export class ScopeValidator {
                 }), {
                     walkMode: WalkMode.visitAllRecursive
                 });
-                console.log('finished walkFiles', file.srcPath);
             }
         });
     }
