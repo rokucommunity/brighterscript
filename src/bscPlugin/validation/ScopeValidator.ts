@@ -492,7 +492,7 @@ export class ScopeValidator {
         if (isXmlScope(this.event.scope) && this.event.scope.xmlFile?.srcPath) {
             info.location = util.createLocation(
                 URI.file(this.event.scope.xmlFile.srcPath).toString(),
-                util.createRange(0, 0, 0, 10)
+                this.event.scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.range ?? util.createRange(0, 0, 0, 10)
             );
         } else {
             info.location = util.createLocation(
