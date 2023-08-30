@@ -13,6 +13,7 @@ import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
 import * as requireRelative from 'require-relative';
 import { Throttler } from './Throttler';
+import { URI } from 'vscode-uri';
 
 /**
  * A runner class that handles
@@ -322,8 +323,19 @@ export class ProgramBuilder {
             for (let diagnostic of sortedDiagnostics) {
                 //default the severity to error if undefined
                 let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
+                let relatedInformation = (diagnostic.relatedInformation ?? []).map(x => {
+                    let relatedInfoFilePath = URI.parse(x.location.uri).fsPath;
+                    if (!emitFullPaths) {
+                        relatedInfoFilePath = path.relative(cwd, relatedInfoFilePath);
+                    }
+                    return {
+                        filePath: relatedInfoFilePath,
+                        range: x.location.range,
+                        message: x.message
+                    };
+                });
                 //format output
-                diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic);
+                diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic, relatedInformation);
             }
         }
     }
