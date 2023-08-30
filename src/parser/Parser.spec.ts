@@ -20,6 +20,7 @@ import { SymbolTypeFlag } from '../SymbolTable';
 import { IntegerType } from '../types/IntegerType';
 import { FloatType } from '../types/FloatType';
 import { StringType } from '../types/StringType';
+import { ArrayType, UnionType } from '../types';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -1512,6 +1513,106 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).to.exist;
         });
+    });
+
+    describe('union types', () => {
+
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(param as string or integer)
+                    print param
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()]);
+        });
+
+        it('allows union types in parameters', () => {
+            let { diagnostics } = parse(`
+                sub main(param as string or integer)
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows union types in type casts', () => {
+            let { diagnostics } = parse(`
+                sub main(val)
+                    printThing(val as string or integer)
+                end sub
+
+                sub printThing(thing as string or integer)
+                    print thing
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+    describe('typed arrays', () => {
+
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(things as string[])
+                    print things
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics,
+                [DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('typed arrays')]
+            );
+        });
+
+
+        it('is allowed in brighterscript mode', () => {
+            let { statements, diagnostics } = parse(`
+                sub main(things as string[])
+                    print things
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const paramType = (statements[0] as FunctionStatement).func.parameters[0].getType({ flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(paramType, ArrayType);
+            expectTypeToBe((paramType as ArrayType).defaultType, StringType);
+        });
+
+        it('allows multi dimensional arrays', () => {
+            let { statements, diagnostics } = parse(`
+                sub main(things as string[][])
+                    print things
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const paramType = (statements[0] as FunctionStatement).func.parameters[0].getType({ flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(paramType, ArrayType);
+            expectTypeToBe((paramType as ArrayType).defaultType, ArrayType);
+            expectTypeToBe(((paramType as ArrayType).defaultType as ArrayType).defaultType, StringType);
+        });
+
+        it('allows arrays as return types', () => {
+            let { statements, diagnostics } = parse(`
+                function getFourPrimes() as integer[]
+                    return [2, 3, 5, 7]
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const paramType = (statements[0] as FunctionStatement).func.returnTypeExpression.getType({ flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(paramType, ArrayType);
+            expectTypeToBe((paramType as ArrayType).defaultType, IntegerType);
+        });
+
+        it('allows arrays in union types', () => {
+            let { statements, diagnostics } = parse(`
+                sub foo(x as integer or integer[] or string or string[])
+                  print x
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const paramType = (statements[0] as FunctionStatement).func.parameters[0].getType({ flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(paramType, UnionType);
+            expect(paramType.toString().includes('Array<string>')).to.be.true;
+            expect(paramType.toString().includes('Array<integer>')).to.be.true;
+        });
+
     });
 });
 

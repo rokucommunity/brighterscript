@@ -85,6 +85,7 @@ import {
     TernaryExpression,
     TypeCastExpression,
     TypeExpression,
+    TypedArrayExpression,
     UnaryExpression,
     VariableExpression,
     XmlAttributeGetExpression
@@ -2540,7 +2541,9 @@ export class Parser {
         const changedTokens: { token: Token; oldKind: TokenKind }[] = [];
         try {
             let expr: Expression = this.getTypeExpressionPart(changedTokens);
-            while (this.matchAny(TokenKind.Or)) {
+            while (this.options.mode === ParseMode.BrighterScript && this.matchAny(TokenKind.Or)) {
+                // If we're in Brighterscript mode, allow union types with "or" between types
+                // TODO: Handle Union types in parens? eg. "(string or integer)"
                 let operator = this.previous();
                 let right = this.getTypeExpressionPart(changedTokens);
                 if (right) {
@@ -2562,8 +2565,15 @@ export class Parser {
         }
     }
 
+    /**
+     * Gets a single "part" of a type of a potential Union type
+     * Note: this does not NEED to be part of a union type, but the logic is the same
+     *
+     * @param changedTokens an array that is modified with any tokens that have been changed from their default kind to identifiers - eg. when a keyword is used as type
+     * @returns an expression that was successfully parsed
+     */
     private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
-        let expr: VariableExpression | DottedGetExpression;
+        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression;
         if (this.checkAny(...DeclarableTypes)) {
             // if this is just a type, just use directly
             expr = new VariableExpression(this.advance() as Identifier);
@@ -2579,6 +2589,28 @@ export class Parser {
                 this._references.expressions.add(expr);
             }
         }
+
+        //Check if it has square brackets, thus making it an array
+        if (expr && this.check(TokenKind.LeftSquareBracket)) {
+            if (this.options.mode === ParseMode.BrightScript) {
+                // typed arrays not allowed in Brightscript
+                this.warnIfNotBrighterScriptMode('typed arrays');
+                return expr;
+            }
+
+            // Check if it is an array - that is, if it has `[]` after the type
+            // eg. `string[]` or `SomeKlass[]`
+            // This is while loop, so it supports multidimensional arrays (eg. integer[][])
+            while (this.check(TokenKind.LeftSquareBracket)) {
+                const leftBracket = this.advance();
+                if (this.check(TokenKind.RightSquareBracket)) {
+                    const rightBracket = this.advance();
+                    expr = new TypedArrayExpression(expr, leftBracket, rightBracket);
+                    this._references.expressions.add(expr);
+                }
+            }
+        }
+
         return expr;
     }
 

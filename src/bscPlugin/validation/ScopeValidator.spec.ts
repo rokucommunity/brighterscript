@@ -765,7 +765,7 @@ describe('ScopeValidator', () => {
         });
 
         it('allows union types of all compatible types as arg', () => {
-            program.setFile('source/util.brs', `
+            program.setFile('source/util.bs', `
                 sub printIntNum(num as float or double or integer)
                     print cInt(num)
                 end sub
@@ -789,7 +789,7 @@ describe('ScopeValidator', () => {
         });
 
         it('validates union types of all compatible types as arg - when some do not work', () => {
-            program.setFile('source/util.brs', `
+            program.setFile('source/util.bs', `
                 sub printIntNum(maybeNum as float or string)
                     print cInt(maybeNum)
                 end sub
