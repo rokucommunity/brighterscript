@@ -734,6 +734,11 @@ export let DiagnosticMessages = {
         message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'`,
         code: 1141,
         severity: DiagnosticSeverity.Error
+    }),
+    returnTypeMismatch: (actualTypeString: string, expectedTypeString: string) => ({
+        message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'`,
+        code: 1142,
+        severity: DiagnosticSeverity.Error
     })
 };
 
