@@ -6,7 +6,6 @@ import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
-import type { Parser } from './Parser';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
@@ -54,8 +53,7 @@ export class EmptyStatement extends Statement {
  */
 export class Body extends Statement implements TypedefProvider {
     constructor(
-        public statements: Statement[] = [],
-        public parser?: Parser
+        public statements: Statement[] = []
     ) {
         super();
     }
