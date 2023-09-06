@@ -14,7 +14,8 @@ export function token(kind: TokenKind, text?: string): Token {
         text: text,
         isReserved: ReservedWords.has((text || '').toLowerCase()),
         range: interpolatedRange,
-        leadingWhitespace: ''
+        leadingWhitespace: '',
+        leadingTrivia: []
     };
 }
 

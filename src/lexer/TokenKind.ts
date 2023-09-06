@@ -665,3 +665,13 @@ export const PreceedingRegexTypes = new Set([
     TokenKind.Colon,
     TokenKind.Semicolon
 ]);
+
+/**
+ * The tokens that may be in leading trivia
+ */
+export const AllowedTriviaTokens: ReadonlyArray<TokenKind> = [
+    TokenKind.Newline,
+    TokenKind.Whitespace,
+    TokenKind.Comment,
+    TokenKind.Colon
+];

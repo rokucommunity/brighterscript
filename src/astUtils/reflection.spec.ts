@@ -193,7 +193,8 @@ describe('reflection', () => {
             range: range,
             isReserved: false,
             charCode: 0,
-            leadingWhitespace: ''
+            leadingWhitespace: '',
+            leadingTrivia: []
         };
 
         const binary = new BinaryExpression(expr, token, expr);

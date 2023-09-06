@@ -378,6 +378,10 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         }
     }
 
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.func.getLeadingTrivia());
+    }
+
     transpile(state: BrsTranspileState) {
         //create a fake token using the full transpiled name
         let nameToken = {
@@ -1234,6 +1238,10 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         return name;
     }
 
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.keyword.leadingTrivia);
+    }
+
     public getNameParts() {
         let parts = util.getAllDottedGetParts(this.nameExpression);
 
@@ -1389,6 +1397,11 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         return !!this.parentInterfaceName;
     }
 
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this,
+            this.tokens.interface.leadingTrivia);
+    }
+
 
     /**
      * The name of the interface WITH its leading namespace (if applicable)
@@ -1541,6 +1554,10 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         as: Token;
     };
 
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.name.leadingTrivia);
+    }
+
     public get name() {
         return this.tokens.name.text;
     }
@@ -1629,6 +1646,10 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         rightParen: Token;
         as: Token;
     };
+
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.functionType.leadingTrivia);
+    }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
@@ -1756,6 +1777,10 @@ export class ClassStatement extends Statement implements TypedefProvider {
             //return undefined which will allow outside callers to know that this class doesn't have a name
             return undefined;
         }
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.classKeyword.leadingTrivia);
     }
 
     public memberMap = {} as Record<string, MemberStatement>;
@@ -2147,6 +2172,10 @@ export class MethodStatement extends FunctionStatement {
         return this.name.text;
     }
 
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.func.getLeadingTrivia());
+    }
+
     transpile(state: BrsTranspileState) {
         if (this.name.text.toLowerCase() === 'new') {
             this.ensureSuperConstructorCall(state);
@@ -2236,7 +2265,8 @@ export class MethodStatement extends FunctionStatement {
                         text: 'super',
                         isReserved: false,
                         range: state.classStatement.name.range,
-                        leadingWhitespace: ''
+                        leadingWhitespace: '',
+                        leadingTrivia: []
                     }
                 ),
                 {
@@ -2244,14 +2274,16 @@ export class MethodStatement extends FunctionStatement {
                     text: '(',
                     isReserved: false,
                     range: state.classStatement.name.range,
-                    leadingWhitespace: ''
+                    leadingWhitespace: '',
+                    leadingTrivia: []
                 },
                 {
                     kind: TokenKind.RightParen,
                     text: ')',
                     isReserved: false,
                     range: state.classStatement.name.range,
-                    leadingWhitespace: ''
+                    leadingWhitespace: '',
+                    leadingTrivia: []
                 },
                 []
             )
@@ -2327,6 +2359,10 @@ export class FieldStatement extends Statement implements TypedefProvider {
     }
 
     public readonly range: Range;
+
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.accessModifier?.leadingTrivia ?? this.name?.leadingTrivia ?? []);
+    }
 
     transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);

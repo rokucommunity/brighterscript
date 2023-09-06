@@ -187,6 +187,10 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      */
     public functionStatement?: FunctionStatement;
 
+    public getLeadingTrivia(): Token[] {
+        return this.functionType?.leadingTrivia ?? [];
+    }
+
     /**
      * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
      * and ending with the last n' in 'end function' or 'b' in 'end sub'
@@ -1412,6 +1416,10 @@ export class AnnotationExpression extends Expression {
             return [];
         }
         return this.call.args.map(e => expressionToValue(e, strict));
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return this.atToken.leadingTrivia;
     }
 
     transpile(state: BrsTranspileState) {
