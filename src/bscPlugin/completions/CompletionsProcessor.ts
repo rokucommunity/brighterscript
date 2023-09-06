@@ -1,10 +1,10 @@
-import { isBody, isBrsFile, isCallableType, isClassType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isMethodStatement, isNamespaceType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isCallableType, isClassType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isMethodStatement, isNamespaceType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { BscFile, ExtraSymbolData, FileReference, ProvideCompletionsEvent } from '../../interfaces';
 import { Keywords, TokenKind } from '../../lexer/TokenKind';
 import type { XmlScope } from '../../XmlScope';
 import { util } from '../../util';
 import type { Scope } from '../../Scope';
-import { ParseMode, type Parser } from '../../parser/Parser';
+import { ParseMode } from '../../parser/Parser';
 import type { CompletionItem, Position } from 'vscode-languageserver';
 import { CompletionItemKind, TextEdit } from 'vscode-languageserver';
 import type { BscSymbol } from '../../SymbolTable';
@@ -12,7 +12,6 @@ import { SymbolTypeFlag } from '../../SymbolTable';
 import type { XmlFile } from '../../files/XmlFile';
 import type { Program } from '../../Program';
 import type { BrsFile } from '../../files/BrsFile';
-import type { Token } from '../../lexer/Token';
 import type { FunctionScope } from '../../FunctionScope';
 import type { BscType } from '../../types';
 import type { AstNode } from '../../parser/AstNode';
@@ -225,9 +224,11 @@ export class CompletionsProcessor {
         function getSymbolTableForLookups() {
             if (shouldLookForMembers) {
                 let type = expression.getType({ flags: SymbolTypeFlag.runtime });
-                if (isEnumMemberType(type)) {
-                    // Completions on an enum member should include the reset of the members
-                    type = expression.getSymbolTable().getSymbolType(type.enumName, { flags: SymbolTypeFlag.runtime });
+                if (isEnumType(type) && !isEnumType(expression.getType({ flags: SymbolTypeFlag.typetime }))) {
+                    // enum members are registered in the symbol table as enum type
+                    // an enum type should ONLY use the enum type's members when called directly
+                    // since this is not a typetime enum, the actual type is actually an enum member!
+                    type = type.defaultMemberType;
                 }
                 // Make sure built in interfaces are added.
                 if (type.isResolvable()) {
@@ -286,22 +287,7 @@ export class CompletionsProcessor {
         if (symbol.data?.description) {
             return symbol.data?.description;
         }
-        const root = symbol.data?.definingNode?.getRoot();
-        let parser: Parser;
-        if (isBody(root)) {
-            parser = root.parser;
-        }
-        if (!parser) {
-            return undefined;
-        }
-        let exprStartToken: Token;
-        for (let token of parser.tokens) {
-            if (util.rangeContains(token.range, symbol.data?.definingNode?.range?.start)) {
-                exprStartToken = token;
-                break;
-            }
-        }
-        return util.getTokenDocumentation(parser?.tokens, exprStartToken);
+        return util.getNodeDocumentation(symbol.data?.definingNode);
     }
 
 

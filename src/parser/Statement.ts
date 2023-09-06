@@ -734,6 +734,10 @@ export class LabelStatement extends Statement {
 
     public readonly range: Range;
 
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.identifier.leadingTrivia);
+    }
+
     transpile(state: BrsTranspileState) {
         return [
             state.transpileToken(this.tokens.identifier),
@@ -2562,6 +2566,10 @@ export class EnumStatement extends Statement implements TypedefProvider {
         return result;
     }
 
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.enum.leadingTrivia);
+    }
+
     /**
      * Get a map of member names and their values.
      * All values are stored as their AST LiteralExpression representation (i.e. string enum values include the wrapping quotes)
@@ -2685,7 +2693,6 @@ export class EnumStatement extends Statement implements TypedefProvider {
         for (const statement of members) {
             resultType.addMember(statement?.tokens?.name?.text, { definingNode: statement }, statement.getType(options), SymbolTypeFlag.runtime);
         }
-
         return resultType;
     }
 }
@@ -2716,6 +2723,10 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
      */
     public get name() {
         return this.tokens.name.text;
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.name.leadingTrivia);
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {
@@ -2771,6 +2782,10 @@ export class ConstStatement extends Statement implements TypedefProvider {
 
     public get name() {
         return this.tokens.name.text;
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.const.leadingTrivia);
     }
 
     /**

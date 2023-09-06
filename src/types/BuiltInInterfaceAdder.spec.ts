@@ -11,6 +11,7 @@ import { DynamicType } from './DynamicType';
 import { ClassType } from './ClassType';
 import { ArrayType } from './ArrayType';
 import { expect } from 'chai';
+import { EnumMemberType, EnumType } from './EnumType';
 
 describe('BuiltInInterfaceAdder', () => {
 
@@ -114,5 +115,15 @@ describe('BuiltInInterfaceAdder', () => {
         expectTypeToBe(popType.returnType, IntegerType);
         const pushType = myArray.getMemberType('push', { flags: SymbolTypeFlag.runtime }) as TypedFunctionType;
         expectTypeToBe(pushType.params[0].type, IntegerType);
+    });
+
+    it('works with enums', () => {
+        const myEnum = new EnumType('myEnum', StringType.instance);
+        const myEnumMember = new EnumMemberType('myEnum', 'member', StringType.instance);
+        myEnum.addMember('member', {}, myEnumMember, SymbolTypeFlag.runtime);
+        const enumTrim = myEnum.getMemberType('trim', { flags: SymbolTypeFlag.runtime });
+        expect(enumTrim).to.be.undefined;
+        const memberTrim = myEnumMember.getMemberType('trim', { flags: SymbolTypeFlag.runtime });
+        expectTypeToBe(memberTrim, TypedFunctionType);
     });
 });

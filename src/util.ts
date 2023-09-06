@@ -616,6 +616,17 @@ export class Util {
     }
 
     /**
+     * Combine all the documentation for a node - uses the AstNode's leadingTrivia property
+     */
+    public getNodeDocumentation(node: AstNode) {
+        if (!node) {
+            return;
+        }
+        const leadingTrivia = node.getLeadingTrivia();
+        return this.getTokenDocumentation(leadingTrivia, leadingTrivia[leadingTrivia.length - 1]);
+    }
+
+    /**
      * Parse an xml file and get back a javascript object containing its results
      */
     public parseXml(text: string) {

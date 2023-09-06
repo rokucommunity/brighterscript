@@ -38,15 +38,6 @@ export class HoverProcessor {
         }
     }
 
-    private buildContentsWithDocsFromToken(text: string, startingToken: Token) {
-        const parts = [text];
-        const docs = util.getTokenDocumentation((this.event.file as BrsFile).parser.tokens, startingToken);
-        if (docs) {
-            parts.push('***', docs);
-        }
-        return parts.join('\n');
-    }
-
     private buildContentsWithDocsFromDescription(text: string, docs: string) {
         const parts = [text];
         if (docs) {
@@ -57,8 +48,7 @@ export class HoverProcessor {
 
     private buildContentsWithDocsFromExpression(text: string, expression: AstNode) {
         const parts = [text];
-        const file = this.event.file as BrsFile;
-        const docs = util.getTokenDocumentation(file.parser.tokens, file.getTokenAt(expression.range.start));
+        const docs = util.getNodeDocumentation(expression);
         if (docs) {
             parts.push('***', docs);
         }
@@ -86,7 +76,7 @@ export class HoverProcessor {
         const constant = scope?.getConstFileLink(fullName, containingNamespace);
         if (constant) {
             const constantValue = new SourceNode(null, null, null, constant.item.value.transpile(new BrsTranspileState(file))).toString();
-            return this.buildContentsWithDocsFromToken(fence(`const ${constant.item.fullName} = ${constantValue}`), constant.item.tokens.const);
+            return this.buildContentsWithDocsFromExpression(fence(`const ${constant.item.fullName} = ${constantValue}`), constant.item);
         }
     }
 

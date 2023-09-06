@@ -1429,6 +1429,66 @@ describe('CompletionsProcessor', () => {
             }]);
         });
 
+        it('gives completions for underlying types on enum members', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+
+                sub goAway(dir as Direction)
+                    print dir.
+                end sub
+
+            `);
+            program.validate();
+            // print dir.|
+            const completions = program.getCompletions('source/main.bs', util.createPosition(7, 31));
+            expectCompletionsIncludes(completions, [{
+                label: 'Trim',
+                kind: CompletionItemKind.Method
+            }]);
+        });
+
+        it('gives completions for underlying types on enum members on future enum declaration', () => {
+            program.setFile('source/main.bs', `
+                sub goAway(dir as Direction)
+                    print dir.
+                end sub
+
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `);
+            program.validate();
+            // print dir.|
+            const completions = program.getCompletions('source/main.bs', util.createPosition(2, 31));
+            expectCompletionsIncludes(completions, [{
+                label: 'Trim',
+                kind: CompletionItemKind.Method
+            }]);
+        });
+
+        it('does not give other members on enum member completion', () => {
+            program.setFile('source/main.bs', `
+                sub goAway(dir as Direction)
+                    print dir.
+                end sub
+
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `);
+            program.validate();
+            // print dir.|
+            const completions = program.getCompletions('source/main.bs', util.createPosition(2, 31));
+            expectCompletionsExcludes(completions, [{
+                label: 'down',
+                kind: CompletionItemKind.EnumMember
+            }]);
+        });
 
     });
 

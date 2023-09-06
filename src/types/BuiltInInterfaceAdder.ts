@@ -4,7 +4,7 @@ import { Cache } from '../Cache';
 import type { TypedFunctionType } from './TypedFunctionType';
 import { SymbolTypeFlag } from '../SymbolTable';
 import type { BscType } from './BscType';
-import { isArrayType, isBooleanType, isCallableType, isClassType, isDoubleType, isEnumMemberType, isEnumType, isFloatType, isIntegerType, isInvalidType, isLongIntegerType, isStringType } from '../astUtils/reflection';
+import { isArrayType, isBooleanType, isCallableType, isClassType, isDoubleType, isEnumMemberType, isFloatType, isIntegerType, isInvalidType, isLongIntegerType, isStringType } from '../astUtils/reflection';
 
 
 export interface BuiltInInterfaceOverride {
@@ -88,7 +88,7 @@ export class BuiltInInterfaceAdder {
             return 'roAssociativeArray';
         } else if (isArrayType(theType)) {
             return 'roArray';
-        } else if (isEnumMemberType(theType) || isEnumType(theType)) {
+        } else if (isEnumMemberType(theType)) {
             return this.getMatchingRokuComponent(theType.underlyingType);
         }
     }
