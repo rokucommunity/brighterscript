@@ -8,7 +8,7 @@ import type { AssignmentStatement, ClassStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAssignmentStatement, isBlock, isCallExpression, isCommentStatement, isDottedGetExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isPrintStatement, isTypeCastExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAssignmentStatement, isBlock, isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isNamespaceStatement, isPrintStatement, isTypeCastExpression, isVariableExpression } from '../astUtils/reflection';
 import { expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
@@ -1613,6 +1613,177 @@ describe('parser', () => {
             expect(paramType.toString().includes('Array<integer>')).to.be.true;
         });
 
+    });
+
+    describe('leadingTrivia', () => {
+        it('gets leading trivia from functions', () => {
+            let { statements } = parse(`
+                ' Nice function, bro
+                function foo()
+                    return 1
+                end function
+            `);
+            const funcStatements = statements.filter(isFunctionStatement);
+            const fooTrivia = funcStatements[0].getLeadingTrivia();
+            expect(fooTrivia.length).to.be.greaterThan(0);
+            expect(fooTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+        });
+
+        it('gets multiple lines of leading trivia', () => {
+            let { statements } = parse(`
+                ' Say hello to someone
+                '
+                ' @param {string} name the person you want to say hello to.
+                sub sayHello(name as string = "world")
+                end sub
+            `);
+            const funcStatements = statements.filter(isFunctionStatement);
+            const helloTrivia = funcStatements[0].getLeadingTrivia();
+            expect(helloTrivia.length).to.be.greaterThan(0);
+            expect(helloTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(3);
+        });
+
+        it('gets leading trivia from classes', () => {
+            let { statements } = parse(`
+                ' hello
+                ' classes
+                class Hello
+                end class
+            `, ParseMode.BrighterScript);
+            const classStatements = statements.filter(isClassStatement);
+            const trivia = classStatements[0].getLeadingTrivia();
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(2);
+        });
+
+        it('gets leading trivia from functions with annotations', () => {
+            let { statements } = parse(`
+                ' hello comment 1
+                ' hello comment 2
+                @annotation
+                sub sayHello(name as string = "world")
+                end sub
+            `, ParseMode.BrighterScript);
+            const funcStatements = statements.filter(isFunctionStatement);
+            const helloTrivia = funcStatements[0].getLeadingTrivia();
+            expect(helloTrivia.length).to.be.greaterThan(0);
+            expect(helloTrivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(2);
+        });
+
+
+        it('gets leading trivia from class methods', () => {
+            let { statements } = parse(`
+                ' hello
+                ' classes
+                class Hello
+
+                    ' Gets the value of PI
+                    ' Not a dessert
+                    function getPi() as float
+                        return 3.14
+                    end function
+
+                    ' Gets a dessert
+                    function getPie() as string
+                        return "Apple Pie"
+                    end function
+                end class
+            `, ParseMode.BrighterScript);
+            const classStatement = statements.filter(isClassStatement)[0];
+            const methodStatements = classStatement.methods;
+
+            // function getPi()
+            let trivia = methodStatements[0].getLeadingTrivia();
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(2);
+
+            // function getPie()
+            trivia = methodStatements[1].getLeadingTrivia();
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+        });
+
+        it('gets leading trivia from class fields', () => {
+            let { statements } = parse(`
+                ' hello
+                ' classes
+                class Thing
+                    ' like the sky
+                    ' or a blueberry, evn though that's purple
+                    color = "blue"
+
+                    ' My name
+                    public name as string
+
+                    ' Only I know how old I am
+                    private age = 42
+                end class
+            `, ParseMode.BrighterScript);
+            const classStatement = statements.filter(isClassStatement)[0];
+            const fieldStatements = classStatement.fields;
+
+            // color = "blue"
+            let trivia = fieldStatements[0].getLeadingTrivia();
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(2);
+
+            // public name as string
+            trivia = fieldStatements[1].getLeadingTrivia();
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+
+            // private age = 42
+            trivia = fieldStatements[2].getLeadingTrivia();
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+        });
+
+        it('gets leading trivia from interfaces', () => {
+            let { statements } = parse(`
+                ' Description of interface
+                interface myIface
+                    ' comment
+                    someField as integer
+
+                    'comment
+                    function someFunc() as string
+                end interface
+            `, ParseMode.BrighterScript);
+            const ifaceStatement = statements.filter(isInterfaceStatement)[0];
+            const fieldStatements = ifaceStatement.fields;
+            const methodStatements = ifaceStatement.methods;
+
+            // interface myIface
+            let trivia = ifaceStatement.getLeadingTrivia();
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+
+            // someField as integer
+            trivia = fieldStatements[0].getLeadingTrivia();
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+
+            // function someFunc() as string
+            trivia = methodStatements[0].getLeadingTrivia();
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+        });
+
+
+        it('gets leading trivia from namespaces', () => {
+            let { statements } = parse(`
+                ' Description of interface
+                namespace Nested.Name.Space
+
+                end  namespace
+            `, ParseMode.BrighterScript);
+            const nameSpaceStatement = statements.filter(isNamespaceStatement)[0];
+
+            // namespace Nested.Name.Space
+            let trivia = nameSpaceStatement.getLeadingTrivia();
+            expect(trivia.length).to.be.greaterThan(0);
+            expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+        });
     });
 });
 

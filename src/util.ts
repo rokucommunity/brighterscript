@@ -1374,6 +1374,10 @@ export class Util {
     }
 
 
+    public concatAnnotationLeadingTrivia(stmt: Statement, otherTrivia: Token[]): Token[] {
+        return [...(stmt.annotations?.map(anno => anno.getLeadingTrivia()).flat() ?? []), ...otherTrivia];
+    }
+
     /**
      * Create a SourceNode that maps every line to itself. Useful for creating maps for files
      * that haven't changed at all, but we still need the map

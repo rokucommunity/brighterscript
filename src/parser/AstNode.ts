@@ -10,6 +10,7 @@ import type { AnnotationExpression } from './Expression';
 import util from '../util';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
+import type { Token } from '../lexer/Token';
 
 /**
  * A BrightScript AST node
@@ -141,6 +142,9 @@ export abstract class AstNode {
         }
     }
 
+    public getLeadingTrivia(): Token[] {
+        return [];
+    }
 }
 
 export abstract class Statement extends AstNode {
