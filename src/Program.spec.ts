@@ -1,5 +1,4 @@
 import { assert, expect } from './chai-config.spec';
-import * as path from 'path';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
@@ -2969,7 +2968,6 @@ describe('Program', () => {
     });
 
     describe('getManifest', () => {
-        const manifestPath = './test/manifest';
         beforeEach(() => {
             fsExtra.emptyDirSync(tempDir);
             fsExtra.writeFileSync(`${tempDir}/manifest`, trim`
