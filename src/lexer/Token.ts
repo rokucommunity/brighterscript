@@ -17,6 +17,11 @@ export interface Token {
      * Any leading whitespace found prior to this token. Excludes newline characters.
      */
     leadingWhitespace?: string;
+
+    /**
+     * Any tokens starting on the next line of the previous token, up to the start of this token
+     */
+    leadingTrivia: Token[];
 }
 
 /**
