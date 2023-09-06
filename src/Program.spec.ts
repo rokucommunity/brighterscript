@@ -2966,4 +2966,92 @@ describe('Program', () => {
             ]);
         });
     });
+
+    describe('getManifest', () => {
+        beforeEach(() => {
+            fsExtra.emptyDirSync(tempDir);
+            fsExtra.writeFileSync(`${tempDir}/manifest`, trim`
+                # Channel Details
+                title=sample manifest
+                major_version=2
+                minor_version=0
+                build_version=0
+                supports_input_launch=1
+                bs_const=DEBUG=false
+            `);
+            program.options = {
+                rootDir: tempDir
+            };
+        });
+
+        afterEach(() => {
+            fsExtra.emptyDirSync(tempDir);
+            program.dispose();
+        });
+
+        it('loads the manifest', () => {
+            let manifest = program.getManifest();
+            testCommonManifestValues(manifest);
+            expect(manifest.get('bs_const')).to.equal('DEBUG=false');
+        });
+
+        it('adds a const to the manifest', () => {
+            program.options.manifest = {
+                // eslint-disable-next-line camelcase
+                bs_const: {
+                    NEW_VALUE: false
+                }
+            };
+            let manifest = program.getManifest();
+            testCommonManifestValues(manifest);
+            expect(manifest.get('bs_const')).to.equal('DEBUG=false;NEW_VALUE=false');
+        });
+
+        it('changes a const in the manifest', () => {
+            program.options.manifest = {
+                // eslint-disable-next-line camelcase
+                bs_const: {
+                    DEBUG: true
+                }
+            };
+            let manifest = program.getManifest();
+            testCommonManifestValues(manifest);
+            expect(manifest.get('bs_const')).to.equal('DEBUG=true');
+        });
+
+        it('removes a const in the manifest', () => {
+            program.options.manifest = {
+                // eslint-disable-next-line camelcase
+                bs_const: {
+                    DEBUG: null
+                }
+            };
+            let manifest = program.getManifest();
+            testCommonManifestValues(manifest);
+            expect(manifest.get('bs_const')).to.equal('');
+        });
+
+        it('handles no consts in the manifest', () => {
+            fsExtra.emptyDirSync(tempDir);
+            fsExtra.writeFileSync(`${tempDir}/manifest`, trim`
+                # Channel Details
+                title=sample manifest
+                major_version=2
+                minor_version=0
+                build_version=0
+                supports_input_launch=1
+            `);
+            let manifest = program.getManifest();
+            testCommonManifestValues(manifest);
+            expect(manifest.get('bs_const')).to.equal('');
+        });
+
+        function testCommonManifestValues(manifest: Map<string, string>) {
+            expect(manifest.get('title')).to.equal('sample manifest');
+            expect(manifest.get('major_version')).to.equal('2');
+            expect(manifest.get('minor_version')).to.equal('0');
+            expect(manifest.get('build_version')).to.equal('0');
+            expect(manifest.get('supports_input_launch')).to.equal('1');
+        }
+    });
 });
