@@ -2,7 +2,7 @@
 
 A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
-[![build status](https://img.shields.io/github/workflow/status/rokucommunity/brighterscript/build.svg?logo=github)](https://github.com/rokucommunity/brighterscript/actions?query=workflow%3Abuild)
+[![build status](https://img.shields.io/github/actions/workflow/status/rokucommunity/brighterscript/build.yml?branch=master&logo=github)](https://github.com/rokucommunity/brighterscript/actions?query=branch%3Amaster+workflow%3Abuild)
 [![coverage status](https://img.shields.io/coveralls/github/rokucommunity/brighterscript?logo=coveralls)](https://coveralls.io/github/rokucommunity/brighterscript?branch=master)
 [![monthly downloads](https://img.shields.io/npm/dm/brighterscript.svg?sanitize=true&logo=npm&logoColor=)](https://npmcharts.com/compare/brighterscript?minimal=true)
 [![npm version](https://img.shields.io/npm/v/brighterscript.svg?logo=npm)](https://www.npmjs.com/package/brighterscript)
@@ -250,6 +250,12 @@ Type: `boolean`
 
 Prevent the staging folder from being deleted after creating the package. Defaults to `false`, meaning that the folder is deleted every time.
 
+#### `removeParameterTypes`
+
+Type: `boolean`
+
+If true, removes the explicit type to function's parameters and return (i.e. the `as type` syntax); otherwise keep this information.
+
 #### `files`
 
 Type:
@@ -469,6 +475,7 @@ A list of filters used to hide diagnostics.
    - A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed.
    - A `number` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project.
    - An object can also be provided to filter specific diagnostic codes for a file pattern. For example,
+
         ```jsonc
         "diagnosticFilters": [{
             "src": "vendor/**/*",
@@ -479,6 +486,19 @@ A list of filters used to hide diagnostics.
 Defaults to `undefined`.
 
 If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify `diagnosticFilters`, the parent bsconfig's `diagnosticFilters` field will be completely overwritten.
+
+#### `diagnosticSeverityOverrides`
+
+Type: `Record<string | number, 'hint' | 'info' | 'warn' | 'error'>`
+
+A map of error codes and severity levels that will override diagnostics' severity. When a diagnostic generator doesn't offer enough control on an error's severity, this is a tool to work around blocking errors, or raise the level of other errors.
+
+      ```jsonc
+      "diagnosticSeverityOverrides": {
+        "1011": "error",       //raise a warning to an error
+        "LINT1001": "warn" //oops we have lots of those to fix... later
+      }
+      ```
 
 #### `diagnosticLevel`
 
@@ -519,6 +539,16 @@ If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify a
 Type: `boolean`
 
 Allow BrighterScript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
+
+#### `bslibDestinationDir`
+
+Type: `string`
+
+Override the destination directory for the bslib.brs file.  Use this if you want
+to customize where the bslib.brs file is located in the staging directory.  Note
+that using a location outside of `source` will break scripts inside `source`
+that depend on bslib.brs.  Defaults to `source`.
+
 
 ## Ignore errors and warnings on a per-line basis
 In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:

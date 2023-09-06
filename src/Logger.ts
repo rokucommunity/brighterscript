@@ -18,7 +18,10 @@ export class Logger {
      */
     private indent = '';
 
-    constructor(logLevel?: LogLevel) {
+    constructor(
+        logLevel?: LogLevel,
+        public prefix?: string
+    ) {
         this.logLevel = logLevel;
     }
 
@@ -34,7 +37,7 @@ export class Logger {
     }
     private _logLevel = LogLevel.log;
 
-    private getTimestamp() {
+    public getTimestamp() {
         return '[' + chalk.grey(moment().format(`hh:mm:ss:SSSS A`)) + ']';
     }
 
@@ -51,7 +54,15 @@ export class Logger {
             }
             finalArgs.push(arg);
         }
-        method.call(console, this.getTimestamp(), this.indent, ...finalArgs);
+        const allArgs = [
+            this.getTimestamp()
+        ];
+        if (this.prefix) {
+            allArgs.push(this.prefix);
+        }
+        allArgs.push(this.indent);
+
+        method.call(console, ...allArgs, ...finalArgs);
         if (Logger.emitter.listenerCount('log') > 0) {
             Logger.emitter.emit('log', finalArgs.join(' '));
         }

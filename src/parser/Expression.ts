@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -18,6 +18,7 @@ import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
 import { Expression } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
+import { SourceNode } from 'source-map';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -61,7 +62,8 @@ export class CallExpression extends Expression {
          */
         readonly openingParen: Token,
         readonly closingParen: Token,
-        readonly args: Expression[]
+        readonly args: Expression[],
+        unused?: any
     ) {
         super();
         this.range = util.createBoundingRange(this.callee, this.openingParen, ...args, this.closingParen);
@@ -194,9 +196,13 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      * and ending with the last n' in 'end function' or 'b' in 'end sub'
      */
     public get range() {
-        return util.createRangeFromPositions(
-            (this.functionType ?? this.leftParen).range.start,
-            (this.end ?? this.body ?? this.returnTypeToken ?? this.asToken ?? this.rightParen).range.end
+        return util.createBoundingRange(
+            this.functionType, this.leftParen,
+            ...this.parameters,
+            this.rightParen,
+            this.asToken,
+            this.returnTypeToken,
+            this.end
         );
     }
 
@@ -232,7 +238,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             state.transpileToken(this.rightParen)
         );
         //as [Type]
-        if (this.asToken) {
+        if (this.asToken && !state.options.removeParameterTypes) {
             results.push(
                 ' ',
                 //as
@@ -257,8 +263,37 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return results;
     }
 
-    getTypedef(state: BrsTranspileState, name?: Identifier) {
-        return this.transpile(state, name, false);
+    getTypedef(state: BrsTranspileState) {
+        let results = [
+            new SourceNode(1, 0, null, [
+                //'function'|'sub'
+                this.functionType?.text,
+                //functionName?
+                ...(isFunctionStatement(this.parent) || isMethodStatement(this.parent) ? [' ', this.parent.name?.text ?? ''] : []),
+                //leftParen
+                '(',
+                //parameters
+                ...(
+                    this.parameters?.map((param, i) => ([
+                        //separating comma
+                        i > 0 ? ', ' : '',
+                        ...param.getTypedef(state)
+                    ])) ?? []
+                ) as any,
+                //right paren
+                ')',
+                //as <ReturnType>
+                ...(this.asToken ? [
+                    ' as ',
+                    this.returnTypeToken?.text
+                ] : []),
+                '\n',
+                state.indent(),
+                //'end sub'|'end function'
+                this.end.text
+            ])
+        ];
+        return results;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -300,10 +335,12 @@ export class FunctionParameterExpression extends Expression {
     public type: BscType;
 
     public get range(): Range {
-        return {
-            start: this.name.range.start,
-            end: this.typeToken ? this.typeToken.range.end : this.name.range.end
-        };
+        return util.createBoundingRange(
+            this.name,
+            this.asToken,
+            this.typeToken,
+            this.defaultValue
+        );
     }
 
     public transpile(state: BrsTranspileState) {
@@ -317,7 +354,7 @@ export class FunctionParameterExpression extends Expression {
             result.push(this.defaultValue.transpile(state));
         }
         //type declaration
-        if (this.asToken) {
+        if (this.asToken && !state.options.removeParameterTypes) {
             result.push(' ');
             result.push(state.transpileToken(this.asToken));
             result.push(' ');
@@ -325,6 +362,23 @@ export class FunctionParameterExpression extends Expression {
         }
 
         return result;
+    }
+
+    public getTypedef(state: BrsTranspileState): TranspileResult {
+        return [
+            //name
+            this.name.text,
+            //default value
+            ...(this.defaultValue ? [
+                ' = ',
+                ...this.defaultValue.transpile(state)
+            ] : []),
+            //type declaration
+            ...(this.asToken ? [
+                ' as ',
+                this.typeToken?.text
+            ] : [])
+        ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -394,7 +448,7 @@ export class DottedGetExpression extends Expression {
         readonly dot: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.obj.range.start, this.name.range.end);
+        this.range = util.createBoundingRange(this.obj, this.dot, this.name);
     }
 
     public readonly range: Range;
@@ -430,7 +484,7 @@ export class XmlAttributeGetExpression extends Expression {
         readonly at: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.obj.range.start, this.name.range.end);
+        this.range = util.createBoundingRange(this.obj, this.at, this.name);
     }
 
     public readonly range: Range;
@@ -494,7 +548,7 @@ export class GroupingExpression extends Expression {
         public expression: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.tokens.left.range.start, this.tokens.right.range.end);
+        this.range = util.createBoundingRange(this.tokens.left, this.expression, this.tokens.right);
     }
 
     public readonly range: Range;
@@ -657,7 +711,7 @@ export class AAMemberExpression extends Expression {
         public value: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(keyToken.range.start, this.value.range.end);
+        this.range = util.createBoundingRange(this.keyToken, this.colonToken, this.value);
     }
 
     public range: Range;
@@ -769,7 +823,7 @@ export class UnaryExpression extends Expression {
         public right: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.operator.range.start, this.right.range.end);
+        this.range = util.createBoundingRange(this.operator, this.right);
     }
 
     public readonly range: Range;
@@ -794,7 +848,7 @@ export class VariableExpression extends Expression {
         readonly name: Identifier
     ) {
         super();
-        this.range = this.name.range;
+        this.range = this.name?.range;
     }
 
     public readonly range: Range;
@@ -835,7 +889,7 @@ export class SourceLiteralExpression extends Expression {
         readonly token: Token
     ) {
         super();
-        this.range = token.range;
+        this.range = token?.range;
     }
 
     public readonly range: Range;
@@ -917,7 +971,7 @@ export class NewExpression extends Expression {
         readonly call: CallExpression
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.newKeyword.range.start, this.call.range.end);
+        this.range = util.createBoundingRange(this.newKeyword, this.call);
     }
 
     /**
@@ -959,9 +1013,13 @@ export class CallfuncExpression extends Expression {
         readonly closingParen: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            callee.range.start,
-            (closingParen ?? args[args.length - 1] ?? openingParen ?? methodName ?? operator).range.end
+        this.range = util.createBoundingRange(
+            callee,
+            operator,
+            methodName,
+            openingParen,
+            ...args,
+            closingParen
         );
     }
 
@@ -1022,9 +1080,8 @@ export class TemplateStringQuasiExpression extends Expression {
         readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.expressions[0].range.start,
-            this.expressions[this.expressions.length - 1].range.end
+        this.range = util.createBoundingRange(
+            ...expressions
         );
     }
     readonly range: Range;
@@ -1062,9 +1119,11 @@ export class TemplateStringExpression extends Expression {
         readonly closingBacktick: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            quasis[0].range.start,
-            quasis[quasis.length - 1].range.end
+        this.range = util.createBoundingRange(
+            openingBacktick,
+            quasis[0],
+            quasis[quasis.length - 1],
+            closingBacktick
         );
     }
 
@@ -1074,7 +1133,7 @@ export class TemplateStringExpression extends Expression {
         if (this.quasis.length === 1 && this.expressions.length === 0) {
             return this.quasis[0].transpile(state);
         }
-        let result = [];
+        let result = ['('];
         let plus = '';
         //helper function to figure out when to include the plus
         function add(...items) {
@@ -1117,6 +1176,8 @@ export class TemplateStringExpression extends Expression {
                 }
             }
         }
+        //the expression should be wrapped in parens so it can be used line a single expression at runtime
+        result.push(')');
 
         return result;
     }
@@ -1145,9 +1206,12 @@ export class TaggedTemplateStringExpression extends Expression {
         readonly closingBacktick: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            quasis[0].range.start,
-            quasis[quasis.length - 1].range.end
+        this.range = util.createBoundingRange(
+            tagName,
+            openingBacktick,
+            quasis[0],
+            quasis[quasis.length - 1],
+            closingBacktick
         );
     }
 
@@ -1217,9 +1281,9 @@ export class AnnotationExpression extends Expression {
     ) {
         super();
         this.name = nameToken.text;
-        this.range = util.createRangeFromPositions(
-            atToken.range.start,
-            nameToken.range.end
+        this.range = util.createBoundingRange(
+            atToken,
+            nameToken
         );
     }
 
@@ -1263,9 +1327,12 @@ export class TernaryExpression extends Expression {
         readonly alternate?: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            test.range.start,
-            (alternate ?? colonToken ?? consequent ?? questionMarkToken ?? test).range.end
+        this.range = util.createBoundingRange(
+            test,
+            questionMarkToken,
+            consequent,
+            colonToken,
+            alternate
         );
     }
 
@@ -1346,9 +1413,10 @@ export class NullCoalescingExpression extends Expression {
         public alternate: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            consequent.range.start,
-            (alternate ?? questionQuestionToken ?? consequent).range.end
+        this.range = util.createBoundingRange(
+            consequent,
+            questionQuestionToken,
+            alternate
         );
     }
     public readonly range: Range;
@@ -1431,7 +1499,7 @@ export class RegexLiteralExpression extends Expression {
     }
 
     public get range() {
-        return this.tokens.regexLiteral.range;
+        return this.tokens?.regexLiteral?.range;
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {

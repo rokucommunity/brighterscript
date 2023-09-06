@@ -16,7 +16,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
+import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
 import { ImportStatement } from '../parser/Statement';
@@ -34,6 +34,7 @@ describe('BrsFile', () => {
     let destPath = 'source/main.brs';
     let file: BrsFile;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
+    let testGetTypedef = getTestGetTypedef(() => [program, rootDir]);
 
     beforeEach(() => {
         fsExtra.emptyDirSync(tempDir);
@@ -66,6 +67,37 @@ describe('BrsFile', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+    });
+
+    it('flags namespaces used as variables', () => {
+        program.setFile('source/main.bs', `
+            sub main()
+                alpha.beta.charlie.test()
+                print alpha
+                print alpha.beta
+                print alpha.beta.charlie
+            end sub
+
+            namespace alpha
+                namespace beta
+                    namespace charlie
+                        sub test()
+                        end sub
+                    end namespace
+                end namespace
+            end namespace
+        `);
+        program.validate();
+        expectDiagnostics(program, [{
+            ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
+            range: util.createRange(3, 22, 3, 27)
+        }, {
+            ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
+            range: util.createRange(4, 22, 4, 32)
+        }, {
+            ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
+            range: util.createRange(5, 22, 5, 40)
+        }]);
     });
 
     it('supports the third parameter in CreateObject', () => {
@@ -1980,14 +2012,14 @@ describe('BrsFile', () => {
                 ' The main function
                 '
                 sub main()
-                    log("hello")
+                    writeToLog("hello")
                 end sub
 
                 '
                 ' Prints a message to the log.
                 ' Works with *markdown* **content**
                 '
-                sub log(message as string)
+                sub writeToLog(message as string)
                     print message
                 end sub
             `);
@@ -1997,7 +2029,7 @@ describe('BrsFile', () => {
                 program.getHover(file.srcPath, Position.create(5, 22))[0].contents
             ).to.equal([
                 '```brightscript',
-                'sub log(message as string) as void',
+                'sub writeToLog(message as string) as void',
                 '```',
                 '***',
                 '',
@@ -2297,6 +2329,30 @@ describe('BrsFile', () => {
         it('keeps function parameter types in proper order', () => {
             testTranspile(`
                 function CreateTestStatistic(name as string, result = "Success" as string, time = 0 as integer, errorCode = 0 as integer, errorMessage = "" as string) as object
+                end function
+            `);
+        });
+
+        it('discard parameter types when removeParameterTypes is true', () => {
+            program.options.removeParameterTypes = true;
+            testTranspile(`
+                sub one(a as integer, b = "" as string, c = invalid as dynamic)
+                end sub
+            `, `
+                sub one(a, b = "", c = invalid)
+                end sub
+            `);
+        });
+
+        it('discard return type when removeParameterTypes is true', () => {
+            program.options.removeParameterTypes = true;
+            testTranspile(`
+                function one() as string
+                    return ""
+                end function
+            `, `
+                function one()
+                    return ""
                 end function
             `);
         });
@@ -2963,6 +3019,32 @@ describe('BrsFile', () => {
     });
 
     describe('typedef', () => {
+        it('includes enum and interface types', () => {
+            testGetTypedef(`
+                interface Foo
+                    field as string
+                end interface
+
+                enum Bar
+                    value
+                end enum
+
+                function baz(parameter as Foo) as Bar
+                    return Bar.value
+                end function
+            `, `
+                interface Foo
+                    field as string
+                end interface
+
+                enum Bar
+                    value
+                end enum
+                function baz(parameter as Foo) as Bar
+                end function
+            `);
+        });
+
         it('sets typedef path properly', () => {
             expect((program.setFile<BrsFile>('source/main1.brs', '')).typedefKey).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
             expect((program.setFile<BrsFile>('source/main2.d.bs', '')).typedefKey).to.equal(undefined);
@@ -3354,7 +3436,7 @@ describe('BrsFile', () => {
                 util.loadPlugins(tempDir, [
                     s`${tempDir}/plugins/${pluginFileName}`
                 ]),
-                new Logger()
+                { logger: new Logger() }
             );
             const file = program.setFile<any>('source/MAIN.brs', '');
             expect(file._customProp).to.exist;
@@ -3365,7 +3447,7 @@ describe('BrsFile', () => {
                 util.loadPlugins(tempDir, [
                     `./plugins/${pluginFileName}`
                 ]),
-                new Logger()
+                { logger: new Logger() }
             );
             const file = program.setFile<any>('source/MAIN.brs', '');
             expect(file._customProp).to.exist;

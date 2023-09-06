@@ -696,7 +696,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     detectedTooDeepFileSource: (numberOfParentDirectories: number) => ({
-        message: `Expected directory depth no larger than 7, but found ${numberOfParentDirectories}.`,
+        message: `Expected directory depth no larger than 7, but found ${numberOfParentDirectories}`,
         code: 1134,
         severity: DiagnosticSeverity.Error
     }),
@@ -708,6 +708,21 @@ export let DiagnosticMessages = {
     keywordMustBeDeclaredAtNamespaceLevel: (keyword: string) => ({
         message: `${keyword} must be declared at the root level or within a namespace`,
         code: 1136,
+        severity: DiagnosticSeverity.Error
+    }),
+    itemCannotBeUsedAsVariable: (itemType: string) => ({
+        message: `${itemType} cannot be used as a variable`,
+        code: 1137,
+        severity: DiagnosticSeverity.Error
+    }),
+    callfuncHasToManyArgs: (numberOfArgs: number) => ({
+        message: `You can not have more than 5 arguments in a callFunc. ${numberOfArgs} found.`,
+        code: 1138,
+        severity: DiagnosticSeverity.Error
+    }),
+    noOptionalChainingInLeftHandSideOfAssignment: () => ({
+        message: `Optional chaining may not be used in the left-hand side of an assignment`,
+        code: 1139,
         severity: DiagnosticSeverity.Error
     })
 };

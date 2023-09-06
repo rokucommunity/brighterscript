@@ -7,6 +7,7 @@ import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { tempDir, rootDir } from './testHelpers.spec';
+import { Program } from './Program';
 
 const sinon = createSandbox();
 
@@ -35,6 +36,31 @@ describe('util', () => {
         it('retains original drive casing for windows', () => {
             expect(util.uriToPath(`file:///C:${path.sep}something`)).to.equal(`C:${path.sep}something`);
             expect(util.uriToPath(`file:///c:${path.sep}something`)).to.equal(`c:${path.sep}something`);
+        });
+    });
+
+    describe('diagnosticIsSuppressed', () => {
+        it('does not crash when diagnostic is missing location information', () => {
+            const program = new Program({});
+            const file = program.setFile('source/main.brs', '');
+            const diagnostic = {
+                file: file,
+                message: 'crash',
+                //important part of the test. range must be missing
+                range: undefined
+            };
+
+            file.commentFlags.push({
+                affectedRange: util.createRange(1, 2, 3, 4),
+                codes: [1, 2, 3],
+                file: file,
+                range: util.createRange(1, 2, 3, 4)
+            });
+            file.diagnostics.push(diagnostic);
+
+            util.diagnosticIsSuppressed(diagnostic);
+
+            //test passes if there's no crash
         });
     });
 
@@ -323,6 +349,16 @@ describe('util', () => {
             let config = util.normalizeAndResolveConfig({ watch: true });
             expect(config.watch).to.be.true;
         });
+
+        it('sets default value for bslibDestinationDir', () => {
+            expect(util.normalizeConfig(<any>{ }).bslibDestinationDir).to.equal('source');
+        });
+
+        it('strips leading and/or trailing slashes from bslibDestinationDir', () => {
+            ['source/opt', '/source/opt', 'source/opt/', '/source/opt/'].forEach(input => {
+                expect(util.normalizeConfig(<any>{ bslibDestinationDir: input }).bslibDestinationDir).to.equal('source/opt');
+            });
+        });
     });
 
     describe('areArraysEqual', () => {
@@ -405,7 +441,16 @@ describe('util', () => {
         });
     });
 
-    describe('compareRangeToPosition', () => {
+    describe('comparePositionToRange', () => {
+        it('does not crash on undefined props', () => {
+            expect(
+                util.comparePositionToRange(null, util.createRange(0, 0, 0, 0))
+            ).to.eql(0);
+            expect(
+                util.comparePositionToRange(util.createPosition(1, 1), null)
+            ).to.eql(0);
+        });
+
         it('correctly compares positions to ranges with one line range line', () => {
             let range = Range.create(1, 10, 1, 15);
             expect(util.comparePositionToRange(Position.create(0, 13), range)).to.equal(-1);
@@ -521,9 +566,28 @@ describe('util', () => {
                 )
             ).not.to.be.null;
         });
+
+        it('copies from local bslib dependency to optionally specified destination directory', async () => {
+            await util.copyBslibToStaging(tempDir, 'source/opt');
+            expect(fsExtra.pathExistsSync(`${tempDir}/source/opt/bslib.brs`)).to.be.true;
+            expect(
+                /^function bslib_toString\(/mg.exec(
+                    fsExtra.readFileSync(`${tempDir}/source/opt/bslib.brs`).toString()
+                )
+            ).not.to.be.null;
+        });
     });
 
     describe('rangesIntersect', () => {
+        it('does not crash on undefined range', () => {
+            expect(
+                util.rangesIntersect(null, util.createRange(0, 0, 0, 0))
+            ).to.be.false;
+            expect(
+                util.rangesIntersect(util.createRange(0, 0, 0, 0), null)
+            ).to.be.false;
+        });
+
         it('does not match when ranges do not touch (a < b)', () => {
             // AA BB
             expect(util.rangesIntersectOrTouch(
@@ -614,6 +678,15 @@ describe('util', () => {
     });
 
     describe('rangesIntersectOrTouch', () => {
+        it('does not crash on undefined range', () => {
+            expect(
+                util.rangesIntersectOrTouch(null, util.createRange(0, 0, 0, 0))
+            ).to.be.false;
+            expect(
+                util.rangesIntersectOrTouch(util.createRange(0, 0, 0, 0), null)
+            ).to.be.false;
+        });
+
         it('does not match when ranges do not touch (a < b)', () => {
             // AA BB
             expect(util.rangesIntersectOrTouch(

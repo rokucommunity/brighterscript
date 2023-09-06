@@ -46,6 +46,8 @@ import { KeyedThrottler } from './KeyedThrottler';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { isBrsFile } from './astUtils/reflection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
+import type { BusyStatus } from './BusyStatusTracker';
+import { BusyStatusTracker } from './BusyStatusTracker';
 
 export class LanguageServer {
     private connection = undefined as Connection;
@@ -96,11 +98,18 @@ export class LanguageServer {
         return this.validateThrottler.run(this.boundValidateAll);
     }
 
+    public busyStatusTracker = new BusyStatusTracker();
+
     //run the server
     public run() {
         // Create a connection for the server. The connection uses Node's IPC as a transport.
         // Also include all preview / proposed LSP features.
         this.connection = this.createConnection();
+
+        // Send the current status of the busyStatusTracker anytime it changes
+        this.busyStatusTracker.on('change', (status) => {
+            this.sendBusyStatus(status);
+        });
 
         //listen to all of the output log events and pipe them into the debug channel in the extension
         this.loggerSubscription = Logger.subscribe((text) => {
@@ -175,6 +184,18 @@ export class LanguageServer {
 
         // Listen on the connection
         this.connection.listen();
+    }
+
+    private busyStatusIndex = -1;
+    private sendBusyStatus(status: BusyStatus) {
+        this.busyStatusIndex = ++this.busyStatusIndex <= 0 ? 0 : this.busyStatusIndex;
+
+        this.connection.sendNotification(NotificationName.busyStatus, {
+            status: status,
+            timestamp: Date.now(),
+            index: this.busyStatusIndex,
+            activeRuns: [...this.busyStatusTracker.activeRuns]
+        });
     }
 
     /**
@@ -263,6 +284,7 @@ export class LanguageServer {
      * Scan the workspace for all `bsconfig.json` files. If at least one is found, then only folders who have bsconfig.json are returned.
      * If none are found, then the workspaceFolder itself is treated as a project
      */
+    @TrackBusyStatus
     private async getProjectPaths(workspaceFolder: string) {
         const excludes = (await this.getWorkspaceExcludeGlobs(workspaceFolder)).map(x => s`!${x}`);
         const files = await rokuDeploy.getFilePaths([
@@ -309,6 +331,7 @@ export class LanguageServer {
      * Handle situations where bsconfig.json files were added or removed (to elevate/lower workspaceFolder projects accordingly)
      * Leave existing projects alone if they are not affected by these changes
      */
+    @TrackBusyStatus
     private async syncProjects() {
         const workspacePaths = await this.getWorkspacePaths();
         let projectPaths = (await Promise.all(
@@ -364,6 +387,7 @@ export class LanguageServer {
      * Called when the client has finished initializing
      */
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onInitialized() {
         let projectCreatedDeferred = new Deferred();
         this.initialProjectsCreated = projectCreatedDeferred.promise;
@@ -412,7 +436,6 @@ export class LanguageServer {
             await this.initialProjectsCreated;
         }
 
-        let status: string;
         for (let project of this.getProjects()) {
             try {
                 await project.firstRunPromise;
@@ -424,7 +447,6 @@ export class LanguageServer {
                 this.sendCriticalFailure(`BrighterScript language server failed to start: \n${e.message}`);
             }
         }
-        this.connection.sendNotification('build-status', status ? status : 'success');
     }
 
     /**
@@ -484,7 +506,19 @@ export class LanguageServer {
         return undefined;
     }
 
-    private async createProject(projectPath: string, workspacePath = projectPath) {
+
+    /**
+     * A unique project counter to help distinguish log entries in lsp mode
+     */
+    private projectCounter = 0;
+
+    /**
+     * @param projectPath path to the project
+     * @param workspacePath path to the workspace in which all project should reside or are referenced by
+     * @param projectNumber an optional project number to assign to the project. Used when reloading projects that should keep the same number
+     */
+    @TrackBusyStatus
+    private async createProject(projectPath: string, workspacePath = projectPath, projectNumber?: number) {
         workspacePath ??= projectPath;
         let project = this.projects.find((x) => x.projectPath === projectPath);
         //skip this project if we already have it
@@ -493,6 +527,9 @@ export class LanguageServer {
         }
 
         let builder = new ProgramBuilder();
+        projectNumber ??= this.projectCounter++;
+        builder.logger.prefix = `[prj${projectNumber}]`;
+        builder.logger.log(`Created project #${projectNumber} for: "${projectPath}"`);
 
         //flush diagnostics every time the program finishes validating
         builder.plugins.add({
@@ -520,22 +557,12 @@ export class LanguageServer {
             configFilePath = undefined;
         }
 
-        let firstRunPromise = builder.run({
-            cwd: cwd,
-            project: configFilePath,
-            watch: false,
-            createPackage: false,
-            deploy: false,
-            copyToStaging: false,
-            showDiagnosticsInConsole: false
-        });
-        firstRunPromise.catch((err) => {
-            console.error(err);
-        });
+        const firstRunDeferred = new Deferred<any>();
 
         let newProject: Project = {
+            projectNumber: projectNumber,
             builder: builder,
-            firstRunPromise: firstRunPromise,
+            firstRunPromise: firstRunDeferred.promise,
             projectPath: projectPath,
             workspacePath: workspacePath,
             isFirstRunComplete: false,
@@ -546,22 +573,33 @@ export class LanguageServer {
 
         this.projects.push(newProject);
 
-        await firstRunPromise.then(() => {
+        try {
+            await builder.run({
+                cwd: cwd,
+                project: configFilePath,
+                watch: false,
+                createPackage: false,
+                deploy: false,
+                copyToStaging: false,
+                showDiagnosticsInConsole: false
+            });
             newProject.isFirstRunComplete = true;
             newProject.isFirstRunSuccessful = true;
-        }).catch(() => {
+            firstRunDeferred.resolve();
+        } catch (e) {
+            builder.logger.error(e);
+            firstRunDeferred.reject(e);
             newProject.isFirstRunComplete = true;
             newProject.isFirstRunSuccessful = false;
-        }).then(() => {
-            //if we found a deprecated brsconfig.json, add a diagnostic warning the user
-            if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
-                builder.addDiagnostic(configFilePath, {
-                    ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
-                    range: util.createRange(0, 0, 0, 0)
-                });
-                return this.sendDiagnostics();
-            }
-        });
+        }
+        //if we found a deprecated brsconfig.json, add a diagnostic warning the user
+        if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
+            builder.addDiagnostic(configFilePath, {
+                ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
+                range: util.createRange(0, 0, 0, 0)
+            });
+            return this.sendDiagnostics();
+        }
     }
 
     private async createStandaloneFileProject(srcPath: string) {
@@ -611,6 +649,7 @@ export class LanguageServer {
         });
 
         let newProject: Project = {
+            projectNumber: this.projectCounter++,
             builder: builder,
             firstRunPromise: firstRunPromise,
             projectPath: srcPath,
@@ -645,6 +684,7 @@ export class LanguageServer {
      * Provide a list of completion items based on the current cursor position
      */
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onCompletion(params: TextDocumentPositionParams) {
         //ensure programs are initialized
         await this.waitAllProjectFirstRuns();
@@ -681,6 +721,7 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onCodeAction(params: CodeActionParams) {
         //ensure programs are initialized
         await this.waitAllProjectFirstRuns();
@@ -732,7 +773,7 @@ export class LanguageServer {
                     this.removeProject(project);
 
                     //create a new workspace/brs program
-                    await this.createProject(project.projectPath, project.workspacePath);
+                    await this.createProject(project.projectPath, project.workspacePath, project.projectNumber);
 
                     //handle temp workspace
                 } else {
@@ -826,11 +867,10 @@ export class LanguageServer {
      * file types are watched (.brs,.bs,.xml,manifest, and any json/text/image files)
      */
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
         //ensure programs are initialized
         await this.waitAllProjectFirstRuns();
-
-        this.connection.sendNotification('build-status', 'building');
 
         let projects = this.getProjects();
 
@@ -915,7 +955,7 @@ export class LanguageServer {
                 projects.map((project) => this.handleFileChanges(project, changes))
             );
         }
-        this.connection.sendNotification('build-status', 'success');
+
     }
 
     /**
@@ -1049,6 +1089,7 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async validateTextDocument(event: TextDocumentChangeEvent<TextDocument>): Promise<void> {
         const { document } = event;
         //ensure programs are initialized
@@ -1060,8 +1101,6 @@ export class LanguageServer {
 
             //throttle file processing. first call is run immediately, and then the last call is processed.
             await this.keyedThrottler.run(filePath, () => {
-
-                this.connection.sendNotification('build-status', 'building');
 
                 let documentText = document.getText();
                 for (const project of this.getProjects()) {
@@ -1084,6 +1123,7 @@ export class LanguageServer {
         }
     }
 
+    @TrackBusyStatus
     private async validateAll() {
         try {
             //synchronize parsing for open files that were included/excluded from projects
@@ -1093,17 +1133,19 @@ export class LanguageServer {
 
             //validate all programs
             await Promise.all(
-                projects.map((x) => x.builder.program.validate())
+                projects.map((project) => {
+                    project.builder.program.validate();
+                    return project;
+                })
             );
         } catch (e: any) {
             this.connection.console.error(e);
             this.sendCriticalFailure(`Critical error validating project: ${e.message}${e.stack ?? ''}`);
         }
-
-        this.connection.sendNotification('build-status', 'success');
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     public async onWorkspaceSymbol(params: WorkspaceSymbolParams) {
         await this.waitAllProjectFirstRuns();
 
@@ -1124,6 +1166,7 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     public async onDocumentSymbol(params: DocumentSymbolParams) {
         await this.waitAllProjectFirstRuns();
 
@@ -1139,6 +1182,7 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onDefinition(params: TextDocumentPositionParams) {
         await this.waitAllProjectFirstRuns();
 
@@ -1154,6 +1198,7 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onSignatureHelp(params: SignatureHelpParams) {
         await this.waitAllProjectFirstRuns();
 
@@ -1188,6 +1233,7 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onReferences(params: ReferenceParams) {
         await this.waitAllProjectFirstRuns();
 
@@ -1203,16 +1249,23 @@ export class LanguageServer {
         return results.filter((r) => r);
     }
 
+    private onValidateSettled() {
+        return Promise.all([
+            //wait for the validator to start running (or timeout if it never did)
+            this.validateThrottler.onRunOnce(100),
+            //wait for the validator to stop running (or resolve immediately if it's already idle)
+            this.validateThrottler.onIdleOnce(true)
+        ]);
+    }
+
     @AddStackToErrorMessage
+    @TrackBusyStatus
     private async onFullSemanticTokens(params: SemanticTokensParams) {
         await this.waitAllProjectFirstRuns();
-        await Promise.all([
-            //wait for the file to settle (in case there are multiple file changes in quick succession)
-            this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true),
-            // wait for the validation to finish before providing semantic tokens. program.validate() populates and then caches AstNode.parent properties.
-            // If we don't wait, then fetching semantic tokens can cause some invalid cache
-            this.validateThrottler.onIdleOnce(false)
-        ]);
+        //wait for the file to settle (in case there are multiple file changes in quick succession)
+        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+        //wait for the validation cycle to settle
+        await this.onValidateSettled();
 
         const srcPath = util.uriToPath(params.textDocument.uri);
         for (const project of this.projects) {
@@ -1251,6 +1304,7 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    @TrackBusyStatus
     public async onExecuteCommand(params: ExecuteCommandParams) {
         await this.waitAllProjectFirstRuns();
         if (params.command === CustomCommands.TranspileFile) {
@@ -1279,6 +1333,10 @@ export class LanguageServer {
 }
 
 export interface Project {
+    /**
+     * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
+     */
+    projectNumber: number;
     firstRunPromise: Promise<any>;
     builder: ProgramBuilder;
     /**
@@ -1297,6 +1355,10 @@ export interface Project {
 
 export enum CustomCommands {
     TranspileFile = 'TranspileFile'
+}
+
+export enum NotificationName {
+    busyStatus = 'busyStatus'
 }
 
 /**
@@ -1327,5 +1389,19 @@ function AddStackToErrorMessage(target: any, propertyKey: string, descriptor: Pr
             }
             throw e;
         }
+    };
+}
+
+/**
+ * An annotation used to wrap the method in a busyStatus tracking call
+ */
+function TrackBusyStatus(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+    let originalMethod = descriptor.value;
+
+    //wrapping the original method
+    descriptor.value = function value(this: LanguageServer, ...args: any[]) {
+        return this.busyStatusTracker.run(() => {
+            return originalMethod.apply(this, args);
+        }, originalMethod.name);
     };
 }

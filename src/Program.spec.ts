@@ -188,7 +188,7 @@ describe('Program', () => {
                 beforeFileParse: beforeFileParse,
                 afterFileParse: afterFileParse,
                 afterFileValidate: afterFileValidate
-            }], new Logger());
+            }], { logger: new Logger() });
 
             //add a new source file
             program.setFile('source/main.brs', '');
@@ -314,6 +314,7 @@ describe('Program', () => {
                 DiagnosticMessages.fileNotReferencedByAnyOtherFile()
             ]);
         });
+
         it('does not throw errors on shadowed init functions in components', () => {
             program.setFile('lib.brs', `
                 function DoSomething()
@@ -1785,6 +1786,16 @@ describe('Program', () => {
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/bslib.brs`)).is.true;
     });
 
+    it('copies the bslib.brs file to optionally specified directory', async () => {
+        fsExtra.ensureDirSync(program.options.stagingDir);
+        program.options.bslibDestinationDir = 'source/opt';
+        program.validate();
+
+        await program.transpile([], program.options.stagingDir);
+
+        expect(fsExtra.pathExistsSync(s`${stagingDir}/source/opt/bslib.brs`)).is.true;
+    });
+
     describe('getTranspiledFileContents', () => {
         it('fires plugin events', async () => {
             const file = program.setFile('source/main.brs', trim`
@@ -1843,8 +1854,38 @@ describe('Program', () => {
         });
     });
 
-    describe('transpile', () => {
+    it('beforeProgramTranspile sends entries in alphabetical order', () => {
+        program.setFile('source/main.bs', trim`
+            sub main()
+                print "hello world"
+            end sub
+        `);
 
+        program.setFile('source/common.bs', trim`
+            sub getString()
+                return "test"
+            end sub
+        `);
+
+        //send the files out of order
+        const result = program['beforeProgramTranspile']([{
+            src: s`${rootDir}/source/main.bs`,
+            dest: 'source/main.bs'
+        }, {
+            src: s`${rootDir}/source/main.bs`,
+            dest: 'source/main.bs'
+        }], program.options.stagingDir);
+
+        //entries should now be in alphabetic order
+        expect(
+            result.entries.map(x => x.outputPath)
+        ).to.eql([
+            s`${stagingDir}/source/common.brs`,
+            s`${stagingDir}/source/main.brs`
+        ]);
+    });
+
+    describe('transpile', () => {
         it('detects and transpiles files added between beforeProgramTranspile and afterProgramTranspile', async () => {
             program.setFile('source/main.bs', trim`
                 sub main()
@@ -2045,6 +2086,24 @@ describe('Program', () => {
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `);
+        });
+
+        it('uses custom bslib path when specified in .xml file', async () => {
+            program.options.bslibDestinationDir = 'source/opt';
+            program.setFile('components/Component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                </component>
+            `);
+            await program.transpile([], program.options.stagingDir);
+            expect(trimMap(
+                fsExtra.readFileSync(s`${stagingDir}/components/Component1.xml`).toString()
+            )).to.eql(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/source/opt/bslib.brs" />
                 </component>
             `);
         });
@@ -2875,6 +2934,16 @@ describe('Program', () => {
             expect(plugin.onFileValidate.callCount).to.equal(1);
             expect(plugin.afterFileValidate.callCount).to.equal(1);
         });
+
+        it('emits program dispose event', () => {
+            const plugin = {
+                name: 'test',
+                beforeProgramDispose: sinon.spy()
+            };
+            program.plugins.add(plugin);
+            program.dispose();
+            expect(plugin.beforeProgramDispose.callCount).to.equal(1);
+        });
     });
 
     describe('getScopesForFile', () => {
@@ -2899,10 +2968,9 @@ describe('Program', () => {
         });
     });
 
-    describe.only('getManifest', () => {
+    describe('getManifest', () => {
         const manifestPath = './test/manifest';
         beforeEach(() => {
-            fsExtra.ensureDirSync(tempDir);
             fsExtra.emptyDirSync(tempDir);
             fsExtra.writeFileSync(`${tempDir}/manifest`, trim`
                 # Channel Details
@@ -2919,7 +2987,6 @@ describe('Program', () => {
         });
 
         afterEach(() => {
-            fsExtra.ensureDirSync(tempDir);
             fsExtra.emptyDirSync(tempDir);
             program.dispose();
         });

@@ -12,6 +12,8 @@ import PluginInterface from './PluginInterface';
 import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
 import * as requireRelative from 'require-relative';
+import { Throttler } from './Throttler';
+import { URI } from 'vscode-uri';
 
 /**
  * A runner class that handles
@@ -36,7 +38,7 @@ export class ProgramBuilder {
     private watcher: Watcher;
     public program: Program;
     public logger = new Logger();
-    public plugins: PluginInterface = new PluginInterface([], this.logger);
+    public plugins: PluginInterface = new PluginInterface([], { logger: this.logger });
     private fileResolvers = [] as FileResolver[];
 
     public addFileResolver(fileResolver: FileResolver) {
@@ -135,7 +137,7 @@ export class ProgramBuilder {
     }
 
     protected createProgram() {
-        const program = new Program(this.options, undefined, this.plugins);
+        const program = new Program(this.options, this.logger, this.plugins);
 
         this.plugins.emit('afterProgramCreate', program);
         return program;
@@ -309,8 +311,19 @@ export class ProgramBuilder {
             for (let diagnostic of sortedDiagnostics) {
                 //default the severity to error if undefined
                 let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
+                let relatedInformation = (diagnostic.relatedInformation ?? []).map(x => {
+                    let relatedInfoFilePath = URI.parse(x.location.uri).fsPath;
+                    if (!emitFullPaths) {
+                        relatedInfoFilePath = path.relative(cwd, relatedInfoFilePath);
+                    }
+                    return {
+                        filePath: relatedInfoFilePath,
+                        range: x.location.range,
+                        message: x.message
+                    };
+                });
                 //format output
-                diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic);
+                diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic, relatedInformation);
             }
         }
     }
@@ -384,49 +397,52 @@ export class ProgramBuilder {
         }
     }
 
+    private transpileThrottler = new Throttler(0);
     /**
      * Transpiles the entire program into the staging folder
      */
     public async transpile() {
-        let options = util.cwdWork(this.options.cwd, () => {
-            return rokuDeploy.getOptions({
-                ...this.options,
-                logLevel: this.options.logLevel as LogLevel,
-                outDir: util.getOutDir(this.options),
-                outFile: path.basename(this.options.outFile)
+        await this.transpileThrottler.run(async () => {
+            let options = util.cwdWork(this.options.cwd, () => {
+                return rokuDeploy.getOptions({
+                    ...this.options,
+                    logLevel: this.options.logLevel as LogLevel,
+                    outDir: util.getOutDir(this.options),
+                    outFile: path.basename(this.options.outFile)
+                });
             });
-        });
 
-        //get every file referenced by the files array
-        let fileMap = await rokuDeploy.getFilePaths(options.files, options.rootDir);
+            //get every file referenced by the files array
+            let fileMap = await rokuDeploy.getFilePaths(options.files, options.rootDir);
 
-        //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
-        let filteredFileMap = [] as FileObj[];
-        for (let fileEntry of fileMap) {
-            if (this.program.hasFile(fileEntry.src) === false) {
-                filteredFileMap.push(fileEntry);
+            //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
+            let filteredFileMap = [] as FileObj[];
+            for (let fileEntry of fileMap) {
+                if (this.program.hasFile(fileEntry.src) === false) {
+                    filteredFileMap.push(fileEntry);
+                }
             }
-        }
 
-        this.plugins.emit('beforePrepublish', this, filteredFileMap);
+            this.plugins.emit('beforePrepublish', this, filteredFileMap);
 
-        await this.logger.time(LogLevel.log, ['Copying to staging directory'], async () => {
-            //prepublish all non-program-loaded files to staging
-            await rokuDeploy.prepublishToStaging({
-                ...options,
-                files: filteredFileMap
+            await this.logger.time(LogLevel.log, ['Copying to staging directory'], async () => {
+                //prepublish all non-program-loaded files to staging
+                await rokuDeploy.prepublishToStaging({
+                    ...options,
+                    files: filteredFileMap
+                });
             });
+
+            this.plugins.emit('afterPrepublish', this, filteredFileMap);
+            this.plugins.emit('beforePublish', this, fileMap);
+
+            await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
+                //transpile any brighterscript files
+                await this.program.transpile(fileMap, options.stagingDir);
+            });
+
+            this.plugins.emit('afterPublish', this, fileMap);
         });
-
-        this.plugins.emit('afterPrepublish', this, filteredFileMap);
-        this.plugins.emit('beforePublish', this, fileMap);
-
-        await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
-            //transpile any brighterscript files
-            await this.program.transpile(fileMap, options.stagingDir);
-        });
-
-        this.plugins.emit('afterPublish', this, fileMap);
     }
 
     private async deployPackageIfEnabled() {

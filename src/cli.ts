@@ -5,6 +5,15 @@ import { ProgramBuilder } from './ProgramBuilder';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import util from './util';
 import { LanguageServer } from './LanguageServer';
+import chalk from 'chalk';
+
+import * as fsExtra from 'fs-extra';
+import * as readline from 'readline';
+import { execSync } from 'child_process';
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
 
 let options = yargs
     .usage('$0', 'BrighterScript, a superset of Roku\'s BrightScript language')
@@ -32,6 +41,7 @@ let options = yargs
     .option('source-root', { type: 'string', description: 'Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files.' })
     .option('watch', { type: 'boolean', defaultDescription: 'false', description: 'Watch input files.' })
     .option('require', { type: 'array', description: 'A list of modules to require() on startup. Useful for doing things like ts-node registration.' })
+    .option('profile', { type: 'boolean', defaultDescription: 'false', description: 'Generate a cpuprofile report during this run' })
     .option('lsp', { type: 'boolean', defaultDescription: 'false', description: 'Run brighterscript as a language server.' })
     .check(argv => {
         const diagnosticLevel = argv.diagnosticLevel as string;
@@ -48,19 +58,100 @@ let options = yargs
     })
     .argv;
 
-if (options.lsp) {
-    const server = new LanguageServer();
-    server.run();
-} else {
-    let builder = new ProgramBuilder();
-    builder.run(<any>options).then(() => {
-        //if this is a single run (i.e. not watch mode) and there are error diagnostics, return an error code
-        const hasError = !!builder.getDiagnostics().find(x => x.severity === DiagnosticSeverity.Error);
-        if (builder.options.watch === false && hasError) {
-            process.exit(1);
+async function main() {
+    try {
+        initProfiling();
+
+        if (options.lsp) {
+            const server = new LanguageServer();
+            server.run();
+        } else {
+            let builder = new ProgramBuilder();
+            await builder.run(<any>options);
+            //if this is a single run (i.e. not watch mode) and there are error diagnostics, return an error code
+            const hasError = !!builder.getDiagnostics().find(x => x.severity === DiagnosticSeverity.Error);
+            if (builder.options.watch) {
+                //watch mode is enabled. wait for user input asking to cancel
+                await askQuestion('Press <enter> to terminate the watcher\n');
+                await finalize(1, builder);
+            } else {
+                if (hasError) {
+                    await finalize(1, builder);
+                } else {
+                    await finalize(0, builder);
+                }
+            }
         }
-    }).catch((error) => {
-        console.error(error);
-        process.exit(1);
+    } catch (e) {
+        console.error(e);
+        await finalize(1);
+    }
+}
+
+function askQuestion(question) {
+    return new Promise((resolve, reject) => {
+        rl.question(question, (answer) => {
+            resolve(answer);
+        });
     });
 }
+
+const profileTitle = `bsc-profile-${Date.now()}`;
+
+let isFinalized = false;
+async function finalize(exitCode: number, builder?: ProgramBuilder) {
+    if (isFinalized) {
+        return;
+    }
+    isFinalized = true;
+    await finalizeProfiling();
+    try {
+        builder?.dispose?.();
+    } catch (e) {
+        console.error(e);
+    }
+    rl.close();
+    process.exit(exitCode);
+}
+
+let v8Profiler;
+
+function initProfiling() {
+    if (options.profile) {
+        console.log('Installing v8-profiler-next');
+        execSync('npm install v8-profiler-next@^1.9.0', {
+            stdio: 'inherit',
+            cwd: `${__dirname}/../`
+        });
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        v8Profiler = require('v8-profiler-next');
+        // set generateType 1 to generate new format for cpuprofile parsing in vscode.
+        v8Profiler.setGenerateType(1);
+        v8Profiler.startProfiling(profileTitle, true);
+    }
+}
+function finalizeProfiling() {
+    return new Promise<void>((resolve, reject) => {
+        try {
+            if (options.profile) {
+                const profileResultPath = path.join(process.cwd(), `${Date.now()}-${profileTitle}.cpuprofile`);
+                console.log(`Writing profile result to:`, chalk.green(profileResultPath));
+                const profile = v8Profiler.stopProfiling(profileTitle);
+                profile.export((error, result) => {
+                    fsExtra.writeFileSync(profileResultPath, result);
+                    profile.delete();
+                    resolve();
+                });
+            } else {
+                resolve();
+            }
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
+main().catch(e => {
+    console.error(e);
+    process.exit(1);
+});

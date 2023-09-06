@@ -28,6 +28,7 @@ import { rokuDeploy } from 'roku-deploy';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
+import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
@@ -65,7 +66,7 @@ export class Program {
     ) {
         this.options = util.normalizeConfig(options);
         this.logger = logger || new Logger(options.logLevel as LogLevel);
-        this.plugins = plugins || new PluginInterface([], this.logger);
+        this.plugins = plugins || new PluginInterface([], { logger: this.logger });
 
         //inject the bsc plugin as the first plugin in the stack.
         this.plugins.addFirst(new BscPlugin());
@@ -102,6 +103,8 @@ export class Program {
 
     private diagnosticFilterer = new DiagnosticFilterer();
 
+    private diagnosticAdjuster = new DiagnosticSeverityAdjuster();
+
     /**
      * A scope that contains all built-in global functions.
      * All scopes should directly or indirectly inherit from this scope
@@ -133,7 +136,7 @@ export class Program {
 
             //default to the embedded version
         } else {
-            return `source${path.sep}bslib.brs`;
+            return `${this.options.bslibDestinationDir}${path.sep}bslib.brs`;
         }
     }
 
@@ -156,7 +159,6 @@ export class Program {
 
     protected addScope(scope: Scope) {
         this.scopes[scope.name] = scope;
-        this.plugins.emit('afterScopeCreate', scope);
     }
 
     /**
@@ -247,7 +249,8 @@ export class Program {
         let result = [] as File[];
         for (let filePath in this.files) {
             let file = this.files[filePath];
-            if (!this.fileIsIncludedInAnyScope(file)) {
+            //is this file part of a scope
+            if (!this.getFirstScopeForFile(file)) {
                 //no scopes reference this file. add it to the list
                 result.push(file);
             }
@@ -286,6 +289,10 @@ export class Program {
                     rootDir: this.options.rootDir
                 }, diagnostics);
                 return finalDiagnostics;
+            });
+
+            this.logger.time(LogLevel.debug, ['adjust diagnostics severity'], () => {
+                this.diagnosticAdjuster.adjust(this.options, diagnostics);
             });
 
             this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
@@ -466,6 +473,8 @@ export class Program {
                 //register this compoent now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
 
+                //notify plugins that the scope is created and the component is registered
+                this.plugins.emit('afterScopeCreate', scope);
             } else {
                 //TODO do we actually need to implement this? Figure out how to handle img paths
                 // let genericFile = this.files[srcPath] = <any>{
@@ -553,6 +562,7 @@ export class Program {
             const sourceScope = new Scope('source', this, 'scope:source');
             sourceScope.attachDependencyGraph(this.dependencyGraph);
             this.addScope(sourceScope);
+            this.plugins.emit('afterScopeCreate', sourceScope);
         }
     }
 
@@ -655,18 +665,6 @@ export class Program {
 
             //validate every file
             for (const file of Object.values(this.files)) {
-
-                //find any files NOT loaded into a scope
-                if (!this.fileIsIncludedInAnyScope(file)) {
-                    this.logger.debug('Program.validate(): fileNotReferenced by any scope', () => chalk.green(file?.pkgPath));
-                    //the file is not loaded in any scope
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.fileNotReferencedByAnyOtherFile(),
-                        file: file,
-                        range: util.createRange(0, 0, 0, Number.MAX_VALUE)
-                    });
-                }
-
                 //for every unvalidated file, validate it
                 if (!file.isValidated) {
                     this.plugins.emit('beforeFileValidate', {
@@ -686,7 +684,6 @@ export class Program {
                     this.plugins.emit('afterFileValidate', file);
                 }
             }
-
 
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
                 for (let scopeName in this.scopes) {
@@ -743,18 +740,6 @@ export class Program {
                 }
             }
         }
-    }
-
-    /**
-     * Determine if the given file is included in at least one scope in this program
-     */
-    private fileIsIncludedInAnyScope(file: BscFile) {
-        for (let scopeName in this.scopes) {
-            if (this.scopes[scopeName].hasFile(file)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -1202,6 +1187,9 @@ export class Program {
                 file: file,
                 outputPath: getOutputPath(file)
             };
+            //sort the entries to make transpiling more deterministic
+        }).sort((a, b) => {
+            return a.file.srcPath < b.file.srcPath ? -1 : 1;
         });
 
         const astEditor = new AstEditor();
@@ -1256,7 +1244,7 @@ export class Program {
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
         if (!this.getFile(bslibAliasedRokuModulesPkgPath) && !this.getFile(s`source/bslib.brs`)) {
-            promises.push(util.copyBslibToStaging(stagingDir));
+            promises.push(util.copyBslibToStaging(stagingDir, this.options.bslibDestinationDir));
         }
         await Promise.all(promises);
 
@@ -1408,6 +1396,8 @@ export class Program {
     private _manifest: Map<string, string>;
 
     public dispose() {
+        this.plugins.emit('beforeProgramDispose', { program: this });
+
         for (let filePath in this.files) {
             this.files[filePath].dispose();
         }

@@ -1,15 +1,16 @@
-import { isBody, isClassStatement, isCommentStatement, isConstStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnFileValidateEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
-import type { Expression } from '../../parser/AstNode';
+import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, NamespaceStatement, WhileStatement } from '../../parser/Statement';
+import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
+import type { Range } from 'vscode-languageserver';
 
 export class BrsFileValidator {
     constructor(
@@ -36,13 +37,25 @@ export class BrsFileValidator {
                 //add the `super` symbol to class methods
                 node.func.body.symbolTable.addSymbol('super', undefined, DynamicType.instance);
             },
+            CallfuncExpression: (node) => {
+                if (node.args.length > 5) {
+                    this.event.file.addDiagnostic({
+                        ...DiagnosticMessages.callfuncHasToManyArgs(node.args.length),
+                        range: node.methodName.range
+                    });
+                }
+            },
             EnumStatement: (node) => {
+                this.validateDeclarationLocations(node, 'enum', () => util.createBoundingRange(node.tokens.enum, node.tokens.name));
+
                 this.validateEnumDeclaration(node);
 
                 //register this enum declaration
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);
             },
             ClassStatement: (node) => {
+                this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.classKeyword, node.name));
+
                 //register this class
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
             },
@@ -50,12 +63,18 @@ export class BrsFileValidator {
                 //register this variable
                 node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
             },
+            DottedSetStatement: (node) => {
+                this.validateNoOptionalChainingInVarSet(node, [node.obj]);
+            },
+            IndexedSetStatement: (node) => {
+                this.validateNoOptionalChainingInVarSet(node, [node.obj]);
+            },
             ForEachStatement: (node) => {
                 //register the for loop variable
                 node.parent.getSymbolTable()?.addSymbol(node.item.text, node.item.range, DynamicType.instance);
             },
             NamespaceStatement: (node) => {
-                this.validateNamespaceStatement(node);
+                this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.keyword, node.nameExpression));
 
                 node.parent.getSymbolTable().addSymbol(
                     node.name.split('.')[0],
@@ -64,6 +83,8 @@ export class BrsFileValidator {
                 );
             },
             FunctionStatement: (node) => {
+                this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.functionType, node.name));
+
                 if (node.name?.text) {
                     node.parent.getSymbolTable().addSymbol(
                         node.name.text,
@@ -97,7 +118,12 @@ export class BrsFileValidator {
                 const symbolTable = node.getSymbolTable();
                 symbolTable?.addSymbol(paramName, node.name.range, node.type);
             },
+            InterfaceStatement: (node) => {
+                this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));
+            },
             ConstStatement: (node) => {
+                this.validateDeclarationLocations(node, 'const', () => util.createBoundingRange(node.tokens.const, node.tokens.name));
+
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);
             },
             CatchStatement: (node) => {
@@ -117,6 +143,24 @@ export class BrsFileValidator {
             visitor(node, parent);
         }, {
             walkMode: WalkMode.visitAllRecursive
+        });
+    }
+
+    /**
+     * Validate that a statement is defined in one of these specific locations
+     *  - the root of the AST
+     *  - inside a namespace
+     * This is applicable to things like FunctionStatement, ClassStatement, NamespaceStatement, EnumStatement, InterfaceStatement
+     */
+    private validateDeclarationLocations(statement: Statement, keyword: string, rangeFactory?: () => Range) {
+        //if nested inside a namespace, or defined at the root of the AST (i.e. in a body that has no parent)
+        if (isNamespaceStatement(statement.parent?.parent) || (isBody(statement.parent) && !statement.parent?.parent)) {
+            return;
+        }
+        //the statement was defined in the wrong place. Flag it.
+        this.event.file.addDiagnostic({
+            ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel(keyword),
+            range: rangeFactory?.() ?? statement.range
         });
     }
 
@@ -197,22 +241,6 @@ export class BrsFileValidator {
         }
     }
 
-    private validateNamespaceStatement(stmt: NamespaceStatement) {
-        let parentNode = stmt.parent;
-
-        while (parentNode) {
-            if (!isNamespaceStatement(parentNode) && !isBody(parentNode)) {
-                this.event.file.addDiagnostic({
-                    ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('namespace'),
-                    range: stmt.range
-                });
-                break;
-            }
-
-            parentNode = parentNode.parent;
-        }
-    }
-
     /**
      * Find statements defined at the top level (or inside a namespace body) that are not allowed to be there
      */
@@ -287,14 +315,14 @@ export class BrsFileValidator {
     }
 
     private validateContinueStatement(statement: ContinueStatement) {
-        const validateLoopTypeMatch = (loopType: TokenKind) => {
+        const validateLoopTypeMatch = (expectedLoopType: TokenKind) => {
             //coerce ForEach to For
-            loopType = loopType === TokenKind.ForEach ? TokenKind.For : loopType;
-
-            if (loopType?.toLowerCase() !== statement.tokens.loopType.text?.toLowerCase()) {
+            expectedLoopType = expectedLoopType === TokenKind.ForEach ? TokenKind.For : expectedLoopType;
+            const actualLoopType = statement.tokens.loopType;
+            if (actualLoopType && expectedLoopType?.toLowerCase() !== actualLoopType.text?.toLowerCase()) {
                 this.event.file.addDiagnostic({
                     range: statement.tokens.loopType.range,
-                    ...DiagnosticMessages.expectedToken(loopType)
+                    ...DiagnosticMessages.expectedToken(expectedLoopType)
                 });
             }
         };
@@ -318,6 +346,46 @@ export class BrsFileValidator {
                 range: statement.range,
                 ...DiagnosticMessages.illegalContinueStatement()
             });
+        }
+    }
+
+    /**
+     * Validate that there are no optional chaining operators on the left-hand-side of an assignment, indexed set, or dotted get
+     */
+    private validateNoOptionalChainingInVarSet(parent: AstNode, children: AstNode[]) {
+        const nodes = [...children, parent];
+        //flag optional chaining anywhere in the left of this statement
+        while (nodes.length > 0) {
+            const node = nodes.shift();
+            if (
+                // a?.b = true or a.b?.c = true
+                ((isDottedSetStatement(node) || isDottedGetExpression(node)) && node.dot?.kind === TokenKind.QuestionDot) ||
+                // a.b?[2] = true
+                (isIndexedGetExpression(node) && (node?.questionDotToken?.kind === TokenKind.QuestionDot || node.openingSquare?.kind === TokenKind.QuestionLeftSquare)) ||
+                // a?[1] = true
+                (isIndexedSetStatement(node) && node.openingSquare?.kind === TokenKind.QuestionLeftSquare)
+            ) {
+                //try to highlight the entire left-hand-side expression if possible
+                let range: Range;
+                if (isDottedSetStatement(parent)) {
+                    range = util.createBoundingRange(parent.obj, parent.dot, parent.name);
+                } else if (isIndexedSetStatement(parent)) {
+                    range = util.createBoundingRange(parent.obj, parent.openingSquare, parent.index, parent.closingSquare);
+                } else {
+                    range = node.range;
+                }
+
+                this.event.file.addDiagnostic({
+                    ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
+                    range: range
+                });
+            }
+
+            if (node === parent) {
+                break;
+            } else {
+                nodes.push(node.parent);
+            }
         }
     }
 }

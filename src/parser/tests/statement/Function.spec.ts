@@ -1,13 +1,23 @@
 import { expect } from '../../../chai-config.spec';
-
 import { Parser } from '../../Parser';
 import { Lexer } from '../../../lexer/Lexer';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
+import { isFunctionStatement } from '../../../astUtils/reflection';
+import type { FunctionStatement } from '../../Statement';
 
 describe('parser', () => {
 
     describe('function declarations', () => {
+        it('still provides a body when end keyword is mangled/missing', () => {
+            const parser = Parser.parse(`
+                sub test()
+                end su
+            `);
+            const func = parser.ast.findChild<FunctionStatement>(isFunctionStatement);
+            expect(func.func.body).to.exist;
+        });
+
         it('recovers when using `end sub` instead of `end function`', () => {
             const { tokens } = Lexer.scan(`
                 function Main()

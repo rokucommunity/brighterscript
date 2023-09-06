@@ -26,7 +26,7 @@ import type { DottedGetExpression, VariableExpression } from './parser/Expressio
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isNewExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isFunctionParameterExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isNewExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
@@ -34,7 +34,7 @@ import type { SGAttribute } from './parser/SGTypes';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { Expression } from './parser/AstNode';
+import type { Expression, Statement } from './parser/AstNode';
 
 export class Util {
     public clearConsole() {
@@ -336,6 +336,7 @@ export class Util {
         config.retainStagingFolder = config.retainStagingDir;
         config.copyToStaging = config.copyToStaging === false ? false : true;
         config.ignoreErrorCodes = config.ignoreErrorCodes ?? [];
+        config.diagnosticSeverityOverrides = config.diagnosticSeverityOverrides ?? {};
         config.diagnosticFilters = config.diagnosticFilters ?? [];
         config.plugins = config.plugins ?? [];
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
@@ -343,10 +344,16 @@ export class Util {
         config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
         config.allowBrighterScriptInBrightScript = config.allowBrighterScriptInBrightScript === true ? true : false;
         config.emitDefinitions = config.emitDefinitions === true ? true : false;
+        config.removeParameterTypes = config.removeParameterTypes === true ? true : false;
         if (typeof config.logLevel === 'string') {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
         }
         config.logLevel = config.logLevel ?? LogLevel.log;
+        config.bslibDestinationDir = config.bslibDestinationDir ?? 'source';
+        if (config.bslibDestinationDir !== 'source') {
+            // strip leading and trailing slashes
+            config.bslibDestinationDir = config.bslibDestinationDir.replace(/^(\/*)(.*?)(\/*)$/, '$2');
+        }
         return config;
     }
 
@@ -502,6 +509,11 @@ export class Util {
      * ```
      */
     public rangesIntersect(a: Range, b: Range) {
+        //stop if the either range is misisng
+        if (!a || !b) {
+            return false;
+        }
+
         // Check if `a` is before `b`
         if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character <= b.start.character)) {
             return false;
@@ -526,6 +538,10 @@ export class Util {
      * ```
      */
     public rangesIntersectOrTouch(a: Range, b: Range) {
+        //stop if the either range is misisng
+        if (!a || !b) {
+            return false;
+        }
         // Check if `a` is before `b`
         if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character < b.start.character)) {
             return false;
@@ -549,6 +565,11 @@ export class Util {
     }
 
     public comparePositionToRange(position: Position, range: Range) {
+        //stop if the either range is misisng
+        if (!position || !range) {
+            return 0;
+        }
+
         if (position.line < range.start.line || (position.line === range.start.line && position.character < range.start.character)) {
             return -1;
         }
@@ -707,7 +728,7 @@ export class Util {
         const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
         for (let flag of diagnostic.file?.commentFlags ?? []) {
             //this diagnostic is affected by this flag
-            if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
+            if (diagnostic.range && this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
                 //if the flag acts upon this diagnostic's code
                 if (flag.codes === null || flag.codes.includes(diagnosticCode)) {
                     return true;
@@ -1207,9 +1228,9 @@ export class Util {
     /**
      * Copy the version of bslib from local node_modules to the staging folder
      */
-    public async copyBslibToStaging(stagingDir: string) {
+    public async copyBslibToStaging(stagingDir: string, bslibDestinationDir = 'source') {
         //copy bslib to the output directory
-        await fsExtra.ensureDir(standardizePath(`${stagingDir}/source`));
+        await fsExtra.ensureDir(standardizePath(`${stagingDir}/${bslibDestinationDir}`));
         // eslint-disable-next-line
         const bslib = require('@rokucommunity/bslib');
         let source = bslib.source as string;
@@ -1227,7 +1248,7 @@ export class Util {
             const position = positions[i];
             source = source.slice(0, position) + 'bslib_' + source.slice(position);
         }
-        await fsExtra.writeFile(`${stagingDir}/source/bslib.brs`, source);
+        await fsExtra.writeFile(`${stagingDir}/${bslibDestinationDir}/bslib.brs`, source);
     }
 
     /**
@@ -1346,14 +1367,16 @@ export class Util {
 
     /**
      * Gets each part of the dotted get.
-     * @param expression any ast expression
+     * @param node any ast expression
      * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
      */
-    public getAllDottedGetParts(expression: Expression): Identifier[] | undefined {
+    public getAllDottedGetParts(node: Expression | Statement): Identifier[] | undefined {
         const parts: Identifier[] = [];
-        let nextPart = expression;
+        let nextPart = node;
         while (nextPart) {
-            if (isDottedGetExpression(nextPart)) {
+            if (isAssignmentStatement(node)) {
+                return [node.name];
+            } else if (isDottedGetExpression(nextPart)) {
                 parts.push(nextPart?.name);
                 nextPart = nextPart.obj;
             } else if (isNamespacedVariableNameExpression(nextPart)) {
@@ -1361,6 +1384,8 @@ export class Util {
             } else if (isVariableExpression(nextPart)) {
                 parts.push(nextPart?.name);
                 break;
+            } else if (isFunctionParameterExpression(nextPart)) {
+                return [nextPart.name];
             } else {
                 //we found a non-DottedGet expression, so return because this whole operation is invalid.
                 return undefined;

@@ -111,6 +111,11 @@ export interface BsConfig {
     ignoreErrorCodes?: (number | string)[];
 
     /**
+     * A map of error codes with their severity level override (error|warn|info)
+     */
+    diagnosticSeverityOverrides?: Record<number | string, 'error' | 'warn' | 'info' | 'hint'>;
+
+    /**
      * Emit full paths to files when printing diagnostics to the console. Defaults to false
      */
     emitFullPaths?: boolean;
@@ -120,6 +125,12 @@ export interface BsConfig {
      * @default true
      */
     emitDefinitions?: boolean;
+
+    /**
+     * If true, removes the explicit type to function's parameters and return (i.e. the `as type` syntax); otherwise keep this information.
+     * @default false
+     */
+    removeParameterTypes?: boolean;
 
     /**
      * A list of filters used to exclude diagnostics from the output
@@ -175,4 +186,12 @@ export interface BsConfig {
      * @default false
      */
     allowBrighterScriptInBrightScript?: boolean;
+
+    /**
+     * Override the destination directory for the bslib.brs file.  Use this if
+     * you want to customize where the bslib.brs file is located in the staging
+     * directory.  Note that using a location outside of `source` will break
+     * scripts inside `source` that depend on bslib.brs.  Defaults to `source`.
+     */
+    bslibDestinationDir?: string;
 }
