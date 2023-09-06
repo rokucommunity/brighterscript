@@ -3031,6 +3031,21 @@ describe('Program', () => {
             expect(manifest.get('bs_const')).to.equal('');
         });
 
+        it('handles no consts in the manifest', () => {
+            fsExtra.emptyDirSync(tempDir);
+            fsExtra.writeFileSync(`${tempDir}/manifest`, trim`
+                # Channel Details
+                title=sample manifest
+                major_version=2
+                minor_version=0
+                build_version=0
+                supports_input_launch=1
+            `);
+            let manifest = program.getManifest();
+            testCommonManifestValues(manifest);
+            expect(manifest.get('bs_const')).to.equal('');
+        });
+
         function testCommonManifestValues(manifest: Map<string, string>) {
             expect(manifest.get('title')).to.equal('sample manifest');
             expect(manifest.get('major_version')).to.equal('2');
