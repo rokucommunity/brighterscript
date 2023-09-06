@@ -13,7 +13,7 @@ export interface BsConfig {
     project?: string;
 
     manifest?: {
-        bs_const?: Record<string, boolean|null>;
+        bs_const?: Record<string, boolean | null>;
     };
 
     /**

@@ -29,7 +29,7 @@
                     "description": "A dictionary of bs_consts to change or add to the manifest. Each entry ",
                     "type": "object",
                     "patternProperties": {
-                        "^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,6}$": {
+                        "^.+$": {
                             "type": ["boolean", "null"]
                         }
                     }
