@@ -299,6 +299,26 @@ describe('HoverProcessor', () => {
             expect(hover?.contents).to.eql([fence('namespace Name1.Name2')]);
         });
 
+        it('finds enum properly', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    up
+                    down
+                end enum
+
+                sub doWork()
+                   print Direction.up
+                end sub
+            `);
+            program.validate();
+            // print Dire|ction.up
+            let hover = program.getHover('source/main.bs', util.createPosition(7, 30))[0];
+            expect(hover?.contents).to.eql([fence('enum Direction')]);
+            // print Direction.u|p
+            hover = program.getHover('source/main.bs', util.createPosition(7, 37))[0];
+            expect(hover?.contents).to.eql([fence('Direction.up as Direction')]);
+        });
+
         it('finds types hover with comment', () => {
             program.setFile('source/main.bs', `
                 ' this is a class comment

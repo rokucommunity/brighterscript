@@ -36,6 +36,10 @@ export abstract class BscType {
         return this.memberTable.getSymbolType(name, options);
     }
 
+    getMemberTable() {
+        return this.memberTable;
+    }
+
     isResolvable(): boolean {
         return true;
     }

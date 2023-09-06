@@ -1,5 +1,5 @@
 import { SourceNode } from 'source-map';
-import { isBrsFile, isClassStatement, isInheritableType, isInterfaceStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypeExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
+import { isBrsFile, isClassStatement, isEnumStatement, isEnumType, isInheritableType, isInterfaceStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypeExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
@@ -104,9 +104,11 @@ export class HoverProcessor {
                 firstToken = extraData.definingNode.keyword;
                 exprTypeString = extraData.definingNode.getName(ParseMode.BrighterScript);
                 declarationText = firstToken?.text ?? TokenKind.Namespace;
+            } else if (isEnumStatement(extraData.definingNode)) {
+                firstToken = extraData.definingNode.tokens.enum;
+                exprTypeString = extraData.definingNode.fullName;
+                declarationText = firstToken?.text ?? TokenKind.Enum;
             }
-
-
         }
         const innerText = `${declarationText} ${exprTypeString}`.trim();
         let result = fence(innerText);
@@ -153,7 +155,8 @@ export class HoverProcessor {
                 let hoverContent = '';
                 if (useCustomTypeHover && isInheritableType(exprType)) {
                     hoverContent = this.getCustomTypeHover(exprType, extraData);
-                } else if (isNamespaceType(exprType)) {
+                } else if (isNamespaceType(exprType) ||
+                    isEnumType(expression.getType({ flags: SymbolTypeFlag.typetime }))) {
                     hoverContent = this.getCustomTypeHover(exprType, extraData);
                 } else {
                     const variableName = !isTypedFunctionType(exprType) ? `${exprNameString} as ` : '';

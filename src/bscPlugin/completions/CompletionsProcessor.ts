@@ -234,7 +234,7 @@ export class CompletionsProcessor {
                 if (type.isResolvable()) {
                     type.addBuiltInInterfaces();
                 }
-                return type?.memberTable;
+                return type?.getMemberTable();
             }
             const symbolTableToUse = expression.getSymbolTable();
             return symbolTableToUse;

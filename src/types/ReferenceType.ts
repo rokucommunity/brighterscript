@@ -112,6 +112,10 @@ export class ReferenceType extends BscType {
                         return propRefType;
                     } else if (propName === 'memberTable') {
                         return this.memberTable;
+                    } else if (propName === 'getMemberTable') {
+                        return () => {
+                            return this.memberTable;
+                        };
                     } else if (propName === 'isTypeCompatible') {
                         return (targetType: BscType) => {
                             return isDynamicType(targetType);
