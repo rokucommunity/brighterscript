@@ -628,7 +628,8 @@ export class Scope {
                             enumStatements: new Map(),
                             constStatements: new Map(),
                             statements: [],
-                            symbolTable: new SymbolTable(`Namespace Aggregate: '${loopName}'`, () => this.symbolTable)
+                            // the aggregate symbol table should have no parent. It should include just the symbols of the namespace.
+                            symbolTable: new SymbolTable(`Namespace Aggregate: '${loopName}'`)
                         });
                     }
                 }
@@ -790,7 +791,6 @@ export class Scope {
      */
     public linkSymbolTable() {
         SymbolTable.cacheVerifier.generateToken();
-
         const allNamespaces: NamespaceStatement[] = [];
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
@@ -800,7 +800,7 @@ export class Scope {
                 allNamespaces.push(...file.parser.references.namespaceStatements);
             }
         }
-
+        const aggregatesAdded = new Set<string>();
         //Add namespace aggregates to namespace member tables
         for (const namespace of allNamespaces) {
             //link each NamespaceType member table with the aggregate NamespaceLookup SymbolTable
@@ -834,9 +834,9 @@ export class Scope {
                             : new NamespaceType(nameSoFar);
                         if (previousNSType) {
                             // adding as a member of existing NS
-                            previousNSType.addMember(nsNamePart, namespace.range, currentNSType, getTypeOptions.flags);
+                            previousNSType.addMember(nsNamePart, { definingNode: namespace }, currentNSType, getTypeOptions.flags);
                         } else {
-                            symbolTable.addSymbol(nsNamePart, namespace.range, currentNSType, getTypeOptions.flags);
+                            symbolTable.addSymbol(nsNamePart, { definingNode: namespace }, currentNSType, getTypeOptions.flags);
                         }
                     } else {
                         break;
@@ -844,11 +844,15 @@ export class Scope {
                 }
 
                 // Now that the namespace type is built, add the aggregate as a sibling
+                const lowerNameSpace = nameSoFar.toLowerCase();
                 let aggregateNSSymbolTable = this.namespaceLookup.get(nameSoFar.toLowerCase()).symbolTable;
-                this.linkSymbolTableDisposables.push(
-                    currentNSType.memberTable.addSibling(aggregateNSSymbolTable)
-                );
 
+                if (!aggregatesAdded.has(lowerNameSpace)) {
+                    this.linkSymbolTableDisposables.push(
+                        currentNSType.memberTable.addSibling(aggregateNSSymbolTable)
+                    );
+                    aggregatesAdded.add(lowerNameSpace);
+                }
                 if (isFinalNamespace) {
                     this.linkSymbolTableDisposables.push(
                         namespace.getSymbolTable().addSibling(aggregateNSSymbolTable)

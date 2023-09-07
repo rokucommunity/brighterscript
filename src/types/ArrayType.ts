@@ -42,7 +42,7 @@ export class ArrayType extends BscType {
     }
 
     public toString() {
-        return `Array<${this.innerTypes.map((x) => x.toString()).join(' | ')}>`;
+        return `Array<${this.defaultType.toString()}>`;
     }
 
     public toTypeString(): string {

@@ -57,12 +57,11 @@ export class BuiltInInterfaceAdder {
                     const paramType = override?.parameterTypes?.[i] ?? this.getPrimitiveType(param.type);
                     methodFuncType.addParameter(param.name, paramType, !param.isRequired);
                 }
-                memberTable.addSymbol(method.name, null, methodFuncType, SymbolTypeFlag.runtime);
+                memberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, SymbolTypeFlag.runtime);
             }
             for (const property of ifaceData.properties ?? []) {
                 const override = overrides?.get(property.name.toLowerCase());
-
-                memberTable.addSymbol(property.name, null, override?.type ?? this.getPrimitiveType(property.type), SymbolTypeFlag.runtime);
+                memberTable.addSymbol(property.name, { description: property.description, completionPriority: 1 }, override?.type ?? this.getPrimitiveType(property.type), SymbolTypeFlag.runtime);
             }
         }
     }
@@ -135,7 +134,7 @@ export class BuiltInInterfaceAdder {
         }
         const lookupTable = this.getLookupTable();
         for (const field of builtInNode.fields) {
-            memberTable.addSymbol(field.name, null, util.getNodeFieldType(field.type, lookupTable), SymbolTypeFlag.runtime);
+            memberTable.addSymbol(field.name, { description: field.description, completionPriority: 1 }, util.getNodeFieldType(field.type, lookupTable), SymbolTypeFlag.runtime);
         }
     }
 

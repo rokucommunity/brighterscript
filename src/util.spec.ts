@@ -17,6 +17,8 @@ import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InvalidTy
 import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
 import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
+import { Parser } from './parser/Parser';
+import type { FunctionStatement } from './parser/Statement';
 
 const sinon = createSandbox();
 
@@ -1013,6 +1015,35 @@ describe('util', () => {
                 expectTypeToBe(util.unaryOperatorResultType(notToken, StringType.instance), DynamicType);
                 expectTypeToBe(util.unaryOperatorResultType(notToken, LongIntegerType.instance), LongIntegerType);
             });
+        });
+    });
+
+    describe('getTokenDocumentation', () => {
+        it('should return a string of the comment', () => {
+            const { tokens, statements } = Parser.parse(`
+                ' This is a comment.
+                ' it has two lines
+                function getOne() as integer
+                    return 1
+                end function
+            `);
+            const docs = util.getTokenDocumentation(tokens, (statements[1] as FunctionStatement).func.functionType);
+            expect(docs).to.eql('This is a comment.\nit has two lines');
+        });
+
+        it('should pay attention to @param, @return, etc. (jsdoc tags)', () => {
+            const { tokens, statements } = Parser.parse(`
+                ' Add 1 to a number
+                '
+                ' @public
+                ' @param {integer} the number to add to
+                ' @return {integer} the result
+                function addOne(num as integer) as integer
+                    return num + 1
+                end function
+            `);
+            const docs = util.getTokenDocumentation(tokens, (statements[1] as FunctionStatement).func.functionType);
+            expect(docs).to.eql('Add 1 to a number\n\n\n_@public_\n\n_@param_ {integer} the number to add to\n\n_@return_ {integer} the result');
         });
     });
 });

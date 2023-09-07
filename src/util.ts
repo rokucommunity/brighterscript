@@ -578,6 +578,57 @@ export class Util {
     }
 
     /**
+     * Combine all the documentation found before a token (i.e. comment tokens)
+     */
+    public getTokenDocumentation(tokens: Token[], token?: Token) {
+        const comments = [] as Token[];
+        const idx = tokens?.indexOf(token);
+        if (!idx || idx === -1) {
+            return undefined;
+        }
+        for (let i = idx - 1; i >= 0; i--) {
+            const token = tokens[i];
+            //skip whitespace and newline chars
+            if (token.kind === TokenKind.Comment) {
+                comments.push(token);
+            } else if (token.kind === TokenKind.Newline || token.kind === TokenKind.Whitespace) {
+                //skip these tokens
+                continue;
+
+                //any other token means there are no more comments
+            } else {
+                break;
+            }
+        }
+        if (comments.length > 0) {
+            return comments.reverse().map(x => x.text.replace(/^('|rem)/i, '').trim()).map(line => {
+                if (line.startsWith('@')) {
+                    // Handle jsdoc/brightscriptdoc tags specially
+                    // make sure they are on their own markdown line, and add italics
+                    const firstSpaceIndex = line.indexOf(' ');
+                    if (firstSpaceIndex === -1) {
+                        return `\n_${line}_`;
+                    }
+                    const firstWord = line.substring(0, firstSpaceIndex);
+                    return `\n_${firstWord}_ ${line.substring(firstSpaceIndex + 1)}`;
+                }
+                return line;
+            }).join('\n');
+        }
+    }
+
+    /**
+     * Combine all the documentation for a node - uses the AstNode's leadingTrivia property
+     */
+    public getNodeDocumentation(node: AstNode) {
+        if (!node) {
+            return;
+        }
+        const leadingTrivia = node.getLeadingTrivia();
+        return this.getTokenDocumentation(leadingTrivia, leadingTrivia[leadingTrivia.length - 1]);
+    }
+
+    /**
      * Parse an xml file and get back a javascript object containing its results
      */
     public parseXml(text: string) {

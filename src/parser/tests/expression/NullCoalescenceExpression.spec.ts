@@ -15,7 +15,7 @@ import {
     NullCoalescingExpression
 } from '../../Expression';
 import { Program } from '../../../Program';
-import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
+import { expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 
 describe('NullCoalescingExpression', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -25,28 +25,27 @@ describe('NullCoalescingExpression', () => {
     });
 
     describe('null coalescing as statements are not supported', () => {
-        it(`rejects various consequents with primitive values:`, () => {
+        it(`creates diagnostic when used as a statement`, () => {
             //test as property
-            for (const test in [
+            for (const test of [
                 'true',
                 'false',
                 'len("person") = 10',
-                'm.getResponse()',
-                'm.myZombies[3].ifFed = true'
+                'm.getResponse()'
             ]) {
 
                 let { tokens } = Lexer.scan(`${test} ?? "human"`);
                 let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-                expect(diagnostics).to.not.be.empty;
-                expect(statements).to.be.empty;
+                expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.unexpectedToken('??').code);
+                expect(statements).not.to.be.empty;
             }
         });
     });
 
-    describe('invalid coalescene - variety of test cases', () => {
-        it(`rejects various consequents with primitive values:`, () => {
+    describe('different coalescence types- variety of test cases', () => {
+        it(`accepts various consequents with primitive values:`, () => {
             //test as property
-            for (const test in [
+            for (const test of [
                 'result = true',
                 'result = false',
                 'result = len("person") = 10',
@@ -56,14 +55,15 @@ describe('NullCoalescingExpression', () => {
 
                 let { tokens } = Lexer.scan(`${test} ?? "human"`);
                 let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-                expect(diagnostics).to.not.be.empty;
-                expect(statements).to.be.empty;
+                expect(diagnostics).to.be.empty;
+                expect(statements[0]).instanceof(AssignmentStatement);
+                expect((statements[0] as AssignmentStatement).value).instanceof(NullCoalescingExpression);
             }
         });
 
-        it(`supports non-primitive alternates:`, () => {
+        it(`supports non-primitive alternates`, () => {
             //test as property
-            for (const consequent in [
+            for (const consequent of [
                 'true',
                 'false',
                 'len("person") = 10',
@@ -77,7 +77,6 @@ describe('NullCoalescingExpression', () => {
                 expectZeroDiagnostics(diagnostics);
                 expect(statements[0]).instanceof(AssignmentStatement);
                 expect((statements[0] as AssignmentStatement).value).instanceof(NullCoalescingExpression);
-
             }
         });
     });

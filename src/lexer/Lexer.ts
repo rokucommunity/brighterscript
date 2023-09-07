@@ -116,8 +116,8 @@ export class Lexer {
     }
 
     /**
-    * Pushes a token into the leadingTrivia list
-    */
+     * Pushes a token into the leadingTrivia list
+     */
     private pushTrivia(token: Token) {
         this.leadingTrivia.push(token);
     }
@@ -1045,8 +1045,8 @@ export class Lexer {
     }
 
     /**
-    * Determine if this token is a trivia token
-    */
+     * Determine if this token is a trivia token
+     */
     private isTrivia(token: Token) {
         return AllowedTriviaTokens.includes(token.kind);
     }

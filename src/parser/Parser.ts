@@ -233,7 +233,6 @@ export class Parser {
         this.pendingAnnotations = [];
 
         this.ast = this.body();
-
         //now that we've built the AST, link every node to its parent
         this.ast.link();
         return this;
@@ -1958,12 +1957,12 @@ export class Parser {
             return new ExpressionStatement(expr);
         }
 
-        //at this point, it's probably an error. However, we recover a little more gracefully by creating an assignment
+        //at this point, it's probably an error. However, we recover a little more gracefully by creating an inclosing ExpressionStatement
         this.diagnostics.push({
             ...DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression(),
             range: expressionStart.range
         });
-        throw this.lastDiagnosticAsError();
+        return new ExpressionStatement(expr);
     }
 
     private setStatement(): DottedSetStatement | IndexedSetStatement | ExpressionStatement | IncrementStatement | AssignmentStatement {
@@ -2026,7 +2025,8 @@ export class Parser {
 
         //print statements can be empty, so look for empty print conditions
         if (!values.length) {
-            let emptyStringLiteral = createStringLiteral('');
+            const endOfStatementRange = util.createRangeFromPositions(printKeyword.range.end, this.peek()?.range.end);
+            let emptyStringLiteral = createStringLiteral('', endOfStatementRange);
             values.push(emptyStringLiteral);
         }
 
@@ -2388,11 +2388,20 @@ export class Parser {
         let newToken = this.advance();
 
         let nameExpr = this.identifyingExpression();
-        let leftParen = this.consume(
+        let leftParen = this.tryConsume(
             DiagnosticMessages.unexpectedToken(this.peek().text),
             TokenKind.LeftParen,
             TokenKind.QuestionLeftParen
         );
+
+        if (!leftParen) {
+            // new expression without a following call expression
+            // wrap the name in an expression
+            const endOfStatementRange = util.createRangeFromPositions(newToken.range.end, this.peek()?.range.end);
+            const exprStmt = nameExpr ?? createStringLiteral('', endOfStatementRange);
+            return new ExpressionStatement(exprStmt);
+        }
+
         let call = this.finishCall(leftParen, nameExpr);
         //pop the call from the  callExpressions list because this is technically something else
         this.callExpressions.pop();

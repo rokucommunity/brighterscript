@@ -128,6 +128,20 @@ export abstract class AstNode {
         });
     }
 
+    /**
+     * Walk upward and return the root node
+     */
+    public getRoot() {
+        let node = this as AstNode;
+
+        while (node) {
+            if (!node.parent) {
+                return node;
+            }
+            node = node.parent;
+        }
+    }
+
     public getLeadingTrivia(): Token[] {
         return [];
     }
