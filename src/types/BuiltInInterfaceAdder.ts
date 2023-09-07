@@ -5,7 +5,7 @@ import type { TypedFunctionType } from './TypedFunctionType';
 import type { SymbolTable } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTable';
 import type { BscType } from './BscType';
-import { isArrayType, isBooleanType, isCallableType, isClassType, isComponentType, isDoubleType, isEnumMemberType, isEnumType, isFloatType, isIntegerType, isInterfaceType, isInvalidType, isLongIntegerType, isStringType } from '../astUtils/reflection';
+import { isArrayType, isBooleanType, isCallableType, isClassType, isComponentType, isDoubleType, isEnumMemberType, isFloatType, isIntegerType, isInterfaceType, isInvalidType, isLongIntegerType, isStringType } from '../astUtils/reflection';
 import type { ComponentType } from './ComponentType';
 import util from '../util';
 
