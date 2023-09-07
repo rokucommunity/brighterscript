@@ -99,7 +99,7 @@ export class BuiltInInterfaceAdder {
             return 'roAssociativeArray';
         } else if (isArrayType(theType)) {
             return 'roArray';
-        } else if (isEnumMemberType(theType) || isEnumType(theType)) {
+        } else if (isEnumMemberType(theType)) {
             return this.getMatchingRokuComponentName(theType.underlyingType);
         } else if (isInterfaceType(theType)) {
             return theType.name;
