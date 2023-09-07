@@ -39,6 +39,11 @@ import { LongIntegerType } from './types/LongIntegerType';
 import { ObjectType } from './types/ObjectType';
 import { VoidType } from './types/VoidType';
 import { FunctionType } from './types/FunctionType';
+import type { SGNodeData, BRSComponentData, BRSEventData, BRSInterfaceData } from './roku-types';
+import { nodes, components, interfaces, events } from './roku-types';
+import { ComponentType } from './types/ComponentType';
+import { InterfaceType } from './types';
+import { BuiltInInterfaceAdder } from './types/BuiltInInterfaceAdder';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
@@ -102,12 +107,36 @@ export class Program {
         (this.globalScope as any).isValidated = true;
     }
 
+
+    private recurseNodeData(nodeData: SGNodeData) {
+        if (!nodeData) {
+            return;
+        }
+        let nodeType: ComponentType;
+        if (!this.globalScope.symbolTable.hasSymbol(nodeData.name, SymbolTypeFlag.typetime)) {
+            let parentNode: ComponentType;
+            if (nodeData.extends) {
+                const parentNodeData = nodes[nodeData.extends.name.toLowerCase()];
+                try {
+                    parentNode = this.recurseNodeData(parentNodeData);
+                } catch (error) {
+                    console.log(error, nodeData);
+                }
+            }
+            nodeType = new ComponentType(nodeData.name, parentNode);
+            nodeType.addBuiltInInterfaces();
+            this.globalScope.symbolTable.addSymbol(nodeData.name, undefined, nodeType, SymbolTypeFlag.typetime);
+        } else {
+            nodeType = this.globalScope.symbolTable.getSymbolType(nodeData.name, { flags: SymbolTypeFlag.typetime }) as ComponentType;
+        }
+
+        return nodeType;
+    }
     /**
      * Do all setup required for the global symbol table.
      */
     private populateGlobalSymbolTable() {
         //Setup primitive types in global symbolTable
-        //TODO: Need to handle Array types
 
         this.globalScope.symbolTable.addSymbol('boolean', undefined, BooleanType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('double', undefined, DoubleType.instance, SymbolTypeFlag.typetime);
@@ -120,9 +149,35 @@ export class Program {
         this.globalScope.symbolTable.addSymbol('string', undefined, StringType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('void', undefined, VoidType.instance, SymbolTypeFlag.typetime);
 
+        BuiltInInterfaceAdder.getLookupTable = () => this.globalScope.symbolTable;
+
         for (let pair of globalCallableMap) {
             let [key, callable] = pair;
             this.globalScope.symbolTable.addSymbol(key, undefined, callable.type, SymbolTypeFlag.runtime);
+        }
+
+        for (const componentData of Object.values(components) as BRSComponentData[]) {
+            const nodeType = new InterfaceType(componentData.name);
+            nodeType.addBuiltInInterfaces();
+            this.globalScope.symbolTable.addSymbol(componentData.name, undefined, nodeType, SymbolTypeFlag.typetime);
+        }
+
+        for (const ifaceData of Object.values(interfaces) as BRSInterfaceData[]) {
+            const nodeType = new InterfaceType(ifaceData.name);
+            nodeType.addBuiltInInterfaces();
+            this.globalScope.symbolTable.addSymbol(ifaceData.name, undefined, nodeType, SymbolTypeFlag.typetime);
+        }
+
+        for (const eventData of Object.values(events) as BRSEventData[]) {
+            const nodeType = new InterfaceType(eventData.name);
+            nodeType.addBuiltInInterfaces();
+            this.globalScope.symbolTable.addSymbol(eventData.name, undefined, nodeType, SymbolTypeFlag.typetime);
+        }
+
+
+        for (const nodeData of Object.values(nodes) as SGNodeData[]) {
+            const nodeType = this.recurseNodeData(nodeData);
+            this.globalScope.symbolTable.addSymbol(nodeData.name, undefined, nodeType, SymbolTypeFlag.typetime);
         }
     }
 

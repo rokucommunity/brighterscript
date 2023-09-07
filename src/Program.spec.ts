@@ -12,13 +12,17 @@ import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { Logger } from './Logger';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
 import type { LiteralExpression } from './parser/Expression';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
+import { SymbolTypeFlag } from './SymbolTable';
+import { StringType } from './types/StringType';
+import { ArrayType, DynamicType, FloatType, IntegerType, InterfaceType, TypedFunctionType } from './types';
+import { ComponentType } from './types/ComponentType';
 
 let sinon = sinonImport.createSandbox();
 
@@ -2235,6 +2239,74 @@ describe('Program', () => {
             ).to.eql([
                 file.srcPath
             ]);
+        });
+    });
+
+    describe('global symbol table', () => {
+        it('adds primitves', () => {
+            const table = program.globalScope.symbolTable;
+            const opts = { flags: SymbolTypeFlag.typetime };
+            const rtOpts = { flags: SymbolTypeFlag.runtime };
+            expectTypeToBe(table.getSymbolType('string', opts), StringType);
+            expectTypeToBe(table.getSymbolType('string', opts).getMemberType('trim', rtOpts), TypedFunctionType);
+
+            expectTypeToBe(table.getSymbolType('dynamic', opts), DynamicType);
+            expectTypeToBe(table.getSymbolType('float', opts), FloatType);
+            expectTypeToBe(table.getSymbolType('integer', opts), IntegerType);
+        });
+
+        it('adds brightscript components', () => {
+            const table = program.globalScope.symbolTable;
+            const opts = { flags: SymbolTypeFlag.typetime };
+            const rtOpts = { flags: SymbolTypeFlag.runtime };
+            expectTypeToBe(table.getSymbolType('roAssociativeArray', opts), InterfaceType);
+            expectTypeToBe(table.getSymbolType('roAssociativeArray', opts).getMemberType('Lookup', rtOpts), TypedFunctionType);
+
+            expectTypeToBe(table.getSymbolType('roBitmap', opts), InterfaceType);
+            expectTypeToBe(table.getSymbolType('roBitmap', opts).getMemberType('DrawPoint', rtOpts), TypedFunctionType);
+
+            expectTypeToBe(table.getSymbolType('roRegistry', opts), InterfaceType);
+            expectTypeToBe(table.getSymbolType('roRegistry', opts).getMemberType('GetSectionList', rtOpts), TypedFunctionType);
+        });
+
+        it('adds brightscript interfaces', () => {
+            const table = program.globalScope.symbolTable;
+            const opts = { flags: SymbolTypeFlag.typetime };
+            const rtOpts = { flags: SymbolTypeFlag.runtime };
+            expectTypeToBe(table.getSymbolType('ifDeviceInfo', opts), InterfaceType);
+            expectTypeToBe(table.getSymbolType('ifDeviceInfo', opts).getMemberType('GetRandomUUID', rtOpts), TypedFunctionType);
+
+            expectTypeToBe(table.getSymbolType('ifSGNodeField', opts), InterfaceType);
+            expectTypeToBe(table.getSymbolType('ifSGNodeField', opts).getMemberType('observeField', rtOpts), TypedFunctionType);
+        });
+
+        it('adds brightscript events', () => {
+            const table = program.globalScope.symbolTable;
+            const opts = { flags: SymbolTypeFlag.typetime };
+            const rtOpts = { flags: SymbolTypeFlag.runtime };
+            expectTypeToBe(table.getSymbolType('roInputEvent', opts), InterfaceType);
+            expectTypeToBe(table.getSymbolType('roInputEvent', opts).getMemberType('GetInfo', rtOpts), TypedFunctionType);
+
+            expectTypeToBe(table.getSymbolType('roSGNodeEvent', opts), InterfaceType);
+            expectTypeToBe(table.getSymbolType('roSGNodeEvent', opts).getMemberType('getData', rtOpts), TypedFunctionType);
+        });
+
+        it('adds SceneGraph nodes', () => {
+            const table = program.globalScope.symbolTable;
+            const opts = { flags: SymbolTypeFlag.typetime };
+            const rtOpts = { flags: SymbolTypeFlag.runtime };
+            expectTypeToBe(table.getSymbolType('LayoutGroup', opts), ComponentType);
+            expectTypeToBe(table.getSymbolType('LayoutGroup', opts).getMemberType('horizAlignment', rtOpts), StringType);
+            expectTypeToBe(table.getSymbolType('LayoutGroup', opts).getMemberType('itemSpacings', rtOpts), ArrayType);
+            expectTypeToBe(table.getSymbolType('LayoutGroup', opts).getMemberType('getChildren', rtOpts), TypedFunctionType);
+            expectTypeToBe(table.getSymbolType('LayoutGroup', opts).getMemberType('createChild', rtOpts), TypedFunctionType);
+
+            expectTypeToBe(table.getSymbolType('Poster', opts), ComponentType);
+            expectTypeToBe(table.getSymbolType('Poster', opts).getMemberType('loadWidth', rtOpts), FloatType);
+            expectTypeToBe(table.getSymbolType('Poster', opts).getMemberType('loadDisplayMode', rtOpts), StringType);
+            const bmpMarginsType = table.getSymbolType('Poster', opts).getMemberType('bitmapMargins', rtOpts);
+            expectTypeToBe(bmpMarginsType, InterfaceType);
+            expect((bmpMarginsType as InterfaceType).name, 'roAssociativeArray');
         });
     });
 });

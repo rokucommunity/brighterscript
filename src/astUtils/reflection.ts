@@ -31,6 +31,7 @@ import type { InheritableType } from '../types/InheritableType';
 import { BscTypeKind } from '../types/BscTypeKind';
 import type { NamespaceType } from '../types/NamespaceType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
+import type { ComponentType } from '../types/ComponentType';
 
 // File reflection
 export function isBrsFile(file: (BscFile | File)): file is BrsFile {
@@ -294,6 +295,9 @@ export function isVoidType(value: any): value is VoidType {
 export function isClassType(value: any): value is ClassType {
     return value?.kind === BscTypeKind.ClassType;
 }
+export function isComponentType(value: any): value is ComponentType {
+    return value?.kind === BscTypeKind.ComponentType;
+}
 export function isDynamicType(value: any): value is DynamicType {
     return value?.kind === BscTypeKind.DynamicType;
 }
@@ -332,7 +336,7 @@ export function isArrayType(value: any): value is ArrayType {
 }
 
 export function isInheritableType(target): target is InheritableType {
-    return isClassType(target) || isInterfaceType(target);
+    return isClassType(target) || isInterfaceType(target) || isComponentType(target);
 }
 
 export function isCallableType(target): target is BaseFunctionType {

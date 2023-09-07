@@ -32,11 +32,13 @@ import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { AstNode } from './parser/AstNode';
 import { AstNodeKind, type Expression, type Statement } from './parser/AstNode';
-import { createIdentifier } from './astUtils/creators';
+import { createIdentifier, createToken } from './astUtils/creators';
 import type { BscType } from './types/BscType';
 import type { AssignmentStatement } from './parser/Statement';
 import { FunctionType } from './types/FunctionType';
-import { BinaryOperatorReferenceType } from './types';
+import { ArrayType, BinaryOperatorReferenceType } from './types';
+import type { SymbolTable } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTable';
 
 export class Util {
     public clearConsole() {
@@ -1087,6 +1089,71 @@ export class Util {
                 }
         }
     }
+
+    /**
+     * Deciphers the correct types for fields based on docs
+     * https://developer.roku.com/en-ca/docs/references/scenegraph/xml-elements/interface.md
+     * @param typeDescriptor the type descriptor from the docs
+     * @returns {BscType} the known type, or dynamic
+     */
+    public getNodeFieldType(typeDescriptor: string, lookupTable: SymbolTable): BscType {
+        const typeDescriptorLower = typeDescriptor.toLowerCase().trim();
+        const bscType = this.tokenToBscType(createToken(TokenKind.Identifier, typeDescriptorLower));
+        if (bscType) {
+            return bscType;
+        }
+        if (typeDescriptorLower.startsWith('array of ')) {
+            let arrayOfTypeName = typeDescriptorLower.substring(9); //cut off beginning 'array of'
+            if (arrayOfTypeName.endsWith('s')) {
+                // remove "s" in "floats", etc.
+                arrayOfTypeName = arrayOfTypeName.substring(0, arrayOfTypeName.length - 1);
+            }
+            if (arrayOfTypeName.endsWith('\'')) {
+                // remove "'" in "float's", etc.
+                arrayOfTypeName = arrayOfTypeName.substring(0, arrayOfTypeName.length - 1);
+            }
+            let arrayType = this.getNodeFieldType(arrayOfTypeName, lookupTable);
+            return new ArrayType(arrayType);
+        } else if (typeDescriptorLower.startsWith('option ')) {
+            const actualTypeName = typeDescriptorLower.substring('option '.length); //cut off beginning 'option '
+            return this.getNodeFieldType(actualTypeName, lookupTable);
+        } else if (typeDescriptorLower.startsWith('value ')) {
+            const actualTypeName = typeDescriptorLower.substring('value '.length); //cut off beginning 'value '
+            return this.getNodeFieldType(actualTypeName, lookupTable);
+        } else if (typeDescriptorLower === 'uri') {
+            return StringType.instance;
+        } else if (typeDescriptorLower === 'vector2d' || typeDescriptorLower === 'floatarray') {
+            return new ArrayType(FloatType.instance);
+        } else if (typeDescriptorLower === 'intarray') {
+            return new ArrayType(IntegerType.instance);
+        } else if (typeDescriptorLower === 'boolarray') {
+            return new ArrayType(BooleanType.instance);
+        } else if (typeDescriptorLower === 'stringarray' || typeDescriptorLower === 'strarray') {
+            return new ArrayType(StringType.instance);
+        } else if (typeDescriptorLower === 'int') {
+            return IntegerType.instance;
+        } else if (typeDescriptorLower === 'time') {
+            return FloatType.instance;
+        } else if (typeDescriptorLower === 'str') {
+            return StringType.instance;
+        } else if (typeDescriptorLower === 'bool') {
+            return BooleanType.instance;
+        } else if (lookupTable) {
+            if (typeDescriptorLower === 'nodearray') {
+                return new ArrayType(lookupTable.getSymbolType('node', { flags: SymbolTypeFlag.typetime }));
+            } else if (typeDescriptorLower === 'assocarray' || typeDescriptorLower === 'associative array') {
+                return lookupTable?.getSymbolType('roAssociativeArray', { flags: SymbolTypeFlag.typetime });
+            } else {
+                //try doing a lookup
+                return lookupTable.getSymbolType(typeDescriptorLower, { flags: SymbolTypeFlag.typetime });
+            }
+        }
+
+
+        //  TODO: Handle  'rect2d', 'rect2dArray', 'color', 'colorarray', 'time'
+        return DynamicType.instance;
+    }
+
 
     public isNumberType(targetType: BscType): boolean {
         return isIntegerType(targetType) ||
