@@ -281,6 +281,67 @@ describe('HoverProcessor', () => {
             expect(hover?.contents).to.eql([fence('class Person')]);
         });
 
+        it('finds namespaces properly', () => {
+            program.setFile('source/main.bs', `
+                namespace Name1
+                   namespace Name2
+                      const hi = "hello"
+                   end namespace
+                end namespace
+
+                sub doWork()
+                   print Name1.Name2.hi
+                end sub
+            `);
+            program.validate();
+            // print Name1.Nam|e2.hi
+            let hover = program.getHover('source/main.bs', util.createPosition(8, 36))[0];
+            expect(hover?.contents).to.eql([fence('namespace Name1.Name2')]);
+        });
+
+        it('finds enum properly', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    up
+                    down
+                end enum
+
+                sub doWork()
+                   print Direction.up
+                end sub
+            `);
+            program.validate();
+            // print Dire|ction.up
+            let hover = program.getHover('source/main.bs', util.createPosition(7, 30))[0];
+            expect(hover?.contents).to.eql([fence('enum Direction')]);
+            // print Direction.u|p
+            hover = program.getHover('source/main.bs', util.createPosition(7, 37))[0];
+            expect(hover?.contents).to.eql([fence('Direction.up as Direction')]);
+        });
+
+        it('finds types hover with comment', () => {
+            program.setFile('source/main.bs', `
+                ' this is a class comment
+                ' it is more than one line
+                class Person
+                end class
+
+                ' does some work
+                sub doWork(age as integer, name as string, guy as Person)
+                end sub
+            `);
+            program.validate();
+            let commentSep = `\n***\n`;
+
+            // gu|y as Person
+            let hover = program.getHover('source/main.bs', util.createPosition(7, 60))[0];
+            expect(hover?.range).to.eql(util.createRange(7, 59, 7, 62));
+            expect(hover?.contents).to.eql([`${fence('guy as Person')}${commentSep}this is a class comment\nit is more than one line`]);
+            // guy as Pe|rson
+            hover = program.getHover('source/main.bs', util.createPosition(7, 69))[0];
+            expect(hover?.contents).to.eql([`${fence('class Person')}${commentSep}this is a class comment\nit is more than one line`]);
+        });
+
         it('finds types from assignments defined in different file', () => {
             program.setFile(`source/main.bs`, `
                 sub main()
@@ -346,14 +407,13 @@ describe('HoverProcessor', () => {
             let commentSep = `\n***\n`;
             //th|ing = new MyKlass()
             let hover = program.getHover('source/main.bs', util.createPosition(2, 24))[0];
-            expect(hover?.contents).to.eql([fence('thing as MyKlass')]);
+            expect(hover?.contents).to.eql([`${fence('thing as MyKlass')}${commentSep}A sample class`]);
             //use|Klass(thing)
             hover = program.getHover('source/main.bs', util.createPosition(3, 24))[0];
-            expect(hover?.contents).to.eql([`${fence('sub useKlass(thing as MyKlass) as void')}${commentSep} Prints a MyKlass.name`]);
+            expect(hover?.contents).to.eql([`${fence('sub useKlass(thing as MyKlass) as void')}${commentSep}Prints a MyKlass.name`]);
             //print thing.getN|ame()
             hover = program.getHover('source/main.bs', util.createPosition(8, 37))[0];
-            // TODO: Add comments for class methods/properties
-            expect(hover?.contents).to.eql([`${fence('function MyKlass.getName() as string')}`]);
+            expect(hover?.contents).to.eql([`${fence('function MyKlass.getName() as string')}${commentSep}Gets the name of this thing`]);
         });
 
         it('finds functions as params', () => {

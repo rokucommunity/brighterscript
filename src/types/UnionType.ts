@@ -4,6 +4,8 @@ import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
 import { findTypeUnion, getUniqueType } from './helpers';
 import { BscTypeKind } from './BscTypeKind';
+import type { TypeCacheEntry } from '../SymbolTable';
+import { SymbolTable, SymbolTypeFlag } from '../SymbolTable';
 
 export function unionTypeFactory(types: BscType[]) {
     return new UnionType(types);
@@ -45,7 +47,7 @@ export class UnionType extends BscType {
                     getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                         return getUniqueType(findTypeUnion(this.getMemberTypeFromInnerTypes(name, options)), unionTypeFactory);
                     },
-                    setCachedType: (innerName: string, innerType: BscType, innerOptions: GetTypeOptions) => {
+                    setCachedType: (innerName: string, innerCacheEntry: TypeCacheEntry, innerOptions: GetTypeOptions) => {
                         // TODO: is this even cachable? This is a NO-OP for now, and it shouldn't hurt anything
                     }
                 };
@@ -93,6 +95,28 @@ export class UnionType extends BscType {
             return false;
         }
         return this.isTypeCompatible(targetType) && targetType.isTypeCompatible(this);
+    }
+
+    getMemberTable(): SymbolTable {
+        const unionTable = new SymbolTable(this.__identifier + ' UnionTable');
+        const firstType = this.types[0];
+        if (!firstType) {
+            return unionTable;
+        }
+        firstType.addBuiltInInterfaces();
+        for (const symbol of firstType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime)) {
+            const foundType = this.getMemberTypeFromInnerTypes(symbol.name, { flags: SymbolTypeFlag.runtime });
+            const allResolvableTypes = foundType.reduce((acc, curType) => {
+                return acc && curType.isResolvable();
+            }, true);
+
+            if (!allResolvableTypes) {
+                continue;
+            }
+            const uniqueType = getUniqueType(findTypeUnion(foundType), unionTypeFactory);
+            unionTable.addSymbol(symbol.name, {}, uniqueType, SymbolTypeFlag.runtime);
+        }
+        return unionTable;
     }
 }
 

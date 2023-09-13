@@ -8,7 +8,7 @@ import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { FunctionStatement } from './parser/Statement';
-import type { Expression } from './parser/AstNode';
+import type { AstNode, Expression } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceMapGenerator, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
@@ -479,9 +479,16 @@ export interface FileLink<T> {
     file: BrsFile;
 }
 
+export interface ExtraSymbolData {
+    definingNode?: AstNode;
+    description?: string;
+    completionPriority?: number; // teh higher the number, the lower the priority
+}
+
 export interface GetTypeOptions {
     flags: SymbolTypeFlag;
     typeChain?: TypeChainEntry[];
+    data?: ExtraSymbolData;
 }
 
 export class TypeChainEntry {

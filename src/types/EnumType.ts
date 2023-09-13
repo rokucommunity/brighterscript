@@ -38,6 +38,10 @@ export class EnumType extends BscType {
     public isEqual(targetType: BscType): boolean {
         return isEnumType(targetType) && targetType?.name.toLowerCase() === this.name.toLowerCase();
     }
+
+    public get defaultMemberType() {
+        return new EnumMemberType(this.name, 'default', this.underlyingType);
+    }
 }
 
 

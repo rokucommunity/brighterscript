@@ -2529,6 +2529,22 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
+            it('should find things in current namespace', () => {
+                program.setFile('source/utils.bs', `
+                    namespace sgnode
+                        sub speak(message)
+                            print message
+                        end sub
+
+                        sub sayHello()
+                            sgnode.speak("Hello")
+                        end sub
+                    end namespace`
+                );
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
         });
 
         describe('const values', () => {

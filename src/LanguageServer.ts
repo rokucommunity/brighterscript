@@ -689,10 +689,15 @@ export class LanguageServer {
         //ensure programs are initialized
         await this.waitAllProjectFirstRuns();
 
+
         let filePath = util.uriToPath(params.textDocument.uri);
 
         //wait until the file has settled
         await this.keyedThrottler.onIdleOnce(filePath, true);
+        // make sure validation is complete
+        await this.validateAllThrottled();
+        //wait for the validation cycle to settle
+        await this.onValidateSettled();
 
         let completions = this
             .getProjects()
@@ -965,23 +970,21 @@ export class LanguageServer {
     public async handleFileChanges(project: Project, changes: { type: FileChangeType; srcPath: string }[]) {
         //this loop assumes paths are both file paths and folder paths, which eliminates the need to detect.
         //All functions below can handle being given a file path AND a folder path, and will only operate on the one they are looking for
-        let consumeCount = 0;
         await Promise.all(changes.map(async (change) => {
             await this.keyedThrottler.run(change.srcPath, async () => {
-                consumeCount += await this.handleFileChange(project, change) ? 1 : 0;
+                if (await this.handleFileChange(project, change)) {
+                    await this.validateAllThrottled();
+                }
             });
         }));
-
-        if (consumeCount > 0) {
-            await this.validateAllThrottled();
-        }
     }
 
     /**
      * This only operates on files that match the specified files globs, so it is safe to throw
      * any file changes you receive with no unexpected side-effects
+     * @returns true if the file was handled by this project, false if it was not
      */
-    private async handleFileChange(project: Project, change: { type: FileChangeType; srcPath: string }) {
+    private async handleFileChange(project: Project, change: { type: FileChangeType; srcPath: string }): Promise<boolean> {
         const { program, options, rootDir } = project.builder;
 
         //deleted

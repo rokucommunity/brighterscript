@@ -30,8 +30,8 @@ describe('ArrayType', () => {
     });
 
     describe('toString', () => {
-        it('prints inner types', () => {
-            expect(new ArrayType(new BooleanType(), new StringType()).toString()).to.eql('Array<boolean | string>');
+        it('prints default type', () => {
+            expect(new ArrayType(new BooleanType(), new StringType()).toString()).to.eql('Array<boolean or string>');
         });
     });
 
