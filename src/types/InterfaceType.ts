@@ -1,5 +1,5 @@
 import { SymbolTypeFlag } from '../SymbolTable';
-import { isDynamicType, isInterfaceType, isUnionType, isInheritableType, isObjectType } from '../astUtils/reflection';
+import { isDynamicType, isInterfaceType, isUnionType, isInheritableType, isObjectType, isAssociativeArrayType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { InheritableType } from './InheritableType';
@@ -17,6 +17,9 @@ export class InterfaceType extends InheritableType {
 
     public isTypeCompatible(targetType: BscType) {
         if (isDynamicType(targetType) || isObjectType(targetType) || isUnionTypeCompatible(this, targetType)) {
+            return true;
+        }
+        if (isAssociativeArrayType(targetType) && this.name.toLowerCase() === 'roassociativearray') {
             return true;
         }
         //TODO: We need to make sure that things don't get assigned to built-in types

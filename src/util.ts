@@ -39,6 +39,8 @@ import { FunctionType } from './types/FunctionType';
 import { ArrayType, BinaryOperatorReferenceType } from './types';
 import type { SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTable';
+import { AssociativeArrayType } from './types/AssociativeArrayType';
+import { ComponentType } from './types/ComponentType';
 
 export class Util {
     public clearConsole() {
@@ -629,6 +631,16 @@ export class Util {
     }
 
     /**
+     * Prefixes a component name so it can be used as type in the symbol table, without polluting available symbols
+     *
+     * @param sgNodeName the Name of the component
+     * @returns the node name, prefixed with `roSGNode`
+     */
+    public getSgNodeTypeName(sgNodeName: string) {
+        return 'roSGNode' + sgNodeName;
+    }
+
+    /**
      * Parse an xml file and get back a javascript object containing its results
      */
     public parseXml(text: string) {
@@ -660,6 +672,7 @@ export class Util {
         }
         return subject;
     }
+
 
     /**
      * Given a URI, convert that to a regular fs path
@@ -1147,7 +1160,7 @@ export class Util {
      * @param typeDescriptor the type descriptor from the docs
      * @returns {BscType} the known type, or dynamic
      */
-    public getNodeFieldType(typeDescriptor: string, lookupTable: SymbolTable): BscType {
+    public getNodeFieldType(typeDescriptor: string, lookupTable?: SymbolTable): BscType {
         const typeDescriptorLower = typeDescriptor.toLowerCase().trim();
         const bscType = this.tokenToBscType(createToken(TokenKind.Identifier, typeDescriptorLower));
         if (bscType) {
@@ -1189,17 +1202,16 @@ export class Util {
             return StringType.instance;
         } else if (typeDescriptorLower === 'bool') {
             return BooleanType.instance;
+        } else if (typeDescriptorLower === 'assocarray' || typeDescriptorLower === 'associative array') {
+            return new AssociativeArrayType();
+        } else if (typeDescriptorLower === 'node') {
+            return ComponentType.instance;
+        } else if (typeDescriptorLower === 'nodearray') {
+            return new ArrayType(ComponentType.instance);
         } else if (lookupTable) {
-            if (typeDescriptorLower === 'nodearray') {
-                return new ArrayType(lookupTable.getSymbolType('node', { flags: SymbolTypeFlag.typetime }));
-            } else if (typeDescriptorLower === 'assocarray' || typeDescriptorLower === 'associative array') {
-                return lookupTable?.getSymbolType('roAssociativeArray', { flags: SymbolTypeFlag.typetime });
-            } else {
-                //try doing a lookup
-                return lookupTable.getSymbolType(typeDescriptorLower, { flags: SymbolTypeFlag.typetime });
-            }
+            //try doing a lookup
+            return lookupTable.getSymbolType(typeDescriptorLower, { flags: SymbolTypeFlag.typetime });
         }
-
 
         //  TODO: Handle  'rect2d', 'rect2dArray', 'color', 'colorarray', 'time'
         return DynamicType.instance;

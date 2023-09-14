@@ -14,7 +14,7 @@ import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DependencyGraph } from './DependencyGraph';
 import { Logger, LogLevel } from './Logger';
 import chalk from 'chalk';
-import { globalCallableMap, globalFile } from './globalCallables';
+import { globalCallables, globalFile } from './globalCallables';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
@@ -125,7 +125,7 @@ export class Program {
             }
             nodeType = new ComponentType(nodeData.name, parentNode);
             nodeType.addBuiltInInterfaces();
-            this.globalScope.symbolTable.addSymbol(nodeData.name, undefined, nodeType, SymbolTypeFlag.typetime);
+            this.globalScope.symbolTable.addSymbol(util.getSgNodeTypeName(nodeData.name), { description: nodeData.description }, nodeType, SymbolTypeFlag.typetime);
         } else {
             nodeType = this.globalScope.symbolTable.getSymbolType(nodeData.name, { flags: SymbolTypeFlag.typetime }) as ComponentType;
         }
@@ -151,33 +151,31 @@ export class Program {
 
         BuiltInInterfaceAdder.getLookupTable = () => this.globalScope.symbolTable;
 
-        for (let pair of globalCallableMap) {
-            let [key, callable] = pair;
-            this.globalScope.symbolTable.addSymbol(key, undefined, callable.type, SymbolTypeFlag.runtime);
+        for (const callable of globalCallables) {
+            this.globalScope.symbolTable.addSymbol(callable.name, { description: callable.shortDescription }, callable.type, SymbolTypeFlag.runtime);
         }
 
         for (const componentData of Object.values(components) as BRSComponentData[]) {
             const nodeType = new InterfaceType(componentData.name);
             nodeType.addBuiltInInterfaces();
-            this.globalScope.symbolTable.addSymbol(componentData.name, undefined, nodeType, SymbolTypeFlag.typetime);
+            this.globalScope.symbolTable.addSymbol(componentData.name, { description: componentData.description }, nodeType, SymbolTypeFlag.typetime);
         }
 
         for (const ifaceData of Object.values(interfaces) as BRSInterfaceData[]) {
             const nodeType = new InterfaceType(ifaceData.name);
             nodeType.addBuiltInInterfaces();
-            this.globalScope.symbolTable.addSymbol(ifaceData.name, undefined, nodeType, SymbolTypeFlag.typetime);
+            this.globalScope.symbolTable.addSymbol(ifaceData.name, { description: ifaceData.description }, nodeType, SymbolTypeFlag.typetime);
         }
 
         for (const eventData of Object.values(events) as BRSEventData[]) {
             const nodeType = new InterfaceType(eventData.name);
             nodeType.addBuiltInInterfaces();
-            this.globalScope.symbolTable.addSymbol(eventData.name, undefined, nodeType, SymbolTypeFlag.typetime);
+            this.globalScope.symbolTable.addSymbol(eventData.name, { description: eventData.description }, nodeType, SymbolTypeFlag.typetime);
         }
-
 
         for (const nodeData of Object.values(nodes) as SGNodeData[]) {
             const nodeType = this.recurseNodeData(nodeData);
-            this.globalScope.symbolTable.addSymbol(nodeData.name, undefined, nodeType, SymbolTypeFlag.typetime);
+            this.globalScope.symbolTable.addSymbol(util.getSgNodeTypeName(nodeData.name), { description: nodeData.description }, nodeType, SymbolTypeFlag.typetime);
         }
     }
 
@@ -274,7 +272,7 @@ export class Program {
      * Register (or replace) the reference to a component in the component map
      */
     private registerComponent(xmlFile: XmlFile, scope: XmlScope) {
-        const key = (xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
+        const key = this.getComponentKey(xmlFile);
         if (!this.components[key]) {
             this.components[key] = [];
         }
@@ -293,13 +291,14 @@ export class Program {
             return 0;
         });
         this.syncComponentDependencyGraph(this.components[key]);
+        this.updateComponentSymbolInGlobalScope(xmlFile);
     }
 
     /**
      * Remove the specified component from the components map
      */
     private unregisterComponent(xmlFile: XmlFile) {
-        const key = (xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
+        const key = this.getComponentKey(xmlFile);
         const arr = this.components[key] || [];
         for (let i = 0; i < arr.length; i++) {
             if (arr[i].file === xmlFile) {
@@ -307,7 +306,33 @@ export class Program {
                 break;
             }
         }
+
         this.syncComponentDependencyGraph(arr);
+        this.updateComponentSymbolInGlobalScope(xmlFile);
+    }
+
+    private getComponentKey(xmlFile: XmlFile) {
+        return (xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
+    }
+
+    /**
+     * Updates the global symbol table with the first component in this.components to have the same name as the component in the file
+     * @param xmlFile file with a component
+     */
+    private updateComponentSymbolInGlobalScope(xmlFile: XmlFile) {
+        const symbolName = util.getSgNodeTypeName(xmlFile.componentName?.text);
+        if (!symbolName) {
+            return;
+        }
+        const key = this.getComponentKey(xmlFile);
+        const components = this.components[key] || [];
+        this.globalScope.symbolTable.removeSymbol(symbolName);
+        if (components.length > 0) {
+            const componentType = components[0].scope.getComponentType();
+            if (componentType) {
+                this.globalScope.symbolTable.addSymbol(symbolName, {}, componentType, SymbolTypeFlag.typetime);
+            }
+        }
     }
 
     /**
@@ -543,7 +568,7 @@ export class Program {
                 let scope = new XmlScope(xmlFile, this);
                 this.addScope(scope);
 
-                //register this compoent now that we have parsed it and know its component name
+                //register this component now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
 
                 //notify plugins that the scope is created and the component is registered

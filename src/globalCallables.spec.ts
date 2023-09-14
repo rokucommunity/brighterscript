@@ -73,12 +73,8 @@ describe('globalCallables', () => {
         program.validate();
         const hover = program.getHover(file.srcPath, util.createPosition(2, 25));
         expect(
-            hover[0].contents.toString().replace('\r\n', '\n')
-        ).to.eql([
-            '```brightscript',
-            'function Mid(s as string, p as integer, n? as integer) as string',
-            '```'
-        ].join('\n'));
+            hover[0].contents.toString()
+        ).to.include('function Mid(s as string, p as integer, n? as integer) as string');
     });
 
     describe('bslCore', () => {

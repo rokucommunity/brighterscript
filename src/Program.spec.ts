@@ -21,8 +21,9 @@ import type { LiteralExpression } from './parser/Expression';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
 import { SymbolTypeFlag } from './SymbolTable';
 import { StringType } from './types/StringType';
-import { ArrayType, DynamicType, FloatType, IntegerType, InterfaceType, TypedFunctionType } from './types';
+import { ArrayType, BooleanType, DynamicType, FloatType, IntegerType, InterfaceType, TypedFunctionType } from './types';
 import { ComponentType } from './types/ComponentType';
+import { AssociativeArrayType } from './types/AssociativeArrayType';
 
 let sinon = sinonImport.createSandbox();
 
@@ -2291,22 +2292,28 @@ describe('Program', () => {
             expectTypeToBe(table.getSymbolType('roSGNodeEvent', opts).getMemberType('getData', rtOpts), TypedFunctionType);
         });
 
-        it('adds SceneGraph nodes', () => {
+        it('adds SceneGraph nodes, prefixed with `roSGNode`', () => {
             const table = program.globalScope.symbolTable;
             const opts = { flags: SymbolTypeFlag.typetime };
             const rtOpts = { flags: SymbolTypeFlag.runtime };
-            expectTypeToBe(table.getSymbolType('LayoutGroup', opts), ComponentType);
-            expectTypeToBe(table.getSymbolType('LayoutGroup', opts).getMemberType('horizAlignment', rtOpts), StringType);
-            expectTypeToBe(table.getSymbolType('LayoutGroup', opts).getMemberType('itemSpacings', rtOpts), ArrayType);
-            expectTypeToBe(table.getSymbolType('LayoutGroup', opts).getMemberType('getChildren', rtOpts), TypedFunctionType);
-            expectTypeToBe(table.getSymbolType('LayoutGroup', opts).getMemberType('createChild', rtOpts), TypedFunctionType);
+            expectTypeToBe(table.getSymbolType('roSGNodeLayoutGroup', opts), ComponentType);
+            expectTypeToBe(table.getSymbolType('roSGNodeLayoutGroup', opts).getMemberType('horizAlignment', rtOpts), StringType);
+            expectTypeToBe(table.getSymbolType('roSGNodeLayoutGroup', opts).getMemberType('itemSpacings', rtOpts), ArrayType);
+            expectTypeToBe(table.getSymbolType('roSGNodeLayoutGroup', opts).getMemberType('getChildren', rtOpts), TypedFunctionType);
+            expectTypeToBe(table.getSymbolType('roSGNodeLayoutGroup', opts).getMemberType('createChild', rtOpts), TypedFunctionType);
 
-            expectTypeToBe(table.getSymbolType('Poster', opts), ComponentType);
-            expectTypeToBe(table.getSymbolType('Poster', opts).getMemberType('loadWidth', rtOpts), FloatType);
-            expectTypeToBe(table.getSymbolType('Poster', opts).getMemberType('loadDisplayMode', rtOpts), StringType);
-            const bmpMarginsType = table.getSymbolType('Poster', opts).getMemberType('bitmapMargins', rtOpts);
-            expectTypeToBe(bmpMarginsType, InterfaceType);
-            expect((bmpMarginsType as InterfaceType).name, 'roAssociativeArray');
+            expectTypeToBe(table.getSymbolType('roSGNodePoster', opts), ComponentType);
+            expectTypeToBe(table.getSymbolType('roSGNodePoster', opts).getMemberType('loadWidth', rtOpts), FloatType);
+            expectTypeToBe(table.getSymbolType('roSGNodePoster', opts).getMemberType('loadDisplayMode', rtOpts), StringType);
+            const bmpMarginsType = table.getSymbolType('roSGNodePoster', opts).getMemberType('bitmapMargins', rtOpts);
+            expectTypeToBe(bmpMarginsType, AssociativeArrayType);
+
+            expectTypeToBe(table.getSymbolType('roSGNodeTimer', opts), ComponentType);
+            expectTypeToBe(table.getSymbolType('roSGNodeTimer', opts).getMemberType('control', rtOpts), StringType);
+            expectTypeToBe(table.getSymbolType('roSGNodeTimer', opts).getMemberType('repeat', rtOpts), BooleanType);
+            expectTypeToBe(table.getSymbolType('roSGNodeTimer', opts).getMemberType('duration', rtOpts), FloatType);
+            expectTypeToBe(table.getSymbolType('roSGNodeTimer', opts).getMemberType('fire', rtOpts), DynamicType);
+
         });
     });
 });

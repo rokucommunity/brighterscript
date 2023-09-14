@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import type { BscType } from '../types/BscType';
@@ -26,6 +26,7 @@ import { VoidType } from '../types/VoidType';
 import { TypePropertyReferenceType } from '../types/ReferenceType';
 import { UnionType } from '../types/UnionType';
 import { ArrayType } from '../types';
+import { AssociativeArrayType } from '../types/AssociativeArrayType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -856,19 +857,13 @@ export class AALiteralExpression extends Expression {
     }
 
     getType(options: GetTypeOptions): BscType {
-        return super.getType(options);
-
-        // TODO: create an AssocArray type, and populate its members:
-        /*
-        const resultType = new AssocArrayType();
+        const resultType = new AssociativeArrayType();
         for (const element of this.elements) {
             if (isAAMemberExpression(element)) {
-                resultType.addMember(element.keyToken.text, element.range, element.getType(options), SymbolTypeFlags.runtime);
+                resultType.addMember(element.keyToken.text, { definingNode: element }, element.getType(options), SymbolTypeFlag.runtime);
             }
-
         }
         return resultType;
-        */
     }
 }
 
@@ -952,7 +947,7 @@ export class VariableExpression extends Expression {
         const nameKey = this.name.text;
         if (!resultType) {
             const symbolTable = this.getSymbolTable();
-            resultType = symbolTable.getSymbolType(nameKey, { ...options, fullName: nameKey, tableProvider: () => this.getSymbolTable() });
+            resultType = symbolTable?.getSymbolType(nameKey, { ...options, fullName: nameKey, tableProvider: () => this.getSymbolTable() });
         }
         options.typeChain?.push(new TypeChainEntry(nameKey, resultType, this.range));
         return resultType;

@@ -32,6 +32,7 @@ import { BscTypeKind } from '../types/BscTypeKind';
 import type { NamespaceType } from '../types/NamespaceType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
 import type { ComponentType } from '../types/ComponentType';
+import type { AssociativeArrayType } from '../types/AssociativeArrayType';
 
 // File reflection
 export function isBrsFile(file: (BscFile | File)): file is BrsFile {
@@ -334,7 +335,9 @@ export function isUninitializedType(value: any): value is UninitializedType {
 export function isArrayType(value: any): value is ArrayType {
     return value?.kind === BscTypeKind.ArrayType;
 }
-
+export function isAssociativeArrayType(value: any): value is AssociativeArrayType {
+    return value?.kind === BscTypeKind.AssociativeArrayType;
+}
 export function isInheritableType(target): target is InheritableType {
     return isClassType(target) || isInterfaceType(target) || isComponentType(target);
 }

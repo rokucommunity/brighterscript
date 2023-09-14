@@ -92,6 +92,11 @@ export class SymbolTable implements SymbolTypeGetter {
         this.siblings.delete(sibling);
     }
 
+
+    public clearSymbols() {
+        this.symbolMap.clear();
+    }
+
     /**
      * Checks if the symbol table contains the given symbol by name
      * If the identifier is not in this table, it will check the parent
@@ -177,6 +182,18 @@ export class SymbolTable implements SymbolTypeGetter {
         });
     }
 
+
+    /**
+     * Removes a new symbol from the table
+     */
+    removeSymbol(name: string) {
+        const key = name.toLowerCase();
+        if (!this.symbolMap.has(key)) {
+            this.symbolMap.set(key, []);
+        }
+        this.symbolMap.delete(key);
+    }
+
     public getSymbolTypes(name: string, options: GetSymbolTypeOptions): TypeCacheEntry[] {
         const symbolArray = this.getSymbol(name, options.flags);
         if (!symbolArray) {
@@ -200,7 +217,7 @@ export class SymbolTable implements SymbolTypeGetter {
             resolvedType = SymbolTable.referenceTypeFactory(name, options.fullName, options.flags, options.tableProvider);
         }
         const newNonReferenceType = originalIsReferenceType && !isAnyReferenceType(resolvedType);
-        if (doSetCache || newNonReferenceType || resolvedType) {
+        if (doSetCache || newNonReferenceType) {
             this.setCachedType(name, { type: resolvedType, data: data }, options);
         }
         if (options.data) {

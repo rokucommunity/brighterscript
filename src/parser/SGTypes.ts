@@ -10,6 +10,7 @@ import { LongIntegerType } from '../types/LongIntegerType';
 import { StringType } from '../types/StringType';
 import util from '../util';
 import type { TranspileState } from './TranspileState';
+import { SymbolTable } from '../SymbolTable';
 
 export interface SGToken {
     text: string;
@@ -867,6 +868,8 @@ export class SGAst {
         public componentElement?: SGComponent
     ) {
     }
+
+    public symbolTable = new SymbolTable('SGAst');
 
     public transpile(state: TranspileState): SourceNode {
         const chunks = [] as SourceNode[];

@@ -24,6 +24,7 @@ import { DoubleType } from './types/DoubleType';
 import { UnionType } from './types/UnionType';
 import { isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
+import { AssociativeArrayType } from './types/AssociativeArrayType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -2689,9 +2690,38 @@ describe('Scope', () => {
                 expectTypeToBe(symbolTable.getSymbolType('a', opts), IntegerType);
                 expectTypeToBe(symbolTable.getSymbolType('b', opts), DoubleType);
                 expectTypeToBe(symbolTable.getSymbolType('c', opts), StringType);
-                expectTypeToBe(symbolTable.getSymbolType('d', opts), DynamicType);
+                expectTypeToBe(symbolTable.getSymbolType('d', opts), AssociativeArrayType);
                 expectTypeToBe(symbolTable.getSymbolType('f', opts), DynamicType);
                 expectTypeToBe(symbolTable.getSymbolType('e', opts), BooleanType);
+            });
+
+            it('should set correct type for aa literals', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    sub process(intVal as integer, dblVal as double, strVal as string)
+                        myAA = {
+                            a: intVal
+                            b: dblVal
+                            c: strVal
+                            d: {}
+                            f :m.foo
+                            e: true
+                        }
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const myAA = symbolTable.getSymbolType('myAA', opts);
+                expectTypeToBe(myAA, AssociativeArrayType);
+                expectTypeToBe(myAA.getMemberType('a', opts), IntegerType);
+                expectTypeToBe(myAA.getMemberType('b', opts), DoubleType);
+                expectTypeToBe(myAA.getMemberType('c', opts), StringType);
+                expectTypeToBe(myAA.getMemberType('d', opts), AssociativeArrayType);
+                expectTypeToBe(myAA.getMemberType('f', opts), DynamicType);
+                expectTypeToBe(myAA.getMemberType('e', opts), BooleanType);
+                expectTypeToBe(myAA.getMemberType('someUnsetThing', opts), DynamicType);
             });
 
             it('should set correct type on compound equals', () => {

@@ -1,12 +1,14 @@
-import type { SymbolTypeFlag } from '../SymbolTable';
+import type { GetSymbolTypeOptions, SymbolTypeFlag } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import { isComponentType, isDynamicType, isObjectType } from '../astUtils/reflection';
+import type { ExtraSymbolData } from '../interfaces';
 import type { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { InheritableType } from './InheritableType';
 import { isUnionTypeCompatible } from './helpers';
+import util from '../util';
 
 export class ComponentType extends InheritableType {
 
@@ -30,8 +32,14 @@ export class ComponentType extends InheritableType {
         return false;
     }
 
+    public static instance = new ComponentType('Node');
+
     isEqual(targetType: BscType): boolean {
         return isComponentType(targetType) && this.name.toLowerCase() === targetType.name.toLowerCase();
+    }
+
+    public toString() {
+        return util.getSgNodeTypeName(this.name);
     }
 
     private builtInMemberTable: SymbolTable;
@@ -70,11 +78,15 @@ export class ComponentType extends InheritableType {
 
     private callFuncMemberTable: SymbolTable;
 
-    addCallFuncMember(name: string, type: BaseFunctionType, flags: SymbolTypeFlag) {
+    addCallFuncMember(name: string, data: ExtraSymbolData, type: BaseFunctionType, flags: SymbolTypeFlag) {
         this.callFuncMemberTable.addSymbol(name, undefined, type, flags);
     }
 
     getCallFuncTable() {
         return this.callFuncMemberTable;
+    }
+
+    getCallFuncType(name: string, options: GetSymbolTypeOptions) {
+        return this.callFuncMemberTable.getSymbolType(name, options);
     }
 }

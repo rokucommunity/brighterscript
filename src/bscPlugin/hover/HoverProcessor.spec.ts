@@ -416,6 +416,19 @@ describe('HoverProcessor', () => {
             expect(hover?.contents).to.eql([`${fence('function MyKlass.getName() as string')}${commentSep}Gets the name of this thing`]);
         });
 
+        it('finds globalCallables with documentation', () => {
+            let mainFile = program.setFile('source/main.brs', `
+                sub Main()
+                    print lcase("HELLO")
+                end sub
+            `);
+            program.validate();
+            let commentSep = `\n***\n`;
+            //    print lc|ase("HELLO")
+            let hover = program.getHover(mainFile.srcPath, util.createPosition(2, 29))[0];
+            expect(hover.contents).to.eql([`${fence('function lcase(s as string) as string')}${commentSep}Converts the string to all lower case.`]);
+        });
+
         it('finds functions as params', () => {
             program.setFile('source/main.brs', `
                 function getStrLength(name as string) as integer
