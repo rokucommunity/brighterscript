@@ -1,4 +1,4 @@
-import { isBrsFile, isCallableType, isClassType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isMethodStatement, isNamespaceType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isCallableType, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isMethodStatement, isNamespaceType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { BscFile, ExtraSymbolData, FileReference, ProvideCompletionsEvent } from '../../interfaces';
 import { Keywords, TokenKind } from '../../lexer/TokenKind';
 import type { XmlScope } from '../../XmlScope';
@@ -16,6 +16,7 @@ import type { FunctionScope } from '../../FunctionScope';
 import type { BscType } from '../../types';
 import type { AstNode } from '../../parser/AstNode';
 import type { FunctionStatement } from '../../parser/Statement';
+import type { Token } from '../../lexer/Token';
 
 
 export class CompletionsProcessor {
@@ -26,25 +27,6 @@ export class CompletionsProcessor {
     }
 
     public process() {
-        let completionsArray = [];
-        if (isBrsFile(this.event.file) && this.event.file.isPositionNextToTokenKind(this.event.position, TokenKind.Callfunc)) {
-            const xmlScopes = this.event.program.getScopes().filter((s) => isXmlScope(s)) as XmlScope[];
-            // is next to a @. callfunc invocation - must be an interface method.
-            //TODO refactor this to utilize the actual variable's component type (when available)
-            for (const scope of xmlScopes) {
-                let fileLinks = this.event.program.getStatementsForXmlFile(scope);
-                for (let fileLink of fileLinks) {
-                    let pushItem = this.createCompletionFromFunctionStatement(fileLink.item);
-                    if (!completionsArray.includes(pushItem.label)) {
-                        completionsArray.push(pushItem.label);
-                        this.event.completions.push(pushItem);
-                    }
-                }
-            }
-            //no other result is possible in this case
-            return;
-        }
-
         //find the scopes for this file
         let scopesForFile = this.event.program.getScopesForFile(this.event.file);
 
@@ -168,37 +150,12 @@ export class CompletionsProcessor {
         if (tokenKind === TokenKind.Comment) {
             return [];
         } else if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
-            const match = /^("?)(pkg|libpkg):/.exec(currentToken.text);
-            if (match) {
-                const [, openingQuote, fileProtocol] = match;
-                //include every absolute file path from this scope
-                for (const file of scope.getAllFiles()) {
-                    const pkgPath = `${fileProtocol}:/${file.pkgPath.replace(/\\/g, '/')}`;
-                    result.push({
-                        label: pkgPath,
-                        textEdit: TextEdit.replace(
-                            util.createRange(
-                                currentToken.range.start.line,
-                                //+1 to step past the opening quote
-                                currentToken.range.start.character + (openingQuote ? 1 : 0),
-                                currentToken.range.end.line,
-                                //-1 to exclude the closing quotemark (or the end character if there is no closing quotemark)
-                                currentToken.range.end.character + (currentToken.text.endsWith('"') ? -1 : 0)
-                            ),
-                            pkgPath
-                        ),
-                        kind: CompletionItemKind.File
-                    });
-                }
-                return result;
-            } else {
-                //do nothing. we don't want to show completions inside of strings...
-                return [];
-            }
+            return this.getStringLiteralCompletions(scope, currentToken);
         }
 
         let expression: AstNode;
         let shouldLookForMembers = false;
+        let shouldLookForCallFuncMembers = false;
 
         if (file.tokenFollows(currentToken, TokenKind.Goto)) {
             let functionScope = file.getFunctionScopeAtPosition(position);
@@ -211,6 +168,11 @@ export class CompletionsProcessor {
             const beforeDotToken = file.getTokenBefore(dotToken);
             expression = file.getClosestExpression(beforeDotToken?.range.end);
             shouldLookForMembers = true;
+        } else if (file.getPreviousToken(currentToken)?.kind === TokenKind.Callfunc || file.isTokenNextToTokenKind(currentToken, TokenKind.Callfunc)) {
+            const dotToken = currentToken.kind === TokenKind.Callfunc ? currentToken : file.getTokenBefore(currentToken, TokenKind.Callfunc);
+            const beforeDotToken = file.getTokenBefore(dotToken);
+            expression = file.getClosestExpression(beforeDotToken?.range.end);
+            shouldLookForCallFuncMembers = true;
         } else {
             expression = file.getClosestExpression(this.event.position);
         }
@@ -235,6 +197,14 @@ export class CompletionsProcessor {
                     type.addBuiltInInterfaces();
                 }
                 return type?.getMemberTable();
+            } else if (shouldLookForCallFuncMembers) {
+                let type = expression.getType({ flags: SymbolTypeFlag.runtime });
+                if (isComponentType(type)) {
+                    // it's a component and you're doing a callFunc - only let it do functions from that table
+                    return type.getCallFuncTable();
+                }
+                // this is not a component type - there should be no callfunc members
+                return undefined;
             }
             const symbolTableToUse = expression.getSymbolTable();
             return symbolTableToUse;
@@ -258,11 +228,14 @@ export class CompletionsProcessor {
                 }
             }
 
-            result.push(...this.getSymbolsCompletion(currentSymbols, shouldLookForMembers));
+            result.push(...this.getSymbolsCompletion(currentSymbols, shouldLookForMembers || shouldLookForCallFuncMembers));
             if (shouldLookForMembers && currentSymbols.length === 0) {
                 // could not find members of actual known types.. just try everything
                 result.push(...this.getPropertyNameCompletions(scope),
                     ...this.getAllClassMemberCompletions(scope).values());
+            } else if (shouldLookForCallFuncMembers && currentSymbols.length === 0) {
+                // could not find members of actual known types.. just try everything
+                result.push(...this.getCallFuncNameCompletions(scope));
             }
             scope.unlinkSymbolTable();
         }
@@ -337,11 +310,45 @@ export class CompletionsProcessor {
     }
 
     public createCompletionFromFunctionStatement(statement: FunctionStatement): CompletionItem {
+        const funcType = statement.getType({ flags: SymbolTypeFlag.runtime });
         return {
             label: statement.getName(ParseMode.BrighterScript),
             kind: CompletionItemKind.Function,
-            documentation: statement.getType({ flags: SymbolTypeFlag.runtime }).toString()
+            detail: funcType.toString(),
+            documentation: util.getNodeDocumentation(statement)
         };
+    }
+
+    private getStringLiteralCompletions(scope: Scope, currentToken: Token) {
+        const match = /^("?)(pkg|libpkg):/.exec(currentToken.text);
+        let result = [] as CompletionItem[];
+        if (match) {
+            // Get file path locations
+            const [, openingQuote, fileProtocol] = match;
+            //include every absolute file path from this scope
+            for (const file of scope.getAllFiles()) {
+                const pkgPath = `${fileProtocol}:/${file.pkgPath.replace(/\\/g, '/')}`;
+                result.push({
+                    label: pkgPath,
+                    textEdit: TextEdit.replace(
+                        util.createRange(
+                            currentToken.range.start.line,
+                            //+1 to step past the opening quote
+                            currentToken.range.start.character + (openingQuote ? 1 : 0),
+                            currentToken.range.end.line,
+                            //-1 to exclude the closing quotemark (or the end character if there is no closing quotemark)
+                            currentToken.range.end.character + (currentToken.text.endsWith('"') ? -1 : 0)
+                        ),
+                        pkgPath
+                    ),
+                    kind: CompletionItemKind.File
+                });
+            }
+            return result;
+        } else {
+            //do nothing. we don't want to show completions inside of strings...
+            return [];
+        }
     }
 
 
@@ -377,6 +384,32 @@ export class CompletionsProcessor {
         }
         return results;
     }
+
+    /**
+     * Scan all xmlScopes for call funcs
+     */
+    public getCallFuncNameCompletions(scope: Scope) {
+        let completionsArray = [] as CompletionItem[];
+        let completetionsLabels = [];
+        const xmlScopes = this.event.program.getScopes().filter((s) => isXmlScope(s)) as XmlScope[];
+        // is next to a @. callfunc invocation - must be an component interface method.
+
+
+        //TODO refactor this to utilize the actual variable's component type (when available)
+        for (const scope of xmlScopes) {
+            let fileLinks = this.event.program.getStatementsForXmlFile(scope);
+            for (let fileLink of fileLinks) {
+                let pushItem = this.createCompletionFromFunctionStatement(fileLink.item);
+                if (!completetionsLabels.includes(pushItem.label)) {
+                    completetionsLabels.push(pushItem.label);
+                    completionsArray.push(pushItem);
+                }
+            }
+        }
+        //no other result is possible in this case
+        return completionsArray;
+    }
+
 }
 
 /**

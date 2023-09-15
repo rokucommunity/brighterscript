@@ -50,7 +50,7 @@ export class XmlScope extends Scope {
             return;
         }
         const parentComponentType = componentElement?.extends
-            ? this.symbolTable.getSymbolType(componentElement?.extends, { flags: SymbolTypeFlag.typetime })
+            ? this.symbolTable.getSymbolType(util.getSgNodeTypeName(componentElement?.extends), { flags: SymbolTypeFlag.typetime, fullName: componentElement?.extends, tableProvider: () => this.symbolTable })
             : undefined;
         const result = new ComponentType(componentElement.name, parentComponentType as ComponentType);
         const iface = componentElement.interfaceElement;
@@ -64,7 +64,6 @@ export class XmlScope extends Scope {
                 //TODO: add documentation - need to get previous comment from XML
                 result.addCallFuncMember(func.name, {}, actualFuncType as BaseFunctionType, SymbolTypeFlag.runtime);
             }
-
         }
         //add fields
         for (const field of iface.fields ?? []) {

@@ -2896,6 +2896,41 @@ describe('Scope', () => {
                 expect((unionDefaultType as UnionType).types).to.include(IntegerType.instance);
             });
         });
+
+        describe('callFunc invocations', () => {
+            it('TODO: should set correct return type', () => {
+
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="Widget.brs"/>
+                        <interface>
+                            <function name="getFloatFromString" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile('components/Widget.brs', `
+                    function getFloatFromString(input as string) as float
+                        return input.toFloat()
+                    end function
+                `);
+
+                let utilFile = program.setFile('source/util.bs', `
+                    sub someFunc(widget as roSGNodeWidget)
+                        pi = widget@.getFloatFromString("3.14")
+                        print pi
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(3, 31));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                // TODO: `pi` SHOULD be FloatType, but it doesn't work yet
+                expectTypeToBe(symbolTable.getSymbolType('pi', opts), DynamicType);
+            });
+        });
     });
 
     describe('unlinkSymbolTable', () => {

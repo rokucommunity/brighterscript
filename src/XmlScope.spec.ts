@@ -238,5 +238,6 @@ describe('XmlScope', () => {
             expect(widgetType.getMemberType('someFunc', { flags: SymbolTypeFlag.runtime }).isResolvable()).to.be.false;
             expectTypeToBe(widgetType.getCallFuncType('someFunc', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
         });
+
     });
 });

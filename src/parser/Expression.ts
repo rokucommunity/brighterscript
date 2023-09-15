@@ -1163,7 +1163,28 @@ export class CallfuncExpression extends Expression {
     }
 
     getType(options: GetTypeOptions) {
-        return this.callee.getType(options);
+        let result: BscType = DynamicType.instance;
+        /*
+         TODO: Figure out how to get return types from call funcs!
+            This code does not work, because if the call func is being validated in another scope
+            before the defining scope is linked, then the function is not known.
+
+        const calleeType = this.callee.getType({ ...options, flags: SymbolTypeFlag.runtime });
+        if (isComponentType(calleeType) || isReferenceType(calleeType)) {
+            const funcType = (calleeType as ComponentType).getCallFuncType(this.methodName.text, options);
+
+            if (isCallableType(funcType) && (!isReferenceType(funcType.returnType) || funcType.returnType.isResolvable())) {
+                result = funcType.returnType;
+            } else if (!isReferenceType(funcType) && (funcType as any).returnType?.isResolvable()) {
+                result = (funcType as any).returnType;
+            } else {
+                result = new TypePropertyReferenceType(funcType, 'returnType');
+            }
+        }
+        */
+
+        options.typeChain?.push(new TypeChainEntry(this.methodName.text, result, this.methodName.range));
+        return result;
     }
 }
 

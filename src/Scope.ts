@@ -772,18 +772,12 @@ export class Scope {
         return this.cache.getOrAdd('symbolTable', () => {
             const result = new SymbolTable(`Scope: '${this.name}'`, () => this.getParentScope()?.symbolTable);
             result.addSymbol('m', undefined, new AssociativeArrayType(), SymbolTypeFlag.runtime);
+            result.addSibling(this.mergedFileSymbolTable);
             return result;
         });
     }
 
-
-    public get mergedFileSymbolTable(): SymbolTable {
-        return this.cache.getOrAdd('mergedFileSymbolTable', () => {
-            const result = new SymbolTable(`Merged Scope: ${this.name}`);
-            this.symbolTable.addSibling(result);
-            return result;
-        });
-    }
+    protected mergedFileSymbolTable = new SymbolTable(`Merged Scope: ${this.name}`);
 
     /**
      * A list of functions that will be called whenever `unlinkSymbolTable` is called
@@ -820,12 +814,14 @@ export class Scope {
 
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
+
                 this.mergedFileSymbolTable.mergeSymbolTable(file.parser?.symbolTable);
 
                 this.linkSymbolTableDisposables.push(
                     file.parser.symbolTable.pushParentProvider(() => this.symbolTable)
                 );
                 allNamespaces.push(...file.parser.references.namespaceStatements);
+
             }
         }
         const aggregatesAdded = new Set<string>();

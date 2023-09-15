@@ -76,10 +76,10 @@ export class ComponentType extends InheritableType {
         this.hasAddedBuiltInFields = true;
     }
 
-    private callFuncMemberTable: SymbolTable;
+    public readonly callFuncMemberTable: SymbolTable;
 
     addCallFuncMember(name: string, data: ExtraSymbolData, type: BaseFunctionType, flags: SymbolTypeFlag) {
-        this.callFuncMemberTable.addSymbol(name, undefined, type, flags);
+        this.callFuncMemberTable.addSymbol(name, data, type, flags);
     }
 
     getCallFuncTable() {

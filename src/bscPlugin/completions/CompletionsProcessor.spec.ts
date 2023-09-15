@@ -3,7 +3,7 @@ import { Program } from '../../Program';
 import util, { standardizePath as s } from '../../util';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
-import { expectCompletionsExcludes, expectCompletionsIncludes, tempDir, rootDir, stagingDir, trim } from '../../testHelpers.spec';
+import { expectCompletionsExcludes, expectCompletionsIncludes, tempDir, rootDir, stagingDir, trim, expectZeroDiagnostics } from '../../testHelpers.spec';
 import { XmlFile } from '../../files/XmlFile';
 import { Keywords } from '../../lexer/TokenKind';
 import { CompletionsProcessor } from './CompletionsProcessor';
@@ -535,10 +535,10 @@ describe('CompletionsProcessor', () => {
             ).to.eql(['MyClassA', 'MyClassB', 'MyClassC']);
         });
 
-        it('gets completions when using callfunc inovation', () => {
+        it('gets completions when using callfunc invocation', () => {
             program.setFile('source/main.bs', `
-                function main()
-                    myNode@.sayHello(arg1)
+                function doStuff(myNode)
+                    myNode@.sayHello(1, 2)
                 end function
             `);
             program.setFile('components/MyNode.bs', `
@@ -554,6 +554,7 @@ describe('CompletionsProcessor', () => {
                 </interface>
             </component>`);
             program.validate();
+            expectZeroDiagnostics(program);
 
             expect(
                 (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
@@ -1506,7 +1507,70 @@ describe('CompletionsProcessor', () => {
                 kind: CompletionItemKind.Method
             }]);
         });
+    });
 
+    describe('callfunc completions', () => {
+        it('finds callfunc members', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                     <script uri="Widget.brs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.brs', `
+                function someFunc(input as string) as float
+                    return input.toFloat()
+                end function
+            `);
+            program.setFile('source/util.bs', `
+                sub callWidgetSomeFunc(widget as roSGNodeWidget)
+                    print widget@.
+                end sub
+            `);
+            program.validate();
+            // print widget@.|
+            let completions = program.getCompletions('source/util.bs', util.createPosition(2, 34));
+            expect(completions.length).to.eql(1);
+            expectCompletionsIncludes(completions, [{
+                label: 'someFunc',
+                kind: CompletionItemKind.Function
+            }]);
+        });
+
+        it('includes documentation', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                     <script uri="Widget.brs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.brs', `
+                ' This is documentation
+                function someFunc(input as string) as float
+                    return input.toFloat()
+                end function
+            `);
+            program.setFile('source/util.bs', `
+                sub callWidgetSomeFunc(widget as roSGNodeWidget)
+                    print widget@.
+                end sub
+            `);
+            program.validate();
+            // print widget@.|
+            let completions = program.getCompletions('source/util.bs', util.createPosition(2, 34));
+            expect(completions.length).to.eql(1);
+            expectCompletionsIncludes(completions, [{
+                label: 'someFunc',
+                kind: CompletionItemKind.Function,
+                documentation: 'This is documentation'
+            }]);
+        });
     });
 
 });
