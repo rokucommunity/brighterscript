@@ -35,7 +35,8 @@ export class BuiltInInterfaceAdder {
         }
         const builtInComponent = this.getMatchingRokuComponent(thisType);
         if (!builtInComponent) {
-            //throw new Error(`Unknown Roku component '${componentName}'`);
+            // TODO: Perhaps have error here, but docs have some references to unknown types
+            //throw new Error(`Unknown Roku component '${this.getMatchingRokuComponentName(thisType)}' for type '${thisType.toString()}'`);
             return;
         }
         if (!this.typedFunctionFactory) {

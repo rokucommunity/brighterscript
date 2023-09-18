@@ -136,7 +136,7 @@ export class ReferenceType extends BscType {
                         };
                     } else if (propName === 'callFuncTable') {
                         return (this as any).callFuncMemberTable;
-                    } else if (propName === 'getcallFuncTable') {
+                    } else if (propName === 'getCallFuncTable') {
                         return () => {
                             return (this as any).callFuncMemberTable;
                         };

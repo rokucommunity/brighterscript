@@ -869,8 +869,6 @@ export class SGAst {
     ) {
     }
 
-    public symbolTable = new SymbolTable('SGAst');
-
     public transpile(state: TranspileState): SourceNode {
         const chunks = [] as SourceNode[];
         //write XML prolog
