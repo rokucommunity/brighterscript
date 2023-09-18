@@ -17,6 +17,12 @@ export interface BsConfig {
     };
 
     /**
+     * when set, bsconfig.json loading is disabled
+     */
+    noProject?: boolean;
+
+
+    /**
      * Relative or absolute path to another bsconfig.json file that this file should import and then override.
      * Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.
      */
