@@ -467,6 +467,12 @@ Type: `boolean`
 
 Emit full paths to files when printing diagnostics to the console. Defaults to `false`.
 
+#### `emitDefinitions`
+
+Type: `boolean`
+
+Emit type definition files (`d.bs`) during transpile. Defaults to `false`.
+
 #### `diagnosticFilters`
 
 Type: `Array<string | number | {src: string; codes: number[]}`
