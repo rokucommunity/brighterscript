@@ -362,3 +362,12 @@ export function mapToObject<T>(map: Map<any, T>) {
     }
     return result;
 }
+
+export function stripConsoleColors(inputString) {
+    // Regular expression to match ANSI escape codes for colors
+    // eslint-disable-next-line no-control-regex
+    const colorPattern = /\u001b\[(?:\d*;){0,5}\d*m/g;
+
+    // Remove all occurrences of ANSI escape codes
+    return inputString.replace(colorPattern, '');
+}

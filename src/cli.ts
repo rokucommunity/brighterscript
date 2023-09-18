@@ -5,11 +5,11 @@ import { ProgramBuilder } from './ProgramBuilder';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import util from './util';
 import { LanguageServer } from './LanguageServer';
-import * as v8Profiler from 'v8-profiler-next';
 import chalk from 'chalk';
 
 import * as fsExtra from 'fs-extra';
 import * as readline from 'readline';
+import { execSync } from 'child_process';
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -30,6 +30,7 @@ let options = yargs
     .option('files', { type: 'array', description: 'The list of files (or globs) to include in your project. Be sure to wrap these in double quotes when using globs.' })
     .option('host', { type: 'string', description: 'The host used when deploying to a Roku.' })
     .option('ignore-error-codes', { type: 'array', description: 'A list of error codes that the compiler should NOT emit, even if encountered.' })
+    .option('no-project', { type: 'boolean', defaultDescription: 'false', description: 'When set, bsconfig.json loading is disabled', alias: ['noproject', 'noProject'] })
     .option('log-level', { type: 'string', defaultDescription: '"log"', description: 'The log level. Value can be "error", "warn", "log", "info", "debug".' })
     .option('out-file', { type: 'string', description: 'Path to the zip folder containing the bundled project. Defaults to `./out/[YOUR_ROOT_FOLDER_NAME].zip' })
     .option('password', { type: 'string', description: 'The password for deploying to a Roku.' })
@@ -114,8 +115,17 @@ async function finalize(exitCode: number, builder?: ProgramBuilder) {
     process.exit(exitCode);
 }
 
+let v8Profiler;
+
 function initProfiling() {
     if (options.profile) {
+        console.log('Installing v8-profiler-next');
+        execSync('npm install v8-profiler-next@^1.9.0', {
+            stdio: 'inherit',
+            cwd: `${__dirname}/../`
+        });
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        v8Profiler = require('v8-profiler-next');
         // set generateType 1 to generate new format for cpuprofile parsing in vscode.
         v8Profiler.setGenerateType(1);
         v8Profiler.startProfiling(profileTitle, true);

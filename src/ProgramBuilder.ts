@@ -13,6 +13,7 @@ import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
 import * as requireRelative from 'require-relative';
 import { Throttler } from './Throttler';
+import { URI } from 'vscode-uri';
 
 /**
  * A runner class that handles
@@ -98,7 +99,9 @@ export class ProgramBuilder {
         this.isRunning = true;
         try {
             this.options = util.normalizeAndResolveConfig(options);
-            if (this.options.project) {
+            if (this.options.noProject) {
+                this.logger.log(`'no-project' flag is set so bsconfig.json loading is disabled'`);
+            } else if (this.options.project) {
                 this.logger.log(`Using config file: "${this.options.project}"`);
             } else {
                 this.logger.log(`No bsconfig.json file found, using default options`);
@@ -310,8 +313,19 @@ export class ProgramBuilder {
             for (let diagnostic of sortedDiagnostics) {
                 //default the severity to error if undefined
                 let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
+                let relatedInformation = (diagnostic.relatedInformation ?? []).map(x => {
+                    let relatedInfoFilePath = URI.parse(x.location.uri).fsPath;
+                    if (!emitFullPaths) {
+                        relatedInfoFilePath = path.relative(cwd, relatedInfoFilePath);
+                    }
+                    return {
+                        filePath: relatedInfoFilePath,
+                        range: x.location.range,
+                        message: x.message
+                    };
+                });
                 //format output
-                diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic);
+                diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic, relatedInformation);
             }
         }
     }
