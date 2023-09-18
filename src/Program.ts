@@ -268,6 +268,9 @@ export class Program {
         }
     }
 
+    /**
+     * Keeps a set of all the components that need to have their types updated during the current validation cycle
+     */
     private componentSymbolsToUpdate = new Set<{ componentKey: string; componentName: string }>();
 
     /**
