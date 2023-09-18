@@ -772,12 +772,14 @@ export class Scope {
         return this.cache.getOrAdd('symbolTable', () => {
             const result = new SymbolTable(`Scope: '${this.name}'`, () => this.getParentScope()?.symbolTable);
             result.addSymbol('m', undefined, new AssociativeArrayType(), SymbolTypeFlag.runtime);
-            result.addSibling(this.mergedFileSymbolTable);
+            for (let file of this.getOwnFiles()) {
+                if (isBrsFile(file)) {
+                    result.mergeSymbolTable(file.parser?.symbolTable);
+                }
+            }
             return result;
         });
     }
-
-    protected mergedFileSymbolTable = new SymbolTable(`Merged Scope: ${this.name}`);
 
     /**
      * A list of functions that will be called whenever `unlinkSymbolTable` is called
@@ -792,13 +794,13 @@ export class Scope {
      *  Tree of symbol tables:
      *  ```
      *  Global Scope Symbol Table
-     *      -  Source Scope Symbol Table :: Merged Symbol Table :: Aggregate Namespaces Symbol Table (Siblings)
+     *      -  Source Scope Symbol Table :: Aggregate Namespaces Symbol Table (Siblings)
      *          - File 1 Symbol Table
      *          - File 2 Symbol Table
-     *      -  Component A Scope Symbol Table :: Merged Symbol Table :: Aggregate Namespaces Symbol Table (Siblings)
+     *      -  Component A Scope Symbol Table :: Aggregate Namespaces Symbol Table (Siblings)
      *          - File 1 Symbol Table
      *          - File 2 Symbol Table
-     *      -  Component B Scope Symbol Table  :: Merged Symbol Table :: Aggregate Namespaces Symbol Table (Siblings)
+     *      -  Component B Scope Symbol Table :: Aggregate Namespaces Symbol Table (Siblings)
      *          - File 1 Symbol Table
      *          - File 2 Symbol Table
      * ```
@@ -807,21 +809,12 @@ export class Scope {
         SymbolTable.cacheVerifier.generateToken();
         const allNamespaces: NamespaceStatement[] = [];
 
-        // Merged Symbols stay around until next linking, so that queries into this scope's symbol table
-        // (eg. a callFunc into this scope) will still resolve
-        this.mergedFileSymbolTable.clearSymbols();
-        this.linkSymbolTableDisposables.push();
-
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
-
-                this.mergedFileSymbolTable.mergeSymbolTable(file.parser?.symbolTable);
-
                 this.linkSymbolTableDisposables.push(
                     file.parser.symbolTable.pushParentProvider(() => this.symbolTable)
                 );
                 allNamespaces.push(...file.parser.references.namespaceStatements);
-
             }
         }
         const aggregatesAdded = new Set<string>();
