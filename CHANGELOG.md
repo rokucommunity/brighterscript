@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.66.0-alpha.5](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.4...v0.66.0-alpha.5) - 2023-09-14
+### Changed
+ - all changes from [v0.65.5](https://github.com/rokucommunity/brighterscript/compare/v0.65.4...v0.65.5)
+ - Type casts are not allowed in BrightScript ([#859](https://github.com/rokucommunity/brighterscript/pull/859))
+ - Fixes small hover issues ([#860](https://github.com/rokucommunity/brighterscript/pull/860))
+ - Fixes ReferenceTypes in Binary Operations & UnionTypes as args ([#858](https://github.com/rokucommunity/brighterscript/pull/858))
+ - Refactor completion logic ([#864](https://github.com/rokucommunity/brighterscript/pull/864))
+ - Fix built in methods parameter types ([#866](https://github.com/rokucommunity/brighterscript/pull/866))
+ - Fixes types on call expression info class ([#877](https://github.com/rokucommunity/brighterscript/pull/877))
+ - Adds Return type validation ([#876](https://github.com/rokucommunity/brighterscript/pull/876))
+ - Adds Typed Arrays ([#875](https://github.com/rokucommunity/brighterscript/pull/875))
+ - Use Symbol Tables for Completions ([#874](https://github.com/rokucommunity/brighterscript/pull/874))
+ - Adds Leading Trivia to all tokens ([#885](https://github.com/rokucommunity/brighterscript/pull/885))
+ - Adds built in Interfaces to primitive types & Validates class method calls ([#856](https://github.com/rokucommunity/brighterscript/pull/856))
+
+
+
 ## [0.66.0-alpha.4](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.3...v0.66.0-alpha.4) - 2023-07-26
 ### Changed
  - all changes from [v0.65.4](https://github.com/rokucommunity/brighterscript/compare/v0.65.3...v0.65.4)

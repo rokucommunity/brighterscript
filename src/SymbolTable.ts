@@ -182,7 +182,6 @@ export class SymbolTable implements SymbolTypeGetter {
         });
     }
 
-
     /**
      * Removes a new symbol from the table
      */
