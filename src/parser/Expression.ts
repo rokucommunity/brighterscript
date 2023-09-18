@@ -28,6 +28,7 @@ import { UnionType } from '../types/UnionType';
 import { ArrayType } from '../types';
 import { AssociativeArrayType } from '../types/AssociativeArrayType';
 import type { ComponentType } from '../types/ComponentType';
+import { createToken } from '../astUtils/creators';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -1174,7 +1175,7 @@ export class CallfuncExpression extends Expression {
         const calleeType = this.callee.getType({ ...options, flags: SymbolTypeFlag.runtime });
         if (isComponentType(calleeType) || isReferenceType(calleeType)) {
             const funcType = (calleeType as ComponentType).getCallFuncType(this.methodName.text, options);
-            options.typeChain?.push(new TypeChainEntry(this.methodName.text, funcType, this.methodName.range, true));
+            options.typeChain?.push(new TypeChainEntry(this.methodName.text, funcType, this.methodName.range, createToken(TokenKind.Callfunc)));
             if (options.ignoreCall) {
                 result = funcType;
             }

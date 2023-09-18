@@ -293,7 +293,7 @@ export class Program {
             return 0;
         });
         this.syncComponentDependencyGraph(this.components[key]);
-        this.addComponentToUpdateSet(xmlFile);
+        this.addDeferredComponentTypeSymbolCreation(xmlFile);
     }
 
     /**
@@ -310,10 +310,14 @@ export class Program {
         }
 
         this.syncComponentDependencyGraph(arr);
-        this.addComponentToUpdateSet(xmlFile);
+        this.addDeferredComponentTypeSymbolCreation(xmlFile);
     }
 
-    private addComponentToUpdateSet(xmlFile: XmlFile) {
+    /**
+     * Adds a component described in an XML to the set of components that needs to be updated this validation cycle.
+     * @param xmlFile XML file with <component> tag
+     */
+    private addDeferredComponentTypeSymbolCreation(xmlFile: XmlFile) {
         this.componentSymbolsToUpdate.add({ componentKey: this.getComponentKey(xmlFile), componentName: xmlFile.componentName?.text });
 
     }
@@ -324,7 +328,8 @@ export class Program {
 
     /**
      * Updates the global symbol table with the first component in this.components to have the same name as the component in the file
-     * @param xmlFile file with a component
+     * @param componentKey key getting a component from `this.components`
+     * @param componentName the unprefixed name of the component that will be added (e.g. 'MyLabel' NOT 'roSgNodeMyLabel')
      */
     private updateComponentSymbolInGlobalScope(componentKey: string, componentName: string) {
         const symbolName = componentName ? util.getSgNodeTypeName(componentName) : undefined;

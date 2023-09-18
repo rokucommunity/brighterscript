@@ -16,6 +16,8 @@ import type { AstEditor } from './astUtils/AstEditor';
 import type { Token } from './lexer/Token';
 import type { SymbolTypeFlag } from './SymbolTable';
 import type { CallExpression } from './parser/Expression';
+import { createToken } from './astUtils/creators';
+import { TokenKind } from './lexer/TokenKind';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -493,7 +495,7 @@ export interface GetTypeOptions {
 }
 
 export class TypeChainEntry {
-    constructor(public name: string, public type: BscType, public range: Range, public isCallFunc = false) {
+    constructor(public name: string, public type: BscType, public range: Range, public seperatorToken: Token = createToken(TokenKind.Dot)) {
     }
     get isResolved() {
         return this.type?.isResolvable();

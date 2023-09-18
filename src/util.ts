@@ -1832,7 +1832,7 @@ export class Util {
         let containsDynamic = false;
         for (let i = 0; i < typeChain.length; i++) {
             const chainItem = typeChain[i];
-            const dotSep = chainItem.isCallFunc ? '@.' : '.';
+            const dotSep = chainItem.seperatorToken.text;
             if (i > 0) {
                 fullChainName += dotSep;
             }
