@@ -330,7 +330,7 @@ export class SymbolTable implements SymbolTypeGetter {
                 ...new Set(
                     [...this.symbolMap.entries()].map(([key, symbols]) => {
                         return symbols.map(x => {
-                            return { name: x.name, type: x.type?.toString() };
+                            return { name: x.name, type: (x.type as any)?.__identifier };
                         });
                     }).flat().sort()
                 )

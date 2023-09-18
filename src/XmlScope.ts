@@ -60,9 +60,13 @@ export class XmlScope extends Scope {
         //add functions
         for (const func of iface.functions ?? []) {
             if (func.name) {
-                const actualFuncType = this.symbolTable.getSymbolType(func.name, { flags: SymbolTypeFlag.runtime, fullName: func.name, tableProvider: () => this.symbolTable });
+                const componentFuncType = this.symbolTable.getSymbolType(func.name, { flags: SymbolTypeFlag.runtime, fullName: func.name, tableProvider: () => this.symbolTable });
+                // TODO: Get correct function type, and fully resolve all param and return types of function
+                // eg.:
+                // callFuncType = new CallFuncType(componentFuncType) // does something to fully resolve & store all associated types
+
                 //TODO: add documentation - need to get previous comment from XML
-                result.addCallFuncMember(func.name, {}, actualFuncType as BaseFunctionType, SymbolTypeFlag.runtime);
+                result.addCallFuncMember(func.name, {}, componentFuncType as BaseFunctionType, SymbolTypeFlag.runtime);
             }
         }
         //add fields

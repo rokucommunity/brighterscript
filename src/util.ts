@@ -1832,13 +1832,14 @@ export class Util {
         let containsDynamic = false;
         for (let i = 0; i < typeChain.length; i++) {
             const chainItem = typeChain[i];
+            const dotSep = chainItem.isCallFunc ? '@.' : '.';
             if (i > 0) {
-                fullChainName += '.';
+                fullChainName += dotSep;
             }
             fullChainName += chainItem.name;
             parentTypeName = previousTypeName;
-            fullErrorName = previousTypeName ? `${previousTypeName}.${chainItem.name}` : chainItem.name;
-            previousTypeName = chainItem.type.toString();
+            fullErrorName = previousTypeName ? `${previousTypeName}${dotSep}${chainItem.name}` : chainItem.name;
+            previousTypeName = chainItem.type?.toString() ?? '';
             itemName = chainItem.name;
             containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
             if (!chainItem.isResolved) {

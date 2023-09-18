@@ -108,24 +108,25 @@ export class Program {
     }
 
 
-    private recurseNodeData(nodeData: SGNodeData) {
+    private recursivelyAddNodeToSymbolTable(nodeData: SGNodeData) {
         if (!nodeData) {
             return;
         }
         let nodeType: ComponentType;
-        if (!this.globalScope.symbolTable.hasSymbol(nodeData.name, SymbolTypeFlag.typetime)) {
+        const nodeName = util.getSgNodeTypeName(nodeData.name);
+        if (!this.globalScope.symbolTable.hasSymbol(nodeName, SymbolTypeFlag.typetime)) {
             let parentNode: ComponentType;
             if (nodeData.extends) {
                 const parentNodeData = nodes[nodeData.extends.name.toLowerCase()];
                 try {
-                    parentNode = this.recurseNodeData(parentNodeData);
+                    parentNode = this.recursivelyAddNodeToSymbolTable(parentNodeData);
                 } catch (error) {
                     console.log(error, nodeData);
                 }
             }
             nodeType = new ComponentType(nodeData.name, parentNode);
             nodeType.addBuiltInInterfaces();
-            this.globalScope.symbolTable.addSymbol(util.getSgNodeTypeName(nodeData.name), { description: nodeData.description }, nodeType, SymbolTypeFlag.typetime);
+            this.globalScope.symbolTable.addSymbol(nodeName, { description: nodeData.description }, nodeType, SymbolTypeFlag.typetime);
         } else {
             nodeType = this.globalScope.symbolTable.getSymbolType(nodeData.name, { flags: SymbolTypeFlag.typetime }) as ComponentType;
         }
@@ -174,8 +175,7 @@ export class Program {
         }
 
         for (const nodeData of Object.values(nodes) as SGNodeData[]) {
-            const nodeType = this.recurseNodeData(nodeData);
-            this.globalScope.symbolTable.addSymbol(util.getSgNodeTypeName(nodeData.name), { description: nodeData.description }, nodeType, SymbolTypeFlag.typetime);
+            this.recursivelyAddNodeToSymbolTable(nodeData);
         }
     }
 
@@ -268,6 +268,8 @@ export class Program {
         }
     }
 
+    private componentSymbolsToUpdate = new Set<{ componentKey: string; componentName: string }>();
+
     /**
      * Register (or replace) the reference to a component in the component map
      */
@@ -291,7 +293,7 @@ export class Program {
             return 0;
         });
         this.syncComponentDependencyGraph(this.components[key]);
-        this.updateComponentSymbolInGlobalScope(xmlFile);
+        this.addComponentToUpdateSet(xmlFile);
     }
 
     /**
@@ -308,7 +310,12 @@ export class Program {
         }
 
         this.syncComponentDependencyGraph(arr);
-        this.updateComponentSymbolInGlobalScope(xmlFile);
+        this.addComponentToUpdateSet(xmlFile);
+    }
+
+    private addComponentToUpdateSet(xmlFile: XmlFile) {
+        this.componentSymbolsToUpdate.add({ componentKey: this.getComponentKey(xmlFile), componentName: xmlFile.componentName?.text });
+
     }
 
     private getComponentKey(xmlFile: XmlFile) {
@@ -319,19 +326,24 @@ export class Program {
      * Updates the global symbol table with the first component in this.components to have the same name as the component in the file
      * @param xmlFile file with a component
      */
-    private updateComponentSymbolInGlobalScope(xmlFile: XmlFile) {
-        const symbolName = util.getSgNodeTypeName(xmlFile.componentName?.text);
+    private updateComponentSymbolInGlobalScope(componentKey: string, componentName: string) {
+        const symbolName = componentName ? util.getSgNodeTypeName(componentName) : undefined;
         if (!symbolName) {
             return;
         }
-        const key = this.getComponentKey(xmlFile);
-        const components = this.components[key] || [];
+        const components = this.components[componentKey] || [];
+        // Remove any existing symbols that match
         this.globalScope.symbolTable.removeSymbol(symbolName);
+        // There is a component that can be added - use it.
         if (components.length > 0) {
-            const componentType = components[0].scope.getComponentType();
+            const componentScope = components[0].scope;
+            // TODO: May need to link symbol tables to get correct types for callfuncs
+            // componentScope.linkSymbolTable();
+            const componentType = componentScope.getComponentType();
             if (componentType) {
                 this.globalScope.symbolTable.addSymbol(symbolName, {}, componentType, SymbolTypeFlag.typetime);
             }
+            // TODO: Remember to unlink! componentScope.unlinkSymbolTable();
         }
     }
 
@@ -759,6 +771,14 @@ export class Program {
                     this.plugins.emit('afterFileValidate', validateFileEvent);
                 }
             }
+
+            // Build component types for any component that changes
+            this.logger.time(LogLevel.info, ['Build component types'], () => {
+                for (let { componentKey, componentName } of this.componentSymbolsToUpdate) {
+                    this.updateComponentSymbolInGlobalScope(componentKey, componentName);
+                }
+                this.componentSymbolsToUpdate.clear();
+            });
 
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
                 for (let scopeName in this.scopes) {

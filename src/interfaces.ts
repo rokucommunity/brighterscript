@@ -482,17 +482,18 @@ export interface FileLink<T> {
 export interface ExtraSymbolData {
     definingNode?: AstNode;
     description?: string;
-    completionPriority?: number; // teh higher the number, the lower the priority
+    completionPriority?: number; // the higher the number, the lower the priority
 }
 
 export interface GetTypeOptions {
     flags: SymbolTypeFlag;
     typeChain?: TypeChainEntry[];
     data?: ExtraSymbolData;
+    ignoreCall?: boolean; // get teh type of this expression, NOT it's return type
 }
 
 export class TypeChainEntry {
-    constructor(public name: string, public type: BscType, public range: Range) {
+    constructor(public name: string, public type: BscType, public range: Range, public isCallFunc = false) {
     }
     get isResolved() {
         return this.type?.isResolvable();

@@ -30,7 +30,7 @@ export class InterfaceType extends InheritableType {
         if (ancestorTypes?.find(ancestorType => ancestorType.isEqual(targetType))) {
             return true;
         }
-        if (isInheritableType(targetType) || isUnionType(targetType)) {
+        if (isInheritableType(targetType) || isUnionType(targetType) || isAssociativeArrayType(targetType)) {
             return this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime);
         }
         return false;

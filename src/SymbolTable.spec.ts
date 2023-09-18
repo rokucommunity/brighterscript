@@ -4,6 +4,7 @@ import { StringType } from './types/StringType';
 import { IntegerType } from './types/IntegerType';
 import { BooleanType } from './types/BooleanType';
 import { SymbolTypeFlag } from './SymbolTable';
+import { expectTypeToBe } from './testHelpers.spec';
 
 describe('SymbolTable', () => {
     let parent: SymbolTable;
@@ -15,7 +16,7 @@ describe('SymbolTable', () => {
     it('is case insensitive', () => {
         const st = new SymbolTable('Child');
         st.addSymbol('foo', null, new StringType(), SymbolTypeFlag.runtime);
-        expect(st.getSymbol('FOO', SymbolTypeFlag.runtime).length).eq(1);
+        expect(st.getSymbol('FOO', SymbolTypeFlag.runtime)[0].type.toString()).eq('string');
         expect(st.getSymbol('FOO', SymbolTypeFlag.runtime)[0].type.toString()).eq('string');
     });
 
@@ -26,6 +27,13 @@ describe('SymbolTable', () => {
         expect(st.getSymbol('FOO', SymbolTypeFlag.runtime).length).eq(2);
     });
 
+    it('can remove symbols', () => {
+        const st = new SymbolTable('Table');
+        st.addSymbol('foo', null, new StringType(), SymbolTypeFlag.runtime);
+        expectTypeToBe(st.getSymbolType('foo', { flags: SymbolTypeFlag.runtime }), StringType);
+        st.removeSymbol('foo');
+        expect(st.getSymbol('foo', SymbolTypeFlag.runtime)).to.be.undefined;
+    });
 
     it('reads from parent symbol table if not found in current', () => {
         const st = new SymbolTable('Child', () => parent);

@@ -2927,8 +2927,11 @@ describe('Scope', () => {
                 const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(3, 31));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
-                // TODO: `pi` SHOULD be FloatType, but it doesn't work yet
+                const sourceScope = program.getScopeByName('source');
+                sourceScope.linkSymbolTable();
+                //TODO: This *SHOULD* be float, but callfunc returns aren't inferred yet
                 expectTypeToBe(symbolTable.getSymbolType('pi', opts), DynamicType);
+                sourceScope.unlinkSymbolTable();
             });
         });
     });

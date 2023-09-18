@@ -323,7 +323,7 @@ export class TypePropertyReferenceType extends BscType {
                         return () => false;
                     }
                 }
-                let inner = this.outerType[this.propertyName];
+                let inner = this.outerType?.[this.propertyName];
 
                 if (!inner) {
                     inner = DynamicType.instance;

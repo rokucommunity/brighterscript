@@ -2,7 +2,7 @@ import { expect } from '../../chai-config.spec';
 import { Program } from '../../Program';
 import { util } from '../../util';
 import { createSandbox } from 'sinon';
-import { rootDir } from '../../testHelpers.spec';
+import { expectZeroDiagnostics, rootDir, trim } from '../../testHelpers.spec';
 let sinon = createSandbox();
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');
@@ -499,6 +499,54 @@ describe('HoverProcessor', () => {
             // return myS|tring
             let hover = program.getHover(file.srcPath, util.createPosition(7, 31))[0];
             expect(hover?.contents).eql([fence('description as string')]);
+        });
+
+
+        it('should provide correct hover for LHS of assignment', () => {
+            let file = program.setFile('source/main.bs', `
+                function getFloat() as float
+                    return 123
+                end function
+
+                sub doStuff()
+                    myFloat = getFloat()
+                end sub
+            `);
+            program.validate();
+            //     myF|loat = getFloat()
+            let hover = program.getHover(file.srcPath, util.createPosition(6, 24))[0];
+            expect(hover?.contents).eql([fence('myFloat as float')]);
+
+        });
+    });
+
+    describe('callFunc', () => {
+
+        it('should get hovers on @callfunc invocations', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                     <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            const file = program.setFile('components/Widget.bs', `
+                sub foo()
+                    top = m.top as roSgNodeWidget
+                    print top@.someFunc("3.14")
+                end sub
+
+                function someFunc(input as string) as float
+                    return input.toFloat()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            // print top@.some|Func("3.14")
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 35))[0];
+            expect(hover?.contents).eql([fence('function roSGNodeWidget@.someFunc(input as string) as float')]);
         });
     });
 });

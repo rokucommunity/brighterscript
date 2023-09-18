@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isCommentStatement, isComponentType, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import type { BscType } from '../types/BscType';
@@ -27,6 +27,7 @@ import { TypePropertyReferenceType } from '../types/ReferenceType';
 import { UnionType } from '../types/UnionType';
 import { ArrayType } from '../types';
 import { AssociativeArrayType } from '../types/AssociativeArrayType';
+import type { ComponentType } from '../types/ComponentType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -142,6 +143,9 @@ export class CallExpression extends Expression {
 
     getType(options: GetTypeOptions) {
         const calleeType = this.callee.getType(options);
+        if (options.ignoreCall) {
+            return calleeType;
+        }
         if (isNewExpression(this.parent)) {
             return calleeType;
         }
@@ -1164,26 +1168,28 @@ export class CallfuncExpression extends Expression {
 
     getType(options: GetTypeOptions) {
         let result: BscType = DynamicType.instance;
-        /*
-         TODO: Figure out how to get return types from call funcs!
-            This code does not work, because if the call func is being validated in another scope
-            before the defining scope is linked, then the function is not known.
+        // a little hacky here with checking options.ignoreCall because callFuncExpression has the method name
+        // It's nicer for CallExpression, because it's a call on any expression.
 
         const calleeType = this.callee.getType({ ...options, flags: SymbolTypeFlag.runtime });
         if (isComponentType(calleeType) || isReferenceType(calleeType)) {
             const funcType = (calleeType as ComponentType).getCallFuncType(this.methodName.text, options);
-
-            if (isCallableType(funcType) && (!isReferenceType(funcType.returnType) || funcType.returnType.isResolvable())) {
+            options.typeChain?.push(new TypeChainEntry(this.methodName.text, funcType, this.methodName.range, true));
+            if (options.ignoreCall) {
+                result = funcType;
+            }
+            /* TODO:
+                make callfunc return types work
+            else if (isCallableType(funcType) && (!isReferenceType(funcType.returnType) || funcType.returnType.isResolvable())) {
                 result = funcType.returnType;
-            } else if (!isReferenceType(funcType) && (funcType as any).returnType?.isResolvable()) {
+            } else if (!isReferenceType(funcType) && (funcType as any)?.returnType?.isResolvable()) {
                 result = (funcType as any).returnType;
             } else {
-                result = new TypePropertyReferenceType(funcType, 'returnType');
+                return new TypePropertyReferenceType(funcType, 'returnType');
             }
+            */
         }
-        */
 
-        options.typeChain?.push(new TypeChainEntry(this.methodName.text, result, this.methodName.range));
         return result;
     }
 }

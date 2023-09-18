@@ -12,12 +12,16 @@ import util from '../util';
 
 export class ComponentType extends InheritableType {
 
-    constructor(public name: string, public readonly superComponent?: ComponentType) {
+    constructor(public name: string, superComponent?: ComponentType) {
         super(name, superComponent);
-        this.callFuncMemberTable = new SymbolTable(`${this.name}: CallFunc`, () => this.superComponent?.callFuncMemberTable);
+        this.callFuncMemberTable = new SymbolTable(`${this.name}: CallFunc`, () => this.parentComponent?.callFuncMemberTable);
     }
 
     public readonly kind = BscTypeKind.ComponentType;
+
+    public get parentComponent() {
+        return this.parentType as ComponentType;
+    }
 
     public isTypeCompatible(targetType: BscType) {
         if (this.isEqual(targetType)) {
