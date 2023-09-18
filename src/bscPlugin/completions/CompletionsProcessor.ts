@@ -245,7 +245,7 @@ export class CompletionsProcessor {
     private getSymbolsCompletion(symbols: BscSymbol[], areMembers = false): CompletionItem[] {
         return symbols.map(symbol => {
             // if this is low priority, sort it at the end of the list
-            const sortText = symbol.data?.completionPriority ? 'z'.repeat(symbol.data?.completionPriority) + symbol.name : undefined;
+            const sortText = symbol.data?.completionPriority ? 'z'.repeat(symbol.data?.completionPriority) + symbol.name : symbol.name;
             return {
                 label: symbol.name,
                 kind: this.getCompletionKindFromType(symbol.type, symbol.data, areMembers),

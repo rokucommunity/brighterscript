@@ -1509,6 +1509,28 @@ describe('CompletionsProcessor', () => {
         });
     });
 
+    describe('global callables', () => {
+        it('finds built in members', () => {
+            program.setFile('source/main.bs', `
+                sub foo(name as string)
+                    print
+                end sub
+            `);
+            program.validate();
+            // print |
+            const completions = program.getCompletions('source/main.bs', util.createPosition(2, 27));
+            expectCompletionsIncludes(completions, [{
+                label: 'LCase',
+                kind: CompletionItemKind.Function
+            }]);
+            expectCompletionsIncludes(completions, [{
+                label: 'CreateObject',
+                kind: CompletionItemKind.Function
+            }]);
+        });
+
+    });
+
     describe('callfunc completions', () => {
         it('finds callfunc members', () => {
             program.setFile('components/Widget.xml', trim`
