@@ -73,7 +73,7 @@ export class CompletionsProcessor {
 
     /**
      * Get a list of all script imports, relative to the specified pkgPath
-     * @param program - reference to teh program
+     * @param program - reference to the program
      * @param sourcePkgPath - the pkgPath of the source that wants to resolve script imports
      * @param scriptImport - example script import
      */
@@ -245,7 +245,7 @@ export class CompletionsProcessor {
     private getSymbolsCompletion(symbols: BscSymbol[], areMembers = false): CompletionItem[] {
         return symbols.map(symbol => {
             // if this is low priority, sort it at the end of the list
-            const sortText = symbol.data?.completionPriority ? 'z'.repeat(symbol.data?.completionPriority) + symbol.name : symbol.name;
+            const sortText = symbol.data?.completionPriority ? 'z'.repeat(symbol.data?.completionPriority) + symbol.name : undefined;
             return {
                 label: symbol.name,
                 kind: this.getCompletionKindFromType(symbol.type, symbol.data, areMembers),
