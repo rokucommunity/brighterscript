@@ -1057,4 +1057,90 @@ describe('ScopeValidator', () => {
             ]);
         });
     });
+
+    describe('assignmentTypeMismatch', () => {
+        it('finds when the type of the lhs is not compatible with teh expected type', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(thing as iThing)
+                    thing.name = 123
+                end sub
+
+                interface iThing
+                    name as string
+                end interface
+            `);
+            program.validate();
+            //should have error - assignment value should be a string, not a float
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('integer', 'string').message
+            ]);
+        });
+
+
+        it('allows setting a member with correct type that is a union type', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(thing as iThing)
+                    thing.name = 123
+                end sub
+
+                interface iThing
+                    name as string or integer
+                end interface
+            `);
+            program.validate();
+            //should have no error - assignment value should be a string, not a float
+            expectZeroDiagnostics(program);
+        });
+
+        it('finds when the rhs type is not compatible with the lhs, which is a union type', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(thing as iThing)
+                    thing.name = false
+                end sub
+
+                interface iThing
+                    name as string or integer
+                end interface
+            `);
+            program.validate();
+            //should have error - assignment value should be a string or integer, not a boolean
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('boolean', 'string or integer').message
+            ]);
+        });
+
+        it('validates when trying to assign to a class method', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(myThing as Thing)
+                    myThing.getPi = 3.14
+                end sub
+
+                class Thing
+                    function getPi() as float
+                        return 3.14
+                    end function
+                end class
+            `);
+            program.validate();
+            //should have error
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('float', 'function getPi() as float').message
+            ]);
+        });
+
+        it('allows adding new properties to a class (but why would you want to?)', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(myThing as Thing)
+                    myThing.getPi = 3.14
+                end sub
+
+                class Thing
+                end class
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+    });
 });

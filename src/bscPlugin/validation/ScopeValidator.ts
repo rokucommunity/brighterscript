@@ -5,7 +5,7 @@ import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTable';
-import type { AssignmentStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
+import type { AssignmentStatement, DottedSetStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -61,6 +61,9 @@ export class ScopeValidator {
                     },
                     ReturnStatement: (returnStatement) => {
                         this.validateReturnStatement(file, returnStatement);
+                    },
+                    DottedSetStatement: (dottedSetStmt) => {
+                        this.validateDottedSetStatement(file, dottedSetStmt);
                     }
 
                 }), {
@@ -481,6 +484,26 @@ export class ScopeValidator {
                 });
 
             }
+        }
+        this.event.scope.addDiagnostics(diagnostics);
+    }
+
+    /**
+     * Detect return statements with incompatible types vs. declared return type
+     */
+    private validateDottedSetStatement(file: BrsFile, dottedSetStmt: DottedSetStatement) {
+        const diagnostics: BsDiagnostic[] = [];
+        const getTypeOpts = { flags: SymbolTypeFlag.runtime };
+
+        const expectedLHSType = dottedSetStmt?.obj?.getType(getTypeOpts)?.getMemberType(dottedSetStmt.name.text, getTypeOpts);
+        const actualRHSType = dottedSetStmt?.value?.getType(getTypeOpts);
+
+        if (expectedLHSType?.isResolvable() && !expectedLHSType?.isTypeCompatible(actualRHSType)) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.assignmentTypeMismatch(actualRHSType.toString(), expectedLHSType.toString()),
+                range: dottedSetStmt.range,
+                file: file
+            });
         }
         this.event.scope.addDiagnostics(diagnostics);
     }

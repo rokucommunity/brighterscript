@@ -739,6 +739,11 @@ export let DiagnosticMessages = {
         message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'`,
         code: 1142,
         severity: DiagnosticSeverity.Error
+    }),
+    assignmentTypeMismatch: (actualTypeString: string, expectedTypeString: string) => ({
+        message: `Type '${actualTypeString}' is not compatible with type '${expectedTypeString}'`,
+        code: 1143,
+        severity: DiagnosticSeverity.Error
     })
 };
 
