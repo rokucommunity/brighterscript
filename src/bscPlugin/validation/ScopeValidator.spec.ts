@@ -1142,5 +1142,21 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('validates class constructors', () => {
+            program.setFile('source/util.bs', `
+                class Video
+                    sub new(url as integer)
+                        m.url = url 'this should be a compile error
+                    end sub
+                    public url as string
+                end class
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('integer', 'string').message
+            ]);
+        });
+
     });
 });
