@@ -12,6 +12,10 @@ export interface BsConfig {
      */
     project?: string;
 
+    manifest?: {
+        bs_const?: Record<string, boolean | null>;
+    };
+
     /**
      * when set, bsconfig.json loading is disabled
      */
@@ -188,4 +192,12 @@ export interface BsConfig {
      * @default false
      */
     allowBrighterScriptInBrightScript?: boolean;
+
+    /**
+     * Override the destination directory for the bslib.brs file.  Use this if
+     * you want to customize where the bslib.brs file is located in the staging
+     * directory.  Note that using a location outside of `source` will break
+     * scripts inside `source` that depend on bslib.brs.  Defaults to `source`.
+     */
+    bslibDestinationDir?: string;
 }

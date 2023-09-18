@@ -354,6 +354,11 @@ export class Util {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
         }
         config.logLevel = config.logLevel ?? LogLevel.log;
+        config.bslibDestinationDir = config.bslibDestinationDir ?? 'source';
+        if (config.bslibDestinationDir !== 'source') {
+            // strip leading and trailing slashes
+            config.bslibDestinationDir = config.bslibDestinationDir.replace(/^(\/*)(.*?)(\/*)$/, '$2');
+        }
         return config;
     }
 
@@ -1228,9 +1233,9 @@ export class Util {
     /**
      * Copy the version of bslib from local node_modules to the staging folder
      */
-    public async copyBslibToStaging(stagingDir: string) {
+    public async copyBslibToStaging(stagingDir: string, bslibDestinationDir = 'source') {
         //copy bslib to the output directory
-        await fsExtra.ensureDir(standardizePath(`${stagingDir}/source`));
+        await fsExtra.ensureDir(standardizePath(`${stagingDir}/${bslibDestinationDir}`));
         // eslint-disable-next-line
         const bslib = require('@rokucommunity/bslib');
         let source = bslib.source as string;
@@ -1248,7 +1253,7 @@ export class Util {
             const position = positions[i];
             source = source.slice(0, position) + 'bslib_' + source.slice(position);
         }
-        await fsExtra.writeFile(`${stagingDir}/source/bslib.brs`, source);
+        await fsExtra.writeFile(`${stagingDir}/${bslibDestinationDir}/bslib.brs`, source);
     }
 
     /**
