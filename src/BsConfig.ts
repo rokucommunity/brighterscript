@@ -128,7 +128,7 @@ export interface BsConfig {
 
     /**
      * Emit type definition files (`d.bs`)
-     * @default true
+     * @default false
      */
     emitDefinitions?: boolean;
 
