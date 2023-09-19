@@ -591,11 +591,14 @@ export class ScopeValidator {
         if (isEnumMemberType(rightType)) {
             rightTypeToTest = rightType.underlyingType;
         }
-        if (isDynamicType(rightTypeToTest) || isObjectType(rightTypeToTest)) {
+        if (isUnionType(rightTypeToTest)) {
+            // TODO: it is possible to validate based on innerTypes, but more complicated
+            // Because you need to verify each combination of types
+            return;
+        } else if (isDynamicType(rightTypeToTest) || isObjectType(rightTypeToTest)) {
             // operand is basically "any" type... ignore;
             return;
-        }
-        if (isPrimitiveType(rightType)) {
+        } else if (isPrimitiveType(rightType)) {
             const opResult = util.unaryOperatorResultType(unaryExpr.operator, rightTypeToTest);
             if (isDynamicType(opResult)) {
                 this.addMultiScopeDiagnostic({
