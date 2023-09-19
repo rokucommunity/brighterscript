@@ -50,5 +50,17 @@ describe('ArrayType', () => {
             const pushType = myArray.getMemberType('push', { flags: SymbolTypeFlag.runtime }) as TypedFunctionType;
             expectTypeToBe(pushType.params[0].type, IntegerType);
         });
+
+        it('correctly gets optional params for sorts', () => {
+            const myArray = new ArrayType();
+            const sortType = myArray.getMemberType('sort', { flags: SymbolTypeFlag.runtime });
+            expectTypeToBe((sortType as TypedFunctionType).params[0].type, StringType);
+            expect((sortType as TypedFunctionType).params[0].isOptional).to.be.true;
+            const sortByType = myArray.getMemberType('sortBy', { flags: SymbolTypeFlag.runtime });
+            expectTypeToBe((sortByType as TypedFunctionType).params[0].type, StringType);
+            expectTypeToBe((sortByType as TypedFunctionType).params[1].type, StringType);
+            expect((sortByType as TypedFunctionType).params[1].isOptional).to.be.true;
+
+        });
     });
 });
