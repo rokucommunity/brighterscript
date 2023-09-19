@@ -16,6 +16,8 @@ import type { AstEditor } from './astUtils/AstEditor';
 import type { Token } from './lexer/Token';
 import type { SymbolTypeFlag } from './SymbolTable';
 import type { CallExpression } from './parser/Expression';
+import { createToken } from './astUtils/creators';
+import { TokenKind } from './lexer/TokenKind';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -482,17 +484,18 @@ export interface FileLink<T> {
 export interface ExtraSymbolData {
     definingNode?: AstNode;
     description?: string;
-    completionPriority?: number; // teh higher the number, the lower the priority
+    completionPriority?: number; // the higher the number, the lower the priority
 }
 
 export interface GetTypeOptions {
     flags: SymbolTypeFlag;
     typeChain?: TypeChainEntry[];
     data?: ExtraSymbolData;
+    ignoreCall?: boolean; // get teh type of this expression, NOT it's return type
 }
 
 export class TypeChainEntry {
-    constructor(public name: string, public type: BscType, public range: Range) {
+    constructor(public name: string, public type: BscType, public range: Range, public separatorToken: Token = createToken(TokenKind.Dot)) {
     }
     get isResolved() {
         return this.type?.isResolvable();

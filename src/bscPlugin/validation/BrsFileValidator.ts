@@ -9,6 +9,7 @@ import type { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTable';
+import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
@@ -125,7 +126,7 @@ export class BrsFileValidator {
             },
             FunctionExpression: (node) => {
                 if (!node.symbolTable.hasSymbol('m', SymbolTypeFlag.runtime)) {
-                    node.symbolTable.addSymbol('m', undefined, DynamicType.instance, SymbolTypeFlag.runtime);
+                    node.symbolTable.addSymbol('m', undefined, new AssociativeArrayType(), SymbolTypeFlag.runtime);
                 }
             },
             FunctionParameterExpression: (node) => {

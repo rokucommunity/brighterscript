@@ -24,6 +24,7 @@ import { DoubleType } from './types/DoubleType';
 import { UnionType } from './types/UnionType';
 import { isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
+import { AssociativeArrayType } from './types/AssociativeArrayType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -2689,9 +2690,38 @@ describe('Scope', () => {
                 expectTypeToBe(symbolTable.getSymbolType('a', opts), IntegerType);
                 expectTypeToBe(symbolTable.getSymbolType('b', opts), DoubleType);
                 expectTypeToBe(symbolTable.getSymbolType('c', opts), StringType);
-                expectTypeToBe(symbolTable.getSymbolType('d', opts), DynamicType);
+                expectTypeToBe(symbolTable.getSymbolType('d', opts), AssociativeArrayType);
                 expectTypeToBe(symbolTable.getSymbolType('f', opts), DynamicType);
                 expectTypeToBe(symbolTable.getSymbolType('e', opts), BooleanType);
+            });
+
+            it('should set correct type for aa literals', () => {
+                let mainFile = program.setFile('source/main.bs', `
+                    sub process(intVal as integer, dblVal as double, strVal as string)
+                        myAA = {
+                            a: intVal
+                            b: dblVal
+                            c: strVal
+                            d: {}
+                            f :m.foo
+                            e: true
+                        }
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const myAA = symbolTable.getSymbolType('myAA', opts);
+                expectTypeToBe(myAA, AssociativeArrayType);
+                expectTypeToBe(myAA.getMemberType('a', opts), IntegerType);
+                expectTypeToBe(myAA.getMemberType('b', opts), DoubleType);
+                expectTypeToBe(myAA.getMemberType('c', opts), StringType);
+                expectTypeToBe(myAA.getMemberType('d', opts), AssociativeArrayType);
+                expectTypeToBe(myAA.getMemberType('f', opts), DynamicType);
+                expectTypeToBe(myAA.getMemberType('e', opts), BooleanType);
+                expectTypeToBe(myAA.getMemberType('someUnsetThing', opts), DynamicType);
             });
 
             it('should set correct type on compound equals', () => {
@@ -2864,6 +2894,44 @@ describe('Scope', () => {
                 expectTypeToBe(unionDefaultType, UnionType);
                 expect((unionDefaultType as UnionType).types).to.include(StringType.instance);
                 expect((unionDefaultType as UnionType).types).to.include(IntegerType.instance);
+            });
+        });
+
+        describe('callFunc invocations', () => {
+            it('TODO: should set correct return type', () => {
+
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="Widget.brs"/>
+                        <interface>
+                            <function name="getFloatFromString" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile('components/Widget.brs', `
+                    function getFloatFromString(input as string) as float
+                        return input.toFloat()
+                    end function
+                `);
+
+                let utilFile = program.setFile('source/util.bs', `
+                    sub someFunc(widget as roSGNodeWidget)
+                        pi = widget@.getFloatFromString("3.14")
+                        print pi
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(3, 31));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const sourceScope = program.getScopeByName('source');
+                sourceScope.linkSymbolTable();
+                //TODO: This *SHOULD* be float, but callfunc returns aren't inferred yet
+                expectTypeToBe(symbolTable.getSymbolType('pi', opts), DynamicType);
+                sourceScope.unlinkSymbolTable();
             });
         });
     });

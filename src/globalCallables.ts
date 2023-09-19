@@ -1,4 +1,3 @@
-import { SymbolTypeFlag } from './SymbolTable';
 import { BrsFile } from './files/BrsFile';
 import type { Callable } from './interfaces';
 import { ArrayType } from './types/ArrayType';
@@ -1024,9 +1023,7 @@ for (let callable of globalCallables) {
 
 }
 globalFile.callables = globalCallables as Callable[];
-for (const callable of globalCallables) {
-    globalFile.parser.symbolTable.addSymbol(callable.name, undefined, callable.type, SymbolTypeFlag.runtime);
-}
+
 
 /**
  * A map of all built-in function names. We use this extensively in scope validation

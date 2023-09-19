@@ -213,7 +213,7 @@ describe('CodeActionsProcessor', () => {
             //import the file in two scopes
             program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ChildScene">
+                <component name="ChildScene" extends="Group">
                     <script uri="comp1.bs" />
                 </component>
             `);
@@ -256,7 +256,7 @@ describe('CodeActionsProcessor', () => {
                     end function
                 end namespace
             `);
-            program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+            program.setFile('components/MainScene.xml', trim`<component name="MainScene" extends="Scene"></component>`);
             const file = program.setFile('components/MainScene.bs', `
                 sub init()
                     print alpha.secondAction()
@@ -283,7 +283,7 @@ describe('CodeActionsProcessor', () => {
                     end function
                 end namespace
             `);
-            program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+            program.setFile('components/MainScene.xml', trim`<component name="MainScene" extends="Scene"></component>`);
             const file = program.setFile('components/MainScene.bs', `
                 import "pkg:/source/first.bs"
                 sub init()
@@ -303,7 +303,7 @@ describe('CodeActionsProcessor', () => {
                 end function
             end namespace
         `);
-        program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+        program.setFile('components/MainScene.xml', trim`<component name="MainScene" extends="Scene"></component>`);
         const file = program.setFile('components/MainScene.bs', `
             sub init()
                 print alpha.firstAction()

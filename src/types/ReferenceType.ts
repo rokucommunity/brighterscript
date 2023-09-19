@@ -1,7 +1,7 @@
 import type { GetTypeOptions, TypeChainEntry } from '../interfaces';
 import type { GetSymbolTypeOptions, SymbolTypeGetterProvider } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTable';
-import { isAnyReferenceType, isDynamicType, isReferenceType } from '../astUtils/reflection';
+import { isAnyReferenceType, isComponentType, isDynamicType, isReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 import { BscTypeKind } from './BscTypeKind';
@@ -96,6 +96,24 @@ export class ReferenceType extends BscType {
                             this.memberTypeReferences.set(refLookUp, memberTypeReference);
                             return memberTypeReference;
                         };
+                    } else if (propName === 'getCallFuncType') {
+                        // We're looking for a callfunc member of a reference type
+                        // Since we don't know what type this is, yet, return ReferenceType
+                        return (memberName: string, options: GetTypeOptions) => {
+                            const resolvedType = this.resolve();
+                            if (isComponentType(resolvedType)) {
+                                return resolvedType.getCallFuncType(memberName, options);
+                            }
+                            const refLookUp = `${memberName.toLowerCase()}-${options.flags}-callfunc`;
+                            let callFuncMemberTypeReference = this.callFuncMemberTypeReferences.get(refLookUp);
+                            if (callFuncMemberTypeReference) {
+                                return callFuncMemberTypeReference;
+
+                            }
+                            callFuncMemberTypeReference = new ReferenceType(memberName, this.makeMemberFullName(memberName), options.flags, this.futureCallFuncMemberTableProvider);
+                            this.callFuncMemberTypeReferences.set(refLookUp, callFuncMemberTypeReference);
+                            return callFuncMemberTypeReference;
+                        };
                     } else if (propName === 'toString') {
                         // This type was never found
                         // For diagnostics, we should return the expected name of of the type
@@ -115,6 +133,12 @@ export class ReferenceType extends BscType {
                     } else if (propName === 'getMemberTable') {
                         return () => {
                             return this.memberTable;
+                        };
+                    } else if (propName === 'callFuncTable') {
+                        return (this as any).callFuncMemberTable;
+                    } else if (propName === 'getCallFuncTable') {
+                        return () => {
+                            return (this as any).callFuncMemberTable;
                         };
                     } else if (propName === 'isTypeCompatible') {
                         return (targetType: BscType) => {
@@ -217,6 +241,7 @@ export class ReferenceType extends BscType {
     private propertyTypeReference = new Map<string, TypePropertyReferenceType>();
 
     private memberTypeReferences = new Map<string, ReferenceType>();
+    private callFuncMemberTypeReferences = new Map<string, ReferenceType>();
 
     private futureMemberTableProvider = () => {
         return {
@@ -230,6 +255,23 @@ export class ReferenceType extends BscType {
                 const resolvedType = this.resolve();
                 if (resolvedType) {
                     resolvedType.memberTable.setCachedType(innerName, innerResolvedTypeCacheEntry, options);
+                }
+            }
+        };
+    };
+
+    private futureCallFuncMemberTableProvider = () => {
+        return {
+            getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
+                const resolvedType = this.resolve();
+                if (isComponentType(resolvedType)) {
+                    return resolvedType.getCallFuncType(innerName, innerOptions);
+                }
+            },
+            setCachedType: (innerName: string, innerResolvedTypeCacheEntry: TypeChainEntry, options: GetSymbolTypeOptions) => {
+                const resolvedType = this.resolve();
+                if (isComponentType(resolvedType)) {
+                    resolvedType.getCallFuncTable().setCachedType(innerName, innerResolvedTypeCacheEntry, options);
                 }
             }
         };
@@ -281,7 +323,7 @@ export class TypePropertyReferenceType extends BscType {
                         return () => false;
                     }
                 }
-                let inner = this.outerType[this.propertyName];
+                let inner = this.outerType?.[this.propertyName];
 
                 if (!inner) {
                     inner = DynamicType.instance;

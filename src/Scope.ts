@@ -25,6 +25,7 @@ import { NamespaceType } from './types/NamespaceType';
 import { referenceTypeFactory } from './types/ReferenceType';
 import { unionTypeFactory } from './types/UnionType';
 import type { Identifier } from './lexer/Token';
+import { AssociativeArrayType } from './types/AssociativeArrayType';
 
 /**
  * Assign some few factories to the SymbolTable to prevent cyclical imports. This file seems like the most intuitive place to do the linking
@@ -770,6 +771,7 @@ export class Scope {
     public get symbolTable(): SymbolTable {
         return this.cache.getOrAdd('symbolTable', () => {
             const result = new SymbolTable(`Scope: '${this.name}'`, () => this.getParentScope()?.symbolTable);
+            result.addSymbol('m', undefined, new AssociativeArrayType(), SymbolTypeFlag.runtime);
             for (let file of this.getOwnFiles()) {
                 if (isBrsFile(file)) {
                     result.mergeSymbolTable(file.parser?.symbolTable);
@@ -788,10 +790,25 @@ export class Scope {
      * Builds the current symbol table for the scope, by merging the tables for all the files in this scope.
      * Also links all file symbols tables to this new table
      * This will only rebuilt if the symbol table has not been built before
+     *
+     *  Tree of symbol tables:
+     *  ```
+     *  Global Scope Symbol Table
+     *      -  Source Scope Symbol Table :: Aggregate Namespaces Symbol Table (Siblings)
+     *          - File 1 Symbol Table
+     *          - File 2 Symbol Table
+     *      -  Component A Scope Symbol Table :: Aggregate Namespaces Symbol Table (Siblings)
+     *          - File 1 Symbol Table
+     *          - File 2 Symbol Table
+     *      -  Component B Scope Symbol Table :: Aggregate Namespaces Symbol Table (Siblings)
+     *          - File 1 Symbol Table
+     *          - File 2 Symbol Table
+     * ```
      */
     public linkSymbolTable() {
         SymbolTable.cacheVerifier.generateToken();
         const allNamespaces: NamespaceStatement[] = [];
+
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
                 this.linkSymbolTableDisposables.push(

@@ -14,7 +14,7 @@ import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DependencyGraph } from './DependencyGraph';
 import { Logger, LogLevel } from './Logger';
 import chalk from 'chalk';
-import { globalCallableMap, globalFile } from './globalCallables';
+import { globalCallables, globalFile } from './globalCallables';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
@@ -39,6 +39,11 @@ import { LongIntegerType } from './types/LongIntegerType';
 import { ObjectType } from './types/ObjectType';
 import { VoidType } from './types/VoidType';
 import { FunctionType } from './types/FunctionType';
+import type { SGNodeData, BRSComponentData, BRSEventData, BRSInterfaceData } from './roku-types';
+import { nodes, components, interfaces, events } from './roku-types';
+import { ComponentType } from './types/ComponentType';
+import { InterfaceType } from './types';
+import { BuiltInInterfaceAdder } from './types/BuiltInInterfaceAdder';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
@@ -102,12 +107,37 @@ export class Program {
         (this.globalScope as any).isValidated = true;
     }
 
+
+    private recursivelyAddNodeToSymbolTable(nodeData: SGNodeData) {
+        if (!nodeData) {
+            return;
+        }
+        let nodeType: ComponentType;
+        const nodeName = util.getSgNodeTypeName(nodeData.name);
+        if (!this.globalScope.symbolTable.hasSymbol(nodeName, SymbolTypeFlag.typetime)) {
+            let parentNode: ComponentType;
+            if (nodeData.extends) {
+                const parentNodeData = nodes[nodeData.extends.name.toLowerCase()];
+                try {
+                    parentNode = this.recursivelyAddNodeToSymbolTable(parentNodeData);
+                } catch (error) {
+                    console.log(error, nodeData);
+                }
+            }
+            nodeType = new ComponentType(nodeData.name, parentNode);
+            nodeType.addBuiltInInterfaces();
+            this.globalScope.symbolTable.addSymbol(nodeName, { description: nodeData.description }, nodeType, SymbolTypeFlag.typetime);
+        } else {
+            nodeType = this.globalScope.symbolTable.getSymbolType(nodeData.name, { flags: SymbolTypeFlag.typetime }) as ComponentType;
+        }
+
+        return nodeType;
+    }
     /**
      * Do all setup required for the global symbol table.
      */
     private populateGlobalSymbolTable() {
         //Setup primitive types in global symbolTable
-        //TODO: Need to handle Array types
 
         this.globalScope.symbolTable.addSymbol('boolean', undefined, BooleanType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('double', undefined, DoubleType.instance, SymbolTypeFlag.typetime);
@@ -120,9 +150,32 @@ export class Program {
         this.globalScope.symbolTable.addSymbol('string', undefined, StringType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('void', undefined, VoidType.instance, SymbolTypeFlag.typetime);
 
-        for (let pair of globalCallableMap) {
-            let [key, callable] = pair;
-            this.globalScope.symbolTable.addSymbol(key, undefined, callable.type, SymbolTypeFlag.runtime);
+        BuiltInInterfaceAdder.getLookupTable = () => this.globalScope.symbolTable;
+
+        for (const callable of globalCallables) {
+            this.globalScope.symbolTable.addSymbol(callable.name, { description: callable.shortDescription }, callable.type, SymbolTypeFlag.runtime);
+        }
+
+        for (const componentData of Object.values(components) as BRSComponentData[]) {
+            const nodeType = new InterfaceType(componentData.name);
+            nodeType.addBuiltInInterfaces();
+            this.globalScope.symbolTable.addSymbol(componentData.name, { description: componentData.description }, nodeType, SymbolTypeFlag.typetime);
+        }
+
+        for (const ifaceData of Object.values(interfaces) as BRSInterfaceData[]) {
+            const nodeType = new InterfaceType(ifaceData.name);
+            nodeType.addBuiltInInterfaces();
+            this.globalScope.symbolTable.addSymbol(ifaceData.name, { description: ifaceData.description }, nodeType, SymbolTypeFlag.typetime);
+        }
+
+        for (const eventData of Object.values(events) as BRSEventData[]) {
+            const nodeType = new InterfaceType(eventData.name);
+            nodeType.addBuiltInInterfaces();
+            this.globalScope.symbolTable.addSymbol(eventData.name, { description: eventData.description }, nodeType, SymbolTypeFlag.typetime);
+        }
+
+        for (const nodeData of Object.values(nodes) as SGNodeData[]) {
+            this.recursivelyAddNodeToSymbolTable(nodeData);
         }
     }
 
@@ -216,10 +269,15 @@ export class Program {
     }
 
     /**
+     * Keeps a set of all the components that need to have their types updated during the current validation cycle
+     */
+    private componentSymbolsToUpdate = new Set<{ componentKey: string; componentName: string }>();
+
+    /**
      * Register (or replace) the reference to a component in the component map
      */
     private registerComponent(xmlFile: XmlFile, scope: XmlScope) {
-        const key = (xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
+        const key = this.getComponentKey(xmlFile);
         if (!this.components[key]) {
             this.components[key] = [];
         }
@@ -238,13 +296,14 @@ export class Program {
             return 0;
         });
         this.syncComponentDependencyGraph(this.components[key]);
+        this.addDeferredComponentTypeSymbolCreation(xmlFile);
     }
 
     /**
      * Remove the specified component from the components map
      */
     private unregisterComponent(xmlFile: XmlFile) {
-        const key = (xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
+        const key = this.getComponentKey(xmlFile);
         const arr = this.components[key] || [];
         for (let i = 0; i < arr.length; i++) {
             if (arr[i].file === xmlFile) {
@@ -252,7 +311,48 @@ export class Program {
                 break;
             }
         }
+
         this.syncComponentDependencyGraph(arr);
+        this.addDeferredComponentTypeSymbolCreation(xmlFile);
+    }
+
+    /**
+     * Adds a component described in an XML to the set of components that needs to be updated this validation cycle.
+     * @param xmlFile XML file with <component> tag
+     */
+    private addDeferredComponentTypeSymbolCreation(xmlFile: XmlFile) {
+        this.componentSymbolsToUpdate.add({ componentKey: this.getComponentKey(xmlFile), componentName: xmlFile.componentName?.text });
+
+    }
+
+    private getComponentKey(xmlFile: XmlFile) {
+        return (xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
+    }
+
+    /**
+     * Updates the global symbol table with the first component in this.components to have the same name as the component in the file
+     * @param componentKey key getting a component from `this.components`
+     * @param componentName the unprefixed name of the component that will be added (e.g. 'MyLabel' NOT 'roSgNodeMyLabel')
+     */
+    private updateComponentSymbolInGlobalScope(componentKey: string, componentName: string) {
+        const symbolName = componentName ? util.getSgNodeTypeName(componentName) : undefined;
+        if (!symbolName) {
+            return;
+        }
+        const components = this.components[componentKey] || [];
+        // Remove any existing symbols that match
+        this.globalScope.symbolTable.removeSymbol(symbolName);
+        // There is a component that can be added - use it.
+        if (components.length > 0) {
+            const componentScope = components[0].scope;
+            // TODO: May need to link symbol tables to get correct types for callfuncs
+            // componentScope.linkSymbolTable();
+            const componentType = componentScope.getComponentType();
+            if (componentType) {
+                this.globalScope.symbolTable.addSymbol(symbolName, {}, componentType, SymbolTypeFlag.typetime);
+            }
+            // TODO: Remember to unlink! componentScope.unlinkSymbolTable();
+        }
     }
 
     /**
@@ -488,7 +588,7 @@ export class Program {
                 let scope = new XmlScope(xmlFile, this);
                 this.addScope(scope);
 
-                //register this compoent now that we have parsed it and know its component name
+                //register this component now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
 
                 //notify plugins that the scope is created and the component is registered
@@ -679,6 +779,14 @@ export class Program {
                     this.plugins.emit('afterFileValidate', validateFileEvent);
                 }
             }
+
+            // Build component types for any component that changes
+            this.logger.time(LogLevel.info, ['Build component types'], () => {
+                for (let { componentKey, componentName } of this.componentSymbolsToUpdate) {
+                    this.updateComponentSymbolInGlobalScope(componentKey, componentName);
+                }
+                this.componentSymbolsToUpdate.clear();
+            });
 
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
                 for (let scopeName in this.scopes) {
