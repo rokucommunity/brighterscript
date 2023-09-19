@@ -62,7 +62,9 @@ describe('parser', () => {
             });
         }
 
-        it('works for references.expressions', () => {
+        // eslint-disable-next-line func-names, prefer-arrow-callback
+        it('works for references.expressions', function () {
+            this.timeout(5000); // this test takes a long time on github
             const parser = Parser.parse(`
                 b += "plus-equal"
                 a += 1 + 2

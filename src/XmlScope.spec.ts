@@ -3,10 +3,14 @@ import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
-import { expectDiagnostics, trim } from './testHelpers.spec';
+import { expectDiagnostics, expectTypeToBe, trim } from './testHelpers.spec';
 import { standardizePath as s, util } from './util';
 let rootDir = s`${process.cwd()}/rootDir`;
 import { createSandbox } from 'sinon';
+import { ComponentType } from './types/ComponentType';
+import { SymbolTypeFlag } from './SymbolTable';
+import { AssociativeArrayType } from './types/AssociativeArrayType';
+import { ArrayType, FloatType, TypedFunctionType } from './types';
 const sinon = createSandbox();
 
 describe('XmlScope', () => {
@@ -175,5 +179,65 @@ describe('XmlScope', () => {
                 code: DiagnosticMessages.xmlGenericParseError('').code
             }]);
         });
+    });
+
+    describe('symbols and types', () => {
+        it('adds the component type to the global symbol table', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <interface>
+                    </interface>
+                </component>
+            `);
+            program.validate();
+            expectTypeToBe(program.globalScope.symbolTable.getSymbolType('roSGNodeWidget', { flags: SymbolTypeFlag.typetime }), ComponentType);
+        });
+
+        it('adds the fields as members to its type', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <interface>
+                        <field id="alpha" type="assocArray" />
+                        <field id="beta" type="float" />
+                        <field id="charlie" type="nodeArray" />
+                    </interface>
+                </component>
+            `);
+            program.validate();
+            const widgetType = program.globalScope.symbolTable.getSymbolType('roSGNodeWidget', { flags: SymbolTypeFlag.typetime });
+
+            expectTypeToBe(widgetType.getMemberType('alpha', { flags: SymbolTypeFlag.runtime }), AssociativeArrayType);
+            expectTypeToBe(widgetType.getMemberType('beta', { flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(widgetType.getMemberType('charlie', { flags: SymbolTypeFlag.runtime }), ArrayType);
+            expectTypeToBe((widgetType.getMemberType('charlie', { flags: SymbolTypeFlag.runtime }) as ArrayType).defaultType, ComponentType);
+        });
+
+
+        it('adds function as callFunc members to its type', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                     <script uri="Widget.brs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.brs', trim`
+                function someFunc(input as string) as float
+                    return input.toFloat()
+                end function
+            `);
+            program.validate();
+            const widgetTypeResult = program.globalScope.symbolTable.getSymbolType('roSGNodeWidget', { flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(widgetTypeResult, ComponentType);
+            const widgetType = widgetTypeResult as ComponentType;
+            // 'someFunc' isn't a regular member
+            expect(widgetType.getMemberType('someFunc', { flags: SymbolTypeFlag.runtime }).isResolvable()).to.be.false;
+            expectTypeToBe(widgetType.getCallFuncType('someFunc', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
+        });
+
     });
 });

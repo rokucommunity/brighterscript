@@ -1,7 +1,9 @@
 export enum BscTypeKind {
     ArrayType = 'ArrayType',
+    AssociativeArrayType = 'AssociativeArrayType',
     BooleanType = 'BooleanType',
     ClassType = 'ClassType',
+    ComponentType = 'ComponentType',
     DoubleType = 'DoubleType',
     DynamicType = 'DynamicType',
     EnumType = 'EnumType',

@@ -13,12 +13,13 @@ import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
 import { ReferenceType } from './types/ReferenceType';
 import { SymbolTypeFlag } from './SymbolTable';
-import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InvalidType, LongIntegerType, StringType } from './types';
+import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InvalidType, LongIntegerType, StringType, TypedFunctionType, VoidType } from './types';
 import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
 import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
 import { Parser } from './parser/Parser';
 import type { FunctionStatement } from './parser/Statement';
+import { ComponentType } from './types/ComponentType';
 
 const sinon = createSandbox();
 
@@ -903,6 +904,16 @@ describe('util', () => {
             expect(result.itemParentTypeName).to.eql('Beta');
             expect(result.fullNameOfItem).to.eql('Beta.CharlieProp');
             expect(result.range).to.eql(util.createRange(3, 3, 4, 4));
+        });
+
+        it('respects the seperatorToken', () => {
+            const chain = [
+                new TypeChainEntry('roSGNodeCustom', new ComponentType('Custom'), util.createRange(1, 1, 2, 2)),
+                new TypeChainEntry('someCallFunc', new TypedFunctionType(VoidType.instance), util.createRange(2, 2, 3, 3), createToken(TokenKind.Callfunc))
+            ];
+
+            const result = util.processTypeChain(chain);
+            expect(result.fullChainName).to.eql('roSGNodeCustom@.someCallFunc');
         });
     });
 

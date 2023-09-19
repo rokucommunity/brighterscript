@@ -1,10 +1,13 @@
-import type { BRSInterfaceData } from '../roku-types';
-import { components, interfaces } from '../roku-types';
+import type { BRSInterfaceData, SGNodeData } from '../roku-types';
+import { components, events, interfaces, nodes } from '../roku-types';
 import { Cache } from '../Cache';
 import type { TypedFunctionType } from './TypedFunctionType';
+import type { SymbolTable } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTable';
 import type { BscType } from './BscType';
-import { isArrayType, isBooleanType, isCallableType, isClassType, isDoubleType, isEnumMemberType, isFloatType, isIntegerType, isInvalidType, isLongIntegerType, isStringType } from '../astUtils/reflection';
+import { isArrayType, isAssociativeArrayType, isBooleanType, isCallableType, isClassType, isComponentType, isDoubleType, isEnumMemberType, isFloatType, isIntegerType, isInterfaceType, isInvalidType, isLongIntegerType, isStringType } from '../astUtils/reflection';
+import type { ComponentType } from './ComponentType';
+import util from '../util';
 
 
 export interface BuiltInInterfaceOverride {
@@ -20,12 +23,9 @@ export class BuiltInInterfaceAdder {
 
     static typedFunctionFactory: (type: BscType) => TypedFunctionType;
 
+    static getLookupTable: () => SymbolTable;
+
     static addBuiltInInterfacesToType(thisType: BscType, overrides?: Map<string, BuiltInInterfaceOverride>) {
-        const componentName = this.getMatchingRokuComponent(thisType);
-        if (!componentName) {
-            // No component matches the given type
-            return;
-        }
         const memberTable = thisType.getBuiltInMemberTable();
         if (!memberTable) {
             // no memberTable to add to
@@ -33,17 +33,21 @@ export class BuiltInInterfaceAdder {
             // the original ancestor should get the built ins
             return;
         }
-        const builtInComponent = components[componentName.toLowerCase()];
+        const builtInComponent = this.getMatchingRokuComponent(thisType);
         if (!builtInComponent) {
-            throw new Error(`Unknown Roku component '${componentName}'`);
+            // TODO: Perhaps have error here, but docs have some references to unknown types
+            //throw new Error(`Unknown Roku component '${this.getMatchingRokuComponentName(thisType)}' for type '${thisType.toString()}'`);
+            return;
         }
         if (!this.typedFunctionFactory) {
             throw new Error(`Unable to build typed functions - no typed function factory`);
         }
+        const interfacesToLoop = builtInComponent.interfaces ?? [builtInComponent];
 
-        for (const iface of builtInComponent.interfaces) {
+        for (const iface of interfacesToLoop) {
             const lowerIfaceName = iface.name.toLowerCase();
-            for (const method of (interfaces[lowerIfaceName] as BRSInterfaceData).methods) {
+            const ifaceData = (interfaces[lowerIfaceName] ?? events[lowerIfaceName]) as BRSInterfaceData;
+            for (const method of ifaceData.methods ?? []) {
                 const override = overrides?.get(method.name.toLowerCase());
                 const returnType = override?.returnType ?? this.getPrimitiveType(method.returnType);
                 const methodFuncType = this.typedFunctionFactory(returnType);
@@ -56,18 +60,26 @@ export class BuiltInInterfaceAdder {
                 }
                 memberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, SymbolTypeFlag.runtime);
             }
+            for (const property of ifaceData.properties ?? []) {
+                const override = overrides?.get(property.name.toLowerCase());
+                memberTable.addSymbol(property.name, { description: property.description, completionPriority: 1 }, override?.type ?? this.getPrimitiveType(property.type), SymbolTypeFlag.runtime);
+            }
         }
     }
 
     private static getPrimitiveType(typeName: string): BscType {
         const returnType = this.primitiveTypeInstanceCache.get(typeName.toLowerCase());
         if (!returnType) {
-            throw new Error(`Unable to find type instance '${typeName}'`);
+            if (!this.getLookupTable) {
+                throw new Error(`Unable to find type instance '${typeName}'`);
+            }
+            return this.getLookupTable()?.getSymbolType(typeName, { flags: SymbolTypeFlag.typetime });
         }
+
         return returnType;
     }
 
-    static getMatchingRokuComponent(theType: BscType) {
+    static getMatchingRokuComponentName(theType: BscType) {
         if (isStringType(theType)) {
             return 'roString';
         } else if (isIntegerType(theType)) {
@@ -86,10 +98,46 @@ export class BuiltInInterfaceAdder {
             return 'roFunction';
         } else if (isClassType(theType)) {
             return 'roAssociativeArray';
+        } else if (isAssociativeArrayType(theType)) {
+            return 'roAssociativeArray';
         } else if (isArrayType(theType)) {
             return 'roArray';
         } else if (isEnumMemberType(theType)) {
-            return this.getMatchingRokuComponent(theType.underlyingType);
+            return this.getMatchingRokuComponentName(theType.underlyingType);
+        } else if (isInterfaceType(theType)) {
+            return theType.name;
+        } else if (isComponentType(theType)) {
+            return 'roSGNode';
+        }
+    }
+
+    static getMatchingRokuComponent(theType: BscType) {
+        const componentName = this.getMatchingRokuComponentName(theType);
+        if (!componentName) {
+            // No component matches the given type
+            return;
+        }
+        const lowerComponentName = componentName.toLowerCase();
+        return components[lowerComponentName] ?? interfaces[lowerComponentName] ?? events[lowerComponentName];
+    }
+
+    static addBuiltInFieldsToNodeType(thisType: ComponentType) {
+        const nodeName = thisType.name;
+        const memberTable = thisType.memberTable;
+        if (!memberTable) {
+            // no memberTable to add to
+            return;
+        }
+        const builtInNode = nodes[nodeName.toLowerCase()] as SGNodeData;
+        if (!builtInNode) {
+            return;
+        }
+        if (!this.typedFunctionFactory) {
+            throw new Error(`Unable to build typed functions - no typed function factory`);
+        }
+        const lookupTable = this.getLookupTable();
+        for (const field of builtInNode.fields) {
+            memberTable.addSymbol(field.name, { description: field.description, completionPriority: 1 }, util.getNodeFieldType(field.type, lookupTable), SymbolTypeFlag.runtime);
         }
     }
 
