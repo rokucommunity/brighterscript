@@ -1158,6 +1158,20 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        it('validates when assigning to a sgNode', () => {
+            program.setFile('source/util.bs', `
+                sub setLabelText(label as roSGNodeLabel)
+                    label.text = 1234
+                end sub
+
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('integer', 'string').message
+            ]);
+        });
+
     });
 
     describe('operatorTypeMismatch', () => {
