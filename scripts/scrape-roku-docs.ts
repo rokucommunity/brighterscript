@@ -372,7 +372,7 @@ class Runner {
         let paramType = 'dynamic';
         let paramName = defaultParamName;
 
-        const isOptional = foundParam.endsWith(']');
+        const isOptional = foundParam.endsWith(']') || foundParam.includes('=');
 
         if (paramTypeIndex >= 0) {
             // if we found a word that looks like a type, use it for the type, and remove it from the array
