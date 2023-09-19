@@ -1,4 +1,4 @@
-import type { GetTypeOptions } from '../interfaces';
+import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { isDynamicType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -27,7 +27,7 @@ export class DynamicType extends BscType {
     /**
      * The dynamic type is convertible to everything.
      */
-    public isTypeCompatible(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         //everything can be dynamic, so as long as a type is provided, this is true
         return !!targetType;
     }

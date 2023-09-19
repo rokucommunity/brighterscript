@@ -1,3 +1,4 @@
+import type { TypeCompatibilityData } from '../interfaces';
 import { isAnyReferenceType, isDynamicType, isInheritableType, isUnionType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
@@ -135,10 +136,10 @@ export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscTyp
 }
 
 
-export function isUnionTypeCompatible(thisType: BscType, maybeUnionType: BscType): boolean {
+export function isUnionTypeCompatible(thisType: BscType, maybeUnionType: BscType, data?: TypeCompatibilityData): boolean {
     if (isUnionType(maybeUnionType)) {
         for (const innerType of maybeUnionType.types) {
-            if (!thisType.isTypeCompatible(innerType)) {
+            if (!thisType.isTypeCompatible(innerType, data)) {
                 return false;
             }
         }

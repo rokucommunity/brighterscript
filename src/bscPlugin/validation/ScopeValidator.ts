@@ -3,7 +3,7 @@ import { isAssignmentStatement, isBinaryExpression, isBrsFile, isClassType, isDy
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
+import type { BscFile, BsDiagnostic, OnScopeValidateEvent, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTable';
 import type { AssignmentStatement, DottedSetStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
@@ -457,9 +457,10 @@ export class ScopeValidator {
                     // unable to find a paramType -- maybe there are more args than params
                     break;
                 }
-                if (!paramType?.isTypeCompatible(argType)) {
+                const compatibilityData: TypeCompatibilityData = {};
+                if (!paramType?.isTypeCompatible(argType, compatibilityData)) {
                     this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), paramType.toString()),
+                        ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), paramType.toString(), compatibilityData),
                         range: arg.range,
                         //TODO detect end of expression call
                         file: file
@@ -482,9 +483,11 @@ export class ScopeValidator {
         let funcType = returnStmt.findAncestor(isFunctionExpression).getType({ flags: SymbolTypeFlag.typetime });
         if (isTypedFunctionType(funcType)) {
             const actualReturnType = returnStmt.value?.getType(getTypeOptions);
-            if (actualReturnType && !funcType.returnType.isTypeCompatible(actualReturnType)) {
+            const compatibilityData: TypeCompatibilityData = {};
+
+            if (actualReturnType && !funcType.returnType.isTypeCompatible(actualReturnType, compatibilityData)) {
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.returnTypeMismatch(actualReturnType.toString(), funcType.returnType.toString()),
+                    ...DiagnosticMessages.returnTypeMismatch(actualReturnType.toString(), funcType.returnType.toString(), compatibilityData),
                     range: returnStmt.value.range,
                     file: file
                 });
@@ -503,10 +506,11 @@ export class ScopeValidator {
 
         const expectedLHSType = dottedSetStmt?.obj?.getType(getTypeOpts)?.getMemberType(dottedSetStmt.name.text, getTypeOpts);
         const actualRHSType = dottedSetStmt?.value?.getType(getTypeOpts);
+        const compatibilityData: TypeCompatibilityData = {};
 
-        if (expectedLHSType?.isResolvable() && !expectedLHSType?.isTypeCompatible(actualRHSType)) {
+        if (expectedLHSType?.isResolvable() && !expectedLHSType?.isTypeCompatible(actualRHSType, compatibilityData)) {
             this.addMultiScopeDiagnostic({
-                ...DiagnosticMessages.assignmentTypeMismatch(actualRHSType.toString(), expectedLHSType.toString()),
+                ...DiagnosticMessages.assignmentTypeMismatch(actualRHSType.toString(), expectedLHSType.toString(), compatibilityData),
                 range: dottedSetStmt.range,
                 file: file
             });

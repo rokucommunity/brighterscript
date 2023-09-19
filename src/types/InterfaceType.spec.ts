@@ -205,7 +205,7 @@ function iface(members: Record<string, BscType>, name?: string, parentType?: Int
     return ifaceType;
 }
 
-function expectCompatible(targetMembers: Record<string, BscType>, sourceMembers: Record<string, BscType>) {
+function expectCompatible(sourceMembers: Record<string, BscType>, targetMembers: Record<string, BscType>) {
     const targetIface = iface(targetMembers);
     const sourceIface = iface(sourceMembers);
     if (!sourceIface.isTypeCompatible(targetIface)) {
@@ -213,7 +213,7 @@ function expectCompatible(targetMembers: Record<string, BscType>, sourceMembers:
     }
 }
 
-function expectNotCompatible(targetMembers: Record<string, BscType>, sourceMembers: Record<string, BscType>) {
+function expectNotCompatible(sourceMembers: Record<string, BscType>, targetMembers: Record<string, BscType>) {
     const targetIface = iface(targetMembers);
     const sourceIface = iface(sourceMembers);
     if (sourceIface.isTypeCompatible(targetIface)) {

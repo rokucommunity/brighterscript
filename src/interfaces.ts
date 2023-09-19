@@ -491,7 +491,7 @@ export interface GetTypeOptions {
     flags: SymbolTypeFlag;
     typeChain?: TypeChainEntry[];
     data?: ExtraSymbolData;
-    ignoreCall?: boolean; // get teh type of this expression, NOT it's return type
+    ignoreCall?: boolean; // get the type of this expression, NOT it's return type
 }
 
 export class TypeChainEntry {
@@ -509,5 +509,10 @@ export interface TypeChainProcessResult {
     fullChainName: string;
     range: Range;
     containsDynamic: boolean;
+}
+
+export interface TypeCompatibilityData {
+    missingFields?: { name: string; expectedType: BscType }[];
+    fieldMismatches?: { name: string; expectedType: BscType; actualType: BscType }[];
 }
 

@@ -1,4 +1,4 @@
-import type { GetTypeOptions } from '../interfaces';
+import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { isDynamicType, isObjectType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
@@ -56,21 +56,21 @@ export class UnionType extends BscType {
         return getUniqueType(findTypeUnion(innerTypesMemberTypes), unionTypeFactory);
     }
 
-    isTypeCompatible(targetType: BscType): boolean {
+    isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData): boolean {
         if (isDynamicType(targetType) || isObjectType(targetType)) {
             return true;
         }
         if (isUnionType(targetType)) {
             // check if this set of inner types is a SUPERSET of targetTypes's inner types
             for (const targetInnerType of targetType.types) {
-                if (!this.isTypeCompatible(targetInnerType)) {
+                if (!this.isTypeCompatible(targetInnerType, data)) {
                     return false;
                 }
             }
             return true;
         }
         for (const innerType of this.types) {
-            const foundCompatibleInnerType = innerType.isTypeCompatible(targetType);
+            const foundCompatibleInnerType = innerType.isTypeCompatible(targetType, data);
             if (foundCompatibleInnerType) {
                 return true;
             }

@@ -3,6 +3,7 @@ import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import type { TypeCompatibilityData } from '../interfaces';
 
 export class VoidType extends BscType {
     constructor(
@@ -15,12 +16,12 @@ export class VoidType extends BscType {
 
     public static instance = new VoidType('void');
 
-    public isTypeCompatible(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isVoidType(targetType) ||
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
-            isUnionTypeCompatible(this, targetType)
+            isUnionTypeCompatible(this, targetType, data)
         );
     }
 

@@ -1,8 +1,11 @@
 import * as sinonImport from 'sinon';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Program } from '../../Program';
-import { expectDiagnostics, expectZeroDiagnostics } from '../../testHelpers.spec';
+import { expectDiagnostics, expectTypeToBe, expectZeroDiagnostics } from '../../testHelpers.spec';
 import { expect } from 'chai';
+import type { TypeCompatibilityData } from '../../interfaces';
+import { IntegerType } from '../../types/IntegerType';
+import { StringType } from '../../types/StringType';
 
 describe('ScopeValidator', () => {
 
@@ -279,7 +282,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.argumentTypeMismatch('string', 'Direction')
+                DiagnosticMessages.argumentTypeMismatch('string', 'Direction').message
             ]);
         });
 
@@ -932,6 +935,86 @@ describe('ScopeValidator', () => {
             expectDiagnostics(program, [
                 DiagnosticMessages.argumentTypeMismatch('function () as dynamic', 'integer').message
             ]);
+        });
+
+
+        it('allows AAs that match an interface to be passed as args', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    takesMyIface({beta: "hello", charlie: "world"})
+                end sub
+
+                sub takesMyIface(iFace as MyIFace)
+                end sub
+
+                interface MyIFace
+                    beta as string
+                    charlie as string
+                end interface
+            `);
+            program.validate();
+            //should have error
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates empty AAs that are passed as args to param expecting interface', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    takesMyIface({})
+                end sub
+
+                sub takesMyIface(iFace as MyIFace)
+                end sub
+
+                interface MyIFace
+                    beta as string
+                    charlie as string
+                end interface
+            `);
+            program.validate();
+            //should have error
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', 'MyIFace', {
+                    missingFields: [{ name: 'beta', expectedType: StringType.instance }, { name: 'charlie', expectedType: StringType.instance }]
+                }).message
+            ]);
+        });
+
+        it('includes data on missing fields', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    takesMyIface({charlie: "hello"})
+                end sub
+
+                sub takesMyIface(iFace as MyIFace)
+                end sub
+
+                interface MyIFace
+                    beta as string
+                    charlie as integer
+                end interface
+            `);
+            program.validate();
+
+            //should have error
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', 'MyIFace', {
+                    missingFields: [{ name: 'beta', expectedType: StringType.instance }],
+                    fieldMismatches: [{ name: 'charlie', expectedType: IntegerType.instance, actualType: StringType.instance }]
+                }).message
+            ]);
+
+            //The aa should have 'beta' and 'charlie' properties of type string and integer
+            const diagnostics = program.getDiagnostics();
+            expect(diagnostics.length).to.eq(1);
+            const data: TypeCompatibilityData = diagnostics[0].data;
+            expect(data.missingFields.length).to.eq(1);
+            expect(data.missingFields[0].name).to.eq('beta');
+            expectTypeToBe(data.missingFields[0].expectedType, StringType);
+            expect(data.fieldMismatches.length).to.eq(1);
+            expect(data.fieldMismatches[0].name).to.eq('charlie');
+            expectTypeToBe(data.fieldMismatches[0].expectedType, IntegerType);
+            expectTypeToBe(data.fieldMismatches[0].actualType, StringType);
         });
     });
 
