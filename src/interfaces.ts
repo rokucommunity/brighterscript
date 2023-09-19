@@ -495,7 +495,7 @@ export interface GetTypeOptions {
 }
 
 export class TypeChainEntry {
-    constructor(public name: string, public type: BscType, public range: Range, public seperatorToken: Token = createToken(TokenKind.Dot)) {
+    constructor(public name: string, public type: BscType, public range: Range, public separatorToken: Token = createToken(TokenKind.Dot)) {
     }
     get isResolved() {
         return this.type?.isResolvable();

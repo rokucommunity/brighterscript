@@ -1832,7 +1832,7 @@ export class Util {
         let containsDynamic = false;
         for (let i = 0; i < typeChain.length; i++) {
             const chainItem = typeChain[i];
-            const dotSep = chainItem.seperatorToken.text;
+            const dotSep = chainItem.separatorToken?.text ?? '.';
             if (i > 0) {
                 fullChainName += dotSep;
             }
