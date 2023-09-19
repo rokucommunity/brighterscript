@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isAssignmentStatement, isBinaryExpression, isBrsFile, isClassType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isTypeExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBinaryExpression, isBrsFile, isClassType, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isObjectType, isPrimitiveType, isTypeExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -13,7 +13,7 @@ import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { type AstNode, type Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, CallExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, CallExpression, BinaryExpression, UnaryExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import { TokenKind } from '../../lexer/TokenKind';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
@@ -64,6 +64,12 @@ export class ScopeValidator {
                     },
                     DottedSetStatement: (dottedSetStmt) => {
                         this.validateDottedSetStatement(file, dottedSetStmt);
+                    },
+                    BinaryExpression: (binaryExpr) => {
+                        this.validateBinaryExpression(file, binaryExpr);
+                    },
+                    UnaryExpression: (unaryExpr) => {
+                        this.validateUnaryExpression(file, unaryExpr);
                     }
 
                 }), {
@@ -509,6 +515,107 @@ export class ScopeValidator {
     }
 
     /**
+     * Detect invalid use of a binary operator
+     */
+    private validateBinaryExpression(file: BrsFile, binaryExpr: BinaryExpression) {
+        const diagnostics: BsDiagnostic[] = [];
+        const getTypeOpts = { flags: SymbolTypeFlag.runtime };
+
+        if (this.checkIfUsedAsTypeExpression(binaryExpr)) {
+            return;
+        }
+
+        let leftType = binaryExpr.left.getType(getTypeOpts);
+        let rightType = binaryExpr.right.getType(getTypeOpts);
+
+        if (!leftType.isResolvable() || !rightType.isResolvable()) {
+            // Can not find the type. error handled elsewhere
+            return;
+        }
+        let leftTypeToTest = leftType;
+        let rightTypeToTest = rightType;
+
+        if (isEnumMemberType(leftType) || isEnumType(leftType)) {
+            leftTypeToTest = leftType.underlyingType;
+        }
+        if (isEnumMemberType(rightType) || isEnumType(rightType)) {
+            rightTypeToTest = rightType.underlyingType;
+        }
+
+        if (isUnionType(leftType) || isUnionType(rightType)) {
+            // TODO: it is possible to validate based on innerTypes, but more complicated
+            // Because you need to verify each combination of types
+            return;
+        }
+        const leftIsPrimitive = isPrimitiveType(leftTypeToTest);
+        const rightIsPrimitive = isPrimitiveType(rightTypeToTest);
+        const leftIsAny = isDynamicType(leftTypeToTest) || isObjectType(leftTypeToTest);
+        const rightIsAny = isDynamicType(rightTypeToTest) || isObjectType(rightTypeToTest);
+
+
+        if (leftIsAny && rightIsAny) {
+            // both operands are basically "any" type... ignore;
+            return;
+        } else if ((leftIsAny && rightIsPrimitive) || (leftIsPrimitive && rightIsAny)) {
+            // one operand is basically "any" type... ignore;
+            return;
+        }
+        const opResult = util.binaryOperatorResultType(leftTypeToTest, binaryExpr.operator, rightTypeToTest);
+
+        if (isDynamicType(opResult)) {
+            // if the result was dynamic, that means there wasn't a valid operation
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.operatorTypeMismatch(binaryExpr.operator.text, leftType.toString(), rightType.toString()),
+                range: binaryExpr.range,
+                file: file
+            });
+        }
+
+        this.event.scope.addDiagnostics(diagnostics);
+    }
+
+    /**
+     * Detect invalid use of a Unary operator
+     */
+    private validateUnaryExpression(file: BrsFile, unaryExpr: UnaryExpression) {
+        const diagnostics: BsDiagnostic[] = [];
+        const getTypeOpts = { flags: SymbolTypeFlag.runtime };
+
+        let rightType = unaryExpr.right.getType(getTypeOpts);
+
+        if (!rightType.isResolvable()) {
+            // Can not find the type. error handled elsewhere
+            return;
+        }
+        let rightTypeToTest = rightType;
+        if (isEnumMemberType(rightType)) {
+            rightTypeToTest = rightType.underlyingType;
+        }
+        if (isDynamicType(rightTypeToTest) || isObjectType(rightTypeToTest)) {
+            // operand is basically "any" type... ignore;
+            return;
+        }
+        if (isPrimitiveType(rightType)) {
+            const opResult = util.unaryOperatorResultType(unaryExpr.operator, rightTypeToTest);
+            if (isDynamicType(opResult)) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.operator.text, rightType.toString()),
+                    range: unaryExpr.range,
+                    file: file
+                });
+            }
+        } else {
+            // rhs is not a primitive, so no binary operator is allowed
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.operator.text, rightType.toString()),
+                range: unaryExpr.range,
+                file: file
+            });
+        }
+        this.event.scope.addDiagnostics(diagnostics);
+    }
+
+    /**
      * Adds a diagnostic to the first scope for this key. Prevents duplicate diagnostics
      * for diagnostics where scope isn't important. (i.e. CreateObject validations)
      */
@@ -549,6 +656,7 @@ export class ScopeValidator {
                 diagnostic.range
             );
         }
+
         diagnostic.relatedInformation.push(info);
     }
 

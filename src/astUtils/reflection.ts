@@ -10,10 +10,10 @@ import type { TypedFunctionType } from '../types/TypedFunctionType';
 import type { FunctionType } from '../types/FunctionType';
 import type { StringType } from '../types/StringType';
 import type { BooleanType } from '../types/BooleanType';
-import { IntegerType } from '../types/IntegerType';
-import { LongIntegerType } from '../types/LongIntegerType';
-import { FloatType } from '../types/FloatType';
-import { DoubleType } from '../types/DoubleType';
+import type { IntegerType } from '../types/IntegerType';
+import type { LongIntegerType } from '../types/LongIntegerType';
+import type { FloatType } from '../types/FloatType';
+import type { DoubleType } from '../types/DoubleType';
 import type { ClassType } from '../types/ClassType';
 import type { Scope } from '../Scope';
 import type { XmlScope } from '../XmlScope';
@@ -351,15 +351,28 @@ export function isAnyReferenceType(target): target is ReferenceType | TypeProper
     return name === 'ReferenceType' || name === 'TypePropertyReferenceType' || name === 'BinaryOperatorReferenceType';
 }
 
-const numberConstructorNames = [
-    IntegerType.name,
-    LongIntegerType.name,
-    FloatType.name,
-    DoubleType.name
+const numberTypeKinds = [
+    BscTypeKind.IntegerType,
+    BscTypeKind.LongIntegerType,
+    BscTypeKind.FloatType,
+    BscTypeKind.DoubleType
 ];
 export function isNumberType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType {
-    return numberConstructorNames.includes(value?.constructor.name);
+    return numberTypeKinds.includes(value?.kind);
 }
+
+const primitiveTypeKinds = [
+    BscTypeKind.IntegerType,
+    BscTypeKind.LongIntegerType,
+    BscTypeKind.FloatType,
+    BscTypeKind.DoubleType,
+    BscTypeKind.BooleanType,
+    BscTypeKind.StringType
+];
+export function isPrimitiveType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType {
+    return primitiveTypeKinds.includes(value?.kind);
+}
+
 
 // Literal reflection
 

@@ -744,6 +744,11 @@ export let DiagnosticMessages = {
         message: `Type '${actualTypeString}' is not compatible with type '${expectedTypeString}'`,
         code: 1143,
         severity: DiagnosticSeverity.Error
+    }),
+    operatorTypeMismatch: (operatorString: string, firstType: string, secondType = '') => ({
+        message: `Operator '${operatorString}' cannot be applied to type${secondType ? 's' : ''} '${firstType}'${secondType ? ` and '${secondType}'` : ''}`,
+        code: 1144,
+        severity: DiagnosticSeverity.Error
     })
 };
 

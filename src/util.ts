@@ -24,7 +24,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isDynamicType, isExpression, isFloatType, isIndexedGetExpression, isIntegerType, isInvalidType, isLongIntegerType, isStringType, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLongIntegerType, isNumberType, isStringType, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -1217,15 +1217,6 @@ export class Util {
         return DynamicType.instance;
     }
 
-
-    public isNumberType(targetType: BscType): boolean {
-        return isIntegerType(targetType) ||
-            isFloatType(targetType) ||
-            isDoubleType(targetType) ||
-            isLongIntegerType(targetType);
-    }
-
-
     /**
      * Return the type of the result of a binary operator
      * Note: compound assignments (eg. +=) internally use a binary expression, so that's why TokenKind.PlusEqual, etc. are here too
@@ -1237,14 +1228,20 @@ export class Util {
                 return this.binaryOperatorResultType(lhs, op, rhs);
             });
         }
+        if (isEnumMemberType(leftType)) {
+            leftType = leftType.underlyingType;
+        }
+        if (isEnumMemberType(rightType)) {
+            rightType = rightType.underlyingType;
+        }
         let hasDouble = isDoubleType(leftType) || isDoubleType(rightType);
         let hasFloat = isFloatType(leftType) || isFloatType(rightType);
         let hasLongInteger = isLongIntegerType(leftType) || isLongIntegerType(rightType);
         let hasInvalid = isInvalidType(leftType) || isInvalidType(rightType);
         let hasDynamic = isDynamicType(leftType) || isDynamicType(rightType);
-        let bothNumbers = this.isNumberType(leftType) && this.isNumberType(rightType);
+        let bothNumbers = isNumberType(leftType) && isNumberType(rightType);
         let bothStrings = isStringType(leftType) && isStringType(rightType);
-        let eitherBooleanOrNum = (this.isNumberType(leftType) || isBooleanType(leftType)) && (this.isNumberType(rightType) || isBooleanType(rightType));
+        let eitherBooleanOrNum = (isNumberType(leftType) || isBooleanType(leftType)) && (isNumberType(rightType) || isBooleanType(rightType));
 
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (operator.kind) {
@@ -1356,7 +1353,7 @@ export class Util {
         switch (operator.kind) {
             // Math operators
             case TokenKind.Minus:
-                if (this.isNumberType(exprType)) {
+                if (isNumberType(exprType)) {
                     // a negative number will be the same type, eg, double->double, int->int, etc.
                     return exprType;
                 }
@@ -1364,7 +1361,7 @@ export class Util {
             case TokenKind.Not:
                 if (isBooleanType(exprType)) {
                     return BooleanType.instance;
-                } else if (this.isNumberType(exprType)) {
+                } else if (isNumberType(exprType)) {
                     //numbers can be "notted"
                     // by default they go to ints, except longints, which stay that way
                     if (isLongIntegerType(exprType)) {

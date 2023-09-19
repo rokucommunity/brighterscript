@@ -32,7 +32,7 @@ describe('ConstStatement', () => {
                 const = {
                     name: "Bob"
                 }
-                print const.name = {}
+                print const.name = "John"
             end sub
         `);
         program.validate();
