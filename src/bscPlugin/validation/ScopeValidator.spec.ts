@@ -1320,5 +1320,28 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        it('allows unary on dynamic and union types', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(x)
+                    y = -x
+                    print y
+                end sub
+
+                sub doOtherStuff(x as float or integer)
+                    y = -x
+                    print y
+                end sub
+
+                sub doEventMoreStuff(x as boolean or dynamic)
+                    if not x
+                        print "ok"
+                    end if
+                end sub
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
     });
 });

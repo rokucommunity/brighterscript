@@ -906,7 +906,7 @@ describe('util', () => {
             expect(result.range).to.eql(util.createRange(3, 3, 4, 4));
         });
 
-        it('respects the seperatorToken', () => {
+        it('respects the separatorToken', () => {
             const chain = [
                 new TypeChainEntry('roSGNodeCustom', new ComponentType('Custom'), util.createRange(1, 1, 2, 2)),
                 new TypeChainEntry('someCallFunc', new TypedFunctionType(VoidType.instance), util.createRange(2, 2, 3, 3), createToken(TokenKind.Callfunc))
