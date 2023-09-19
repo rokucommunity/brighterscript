@@ -1014,6 +1014,51 @@ describe('Scope', () => {
             ]);
         });
 
+        it('detects calling interface function with too few args', () => {
+            program.setFile('source/file.bs', `
+                sub init(arg as Tester)
+                    arg.test()
+                end sub
+                interface Tester
+                    sub test(param1)
+                end interface
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(1, 0).message
+            ]);
+        });
+
+        it('detects calling interface function with too many args', () => {
+            program.setFile('source/file.bs', `
+                sub init(arg as Tester)
+                    arg.test(1, 2)
+                end sub
+                interface Tester
+                    sub test(param1)
+                end interface
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(1, 2).message
+            ]);
+        });
+
+        it('detects calling interface function with mismatch argument type', () => {
+            program.setFile('source/file.bs', `
+                sub init(arg as Tester)
+                    arg.test(1)
+                end sub
+                interface Tester
+                    sub test(param1 as string)
+                end interface
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
+            ]);
+        });
+
         it('detects calling class constructors with too many parameters', () => {
             program.setFile('source/main.bs', `
                 function noop0()
