@@ -1140,9 +1140,9 @@ export class Util {
     }
 
     /**
-         * Return the type of the result of a binary operator
-         * Note: compound assignments (eg. +=) internally use a binary expression, so that's why TokenKind.PlusEqual, etc. are here too
-         */
+     * Return the type of the result of a binary operator
+     * Note: compound assignments (eg. +=) internally use a binary expression, so that's why TokenKind.PlusEqual, etc. are here too
+     */
     public binaryOperatorResultType(leftType: BscType, operator: Token, rightType: BscType): BscType {
         if ((isAnyReferenceType(leftType) && !leftType.isResolvable()) ||
             (isAnyReferenceType(rightType) && !rightType.isResolvable())) {
