@@ -1059,7 +1059,7 @@ describe('ScopeValidator', () => {
     });
 
     describe('assignmentTypeMismatch', () => {
-        it('finds when the type of the lhs is not compatible with teh expected type', () => {
+        it('finds when the type of the lhs is not compatible with the expected type', () => {
             program.setFile('source/util.bs', `
                 sub doStuff(thing as iThing)
                     thing.name = 123
@@ -1155,6 +1155,154 @@ describe('ScopeValidator', () => {
             //should have errors
             expectDiagnostics(program, [
                 DiagnosticMessages.assignmentTypeMismatch('integer', 'string').message
+            ]);
+        });
+
+    });
+
+    describe('operatorTypeMismatch', () => {
+        it('finds when the type of the lhs is not compatible with the rhs type', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    a = 1 + true
+                    b = "hello" * 2
+                end sub
+
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+', 'integer', 'boolean').message,
+                DiagnosticMessages.operatorTypeMismatch('*', 'string', 'integer').message
+            ]);
+        });
+
+        it('allows when the type of the lhs is compatible with the rhs type', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    a = 10 << 1
+                    b = "hello" + "world"
+                    c = 78 / 34
+                    d = 100 \\ 5
+                    thing = new Klass()
+                    e = thing <> invalid
+                end sub
+
+                class Klass
+                end class
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows tests against invalid', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    thing = new Klass()
+                    x = thing <> invalid
+                end sub
+
+                class Klass
+                end class
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('disallows equality tests of classes', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    thing = new Klass()
+                    thing2 = new Klass()
+                    x = thing = thing2
+                end sub
+
+                class Klass
+                end class
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('=', 'Klass', 'Klass').message
+            ]);
+        });
+
+        it('disallows operations between dynamic and custom types', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(input)
+                    thing = new Klass()
+                    x = thing + input
+                end sub
+
+                class Klass
+                end class
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+', 'Klass', 'dynamic').message
+            ]);
+        });
+
+        it('allows valid operations on enum members', () => {
+            program.setFile('source/util.bs', `
+                sub makeEasterly(d as Direction)
+                    print d + "e"
+                    print Direction.north + "east"
+                end sub
+
+                function getTax(itemAmt as ItemCost) as Float
+                    return itemAmt * 1.15
+                end function
+
+                enum Direction
+                    north = "n"
+                    south = "s"
+                end enum
+
+                enum ItemCost
+                    x = 99.99
+                    y = 29.99
+                end enum
+
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('finds invalid operations on enum members', () => {
+            program.setFile('source/util.bs', `
+                enum Direction
+                    north = "n"
+                    south = "s"
+                end enum
+
+                sub makeEasterly(d as Direction)
+                    print d + 2
+                    print 3.14 * Direction.north
+                end sub
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+', 'Direction', 'integer').message,
+                DiagnosticMessages.operatorTypeMismatch('*', 'float', 'Direction').message
+            ]);
+        });
+
+        it('validates unary operators', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    x = - "hello world"
+                end sub
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('-', 'string').message
             ]);
         });
 

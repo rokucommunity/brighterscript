@@ -815,7 +815,7 @@ let programStatementFunctions = [
     }, {
         name: 'Pos',
         shortDescription: 'Returns a number from 0 to window width, indicating the current cursor position on the cursor. Requires a "dummy argument" (any numeric expression).',
-        type: new TypedFunctionType(new VoidType()),
+        type: new TypedFunctionType(new IntegerType()),
         file: globalFile,
         params: [{
             name: 'x',

@@ -2687,7 +2687,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
         const resultType = new EnumType(
             this.fullName,
-            members[0]?.getType(options)
+            members[0]?.getType(options).underlyingType
         );
         resultType.pushMemberProvider(() => this.getSymbolTable());
         for (const statement of members) {
