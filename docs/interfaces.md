@@ -18,7 +18,7 @@ end sub
 transpiles to
 
 ```BrightScript
-sub test(bob as object)
+sub test(bob as dynamic)
     print bob.name, bob.getName()
 end sub
 ```
@@ -41,7 +41,7 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-sub walkThePuppy(puppy as object) as object
+sub walkThePuppy(puppy as dynamic) as dynamic
     puppy.walk()
     return puppy
 end sub
@@ -67,7 +67,7 @@ end sub
 transpiles to
 
 ```BrightScript
-sub test(bob as object)
+sub test(bob as dynamic)
     print bob.name, bob.getName()
 end sub
 ```
@@ -82,6 +82,22 @@ end interface
 interface Human
     pet as Dog
     mother as Human
+end interface
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+```BrightScript
+
+```
+</details>
+
+## Methods
+Interfaces can describe complex methods as well
+```brighterscript
+interface Dog
+    sub barkAt(nemesis as Cat)
 end interface
 ```
 
