@@ -33,6 +33,7 @@ import type { NamespaceType } from '../types/NamespaceType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
 import type { ComponentType } from '../types/ComponentType';
 import type { AssociativeArrayType } from '../types/AssociativeArrayType';
+import { TokenKind } from '../lexer/TokenKind';
 
 // File reflection
 export function isBrsFile(file: (BscFile | File)): file is BrsFile {
@@ -377,7 +378,7 @@ export function isPrimitiveType(value: any): value is IntegerType | LongIntegerT
 // Literal reflection
 
 export function isLiteralInvalid(value: any): value is LiteralExpression & { type: InvalidType } {
-    return isLiteralExpression(value) && isInvalidType(value.getType());
+    return isLiteralExpression(value) && value.token.kind === TokenKind.Invalid;
 }
 export function isLiteralBoolean(value: any): value is LiteralExpression & { type: BooleanType } {
     return isLiteralExpression(value) && isBooleanType(value.getType());
@@ -388,3 +389,17 @@ export function isLiteralString(value: any): value is LiteralExpression & { type
 export function isLiteralNumber(value: any): value is LiteralExpression & { type: IntegerType | LongIntegerType | FloatType | DoubleType } {
     return isLiteralExpression(value) && isNumberType(value.getType());
 }
+export function isLiteralInteger(value: any): value is LiteralExpression & { type: IntegerType } {
+    return isLiteralExpression(value) && isIntegerType(value.getType());
+}
+export function isLiteralLongInteger(value: any): value is LiteralExpression & { type: LongIntegerType } {
+    return isLiteralExpression(value) && isLongIntegerType(value.getType());
+}
+export function isLiteralFloat(value: any): value is LiteralExpression & { type: FloatType } {
+    return isLiteralExpression(value) && isFloatType(value.getType());
+}
+export function isLiteralDouble(value: any): value is LiteralExpression & { type: DoubleType } {
+    return isLiteralExpression(value) && isDoubleType(value.getType());
+}
+
+
