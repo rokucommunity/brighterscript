@@ -1349,51 +1349,59 @@ export class Program {
         return files;
     }
 
+    private _manifest: Map<string, string>;
+
+    /**
+     * Try to find and load the manifest into memory
+     * @param staticFiles A list of all static files
+     */
+    public loadManifest(staticFiles?: FileObj[]) {
+        let manifestPath = path.join(this.options.rootDir, 'manifest'); // @todo
+
+        try {
+            // we only load this manifest once, so do it sync to improve speed downstream
+            const contents = fsExtra.readFileSync(manifestPath, 'utf-8');
+            const parsedManifest = parseManifest(contents);
+
+            // Lift the bs_consts defined in the manifest
+            let bsConsts = getBsConst(parsedManifest, false);
+
+            // Override or delete any bs_consts defined in the bs config
+            for (const key in this.options?.manifest?.bs_const) {
+                const value = this.options.manifest.bs_const[key];
+                if (value === null) {
+                    bsConsts.delete(key);
+                } else {
+                    bsConsts.set(key, value);
+                }
+            }
+
+            // convert the new list of bs consts back into a string for the rest of the down stream systems to use
+            let constString = '';
+            for (const [key, value] of bsConsts) {
+                constString += `${constString !== '' ? ';' : ''}${key}=${value.toString()}`;
+            }
+
+            // Set the updated bs_const value
+            parsedManifest.set('bs_const', constString);
+
+            this._manifest = parsedManifest;
+        } finally {
+            if (!this._manifest) {
+                this._manifest = new Map();
+            }
+        }
+    }
+
     /**
      * Get a map of the manifest information
      */
     public getManifest() {
         if (!this._manifest) {
-            //load the manifest file.
-            //TODO update this to get the manifest from the files array or require it in the options...we shouldn't assume the location of the manifest
-            let manifestPath = path.join(this.options.rootDir, 'manifest');
-
-            let contents: string;
-            try {
-                //we only load this manifest once, so do it sync to improve speed downstream
-                contents = fsExtra.readFileSync(manifestPath, 'utf-8');
-                let parsedManifest = parseManifest(contents);
-
-                // Lift the bs_consts defined in the manifest
-                let bsConsts = getBsConst(parsedManifest, false);
-
-                // Override or delete any bs_consts defined in the bs config
-                for (const key in this.options?.manifest?.bs_const) {
-                    const value = this.options.manifest.bs_const[key];
-                    if (value === null) {
-                        bsConsts.delete(key);
-                    } else {
-                        bsConsts.set(key, value);
-                    }
-                }
-
-                // convert the new list of bs consts back into a string for the rest of the down stream systems to use
-                let constString = '';
-                for (const [key, value] of bsConsts) {
-                    constString += `${constString !== '' ? ';' : ''}${key}=${value.toString()}`;
-                }
-
-                // Set the updated bs_const value
-                parsedManifest.set('bs_const', constString);
-
-                this._manifest = parsedManifest;
-            } catch (err) {
-                this._manifest = new Map();
-            }
+            this.loadManifest();
         }
         return this._manifest;
     }
-    private _manifest: Map<string, string>;
 
     public dispose() {
         this.plugins.emit('beforeProgramDispose', { program: this });
