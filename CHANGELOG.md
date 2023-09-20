@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.66.0-alpha.6](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.5...v0.66.0-alpha.6) - 2023-09-20
+### Changed
+ - Validates DottedSetStatements for type compatibility ([#894](https://github.com/rokucommunity/brighterscript/pull/894))
+ - Adds Native Brightscript Component Types and Custom Components (Nodes) to Type System ([#891](https://github.com/rokucommunity/brighterscript/pull/891))
+ - Adds validation for binary operators ([#896](https://github.com/rokucommunity/brighterscript/pull/896))
+ - Fix union type unary operations and Array.sort(by) optional params ([#897](https://github.com/rokucommunity/brighterscript/pull/897))
+ - Interface param support ([#900](https://github.com/rokucommunity/brighterscript/pull/900))
+ - Fixes issues with Interface validations, and adds extra details about missing or mismatches members ([#901](https://github.com/rokucommunity/brighterscript/pull/901))
+ - Fix isLiteralInvalid ([#902](https://github.com/rokucommunity/brighterscript/pull/902))
+
+
+
 ## [0.66.0-alpha.5](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.4...v0.66.0-alpha.5) - 2023-09-14
 ### Changed
  - all changes from [v0.65.5](https://github.com/rokucommunity/brighterscript/compare/v0.65.4...v0.65.5)
