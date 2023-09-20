@@ -1,6 +1,6 @@
 import { SymbolTypeFlag } from '../SymbolTable';
 import { isObjectType } from '../astUtils/reflection';
-import type { GetTypeOptions } from '../interfaces';
+import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
@@ -15,7 +15,7 @@ export class ObjectType extends BscType {
 
     public readonly kind = BscTypeKind.ObjectType;
 
-    public isTypeCompatible(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         //Brightscript allows anything passed "as object", so as long as a type is provided, this is true
         return !!targetType;
     }

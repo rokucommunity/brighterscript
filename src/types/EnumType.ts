@@ -1,4 +1,5 @@
 import { isDynamicType, isEnumMemberType, isEnumType, isObjectType } from '../astUtils/reflection';
+import type { TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { DynamicType } from './DynamicType';
@@ -17,13 +18,13 @@ export class EnumType extends BscType {
 
     public readonly kind = BscTypeKind.EnumType;
 
-    public isTypeCompatible(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
             this.isEqual(targetType) ||
             (isEnumMemberType(targetType) && targetType?.enumName.toLowerCase() === this.name.toLowerCase()) ||
-            isUnionTypeCompatible(this, targetType)
+            isUnionTypeCompatible(this, targetType, data)
         );
     }
 
@@ -68,7 +69,7 @@ export class EnumMemberType extends BscType {
         );
     }
 
-    public isTypeCompatible(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             this.isEqual(targetType) ||
             isDynamicType(targetType)

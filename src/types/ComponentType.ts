@@ -1,7 +1,7 @@
 import type { GetSymbolTypeOptions, SymbolTypeFlag } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import { isComponentType, isDynamicType, isObjectType } from '../astUtils/reflection';
-import type { ExtraSymbolData } from '../interfaces';
+import type { ExtraSymbolData, TypeCompatibilityData } from '../interfaces';
 import type { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -23,12 +23,12 @@ export class ComponentType extends InheritableType {
         return this.parentType as ComponentType;
     }
 
-    public isTypeCompatible(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         if (this.isEqual(targetType)) {
             return true;
         } else if (isDynamicType(targetType) ||
             isObjectType(targetType) ||
-            isUnionTypeCompatible(this, targetType)) {
+            isUnionTypeCompatible(this, targetType, data)) {
             return true;
         } else if (isComponentType(targetType)) {
             return this.isTypeDescendent(targetType);

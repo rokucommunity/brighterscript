@@ -1,4 +1,5 @@
 import { isDynamicType, isUninitializedType } from '../astUtils/reflection';
+import type { TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { DynamicType } from './DynamicType';
@@ -13,7 +14,7 @@ export class UninitializedType extends BscType {
 
     public readonly kind = BscTypeKind.UninitializedType;
 
-    public isTypeCompatible(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isUninitializedType(targetType) ||
             isDynamicType(targetType)

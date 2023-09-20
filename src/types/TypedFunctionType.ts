@@ -4,6 +4,7 @@ import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import type { TypeCompatibilityData } from '../interfaces';
 
 export class TypedFunctionType extends BaseFunctionType {
     constructor(
@@ -40,11 +41,11 @@ export class TypedFunctionType extends BaseFunctionType {
         return this;
     }
 
-    public isTypeCompatible(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         if (
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
-            isUnionTypeCompatible(this, targetType)
+            isUnionTypeCompatible(this, targetType, data)
         ) {
             return true;
         }

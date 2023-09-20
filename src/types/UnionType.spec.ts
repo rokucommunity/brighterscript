@@ -26,8 +26,8 @@ describe('UnionType', () => {
 
         expect(myUnion.isTypeCompatible(FloatType.instance)).to.be.true;
         expect(myUnion.isTypeCompatible(StringType.instance)).to.be.true;
-        expect(myUnion.isTypeCompatible(otheriFaceWithSameMembers)).to.be.false;
-        expect(otheriFaceWithSameMembers.isTypeCompatible(myUnion)).to.be.true;
+        expect(myUnion.isTypeCompatible(otheriFaceWithSameMembers)).to.be.true;
+        expect(otheriFaceWithSameMembers.isTypeCompatible(myUnion)).to.be.false;
     });
 
     it('can assign to a more general Union', () => {
@@ -49,6 +49,7 @@ describe('UnionType', () => {
         const otheriFaceWithSameMembers = new InterfaceType('OtherIface');
         otheriFaceWithSameMembers.addMember('name', null, StringType.instance, SymbolTypeFlag.runtime);
         otheriFaceWithSameMembers.addMember('age', null, IntegerType.instance, SymbolTypeFlag.runtime);
+        otheriFaceWithSameMembers.addMember('height', null, FloatType.instance, SymbolTypeFlag.runtime);
 
         const otherUnion = new UnionType([FloatType.instance, otheriFaceWithSameMembers, StringType.instance]);
 

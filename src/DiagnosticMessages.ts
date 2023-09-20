@@ -1,6 +1,6 @@
 import type { Position } from 'vscode-languageserver';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import type { BsDiagnostic } from './interfaces';
+import type { BsDiagnostic, TypeCompatibilityData } from './interfaces';
 import type { TokenKind } from './lexer/TokenKind';
 
 /**
@@ -730,18 +730,21 @@ export let DiagnosticMessages = {
         code: 1140,
         severity: DiagnosticSeverity.Error
     }),
-    argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string) => ({
-        message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'`,
+    argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
+        message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'${typeCompatibilityMessage(data)}`,
+        data: data,
         code: 1141,
         severity: DiagnosticSeverity.Error
     }),
-    returnTypeMismatch: (actualTypeString: string, expectedTypeString: string) => ({
-        message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'`,
+    returnTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
+        message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'${typeCompatibilityMessage(data)}'`,
+        data: data,
         code: 1142,
         severity: DiagnosticSeverity.Error
     }),
-    assignmentTypeMismatch: (actualTypeString: string, expectedTypeString: string) => ({
-        message: `Type '${actualTypeString}' is not compatible with type '${expectedTypeString}'`,
+    assignmentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
+        message: `Type '${actualTypeString}' is not compatible with type '${expectedTypeString}'${typeCompatibilityMessage(data)}`,
+        data: data,
         code: 1143,
         severity: DiagnosticSeverity.Error
     }),
@@ -751,6 +754,21 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     })
 };
+
+function typeCompatibilityMessage(data: TypeCompatibilityData) {
+    let message = '';
+    if (data?.missingFields?.length > 0) {
+        for (const missingField of data.missingFields) {
+            message += `\n - Missing member '${missingField.name}' of type ${missingField.expectedType?.toString()}`;
+        }
+    }
+    if (data?.fieldMismatches?.length > 0) {
+        for (const fieldMismatch of data.fieldMismatches) {
+            message += `\n - Member '${fieldMismatch.name}' should be of type ${fieldMismatch.expectedType?.toString()}, but it is of type ${fieldMismatch.actualType?.toString()}`;
+        }
+    }
+    return message;
+}
 
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
 export let diagnosticCodes = [] as number[];

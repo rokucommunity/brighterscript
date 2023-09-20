@@ -1,3 +1,4 @@
+import type { TypeCompatibilityData } from '..';
 import { isArrayType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -27,7 +28,7 @@ export class ArrayType extends BscType {
         return getUniqueType(this.innerTypes, unionTypeFactory);
     }
 
-    public isTypeCompatible(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
 
         if (isDynamicType(targetType)) {
             return true;
@@ -36,7 +37,7 @@ export class ArrayType extends BscType {
         } else if (isUnionTypeCompatible(this, targetType)) {
             return true;
         } else if (isArrayType(targetType)) {
-            return this.defaultType.isTypeCompatible(targetType.defaultType);
+            return this.defaultType.isTypeCompatible(targetType.defaultType, data);
         }
         return false;
     }
