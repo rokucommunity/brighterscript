@@ -486,6 +486,8 @@ export class ProgramBuilder {
                 }
             }
 
+            this.program.loadManifest(staticFiles);
+
             const loadFile = async (fileObj) => {
                 try {
                     this.program.setFile(
