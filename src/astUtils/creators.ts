@@ -133,10 +133,16 @@ export function createIntegerLiteral(value: string, range?: Range) {
 export function createFloatLiteral(value: string, range?: Range) {
     return new LiteralExpression(createToken(TokenKind.FloatLiteral, value, range));
 }
+export function createDoubleLiteral(value: string, range?: Range) {
+    return new LiteralExpression(createToken(TokenKind.DoubleLiteral, value, range));
+}
+export function createLongIntegerLiteral(value: string, range?: Range) {
+    return new LiteralExpression(createToken(TokenKind.LongIntegerLiteral, value, range));
+}
 export function createInvalidLiteral(value?: string, range?: Range) {
     return new LiteralExpression(createToken(TokenKind.Invalid, value, range));
 }
-export function createBooleanLiteral(value: 'true' | 'false', range?: Range) {
+export function createBooleanLiteral(value: string, range?: Range) {
     return new LiteralExpression(createToken(value === 'true' ? TokenKind.True : TokenKind.False, value, range));
 }
 export function createFunctionExpression(kind: TokenKind.Sub | TokenKind.Function) {
