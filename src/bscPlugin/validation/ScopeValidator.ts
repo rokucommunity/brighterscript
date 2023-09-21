@@ -11,7 +11,6 @@ import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
-import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { type AstNode, type Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression, CallExpression, BinaryExpression, UnaryExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
@@ -172,13 +171,13 @@ export class ScopeValidator {
                             ...DiagnosticMessages.itemCannotBeUsedAsType(typeChainScan.fullChainName),
                             range: info.expression.range,
                             file: file
-                        }, 'When used in scope');
+                        });
                     } else {
                         this.addMultiScopeDiagnostic({
                             ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedType.toString()),
                             range: info.expression.range,
                             file: file
-                        }, 'When used in scope');
+                        });
                     }
                     continue;
                 }
@@ -191,7 +190,6 @@ export class ScopeValidator {
                 });
                 //skip to the next expression
                 continue;
-
             }
             const enumStatement = scope.getEnum(firstNamespacePartLower, info.enclosingNamespaceNameLower);
 
@@ -253,7 +251,7 @@ export class ScopeValidator {
                     ...DiagnosticMessages.itemCannotBeUsedAsVariable('enum'),
                     range: info.expression.range,
                     file: file
-                }, 'When used in scope');
+                });
             }
 
             //if the full expression is a namespace path, this is an illegal statement because namespaces don't exist at runtme
@@ -262,7 +260,7 @@ export class ScopeValidator {
                     ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
                     range: info.expression.range,
                     file: file
-                }, 'When used in scope');
+                });
             }
         }
     }
@@ -641,7 +639,7 @@ export class ScopeValidator {
     /**
      * Add a diagnostic (to the first scope) that will have `relatedInformation` for each affected scope
      */
-    private addMultiScopeDiagnostic(diagnostic: BsDiagnostic, message = 'Not defined in scope') {
+    private addMultiScopeDiagnostic(diagnostic: BsDiagnostic) {
         diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.file?.srcPath}-${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`, () => {
             if (!diagnostic.relatedInformation) {
                 diagnostic.relatedInformation = [];
@@ -649,22 +647,23 @@ export class ScopeValidator {
             this.addDiagnostic(diagnostic);
             return diagnostic;
         });
-        const info = {
-            message: `${message} '${this.event.scope.name}'`
-        } as DiagnosticRelatedInformation;
         if (isXmlScope(this.event.scope) && this.event.scope.xmlFile?.srcPath) {
-            info.location = util.createLocation(
-                URI.file(this.event.scope.xmlFile.srcPath).toString(),
-                this.event.scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.range ?? util.createRange(0, 0, 0, 10)
-            );
+            diagnostic.relatedInformation.push({
+                message: `In component scope '${this.event.scope?.xmlFile?.componentName?.text}'`,
+                location: util.createLocation(
+                    URI.file(this.event.scope.xmlFile.srcPath).toString(),
+                    this.event.scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.tokens?.value?.range ?? util.createRange(0, 0, 0, 10)
+                )
+            });
         } else {
-            info.location = util.createLocation(
-                URI.file(diagnostic.file.srcPath).toString(),
-                diagnostic.range
-            );
+            diagnostic.relatedInformation.push({
+                message: `In scope '${this.event.scope.name}'`,
+                location: util.createLocation(
+                    URI.file(diagnostic.file.srcPath).toString(),
+                    diagnostic.range
+                )
+            });
         }
-
-        diagnostic.relatedInformation.push(info);
     }
 
     private multiScopeCache = new Cache<string, BsDiagnostic>();
