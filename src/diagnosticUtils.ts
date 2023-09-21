@@ -5,6 +5,8 @@ import { DiagnosticSeverity } from 'vscode-languageserver';
 import type { BsDiagnostic } from '.';
 import type { Range } from 'vscode-languageserver';
 
+export const MAX_RELATED_INFOS_COUNT = 3;
+
 /**
  * Prepare print diagnostic formatting options
  */
@@ -99,8 +101,8 @@ export function printDiagnostic(
     let indent = '    ';
     for (let i = 0; i < relatedInfoList.length; i++) {
         let relatedInfo = relatedInfoList[i];
-        //only show the first 5 relatedInfo links
-        if (i < 5) {
+        //only show the first MAX_RELATED_INFOS_COUNT relatedInfo links
+        if (i < MAX_RELATED_INFOS_COUNT) {
             console.log('');
             console.log(
                 indent,

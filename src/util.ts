@@ -4,7 +4,7 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
-import type { Diagnostic, Position, Range, Location } from 'vscode-languageserver';
+import { type Diagnostic, type Position, type Range, type Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
@@ -41,6 +41,7 @@ import type { SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTable';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
+import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
 
 export class Util {
     public clearConsole() {
@@ -1524,11 +1525,20 @@ export class Util {
      * @param relatedInformationFallbackLocation a default location to use for all `relatedInformation` entries that are missing a location
      */
     public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic, relatedInformationFallbackLocation: string) {
+        let relatedInformation = diagnostic.relatedInformation ?? [];
+        if (relatedInformation.length > MAX_RELATED_INFOS_COUNT) {
+            const relatedInfoLength = relatedInformation.length;
+            relatedInformation = relatedInformation.slice(0, MAX_RELATED_INFOS_COUNT);
+            relatedInformation.push({
+                message: `...and ${relatedInfoLength - MAX_RELATED_INFOS_COUNT} more`,
+                location: util.createLocation('   ', util.createRange(0, 0, 0, 0))
+            });
+        }
         return {
             severity: diagnostic.severity,
             range: diagnostic.range,
             message: diagnostic.message,
-            relatedInformation: diagnostic.relatedInformation?.map(x => {
+            relatedInformation: relatedInformation.map(x => {
 
                 //clone related information just in case a plugin added circular ref info here
                 const clone = { ...x };

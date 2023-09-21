@@ -343,7 +343,7 @@ describe('Scope', () => {
                         srcPath: buttonPrimary.srcPath
                     },
                     relatedInformation: [{
-                        message: `Not defined in scope '${s('components/ButtonPrimary.xml')}'`
+                        message: `In component scope 'ButtonPrimary'`
                     }]
                 }, {
                     message: DiagnosticMessages.cannotFindName('delta').message,
@@ -351,7 +351,7 @@ describe('Scope', () => {
                         srcPath: buttonSecondary.srcPath
                     },
                     relatedInformation: [{
-                        message: `Not defined in scope '${s('components/ButtonSecondary.xml')}'`
+                        message: `In component scope 'ButtonSecondary'`
                     }]
                 }
             ]);
