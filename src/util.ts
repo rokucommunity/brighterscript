@@ -1863,6 +1863,51 @@ export class Util {
             containsDynamic: containsDynamic
         };
     }
+
+    public truncate<T>(
+        leadingText: string,
+        items: T[],
+        partBuilder: (item: T) => string,
+        maxLength = 160
+    ): string {
+        let parts = [];
+        let length = leadingText.length;
+
+        //calculate the max number of items we could fit in the given space
+        for (let i = 0; i < items.length; i++) {
+            let part = partBuilder(items[i]);
+            if (i > 0) {
+                part = ', ' + part;
+            }
+            parts.push(part);
+            length += part.length;
+            //exit the loop if we've maxed out our length
+            if (length >= maxLength) {
+                break;
+            }
+        }
+        let message: string;
+        //we have enough space to include all the parts
+        if (parts.length >= items.length) {
+            message = leadingText + parts.join('');
+
+            //we require truncation
+        } else {
+            length = leadingText.length + `...and ${items.length} more`.length; //account for truncation message length including max possible "more" items digits
+            message = leadingText;
+            for (let i = 0; i < parts.length; i++) {
+                //always include at least 2 items. if this part would overflow the max, then skip it and finalize the message
+                if (i > 1 && length + parts[i].length > maxLength) {
+                    message += `...and ${items.length - i} more`;
+                    return message;
+                } else {
+                    message += parts[i];
+                    length += parts[i].length;
+                }
+            }
+        }
+        return message;
+    }
 }
 
 /**

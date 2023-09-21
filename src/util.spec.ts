@@ -1057,4 +1057,40 @@ describe('util', () => {
             expect(docs).to.eql('Add 1 to a number\n\n\n_@public_\n\n_@param_ {integer} the number to add to\n\n_@return_ {integer} the result');
         });
     });
+
+    describe('truncate', () => {
+        const items = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
+
+        it('returns whole string when under the limit', () => {
+            expect(
+                util.truncate('We have numbers: ', items, (item) => item, 1000)
+            ).to.eql(
+                'We have numbers: ' + items.join(', ')
+            );
+        });
+
+        it('truncates to max length', () => {
+            expect(
+                util.truncate('We have numbers: ', items, (item) => item, 50)
+            ).to.eql(
+                'We have numbers: one, two, three...and 17 more'
+            );
+        });
+
+        it('shows at least 2 items, even if going over the length', () => {
+            expect(
+                util.truncate('We have numbers: ', items, (item) => item, 30)
+            ).to.eql(
+                'We have numbers: one, two...and 18 more'
+            );
+        });
+
+        it('Accounts for extra wrapping around items', () => {
+            expect(
+                util.truncate('We have numbers: ', items, (item) => `--${item}--`, 60)
+            ).to.eql(
+                'We have numbers: --one--, --two--, --three--...and 17 more'
+            );
+        });
+    });
 });
