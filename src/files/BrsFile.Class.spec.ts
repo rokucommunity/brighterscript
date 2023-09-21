@@ -1226,7 +1226,7 @@ describe('BrsFile BrighterScript classes', () => {
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird'),
                 relatedInformation: [{
-                    message: `Not defined in scope 'source'`
+                    message: `In scope 'source'`
                 }]
             }]);
         });
