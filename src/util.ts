@@ -1864,20 +1864,29 @@ export class Util {
         };
     }
 
-    public truncate<T>(
-        leadingText: string,
-        items: T[],
-        partBuilder: (item: T) => string,
-        maxLength = 160
-    ): string {
+    public truncate<T>(options: {
+        leadingText: string;
+        items: T[];
+        trailingText?: string;
+        maxLength: number;
+        itemSeparator?: string;
+        partBuilder?: (item: T) => string;
+    }): string {
+        let leadingText = options.leadingText;
+        let items = options?.items ?? [];
+        let trailingText = options?.trailingText ?? '';
+        let maxLength = options?.maxLength ?? 160;
+        let itemSeparator = options?.itemSeparator ?? ', ';
+        let partBuilder = options?.partBuilder ?? ((x) => x.toString());
+
         let parts = [];
-        let length = leadingText.length;
+        let length = leadingText.length + (trailingText?.length ?? 0);
 
         //calculate the max number of items we could fit in the given space
         for (let i = 0; i < items.length; i++) {
             let part = partBuilder(items[i]);
             if (i > 0) {
-                part = ', ' + part;
+                part = itemSeparator + part;
             }
             parts.push(part);
             length += part.length;
@@ -1889,16 +1898,17 @@ export class Util {
         let message: string;
         //we have enough space to include all the parts
         if (parts.length >= items.length) {
-            message = leadingText + parts.join('');
+            message = leadingText + parts.join('') + trailingText;
 
             //we require truncation
         } else {
-            length = leadingText.length + `...and ${items.length} more`.length; //account for truncation message length including max possible "more" items digits
+            //account for truncation message length including max possible "more" items digits, trailing text length, and the separator between last item and trailing text
+            length = leadingText.length + `...and ${items.length} more`.length + itemSeparator.length + (trailingText?.length ?? 0);
             message = leadingText;
             for (let i = 0; i < parts.length; i++) {
                 //always include at least 2 items. if this part would overflow the max, then skip it and finalize the message
                 if (i > 1 && length + parts[i].length > maxLength) {
-                    message += `...and ${items.length - i} more`;
+                    message += itemSeparator + `...and ${items.length - i} more` + trailingText;
                     return message;
                 } else {
                     message += parts[i];

@@ -1063,7 +1063,12 @@ describe('util', () => {
 
         it('returns whole string when under the limit', () => {
             expect(
-                util.truncate('We have numbers: ', items, (item) => item, 1000)
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 1000
+                })
             ).to.eql(
                 'We have numbers: ' + items.join(', ')
             );
@@ -1071,25 +1076,54 @@ describe('util', () => {
 
         it('truncates to max length', () => {
             expect(
-                util.truncate('We have numbers: ', items, (item) => item, 50)
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 50
+                })
             ).to.eql(
-                'We have numbers: one, two, three...and 17 more'
+                'We have numbers: one, two, three, ...and 17 more'
             );
         });
 
         it('shows at least 2 items, even if going over the length', () => {
             expect(
-                util.truncate('We have numbers: ', items, (item) => item, 30)
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 30
+                })
             ).to.eql(
-                'We have numbers: one, two...and 18 more'
+                'We have numbers: one, two, ...and 18 more'
             );
         });
 
         it('Accounts for extra wrapping around items', () => {
             expect(
-                util.truncate('We have numbers: ', items, (item) => `--${item}--`, 60)
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => `--${item}--`,
+                    maxLength: 60
+                })
             ).to.eql(
-                'We have numbers: --one--, --two--, --three--...and 17 more'
+                'We have numbers: --one--, --two--, --three--, ...and 17 more'
+            );
+        });
+
+        it('includes trailing text', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    trailingText: '!',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 50
+                })
+            ).to.eql(
+                'We have numbers: one, two, three, ...and 17 more!'
             );
         });
     });
