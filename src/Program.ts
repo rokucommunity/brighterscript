@@ -1353,10 +1353,12 @@ export class Program {
 
     /**
      * Try to find and load the manifest into memory
-     * @param staticFiles A list of all static files
+     * @param manifestFileObj A pointer to a potential manifest file object found during loading
      */
-    public loadManifest(staticFiles?: FileObj[]) {
-        let manifestPath = path.join(this.options.rootDir, 'manifest'); // @todo
+    public loadManifest(manifestFileObj?: FileObj) {
+        let manifestPath = manifestFileObj
+            ? manifestFileObj.src
+            : path.join(this.options.rootDir, 'manifest');
 
         try {
             // we only load this manifest once, so do it sync to improve speed downstream
