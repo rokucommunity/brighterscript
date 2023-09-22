@@ -473,18 +473,17 @@ export class ProgramBuilder {
 
             const acceptableSourceExtensions = ['.bs', '.brs', '.xml'];
             const typedefFiles = [] as FileObj[];
-            const staticFiles = [] as FileObj[];
             const sourceFiles = [] as FileObj[];
             let manifestFile: FileObj | null = null;
+
             for (const file of files) {
                 const srcLower = file.src.toLowerCase();
                 if (srcLower.endsWith('.d.bs')) {
                     typedefFiles.push(file);
-                } else if (acceptableSourceExtensions.includes(path.extname(file.src).toLowerCase())) {
+                } else if (acceptableSourceExtensions.includes(path.extname(srcLower))) {
                     sourceFiles.push(file);
                 } else {
-                    staticFiles.push(file);
-                    if (srcLower.endsWith('/manifest')) {
+                    if (file.dest.toLowerCase() === 'manifest') { // todo: evaluate if this is acceptable.
                         manifestFile = file;
                     }
                 }
@@ -496,18 +495,13 @@ export class ProgramBuilder {
 
             const loadFile = async (fileObj) => {
                 try {
-                    this.program.setFile(
-                        fileObj,
-                        await this.getFileContents(fileObj.src)
-                    );
+                    this.program.setFile(fileObj, await this.getFileContents(fileObj.src));
                 } catch (e) {
-                    // log the error, but don't fail this process because the file might be fixable later
-                    this.logger.log(e);
+                    this.logger.log(e); // log the error, but don't fail this process because the file might be fixable later
                 }
             };
-            await Promise.all(typedefFiles.map(loadFile)); // first, preload every type definition file, which eliminates duplicate file loading
-            await Promise.all(staticFiles.map(loadFile)); // then, preload all static files
-            await Promise.all(sourceFiles.map(loadFile)); // finally, parse source files
+            await Promise.all(typedefFiles.map(loadFile)); // preload every type definition file, which eliminates duplicate file loading
+            await Promise.all(sourceFiles.map(loadFile)); // parse source files
         });
     }
 
