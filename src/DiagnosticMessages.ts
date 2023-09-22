@@ -2,6 +2,7 @@ import type { Position } from 'vscode-languageserver';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import type { BsDiagnostic, TypeCompatibilityData } from './interfaces';
 import type { TokenKind } from './lexer/TokenKind';
+import util from './util';
 
 /**
  * An object that keeps track of all possible error messages.
@@ -731,19 +732,19 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
-        message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'${typeCompatibilityMessage(data)}`,
+        message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}`,
         data: data,
         code: 1141,
         severity: DiagnosticSeverity.Error
     }),
     returnTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
-        message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'${typeCompatibilityMessage(data)}'`,
+        message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}'`,
         data: data,
         code: 1142,
         severity: DiagnosticSeverity.Error
     }),
     assignmentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
-        message: `Type '${actualTypeString}' is not compatible with type '${expectedTypeString}'${typeCompatibilityMessage(data)}`,
+        message: `Type '${actualTypeString}' is not compatible with type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}`,
         data: data,
         code: 1143,
         severity: DiagnosticSeverity.Error
@@ -754,18 +755,27 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     })
 };
+export const defaultMaximumTruncationLength = 160;
 
-function typeCompatibilityMessage(data: TypeCompatibilityData) {
+function typeCompatibilityMessage(actualTypeString: string, expectedTypeString: string, data: TypeCompatibilityData) {
     let message = '';
     if (data?.missingFields?.length > 0) {
-        for (const missingField of data.missingFields) {
-            message += `\n - Missing member '${missingField.name}' of type ${missingField.expectedType?.toString()}`;
-        }
-    }
-    if (data?.fieldMismatches?.length > 0) {
-        for (const fieldMismatch of data.fieldMismatches) {
-            message += `\n - Member '${fieldMismatch.name}' should be of type ${fieldMismatch.expectedType?.toString()}, but it is of type ${fieldMismatch.actualType?.toString()}`;
-        }
+        message = `\n    Type '${actualTypeString}' is missing the following members: ` + util.truncate({
+            leadingText: ``,
+            trailingText: '',
+            itemSeparator: ', ',
+            items: data.missingFields,
+            partBuilder: (x) => x.name,
+            maxLength: defaultMaximumTruncationLength
+        });
+    } else if (data?.fieldMismatches?.length > 0) {
+        message = '. ' + util.truncate({
+            leadingText: `Type '${actualTypeString}' has incompatible members:`,
+            items: data.fieldMismatches,
+            itemSeparator: '',
+            partBuilder: (x) => `\n    member "${x.name}" should be '${x.expectedType}' but is '${x.actualType}'`,
+            maxLength: defaultMaximumTruncationLength
+        });
     }
     return message;
 }
