@@ -323,8 +323,6 @@ export default function () {
 };
 ```
 
-Note that creating diagnostics requires that `BscFile` objects are available. This means that diagnostics cannot be recorded in the `beforeProgramCreate` and `afterProgramCreate` steps.
-
 ## Modifying code
 Sometimes plugins will want to modify code before the project is transpiled. While you can technically edit the AST directly at any point in the file's lifecycle, this is not recommended as those changes will remain changed as long as that file exists in memory and could cause issues with file validation if the plugin is used in a language-server context (i.e. inside vscode).
 
