@@ -1,5 +1,5 @@
 import { createToken } from '../../astUtils/creators';
-import { isBrsFile, isDottedGetExpression, isLiteralExpression, isVariableExpression } from '../../astUtils/reflection';
+import { isBrsFile, isDottedGetExpression, isLiteralExpression, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BeforeFileTranspileEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
@@ -25,7 +25,11 @@ export class BrsFilePreTranspileProcessor {
         const scope = this.event.program.getFirstScopeForFile(this.event.file);
         for (let expression of this.event.file.parser.references.expressions) {
             if (expression) {
-                this.processExpression(expression, scope);
+                if (isUnaryExpression(expression)) {
+                    this.processExpression(expression.right, scope);
+                } else {
+                    this.processExpression(expression, scope);
+                }
             }
         }
     }

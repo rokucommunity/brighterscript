@@ -209,6 +209,34 @@ describe('ConstStatement', () => {
             );
         });
 
+        it('transpiles simple const in a unary expression', () => {
+            testTranspile(`
+                const foo = 1
+                sub main()
+                    bar = -foo
+                end sub
+            `, `
+                sub main()
+                    bar = - 1
+                end sub
+            `, undefined, 'source/main.bs');
+        });
+
+        it('transpiles complex const in a unary expression', () => {
+            testTranspile(`
+                namespace some.consts
+                    const foo = 1
+                end namespace
+                sub main()
+                    bar = -some.consts.foo
+                end sub
+            `, `
+                sub main()
+                    bar = - 1
+                end sub
+            `, undefined, 'source/main.bs');
+        });
+
         it('shows up in namespace completions', () => {
             program.setFile('source/main.bs', `
                 namespace constants
