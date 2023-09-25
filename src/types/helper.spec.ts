@@ -12,6 +12,7 @@ import { InterfaceType } from './InterfaceType';
 import { SymbolTypeFlag } from '../SymbolTable';
 import { DoubleType } from './DoubleType';
 import { BooleanType } from './BooleanType';
+import { EnumType, EnumMemberType } from './EnumType';
 
 
 describe('findTypeIntersection', () => {
@@ -150,4 +151,24 @@ describe('getUniqueType', () => {
             assert.fail('Should be UnionType');
         }
     });
+});
+
+describe('isEnumTypeCompatible', () => {
+    it('should be true when an enum that is an int is passed to a number type', () => {
+        const myEnum = new EnumType('test', IntegerType.instance);
+        const myEnumMember = new EnumMemberType('test', 'val1', IntegerType.instance);
+
+        expect(IntegerType.instance.isTypeCompatible(myEnum)).to.be.true;
+        expect(FloatType.instance.isTypeCompatible(myEnum)).to.be.true;
+        expect(DoubleType.instance.isTypeCompatible(myEnum)).to.be.true;
+
+        expect(IntegerType.instance.isTypeCompatible(myEnumMember)).to.be.true;
+        expect(FloatType.instance.isTypeCompatible(myEnumMember)).to.be.true;
+        expect(DoubleType.instance.isTypeCompatible(myEnumMember)).to.be.true;
+
+        expect(StringType.instance.isTypeCompatible(myEnum)).to.be.false;
+        expect(StringType.instance.isTypeCompatible(myEnumMember)).to.be.false;
+    });
+
+
 });

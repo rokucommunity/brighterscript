@@ -1,5 +1,5 @@
 import type { TypeCompatibilityData } from '../interfaces';
-import { isAnyReferenceType, isDynamicType, isInheritableType, isUnionType } from '../astUtils/reflection';
+import { isAnyReferenceType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isUnionType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[]) {
@@ -144,6 +144,14 @@ export function isUnionTypeCompatible(thisType: BscType, maybeUnionType: BscType
             }
         }
         return true;
+    }
+    return false;
+}
+
+
+export function isEnumTypeCompatible(thisType: BscType, maybeEnumType: BscType, data?: TypeCompatibilityData): boolean {
+    if (isEnumMemberType(maybeEnumType) || isEnumType(maybeEnumType)) {
+        return thisType.isTypeCompatible(maybeEnumType.underlyingType, data);
     }
     return false;
 }
