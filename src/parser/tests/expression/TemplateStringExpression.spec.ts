@@ -9,7 +9,6 @@ import { AssignmentStatement } from '../../Statement';
 import { Program } from '../../../Program';
 import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 import { util } from '../../../util';
-import { TokenKind } from '../../../lexer/TokenKind';
 
 describe('TemplateStringExpression', () => {
     describe('parser template String', () => {
