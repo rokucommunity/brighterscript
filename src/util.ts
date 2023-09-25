@@ -297,12 +297,17 @@ export class Util {
     public normalizeAndResolveConfig(config: BsConfig) {
         let result = this.normalizeConfig({});
 
-        //if no options were provided, try to find a bsconfig.json file
-        if (!config || !config.project) {
-            result.project = this.getConfigFilePath(config?.cwd);
+        if (config?.noProject) {
+            return result;
+        }
+
+        result.project = null;
+        if (config?.project) {
+            result.project = config?.project;
         } else {
-            //use the config's project link
-            result.project = config.project;
+            if (config?.cwd) {
+                result.project = this.getConfigFilePath(config?.cwd);
+            }
         }
         if (result.project) {
             let configFile = this.loadConfigFile(result.project, null, config?.cwd);

@@ -16,7 +16,7 @@ import { DependencyGraph } from './DependencyGraph';
 import { Logger, LogLevel } from './Logger';
 import chalk from 'chalk';
 import { globalFile } from './globalCallables';
-import { parseManifest } from './preprocessor/Manifest';
+import { parseManifest, getBsConst } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUtils/reflection';
@@ -1362,7 +1362,31 @@ export class Program {
             try {
                 //we only load this manifest once, so do it sync to improve speed downstream
                 contents = fsExtra.readFileSync(manifestPath, 'utf-8');
-                this._manifest = parseManifest(contents);
+                let parsedManifest = parseManifest(contents);
+
+                // Lift the bs_consts defined in the manifest
+                let bsConsts = getBsConst(parsedManifest, false);
+
+                // Override or delete any bs_consts defined in the bs config
+                for (const key in this.options?.manifest?.bs_const) {
+                    const value = this.options.manifest.bs_const[key];
+                    if (value === null) {
+                        bsConsts.delete(key);
+                    } else {
+                        bsConsts.set(key, value);
+                    }
+                }
+
+                // convert the new list of bs consts back into a string for the rest of the down stream systems to use
+                let constString = '';
+                for (const [key, value] of bsConsts) {
+                    constString += `${constString !== '' ? ';' : ''}${key}=${value.toString()}`;
+                }
+
+                // Set the updated bs_const value
+                parsedManifest.set('bs_const', constString);
+
+                this._manifest = parsedManifest;
             } catch (err) {
                 this._manifest = new Map();
             }
