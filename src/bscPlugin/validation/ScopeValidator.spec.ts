@@ -1016,6 +1016,89 @@ describe('ScopeValidator', () => {
             expectTypeToBe(data.fieldMismatches[0].expectedType, IntegerType);
             expectTypeToBe(data.fieldMismatches[0].actualType, StringType);
         });
+
+        it('allows interfaces that have a superset of properties', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    takesMyIface({alpha: true, beta: "hello", charlie: 1})
+                end sub
+
+                sub takesMyIface(iFace as MyIFace)
+                end sub
+
+                interface MyIFace
+                    beta as string
+                    charlie as integer
+                end interface
+            `);
+            program.validate();
+
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows interfaces that have a superset of properties', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(otherFace as MyOtherFace)
+                    takesMyIface(otherFace)
+                end sub
+
+                sub takesMyIface(iFace as MyIFace)
+                end sub
+
+                interface MyIFace
+                    beta as string
+                    charlie as integer
+                end interface
+
+                interface MyOtherFace
+                    alpha as boolean
+                    beta as string
+                    charlie as integer
+                end interface
+            `);
+            program.validate();
+
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('includes data on missing fields', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    takesMyIface({charlie: "hello"})
+                end sub
+
+                sub takesMyIface(iFace as MyIFace)
+                end sub
+
+                interface MyIFace
+                    beta as string
+                    charlie as integer
+                end interface
+            `);
+            program.validate();
+
+            //should have error
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', 'MyIFace', {
+                    missingFields: [{ name: 'beta', expectedType: StringType.instance }],
+                    fieldMismatches: [{ name: 'charlie', expectedType: IntegerType.instance, actualType: StringType.instance }]
+                }).message
+            ]);
+
+            //The aa should have 'beta' and 'charlie' properties of type string and integer
+            const diagnostics = program.getDiagnostics();
+            expect(diagnostics.length).to.eq(1);
+            const data: TypeCompatibilityData = diagnostics[0].data;
+            expect(data.missingFields.length).to.eq(1);
+            expect(data.missingFields[0].name).to.eq('beta');
+            expectTypeToBe(data.missingFields[0].expectedType, StringType);
+            expect(data.fieldMismatches.length).to.eq(1);
+            expect(data.fieldMismatches[0].name).to.eq('charlie');
+            expectTypeToBe(data.fieldMismatches[0].expectedType, IntegerType);
+            expectTypeToBe(data.fieldMismatches[0].actualType, StringType);
+        });
     });
 
     describe('cannotFindName', () => {
@@ -1138,6 +1221,117 @@ describe('ScopeValidator', () => {
             expectDiagnostics(program, [
                 DiagnosticMessages.returnTypeMismatch('string', 'void').message
             ]);
+        });
+
+        it('allows returning enums with the default type that matches the declared return type', () => {
+            program.setFile('source/util.bs', `
+                enum MyEnum
+                    val1
+                    val2
+                end enum
+
+                function getInt() as integer
+                    return MyEnum.val1
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows returning enums passed as a param with the default type that matches the declared return type', () => {
+            program.setFile('source/util.bs', `
+                enum MyEnum
+                    val1
+                    val2
+                end enum
+
+                function getInt(enumVal as MyEnum) as integer
+                    return enumVal
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows returning enums with the default type that matches the declared return type for string enums', () => {
+            program.setFile('source/util.bs', `
+                enum MyEnum
+                    val1 = "hello"
+                    val2 = "world"
+                end enum
+
+                function getInt() as string
+                    return MyEnum.val1
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags returning enums with the default type that does not matches the declared return type', () => {
+            program.setFile('source/util.bs', `
+                enum MyEnum
+                    val1 = "hello"
+                    val2 = "world"
+                end enum
+
+                function getInt() as integer
+                    return MyEnum.val1
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.returnTypeMismatch('MyEnum', 'integer').message
+            ]);
+        });
+
+        it('flags returning enums passed as params with the default type that does not matches the declared return type', () => {
+            program.setFile('source/util.bs', `
+                enum MyEnum
+                    val1 = "hello"
+                    val2 = "world"
+                end enum
+
+                function getInt(enumVal as MyEnum) as integer
+                    return enumVal
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.returnTypeMismatch('MyEnum', 'integer').message
+            ]);
+        });
+
+        it('flags returning enums type', () => {
+            program.setFile('source/util.bs', `
+                enum MyEnum
+                    val1 = "hello"
+                    val2 = "world"
+                end enum
+
+
+                function getInt() as integer
+                    return MyEnum
+                end function
+            `);
+            program.validate();
+            expect(program.getDiagnostics().length).to.be.greaterThan(0);
+        });
+
+        it('allows returning an Enum', () => {
+            program.setFile('source/util.bs', `
+                enum MyEnum
+                    val1 = "hello"
+                    val2 = "world"
+                end enum
+
+
+                function getInt() as MyEnum
+                    return MyEnum.val1
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 

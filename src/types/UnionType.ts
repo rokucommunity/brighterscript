@@ -2,7 +2,7 @@ import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { isDynamicType, isObjectType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
-import { findTypeUnion, getUniqueType } from './helpers';
+import { findTypeUnion, getUniqueType, isEnumTypeCompatible } from './helpers';
 import { BscTypeKind } from './BscTypeKind';
 import type { TypeCacheEntry } from '../SymbolTable';
 import { SymbolTable, SymbolTypeFlag } from '../SymbolTable';
@@ -60,6 +60,9 @@ export class UnionType extends BscType {
         if (isDynamicType(targetType) || isObjectType(targetType)) {
             return true;
         }
+        if (isEnumTypeCompatible(this, targetType, data)) {
+            return true;
+        }
         if (isUnionType(targetType)) {
             // check if this set of inner types is a SUPERSET of targetTypes's inner types
             for (const targetInnerType of targetType.types) {
@@ -75,6 +78,8 @@ export class UnionType extends BscType {
                 return true;
             }
         }
+
+
         return false;
     }
     toString(): string {

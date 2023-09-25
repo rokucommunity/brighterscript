@@ -1,7 +1,7 @@
 import { isDynamicType, isEnumMemberType, isEnumType, isObjectType, isStringType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
-import { isUnionTypeCompatible } from './helpers';
+import { isEnumTypeCompatible, isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
 
@@ -25,10 +25,7 @@ export class StringType extends BscType {
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
             isUnionTypeCompatible(this, targetType, data) ||
-            //string enums are compatible with strings
-            (
-                (isEnumType(targetType) || isEnumMemberType(targetType)) && isStringType(targetType.underlyingType)
-            )
+            isEnumTypeCompatible(this, targetType, data)
         );
     }
 
