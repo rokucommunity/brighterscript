@@ -25,6 +25,8 @@ import { UnionType } from './types/UnionType';
 import { isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
+import { InterfaceType } from '.';
+import { ComponentType } from './types/ComponentType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -2939,6 +2941,66 @@ describe('Scope', () => {
                 expectTypeToBe(unionDefaultType, UnionType);
                 expect((unionDefaultType as UnionType).types).to.include(StringType.instance);
                 expect((unionDefaultType as UnionType).types).to.include(IntegerType.instance);
+            });
+
+            it('should allow built in component types', () => {
+                let utilFile = program.setFile('source/util.bs', `
+                    sub process(data as roAssociativeArray[])
+                        for each datum in data
+                            print datum
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('data', opts), ArrayType);
+                expectTypeToBe(symbolTable.getSymbolType('datum', opts), InterfaceType);
+            });
+
+            it('should allow class types', () => {
+                let utilFile = program.setFile('source/util.bs', `
+                    sub process(data as Klass[])
+                        for each datum in data
+                            print datum.name
+                        end for
+                    end sub
+
+
+                    class Klass
+                        name as string
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const dataType = symbolTable.getSymbolType('data', opts);
+                expectTypeToBe(dataType, ArrayType);
+                expectTypeToBe((dataType as ArrayType).defaultType, ClassType);
+                expect((dataType as ArrayType).defaultType.toString()).to.equal('Klass');
+            });
+
+            it('should allow component types', () => {
+                let utilFile = program.setFile('source/util.bs', `
+                    sub process(labels as roSgNodeLabel[])
+                        for each label in labels
+                            print label.text
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const dataType = symbolTable.getSymbolType('labels', opts);
+                expectTypeToBe(dataType, ArrayType);
+                expectTypeToBe((dataType as ArrayType).defaultType, ComponentType);
+                expect((dataType as ArrayType).defaultType.toString()).to.equal('roSGNodeLabel');
             });
         });
 

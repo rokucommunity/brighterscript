@@ -1819,7 +1819,7 @@ export class TypedArrayExpression extends Expression {
         );
     }
 
-    public readonly kind = AstNodeKind.ArrayTypeExpression;
+    public readonly kind = AstNodeKind.TypedArrayExpression;
 
     public range: Range;
 

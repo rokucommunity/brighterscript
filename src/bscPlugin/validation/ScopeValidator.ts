@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isAssignmentStatement, isBinaryExpression, isBrsFile, isClassType, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isObjectType, isPrimitiveType, isTypeExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBinaryExpression, isBrsFile, isClassType, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isObjectType, isPrimitiveType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -80,9 +80,11 @@ export class ScopeValidator {
 
 
     private checkIfUsedAsTypeExpression(expression: AstNode): boolean {
-        //TODO: this is much faster than node.findAncestor(), but will not work for "complicated" type expressions like UnionTypes
+        //TODO: this is much faster than node.findAncestor(), but may need to be updated for "complicated" type expressions
         if (isTypeExpression(expression) ||
-            isTypeExpression(expression.parent)) {
+            isTypeExpression(expression.parent) ||
+            isTypedArrayExpression(expression) ||
+            isTypedArrayExpression(expression.parent)) {
             return true;
         }
         if (isBinaryExpression(expression.parent)) {
@@ -90,7 +92,7 @@ export class ScopeValidator {
             while (isBinaryExpression(currentExpr) && currentExpr.operator.kind === TokenKind.Or) {
                 currentExpr = currentExpr.parent;
             }
-            return isTypeExpression(currentExpr);
+            return isTypeExpression(currentExpr) || isTypedArrayExpression(currentExpr);
         }
         return false;
     }
