@@ -17,6 +17,7 @@ import { isBrsFile, isLiteralString } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
 import { URI } from 'vscode-uri';
+import { BusyStatusTracker } from './BusyStatusTracker';
 
 const sinon = createSandbox();
 
@@ -76,6 +77,7 @@ describe('LanguageServer', () => {
     beforeEach(() => {
         sinon.restore();
         server = new LanguageServer();
+        server['busyStatusTracker'] = new BusyStatusTracker();
         workspaceFolders = [workspacePath];
 
         vfs = {};
@@ -1072,7 +1074,8 @@ describe('LanguageServer', () => {
                 //make a plugin that changes string text
                 server.projects[0].builder.program.plugins.add({
                     name: 'test-plugin',
-                    beforeProgramTranspile: (program, entries, editor) => {
+                    beforeProgramTranspile: (event) => {
+                        const { program, editor } = event;
                         const file = program.getFile('source/main.bs');
                         if (isBrsFile(file)) {
                             file.ast.walk(createVisitor({

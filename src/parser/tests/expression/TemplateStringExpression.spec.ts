@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/no-for-in-array */
-/* eslint no-template-curly-in-string: 0 */
-
+/* eslint-disable no-template-curly-in-string */
 import { expect } from '../../../chai-config.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Lexer } from '../../../lexer/Lexer';
@@ -82,7 +80,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = rokucommunity_bslib_toString(LINE_NUM) + "," + rokucommunity_bslib_toString(LINE_NUM)
+                    a = (rokucommunity_bslib_toString(LINE_NUM) + "," + rokucommunity_bslib_toString(LINE_NUM))
                 end sub
             `);
         });
@@ -94,7 +92,7 @@ describe('TemplateStringExpression', () => {
                     end sub
                 `, `
                     sub main()
-                        a = bslib_toString(LINE_NUM) + "," + bslib_toString(LINE_NUM)
+                        a = (bslib_toString(LINE_NUM) + "," + bslib_toString(LINE_NUM))
                     end sub
                 `
             );
@@ -119,7 +117,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = "hello " + bslib_toString(LINE_NUM.text) + " world " + bslib_toString("template" + "".getChars()) + " test"
+                    a = ("hello " + bslib_toString(LINE_NUM.text) + " world " + bslib_toString("template" + "".getChars()) + " test")
                 end sub
             `);
         });
@@ -191,7 +189,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = "I am multiline" + chr(10) + bslib_toString(a.isRunning()) + chr(10) + "more"
+                    a = ("I am multiline" + chr(10) + bslib_toString(a.isRunning()) + chr(10) + "more")
                 end sub
             `);
         });
@@ -210,11 +208,11 @@ describe('TemplateStringExpression', () => {
                     a = [
                         "one"
                         "two"
-                        "I am a complex example" + bslib_toString(a.isRunning([
+                        ("I am a complex example" + bslib_toString(a.isRunning([
                             "a"
                             "b"
                             "c"
-                        ]))
+                        ])))
                     ]
                 end sub
             `);
@@ -239,12 +237,12 @@ describe('TemplateStringExpression', () => {
                     a = [
                         "one"
                         "two"
-                        "I am a complex example " + bslib_toString(a.isRunning([
+                        ("I am a complex example " + bslib_toString(a.isRunning([
                             "a"
                             "b"
                             "c"
-                            "d_open " + bslib_toString("inside" + m.items[1]) + " d_close"
-                        ]))
+                            ("d_open " + bslib_toString("inside" + m.items[1]) + " d_close")
+                        ])))
                     ]
                 end sub
             `);
@@ -257,7 +255,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = "hello" + "world"
+                    a = ("hello" + "world")
                 end sub
             `);
         });
@@ -269,7 +267,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    text = "Hello " + "world"
+                    text = ("Hello " + "world")
                 end sub
             `);
         });

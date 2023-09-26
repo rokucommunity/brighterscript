@@ -103,7 +103,7 @@ describe('astUtils visitors', () => {
             const walker = functionsWalker(visitor);
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: file => walker(file as BrsFile)
+                afterFileParse: event => walker(event.file as BrsFile)
             });
             program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
@@ -140,7 +140,7 @@ describe('astUtils visitors', () => {
             const walker = functionsWalker(s => actual.push(s.constructor.name), cancel.token);
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: file => walker(file as BrsFile)
+                afterFileParse: event => walker(event.file as BrsFile)
             });
             program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
@@ -185,7 +185,7 @@ describe('astUtils visitors', () => {
             }, cancel.token);
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: file => walker(file as BrsFile)
+                afterFileParse: event => walker(event.file as BrsFile)
             });
             program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
@@ -291,7 +291,7 @@ describe('astUtils visitors', () => {
             });
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: (file) => walker(file as BrsFile)
+                afterFileParse: (event) => walker(event.file as BrsFile)
             });
 
             program.setFile('source/main.brs', EXPRESSIONS_SRC);
@@ -645,7 +645,6 @@ describe('astUtils visitors', () => {
                end namespace
             `, [
                 'NamespaceStatement',
-                'NamespacedVariableNameExpression',
                 'DottedGetExpression',
                 'VariableExpression'
             ]);
@@ -939,7 +938,6 @@ describe('astUtils visitors', () => {
                 'AssignmentStatement',
                 'NewExpression',
                 'CallExpression',
-                'NamespacedVariableNameExpression',
                 'VariableExpression'
             ]);
         });
@@ -972,7 +970,11 @@ describe('astUtils visitors', () => {
             `, [
                 'ClassStatement',
                 'FieldStatement',
+                'TypeExpression',
+                'VariableExpression',
                 'FieldStatement',
+                'TypeExpression',
+                'VariableExpression',
                 'LiteralExpression',
                 'MethodStatement',
                 'FunctionExpression',

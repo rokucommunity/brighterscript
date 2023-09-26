@@ -33,6 +33,14 @@ describe('DiagnosticCollection', () => {
         expect(actual).to.eql(expected);
     }
 
+    it('does not crash for diagnostics with missing locations', () => {
+        const [d1] = addDiagnostics('file1.brs', ['I have no location']);
+        delete d1.range;
+        testPatch({
+            'file1.brs': ['I have no location']
+        });
+    });
+
     it('returns full list of diagnostics on first call, and nothing on second call', () => {
         addDiagnostics('file1.brs', ['message1', 'message2']);
         addDiagnostics('file2.brs', ['message3', 'message4']);
@@ -96,8 +104,9 @@ describe('DiagnosticCollection', () => {
     }
 
     function addDiagnostics(srcPath: string, messages: string[]) {
+        const newDiagnostics = [];
         for (const message of messages) {
-            diagnostics.push({
+            newDiagnostics.push({
                 file: {
                     srcPath: srcPath
                 } as File,
@@ -107,5 +116,7 @@ describe('DiagnosticCollection', () => {
                 message: message
             });
         }
+        diagnostics.push(...newDiagnostics);
+        return newDiagnostics as typeof diagnostics;
     }
 });

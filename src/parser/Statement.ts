@@ -1,25 +1,32 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
-import type { BinaryExpression, NamespacedVariableNameExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression } from './Expression';
+import type { BinaryExpression, DottedGetExpression, FunctionExpression, FunctionParameterExpression, LiteralExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
-import { Position } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
-import type { TranspileResult, TypedefProvider } from '../interfaces';
+import { isCallExpression, isCommentStatement, isEnumMemberStatement, isExpression, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypedefProvider, isUnaryExpression, isVoidType } from '../astUtils/reflection';
+import { TypeChainEntry, type GetTypeOptions, type TranspileResult, type TypedefProvider } from '../interfaces';
+import { SymbolTypeFlag } from '../SymbolTable';
 import { createInvalidLiteral, createMethodStatement, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
-import type { BscType } from '../types/BscType';
 import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
 import type { Expression } from './AstNode';
+import { AstNodeKind } from './AstNode';
 import { Statement } from './AstNode';
+import { ClassType } from '../types/ClassType';
+import { EnumMemberType, EnumType } from '../types/EnumType';
+import { NamespaceType } from '../types/NamespaceType';
+import { InterfaceType } from '../types/InterfaceType';
+import type { BscType } from '../types/BscType';
+import { VoidType } from '../types/VoidType';
+import { TypedFunctionType } from '../types/TypedFunctionType';
 
 export class EmptyStatement extends Statement {
     constructor(
@@ -30,6 +37,8 @@ export class EmptyStatement extends Statement {
     ) {
         super();
     }
+
+    public readonly kind = AstNodeKind.EmptyStatement;
 
     transpile(state: BrsTranspileState) {
         return [];
@@ -49,12 +58,14 @@ export class Body extends Statement implements TypedefProvider {
         super();
     }
 
+    public readonly kind = AstNodeKind.Body;
+
     public symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
 
     public get range() {
-        return util.createRangeFromPositions(
-            this.statements[0]?.range.start ?? Position.create(0, 0),
-            this.statements[this.statements.length - 1]?.range.end ?? Position.create(0, 0)
+        //this needs to be a getter because the body has its statements pushed to it after being constructed
+        return util.createBoundingRange(
+            ...(this.statements ?? [])
         );
     }
 
@@ -115,23 +126,19 @@ export class Body extends Statement implements TypedefProvider {
 
 export class AssignmentStatement extends Statement {
     constructor(
-        readonly equals: Token,
-        readonly name: Identifier,
-        readonly value: Expression
+        public equals: Token,
+        public name: Identifier,
+        public value: Expression,
+        public asToken?: Token,
+        public typeExpression?: TypeExpression
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.name.range.start, this.value.range.end);
+        this.range = util.createBoundingRange(name, equals, value);
     }
+
+    public readonly kind = AstNodeKind.AssignmentStatement;
 
     public readonly range: Range;
-
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isFunctionExpression)` instead.
-     */
-    public get containingFunction() {
-        return this.findAncestor<FunctionExpression>(isFunctionExpression);
-    }
 
     transpile(state: BrsTranspileState) {
         //if the value is a compound assignment, just transpile the expression itself
@@ -150,8 +157,19 @@ export class AssignmentStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
+            //TODO: Walk TypeExpression. We need to decide how to implement types on assignments
             walk(this, 'value', visitor, options);
         }
+    }
+
+    getType(options: GetTypeOptions) {
+        // TODO: Do we still need this.typeExpression?
+
+        // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
+        // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
+        const rhs = this.value.getType({ ...options, typeChain: undefined });
+        options.typeChain?.push(new TypeChainEntry(this.name.text, rhs, this.name.range));
+        return rhs;
     }
 }
 
@@ -161,13 +179,13 @@ export class Block extends Statement {
         readonly startingRange: Range
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.startingRange.start,
-            this.statements.length
-                ? this.statements[this.statements.length - 1].range.end
-                : this.startingRange.start
+        this.range = util.createBoundingRange(
+            { range: this.startingRange },
+            ...(statements ?? [])
         );
     }
+
+    public readonly kind = AstNodeKind.Block;
 
     public readonly range: Range;
 
@@ -219,6 +237,8 @@ export class ExpressionStatement extends Statement {
         this.range = this.expression.range;
     }
 
+    public readonly kind = AstNodeKind.ExpressionStatement;
+
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
@@ -239,13 +259,13 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
         super();
         this.visitMode = InternalWalkMode.visitStatements | InternalWalkMode.visitExpressions;
         if (this.comments?.length > 0) {
-
-            this.range = util.createRangeFromPositions(
-                this.comments[0].range.start,
-                this.comments[this.comments.length - 1].range.end
+            this.range = util.createBoundingRange(
+                ...this.comments
             );
         }
     }
+
+    public readonly kind = AstNodeKind.CommentStatement;
 
     public range: Range;
 
@@ -290,6 +310,8 @@ export class ExitForStatement extends Statement {
         this.range = this.tokens.exitFor.range;
     }
 
+    public readonly kind = AstNodeKind.ExitForStatement;
+
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
@@ -314,6 +336,8 @@ export class ExitWhileStatement extends Statement {
         this.range = this.tokens.exitWhile.range;
     }
 
+    public readonly kind = AstNodeKind.ExitWhileStatement;
+
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
@@ -336,6 +360,8 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         this.range = this.func.range;
     }
 
+    public readonly kind = AstNodeKind.FunctionStatement as AstNodeKind;
+
     public readonly range: Range;
 
     /**
@@ -352,12 +378,8 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         }
     }
 
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
-     */
-    public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.func.getLeadingTrivia());
     }
 
     transpile(state: BrsTranspileState) {
@@ -391,6 +413,12 @@ export class FunctionStatement extends Statement implements TypedefProvider {
             walk(this, 'func', visitor, options);
         }
     }
+
+    getType(options: GetTypeOptions) {
+        const funcExprType = this.func.getType(options);
+        funcExprType.setName(this.name.text);
+        return funcExprType;
+    }
 }
 
 export class IfStatement extends Statement {
@@ -407,11 +435,19 @@ export class IfStatement extends Statement {
         readonly isInline?: boolean
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.tokens.if.range.start,
-            (this.tokens.endIf ?? this.elseBranch ?? this.thenBranch).range.end
+        this.range = util.createBoundingRange(
+            tokens.if,
+            condition,
+            tokens.then,
+            thenBranch,
+            tokens.else,
+            elseBranch,
+            tokens.endIf
         );
     }
+
+    public readonly kind = AstNodeKind.IfStatement;
+
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
@@ -509,8 +545,13 @@ export class IncrementStatement extends Statement {
         readonly operator: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.value.range.start, this.operator.range.end);
+        this.range = util.createBoundingRange(
+            value,
+            operator
+        );
     }
+
+    public readonly kind = AstNodeKind.IncrementStatement;
 
     public readonly range: Range;
 
@@ -555,13 +596,13 @@ export class PrintStatement extends Statement {
         readonly expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.tokens.print.range.start,
-            this.expressions.length
-                ? this.expressions[this.expressions.length - 1].range.end
-                : this.tokens.print.range.end
+        this.range = util.createBoundingRange(
+            tokens.print,
+            ...(expressions ?? [])
         );
     }
+
+    public readonly kind = AstNodeKind.PrintStatement;
 
     public readonly range: Range;
 
@@ -604,11 +645,17 @@ export class DimStatement extends Statement {
         public closingSquare?: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.dimToken.range.start,
-            (this.closingSquare ?? this.dimensions[this.dimensions.length - 1] ?? this.openingSquare ?? this.identifier ?? this.dimToken).range.end
+        this.range = util.createBoundingRange(
+            dimToken,
+            identifier,
+            openingSquare,
+            ...(dimensions ?? []),
+            closingSquare
         );
     }
+
+    public readonly kind = AstNodeKind.DimStatement;
+
     public range: Range;
 
     public transpile(state: BrsTranspileState) {
@@ -646,8 +693,13 @@ export class GotoStatement extends Statement {
         }
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.tokens.goto.range.start, this.tokens.label.range.end);
+        this.range = util.createBoundingRange(
+            tokens.goto,
+            tokens.label
+        );
     }
+
+    public readonly kind = AstNodeKind.GotoStatement;
 
     public readonly range: Range;
 
@@ -672,10 +724,19 @@ export class LabelStatement extends Statement {
         }
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.tokens.identifier.range.start, this.tokens.colon.range.end);
+        this.range = util.createBoundingRange(
+            tokens.identifier,
+            tokens.colon
+        );
     }
 
+    public readonly kind = AstNodeKind.LabelStatement;
+
     public readonly range: Range;
+
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.identifier.leadingTrivia);
+    }
 
     transpile(state: BrsTranspileState) {
         return [
@@ -698,11 +759,13 @@ export class ReturnStatement extends Statement {
         readonly value?: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.tokens.return.range.start,
-            this.value?.range.end || this.tokens.return.range.end
+        this.range = util.createBoundingRange(
+            tokens.return,
+            value
         );
     }
+
+    public readonly kind = AstNodeKind.ReturnStatement;
 
     public readonly range: Range;
 
@@ -732,8 +795,10 @@ export class EndStatement extends Statement {
         }
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.tokens.end.range.start, this.tokens.end.range.end);
+        this.range = tokens.end.range;
     }
+
+    public readonly kind = AstNodeKind.EndStatement;
 
     public readonly range: Range;
 
@@ -755,8 +820,10 @@ export class StopStatement extends Statement {
         }
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.tokens.stop.range.start, this.tokens.stop.range.end);
+        this.range = tokens?.stop?.range;
     }
+
+    public readonly kind = AstNodeKind.StopStatement;
 
     public readonly range: Range;
 
@@ -783,9 +850,19 @@ export class ForStatement extends Statement {
         public increment?: Expression
     ) {
         super();
-        const lastRange = this.endForToken?.range ?? body.range;
-        this.range = util.createRangeFromPositions(this.forToken.range.start, lastRange.end);
+        this.range = util.createBoundingRange(
+            forToken,
+            counterDeclaration,
+            toToken,
+            finalValue,
+            stepToken,
+            increment,
+            body,
+            endForToken
+        );
     }
+
+    public readonly kind = AstNodeKind.ForStatement;
 
     public readonly range: Range;
 
@@ -860,9 +937,17 @@ export class ForEachStatement extends Statement {
         readonly body: Block
     ) {
         super();
-        const lastRange = this.tokens.endFor?.range ?? body.range;
-        this.range = util.createRangeFromPositions(this.tokens.forEach.range.start, lastRange.end);
+        this.range = util.createBoundingRange(
+            tokens.forEach,
+            item,
+            tokens.in,
+            target,
+            body,
+            tokens.endFor
+        );
     }
+
+    public readonly kind = AstNodeKind.ForEachStatement;
 
     public readonly range: Range;
 
@@ -921,9 +1006,15 @@ export class WhileStatement extends Statement {
         readonly body: Block
     ) {
         super();
-        const lastRange = this.tokens.endWhile?.range ?? body.range;
-        this.range = util.createRangeFromPositions(this.tokens.while.range.start, lastRange.end);
+        this.range = util.createBoundingRange(
+            tokens.while,
+            condition,
+            body,
+            tokens.endWhile
+        );
     }
+
+    public readonly kind = AstNodeKind.WhileStatement;
 
     public readonly range: Range;
 
@@ -969,11 +1060,19 @@ export class DottedSetStatement extends Statement {
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
-        readonly value: Expression
+        readonly value: Expression,
+        readonly dot?: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.obj.range.start, this.value.range.end);
+        this.range = util.createBoundingRange(
+            obj,
+            dot,
+            name,
+            value
+        );
     }
+
+    public readonly kind = AstNodeKind.DottedSetStatement;
 
     public readonly range: Range;
 
@@ -985,7 +1084,7 @@ export class DottedSetStatement extends Statement {
             return [
                 //object
                 ...this.obj.transpile(state),
-                '.',
+                this.dot ? state.tokenToSourceNode(this.dot) : '.',
                 //name
                 state.transpileToken(this.name),
                 ' = ',
@@ -1012,8 +1111,16 @@ export class IndexedSetStatement extends Statement {
         readonly closingSquare: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.obj.range.start, this.value.range.end);
+        this.range = util.createBoundingRange(
+            obj,
+            openingSquare,
+            index,
+            closingSquare,
+            value
+        );
     }
+
+    public readonly kind = AstNodeKind.IndexedSetStatement;
 
     public readonly range: Range;
 
@@ -1056,11 +1163,13 @@ export class LibraryStatement extends Statement implements TypedefProvider {
         }
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.tokens.library.range.start,
-            this.tokens.filePath ? this.tokens.filePath.range.end : this.tokens.library.range.end
+        this.range = util.createBoundingRange(
+            this.tokens.library,
+            this.tokens.filePath
         );
     }
+
+    public readonly kind = AstNodeKind.LibraryStatement;
 
     public readonly range: Range;
 
@@ -1091,8 +1200,7 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 export class NamespaceStatement extends Statement implements TypedefProvider {
     constructor(
         public keyword: Token,
-        // this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
-        public nameExpression: NamespacedVariableNameExpression,
+        public nameExpression: VariableExpression | DottedGetExpression,
         public body: Body,
         public endKeyword: Token
     ) {
@@ -1100,6 +1208,8 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         this.name = this.getName(ParseMode.BrighterScript);
         this.symbolTable = new SymbolTable(`NamespaceStatement: '${this.name}'`, () => this.parent?.getSymbolTable());
     }
+
+    public readonly kind = AstNodeKind.NamespaceStatement;
 
     /**
      * The string name for this namespace
@@ -1124,15 +1234,25 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     public getName(parseMode: ParseMode) {
-        const parentNamespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
-        let name = this.nameExpression.getName(parseMode);
-
-        if (parentNamespace) {
-            const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
-            name = parentNamespace.getName(parseMode) + sep + name;
+        const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
+        let name = util.getAllDottedGetPartsAsString(this.nameExpression, parseMode);
+        if ((this.parent as Body)?.parent?.kind === AstNodeKind.NamespaceStatement) {
+            name = (this.parent.parent as NamespaceStatement).getName(parseMode) + sep + name;
         }
-
         return name;
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.keyword.leadingTrivia);
+    }
+
+    public getNameParts() {
+        let parts = util.getAllDottedGetParts(this.nameExpression);
+
+        if ((this.parent as Body)?.parent?.kind === AstNodeKind.NamespaceStatement) {
+            parts = (this.parent.parent as NamespaceStatement).getNameParts().concat(parts);
+        }
+        return parts;
     }
 
     transpile(state: BrsTranspileState) {
@@ -1168,6 +1288,12 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
             walk(this, 'body', visitor, options);
         }
     }
+
+    getType(options: GetTypeOptions) {
+        const resultType = new NamespaceType(this.name);
+        return resultType;
+    }
+
 }
 
 export class ImportStatement extends Statement implements TypedefProvider {
@@ -1176,9 +1302,9 @@ export class ImportStatement extends Statement implements TypedefProvider {
         readonly filePathToken: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            importToken.range.start,
-            (filePathToken ?? importToken).range.end
+        this.range = util.createBoundingRange(
+            importToken,
+            filePathToken
         );
         if (this.filePathToken) {
             //remove quotes
@@ -1192,8 +1318,11 @@ export class ImportStatement extends Statement implements TypedefProvider {
             );
         }
     }
-    public filePath: string;
+    public readonly kind = AstNodeKind.ImportStatement;
+
     public range: Range;
+
+    public filePath: string;
 
     transpile(state: BrsTranspileState) {
         //The xml files are responsible for adding the additional script imports, but
@@ -1228,7 +1357,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         interfaceToken: Token,
         name: Identifier,
         extendsToken: Token,
-        public parentInterfaceName: NamespacedVariableNameExpression,
+        public parentInterfaceName: TypeExpression,
         public body: Statement[],
         endInterfaceToken: Token
     ) {
@@ -1247,6 +1376,8 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         );
     }
 
+    public readonly kind = AstNodeKind.InterfaceStatement;
+
     public tokens = {} as {
         interface: Token;
         name: Identifier;
@@ -1256,21 +1387,24 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
 
     public range: Range;
 
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
-     */
-    public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+    public get fields(): InterfaceFieldStatement[] {
+        return this.body.filter(x => isInterfaceFieldStatement(x)) as InterfaceFieldStatement[];
     }
 
-    public get fields() {
-        return this.body.filter(x => isInterfaceFieldStatement(x));
+    public get methods(): InterfaceMethodStatement[] {
+        return this.body.filter(x => isInterfaceMethodStatement(x)) as InterfaceMethodStatement[];
     }
 
-    public get methods() {
-        return this.body.filter(x => isInterfaceMethodStatement(x));
+
+    public hasParentInterface() {
+        return !!this.parentInterfaceName;
     }
+
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this,
+            this.tokens.interface.leadingTrivia);
+    }
+
 
     /**
      * The name of the interface WITH its leading namespace (if applicable)
@@ -1331,7 +1465,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             ' ',
             this.tokens.name.text
         );
-        const parentInterfaceName = this.parentInterfaceName?.getName(ParseMode.BrighterScript);
+        const parentInterfaceName = this.parentInterfaceName?.getName();
         if (parentInterfaceName) {
             result.push(
                 ' extends ',
@@ -1377,6 +1511,22 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
             walkArray(this.body, visitor, options, this);
         }
     }
+
+    getType(options: GetTypeOptions) {
+        const superIface = this.parentInterfaceName?.getType(options) as InterfaceType;
+
+        const resultType = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
+        for (const statement of this.methods) {
+            const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, SymbolTypeFlag.runtime);
+        }
+        for (const statement of this.fields) {
+            const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, SymbolTypeFlag.runtime);
+        }
+        options.typeChain?.push(new TypeChainEntry(this.getName(ParseMode.BrighterScript), resultType, this.range));
+        return resultType;
+    }
 }
 
 export class InterfaceFieldStatement extends Statement implements TypedefProvider {
@@ -1386,33 +1536,39 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
     constructor(
         nameToken: Identifier,
         asToken: Token,
-        typeToken: Token,
-        public type: BscType
+        public typeExpression?: TypeExpression
     ) {
         super();
         this.tokens.name = nameToken;
         this.tokens.as = asToken;
-        this.tokens.type = typeToken;
-    }
-    public get range() {
-        return util.createRangeFromPositions(
-            this.tokens.name.range.start,
-            (this.tokens.type ?? this.tokens.as ?? this.tokens.name).range.end
+        this.range = util.createBoundingRange(
+            this.tokens.name,
+            this.tokens.as,
+            this.typeExpression
         );
     }
+
+    public readonly kind = AstNodeKind.InterfaceFieldStatement;
+
+    public range: Range;
 
     public tokens = {} as {
         name: Identifier;
         as: Token;
-        type: Token;
     };
+
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.name.leadingTrivia);
+    }
 
     public get name() {
         return this.tokens.name.text;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        //nothing to walk
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typeExpression', visitor, options);
+        }
     }
 
     getTypedef(state: BrsTranspileState): (string | SourceNode)[] {
@@ -1428,17 +1584,23 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         result.push(
             this.tokens.name.text
         );
-        if (this.tokens.type?.text?.length > 0) {
+        if (this.typeExpression) {
             result.push(
                 ' as ',
-                this.tokens.type.text
+                ...this.typeExpression.getTypedef(state)
             );
         }
         return result;
     }
 
+    public getType(options: GetTypeOptions): BscType {
+        return this.typeExpression?.getType(options) ?? DynamicType.instance;
+    }
+
 }
 
+//TODO: there is much that is similar with this and FunctionExpression.
+//It would be nice to refactor this so there is less duplicated code
 export class InterfaceMethodStatement extends Statement implements TypedefProvider {
     public transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('Method not implemented.');
@@ -1450,8 +1612,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         public params: FunctionParameterExpression[],
         rightParen: Token,
         asToken?: Token,
-        returnTypeToken?: Token,
-        public returnType?: BscType
+        public returnTypeExpression?: TypeExpression
     ) {
         super();
         this.tokens.functionType = functionTypeToken;
@@ -1459,22 +1620,26 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         this.tokens.leftParen = leftParen;
         this.tokens.rightParen = rightParen;
         this.tokens.as = asToken;
-        this.tokens.returnType = returnTypeToken;
     }
 
+    public readonly kind = AstNodeKind.InterfaceMethodStatement;
+
     public get range() {
-        return util.createRangeFromPositions(
-            this.tokens.name.range.start,
-            (
-                this.tokens.returnType ??
-                this.tokens.as ??
-                this.tokens.rightParen ??
-                this.params?.[this.params?.length - 1] ??
-                this.tokens.leftParen ??
-                this.tokens.name ??
-                this.tokens.functionType
-            ).range.end
+        return util.createBoundingRange(
+            this.tokens.functionType,
+            this.tokens.name,
+            this.tokens.leftParen,
+            ...(this.params ?? []),
+            this.tokens.rightParen,
+            this.tokens.as,
+            this.returnTypeExpression
         );
+    }
+    /**
+     * Get the name of this method.
+     */
+    public getName(parseMode: ParseMode) {
+        return this.tokens.name.text;
     }
 
     public tokens = {} as {
@@ -1483,11 +1648,16 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         leftParen: Token;
         rightParen: Token;
         as: Token;
-        returnType: Token;
     };
 
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.functionType.leadingTrivia);
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        //nothing to walk
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'returnTypeExpression', visitor, options);
+        }
     }
 
     getTypedef(state: BrsTranspileState) {
@@ -1513,28 +1683,51 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             }
             const param = params[i];
             result.push(param.name.text);
-            if (param.typeToken?.text?.length > 0) {
+            if (param.typeExpression) {
                 result.push(
                     ' as ',
-                    param.typeToken.text
+                    ...param.typeExpression.getTypedef(state)
                 );
             }
         }
         result.push(
             ')'
         );
-        if (this.tokens.returnType?.text.length > 0) {
+        if (this.returnTypeExpression) {
             result.push(
                 ' as ',
-                this.tokens.returnType.text
+                ...this.returnTypeExpression.getTypedef(state)
             );
         }
         return result;
     }
+
+    public getType(options: GetTypeOptions): TypedFunctionType {
+        //if there's a defined return type, use that
+        let returnType = this.returnTypeExpression?.getType(options);
+        const isSub = this.tokens.functionType.kind === TokenKind.Sub;
+        //if we don't have a return type and this is a sub, set the return type to `void`. else use `dynamic`
+        if (!returnType) {
+            returnType = isSub ? VoidType.instance : DynamicType.instance;
+        }
+
+        const resultType = new TypedFunctionType(returnType);
+        resultType.isSub = isSub;
+        for (let param of this.params) {
+            resultType.addParameter(param.name.text, param.getType(options), !!param.defaultValue);
+        }
+        if (options.typeChain) {
+            // need Interface type for type chain
+            this.parent?.getType(options);
+        }
+        let funcName = this.getName(ParseMode.BrighterScript);
+        resultType.setName(funcName);
+        options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, this.range));
+        return resultType;
+    }
 }
 
 export class ClassStatement extends Statement implements TypedefProvider {
-
     constructor(
         readonly classKeyword: Token,
         /**
@@ -1544,10 +1737,11 @@ export class ClassStatement extends Statement implements TypedefProvider {
         public body: Statement[],
         readonly end: Token,
         readonly extendsKeyword?: Token,
-        readonly parentClassName?: NamespacedVariableNameExpression
+        readonly parentClassName?: TypeExpression
     ) {
         super();
         this.body = this.body ?? [];
+        this.symbolTable = new SymbolTable(`ClassStatement: '${this.name?.text}'`, () => this.parent?.getSymbolTable());
 
         for (let statement of this.body) {
             if (isMethodStatement(statement)) {
@@ -1559,17 +1753,17 @@ export class ClassStatement extends Statement implements TypedefProvider {
             }
         }
 
-        this.range = util.createRangeFromPositions(this.classKeyword.range.start, this.end.range.end);
+        this.range = util.createBoundingRange(
+            classKeyword,
+            name,
+            extendsKeyword,
+            parentClassName,
+            ...(body ?? []),
+            end
+        );
     }
 
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
-     */
-    public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
-    }
-
+    public readonly kind = AstNodeKind.ClassStatement;
 
     public getName(parseMode: ParseMode) {
         const name = this.name?.text;
@@ -1586,6 +1780,10 @@ export class ClassStatement extends Statement implements TypedefProvider {
             //return undefined which will allow outside callers to know that this class doesn't have a name
             return undefined;
         }
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.classKeyword.leadingTrivia);
     }
 
     public memberMap = {} as Record<string, MemberStatement>;
@@ -1623,7 +1821,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         if (this.extendsKeyword && this.parentClassName) {
             const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
             const fqName = util.getFullyQualifiedClassName(
-                this.parentClassName.getName(ParseMode.BrighterScript),
+                this.parentClassName.getName(),
                 namespace?.getName(ParseMode.BrighterScript)
             );
             result.push(
@@ -1676,7 +1874,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
                 //find the parent class
                 stmt = state.file.getClassFileLink(
-                    stmt.parentClassName.getName(ParseMode.BrighterScript),
+                    stmt.parentClassName.getName(),
                     namespace?.getName(ParseMode.BrighterScript)
                 )?.item;
                 myIndex++;
@@ -1707,7 +1905,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             if (stmt.parentClassName) {
                 const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
                 stmt = state.file.getClassFileLink(
-                    stmt.parentClassName.getName(ParseMode.BrighterScript),
+                    stmt.parentClassName.getName(),
                     namespace?.getName(ParseMode.BrighterScript)
                 )?.item;
                 ancestors.push(stmt);
@@ -1914,6 +2112,23 @@ export class ClassStatement extends Statement implements TypedefProvider {
             walkArray(this.body, visitor, options, this);
         }
     }
+
+    getType(options: GetTypeOptions) {
+        const superClass = this.parentClassName?.getType(options) as ClassType;
+
+        const resultType = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
+
+        for (const statement of this.methods) {
+            const funcType = statement?.func.getType({ ...options, typeChain: undefined }); //no typechain needed
+            resultType.addMember(statement?.name?.text, { definingNode: statement }, funcType, SymbolTypeFlag.runtime);
+        }
+        for (const statement of this.fields) {
+            const fieldType = statement.getType({ ...options, typeChain: undefined }); //no typechain needed
+            resultType.addMember(statement?.name?.text, { definingNode: statement }, fieldType, SymbolTypeFlag.runtime);
+        }
+        options.typeChain?.push(new TypeChainEntry(resultType.name, resultType, this.range));
+        return resultType;
+    }
 }
 
 const accessModifiers = [
@@ -1936,11 +2151,14 @@ export class MethodStatement extends FunctionStatement {
                 this.modifiers.push(modifiers);
             }
         }
-        this.range = util.createRangeFromPositions(
-            (this.accessModifier ?? this.func).range.start,
-            this.func.range.end
+        this.range = util.createBoundingRange(
+            ...(this.modifiers),
+            override,
+            func
         );
     }
+
+    public readonly kind = AstNodeKind.MethodStatement as AstNodeKind;
 
     public modifiers: Token[] = [];
 
@@ -1955,6 +2173,10 @@ export class MethodStatement extends FunctionStatement {
      */
     public getName(parseMode: ParseMode) {
         return this.name.text;
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.func.getLeadingTrivia());
     }
 
     transpile(state: BrsTranspileState) {
@@ -2023,19 +2245,21 @@ export class MethodStatement extends FunctionStatement {
             return;
         }
 
-        //find the first non-comment statement
-        let firstStatement = this.func.body.statements.find(x => !isCommentStatement(x));
-        //if the first statement is a call to super, quit here
-        if (
-            //is a call statement
-            isExpressionStatement(firstStatement) && isCallExpression(firstStatement.expression) &&
-            //is a call to super
-            util.findBeginningVariableExpression(firstStatement?.expression.callee as any).name.text.toLowerCase() === 'super'
-        ) {
+        //check whether any calls to super exist
+        let containsSuperCall =
+            this.func.body.statements.findIndex((x) => {
+                //is a call statement
+                return isExpressionStatement(x) && isCallExpression(x.expression) &&
+                    //is a call to super
+                    util.findBeginningVariableExpression(x.expression.callee as any).name.text.toLowerCase() === 'super';
+            }) !== -1;
+
+        //if a call to super exists, quit here
+        if (containsSuperCall) {
             return;
         }
 
-        //this is a child class, and the first statement isn't a call to super. Inject one
+        //this is a child class, and the constructor doesn't contain a call to super. Inject one
         const superCall = new ExpressionStatement(
             new CallExpression(
                 new VariableExpression(
@@ -2044,7 +2268,8 @@ export class MethodStatement extends FunctionStatement {
                         text: 'super',
                         isReserved: false,
                         range: state.classStatement.name.range,
-                        leadingWhitespace: ''
+                        leadingWhitespace: '',
+                        leadingTrivia: []
                     }
                 ),
                 {
@@ -2052,14 +2277,16 @@ export class MethodStatement extends FunctionStatement {
                     text: '(',
                     isReserved: false,
                     range: state.classStatement.name.range,
-                    leadingWhitespace: ''
+                    leadingWhitespace: '',
+                    leadingTrivia: []
                 },
                 {
                     kind: TokenKind.RightParen,
                     text: ')',
                     isReserved: false,
                     range: state.classStatement.name.range,
-                    leadingWhitespace: ''
+                    leadingWhitespace: '',
+                    leadingTrivia: []
                 },
                 []
             )
@@ -2102,43 +2329,43 @@ export class MethodStatement extends FunctionStatement {
         }
     }
 }
-/**
- * @deprecated use `MethodStatement`
- */
-export class ClassMethodStatement extends MethodStatement { }
 
 export class FieldStatement extends Statement implements TypedefProvider {
-
     constructor(
         readonly accessModifier?: Token,
         readonly name?: Identifier,
         readonly as?: Token,
-        readonly type?: Token,
+        readonly typeExpression?: TypeExpression,
         readonly equal?: Token,
         readonly initialValue?: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            (this.accessModifier ?? this.name).range.start,
-            (this.initialValue ?? this.type ?? this.as ?? this.name).range.end
+        this.range = util.createBoundingRange(
+            accessModifier,
+            name,
+            as,
+            typeExpression,
+            equal,
+            initialValue
         );
     }
+
+    public readonly kind = AstNodeKind.FieldStatement;
 
     /**
      * Derive a ValueKind from the type token, or the initial value.
      * Defaults to `DynamicType`
      */
-    getType() {
-        if (this.type) {
-            return util.tokenToBscType(this.type);
-        } else if (isLiteralExpression(this.initialValue)) {
-            return this.initialValue.type;
-        } else {
-            return new DynamicType();
-        }
+    getType(options: GetTypeOptions) {
+        return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime }) ??
+            this.initialValue?.getType({ ...options, flags: SymbolTypeFlag.runtime }) ?? DynamicType.instance;
     }
 
     public readonly range: Range;
+
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.accessModifier?.leadingTrivia ?? this.name?.leadingTrivia ?? []);
+    }
 
     transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
@@ -2155,7 +2382,7 @@ export class FieldStatement extends Statement implements TypedefProvider {
                 );
             }
 
-            let type = this.getType();
+            let type = this.getType({ flags: SymbolTypeFlag.typetime });
             if (isInvalidType(type) || isVoidType(type)) {
                 type = new DynamicType();
             }
@@ -2172,22 +2399,14 @@ export class FieldStatement extends Statement implements TypedefProvider {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (this.initialValue && options.walkMode & InternalWalkMode.walkExpressions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typeExpression', visitor, options);
             walk(this, 'initialValue', visitor, options);
         }
     }
 }
-/**
- * @deprecated use `FieldStatement`
- */
-export class ClassFieldStatement extends FieldStatement { }
 
 export type MemberStatement = FieldStatement | MethodStatement;
-
-/**
- * @deprecated use `MemeberStatement`
- */
-export type ClassMemberStatement = MemberStatement;
 
 export class TryCatchStatement extends Statement {
     constructor(
@@ -2199,14 +2418,17 @@ export class TryCatchStatement extends Statement {
         public catchStatement?: CatchStatement
     ) {
         super();
-    }
-
-    public get range() {
-        return util.createRangeFromPositions(
-            this.tokens.try.range.start,
-            (this.tokens.endTry ?? this.catchStatement ?? this.tryBranch ?? this.tokens.try).range.end
+        this.range = util.createBoundingRange(
+            tokens.try,
+            tryBranch,
+            catchStatement,
+            tokens.endTry
         );
     }
+
+    public readonly kind = AstNodeKind.TryCatchStatement;
+
+    public readonly range: Range;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
@@ -2238,14 +2460,16 @@ export class CatchStatement extends Statement {
         public catchBranch?: Block
     ) {
         super();
-    }
-
-    public get range() {
-        return util.createRangeFromPositions(
-            this.tokens.catch.range.start,
-            (this.catchBranch ?? this.exceptionVariable ?? this.tokens.catch).range.end
+        this.range = util.createBoundingRange(
+            tokens.catch,
+            exceptionVariable,
+            catchBranch
         );
     }
+
+    public readonly kind = AstNodeKind.CatchStatement;
+
+    public range: Range;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
@@ -2269,11 +2493,14 @@ export class ThrowStatement extends Statement {
         public expression?: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.throwToken.range.start,
-            (this.expression ?? this.throwToken).range.end
+        this.range = util.createBoundingRange(
+            throwToken,
+            expression
         );
     }
+
+    public readonly kind = AstNodeKind.ThrowStatement;
+
     public range: Range;
 
     public transpile(state: BrsTranspileState) {
@@ -2304,7 +2531,6 @@ export class ThrowStatement extends Statement {
 
 
 export class EnumStatement extends Statement implements TypedefProvider {
-
     constructor(
         public tokens: {
             enum: Token;
@@ -2317,19 +2543,17 @@ export class EnumStatement extends Statement implements TypedefProvider {
         this.body = this.body ?? [];
     }
 
-    public get range() {
-        return util.createRangeFromPositions(
-            this.tokens.enum.range.start ?? Position.create(0, 0),
-            (this.tokens.endEnum ?? this.tokens.name ?? this.tokens.enum).range.end
-        );
-    }
+    public readonly kind = AstNodeKind.EnumStatement;
 
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
-     */
-    public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+    public symbolTable = new SymbolTable('Enum');
+
+    public get range(): Range {
+        return util.createBoundingRange(
+            this.tokens.enum,
+            this.tokens.name,
+            ...this.body,
+            this.tokens.endEnum
+        );
     }
 
     public getMembers() {
@@ -2340,6 +2564,10 @@ export class EnumStatement extends Statement implements TypedefProvider {
             }
         }
         return result;
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.enum.leadingTrivia);
     }
 
     /**
@@ -2453,10 +2681,23 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
         }
     }
+
+    getType(options: GetTypeOptions) {
+        const members = this.getMembers();
+
+        const resultType = new EnumType(
+            this.fullName,
+            members[0]?.getType(options)
+        );
+        resultType.pushMemberProvider(() => this.getSymbolTable());
+        for (const statement of members) {
+            resultType.addMember(statement?.tokens?.name?.text, { definingNode: statement }, statement.getType(options), SymbolTypeFlag.runtime);
+        }
+        return resultType;
+    }
 }
 
 export class EnumMemberStatement extends Statement implements TypedefProvider {
-
     public constructor(
         public tokens: {
             name: Identifier;
@@ -2467,6 +2708,16 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         super();
     }
 
+    public readonly kind = AstNodeKind.EnumMemberStatement;
+
+    public get range() {
+        return util.createBoundingRange(
+            this.tokens.name,
+            this.tokens.equal,
+            this.value
+        );
+    }
+
     /**
      * The name of the member
      */
@@ -2474,11 +2725,8 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         return this.tokens.name.text;
     }
 
-    public get range() {
-        return util.createRangeFromPositions(
-            (this.tokens.name ?? this.tokens.equal ?? this.value).range.start ?? Position.create(0, 0),
-            (this.value ?? this.tokens.equal ?? this.tokens.name).range.end
-        );
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.name.leadingTrivia);
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {
@@ -2505,10 +2753,17 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
             walk(this, 'value', visitor, options);
         }
     }
+
+    getType(options: GetTypeOptions) {
+        return new EnumMemberType(
+            (this.parent as EnumStatement)?.fullName,
+            this.tokens?.name?.text,
+            this.value?.getType(options)
+        );
+    }
 }
 
 export class ConstStatement extends Statement implements TypedefProvider {
-
     public constructor(
         public tokens: {
             const: Token;
@@ -2521,10 +2776,16 @@ export class ConstStatement extends Statement implements TypedefProvider {
         this.range = util.createBoundingRange(this.tokens.const, this.tokens.name, this.tokens.equals, this.value);
     }
 
+    public readonly kind = AstNodeKind.ConstStatement;
+
     public range: Range;
 
     public get name() {
         return this.tokens.name.text;
+    }
+
+    public getLeadingTrivia(): Token[] {
+        return util.concatAnnotationLeadingTrivia(this, this.tokens.const.leadingTrivia);
     }
 
     /**
@@ -2568,6 +2829,10 @@ export class ConstStatement extends Statement implements TypedefProvider {
             walk(this, 'value', visitor, options);
         }
     }
+
+    getType(options: GetTypeOptions) {
+        return this.value.getType(options);
+    }
 }
 
 export class ContinueStatement extends Statement {
@@ -2578,11 +2843,15 @@ export class ContinueStatement extends Statement {
         }
     ) {
         super();
+        this.range = util.createBoundingRange(
+            tokens.continue,
+            tokens.loopType
+        );
     }
 
-    public get range() {
-        return this.tokens.continue.range;
-    }
+    public readonly kind = AstNodeKind.ContinueStatement;
+
+    public range: Range;
 
     transpile(state: BrsTranspileState) {
         return [

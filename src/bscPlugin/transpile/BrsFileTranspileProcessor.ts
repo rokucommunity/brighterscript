@@ -3,7 +3,7 @@ import type { Editor } from '../../astUtils/Editor';
 import { isDottedGetExpression, isLiteralExpression, isVariableExpression } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
-import type { AfterPrepareFileEvent } from '../../interfaces';
+import type { OnPrepareFileEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { Expression } from '../../parser/AstNode';
 import { LiteralExpression } from '../../parser/Expression';
@@ -14,7 +14,7 @@ import { BslibManager } from '../serialize/BslibManager';
 
 export class BrsFilePreTranspileProcessor {
     public constructor(
-        private event: AfterPrepareFileEvent<BrsFile>
+        private event: OnPrepareFileEvent<BrsFile>
     ) {
     }
 
@@ -71,7 +71,7 @@ export class BrsFilePreTranspileProcessor {
                 enum: result.item,
                 value: new LiteralExpression(createToken(
                     //just use float literal for now...it will transpile properly with any literal value
-                    value.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
+                    value?.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
                     value
                 ))
             };

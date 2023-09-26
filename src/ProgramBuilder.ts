@@ -16,6 +16,7 @@ import { Throttler } from './Throttler';
 import { AssetFile } from './files/AssetFile';
 import type { File } from './files/File';
 import type { BrsFile } from './files/BrsFile';
+import { URI } from 'vscode-uri';
 
 /**
  * A runner class that handles
@@ -91,13 +92,10 @@ export class ProgramBuilder {
         ];
     }
 
-    public async run(options: BsConfig) {
-        this.logger.logLevel = options.logLevel as LogLevel;
-
-        if (this.isRunning) {
-            throw new Error('Server is already running');
-        }
-        this.isRunning = true;
+    /**
+     * Load the project and all the files, but don't run the validation, transpile, or watch cycles
+     */
+    public async load(options: BsConfig) {
         try {
             this.options = util.normalizeAndResolveConfig(options);
             if (this.options.project) {
@@ -127,6 +125,17 @@ export class ProgramBuilder {
 
         //parse every file in the entire project
         await this.loadFiles();
+    }
+
+    public async run(options: BsConfig) {
+        this.logger.logLevel = options.logLevel as LogLevel;
+
+        if (this.isRunning) {
+            throw new Error('Server is already running');
+        }
+        this.isRunning = true;
+
+        await this.load(options);
 
         if (this.options.watch) {
             this.logger.log('Starting compilation in watch mode...');
@@ -138,9 +147,12 @@ export class ProgramBuilder {
     }
 
     protected createProgram() {
-        const program = new Program(this.options, undefined, this.plugins);
+        const program = new Program(this.options, this.logger, this.plugins);
 
-        this.plugins.emit('afterProgramCreate', program);
+        this.plugins.emit('afterProgramCreate', {
+            builder: this,
+            program: program
+        });
         return program;
     }
 
@@ -156,7 +168,9 @@ export class ProgramBuilder {
             this.plugins.add(plugin);
         }
 
-        this.plugins.emit('beforeProgramCreate', this);
+        this.plugins.emit('beforeProgramCreate', {
+            builder: this
+        });
     }
 
     /**
@@ -312,8 +326,19 @@ export class ProgramBuilder {
             for (let diagnostic of sortedDiagnostics) {
                 //default the severity to error if undefined
                 let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
+                let relatedInformation = (diagnostic.relatedInformation ?? []).map(x => {
+                    let relatedInfoFilePath = URI.parse(x.location.uri).fsPath;
+                    if (!emitFullPaths) {
+                        relatedInfoFilePath = path.relative(cwd, relatedInfoFilePath);
+                    }
+                    return {
+                        filePath: relatedInfoFilePath,
+                        range: x.location.range,
+                        message: x.message
+                    };
+                });
                 //format output
-                diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic);
+                diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic, relatedInformation);
             }
         }
     }
@@ -410,18 +435,10 @@ export class ProgramBuilder {
                 }
             }
 
-            this.plugins.emit('beforePrepublish', this, filteredFileMap);
-
-            this.plugins.emit('beforePublish', this, fileMap);
-
             await this.logger.time(LogLevel.log, ['Building'], async () => {
                 //transpile any brighterscript files
                 await this.program.build();
             });
-
-            this.plugins.emit('afterPrepublish', this, filteredFileMap);
-
-            this.plugins.emit('afterPublish', this, fileMap);
         });
     }
 

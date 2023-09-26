@@ -1,62 +1,64 @@
 import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
+import type { Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticCodeMap, diagnosticCodes } from '../DiagnosticMessages';
-import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag, SerializedCodeFile } from '../interfaces';
 import type { Program } from '../Program';
-import { util, standardizePath as s } from '../util';
-import SGParser, { rangeFromTokenValue } from '../parser/SGParser';
+import util from '../util';
+import { standardizePath as s } from '../util';
+import SGParser from '../parser/SGParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import type { DependencyGraph } from '../DependencyGraph';
-import type { SGToken } from '../parser/SGTypes';
-import { SGScript } from '../parser/SGTypes';
+import { type SGToken } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';
 import type { File } from './File';
 import type { Editor } from '../astUtils/Editor';
+import type { FunctionScope } from '../FunctionScope';
 
 export class XmlFile implements File {
-    /**
-     * @deprecated use the object pattern
-     */
-    constructor(srcPath: string, destPath: string, program: Program);
     /**
      * Create a new instance of BrsFile
      */
     constructor(options: {
+        /**
+         * The absolute path to the source file on disk (e.g. '/usr/you/projects/RokuApp/source/main.brs' or 'c:/projects/RokuApp/source/main.brs').
+         */
         srcPath: string;
+        /**
+         * The absolute path to the file on-device (i.e. 'source/main.brs') without the leading `pkg:/`
+         */
         destPath: string;
         pkgPath?: string;
         program: Program;
-    });
-    constructor(...args: any[]) {
-        //legacy constructor params. deprecate in v1
-        if (typeof args[0] === 'string') {
-            [this.srcPath, this.pkgPath, this.program] = args;
-        } else {
-            //spread the constructor args onto this object
-            Object.assign(this, args[0]);
+    }) {
+        if (options) {
+            this.srcPath = s`${options.srcPath}`;
+            this.destPath = s`${options.destPath}`;
+            this.pkgPath = s`${options.pkgPath ?? options.destPath}`;
+            this.program = options.program;
+
+            this.extension = path.extname(this.srcPath).toLowerCase();
+
+            this.possibleCodebehindDestPaths = [
+                this.pkgPath.replace(/\.xml$/, '.bs'),
+                this.pkgPath.replace(/\.xml$/, '.brs')
+            ];
         }
-
-        this.srcPath = s`${this.srcPath}`;
-        this.destPath = s`${this.destPath}`;
-        this.pkgPath = s`${this.pkgPath ?? this.destPath}`;
-
-        this.extension = path.extname(this.srcPath).toLowerCase();
-
-        this.possibleCodebehindDestPaths = [
-            this.pkgPath.replace(/\.xml$/, '.bs'),
-            this.pkgPath.replace(/\.xml$/, '.brs')
-        ];
     }
 
     public type = 'XmlFile';
 
+    /**
+     * The absolute path to the source file on disk (e.g. '/usr/you/projects/RokuApp/source/main.brs' or 'c:/projects/RokuApp/source/main.brs').
+     */
     public srcPath: string;
+    /**
+     * The absolute path to the file on-device (i.e. 'source/main.brs') without the leading `pkg:/`
+     */
     public destPath: string;
     public pkgPath: string;
 
@@ -195,7 +197,7 @@ export class XmlFile implements File {
     public fileRange: Range;
 
     /**
-     * A collection of diagnostics related to this file
+     * Diagnostics for this file
      */
     public diagnostics = [] as BsDiagnostic[];
 
@@ -234,7 +236,7 @@ export class XmlFile implements File {
             return this._needsTranspiled;
         }
         return !!(
-            this.editor?.hasChanges || this.ast.component?.scripts?.some(
+            this.editor?.hasChanges || this.ast.componentElement?.scriptElements?.some(
                 script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
             )
         );
@@ -268,7 +270,6 @@ export class XmlFile implements File {
             ...diagnostic,
             file: this
         }));
-
         this.getCommentFlags(this.parser.tokens as any[]);
     }
 
@@ -284,11 +285,6 @@ export class XmlFile implements File {
     }
 
     /**
-     * @deprecated logic has moved into XmlFileValidator, this is now an empty function
-     */
-    public validate() { }
-
-    /**
      * Collect all bs: comment flags
      */
     public getCommentFlags(tokens: Array<IToken & { tokenType: TokenType }>) {
@@ -300,7 +296,8 @@ export class XmlFile implements File {
                 processor.tryAdd(
                     //remove the close comment symbol
                     token.image.replace(/\-\-\>$/, ''),
-                    rangeFromTokenValue(token)
+                    //technically this range is 3 characters longer due to the removed `-->`, but that probably doesn't matter
+                    this.parser.rangeFromToken(token)
                 );
             }
         }
@@ -332,7 +329,7 @@ export class XmlFile implements File {
             ...this.scriptTagImports.map(x => x.destPath.toLowerCase())
         ];
         //if autoImportComponentScript is enabled, add the .bs and .brs files with the same name
-        if (this.program.options.autoImportComponentScript) {
+        if (this.program?.options?.autoImportComponentScript) {
             dependencies.push(
                 //add the codebehind file dependencies.
                 //These are kind of optional, so it doesn't hurt to just add both extension versions
@@ -427,18 +424,6 @@ export class XmlFile implements File {
     }
 
     /**
-     * Get all available completions for the specified position
-     */
-    public getCompletions(position: Position): CompletionItem[] {
-        let scriptImport = util.getScriptImportAtPosition(this.scriptTagImports, position);
-        if (scriptImport) {
-            return this.program.getScriptImportCompletions(this.destPath, scriptImport);
-        } else {
-            return [];
-        }
-    }
-
-    /**
      * Get the parent component (the component this component extends)
      */
     public get parentComponent() {
@@ -485,7 +470,7 @@ export class XmlFile implements File {
      * and only includes the ones that are not found on the parent.
      * If no parent is found, all imports are returned
      */
-    private getMissingImportsForTranspile() {
+    public getMissingImportsForTranspile() {
         let ownImports = this.getAvailableScriptImports();
         //add the bslib path to ownImports, it'll get filtered down below
         ownImports.push(this.program.bslibPkgPath);
@@ -523,7 +508,7 @@ export class XmlFile implements File {
     }
 
     private logDebug(...args) {
-        this.program.logger.debug('XmlFile', chalk.green(this.destPath), ...args);
+        this.program?.logger?.debug('XmlFile', chalk.green(this.destPath), ...args);
     }
 
     /**
@@ -532,27 +517,10 @@ export class XmlFile implements File {
     public transpile(): CodeWithSourceMap {
         const state = new TranspileState(this.srcPath, this.program.options);
 
-        const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
-            const script = new SGScript();
-            script.uri = util.sanitizePkgPath(uri.replace(/\.bs$/, '.brs'));
-            return script;
-        });
-
         let transpileResult: SourceNode | undefined;
 
-        if (this.needsTranspiled || extraImportScripts.length > 0) {
-            //temporarily add the missing imports as script tags
-            const originalScripts = this.ast.component?.scripts ?? [];
-            this.ast.component.scripts = [
-                ...originalScripts,
-                ...extraImportScripts
-            ];
-
+        if (this.needsTranspiled) {
             transpileResult = new SourceNode(null, null, state.srcPath, this.parser.ast.transpile(state));
-
-            //restore the original scripts array
-            this.ast.component.scripts = originalScripts;
-
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location
             transpileResult = util.simpleMap(state.srcPath, this.fileContents);

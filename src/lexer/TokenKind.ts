@@ -616,6 +616,12 @@ export const DeclarableTypes = [
     TokenKind.Function
 ];
 
+/** List of TokenKind that will not break parsing a TypeExpression in Brighterscript*/
+export const AllowedTypeIdentifiers = [
+    ...AllowedProperties
+];
+
+
 /**
  * The tokens that might preceed a regex literal
  */
@@ -659,3 +665,13 @@ export const PreceedingRegexTypes = new Set([
     TokenKind.Colon,
     TokenKind.Semicolon
 ]);
+
+/**
+ * The tokens that may be in leading trivia
+ */
+export const AllowedTriviaTokens: ReadonlyArray<TokenKind> = [
+    TokenKind.Newline,
+    TokenKind.Whitespace,
+    TokenKind.Comment,
+    TokenKind.Colon
+];

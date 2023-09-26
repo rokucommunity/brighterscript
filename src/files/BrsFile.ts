@@ -1,35 +1,33 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import * as path from 'path';
-import type { CompletionItem, Position, Diagnostic } from 'vscode-languageserver';
-import { CancellationTokenSource, CompletionItemKind, SymbolKind, DocumentSymbol, SymbolInformation, TextEdit, Location } from 'vscode-languageserver';
+import type { CompletionItem, Position, Location, Diagnostic } from 'vscode-languageserver';
+import { CancellationTokenSource } from 'vscode-languageserver';
+import { CompletionItemKind, SymbolKind, DocumentSymbol, SymbolInformation } from 'vscode-languageserver';
 import chalk from 'chalk';
-import type { Scope } from '../Scope';
+import * as path from 'path';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, SerializedCodeFile } from '../interfaces';
 import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
-import { TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer/TokenKind';
+import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression, VariableExpression } from '../parser/Expression';
-import type { ClassStatement, FunctionStatement, NamespaceStatement, AssignmentStatement, MethodStatement, FieldStatement } from '../parser/Statement';
+import type { ClassStatement, FunctionStatement, NamespaceStatement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program } from '../Program';
 import { DynamicType } from '../types/DynamicType';
-import { FunctionType } from '../types/FunctionType';
-import { VoidType } from '../types/VoidType';
-import { util, standardizePath as s } from '../util';
+import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement, isBrsFile } from '../astUtils/reflection';
-import type { BscType } from '../types/BscType';
+import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isFunctionExpression, isBrsFile } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
-import type { AstNode, Expression, Statement } from '../parser/AstNode';
+import { type AstNode, type Expression, type Statement } from '../parser/AstNode';
+import { SymbolTypeFlag } from '../SymbolTable';
 import type { File } from './File';
 import { Editor } from '../astUtils/Editor';
 
@@ -37,54 +35,39 @@ import { Editor } from '../astUtils/Editor';
  * Holds all details about this file within the scope of the whole program
  */
 export class BrsFile implements File {
-    /**
-     * @deprecated use the object pattern
-     */
-    constructor(srcPath: string, destPath: string, program: Program);
-    /**
-     * Create a new instance of BrsFile
-     */
     constructor(options: {
         srcPath: string;
         destPath: string;
         pkgPath?: string;
         program: Program;
-    });
-    constructor(...args: any[]) {
-        //legacy constructor params. deprecate in v1
-        if (typeof args[0] === 'string') {
-            [this.srcPath, this.pkgPath, this.program] = args;
-        } else {
-            //spread the constructor args onto this object
-            Object.assign(this, args[0]);
-        }
-        this.srcPath = s`${this.srcPath}`;
-        this.destPath = s`${this.destPath}`;
+    }) {
+        if (options) {
+            this.srcPath = s`${options.srcPath}`;
+            this.destPath = s`${options.destPath}`;
+            this.program = options.program;
 
-        this.extension = util.getExtension(this.srcPath);
+            this.extension = util.getExtension(this.srcPath);
 
-        //if no pkgPath, leverage destPath
-        if (!this.pkgPath) {
             //don't rename .d.bs files to .d.brs
             if (this.extension === '.d.bs') {
                 this.pkgPath = this.destPath;
             } else {
                 this.pkgPath = this.destPath.replace(/\.bs$/i, '.brs');
             }
-        }
 
-        //all BrighterScript files need to be transpiled
-        if (this.extension?.endsWith('.bs') || this.program?.options?.allowBrighterScriptInBrightScript) {
-            this.parseMode = ParseMode.BrighterScript;
-        }
-        this.isTypedef = this.extension === '.d.bs';
-        if (!this.isTypedef) {
-            this.typedefKey = util.getTypedefPath(this.srcPath);
-        }
+            //all BrighterScript files need to be transpiled
+            if (this.extension?.endsWith('.bs') || this.program?.options?.allowBrighterScriptInBrightScript) {
+                this.parseMode = ParseMode.BrighterScript;
+            }
+            this.isTypedef = this.extension === '.d.bs';
+            if (!this.isTypedef) {
+                this.typedefKey = util.getTypedefPath(this.srcPath);
+            }
 
-        //global file doesn't have a program, so only resolve typedef info if we have a program
-        if (this.program) {
-            this.resolveTypedef();
+            //global file doesn't have a program, so only resolve typedef info if we have a program
+            if (this.program) {
+                this.resolveTypedef();
+            }
         }
     }
 
@@ -100,17 +83,6 @@ export class BrsFile implements File {
      * An editor assigned during the build flow that manages edits that will be undone once the build process is complete.
      */
     public editor?: Editor;
-
-    /**
-     * The absolute path to the source location for this file
-     * @deprecated use `srcPath` instead
-     */
-    public get pathAbsolute() {
-        return this.srcPath;
-    }
-    public set pathAbsolute(value) {
-        this.srcPath = value;
-    }
 
     /**
      * The parseMode used for the parser for this file
@@ -487,7 +459,9 @@ export class BrsFile implements File {
 
             //find parent function, and add this scope to it if found
             {
-                let parentScope = this.scopesByFunc.get(func.parentFunction);
+                let parentScope = this.scopesByFunc.get(
+                    func.findAncestor<FunctionExpression>(isFunctionExpression)
+                );
 
                 //add this child scope to its parent
                 if (parentScope) {
@@ -503,7 +477,9 @@ export class BrsFile implements File {
                     nameRange: param.name.range,
                     lineIndex: param.name.range.start.line,
                     name: param.name.text,
-                    type: param.type
+                    getType: () => {
+                        return param.getType({ flags: SymbolTypeFlag.typetime });
+                    }
                 });
             }
 
@@ -514,7 +490,7 @@ export class BrsFile implements File {
                         nameRange: stmt.item.range,
                         lineIndex: stmt.item.range.start.line,
                         name: stmt.item.text,
-                        type: new DynamicType()
+                        getType: () => DynamicType.instance //TODO: Infer types from array
                     });
                 },
                 LabelStatement: (stmt) => {
@@ -541,7 +517,9 @@ export class BrsFile implements File {
         for (let statement of assignmentStatements) {
 
             //find this statement's function scope
-            let scope = this.scopesByFunc.get(statement.containingFunction);
+            let scope = this.scopesByFunc.get(
+                statement.findAncestor<FunctionExpression>(isFunctionExpression)
+            );
 
             //skip variable declarations that are outside of any scope
             if (scope) {
@@ -549,63 +527,10 @@ export class BrsFile implements File {
                     nameRange: statement.name.range,
                     lineIndex: statement.name.range.start.line,
                     name: statement.name.text,
-                    type: this.getBscTypeFromAssignment(statement, scope)
-                });
-            }
-        }
-    }
-
-    private getBscTypeFromAssignment(assignment: AssignmentStatement, scope: FunctionScope): BscType {
-        try {
-            //function
-            if (isFunctionExpression(assignment.value)) {
-                let functionType = new FunctionType(assignment.value.returnType);
-                functionType.isSub = assignment.value.functionType.text === 'sub';
-                if (functionType.isSub) {
-                    functionType.returnType = new VoidType();
-                }
-
-                functionType.setName(assignment.name.text);
-                for (let param of assignment.value.parameters) {
-                    let isOptional = !!param.defaultValue;
-                    //TODO compute optional parameters
-                    functionType.addParameter(param.name.text, param.type, isOptional);
-                }
-                return functionType;
-
-                //literal
-            } else if (isLiteralExpression(assignment.value)) {
-                return assignment.value.type;
-
-                //function call
-            } else if (isCallExpression(assignment.value)) {
-                let calleeName = (assignment.value.callee as any)?.name?.text;
-                if (calleeName) {
-                    let func = this.getCallableByName(calleeName);
-                    if (func) {
-                        return func.type.returnType;
+                    getType: () => {
+                        return statement.getType({ flags: SymbolTypeFlag.runtime });
                     }
-                }
-            } else if (isVariableExpression(assignment.value)) {
-                let variableName = assignment.value?.name?.text;
-                let variable = scope.getVariableByName(variableName);
-                return variable.type;
-            }
-        } catch (e) {
-            //do nothing. Just return dynamic
-        }
-        //fallback to dynamic
-        return new DynamicType();
-    }
-
-    private getCallableByName(name: string) {
-        name = name ? name.toLowerCase() : undefined;
-        if (!name) {
-            return;
-        }
-        for (let func of this.callables) {
-            if (func.name.toLowerCase() === name) {
-                return func;
+                });
             }
         }
     }
@@ -613,27 +538,20 @@ export class BrsFile implements File {
     private findCallables() {
         for (let statement of this.parser.references.functionStatements ?? []) {
 
-            let functionType = new FunctionType(statement.func.returnType);
-            functionType.setName(statement.name.text);
-            functionType.isSub = statement.func.functionType.text.toLowerCase() === 'sub';
-            if (functionType.isSub) {
-                functionType.returnType = new VoidType();
-            }
-
             //extract the parameters
             let params = [] as CallableParam[];
             for (let param of statement.func.parameters) {
+                const paramType = param.getType({ flags: SymbolTypeFlag.typetime });
+
                 let callableParam = {
                     name: param.name.text,
-                    type: param.type,
+                    type: paramType,
                     isOptional: !!param.defaultValue,
                     isRestArgument: false
                 };
                 params.push(callableParam);
-                let isOptional = !!param.defaultValue;
-                functionType.addParameter(callableParam.name, callableParam.type, isOptional);
             }
-
+            const funcType = statement.getType({ flags: SymbolTypeFlag.typetime });
             this.callables.push({
                 isSub: statement.func.functionType.text.toLowerCase() === 'sub',
                 name: statement.name.text,
@@ -641,7 +559,7 @@ export class BrsFile implements File {
                 file: this,
                 params: params,
                 range: statement.func.range,
-                type: functionType,
+                type: funcType,
                 getName: statement.getName.bind(statement),
                 hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
                 functionStatement: statement
@@ -681,7 +599,7 @@ export class BrsFile implements File {
                     if (isLiteralExpression(arg)) {
                         args.push({
                             range: arg.range,
-                            type: arg.type,
+                            type: arg.getType(),
                             text: arg.token.text,
                             expression: arg,
                             typeToken: undefined
@@ -736,7 +654,8 @@ export class BrsFile implements File {
                     name: functionName,
                     nameRange: util.createRange(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
                     //TODO keep track of parameters
-                    args: args
+                    args: args,
+                    expression: expression
                 };
                 this.functionCalls.push(functionCall);
             }
@@ -783,369 +702,6 @@ export class BrsFile implements File {
                 }
             });
         }
-    }
-
-    /**
-     * Get completions available at the given cursor. This aggregates all values from this file and the current scope.
-     */
-    public getCompletions(position: Position, scope?: Scope): CompletionItem[] {
-        let result = [] as CompletionItem[];
-
-        //a map of lower-case names of all added options
-        let names = {} as Record<string, boolean>;
-
-        //handle script import completions
-        let scriptImport = util.getScriptImportAtPosition(this.ownScriptImports, position);
-        if (scriptImport) {
-            return this.program.getScriptImportCompletions(this.destPath, scriptImport);
-        }
-
-        //if cursor is within a comment, disable completions
-        let currentToken = this.getTokenAt(position);
-        const tokenKind = currentToken?.kind;
-        if (tokenKind === TokenKind.Comment) {
-            return [];
-        } else if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
-            const match = /^("?)(pkg|libpkg):/.exec(currentToken.text);
-            if (match) {
-                const [, openingQuote, fileProtocol] = match;
-                //include every absolute file path from this scope
-                for (const file of scope.getAllFiles()) {
-                    const destPath = `${fileProtocol}:/${file.destPath.replace(/\\/g, '/')}`;
-                    result.push({
-                        label: destPath,
-                        textEdit: TextEdit.replace(
-                            util.createRange(
-                                currentToken.range.start.line,
-                                //+1 to step past the opening quote
-                                currentToken.range.start.character + (openingQuote ? 1 : 0),
-                                currentToken.range.end.line,
-                                //-1 to exclude the closing quotemark (or the end character if there is no closing quotemark)
-                                currentToken.range.end.character + (currentToken.text.endsWith('"') ? -1 : 0)
-                            ),
-                            destPath
-                        ),
-                        kind: CompletionItemKind.File
-                    });
-                }
-                return result;
-            } else {
-                //do nothing. we don't want to show completions inside of strings...
-                return [];
-            }
-        }
-
-        const namespaceCompletions = this.getNamespaceCompletions(currentToken, this.parseMode, scope);
-        if (namespaceCompletions.length > 0) {
-            return [...namespaceCompletions];
-        }
-
-        const enumMemberCompletions = this.getEnumMemberStatementCompletions(currentToken, this.parseMode, scope);
-        if (enumMemberCompletions.length > 0) {
-            // no other completion is valid in this case
-            return enumMemberCompletions;
-        }
-
-        //determine if cursor is inside a function
-        let functionScope = this.getFunctionScopeAtPosition(position);
-        if (!functionScope) {
-            //we aren't in any function scope, so return the keyword completions and namespaces
-            if (this.getTokenBefore(currentToken, TokenKind.New)) {
-                // there's a new keyword, so only class types are viable here
-                return [...this.getGlobalClassStatementCompletions(currentToken, this.parseMode)];
-            } else {
-                return [
-                    ...KeywordCompletions,
-                    ...this.getGlobalClassStatementCompletions(currentToken, this.parseMode),
-                    ...namespaceCompletions,
-                    ...this.getNonNamespacedEnumStatementCompletions(currentToken, this.parseMode, scope)
-                ];
-            }
-        }
-
-        const classNameCompletions = this.getGlobalClassStatementCompletions(currentToken, this.parseMode);
-        const newToken = this.getTokenBefore(currentToken, TokenKind.New);
-        if (newToken) {
-            //we are after a new keyword; so we can only be top-level namespaces or classes at this point
-            result.push(...classNameCompletions);
-            result.push(...namespaceCompletions);
-            return result;
-        }
-
-        if (this.tokenFollows(currentToken, TokenKind.Goto)) {
-            return this.getLabelCompletion(functionScope);
-        }
-
-        if (this.isPositionNextToTokenKind(position, TokenKind.Dot)) {
-
-            const selfClassMemberCompletions = this.getClassMemberCompletions(position, currentToken, functionScope, scope);
-
-            if (selfClassMemberCompletions.size > 0) {
-                return [...selfClassMemberCompletions.values()].filter((i) => i.label !== 'new');
-            }
-
-            if (!this.getClassFromMReference(position, currentToken, functionScope)) {
-                //and anything from any class in scope to a non m class
-                let classMemberCompletions = scope.getAllClassMemberCompletions();
-                result.push(...classMemberCompletions.values());
-                result.push(...scope.getPropertyNameCompletions().filter((i) => !classMemberCompletions.has(i.label)));
-            } else {
-                result.push(...scope.getPropertyNameCompletions());
-            }
-        } else {
-            result.push(
-                //include namespaces
-                ...namespaceCompletions,
-                //include class names
-                ...classNameCompletions,
-                //include enums
-                ...this.getNonNamespacedEnumStatementCompletions(currentToken, this.parseMode, scope),
-                //include constants
-                ...this.getNonNamespacedConstStatementCompletions(currentToken, this.parseMode, scope),
-                //include the global callables
-                ...scope.getCallablesAsCompletions(this.parseMode)
-            );
-
-            //add `m` because that's always valid within a function
-            result.push({
-                label: 'm',
-                kind: CompletionItemKind.Variable
-            });
-            names.m = true;
-
-            result.push(...KeywordCompletions);
-
-            //include local variables
-            let variables = functionScope.variableDeclarations;
-            for (let variable of variables) {
-                //skip duplicate variable names
-                if (names[variable.name.toLowerCase()]) {
-                    continue;
-                }
-                names[variable.name.toLowerCase()] = true;
-                result.push({
-                    label: variable.name,
-                    kind: isFunctionType(variable.type) ? CompletionItemKind.Function : CompletionItemKind.Variable
-                });
-            }
-
-            if (this.parseMode === ParseMode.BrighterScript) {
-                //include the first part of namespaces
-                let namespaces = scope.getAllNamespaceStatements();
-                for (let stmt of namespaces) {
-                    let firstPart = stmt.nameExpression.getNameParts().shift();
-                    //skip duplicate namespace names
-                    if (names[firstPart.toLowerCase()]) {
-                        continue;
-                    }
-                    names[firstPart.toLowerCase()] = true;
-                    result.push({
-                        label: firstPart,
-                        kind: CompletionItemKind.Module
-                    });
-                }
-            }
-        }
-        return result;
-    }
-
-    private getLabelCompletion(functionScope: FunctionScope) {
-        return functionScope.labelStatements.map(label => ({
-            label: label.name,
-            kind: CompletionItemKind.Reference
-        }));
-    }
-
-    private getClassMemberCompletions(position: Position, currentToken: Token, functionScope: FunctionScope, scope: Scope) {
-
-        let classStatement = this.getClassFromMReference(position, currentToken, functionScope);
-        let results = new Map<string, CompletionItem>();
-        if (classStatement) {
-            let classes = scope.getClassHierarchy(classStatement.item.getName(ParseMode.BrighterScript).toLowerCase());
-            for (let cs of classes) {
-                for (let member of [...cs?.item?.fields ?? [], ...cs?.item?.methods ?? []]) {
-                    if (!results.has(member.name.text.toLowerCase())) {
-                        results.set(member.name.text.toLowerCase(), {
-                            label: member.name.text,
-                            kind: isFieldStatement(member) ? CompletionItemKind.Field : CompletionItemKind.Function
-                        });
-                    }
-                }
-            }
-        }
-        return results;
-    }
-
-    public getClassFromMReference(position: Position, currentToken: Token, functionScope: FunctionScope): FileLink<ClassStatement> | undefined {
-        let previousToken = this.getPreviousToken(currentToken);
-        if (previousToken?.kind === TokenKind.Dot) {
-            previousToken = this.getPreviousToken(previousToken);
-        }
-        if (previousToken?.kind === TokenKind.Identifier && previousToken?.text.toLowerCase() === 'm' && isMethodStatement(functionScope.func.functionStatement)) {
-            return { item: this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, position)), file: this };
-        }
-        return undefined;
-    }
-
-    private getGlobalClassStatementCompletions(currentToken: Token, parseMode: ParseMode): CompletionItem[] {
-        if (parseMode === ParseMode.BrightScript) {
-            return [];
-        }
-        let results = new Map<string, CompletionItem>();
-        let completionName = this.getPartialVariableName(currentToken, [TokenKind.New])?.toLowerCase();
-        if (completionName?.includes('.')) {
-            return [];
-        }
-        let scopes = this.program.getScopesForFile(this);
-        for (let scope of scopes) {
-            let classMap = scope.getClassMap();
-            for (const key of [...classMap.keys()]) {
-                let cs = classMap.get(key).item;
-                if (!results.has(cs.name.text)) {
-                    results.set(cs.name.text, {
-                        label: cs.name.text,
-                        kind: CompletionItemKind.Class
-                    });
-                }
-            }
-        }
-        return [...results.values()];
-    }
-
-    private getNonNamespacedEnumStatementCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
-        if (parseMode !== ParseMode.BrighterScript) {
-            return [];
-        }
-        const containingNamespaceName = this.getNamespaceStatementForPosition(currentToken?.range?.start)?.name + '.';
-        const results = new Map<string, CompletionItem>();
-        const enumMap = scope.getEnumMap();
-        for (const key of [...enumMap.keys()]) {
-            const enumStatement = enumMap.get(key).item;
-            const fullName = enumStatement.fullName;
-            //if the enum is contained within our own namespace, or if it's a non-namespaced enum
-            if (fullName.startsWith(containingNamespaceName) || !fullName.includes('.')) {
-                results.set(fullName, {
-                    label: enumStatement.name,
-                    kind: CompletionItemKind.Enum
-                });
-            }
-        }
-        return [...results.values()];
-    }
-
-    private getNonNamespacedConstStatementCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
-        if (parseMode !== ParseMode.BrighterScript) {
-            return [];
-        }
-        const containingNamespaceName = this.getNamespaceStatementForPosition(currentToken?.range?.start)?.name + '.';
-        const results = new Map<string, CompletionItem>();
-        const map = scope.getConstMap();
-        for (const key of [...map.keys()]) {
-            const statement = map.get(key).item;
-            const fullName = statement.fullName;
-            //if the item is contained within our own namespace, or if it's non-namespaced
-            if (fullName.startsWith(containingNamespaceName) || !fullName.includes('.')) {
-                results.set(fullName, {
-                    label: statement.name,
-                    kind: CompletionItemKind.Constant
-                });
-            }
-        }
-        return [...results.values()];
-    }
-
-    private getEnumMemberStatementCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
-        if (parseMode === ParseMode.BrightScript || !currentToken) {
-            return [];
-        }
-        const results = new Map<string, CompletionItem>();
-        const completionName = this.getPartialVariableName(currentToken)?.toLowerCase();
-        //if we don't have a completion name, or if there's no period in the name, then this is not to the right of an enum name
-        if (!completionName || !completionName.includes('.')) {
-            return [];
-        }
-        const enumNameLower = completionName?.split(/\.(\w+)?$/)[0]?.toLowerCase();
-        const namespaceNameLower = this.getNamespaceStatementForPosition(currentToken.range.end)?.name.toLowerCase();
-        const enumMap = scope.getEnumMap();
-        //get the enum statement with this name (check without namespace prefix first, then with inferred namespace prefix next)
-        const enumStatement = (enumMap.get(enumNameLower) ?? enumMap.get(namespaceNameLower + '.' + enumNameLower))?.item;
-        //if we found an enum with this name
-        if (enumStatement) {
-            for (const member of enumStatement.getMembers()) {
-                const name = enumStatement.fullName + '.' + member.name;
-                const nameLower = name.toLowerCase();
-                results.set(nameLower, {
-                    label: member.name,
-                    kind: CompletionItemKind.EnumMember
-                });
-            }
-        }
-        return [...results.values()];
-    }
-
-    private getNamespaceCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
-        //BrightScript does not support namespaces, so return an empty list in that case
-        if (parseMode === ParseMode.BrightScript) {
-            return [];
-        }
-
-        const completionName = this.getPartialVariableName(currentToken, [TokenKind.New]);
-        //if we don't have a completion name, or if there's no period in the name, then this is not a namespaced variable
-        if (!completionName || !completionName.includes('.')) {
-            return [];
-        }
-        //remove any trailing identifer and then any trailing dot, to give us the
-        //name of its immediate parent namespace
-        let closestParentNamespaceName = completionName.replace(/\.([a-z0-9_]*)?$/gi, '').toLowerCase();
-        let newToken = this.getTokenBefore(currentToken, TokenKind.New);
-
-        let result = new Map<string, CompletionItem>();
-        for (let [, namespace] of scope.namespaceLookup) {
-            //completionName = "NameA."
-            //completionName = "NameA.Na
-            //NameA
-            //NameA.NameB
-            //NameA.NameB.NameC
-            if (namespace.fullName.toLowerCase() === closestParentNamespaceName) {
-                //add all of this namespace's immediate child namespaces, bearing in mind if we are after a new keyword
-                for (let [, ns] of namespace.namespaces) {
-                    if (!newToken || ns.statements.find((s) => isClassStatement(s))) {
-                        if (!result.has(ns.lastPartName)) {
-                            result.set(ns.lastPartName, {
-                                label: ns.lastPartName,
-                                kind: CompletionItemKind.Module
-                            });
-                        }
-                    }
-                }
-
-                //add function and class statement completions
-                for (let stmt of namespace.statements) {
-                    if (isClassStatement(stmt)) {
-                        result.set(stmt.name.text, {
-                            label: stmt.name.text,
-                            kind: CompletionItemKind.Class
-                        });
-                    } else if (isFunctionStatement(stmt) && !newToken) {
-                        result.set(stmt.name.text, {
-                            label: stmt.name.text,
-                            kind: CompletionItemKind.Function
-                        });
-                    } else if (isEnumStatement(stmt) && !newToken) {
-                        result.set(stmt.name, {
-                            label: stmt.name,
-                            kind: CompletionItemKind.Enum
-                        });
-                    } else if (isConstStatement(stmt) && !newToken) {
-                        result.set(stmt.name, {
-                            label: stmt.name,
-                            kind: CompletionItemKind.Constant
-                        });
-                    }
-                }
-            }
-        }
-        return [...result.values()];
     }
 
     private getNamespaceDefinitions(token: Token, file: BrsFile): Location {
@@ -1214,6 +770,10 @@ export class BrsFile implements File {
 
     public isPositionNextToTokenKind(position: Position, tokenKind: TokenKind) {
         const closestToken = this.getClosestToken(position);
+        return this.isTokenNextToTokenKind(closestToken, tokenKind);
+    }
+
+    public isTokenNextToTokenKind(closestToken: Token, tokenKind: TokenKind) {
         const previousToken = this.getPreviousToken(closestToken);
         const previousTokenKind = previousToken?.kind;
         //next to matched token
@@ -1231,8 +791,11 @@ export class BrsFile implements File {
         }
     }
 
-    private getTokenBefore(currentToken: Token, tokenKind: TokenKind): Token {
+    public getTokenBefore(currentToken: Token, tokenKind?: TokenKind): Token {
         const index = this.parser.tokens.indexOf(currentToken);
+        if (!tokenKind) {
+            return this.parser.tokens[index - 1];
+        }
         for (let i = index - 1; i >= 0; i--) {
             currentToken = this.parser.tokens[i];
             if (currentToken.kind === TokenKind.Newline) {
@@ -1244,7 +807,7 @@ export class BrsFile implements File {
         return undefined;
     }
 
-    private tokenFollows(currentToken: Token, tokenKind: TokenKind): boolean {
+    public tokenFollows(currentToken: Token, tokenKind: TokenKind): boolean {
         const index = this.parser.tokens.indexOf(currentToken);
         if (index > 0) {
             return this.parser.tokens[index - 1].kind === tokenKind;
@@ -1304,7 +867,7 @@ export class BrsFile implements File {
                 let scopes = this.program.getScopesForFile(this);
                 for (let scope of scopes) {
                     let namespace = scope.namespaceLookup.get(namespaceName.toLowerCase());
-                    if (namespace.functionStatements[lowerCalleeName]) {
+                    if (namespace.functionStatements.has(lowerCalleeName)) {
                         return true;
                     }
                 }
@@ -1620,8 +1183,8 @@ export class BrsFile implements File {
             }
         };
         file.parser.ast.walk(createVisitor({
-            ClassMethodStatement: statementHandler,
-            ClassFieldStatement: fieldStatementHandler
+            MethodStatement: statementHandler,
+            FieldStatement: fieldStatementHandler
         }), {
             walkMode: WalkMode.visitStatements
         });
@@ -1675,7 +1238,7 @@ export class BrsFile implements File {
                     file.ast.walk(createVisitor({
                         VariableExpression: (e) => {
                             if (e.name.text.toLowerCase() === searchFor) {
-                                locations.push(Location.create(util.pathToUri(file.pathAbsolute), e.range));
+                                locations.push(util.createLocation(util.pathToUri(file.srcPath), e.range));
                             }
                         }
                     }), {
@@ -1765,17 +1328,3 @@ export class BrsFile implements File {
     }
 }
 
-/**
- * List of completions for all valid keywords/reserved words.
- * Build this list once because it won't change for the lifetime of this process
- */
-export const KeywordCompletions = Object.keys(Keywords)
-    //remove any keywords with whitespace
-    .filter(x => !x.includes(' '))
-    //create completions
-    .map(x => {
-        return {
-            label: x,
-            kind: CompletionItemKind.Keyword
-        } as CompletionItem;
-    });

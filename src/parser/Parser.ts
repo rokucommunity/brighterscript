@@ -4,10 +4,11 @@ import type { BlockTerminator } from '../lexer/TokenKind';
 import { Lexer } from '../lexer/Lexer';
 import {
     AllowedLocalIdentifiers,
+    AllowedTypeIdentifiers,
+    DeclarableTypes,
     AllowedProperties,
     AssignmentOperators,
     BrighterScriptSourceLiterals,
-    DeclarableTypes,
     DisallowedFunctionIdentifiersText,
     DisallowedLocalIdentifiersText,
     TokenKind
@@ -74,7 +75,6 @@ import {
     GroupingExpression,
     IndexedGetExpression,
     LiteralExpression,
-    NamespacedVariableNameExpression,
     NewExpression,
     NullCoalescingExpression,
     RegexLiteralExpression,
@@ -83,6 +83,9 @@ import {
     TemplateStringExpression,
     TemplateStringQuasiExpression,
     TernaryExpression,
+    TypeCastExpression,
+    TypeExpression,
+    TypedArrayExpression,
     UnaryExpression,
     VariableExpression,
     XmlAttributeGetExpression
@@ -91,7 +94,7 @@ import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
 import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCallExpression, isCallfuncExpression, isMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
-import { createStringLiteral, createToken } from '../astUtils/creators';
+import { createStringLiteral } from '../astUtils/creators';
 import { Cache } from '../Cache';
 import type { Expression, Statement } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
@@ -230,7 +233,6 @@ export class Parser {
         this.pendingAnnotations = [];
 
         this.ast = this.body();
-
         //now that we've built the AST, link every node to its parent
         this.ast.link();
         return this;
@@ -394,19 +396,27 @@ export class Parser {
      */
     private interfaceFieldStatement() {
         const name = this.identifier(...AllowedProperties);
+        const [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
+        return new InterfaceFieldStatement(name, asToken, typeExpression);
+    }
+
+    private consumeAsTokenAndTypeExpression(): [Token, TypeExpression] {
         let asToken = this.consumeToken(TokenKind.As);
-        let typeToken = this.typeToken();
-        const type = util.tokenToBscType(typeToken);
-
-        if (!type) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, typeToken.text),
-                range: typeToken.range
-            });
-            throw this.lastDiagnosticAsError();
+        let typeExpression: TypeExpression;
+        if (asToken) {
+            //if there's nothing after the `as`, add a diagnostic and continue
+            if (this.checkEndOfStatement()) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedIdentifierAfterKeyword(asToken.text),
+                    range: asToken.range
+                });
+                //consume the statement separator
+                this.consumeStatementSeparators();
+            } else {
+                typeExpression = this.typeExpression();
+            }
         }
-
-        return new InterfaceFieldStatement(name, asToken, typeToken, type);
+        return [asToken, typeExpression];
     }
 
     /**
@@ -419,19 +429,12 @@ export class Parser {
 
         const params = [];
         const rightParen = this.consumeToken(TokenKind.RightParen);
-        let asToken = null as Token;
-        let returnTypeToken = null as Token;
+        // let asToken = null as Token;
+        // let returnTypeExpression: TypeExpression;
+        let asToken: Token;
+        let returnTypeExpression: TypeExpression;
         if (this.check(TokenKind.As)) {
-            asToken = this.advance();
-            returnTypeToken = this.typeToken();
-            const returnType = util.tokenToBscType(returnTypeToken);
-            if (!returnType) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, returnTypeToken.text),
-                    range: returnTypeToken.range
-                });
-                throw this.lastDiagnosticAsError();
-            }
+            [asToken, returnTypeExpression] = this.consumeAsTokenAndTypeExpression();
         }
 
         return new InterfaceMethodStatement(
@@ -441,8 +444,7 @@ export class Parser {
             params,
             rightParen,
             asToken,
-            returnTypeToken,
-            util.tokenToBscType(returnTypeToken)
+            returnTypeExpression
         );
     }
 
@@ -458,11 +460,18 @@ export class Parser {
         const nameToken = this.identifier();
 
         let extendsToken: Token;
-        let parentInterfaceName: NamespacedVariableNameExpression;
+        let parentInterfaceName: TypeExpression;
 
         if (this.peek().text.toLowerCase() === 'extends') {
             extendsToken = this.advance();
-            parentInterfaceName = this.getNamespacedVariableNameExpression();
+            if (this.checkEndOfStatement()) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedIdentifierAfterKeyword(extendsToken.text),
+                    range: extendsToken.range
+                });
+            } else {
+                parentInterfaceName = this.typeExpression();
+            }
         }
         this.consumeStatementSeparators();
         //gather up all interface members (Fields, Methods)
@@ -599,7 +608,7 @@ export class Parser {
             TokenKind.Class
         );
         let extendsKeyword: Token;
-        let parentClassName: NamespacedVariableNameExpression;
+        let parentClassName: TypeExpression;
 
         //get the class name
         let className = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('class'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
@@ -607,7 +616,14 @@ export class Parser {
         //see if the class inherits from parent
         if (this.peek().text.toLowerCase() === 'extends') {
             extendsKeyword = this.advance();
-            parentClassName = this.getNamespacedVariableNameExpression();
+            if (this.checkEndOfStatement()) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedIdentifierAfterKeyword(extendsKeyword.text),
+                    range: extendsKeyword.range
+                });
+            } else {
+                parentClassName = this.typeExpression();
+            }
         }
 
         //ensure statement separator
@@ -719,19 +735,10 @@ export class Parser {
             ...AllowedProperties
         ) as Identifier;
         let asToken: Token;
-        let fieldType: Token;
+        let fieldTypeExpression: TypeExpression;
         //look for `as SOME_TYPE`
         if (this.check(TokenKind.As)) {
-            asToken = this.advance();
-            fieldType = this.typeToken();
-
-            //no field type specified
-            if (!util.tokenToBscType(fieldType)) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.expectedValidTypeToFollowAsKeyword(),
-                    range: this.peek().range
-                });
-            }
+            [asToken, fieldTypeExpression] = this.consumeAsTokenAndTypeExpression();
         }
 
         let initialValue: Expression;
@@ -746,7 +753,7 @@ export class Parser {
             accessModifier,
             name,
             asToken,
-            fieldType,
+            fieldTypeExpression,
             equal,
             initialValue
         );
@@ -782,7 +789,8 @@ export class Parser {
                         start: this.peek().range.start,
                         end: this.peek().range.start
                     },
-                    leadingWhitespace: ''
+                    leadingWhitespace: '',
+                    leadingTrivia: []
                 };
             }
             let isSub = functionType?.kind === TokenKind.Sub;
@@ -827,7 +835,7 @@ export class Parser {
 
             let params = [] as FunctionParameterExpression[];
             let asToken: Token;
-            let typeToken: Token;
+            let typeExpression: TypeExpression;
             if (!this.check(TokenKind.RightParen)) {
                 do {
                     if (params.length >= CallExpression.MaximumArguments) {
@@ -843,16 +851,7 @@ export class Parser {
             let rightParen = this.advance();
 
             if (this.check(TokenKind.As)) {
-                asToken = this.advance();
-
-                typeToken = this.typeToken();
-
-                if (!util.tokenToBscType(typeToken, this.options.mode === ParseMode.BrighterScript)) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.invalidFunctionReturnType(typeToken.text ?? ''),
-                        range: typeToken.range
-                    });
-                }
+                [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
             }
 
             params.reduce((haveFoundOptional: boolean, param: FunctionParameterExpression) => {
@@ -876,23 +875,18 @@ export class Parser {
                 leftParen,
                 rightParen,
                 asToken,
-                typeToken
+                typeExpression
             );
-
-            // add the function to the relevant symbol tables
-            if (!onlyCallableAsMember && name) {
-                const funcType = func.getFunctionType();
-                funcType.setName(name.text);
-            }
 
             this._references.functionExpressions.push(func);
 
-            //make sure to restore the currentFunctionExpression even if the body block fails to parse
-            try {
-                //support ending the function with `end sub` OR `end function`
-                func.body = this.block();
-                func.body.symbolTable = new SymbolTable(`Block: Function '${name?.text ?? ''}'`, () => func.getSymbolTable());
-            } finally { }
+            //support ending the function with `end sub` OR `end function`
+            func.body = this.block();
+            //if the parser was unable to produce a block, make an empty one so the AST makes some sense...
+            if (!func.body) {
+                func.body = new Block([], util.createRangeFromPositions(func.range.start, func.range.start));
+            }
+            func.body.symbolTable = new SymbolTable(`Block: Function '${name?.text ?? ''}'`, () => func.getSymbolTable());
 
             if (!func.body) {
                 this.diagnostics.push({
@@ -946,33 +940,26 @@ export class Parser {
         // force the name into an identifier so the AST makes some sense
         name.kind = TokenKind.Identifier;
 
-        let typeToken: Token | undefined;
+        let typeExpression: TypeExpression;
         let defaultValue;
-
+        let equalToken: Token;
         // parse argument default value
-        if (this.match(TokenKind.Equal)) {
+        if ((equalToken = this.consumeTokenIf(TokenKind.Equal))) {
             // it seems any expression is allowed here -- including ones that operate on other arguments!
-            defaultValue = this.expression();
+            defaultValue = this.expression(false);
         }
 
-        let asToken = null;
+        let asToken: Token = null;
         if (this.check(TokenKind.As)) {
-            asToken = this.advance();
+            [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
 
-            typeToken = this.typeToken();
-
-            if (!util.tokenToBscType(typeToken, this.options.mode === ParseMode.BrighterScript)) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, typeToken.text),
-                    range: typeToken.range
-                });
-            }
         }
         return new FunctionParameterExpression(
             name,
-            typeToken,
+            equalToken,
             defaultValue,
-            asToken
+            asToken,
+            typeExpression
         );
     }
 
@@ -1302,7 +1289,7 @@ export class Parser {
 
         this.namespaceAndFunctionDepth++;
 
-        let name = this.getNamespacedVariableNameExpression();
+        let name = this.identifyingExpression();
         //set the current namespace name
         let result = new NamespaceStatement(keyword, name, null, null);
 
@@ -1335,11 +1322,12 @@ export class Parser {
     /**
      * Get an expression with identifiers separated by periods. Useful for namespaces and class extends
      */
-    private getNamespacedVariableNameExpression() {
+    private identifyingExpression(allowedTokenKinds?: TokenKind[]): DottedGetExpression | VariableExpression {
+        allowedTokenKinds = allowedTokenKinds ?? this.allowedLocalIdentifiers;
         let firstIdentifier = this.consume(
             DiagnosticMessages.expectedIdentifierAfterKeyword(this.previous().text),
             TokenKind.Identifier,
-            ...this.allowedLocalIdentifiers
+            ...allowedTokenKinds
         ) as Identifier;
 
         let expr: DottedGetExpression | VariableExpression;
@@ -1362,7 +1350,7 @@ export class Parser {
                 let identifier = this.tryConsume(
                     DiagnosticMessages.expectedIdentifier(),
                     TokenKind.Identifier,
-                    ...this.allowedLocalIdentifiers,
+                    ...allowedTokenKinds,
                     ...AllowedProperties
                 ) as Identifier;
 
@@ -1374,9 +1362,8 @@ export class Parser {
                 expr = new DottedGetExpression(expr, identifier, dot);
             }
         }
-        return new NamespacedVariableNameExpression(expr);
+        return expr;
     }
-
     /**
      * Add an 'unexpected token' diagnostic for any token found between current and the first stopToken found.
      */
@@ -1970,12 +1957,12 @@ export class Parser {
             return new ExpressionStatement(expr);
         }
 
-        //at this point, it's probably an error. However, we recover a little more gracefully by creating an assignment
+        //at this point, it's probably an error. However, we recover a little more gracefully by creating an inclosing ExpressionStatement
         this.diagnostics.push({
             ...DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression(),
             range: expressionStart.range
         });
-        throw this.lastDiagnosticAsError();
+        return new ExpressionStatement(expr);
     }
 
     private setStatement(): DottedSetStatement | IndexedSetStatement | ExpressionStatement | IncrementStatement | AssignmentStatement {
@@ -2008,7 +1995,8 @@ export class Parser {
                     left.name,
                     operator.kind === TokenKind.Equal
                         ? right
-                        : new BinaryExpression(left, operator, right)
+                        : new BinaryExpression(left, operator, right),
+                    left.dot
                 );
             }
         }
@@ -2037,7 +2025,8 @@ export class Parser {
 
         //print statements can be empty, so look for empty print conditions
         if (!values.length) {
-            let emptyStringLiteral = createStringLiteral('');
+            const endOfStatementRange = util.createRangeFromPositions(printKeyword.range.end, this.peek()?.range.end);
+            let emptyStringLiteral = createStringLiteral('', endOfStatementRange);
             values.push(emptyStringLiteral);
         }
 
@@ -2224,8 +2213,27 @@ export class Parser {
         this.pendingAnnotations = parentAnnotations;
     }
 
-    private expression(): Expression {
-        const expression = this.anonymousFunction();
+    private expression(findTypeCast = true): Expression {
+        let expression = this.anonymousFunction();
+        let asToken: Token;
+        let typeExpression: TypeExpression;
+        if (findTypeCast) {
+            do {
+                if (this.check(TokenKind.As)) {
+                    this.warnIfNotBrighterScriptMode('type cast');
+                    // Check if this expression is wrapped in any type casts
+                    // allows for multiple casts:
+                    // myVal = foo() as dynamic as string
+                    [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
+                    if (asToken && typeExpression) {
+                        expression = new TypeCastExpression(expression, asToken, typeExpression);
+                    }
+                } else {
+                    break;
+                }
+
+            } while (asToken && typeExpression);
+        }
         this._references.expressions.add(expression);
         return expression;
     }
@@ -2379,12 +2387,21 @@ export class Parser {
         this.warnIfNotBrighterScriptMode(`using 'new' keyword to construct a class`);
         let newToken = this.advance();
 
-        let nameExpr = this.getNamespacedVariableNameExpression();
-        let leftParen = this.consume(
+        let nameExpr = this.identifyingExpression();
+        let leftParen = this.tryConsume(
             DiagnosticMessages.unexpectedToken(this.peek().text),
             TokenKind.LeftParen,
             TokenKind.QuestionLeftParen
         );
+
+        if (!leftParen) {
+            // new expression without a following call expression
+            // wrap the name in an expression
+            const endOfStatementRange = util.createRangeFromPositions(newToken.range.end, this.peek()?.range.end);
+            const exprStmt = nameExpr ?? createStringLiteral('', endOfStatementRange);
+            return new ExpressionStatement(exprStmt);
+        }
+
         let call = this.finishCall(leftParen, nameExpr);
         //pop the call from the  callExpressions list because this is technically something else
         this.callExpressions.pop();
@@ -2518,30 +2535,83 @@ export class Parser {
     }
 
     /**
-     * Tries to get the next token as a type
-     * Allows for built-in types (double, string, etc.) or namespaced custom types in Brighterscript mode
-     * Will return a token of whatever is next to be parsed
+     * Creates a TypeExpression, which wraps standard ASTNodes that represent a BscType
      */
-    private typeToken(): Token {
-        let typeToken: Token;
-
-        if (this.checkAny(...DeclarableTypes)) {
-            // Token is a built in type
-            typeToken = this.advance();
-        } else if (this.options.mode === ParseMode.BrighterScript) {
-            try {
-                // see if we can get a namespaced identifer
-                const qualifiedType = this.getNamespacedVariableNameExpression();
-                typeToken = createToken(TokenKind.Identifier, qualifiedType.getName(this.options.mode), qualifiedType.range);
-            } catch {
-                //could not get an identifier - just get whatever's next
-                typeToken = this.advance();
+    private typeExpression(): TypeExpression {
+        const changedTokens: { token: Token; oldKind: TokenKind }[] = [];
+        try {
+            let expr: Expression = this.getTypeExpressionPart(changedTokens);
+            while (this.options.mode === ParseMode.BrighterScript && this.matchAny(TokenKind.Or)) {
+                // If we're in Brighterscript mode, allow union types with "or" between types
+                // TODO: Handle Union types in parens? eg. "(string or integer)"
+                let operator = this.previous();
+                let right = this.getTypeExpressionPart(changedTokens);
+                if (right) {
+                    expr = new BinaryExpression(expr, operator, right);
+                } else {
+                    break;
+                }
             }
-        } else {
-            // just get whatever's next
-            typeToken = this.advance();
+            if (expr) {
+                return new TypeExpression(expr);
+            }
+
+        } catch (error) {
+            // Something went wrong - reset the kind to what it was previously
+            for (const changedToken of changedTokens) {
+                changedToken.token.kind = changedToken.oldKind;
+            }
+            throw error;
         }
-        return typeToken;
+    }
+
+    /**
+     * Gets a single "part" of a type of a potential Union type
+     * Note: this does not NEED to be part of a union type, but the logic is the same
+     *
+     * @param changedTokens an array that is modified with any tokens that have been changed from their default kind to identifiers - eg. when a keyword is used as type
+     * @returns an expression that was successfully parsed
+     */
+    private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
+        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression;
+        if (this.checkAny(...DeclarableTypes)) {
+            // if this is just a type, just use directly
+            expr = new VariableExpression(this.advance() as Identifier);
+        } else {
+            if (this.checkAny(...AllowedTypeIdentifiers)) {
+                // Since the next token is allowed as a type identifier, change the kind
+                let nextToken = this.peek();
+                changedTokens.push({ token: nextToken, oldKind: nextToken.kind });
+                nextToken.kind = TokenKind.Identifier;
+            }
+            expr = this.identifyingExpression(AllowedTypeIdentifiers);
+            if (expr) {
+                this._references.expressions.add(expr);
+            }
+        }
+
+        //Check if it has square brackets, thus making it an array
+        if (expr && this.check(TokenKind.LeftSquareBracket)) {
+            if (this.options.mode === ParseMode.BrightScript) {
+                // typed arrays not allowed in Brightscript
+                this.warnIfNotBrighterScriptMode('typed arrays');
+                return expr;
+            }
+
+            // Check if it is an array - that is, if it has `[]` after the type
+            // eg. `string[]` or `SomeKlass[]`
+            // This is while loop, so it supports multidimensional arrays (eg. integer[][])
+            while (this.check(TokenKind.LeftSquareBracket)) {
+                const leftBracket = this.advance();
+                if (this.check(TokenKind.RightSquareBracket)) {
+                    const rightBracket = this.advance();
+                    expr = new TypedArrayExpression(expr, leftBracket, rightBracket);
+                    this._references.expressions.add(expr);
+                }
+            }
+        }
+
+        return expr;
     }
 
     private primary(): Expression {
@@ -2821,6 +2891,15 @@ export class Parser {
         }
     }
 
+    /**
+     * Consume next token IF it matches the specified kind. Otherwise, do nothing and return undefined
+     */
+    private consumeTokenIf(tokenKind: TokenKind) {
+        if (this.match(tokenKind)) {
+            return this.previous();
+        }
+    }
+
     private consumeToken(tokenKind: TokenKind) {
         return this.consume(
             DiagnosticMessages.expectedToken(tokenKind),
@@ -3047,7 +3126,7 @@ export class Parser {
             ClassStatement: s => {
                 this._references.classStatements.push(s);
             },
-            ClassFieldStatement: s => {
+            FieldStatement: s => {
                 if (s.initialValue) {
                     this._references.expressions.add(s.initialValue);
                 }
@@ -3239,7 +3318,6 @@ export class References {
      * `value = SomeEnum.value > 2 or SomeEnum.otherValue < 10` will result in 4 entries. `SomeEnum.value`, `2`, `SomeEnum.otherValue`, `10`
      */
     public expressions = new Set<Expression>();
-
     public importStatements = [] as ImportStatement[];
     public libraryStatements = [] as LibraryStatement[];
     public namespaceStatements = [] as NamespaceStatement[];

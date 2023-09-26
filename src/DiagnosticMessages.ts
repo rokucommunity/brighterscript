@@ -206,7 +206,7 @@ export let DiagnosticMessages = {
         code: 1036,
         severity: DiagnosticSeverity.Error
     }),
-    invalidFunctionReturnType: (typeText: string) => ({
+    __unused: (typeText: string) => ({
         message: `Function return type '${typeText}' is invalid`,
         code: 1037,
         severity: DiagnosticSeverity.Error
@@ -241,7 +241,7 @@ export let DiagnosticMessages = {
         code: 1043,
         severity: DiagnosticSeverity.Error
     }),
-    functionParameterTypeIsInvalid: (parameterName: string, typeText: string) => ({
+    __unused2: (parameterName: string, typeText: string) => ({
         message: `Function parameter '${parameterName}' is of invalid type '${typeText}'`,
         code: 1044,
         severity: DiagnosticSeverity.Error
@@ -637,7 +637,7 @@ export let DiagnosticMessages = {
         code: 1122,
         severity: DiagnosticSeverity.Error
     }),
-    cannotFindType: (typeName: string) => ({
+    __unused3: (typeName: string) => ({
         message: `Cannot find type with name '${typeName}'`,
         code: 1123,
         severity: DiagnosticSeverity.Error
@@ -710,14 +710,34 @@ export let DiagnosticMessages = {
         code: 1136,
         severity: DiagnosticSeverity.Error
     }),
-    namespaceCannotBeReferencedDirectly: () => ({
-        message: `Namespace cannot be referenced directly`,
+    itemCannotBeUsedAsVariable: (itemType: string) => ({
+        message: `${itemType} cannot be used as a variable`,
         code: 1137,
         severity: DiagnosticSeverity.Error
     }),
     callfuncHasToManyArgs: (numberOfArgs: number) => ({
         message: `You can not have more than 5 arguments in a callFunc. ${numberOfArgs} found.`,
         code: 1138,
+        severity: DiagnosticSeverity.Error
+    }),
+    noOptionalChainingInLeftHandSideOfAssignment: () => ({
+        message: `Optional chaining may not be used in the left-hand side of an assignment`,
+        code: 1139,
+        severity: DiagnosticSeverity.Error
+    }),
+    itemCannotBeUsedAsType: (typeText: string) => ({
+        message: `'${typeText}' cannot be used as a type`,
+        code: 1140,
+        severity: DiagnosticSeverity.Error
+    }),
+    argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string) => ({
+        message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'`,
+        code: 1141,
+        severity: DiagnosticSeverity.Error
+    }),
+    returnTypeMismatch: (actualTypeString: string, expectedTypeString: string) => ({
+        message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'`,
+        code: 1142,
         severity: DiagnosticSeverity.Error
     })
 };

@@ -51,13 +51,13 @@ describe('import statements', () => {
                 return true
             end function
         `);
-        let files = Object.keys(program.files).map(x => program.getFile(x)).filter(x => !!x).map(x => {
+        Object.keys(program.files).map(x => program.getFile(x)).filter(x => !!x).map(x => {
             return {
                 src: x.srcPath,
                 dest: x.destPath
             };
         });
-        await program.transpile(files, stagingDir);
+        await program.build({ stagingDir: stagingDir });
         expect(
             trimMap(fsExtra.readFileSync(`${stagingDir}/components/ChildScene.xml`).toString())
         ).to.equal(trim`
@@ -173,14 +173,7 @@ describe('import statements', () => {
         expectZeroDiagnostics(program);
     });
 
-    it('adds brs imports to xml file during transpile', () => {
-        //create child component
-        let component = program.setFile<XmlFile>('components/ChildScene.xml', trim`
-            <?xml version="1.0" encoding="utf-8" ?>
-            <component name="ChildScene" extends="ParentScene">
-                <script type="text/brightscript" uri="pkg:/source/lib.bs" />
-            </component>
-        `);
+    it('adds brs imports to xml file during transpile', async () => {
         program.setFile('source/lib.bs', `
             import "stringOps.brs"
             function toLower(strVal as string)
@@ -189,18 +182,22 @@ describe('import statements', () => {
         `);
         program.setFile('source/stringOps.brs', `
             function StringToLower(strVal as string)
-                return isInt(strVal)
+                return LCase(strVal)
             end function
         `);
-        program.validate();
-        expect(trimMap(component.transpile().code)).to.equal(trim`
+        await testTranspile(trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="ParentScene">
+                <script type="text/brightscript" uri="pkg:/source/lib.bs" />
+            </component>
+        `, trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brightscript" uri="pkg:/source/lib.brs" />
                 <script type="text/brightscript" uri="pkg:/source/stringOps.brs" />
                 <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
             </component>
-        `);
+        `, null, 'components/ChildScene.xml');
     });
 
     it('shows diagnostic for missing file in import', () => {

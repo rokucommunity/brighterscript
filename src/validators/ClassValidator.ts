@@ -6,12 +6,14 @@ import type { ClassStatement, MethodStatement, NamespaceStatement } from '../par
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
-import { isCallExpression, isFieldStatement, isMethodStatement, isCustomType, isNamespaceStatement } from '../astUtils/reflection';
+import { isCallExpression, isFieldStatement, isMethodStatement, isNamespaceStatement } from '../astUtils/reflection';
 import type { BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer/TokenKind';
 import { DynamicType } from '../types/DynamicType';
+import type { BscType } from '../types/BscType';
+import { SymbolTypeFlag } from '../SymbolTable';
 import type { File } from '../files/File';
 
 export class BsClassValidator {
@@ -33,7 +35,6 @@ export class BsClassValidator {
         this.validateMemberCollisions();
         this.verifyChildConstructor();
         this.verifyNewExpressions();
-        this.validateFieldTypes();
 
         this.cleanUp();
     }
@@ -220,14 +221,14 @@ export class BsClassValidator {
 
                         //child field has same name as parent
                         if (isFieldStatement(member)) {
-                            let ancestorMemberType = new DynamicType();
+                            let ancestorMemberType: BscType = new DynamicType();
                             if (isFieldStatement(ancestorAndMember.member)) {
-                                ancestorMemberType = ancestorAndMember.member.getType();
+                                ancestorMemberType = ancestorAndMember.member.getType({ flags: SymbolTypeFlag.typetime });
                             } else if (isMethodStatement(ancestorAndMember.member)) {
-                                ancestorMemberType = ancestorAndMember.member.func.getFunctionType();
+                                ancestorMemberType = ancestorAndMember.member.func.getType({ flags: SymbolTypeFlag.typetime });
                             }
-                            const childFieldType = member.getType();
-                            if (!childFieldType.isAssignableTo(ancestorMemberType)) {
+                            const childFieldType = member.getType({ flags: SymbolTypeFlag.typetime });
+                            if (!ancestorMemberType.isTypeCompatible(childFieldType)) {
                                 //flag incompatible child field type to ancestor field type
                                 this.diagnostics.push({
                                     ...DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty(
@@ -292,36 +293,6 @@ export class BsClassValidator {
         }
     }
 
-
-    /**
-     * Check the types for fields, and validate they are valid types
-     */
-    private validateFieldTypes() {
-        for (const [, classStatement] of this.classes) {
-            for (let statement of classStatement.body) {
-                if (isFieldStatement(statement)) {
-                    let fieldType = statement.getType();
-
-                    if (isCustomType(fieldType)) {
-                        const fieldTypeName = fieldType.name;
-                        const lowerFieldTypeName = fieldTypeName?.toLowerCase();
-                        if (lowerFieldTypeName) {
-                            const namespace = classStatement.findAncestor<NamespaceStatement>(isNamespaceStatement);
-                            const currentNamespaceName = namespace?.getName(ParseMode.BrighterScript);
-                            //check if this custom type is in our class map
-                            if (!this.getClassByName(lowerFieldTypeName, currentNamespaceName) && !this.scope.hasInterface(lowerFieldTypeName) && !this.scope.hasEnum(lowerFieldTypeName)) {
-                                this.diagnostics.push({
-                                    ...DiagnosticMessages.cannotFindType(fieldTypeName),
-                                    range: statement.type.range,
-                                    file: classStatement.file
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     /**
      * Get the closest member with the specified name (case-insensitive)
@@ -390,7 +361,7 @@ export class BsClassValidator {
     private linkClassesWithParents() {
         //link all classes with their parents
         for (const [, classStatement] of this.classes) {
-            let parentClassName = classStatement.parentClassName?.getName(ParseMode.BrighterScript);
+            let parentClassName = classStatement.parentClassName?.getName();
             if (parentClassName) {
                 let relativeName: string;
                 let absoluteName: string;

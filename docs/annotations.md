@@ -24,7 +24,6 @@ Annotations can have parameters - these parameters should be a list of valid Bri
 ## Examples
 
 ```brighterscript
-@translate print "hello"
 
 @expose
 class MyComp
@@ -49,7 +48,6 @@ end
 transpiles to
 
 ```brightscript
-print "hello"
 function __MyComp_builder()
     instance = {}
     instance.new = sub()

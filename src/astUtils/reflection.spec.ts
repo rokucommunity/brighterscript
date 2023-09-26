@@ -1,10 +1,10 @@
 /* eslint-disable no-multi-spaces */
 import { expect } from '../chai-config.spec';
 import { PrintStatement, Block, Body, AssignmentStatement, CommentStatement, ExitForStatement, ExitWhileStatement, ExpressionStatement, FunctionStatement, IfStatement, IncrementStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, EmptyStatement, TryCatchStatement, CatchStatement, ThrowStatement } from '../parser/Statement';
-import { FunctionExpression, NamespacedVariableNameExpression, BinaryExpression, CallExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, XmlAttributeGetExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression } from '../parser/Expression';
+import { FunctionExpression, BinaryExpression, CallExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, XmlAttributeGetExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression } from '../parser/Expression';
 import type { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import { isPrintStatement, isIfStatement, isBody, isAssignmentStatement, isBlock, isExpressionStatement, isCommentStatement, isExitForStatement, isExitWhileStatement, isFunctionStatement, isIncrementStatement, isGotoStatement, isLabelStatement, isReturnStatement, isEndStatement, isStopStatement, isForStatement, isForEachStatement, isWhileStatement, isDottedSetStatement, isIndexedSetStatement, isLibraryStatement, isNamespaceStatement, isImportStatement, isExpression, isBinaryExpression, isCallExpression, isFunctionExpression, isNamespacedVariableNameExpression, isDottedGetExpression, isXmlAttributeGetExpression, isIndexedGetExpression, isGroupingExpression, isLiteralExpression, isEscapedCharCodeLiteralExpression, isArrayLiteralExpression, isAALiteralExpression, isUnaryExpression, isVariableExpression, isSourceLiteralExpression, isNewExpression, isCallfuncExpression, isTemplateStringQuasiExpression, isTemplateStringExpression, isTaggedTemplateStringExpression, isBrsFile, isXmlFile, isClassStatement, isStatement, isAnnotationExpression, isTryCatchStatement, isCatchStatement, isThrowStatement } from './reflection';
+import { isPrintStatement, isIfStatement, isBody, isAssignmentStatement, isBlock, isExpressionStatement, isCommentStatement, isExitForStatement, isExitWhileStatement, isFunctionStatement, isIncrementStatement, isGotoStatement, isLabelStatement, isReturnStatement, isEndStatement, isStopStatement, isForStatement, isForEachStatement, isWhileStatement, isDottedSetStatement, isIndexedSetStatement, isLibraryStatement, isNamespaceStatement, isImportStatement, isExpression, isBinaryExpression, isCallExpression, isFunctionExpression, isDottedGetExpression, isXmlAttributeGetExpression, isIndexedGetExpression, isGroupingExpression, isLiteralExpression, isEscapedCharCodeLiteralExpression, isArrayLiteralExpression, isAALiteralExpression, isUnaryExpression, isVariableExpression, isSourceLiteralExpression, isNewExpression, isCallfuncExpression, isTemplateStringQuasiExpression, isTemplateStringExpression, isTaggedTemplateStringExpression, isBrsFile, isXmlFile, isClassStatement, isStatement, isAnnotationExpression, isTryCatchStatement, isCatchStatement, isThrowStatement } from './reflection';
 import { createToken, createStringLiteral, interpolatedRange as range } from './creators';
 import { Program } from '../Program';
 import { BrsFile } from '../files/BrsFile';
@@ -15,8 +15,8 @@ describe('reflection', () => {
     describe('Files', () => {
         it('recognizes files', () => {
             const program = new Program({});
-            const file = new BrsFile('path/to/source/file.brs', 'pkg:/source/file.brs', program);
-            const comp = new XmlFile('path/to/components/file.xml', 'pkg:/components/file.brs', program);
+            const file = new BrsFile({ srcPath: 'path/to/source/file.brs', destPath: 'source/file.brs', program: program });
+            const comp = new XmlFile({ srcPath: 'path/to/components/file.xml', destPath: 'components/file.brs', program: program });
             expect(isBrsFile(file)).to.be.true;
             expect(isXmlFile(file)).to.be.false;
             expect(isBrsFile(comp)).to.be.false;
@@ -50,7 +50,7 @@ describe('reflection', () => {
         const dottedSet = new DottedSetStatement(expr, ident, expr);
         const indexedSet = new IndexedSetStatement(expr, expr, expr, token, token);
         const library = new LibraryStatement({ library: token, filePath: token });
-        const namespace = new NamespaceStatement(token, new NamespacedVariableNameExpression(createVariableExpression('a', range)), body, token);
+        const namespace = new NamespaceStatement(token, createVariableExpression('a', range), body, token);
         const cls = new ClassStatement(token, ident, [], token);
         const imports = new ImportStatement(token, token);
         const catchStmt = new CatchStatement({ catch: token }, ident, block);
@@ -193,9 +193,10 @@ describe('reflection', () => {
             range: range,
             isReserved: false,
             charCode: 0,
-            leadingWhitespace: ''
+            leadingWhitespace: '',
+            leadingTrivia: []
         };
-        const nsVar = new NamespacedVariableNameExpression(createVariableExpression('a', range));
+
         const binary = new BinaryExpression(expr, token, expr);
         const call = new CallExpression(expr, token, token, []);
         const fun = new FunctionExpression([], block, token, token, token, token);
@@ -233,10 +234,7 @@ describe('reflection', () => {
             expect(isFunctionExpression(fun)).to.be.true;
             expect(isFunctionExpression(call)).to.be.false;
         });
-        it('isNamespacedVariableNameExpression', () => {
-            expect(isNamespacedVariableNameExpression(nsVar)).to.be.true;
-            expect(isNamespacedVariableNameExpression(fun)).to.be.false;
-        });
+
         it('isDottedGetExpression', () => {
             expect(isDottedGetExpression(dottedGet)).to.be.true;
             expect(isDottedGetExpression(fun)).to.be.false;

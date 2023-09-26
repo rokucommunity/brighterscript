@@ -84,27 +84,19 @@ export interface BsConfig {
     retainStagingDir?: boolean;
 
     /**
-     * Prevent the staging folder from being deleted after creating the package
-     * @default false
-     * @deprecated use `retainStagingDir` instead
-     */
-    retainStagingFolder?: boolean;
-
-    /**
      * The path to the staging directory (wehre the output files are copied immediately before creating the zip)
      */
     stagingDir?: string;
 
     /**
-     * The path to the staging folder (where all files are copied to right before creating the zip package)
-     * @deprecated use `stagingDir` instead
-     */
-    stagingFolderPath?: string;
-
-    /**
      * A list of error codes the compiler should NOT emit, even if encountered.
      */
     ignoreErrorCodes?: (number | string)[];
+
+    /**
+     * A map of error codes with their severity level override (error|warn|info)
+     */
+    diagnosticSeverityOverrides?: Record<number | string, 'error' | 'warn' | 'info' | 'hint'>;
 
     /**
      * Emit full paths to files when printing diagnostics to the console. Defaults to false

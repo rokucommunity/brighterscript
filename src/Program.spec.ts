@@ -1,6 +1,6 @@
 import { assert, expect } from './chai-config.spec';
 import * as pick from 'object.pick';
-import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
+import { Position, Range } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
@@ -10,17 +10,17 @@ import { standardizePath as s, util } from './util';
 import { URI } from 'vscode-uri';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
 import type { LiteralExpression } from './parser/Expression';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
-import type { ProvideFileEvent, BeforeFileParseEvent, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent, TranspileObj, Editor } from '.';
 import { AssetFile } from './files/AssetFile';
 import * as path from 'path';
 import type { SinonSpy } from 'sinon';
 import { createSandbox } from 'sinon';
+import type { AfterFileAddEvent, AfterFileRemoveEvent, AfterProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, BeforeProvideFileEvent, CompilerPlugin, ProvideFileEvent } from './interfaces';
 
 const sinon = createSandbox();
 
@@ -133,7 +133,10 @@ describe('Program', () => {
                 end sub
             `);
             (file.parser.ast.statements[0] as FunctionStatement).func.body.statements[0] = new EmptyStatement();
-            await program.transpile([{ src: file.srcPath, dest: file.destPath }], tempDir);
+            await program.build({
+                files: [file],
+                stagingDir: tempDir
+            });
         });
 
         it('works with different cwd', () => {
@@ -838,641 +841,6 @@ describe('Program', () => {
         });
     });
 
-    describe('getCompletions', () => {
-        it('includes `for each` variable', () => {
-            program.setFile('source/main.brs', `
-                sub main()
-                    items = [1, 2, 3]
-                    for each thing in items
-                        t =
-                    end for
-                    end for
-                end sub
-            `);
-            program.validate();
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(4, 28)).map(x => x.label);
-            expect(completions).to.include('thing');
-        });
-
-        it('includes `for` variable', () => {
-            program.setFile('source/main.brs', `
-                sub main()
-                    for i = 0 to 10
-                        t =
-                    end for
-                end sub
-            `);
-            program.validate();
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 28)).map(x => x.label);
-            expect(completions).to.include('i');
-        });
-
-        it('should include first-level namespace names for brighterscript files', () => {
-            program.setFile('source/main.bs', `
-                namespace NameA.NameB.NameC
-                    sub DoSomething()
-                    end sub
-                end namespace
-                sub main()
-                    print
-                end sub
-            `);
-            expectCompletionsIncludes(program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 25)), [{
-                label: 'NameA',
-                kind: CompletionItemKind.Module
-            }]);
-            expectCompletionsExcludes(program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 25)), [{
-                label: 'NameB',
-                kind: CompletionItemKind.Module
-            }, {
-                label: 'NameA.NameB',
-                kind: CompletionItemKind.Module
-            }, {
-                label: 'NameA.NameB.NameC',
-                kind: CompletionItemKind.Module
-            }, {
-                label: 'NameA.NameB.NameC.DoSomething',
-                kind: CompletionItemKind.Module
-            }]);
-        });
-
-        it('resolves completions for namespaces with next namespace part for brighterscript file', () => {
-            program.setFile('source/main.bs', `
-                namespace NameA.NameB.NameC
-                    sub DoSomething()
-                    end sub
-                end namespace
-                sub main()
-                    NameA.
-                end sub
-            `);
-            let completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 26)).map(x => x.label);
-            expect(completions).to.include('NameB');
-            expect(completions).not.to.include('NameA');
-            expect(completions).not.to.include('NameA.NameB');
-            expect(completions).not.to.include('NameA.NameB.NameC');
-            expect(completions).not.to.include('NameA.NameB.NameC.DoSomething');
-        });
-
-        it('finds namespace members for brighterscript file', () => {
-            program.setFile('source/main.bs', `
-                sub main()
-                    NameA.
-                    NameA.NameB.
-                    NameA.NameB.NameC.
-                end sub
-                namespace NameA
-                    sub alertA()
-                    end sub
-                end namespace
-                namespace NameA
-                    sub info()
-                    end sub
-                end namespace
-                namespace NameA.NameB
-                    sub alertB()
-                    end sub
-                end namespace
-                namespace NameA.NameB.NameC
-                    sub alertC()
-                    end sub
-                end namespace
-            `);
-            expect(
-                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 26)).map(x => x.label).sort()
-            ).to.eql(['NameB', 'alertA', 'info']);
-
-            expect(
-                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 32)).map(x => x.label).sort()
-            ).to.eql(['NameC', 'alertB']);
-
-            expect(
-                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 38)).map(x => x.label).sort()
-            ).to.eql(['alertC']);
-        });
-
-        it('finds namespace members for classes', () => {
-            program.setFile('source/main.bs', `
-                sub main()
-                    NameA.
-                    NameA.NameB.
-                    NameA.NameB.NameC.
-                end sub
-                namespace NameA
-                    sub alertA()
-                    end sub
-                end namespace
-                namespace NameA
-                    sub info()
-                    end sub
-                    class MyClassA
-                    end class
-                end namespace
-                namespace NameA.NameB
-                    sub alertB()
-                    end sub
-                    class MyClassB
-                    end class
-                end namespace
-                namespace NameA.NameB.NameC
-                    sub alertC()
-                    end sub
-                end namespace
-            `);
-            expect(
-                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 26)).map(x => x.label).sort()
-            ).to.eql(['MyClassA', 'NameB', 'alertA', 'info']);
-
-            expect(
-                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 32)).map(x => x.label).sort()
-            ).to.eql(['MyClassB', 'NameC', 'alertB']);
-
-            expect(
-                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 38)).map(x => x.label).sort()
-            ).to.eql(['alertC']);
-        });
-
-        it('finds only namespaces that have classes, when new keyword is used', () => {
-            program.setFile('source/main.bs', `
-                sub main()
-                    a = new NameA.
-                    b = new NameA.NameB.
-                    c = new NameA.NameB.NameC.
-                end sub
-                namespace NameA
-                    sub alertA()
-                    end sub
-                end namespace
-                namespace NameA
-                    sub info()
-                    end sub
-                    class MyClassA
-                    end class
-                end namespace
-                namespace NameA.NoClassA
-                end namespace
-                namespace NameA.NoClassB
-                end namespace
-                namespace NameA.NameB
-                    sub alertB()
-                    end sub
-                    class MyClassB
-                    end class
-                end namespace
-                namespace NameA.NameB.NoClass
-                end namespace
-                namespace NameA.NameB.NameC
-                    sub alertC()
-                    end sub
-                end namespace
-            `);
-            expect(
-                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 34)).map(x => x.label).sort()
-            ).to.eql(['MyClassA', 'NameB']);
-
-            expect(
-                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 40)).map(x => x.label).sort()
-            ).to.eql(['MyClassB']);
-
-            expect(
-                program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 46)).map(x => x.label).sort()
-            ).to.be.empty;
-        });
-
-        //Bron.. pain to get this working.. do we realy need this? seems moot with ropm..
-        it.skip('should include translated namespace function names for brightscript files', () => {
-            program.setFile('source/main.bs', `
-                namespace NameA.NameB.NameC
-                    sub DoSomething()
-                    end sub
-                end namespace
-            `);
-            program.setFile('source/lib.brs', `
-                sub test()
-
-                end sub
-            `);
-            let completions = program.getCompletions(`${rootDir}/source/lib.brs`, Position.create(2, 23));
-            expect(completions.map(x => x.label)).to.include('NameA_NameB_NameC_DoSomething');
-        });
-
-        it('inlcudes global completions for file with no scope', () => {
-            program.setFile('main.brs', `
-                function Main()
-                    age = 1
-                end function
-            `);
-            let completions = program.getCompletions('main.brs', Position.create(2, 10));
-            expect(completions.filter(x => x.label.toLowerCase() === 'abs')).to.be.lengthOf(1);
-        });
-
-        it('filters out text results for top-level function statements', () => {
-            program.setFile('source/main.brs', `
-                function Main()
-                    age = 1
-                end function
-            `);
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
-            expect(completions.filter(x => x.label === 'Main')).to.be.lengthOf(1);
-        });
-
-        it('does not filter text results for object properties used in conditional statements', () => {
-            program.setFile('source/main.brs', `
-                sub Main()
-                    p.
-                end sub
-                sub SayHello()
-                    person = {}
-                    if person.isAlive then
-                        print "Hello"
-                    end if
-                end sub
-            `);
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 22));
-            expect(completions.filter(x => x.label === 'isAlive')).to.be.lengthOf(1);
-        });
-
-        it('does not filter text results for object properties used in assignments', () => {
-            program.setFile('source/main.brs', `
-                sub Main()
-                    p.
-                end sub
-                sub SayHello()
-                   person = {}
-                   localVar = person.name
-                end sub
-            `);
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 22));
-            expect(completions.filter(x => x.label === 'name')).to.be.lengthOf(1);
-        });
-
-        it('does not filter text results for object properties', () => {
-            program.setFile('source/main.brs', `
-                sub Main()
-                    p.
-                end sub
-                sub SayHello()
-                   person = {}
-                   person.name = "bob"
-                end sub
-            `);
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 22));
-            expect(completions.filter(x => x.label === 'name')).to.be.lengthOf(1);
-        });
-
-        it('filters out text results for local vars used in conditional statements', () => {
-            program.setFile('source/main.brs', `
-                sub Main()
-
-                end sub
-                sub SayHello()
-                    isTrue = true
-                    if isTrue then
-                        print "is true"
-                    end if
-                end sub
-            `);
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
-            expect(completions.filter(x => x.label === 'isTrue')).to.be.lengthOf(0);
-        });
-
-        it('filters out text results for local variable assignments', () => {
-            program.setFile('source/main.brs', `
-                sub Main()
-
-                end sub
-                sub SayHello()
-                    message = "Hello"
-                end sub
-            `);
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
-            expect(completions.filter(x => x.label === 'message')).to.be.lengthOf(0);
-        });
-
-        it('filters out text results for local variables used in assignments', () => {
-            program.setFile('source/main.brs', `
-                sub Main()
-
-                end sub
-                sub SayHello()
-                    message = "Hello"
-                    otherVar = message
-                end sub
-            `);
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
-            expect(completions.filter(x => x.label === 'message')).to.be.lengthOf(0);
-        });
-
-        it('does not suggest local variables when initiated to the right of a period', () => {
-            program.setFile('source/main.brs', `
-                function Main()
-                    helloMessage = "jack"
-                    person.hello
-                end function
-            `);
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 32));
-            expect(completions.filter(x => x.kind === CompletionItemKind.Variable).map(x => x.label)).not.to.contain('helloMessage');
-        });
-
-        it('finds all file paths when initiated on xml uri', () => {
-            let xmlPath = s`${rootDir}/components/component1.xml`;
-            program.setFile('components/component1.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="HeroScene" extends="Scene">
-                    <script type="text/brightscript" uri="" />
-                </component>
-            `);
-            program.setFile('components/component1.brs', '');
-            let completions = program.getCompletions(xmlPath, Position.create(2, 42));
-            expect(completions[0]).to.include({
-                kind: CompletionItemKind.File,
-                label: 'component1.brs'
-            });
-            expect(completions[1]).to.include({
-                kind: CompletionItemKind.File,
-                label: 'pkg:/components/component1.brs'
-            });
-            //it should NOT include the global methods
-            expect(completions).to.be.lengthOf(2);
-        });
-
-        it('get all functions and properties in scope when doing any dotted get on non m ', () => {
-            program.setFile('source/main.bs', `
-                sub main()
-                    thing.anonPropA = "foo"
-                    thing.anonPropB = "bar"
-                    thing.person
-                end sub
-                class MyClassA
-                    personName = "rafa"
-                    personAName = "rafaA"
-                    function personAMethodA()
-                    end function
-                    function personAMethodB()
-                    end function
-                end class
-                namespace NameA
-                    sub alertA()
-                    end sub
-                end namespace
-                namespace NameA.NameB
-                    sub alertB()
-                    end sub
-                    class MyClassB
-                        personName = "roger"
-                        personBName = "rogerB"
-                        function personAMethodC()
-                        end function
-                        function personBMethodA()
-                        end function
-                        function personBMethodB()
-                        end function
-                    end class
-                end namespace
-                namespace NameA.NameB.NameC
-                    sub alertC()
-                    end sub
-                end namespace
-            `);
-            //note - we let the vscode extension do the filtering, so we still return everything; otherwise it exhibits strange behaviour in the IDE
-            expect(
-                (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 32))).map(x => x.label).sort()
-            ).to.eql(['anonPropA', 'anonPropB', 'person', 'personAMethodA', 'personAMethodB', 'personAMethodC', 'personAName', 'personBMethodA', 'personBMethodB', 'personBName', 'personName']);
-        });
-
-        it('get all functions and properties relevant for m ', () => {
-            program.setFile('source/main.bs', `
-                class MyClassA
-                    function new()
-                        m.
-                    end function
-                    personName = "rafa"
-                    personAName = "rafaA"
-                    function personAMethodA()
-                    end function
-                    function personAMethodB()
-                    end function
-                end class
-                class MyClassB
-                    personName = "roger"
-                    personBName = "rogerB"
-                    function personAMethodC()
-                    end function
-                    function personBMethodA()
-                    end function
-                    function personBMethodB()
-                    end function
-                end class
-                class MyClassC extends MyClassA
-                    function new()
-                        m.
-                    end function
-                    personCName = "rogerC"
-                    function personCMethodC()
-                    end function
-                    function personCMethodA()
-                    end function
-                    function personCMethodB()
-                    end function
-                end class
-                sub alertC()
-                end sub
-            `);
-            expect(
-                (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 26))).map(x => x.label).sort()
-            ).to.eql(['personAMethodA', 'personAMethodB', 'personAName', 'personName']);
-            expect(
-                (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(24, 26))).map(x => x.label).sort()
-            ).to.eql(['personAMethodA', 'personAMethodB', 'personAName', 'personCMethodA', 'personCMethodB', 'personCMethodC', 'personCName', 'personName']);
-        });
-
-    });
-
-    it('include non-namespaced classes in the list of general output', () => {
-        program.setFile('source/main.bs', `
-                function regularFunc()
-                    MyClass
-                end function
-                sub alertC()
-                end sub
-                class MyClassA
-                end class
-                class MyClassB
-                end class
-                class MyClassC extends MyClassA
-                end class
-            `);
-        expect(
-            (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 26))).map(x => x.label).sort()
-        ).to.include.members(['MyClassA', 'MyClassB', 'MyClassC']);
-    });
-
-    it('only include classes when using new keyword', () => {
-        program.setFile('source/main.bs', `
-                class MyClassA
-                end class
-                class MyClassB
-                end class
-                class MyClassC extends MyClassA
-                end class
-                function regularFunc()
-                    new MyClass
-                end function
-                sub alertC()
-                end sub
-            `);
-        expect(
-            (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 29))).map(x => x.label).sort()
-        ).to.eql(['MyClassA', 'MyClassB', 'MyClassC']);
-    });
-
-    it('gets completions when using callfunc inovation', () => {
-        program.setFile('source/main.bs', `
-            function main()
-                myNode@.sayHello(arg1)
-            end function
-        `);
-        program.setFile('components/MyNode.bs', `
-            function sayHello(text, text2)
-            end function
-        `);
-        program.setFile<XmlFile>('components/MyNode.xml',
-            trim`<?xml version="1.0" encoding="utf-8" ?>
-            <component name="Component1" extends="Scene">
-                <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
-                <interface>
-                    <function name="sayHello"/>
-                </interface>
-            </component>`);
-        program.validate();
-
-        expect(
-            (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
-        ).to.eql(['sayHello']);
-    });
-
-    it('gets completions for callfunc invocation with multiple nodes', () => {
-        program.setFile('source/main.bs', `
-            function main()
-                myNode@.sayHello(arg1)
-            end function
-        `);
-        program.setFile('components/MyNode.bs', `
-            function sayHello(text, text2)
-            end function
-            function sayHello2(text, text2)
-            end function
-        `);
-        program.setFile<XmlFile>('components/MyNode.xml',
-            trim`<?xml version="1.0" encoding="utf-8" ?>
-            <component name="Component1" extends="Scene">
-                <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
-                <interface>
-                    <function name="sayHello"/>
-                    <function name="sayHello2"/>
-                </interface>
-            </component>`);
-        program.setFile('components/MyNode2.bs', `
-            function sayHello3(text, text2)
-            end function
-            function sayHello4(text, text2)
-            end function
-        `);
-        program.setFile<XmlFile>('components/MyNode2.xml',
-            trim`<?xml version="1.0" encoding="utf-8" ?>
-            <component name="Component2" extends="Scene">
-                <script type="text/brightscript" uri="pkg:/components/MyNode2.bs" />
-                <interface>
-                    <function name="sayHello3"/>
-                    <function name="sayHello4"/>
-                </interface>
-            </component>`);
-        program.validate();
-
-        expect(
-            (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
-        ).to.eql(['sayHello', 'sayHello2', 'sayHello3', 'sayHello4']);
-    });
-
-    it('gets completions for callfunc invocation with multiple nodes and validates single code completion results', () => {
-        program.setFile('source/main.bs', `
-            function main()
-                ParentNode@.sayHello(arg1)
-            end function
-        `);
-        program.setFile('components/ParentNode.bs', `
-            function sayHello(text, text2)
-            end function
-        `);
-        program.setFile<XmlFile>('components/ParentNode.xml',
-            trim`<?xml version="1.0" encoding="utf-8" ?>
-            <component name="ParentNode" extends="Scene">
-                <script type="text/brightscript" uri="pkg:/components/ParentNode.bs" />
-                <interface>
-                    <function name="sayHello"/>
-                </interface>
-            </component>`);
-        program.setFile('components/ChildNode.bs', `
-            function sayHello(text, text2)
-            end function
-        `);
-        program.setFile<XmlFile>('components/ChildNode.xml',
-            trim`<?xml version="1.0" encoding="utf-8" ?>
-            <component name="ChildNode" extends="ParentNode">
-                <script type="text/brightscript" uri="pkg:/components/ChildNode.bs" />
-            </component>`);
-        program.validate();
-
-        expect(
-            (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
-        ).to.eql(['sayHello']);
-    });
-
-    it('gets completions for extended nodes with callfunc invocation - ensure overridden methods included', () => {
-        program.setFile('source/main.bs', `
-            function main()
-                myNode@.sayHello(arg1)
-            end function
-        `);
-        program.setFile('components/MyNode.bs', `
-            function sayHello(text, text2)
-            end function
-            function sayHello2(text, text2)
-            end function
-        `);
-        program.setFile<XmlFile>('components/MyNode.xml',
-            trim`<?xml version="1.0" encoding="utf-8" ?>
-            <component name="Component1" extends="Scene">
-                <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
-                <interface>
-                    <function name="sayHello"/>
-                    <function name="sayHello2"/>
-                </interface>
-            </component>`);
-        program.setFile('components/MyNode2.bs', `
-            function sayHello3(text, text2)
-            end function
-            function sayHello2(text, text2)
-            end function
-            function sayHello4(text, text2)
-            end function
-        `);
-        program.setFile<XmlFile>('components/MyNode2.xml',
-            trim`<?xml version="1.0" encoding="utf-8" ?>
-            <component name="Component2" extends="Component1">
-                <script type="text/brightscript" uri="pkg:/components/MyNode2.bs" />
-                <interface>
-                    <function name="sayHello3"/>
-                    <function name="sayHello4"/>
-                </interface>
-            </component>`);
-        program.validate();
-
-        expect(
-            (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
-        ).to.eql(['sayHello', 'sayHello2', 'sayHello3', 'sayHello4']);
-    });
-
     describe('xml inheritance', () => {
         it('handles parent-child attach and detach', () => {
             //create parent component
@@ -1628,23 +996,12 @@ describe('Program', () => {
         });
     });
 
-    describe('getFileByPkgPath', () => {
-        it('finds file in source folder', () => {
-            expect(program.getFileByPkgPath(s`source/main.brs`)).not.to.exist;
-            expect(program.getFileByPkgPath(s`source/main2.brs`)).not.to.exist;
-            program.setFile('source/main2.brs', '');
-            program.setFile('source/main.brs', '');
-            expect(program.getFileByPkgPath(s`source/main.brs`)).to.exist;
-            expect(program.getFileByPkgPath(s`source/main2.brs`)).to.exist;
-        });
-    });
-
     describe('removeFiles', () => {
         it('removes files by absolute paths', () => {
             program.setFile('source/main.brs', '');
-            expect(program.getFileByPkgPath(s`source/main.brs`)).to.exist;
+            expect(program.getFile(s`source/main.brs`)).to.exist;
             program.removeFiles([`${rootDir}/source/main.brs`]);
-            expect(program.getFileByPkgPath(s`source/main.brs`)).not.to.exist;
+            expect(program.getFile(s`source/main.brs`)).not.to.exist;
         });
     });
 
@@ -1668,7 +1025,7 @@ describe('Program', () => {
             program.setFile('source/main.brs', `
                 sub A()
                     'call with wrong param count
-                    B(1,2,3)
+                    B("one", "two")
 
                     'call unknown function
                     C()
@@ -1747,15 +1104,15 @@ describe('Program', () => {
             expect(labels).to.deep.include({ label: 'shoeSize' });
         });
 
-        it('returns empty set when out of range', () => {
-            const position = util.createPosition(99, 99);
-            program.setFile('source/main.brs', '');
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, position);
-            //get the name of all global completions
-            const globalCompletions = program.globalScope.getAllFiles().flatMap(x => (x as BrsFile).getCompletions(position)).map(x => x.label);
-            //filter out completions from global scope
-            completions = completions.filter(x => !globalCompletions.includes(x.label));
-            expect(completions).to.be.empty;
+        it.skip('returns empty set when out of range', () => {
+            // const position = util.createPosition(99, 99);
+            // program.setFile('source/main.brs', '');
+            // let completions = program.getCompletions(`${rootDir}/source/main.brs`, position);
+            // //get the name of all global completions
+            // const globalCompletions = program.globalScope.getAllFiles().flatMap(x => (x as BrsFile).getCompletions(position)).map(x => x.label);
+            // //filter out completions from global scope
+            // completions = completions.filter(x => !globalCompletions.includes(x.label));
+            // expect(completions).to.be.empty;
         });
 
         it('finds parameters', () => {
@@ -1780,7 +1137,7 @@ describe('Program', () => {
             end sub
         `);
         program.validate();
-        await program.transpile([], program.options.stagingDir);
+        await program.build({ files: [], stagingDir: program.options.stagingDir });
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.false;
     });
@@ -1801,15 +1158,11 @@ describe('Program', () => {
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.false;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/components/comp1.xml.map`)).is.false;
 
-        let filePaths = [{
-            src: s`${rootDir}/source/main.brs`,
-            dest: s`source/main.brs`
-        }, {
-            src: s`${rootDir}/components/comp1.xml`,
-            dest: s`components/comp1.xml`
-        }];
         program.options.sourceMap = true;
-        await program.transpile(filePaths, program.options.stagingDir);
+        await program.build({
+            files: program.getFiles([s`${rootDir}/source/main.brs`, s`${rootDir}/components/comp1.xml`]),
+            stagingDir: program.options.stagingDir
+        });
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/components/comp1.xml.map`)).is.true;
@@ -1819,7 +1172,9 @@ describe('Program', () => {
         fsExtra.ensureDirSync(program.options.stagingDir);
         program.validate();
 
-        await program.transpile([], program.options.stagingDir);
+        await program.build({
+            stagingDir: program.options.stagingDir
+        });
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/bslib.brs`)).is.true;
     });
@@ -1833,11 +1188,11 @@ describe('Program', () => {
             `);
             const plugin = program.plugins.add({
                 name: 'TestPlugin',
-                beforeFileTranspile: (event) => {
+                beforePrepareFile: (event) => {
                     const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
                     event.editor.setProperty((stmt.expressions[0] as LiteralExpression).token, 'text', '"hello there"');
                 },
-                afterFileTranspile: sinon.spy()
+                afterPrepareFile: sinon.spy()
             });
             const result = await program.getTranspiledFileContents(file.srcPath);
             expect(
@@ -1847,24 +1202,33 @@ describe('Program', () => {
                     print "hello there"
                 end sub`
             );
-            expect(plugin.afterFileTranspile.callCount).to.be.greaterThan(0);
+            expect(plugin.afterPrepareFile.callCount).to.be.greaterThan(0);
         });
 
         it('allows events to modify the file contents', async () => {
             program.options.emitDefinitions = true;
             program.plugins.add({
                 name: 'TestPlugin',
-                afterFileTranspile: (event) => {
-                    event.code = `'code comment\n${event.code}`;
-                    event.typedef = `'typedef comment\n${event.typedef}`;
+                afterSerializeFile: (event) => {
+                    if (event.file.pkgPath.endsWith('lib.brs')) {
+                        const fileResult = event.result.get(event.file);
+
+                        const brsFile = fileResult.find(x => x.pkgPath.endsWith('lib.brs'));
+                        brsFile.data = Buffer.from(`'code comment\n${brsFile.data.toString()}`);
+
+                        const dbsFile = fileResult.find(x => x.pkgPath.endsWith('lib.d.bs'));
+                        dbsFile.data = Buffer.from(`'typedef comment\n${dbsFile.data.toString()}`);
+                    }
                 }
-            });
+            } as CompilerPlugin);
             program.setFile('source/lib.bs', `
                 sub log(message)
                     print message
                 end sub
             `);
-            await program.transpile([], stagingDir);
+            await program.build({
+                stagingDir: stagingDir
+            });
             expect(
                 fsExtra.readFileSync(`${stagingDir}/source/lib.brs`).toString().trimEnd()
             ).to.eql(trim`
@@ -1883,52 +1247,38 @@ describe('Program', () => {
         });
     });
 
-    describe('transpile', () => {
-        it.skip('detects and transpiles files added between beforeProgramTranspile and afterProgramTranspile', async () => {
-            program.setFile('source/main.bs', trim`
-                sub main()
-                    print "hello world"
-                end sub
-            `);
-            program.plugins.add({
-                name: 'TestPlugin',
-                beforeFileTranspile: (event) => {
-                    if (isBrsFile(event.file)) {
-                        //add lib1
-                        if (event.outputPath.endsWith('main.brs')) {
-                            event.program.setFile('source/lib1.bs', `
-                                sub lib1()
-                                end sub
-                            `);
-                        }
-                        //add lib2 (this should happen during the next cycle of "catch missing files" cycle
-                        if (event.outputPath.endsWith('main.brs')) {
-                            //add another file
-                            event.program.setFile('source/lib2.bs', `
-                                sub lib2()
-                                end sub
-                            `);
-                        }
-                    }
-                }
-            });
-            await program.transpile([], stagingDir);
-            //our new files should exist
-            expect(
-                fsExtra.readFileSync(`${stagingDir}/source/lib1.brs`).toString()
-            ).to.eql(trim`
-                sub lib1()
-                end sub
-            `);
-            //our changes should be there
-            expect(
-                fsExtra.readFileSync(`${stagingDir}/source/lib2.brs`).toString()
-            ).to.eql(trim`
-                sub lib2()
-                end sub
-            `);
-        });
+    it('beforeProgramTranspile sends entries in alphabetical order', () => {
+        program.setFile('source/main.bs', trim`
+            sub main()
+                print "hello world"
+            end sub
+        `);
 
+        program.setFile('source/common.bs', trim`
+            sub getString()
+                return "test"
+            end sub
+        `);
+
+        //send the files out of order
+        const result = program['beforeProgramTranspile']([{
+            src: s`${rootDir}/source/main.bs`,
+            dest: 'source/main.bs'
+        }, {
+            src: s`${rootDir}/source/main.bs`,
+            dest: 'source/main.bs'
+        }], program.options.stagingDir);
+
+        //entries should now be in alphabetic order
+        expect(
+            result.entries.map(x => x.outputPath)
+        ).to.eql([
+            s`${stagingDir}/source/common.brs`,
+            s`${stagingDir}/source/main.brs`
+        ]);
+    });
+
+    describe('transpile', () => {
         it('sets needsTranspiled=true when there is at least one edit', async () => {
             program.setFile('source/main.brs', trim`
                 sub main()
@@ -1937,12 +1287,14 @@ describe('Program', () => {
             `);
             program.plugins.add({
                 name: 'TestPlugin',
-                beforeFileTranspile: (event) => {
+                beforePrepareFile: (event) => {
                     const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
                     event.editor.setProperty((stmt.expressions[0] as LiteralExpression).token, 'text', '"hello there"');
                 }
             });
-            await program.transpile([], stagingDir);
+            await program.build({
+                stagingDir: stagingDir
+            });
             //our changes should be there
             expect(
                 fsExtra.readFileSync(`${stagingDir}/source/main.brs`).toString()
@@ -1963,7 +1315,7 @@ describe('Program', () => {
             //replace all strings with "goodbye world"
             program.plugins.add({
                 name: 'TestPlugin',
-                beforeFileTranspile: (event) => {
+                beforePrepareFile: (event) => {
                     if (event.file === file && isBrsFile(event.file)) {
                         event.file.ast.walk(createVisitor({
                             LiteralExpression: (literal) => {
@@ -1977,7 +1329,9 @@ describe('Program', () => {
                 }
             });
             //transpile the file
-            await program.transpile([], stagingDir);
+            await program.build({
+                stagingDir: stagingDir
+            });
             //our changes should be there
             expect(
                 fsExtra.readFileSync(`${stagingDir}/source/main.brs`).toString()
@@ -2001,11 +1355,11 @@ describe('Program', () => {
             //replace all strings with "goodbye world"
             program.plugins.add({
                 name: 'TestPlugin',
-                beforeProgramTranspile: (program: Program, entries: TranspileObj[], editor: Editor) => {
+                beforePrepareProgram: (event) => {
                     file.ast.walk(createVisitor({
                         LiteralExpression: (literal) => {
                             literalExpression = literal;
-                            editor.setProperty(literal.token, 'text', '"goodbye world"');
+                            event.editor.setProperty(literal.token, 'text', '"goodbye world"');
                         }
                     }), {
                         walkMode: WalkMode.visitExpressionsRecursive
@@ -2013,7 +1367,9 @@ describe('Program', () => {
                 }
             });
             //transpile the file
-            await program.transpile([], stagingDir);
+            await program.build({
+                stagingDir: stagingDir
+            });
             //our changes should be there
             expect(
                 fsExtra.readFileSync(`${stagingDir}/source/main.brs`).toString()
@@ -2028,13 +1384,17 @@ describe('Program', () => {
         });
 
         it('copies the embedded version of bslib.brs when a version from ropm is not found', async () => {
-            await program.transpile([], stagingDir);
+            await program.build({
+                stagingDir: stagingDir
+            });
             expect(fsExtra.pathExistsSync(`${stagingDir}/source/bslib.brs`)).to.be.true;
         });
 
         it('does not copy bslib.brs when found in roku_modules', async () => {
             program.setFile('source/roku_modules/bslib/bslib.brs', '');
-            await program.transpile([], stagingDir);
+            await program.build({
+                stagingDir: stagingDir
+            });
             expect(fsExtra.pathExistsSync(`${stagingDir}/source/bslib.brs`)).to.be.false;
             expect(fsExtra.pathExistsSync(`${stagingDir}/source/roku_modules/bslib/bslib.brs`)).to.be.true;
         });
@@ -2045,7 +1405,9 @@ describe('Program', () => {
                     print SOURCE_LINE_NUM
                 end sub
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.build({
+                stagingDir: program.options.stagingDir
+            });
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/source/logger.brs`).toString()
             )).to.eql(trim`
@@ -2061,7 +1423,9 @@ describe('Program', () => {
                     print "logInfo"
                 end sub
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.build({
+                stagingDir: program.options.stagingDir
+            });
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/source/logger.brs`).toString()
             )).to.eql(trim`
@@ -2077,7 +1441,9 @@ describe('Program', () => {
                 <component name="Component1" extends="Scene">
                 </component>
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.build({
+                stagingDir: program.options.stagingDir
+            });
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/components/Component1.xml`).toString()
             )).to.eql(trim`
@@ -2096,14 +1462,14 @@ describe('Program', () => {
                 sourceRoot: sourceRoot,
                 sourceMap: true
             });
-            program.setFile('source/main.brs', `
+            const main = program.setFile('source/main.brs', `
                 sub main()
                 end sub
             `);
-            await program.transpile([{
-                src: s`${rootDir}/source/main.brs`,
-                dest: s`source/main.brs`
-            }], stagingDir);
+            await program.build({
+                files: [main],
+                stagingDir: stagingDir
+            });
 
             let contents = fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`).toString();
             let map = JSON.parse(contents);
@@ -2126,10 +1492,10 @@ describe('Program', () => {
                 sub main()
                 end sub
             `);
-            await program.transpile([{
-                src: s`${rootDir}/source/main.bs`,
-                dest: s`source/main.bs`
-            }], stagingDir);
+            await program.build({
+                files: [program.getFile('source/main.bs')],
+                stagingDir: stagingDir
+            });
 
             let contents = fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`).toString();
             let map = JSON.parse(contents);
@@ -2150,7 +1516,9 @@ describe('Program', () => {
                 `);
                 program.options.emitDefinitions = true;
                 program.validate();
-                await program.transpile([], stagingDir);
+                await program.build({
+                    stagingDir: stagingDir
+                });
 
                 expect(fsExtra.pathExistsSync(s`${stagingDir}/source/Duck.brs`)).to.be.true;
                 expect(fsExtra.pathExistsSync(s`${stagingDir}/source/Duck.d.bs`)).to.be.true;
@@ -2164,7 +1532,9 @@ describe('Program', () => {
                 `);
                 program.options.emitDefinitions = true;
                 program.validate();
-                await program.transpile([], stagingDir);
+                await program.build({
+                    stagingDir: stagingDir
+                });
 
                 expect(fsExtra.pathExistsSync(s`${stagingDir}/source/Duck.d.brs`)).to.be.false;
                 expect(fsExtra.pathExistsSync(s`${stagingDir}/source/Duck.brs`)).to.be.false;
@@ -2446,15 +1816,15 @@ describe('Program', () => {
                         outer([inner(["apple"], 100)], 12)
                     end sub
 
-                    sub outer(name as string, age as integer)
+                    sub outer(name as object, age as integer)
                     end sub
 
-                    sub inner(fruits as object, age as integer)
-                    end sub
+                    function inner(fruits as object, age as integer)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(2, 36, 'sub outer(name as string, age as integer)', 0);
+                assertSignatureHelp(2, 36, 'sub outer(name as object, age as integer)', 0);
             });
 
             it('gets signature info for the outer function - index 1', () => {
@@ -2463,15 +1833,15 @@ describe('Program', () => {
                         outer([inner(["apple"], 100)], 12)
                     end sub
 
-                    sub outer(name as string, age as integer)
+                    sub outer(name as object, age as integer)
                     end sub
 
-                    sub inner(fruits as object, age as integer)
-                    end sub
+                    function inner(fruits as object, age as integer)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(2, 57, 'sub outer(name as string, age as integer)', 1);
+                assertSignatureHelp(2, 57, 'sub outer(name as object, age as integer)', 1);
             });
 
             it('gets signature info for the inner function - name', () => {
@@ -2480,15 +1850,15 @@ describe('Program', () => {
                         outer([inner(["apple"], 100)], 12)
                     end sub
 
-                    sub outer(name as string, age as integer)
+                    sub outer(name as object, age as integer)
                     end sub
 
-                    sub inner(fruits as object, age as integer)
-                    end sub
+                    function inner(fruits as object, age as integer)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(2, 43, 'sub inner(fruits as object, age as integer)', 0);
+                assertSignatureHelp(2, 43, 'function inner(fruits as object, age as integer)', 0);
             });
 
             it('gets signature info for the inner function - param 0', () => {
@@ -2497,15 +1867,15 @@ describe('Program', () => {
                         outer([inner(["apple"], 100)], 12)
                     end sub
 
-                    sub outer(name as string, age as integer)
+                    sub outer(name as object, age as integer)
                     end sub
 
-                    sub inner(fruits as object, age as integer)
-                    end sub
+                    function inner(fruits as object, age as integer)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(2, 51, 'sub inner(fruits as object, age as integer)', 1);
+                assertSignatureHelp(2, 51, 'function inner(fruits as object, age as integer)', 1);
             });
 
             it('gets signature info for the inner function - param 1', () => {
@@ -2514,15 +1884,15 @@ describe('Program', () => {
                         outer([inner(["apple"], 100)], 12)
                     end sub
 
-                    sub outer(name as string, age as integer)
+                    sub outer(name as object, age as integer)
                     end sub
 
-                    sub inner(fruits as object, age as integer)
-                    end sub
+                    function inner(fruits as object, age as integer)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(2, 48, 'sub inner(fruits as object, age as integer)', 1);
+                assertSignatureHelp(2, 48, 'function inner(fruits as object, age as integer)', 1);
             });
         });
 
@@ -2688,16 +2058,16 @@ describe('Program', () => {
                         )], 12)
                     end sub
 
-                    sub sayHello(name as string, age as integer)
+                    sub sayHello(name as object, age as integer)
                     end sub
 
-                    sub getName(fruits as object, age as function)
-                    end sub
+                    function getName(fruits as object, age as function)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
                 for (let i = 34; i < 42; i++) {
-                    assertSignatureHelp(2, i, 'sub sayHello(name as string, age as integer)', 0);
+                    assertSignatureHelp(2, i, 'sub sayHello(name as object, age as integer)', 0);
                 }
             });
 
@@ -2713,15 +2083,15 @@ describe('Program', () => {
                         )], 12)
                     end sub
 
-                    sub sayHello(name as string, age as integer)
+                    sub sayHello(name as object, age as integer)
                     end sub
 
-                    sub getName(fruits as object, age as function)
-                    end sub
+                    function getName(fruits as object, age as function)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(8, 25, 'sub sayHello(name as string, age as integer)', 0);
+                assertSignatureHelp(8, 25, 'sub sayHello(name as object, age as integer)', 0);
             });
 
             it('gets signature info for the outer function - index 1', () => {
@@ -2736,15 +2106,15 @@ describe('Program', () => {
                         )], 12)
                     end sub
 
-                    sub sayHello(name as string, age as integer)
+                    sub sayHello(name as object, age as integer)
                     end sub
 
-                    sub getName(fruits as object, age as function)
-                    end sub
+                    function getName(fruits as object, age as function)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(8, 30, 'sub sayHello(name as string, age as integer)', 1);
+                assertSignatureHelp(8, 30, 'sub sayHello(name as object, age as integer)', 1);
             });
 
             it('gets signature info for the inner function - param 0', () => {
@@ -2759,16 +2129,16 @@ describe('Program', () => {
                         )], 12)
                     end sub
 
-                    sub sayHello(name as string, age as integer)
+                    sub sayHello(name as object, age as integer)
                     end sub
 
-                    sub getName(fruits as object, age as function)
-                    end sub
+                    function getName(fruits as object, age as function)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(3, 31, 'sub getName(fruits as object, age as function)', 0);
-                assertSignatureHelp(4, 31, 'sub getName(fruits as object, age as function)', 0);
+                assertSignatureHelp(3, 31, 'function getName(fruits as object, age as function)', 0);
+                assertSignatureHelp(4, 31, 'function getName(fruits as object, age as function)', 0);
             });
 
             it('gets signature info for the inner function - param 1 - function declartion', () => {
@@ -2783,15 +2153,15 @@ describe('Program', () => {
                         )], 12)
                     end sub
 
-                    sub sayHello(name as string, age as integer)
+                    sub sayHello(name as object, age as integer)
                     end sub
 
-                    sub getName(fruits as object, age as function)
-                    end sub
+                    function getName(fruits as object, age as function)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(5, 31, 'sub getName(fruits as object, age as function)', 1);
+                assertSignatureHelp(5, 31, 'function getName(fruits as object, age as function)', 1);
             });
 
             it('gets signature info for the inner function - param 1 - in anon function', () => {
@@ -2806,15 +2176,15 @@ describe('Program', () => {
                         )], 12)
                     end sub
 
-                    sub sayHello(name as string, age as integer)
+                    sub sayHello(name as object, age as integer)
                     end sub
 
-                    sub getName(fruits as object, age as function)
-                    end sub
+                    function getName(fruits as object, age as function)
+                    end function
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                assertSignatureHelp(6, 31, 'sub getName(fruits as object, age as function)', 1);
+                assertSignatureHelp(6, 31, 'function getName(fruits as object, age as function)', 1);
             });
         });
 
@@ -2918,18 +2288,6 @@ describe('Program', () => {
             test(plugin.afterProvideFile);
         });
 
-        it('beforeFileParse can override source contents', () => {
-            const plugin = {
-                name: 'test',
-                beforeFileParse: (event: BeforeFileParseEvent) => {
-                    event.source = `'override`;
-                }
-            };
-            program.plugins.add(plugin);
-            const file = program.setFile<BrsFile>('source/main.brs', `'original`);
-            expect(file.fileContents).to.eql(`'override`);
-        });
-
         it('beforeProvideFile can override source contents', () => {
             const plugin = {
                 name: 'test',
@@ -2940,21 +2298,6 @@ describe('Program', () => {
             program.plugins.add(plugin);
             const file = program.setFile<BrsFile>('source/main.brs', `'original`);
             expect(file.fileContents).to.eql(`'override`);
-        });
-
-        it('beforeFileParse overrides beforeProvideFile event contents', () => {
-            const plugin = {
-                name: 'test',
-                beforeFileParse: (event: BeforeFileParseEvent) => {
-                    event.source = `'beforeFileParse`;
-                },
-                beforeProvideFile: (event: BeforeProvideFileEvent) => {
-                    event.data.value = `'beforeProvideFile`;
-                }
-            };
-            program.plugins.add(plugin);
-            const file = program.setFile<BrsFile>('source/main.brs', `'original`);
-            expect(file.fileContents).to.eql(`'beforeFileParse`);
         });
 
         it('emits event for each virtual file', () => {
@@ -3080,6 +2423,16 @@ describe('Program', () => {
             expect(plugin.beforeFileValidate.callCount).to.equal(1);
             expect(plugin.onFileValidate.callCount).to.equal(1);
             expect(plugin.afterFileValidate.callCount).to.equal(1);
+        });
+
+        it('emits program dispose event', () => {
+            const plugin = {
+                name: 'test',
+                beforeProgramDispose: sinon.spy()
+            };
+            program.plugins.add(plugin);
+            program.dispose();
+            expect(plugin.beforeProgramDispose.callCount).to.equal(1);
         });
     });
 

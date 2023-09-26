@@ -155,7 +155,7 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
                 class Duck extends Bird
-                    sub new()
+                    sub new(name)
                         thing = { m: "m"}
                         print thing.m
                         name = "Donald" + "Duck"
@@ -170,23 +170,25 @@ describe('BrsFile BrighterScript classes', () => {
         it('allows non-`m` expressions and statements before the super call', () => {
             program.setFile('source/main.bs', `
                 class Bird
-                    sub new(name)
+                    name as string
+                    sub new(name as string)
+                        m.name = name
                     end sub
                 end class
                 class Duck extends Bird
                     sub new()
                         m.name = m.name + "Duck"
-                        super()
+                        super("Flappy")
                     end sub
                 end class
             `);
             program.validate();
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
-                range: Range.create(7, 24, 7, 25)
+                range: Range.create(9, 24, 9, 25)
             }, {
                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
-                range: Range.create(7, 33, 7, 34)
+                range: Range.create(9, 33, 9, 34)
             }]);
         });
     });
@@ -206,7 +208,7 @@ describe('BrsFile BrighterScript classes', () => {
             expect(
                 (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.name.text
             ).to.eql('super');
-            await program.transpile([], stagingDir);
+            await program.getTranspiledFileContents(file.srcPath);
             expect(
                 (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.name.text
             ).to.eql('super');
@@ -217,14 +219,14 @@ describe('BrsFile BrighterScript classes', () => {
                 class Animal
                     species1 = "Animal"
                     sub new()
-                        print "From Animal: " + m.species
+                        print "From Animal: " + m.species1
                     end sub
                 end class
                 class Duck extends Animal
                     species2 = "Duck"
                     sub new()
                         super()
-                        print "From Duck: " + m.species
+                        print "From Duck: " + m.species2
                     end sub
                 end class
             `, `
@@ -232,7 +234,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance = {}
                     instance.new = sub()
                         m.species1 = "Animal"
-                        print "From Animal: " + m.species
+                        print "From Animal: " + m.species1
                     end sub
                     return instance
                 end function
@@ -247,7 +249,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new = sub()
                         m.super0_new()
                         m.species2 = "Duck"
-                        print "From Duck: " + m.species
+                        print "From Duck: " + m.species2
                     end sub
                     return instance
                 end function
@@ -286,6 +288,45 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.super0_new = instance.new
                     instance.new = sub()
                         'comment should not cause double super call
+                        m.super0_new()
+                    end sub
+                    return instance
+                end function
+                function Duck()
+                    instance = __Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+            `);
+        });
+
+        it('does not inject a call to super if one exists', async () => {
+            await testTranspile(`
+                class Animal
+                end class
+                class Duck extends Animal
+                    sub new()
+                        print "I am a statement which does not use m"
+                        super()
+                    end sub
+                end class
+            `, `
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = sub()
+                    end sub
+                    return instance
+                end function
+                function Animal()
+                    instance = __Animal_builder()
+                    instance.new()
+                    return instance
+                end function
+                function __Duck_builder()
+                    instance = __Animal_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub()
+                        print "I am a statement which does not use m"
                         m.super0_new()
                     end sub
                     return instance
@@ -434,6 +475,9 @@ describe('BrsFile BrighterScript classes', () => {
                 class Animal
                     sub new(name as string)
                     end sub
+
+                    sub DoSomething()
+                    end sub
                 end class
 
                 class Duck extends Animal
@@ -446,6 +490,8 @@ describe('BrsFile BrighterScript classes', () => {
                 function __Animal_builder()
                     instance = {}
                     instance.new = sub(name as string)
+                    end sub
+                    instance.DoSomething = sub()
                     end sub
                     return instance
                 end function
@@ -876,7 +922,7 @@ describe('BrsFile BrighterScript classes', () => {
 
     it('detects indirect circular extends', () => {
         //direct
-        program.addOrReplaceFile('source/Indirect.bs', `
+        program.setFile('source/Indirect.bs', `
             class Parent extends Grandchild
             end class
 
@@ -910,9 +956,9 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
             end class
         `);
-        await program.transpile([], stagingDir);
+        await program.build({ stagingDir: stagingDir });
         fsExtra.emptyDirSync(stagingDir);
-        await program.transpile([], stagingDir);
+        await program.build({ stagingDir: stagingDir });
         expect(
             fsExtra.readFileSync(s`${stagingDir}/source/lib.brs`).toString().trimEnd()
         ).to.eql(trim`
@@ -1030,15 +1076,14 @@ describe('BrsFile BrighterScript classes', () => {
                 public owner as Person
             end class
             class Duck extends Bird
-                public age = 12.2 'should be integer but is float
+                public age = 12.2 'should be integer, but a float can be assigned to an int
                 public name = 12 'should be string but is integer
                 public owner as string
             end class
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.cannotFindType('Person'),
-            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'age', 'float', 'integer'),
+            DiagnosticMessages.cannotFindName('Person'),
             DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'name', 'integer', 'string'),
             DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'owner', 'string', 'Person')
         ]);
@@ -1178,9 +1223,12 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             `);
             program.validate();
-            expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird')
-            ]);
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird'),
+                relatedInformation: [{
+                    message: `Not defined in scope 'source'`
+                }]
+            }]);
         });
 
         it('namespaced parent class from inside namespace', () => {
@@ -1199,12 +1247,9 @@ describe('BrsFile BrighterScript classes', () => {
                 end namespace
             `);
             program.validate();
-            expectDiagnostics(program, [{
-                ...DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird'),
-                relatedInformation: [{
-                    message: `Not defined in scope 'source'`
-                }]
-            }]);
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('GroundedBird', 'Vertibrates.GroundedBird').message
+            ]);
         });
     });
 

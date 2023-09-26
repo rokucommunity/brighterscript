@@ -1,21 +1,21 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, Hover } from 'vscode-languageserver';
-import { CompletionItemKind } from 'vscode-languageserver';
+import type { CodeAction, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileReference, FileObj, SemanticToken, FileLink, ProvideCompletionsEvent, ProvideHoverEvent, ProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, SerializedFile, TranspileObj } from './interfaces';
+import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj } from './interfaces';
+import type { File } from './files/File';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DependencyGraph } from './DependencyGraph';
 import { Logger, LogLevel } from './Logger';
 import chalk from 'chalk';
-import { globalFile } from './globalCallables';
+import { globalCallableMap, globalFile } from './globalCallables';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
@@ -26,12 +26,23 @@ import { Editor } from './astUtils/Editor';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
-import { rokuDeploy } from 'roku-deploy';
+import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
+import { IntegerType } from './types/IntegerType';
+import { StringType } from './types/StringType';
+import { SymbolTypeFlag } from './SymbolTable';
+import { BooleanType } from './types/BooleanType';
+import { DoubleType } from './types/DoubleType';
+import { DynamicType } from './types/DynamicType';
+import { FloatType } from './types/FloatType';
+import { LongIntegerType } from './types/LongIntegerType';
+import { ObjectType } from './types/ObjectType';
+import { VoidType } from './types/VoidType';
+import { FunctionType } from './types/FunctionType';
 import { FileFactory } from './files/Factory';
-import type { File } from './files/File';
 import { ActionPipeline } from './ActionPipeline';
 import type { FileData } from './files/LazyFileData';
 import { LazyFileData } from './files/LazyFileData';
+import { rokuDeploy } from 'roku-deploy';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -83,6 +94,9 @@ export class Program {
         this.globalScope = new Scope('global', this, 'scope:global');
         this.globalScope.attachDependencyGraph(this.dependencyGraph);
         this.scopes.global = this.globalScope;
+
+        this.populateGlobalSymbolTable();
+
         //hardcode the files list for global scope to only contain the global file
         this.globalScope.getAllFiles = () => [globalFile];
         this.globalScope.validate();
@@ -90,6 +104,30 @@ export class Program {
         this.globalScope.getDiagnostics = () => [];
         //TODO we might need to fix this because the isValidated clears stuff now
         (this.globalScope as any).isValidated = true;
+    }
+
+    /**
+     * Do all setup required for the global symbol table.
+     */
+    private populateGlobalSymbolTable() {
+        //Setup primitive types in global symbolTable
+        //TODO: Need to handle Array types
+
+        this.globalScope.symbolTable.addSymbol('boolean', undefined, BooleanType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('double', undefined, DoubleType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('dynamic', undefined, DynamicType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('float', undefined, FloatType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('function', undefined, new FunctionType(), SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('integer', undefined, IntegerType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('longinteger', undefined, LongIntegerType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('object', undefined, new ObjectType(), SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('string', undefined, StringType.instance, SymbolTypeFlag.typetime);
+        this.globalScope.symbolTable.addSymbol('void', undefined, VoidType.instance, SymbolTypeFlag.typetime);
+
+        for (let pair of globalCallableMap) {
+            let [key, callable] = pair;
+            this.globalScope.symbolTable.addSymbol(key, undefined, callable.type, SymbolTypeFlag.runtime);
+        }
     }
 
     /**
@@ -101,6 +139,8 @@ export class Program {
     private dependencyGraph = new DependencyGraph();
 
     private diagnosticFilterer = new DiagnosticFilterer();
+
+    private diagnosticAdjuster = new DiagnosticSeverityAdjuster();
 
     /**
      * A scope that contains all built-in global functions.
@@ -165,7 +205,6 @@ export class Program {
 
     protected addScope(scope: Scope) {
         this.scopes[scope.name] = scope;
-        this.plugins.emit('afterScopeCreate', scope);
     }
 
     /**
@@ -299,6 +338,10 @@ export class Program {
                 return finalDiagnostics;
             });
 
+            this.logger.time(LogLevel.debug, ['adjust diagnostics severity'], () => {
+                this.diagnosticAdjuster.adjust(this.options, diagnostics);
+            });
+
             this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
             return filteredDiagnostics;
         });
@@ -321,14 +364,14 @@ export class Program {
      * roku filesystem is case INsensitive, so find the scope by key case insensitive
      * @param scopeName xml scope names are their `destPath`. Source scope is stored with the key `"source"`
      */
-    public getScopeByName(scopeName: string) {
+    public getScopeByName(scopeName: string): Scope {
         if (!scopeName) {
             return undefined;
         }
         //most scopes are xml file pkg paths. however, the ones that are not are single names like "global" and "scope",
         //so it's safe to run the standardizePkgPath method
-        scopeName = s`${scopeName}`;
-        let key = Object.keys(this.scopes).find(x => x.toLowerCase() === scopeName.toLowerCase());
+        scopeName = s`${scopeName.toLowerCase()}`;
+        let key = Object.keys(this.scopes).find(x => x.toLowerCase() === scopeName);
         return this.scopes[key];
     }
 
@@ -372,25 +415,6 @@ export class Program {
         delete this.files[file.srcPath.toLowerCase()];
         this.destMap.delete(file.destPath.toLowerCase());
         return file;
-    }
-
-    /**
-     * Load a file into the program. If that file already exists, it is replaced.
-     * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
-     * @param srcPath the file path relative to the root dir
-     * @param fileContents the file contents
-     * @deprecated use `setFile` instead
-     */
-    public addOrReplaceFile<T extends File>(srcPath: string, fileContents: string): T;
-    /**
-     * Load a file into the program. If that file already exists, it is replaced.
-     * @param fileEntry an object that specifies src and dest for the file.
-     * @param fileContents the file contents
-     * @deprecated use `setFile` instead
-     */
-    public addOrReplaceFile<T extends File>(fileEntry: FileObj, fileContents: string): T;
-    public addOrReplaceFile<T extends File>(fileParam: FileObj | string, fileContents: string): T {
-        return this.setFile<T>(fileParam as any, fileContents);
     }
 
     /**
@@ -492,6 +516,12 @@ export class Program {
 
                     //register this compoent now that we have parsed it and know its component name
                     this.registerComponent(file, scope);
+
+                    //notify plugins that the scope is created and the component is registered
+                    this.plugins.emit('afterScopeCreate', {
+                        program: this,
+                        scope: scope
+                    });
                 }
             }
 
@@ -587,43 +617,11 @@ export class Program {
             const sourceScope = new Scope('source', this, 'scope:source');
             sourceScope.attachDependencyGraph(this.dependencyGraph);
             this.addScope(sourceScope);
+            this.plugins.emit('afterScopeCreate', {
+                program: this,
+                scope: sourceScope
+            });
         }
-    }
-
-    /**
-     * Find the file by its absolute path. This is case INSENSITIVE, since
-     * Roku is a case insensitive file system. It is an error to have multiple files
-     * with the same path with only case being different.
-     * @param srcPath the absolute path to the file
-     * @deprecated use `getFile` instead, which auto-detects the path type
-     */
-    public getFileByPathAbsolute<T extends File>(srcPath: string) {
-        srcPath = s`${srcPath}`;
-        for (let filePath in this.files) {
-            if (filePath.toLowerCase() === srcPath.toLowerCase()) {
-                return this.files[filePath] as T;
-            }
-        }
-    }
-
-    /**
-     * Get a list of files for the given (platform-normalized) destPath array.
-     * Missing files are just ignored.
-     * @deprecated use `getFiles` instead, which auto-detects the path types
-     */
-    public getFilesByPkgPaths<T extends File[]>(destPaths: string[]) {
-        return destPaths
-            .map(destpath => this.getFileByPkgPath(destpath))
-            .filter(file => file !== undefined) as T;
-    }
-
-    /**
-     * Get a file with the specified (platform-normalized) destPath.
-     * If not found, return undefined
-     * @deprecated use `getFile` instead, which auto-detects the path type
-     */
-    public getFileByPkgPath<T extends File>(destPath: string) {
-        return this.destMap.get(destPath.toLowerCase()) as T;
     }
 
     /**
@@ -654,8 +652,6 @@ export class Program {
             if (!file || !this.hasFile(file.srcPath)) {
                 continue;
             }
-            //deprecated. remove in v1
-            this.plugins.emit('beforeFileDispose', file);
 
             const event: BeforeFileRemoveEvent = { file: file, program: this };
             this.plugins.emit('beforeFileRemove', event);
@@ -663,12 +659,17 @@ export class Program {
             //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
             let scope = this.scopes[file.destPath];
             if (scope) {
-                this.plugins.emit('beforeScopeDispose', scope);
+                const scopeDisposeEvent = {
+                    program: this,
+                    scope: scope
+                };
+                this.plugins.emit('beforeScopeDispose', scopeDisposeEvent);
+                this.plugins.emit('onScopeDispose', scopeDisposeEvent);
                 scope.dispose();
                 //notify dependencies of this scope that it has been removed
                 this.dependencyGraph.remove(scope.dependencyGraphKey);
                 delete this.scopes[file.destPath];
-                this.plugins.emit('afterScopeDispose', scope);
+                this.plugins.emit('afterScopeDispose', scopeDisposeEvent);
             }
             //remove the file from the program
             this.unassignFile(file);
@@ -692,9 +693,6 @@ export class Program {
             file?.dispose?.();
 
             this.plugins.emit('afterFileRemove', event);
-
-            //deprecated. remove in v1
-            this.plugins.emit('afterFileDispose', file);
         }
     }
 
@@ -704,42 +702,40 @@ export class Program {
     public validate() {
         this.logger.time(LogLevel.log, ['Validating project'], () => {
             this.diagnostics = [];
-            this.plugins.emit('beforeProgramValidate', this);
+            const programValidateEvent = {
+                program: this
+            };
+            this.plugins.emit('beforeProgramValidate', programValidateEvent);
+            this.plugins.emit('onProgramValidate', programValidateEvent);
 
             //validate every file
             for (const file of Object.values(this.files)) {
                 //for every unvalidated file, validate it
                 if (!file.isValidated) {
-                    this.plugins.emit('beforeFileValidate', {
+                    const validateFileEvent = {
                         program: this,
                         file: file
-                    });
+                    };
+                    this.plugins.emit('beforeFileValidate', validateFileEvent);
 
                     //emit an event to allow plugins to contribute to the file validation process
-                    this.plugins.emit('onFileValidate', {
-                        program: this,
-                        file: file
-                    });
-                    //call file.validate() IF the file has that function defined
-                    file.validate?.();
+                    this.plugins.emit('onFileValidate', validateFileEvent);
                     file.isValidated = true;
 
-                    this.plugins.emit('afterFileValidate', file);
+                    this.plugins.emit('afterFileValidate', validateFileEvent);
                 }
             }
 
             this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
                 for (let scopeName in this.scopes) {
                     let scope = this.scopes[scopeName];
-                    scope.linkSymbolTable();
                     scope.validate();
-                    scope.unlinkSymbolTable();
                 }
             });
 
             this.detectDuplicateComponentNames();
 
-            this.plugins.emit('afterProgramValidate', this);
+            this.plugins.emit('afterProgramValidate', programValidateEvent);
         });
     }
 
@@ -885,7 +881,7 @@ export class Program {
         let funcNames = new Set<string>();
         let currentScope = scope;
         while (isXmlScope(currentScope)) {
-            for (let name of currentScope.xmlFile.ast.component.api?.functions.map((f) => f.name) ?? []) {
+            for (let name of currentScope.xmlFile.ast.componentElement.interfaceElement?.functions.map((f) => f.name) ?? []) {
                 if (!filterName || name === filterName) {
                     funcNames.add(name);
                 }
@@ -1072,64 +1068,6 @@ export class Program {
     }
 
     /**
-     * Get a list of all script imports, relative to the specified destPath
-     * @param sourceDestPath - the destPath of the source that wants to resolve script imports.
-     */
-
-    public getScriptImportCompletions(sourceDestPath: string, scriptImport: FileReference) {
-        let lowerSourceDestPath = sourceDestPath.toLowerCase();
-
-        let result = [] as CompletionItem[];
-        /**
-         * hashtable to prevent duplicate results
-         */
-        let resultDestPaths = {} as Record<string, boolean>;
-
-        //restrict to only .brs files
-        for (let key in this.files) {
-            let file = this.files[key];
-            const fileExtension = path.extname(file.destPath);
-            if (
-                //is a BrightScript or BrighterScript file
-                (fileExtension === '.bs' || fileExtension === '.brs') &&
-                //this file is not the current file
-                lowerSourceDestPath !== file.destPath.toLowerCase()
-            ) {
-                //add the relative path
-                const relativePath = util.getRelativePath(sourceDestPath, file.destPath).replace(/\\/g, '/');
-                let fileDestPath = util.sanitizePkgPath(file.destPath);
-                let fileDestPathLower = fileDestPath.toLowerCase();
-                if (!resultDestPaths[fileDestPathLower]) {
-                    resultDestPaths[fileDestPathLower] = true;
-
-                    result.push({
-                        label: relativePath,
-                        detail: file.srcPath,
-                        kind: CompletionItemKind.File,
-                        textEdit: {
-                            newText: relativePath,
-                            range: scriptImport.filePathRange
-                        }
-                    });
-
-                    //add the absolute path
-                    result.push({
-                        label: fileDestPath,
-                        detail: file.srcPath,
-                        kind: CompletionItemKind.File,
-                        textEdit: {
-                            newText: fileDestPath,
-                            range: scriptImport.filePathRange
-                        }
-                    });
-                }
-            }
-        }
-        return result;
-    }
-
-
-    /**
      * Transpile a single file and get the result as a string.
      * This does not write anything to the file system.
      *
@@ -1199,7 +1137,7 @@ export class Program {
     }
 
     private getStagingDir(stagingDir?: string) {
-        let result = stagingDir ?? this.options.stagingDir ?? this.options.stagingFolderPath;
+        let result = stagingDir ?? this.options.stagingDir ?? this.options.stagingDir;
         if (!result) {
             result = rokuDeploy.getOptions(this.options as any).stagingDir;
         }
@@ -1249,17 +1187,11 @@ export class Program {
             await this.plugins.emitAsync('prepareFile', event);
             await this.plugins.emitAsync('afterPrepareFile', event);
 
-            //TODO remove `beforeFileTranspile` in v1
-            await this.plugins.emitAsync('beforeFileTranspile', event);
-
             //TODO remove this in v1
             entries.push(event);
         }
 
         await this.plugins.emitAsync('afterPrepareProgram', programEvent);
-
-        //TODO remove the beforeProgramTranspile event in v1
-        await this.plugins.emitAsync('beforeProgramTranspile', this, entries, programEvent.editor);
         return files;
     }
 
@@ -1270,10 +1202,20 @@ export class Program {
 
         const allFiles = new Map<File, SerializedFile[]>();
 
-        await this.plugins.emitAsync('beforeSerializeProgram', {
+        const serializeProgramEvent = await this.plugins.emitAsync('beforeSerializeProgram', {
             program: this,
             files: files,
             result: allFiles
+        });
+        await this.plugins.emitAsync('onSerializeProgram', {
+            program: this,
+            files: files,
+            result: allFiles
+        });
+
+        //sort the entries to make transpiling more deterministic
+        files = serializeProgramEvent.files.sort((a, b) => {
+            return a.srcPath < b.srcPath ? -1 : 1;
         });
 
         // serialize each file
@@ -1294,8 +1236,6 @@ export class Program {
             result: allFiles
         });
 
-        //TODO remove the beforeProgramTranspile event in v1. This event has been nerfed anyway, we're not including any files and the editor does nothing
-        await this.plugins.emitAsync('afterProgramTranspile', this, [], new Editor());
         return allFiles;
     }
 
@@ -1368,13 +1308,6 @@ export class Program {
                 file.editor.undoAll();
             }
         });
-    }
-
-    /**
-     * @deprecated use `.build()` instead
-     */
-    public async transpile(fileEntries: FileObj[], stagingDir: string) {
-        return this.build({ stagingDir: stagingDir });
     }
 
     /**
@@ -1474,6 +1407,8 @@ export class Program {
     private _manifest: Map<string, string>;
 
     public dispose() {
+        this.plugins.emit('beforeProgramDispose', { program: this });
+
         for (let filePath in this.files) {
             this.files[filePath]?.dispose?.();
         }

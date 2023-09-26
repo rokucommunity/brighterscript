@@ -136,10 +136,10 @@ describe('ProgramBuilder', () => {
                 ]
             });
 
-            expect(fsExtra.pathExistsSync(`${stagingDir}/source/main.brs`)).to.be.true;
-            expect(fsExtra.pathExistsSync(`${stagingDir}/manifest`)).to.be.true;
-            expect(fsExtra.pathExistsSync(`${stagingDir}/assets/images/logo.png`)).to.be.true;
-            expect(fsExtra.pathExistsSync(`${stagingDir}/locale/en_US/translations.xml`)).to.be.true;
+            expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs`)).to.be.true;
+            expect(fsExtra.pathExistsSync(s`${stagingDir}/manifest`)).to.be.true;
+            expect(fsExtra.pathExistsSync(s`${stagingDir}/assets/images/logo.png`)).to.be.true;
+            expect(fsExtra.pathExistsSync(s`${stagingDir}/locale/en_US/translations.xml`)).to.be.true;
         });
 
         it('uses default options when the config file fails to parse', async () => {
@@ -370,7 +370,7 @@ describe('ProgramBuilder', () => {
 });
 
 function createBsDiagnostic(filePath: string, messages: string[]): BsDiagnostic[] {
-    let file = new BrsFile(filePath, filePath, null);
+    let file = new BrsFile({ srcPath: filePath, destPath: filePath, program: null });
     let diagnostics = [];
     for (let message of messages) {
         let d = createDiagnostic(file, 1, message);

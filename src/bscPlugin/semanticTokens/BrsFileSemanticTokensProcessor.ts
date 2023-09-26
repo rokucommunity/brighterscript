@@ -1,13 +1,14 @@
 import type { Range } from 'vscode-languageserver-protocol';
 import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isCallExpression, isCustomType, isNamespaceStatement, isNewExpression } from '../../astUtils/reflection';
+import { isCallExpression, isClassType, isNamespaceStatement, isNewExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnGetSemanticTokensEvent } from '../../interfaces';
 import type { Locatable } from '../../lexer/Token';
 import { ParseMode } from '../../parser/Parser';
 import type { NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
+import { SymbolTypeFlag } from '../../SymbolTable';
 
 export class BrsFileSemanticTokensProcessor {
     public constructor(
@@ -19,7 +20,7 @@ export class BrsFileSemanticTokensProcessor {
     public process() {
         this.handleClasses();
         this.handleConstDeclarations();
-        this.iterateExpressions();
+        this.iterateNodes();
     }
 
     private handleConstDeclarations() {
@@ -34,13 +35,13 @@ export class BrsFileSemanticTokensProcessor {
 
         //classes used in function param types
         for (const func of this.event.file.parser.references.functionExpressions) {
-            for (const parm of func.parameters) {
-                if (isCustomType(parm.type)) {
-                    const namespace = parm.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            for (const param of func.parameters) {
+                if (isClassType(param.getType({ flags: SymbolTypeFlag.typetime }))) {
+                    const namespace = param.findAncestor<NamespaceStatement>(isNamespaceStatement);
                     classes.push({
-                        className: parm.typeToken.text,
+                        className: util.getAllDottedGetParts(param.typeExpression.expression).map(x => x.text).join('.'),
                         namespaceName: namespace?.getName(ParseMode.BrighterScript),
-                        range: parm.typeToken.range
+                        range: param.typeExpression.range
                     });
                 }
             }
@@ -84,7 +85,7 @@ export class BrsFileSemanticTokensProcessor {
         });
     }
 
-    private iterateExpressions() {
+    private iterateNodes() {
         const scope = this.event.scopes[0];
 
         //if this file has no scopes, there's nothing else we can do about this
@@ -92,30 +93,38 @@ export class BrsFileSemanticTokensProcessor {
             return;
         }
 
-        for (let expression of this.event.file.parser.references.expressions) {
+        const nodes = [
+            ...this.event.file.parser.references.expressions,
+            //make a new VariableExpression to wrap the name. This is a hack, we could probably do it better
+            ...this.event.file.parser.references.assignmentStatements,
+            ...this.event.file.parser.references.functionExpressions.map(x => x.parameters).flat()
+        ];
+
+        for (let node of nodes) {
             //lift the callee from call expressions to handle namespaced function calls
-            if (isCallExpression(expression)) {
-                expression = expression.callee;
-            } else if (isNewExpression(expression)) {
-                expression = expression.call.callee;
+            if (isCallExpression(node)) {
+                node = node.callee;
+            } else if (isNewExpression(node)) {
+                node = node.call.callee;
             }
-            const tokens = util.getAllDottedGetParts(expression);
+            const containingNamespaceNameLower = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase();
+            const tokens = util.getAllDottedGetParts(node);
             const processedNames: string[] = [];
             for (const token of tokens ?? []) {
                 processedNames.push(token.text?.toLowerCase());
                 const entityName = processedNames.join('.');
 
-                if (scope.getEnumMemberMap().has(entityName)) {
+                if (scope.getEnumMemberFileLink(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.enumMember);
-                } else if (scope.getEnumMap().has(entityName)) {
+                } else if (scope.getEnum(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.enum);
-                } else if (scope.getClassMap().has(entityName)) {
+                } else if (scope.getClass(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.class);
                 } else if (scope.getCallableByName(entityName)) {
                     this.addToken(token, SemanticTokenTypes.function);
-                } else if (scope.namespaceLookup.has(entityName)) {
+                } else if (scope.getNamespace(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.namespace);
-                } else if (scope.getConstFileLink(entityName)) {
+                } else if (scope.getConstFileLink(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.variable, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]);
                 }
             }

@@ -1,33 +1,31 @@
-import type { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
-import { FloatType } from './FloatType';
-import { IntegerType } from './IntegerType';
-import { LongIntegerType } from './LongIntegerType';
+import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType, isObjectType } from '../astUtils/reflection';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
+import { isUnionTypeCompatible } from './helpers';
 
-export class DoubleType implements BscType {
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+
+export class DoubleType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
-
-    public isAssignableTo(targetType: BscType) {
-        return (
-            targetType instanceof DoubleType ||
-            targetType instanceof DynamicType
-        );
+    ) {
+        super();
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        if (
-            targetType instanceof DynamicType ||
-            targetType instanceof IntegerType ||
-            targetType instanceof FloatType ||
-            targetType instanceof DoubleType ||
-            targetType instanceof LongIntegerType
-        ) {
-            return true;
-        } else {
-            return false;
-        }
+    public readonly kind = BscTypeKind.DoubleType;
+
+    public static instance = new DoubleType('double');
+
+    public isTypeCompatible(targetType: BscType) {
+        return (
+            isDynamicType(targetType) ||
+            isObjectType(targetType) ||
+            isIntegerType(targetType) ||
+            isFloatType(targetType) ||
+            isDoubleType(targetType) ||
+            isLongIntegerType(targetType) ||
+            isUnionTypeCompatible(this, targetType)
+        );
     }
     public toString() {
         return this.typeText ?? 'double';
@@ -36,4 +34,11 @@ export class DoubleType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    public isEqual(targetType: BscType): boolean {
+        return isDoubleType(targetType);
+    }
+
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('double', DoubleType.instance);

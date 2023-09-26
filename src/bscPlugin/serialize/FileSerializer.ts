@@ -29,34 +29,22 @@ export class FileSerializer {
         const result: SerializedFile[] = [];
         const serialized = file.serialize();
 
-        const afterTranspileEvent = {
-            program: this.event.program,
-            file: file,
-            code: serialized.code,
-            outputPath: this.event.program['getOutputPath'](file), // eslint-disable-line
-            map: serialized.map,
-            typedef: serialized.typedef
-        };
-
-        //TODO remove `afterFileTranspile` in v1
-        this.event.program.plugins.emit('afterFileTranspile', afterTranspileEvent);
-
-        if (typeof afterTranspileEvent.code === 'string') {
+        if (typeof serialized.code === 'string') {
             result.push({
                 pkgPath: file.pkgPath,
-                data: Buffer.from(afterTranspileEvent.code)
+                data: Buffer.from(serialized.code)
             });
         }
-        if (afterTranspileEvent.map) {
+        if (serialized.map) {
             result.push({
                 pkgPath: file.pkgPath + '.map',
-                data: Buffer.from(afterTranspileEvent.map.toString())
+                data: Buffer.from(serialized.map.toString())
             });
         }
-        if (typeof afterTranspileEvent.typedef === 'string') {
+        if (typeof serialized.typedef === 'string') {
             result.push({
                 pkgPath: file.pkgPath.replace(/\.brs$/i, '.d.bs'),
-                data: Buffer.from(afterTranspileEvent.typedef)
+                data: Buffer.from(serialized.typedef)
             });
         }
 

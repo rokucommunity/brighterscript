@@ -16,9 +16,9 @@ describe('PluginInterface', () => {
             name: 'allows adding a plugin',
             beforePublish: beforePublish
         };
-        pluginInterface.emit('beforePublish', undefined, []);
+        pluginInterface.emit('beforeProgramCreate', {} as any);
         pluginInterface.add(plugin);
-        pluginInterface.emit('beforePublish', undefined, []);
+        pluginInterface.emit('beforeProgramCreate', {} as any);
         expect(beforePublish.callCount).to.equal(1);
     });
 
@@ -32,30 +32,31 @@ describe('PluginInterface', () => {
     });
 
     it('does not allows adding a plugin multiple times', () => {
-        const beforePublish = sinon.spy();
+        const beforeProgramCreate = sinon.spy();
         const plugin = {
             name: 'does not allows adding a plugin multiple times',
-            beforePublish: beforePublish
+            beforeProgramCreate: beforeProgramCreate
         };
         pluginInterface.add(plugin);
         pluginInterface.add(plugin);
-        pluginInterface.emit('beforePublish', undefined, []);
-        expect(beforePublish.callCount).to.equal(1);
+        pluginInterface.emit('beforeProgramCreate', {} as any);
+
+        expect(beforeProgramCreate.callCount).to.equal(1);
         pluginInterface.remove(plugin);
         expect(pluginInterface.has(plugin)).to.be.false;
     });
 
     it('allows removing a plugin', () => {
-        const beforePublish = sinon.spy();
+        const beforeProgramCreate = sinon.spy();
         const plugin = {
             name: 'allows removing a plugin',
-            beforePublish: beforePublish
+            beforeProgramCreate: beforeProgramCreate
         };
         pluginInterface.add(plugin);
-        pluginInterface.emit('beforePublish', undefined, []);
-        expect(beforePublish.callCount).to.equal(1);
+        pluginInterface.emit('beforeProgramCreate', {} as any);
+        expect(beforeProgramCreate.callCount).to.equal(1);
         pluginInterface.remove(plugin);
-        pluginInterface.emit('beforePublish', undefined, []);
-        expect(beforePublish.callCount).to.equal(1);
+        pluginInterface.emit('beforeProgramCreate', {} as any);
+        expect(beforeProgramCreate.callCount).to.equal(1);
     });
 });

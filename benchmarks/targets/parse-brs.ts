@@ -1,4 +1,7 @@
-module.exports = async (suite, name, brighterscript, projectPath, options) => {
+import type { TargetOptions } from '../target-runner';
+
+module.exports = async (options: TargetOptions) => {
+    const { suite, name, version, fullName, brighterscript, projectPath, suiteOptions } = options;
     const { ProgramBuilder } = brighterscript;
 
     const builder = new ProgramBuilder();
@@ -9,20 +12,23 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
         copyToStaging: false,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
-        logLevel: 'error'
+        logLevel: 'error',
+        ...options.additionalConfig
     });
     //collect all the brs file contents
-    const files = Object.values(builder.program.files).filter(x => ['.brs', '.bs', '.d.bs'].includes(x.extension)).map(x => ({
+    const files = Object.values(builder.program.files).filter(x => ['.brs', '.bs', '.d.bs'].includes(brighterscript.util.getExtension(x.srcPath)!)).map(x => ({
         destPath: x.destPath ?? x.pkgPath,
-        fileContents: x.fileContents
+        fileContents: (x as any).fileContents
     }));
     if (files.length === 0) {
         console.log('[parse-brs] No brs files found in program');
         return;
     }
-    suite.add(name, (deferred) => {
-        const promises = [];
-        const setFileFuncName = builder.program.setFile ? 'setFile' : 'addOrReplaceFile';
+
+    const setFileFuncName = builder.program['setFile'] ? 'setFile' : 'addOrReplaceFile';
+
+    suite.add(fullName, (deferred) => {
+        const promises: unknown[] = [];
         for (const file of files) {
             promises.push(
                 builder.program[setFileFuncName](file.destPath, file.fileContents)
@@ -31,7 +37,7 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
         // eslint-disable-next-line @typescript-eslint/no-floating-promises
         Promise.all(promises).then(() => deferred.resolve());
     }, {
-        ...options,
+        ...suiteOptions,
         'defer': true
     });
 };

@@ -2,7 +2,7 @@
 
 A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
-[![build status](https://img.shields.io/github/workflow/status/rokucommunity/brighterscript/build.svg?logo=github)](https://github.com/rokucommunity/brighterscript/actions?query=workflow%3Abuild)
+[![build status](https://img.shields.io/github/actions/workflow/status/rokucommunity/brighterscript/build.yml?branch=master&logo=github)](https://github.com/rokucommunity/brighterscript/actions?query=branch%3Amaster+workflow%3Abuild)
 [![coverage status](https://img.shields.io/coveralls/github/rokucommunity/brighterscript?logo=coveralls)](https://coveralls.io/github/rokucommunity/brighterscript?branch=master)
 [![monthly downloads](https://img.shields.io/npm/dm/brighterscript.svg?sanitize=true&logo=npm&logoColor=)](https://npmcharts.com/compare/brighterscript?minimal=true)
 [![npm version](https://img.shields.io/npm/v/brighterscript.svg?logo=npm)](https://www.npmjs.com/package/brighterscript)
@@ -10,6 +10,8 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 [![Slack](https://img.shields.io/badge/Slack-RokuCommunity-4A154B?logo=slack)](https://join.slack.com/t/rokudevelopers/shared_invite/zt-4vw7rg6v-NH46oY7hTktpRIBM_zGvwA)
 
 ## Overview
+
+**WARNING: this is the v0.66.0 branch with experimental features**
 
 The BrighterScript language provides new features and syntax enhancements to Roku's BrightScript language. Because the language is a superset of BrightScript, the parser and associated tools (VSCode integration, cli, etc...) work with standard BrightScript (.brs) files. This means you will get benefits (as described in the following section) from using the BrighterScript compiler, whether your project contains BrighterScript (.bs) files or not. The BrighterScript language transpiles to standard BrightScript, so your code is fully compatible with all roku devices.
 
@@ -475,6 +477,7 @@ A list of filters used to hide diagnostics.
    - A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed.
    - A `number` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project.
    - An object can also be provided to filter specific diagnostic codes for a file pattern. For example,
+
         ```jsonc
         "diagnosticFilters": [{
             "src": "vendor/**/*",
@@ -485,6 +488,19 @@ A list of filters used to hide diagnostics.
 Defaults to `undefined`.
 
 If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify `diagnosticFilters`, the parent bsconfig's `diagnosticFilters` field will be completely overwritten.
+
+#### `diagnosticSeverityOverrides`
+
+Type: `Record<string | number, 'hint' | 'info' | 'warn' | 'error'>`
+
+A map of error codes and severity levels that will override diagnostics' severity. When a diagnostic generator doesn't offer enough control on an error's severity, this is a tool to work around blocking errors, or raise the level of other errors.
+
+      ```jsonc
+      "diagnosticSeverityOverrides": {
+        "1011": "error",       //raise a warning to an error
+        "LINT1001": "warn" //oops we have lots of those to fix... later
+      }
+      ```
 
 #### `diagnosticLevel`
 

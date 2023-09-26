@@ -1,33 +1,30 @@
-import type { BscType } from './BscType';
-import { DoubleType } from './DoubleType';
-import { DynamicType } from './DynamicType';
-import { FloatType } from './FloatType';
-import { LongIntegerType } from './LongIntegerType';
+import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType, isObjectType } from '../astUtils/reflection';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
+import { isUnionTypeCompatible } from './helpers';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
-export class IntegerType implements BscType {
+export class IntegerType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
-
-    public isAssignableTo(targetType: BscType) {
-        return (
-            targetType instanceof IntegerType ||
-            targetType instanceof DynamicType
-        );
+    ) {
+        super();
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        if (
-            targetType instanceof DynamicType ||
-            targetType instanceof IntegerType ||
-            targetType instanceof FloatType ||
-            targetType instanceof DoubleType ||
-            targetType instanceof LongIntegerType
-        ) {
-            return true;
-        } else {
-            return false;
-        }
+    public readonly kind = BscTypeKind.IntegerType;
+
+    public static instance = new IntegerType('integer');
+
+    public isTypeCompatible(targetType: BscType) {
+        return (
+            isDynamicType(targetType) ||
+            isObjectType(targetType) ||
+            isIntegerType(targetType) ||
+            isFloatType(targetType) ||
+            isDoubleType(targetType) ||
+            isLongIntegerType(targetType) ||
+            isUnionTypeCompatible(this, targetType)
+        );
     }
 
     public toString() {
@@ -37,4 +34,10 @@ export class IntegerType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    isEqual(otherType: BscType) {
+        return isIntegerType(otherType);
+    }
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('integer', IntegerType.instance);

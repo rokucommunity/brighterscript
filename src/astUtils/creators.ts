@@ -1,9 +1,9 @@
 import type { Range } from 'vscode-languageserver';
 import type { Identifier, Token } from '../lexer/Token';
+import { SGAttribute, SGComponent, SGInterface, SGInterfaceField, SGInterfaceFunction, SGScript } from '../parser/SGTypes';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Expression } from '../parser/AstNode';
-import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../parser/Expression';
-import type { SGAttribute } from '../parser/SGTypes';
+import { CallExpression, DottedGetExpression, FunctionExpression, LiteralExpression, VariableExpression } from '../parser/Expression';
 import { Block, MethodStatement } from '../parser/Statement';
 
 /**
@@ -89,7 +89,8 @@ export function createToken<T extends TokenKind>(kind: T, text?: string, range =
         text: text ?? tokenDefaults[kind as string] ?? kind.toString().toLowerCase(),
         isReserved: !text || text === kind.toString(),
         range: range,
-        leadingWhitespace: ''
+        leadingWhitespace: '',
+        leadingTrivia: []
     };
 }
 
@@ -99,7 +100,8 @@ export function createIdentifier(name: string, range?: Range): Identifier {
         text: name,
         isReserved: false,
         range: range,
-        leadingWhitespace: ''
+        leadingWhitespace: '',
+        leadingTrivia: []
     };
 }
 
@@ -157,19 +159,13 @@ export function createMethodStatement(name: string, kind: TokenKind.Sub | TokenK
     );
 }
 
-/**
- * @deprecated use `createMethodStatement`
- */
-export function createClassMethodStatement(name: string, kind: TokenKind.Sub | TokenKind.Function = TokenKind.Function, accessModifier?: Token) {
-    return createMethodStatement(name, kind, [accessModifier]);
-}
-
 export function createCall(callee: Expression, args?: Expression[]) {
     return new CallExpression(
         callee,
         createToken(TokenKind.LeftParen, '('),
         createToken(TokenKind.RightParen, ')'),
-        args || []
+        args || [],
+        []
     );
 }
 
@@ -177,12 +173,86 @@ export function createCall(callee: Expression, args?: Expression[]) {
  * Create an SGAttribute without any ranges
  */
 export function createSGAttribute(keyName: string, value: string) {
-    return {
-        key: {
-            text: keyName
-        },
-        value: {
-            text: value
-        }
-    } as SGAttribute;
+    return new SGAttribute(
+        { text: keyName },
+        { text: '=' },
+        { text: '"' },
+        { text: value },
+        { text: '"' }
+    );
+}
+
+export function createSGInterfaceField(id: string, attributes: { type?: string; alias?: string; value?: string; onChange?: string; alwaysNotify?: string } = {}) {
+    const attrs = [
+        createSGAttribute('id', id)
+    ];
+    for (let key in attributes) {
+        attrs.push(
+            createSGAttribute(key, attributes[key])
+        );
+    }
+    return new SGInterfaceField(
+        { text: '<' },
+        { text: 'field' },
+        attrs,
+        { text: '/>' }
+    );
+}
+
+export function createSGComponent(name: string, parentName?: string) {
+    const attributes = [
+        createSGAttribute('name', name)
+    ];
+    if (parentName) {
+        attributes.push(
+            createSGAttribute('extends', parentName)
+        );
+    }
+    return new SGComponent(
+        { text: '<' },
+        { text: 'component' },
+        attributes,
+        { text: '>' },
+        [],
+        { text: '</' },
+        { text: 'component' },
+        { text: '>' }
+    );
+}
+
+export function createSGInterfaceFunction(functionName: string) {
+    return new SGInterfaceFunction(
+        { text: '<' },
+        { text: 'function' },
+        [createSGAttribute('name', functionName)],
+        { text: '/>' }
+    );
+}
+
+export function createSGInterface() {
+    return new SGInterface(
+        { text: '<' },
+        { text: 'interface' },
+        [],
+        { text: '>' },
+        [],
+        { text: '</' },
+        { text: 'interface' },
+        { text: '>' }
+    );
+}
+
+export function createSGScript(attributes: { type?: string; uri?: string }) {
+    const attrs = [] as SGAttribute[];
+    for (let key in attributes) {
+        attrs.push(
+            createSGAttribute(key, attributes[key])
+        );
+    }
+    return new SGScript(
+        { text: '<' },
+        { text: 'script' },
+        attrs,
+        { text: '/>' }
+    );
 }

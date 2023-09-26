@@ -1,47 +1,90 @@
-import type { BscType } from './BscType';
+import { isArrayType, isDynamicType, isObjectType } from '../astUtils/reflection';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
+import type { BuiltInInterfaceOverride } from './BuiltInInterfaceAdder';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { DynamicType } from './DynamicType';
+import { IntegerType } from './IntegerType';
+import { unionTypeFactory } from './UnionType';
+import { getUniqueType, isUnionTypeCompatible } from './helpers';
 
-export class ArrayType implements BscType {
+export class ArrayType extends BscType {
     constructor(...innerTypes: BscType[]) {
+        super();
         this.innerTypes = innerTypes;
     }
+
+    public readonly kind = BscTypeKind.ArrayType;
+
     public innerTypes: BscType[] = [];
 
-    public isAssignableTo(targetType: BscType) {
-        if (targetType instanceof DynamicType) {
-            return true;
-        } else if (!(targetType instanceof ArrayType)) {
-            return false;
+    public get defaultType(): BscType {
+        if (this.innerTypes?.length === 0) {
+            return DynamicType.instance;
+        } else if (this.innerTypes?.length === 1) {
+            return this.innerTypes[0];
         }
-        //this array type is assignable to the target IF
-        //1. all of the types in this array are present in the target
-        outer: for (let innerType of this.innerTypes) {
-            //find this inner type in the target
-
-            // eslint-disable-next-line no-unreachable-loop
-            for (let targetInnerType of targetType.innerTypes) {
-                //TODO is this loop correct? It ends after 1 iteration but we might need to do more iterations
-
-                if (innerType.isAssignableTo(targetInnerType)) {
-                    continue outer;
-                }
-
-                //our array contains a type that the target array does not...so these arrays are different
-                return false;
-            }
-        }
-        return true;
+        return getUniqueType(this.innerTypes, unionTypeFactory);
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+    public isTypeCompatible(targetType: BscType) {
+
+        if (isDynamicType(targetType)) {
+            return true;
+        } else if (isObjectType(targetType)) {
+            return true;
+        } else if (isUnionTypeCompatible(this, targetType)) {
+            return true;
+        } else if (isArrayType(targetType)) {
+            return this.defaultType.isTypeCompatible(targetType.defaultType);
+        }
+        return false;
     }
 
     public toString() {
-        return `Array<${this.innerTypes.map((x) => x.toString()).join(' | ')}>`;
+        return `Array<${this.defaultType.toString()}>`;
     }
 
     public toTypeString(): string {
         return 'object';
     }
+
+    public isEqual(targetType: BscType): boolean {
+        if (isArrayType(targetType)) {
+            if (targetType.innerTypes.length !== this.innerTypes.length) {
+                return false;
+            }
+            for (let i = 0; i < this.innerTypes.length; i++) {
+                if (!this.innerTypes[i].isEqual(targetType.innerTypes[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    addBuiltInInterfaces() {
+        if (!this.hasAddedBuiltInInterfaces) {
+            const overrideMap = new Map<string, BuiltInInterfaceOverride>();
+            const defaultType = this.defaultType;
+            overrideMap
+                // ifArray
+                .set('peek', { returnType: defaultType })
+                .set('pop', { returnType: defaultType })
+                .set('push', { parameterTypes: [defaultType] })
+                .set('shift', { returnType: defaultType })
+                .set('unshift', { parameterTypes: [defaultType] })
+                .set('append', { parameterTypes: [this] })
+                // ifArrayGet
+                .set('get', { returnType: defaultType })
+                // ifArraySet
+                .set('get', { parameterTypes: [IntegerType.instance, defaultType] })
+                //ifEnum
+                .set('next', { returnType: defaultType });
+            BuiltInInterfaceAdder.addBuiltInInterfacesToType(this, overrideMap);
+        }
+        this.hasAddedBuiltInInterfaces = true;
+    }
 }
+

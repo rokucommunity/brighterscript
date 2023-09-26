@@ -1,20 +1,27 @@
-import type { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
+import { isBooleanType, isDynamicType, isObjectType } from '../astUtils/reflection';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
+import { isUnionTypeCompatible } from './helpers';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
-export class BooleanType implements BscType {
+export class BooleanType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
-
-    public isAssignableTo(targetType: BscType) {
-        return (
-            targetType instanceof BooleanType ||
-            targetType instanceof DynamicType
-        );
+    ) {
+        super();
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+    public readonly kind = BscTypeKind.BooleanType;
+
+    public static instance = new BooleanType('boolean');
+
+    public isTypeCompatible(targetType: BscType) {
+        return (
+            isBooleanType(targetType) ||
+            isDynamicType(targetType) ||
+            isObjectType(targetType) ||
+            isUnionTypeCompatible(this, targetType)
+        );
     }
 
     public toString() {
@@ -24,4 +31,10 @@ export class BooleanType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    isEqual(targetType: BscType): boolean {
+        return isBooleanType(targetType);
+    }
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('boolean', BooleanType.instance);

@@ -75,6 +75,7 @@ Full compiler lifecycle:
         - `afterFileTranspile`
     - `afterProgramTranspile`
 - `afterPublish`
+- `beforeProgramDispose`
 
 ### Language server
 
@@ -248,11 +249,6 @@ export interface CompilerPlugin {
 interface FileObj {
     src: string;
     dest: string;
-}
-
-interface SourceObj {
-    pathAbsolute: string;
-    source: string;
 }
 
 interface TranspileObj {
@@ -472,7 +468,7 @@ import { BeforeProvideFileEvent, CompilerPlugin, BrsFile, XmlFile, trim } from '
 
 export default function plugin() {
     return {
-        name: 'removeCommentAndPrintStatements',
+        name: 'componentPlugin',
         beforeProvideFile: (event: BeforeProvideFileEvent) => {
             // source/buttons.component.bs
 

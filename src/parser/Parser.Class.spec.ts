@@ -6,6 +6,9 @@ import { Parser, ParseMode } from './Parser';
 import type { FunctionStatement, AssignmentStatement, FieldStatement } from './Statement';
 import { ClassStatement } from './Statement';
 import { NewExpression } from './Expression';
+import { StringType } from '../types/StringType';
+import { expectDiagnosticsIncludes } from '../testHelpers.spec';
+import { SymbolTypeFlag } from '../SymbolTable';
 
 describe('parser class', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -197,7 +200,7 @@ describe('parser class', () => {
             expect(field.accessModifier.kind).to.equal(TokenKind.Public);
             expect(field.name.text).to.equal('firstName');
             expect(field.as.text).to.equal('as');
-            expect(field.type.text).to.equal('string');
+            expect(field.getType({ flags: SymbolTypeFlag.typetime })).to.be.instanceOf(StringType);
         });
 
         it('can be solely an identifier', () => {
@@ -228,15 +231,15 @@ describe('parser class', () => {
 
         it(`detects missing type after 'as' keyword`, () => {
             let { tokens } = Lexer.scan(`
-                    class Person
-                        middleName as
-                    end class
-                `);
+                class Person
+                    middleName as
+                end class
+            `);
             let { diagnostics, statements } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics.length).to.be.greaterThan(0);
             let cls = statements[0] as ClassStatement;
             expect(cls.fields[0].name.text).to.equal('middleName');
-            expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedIdentifierAfterKeyword('as').code);
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedIdentifierAfterKeyword('as'));
         });
 
         it('field access modifier defaults to undefined when omitted', () => {
@@ -365,7 +368,7 @@ describe('parser class', () => {
         expect(diagnostics[0]?.message).to.not.exist;
         let stmt = (statements[1] as ClassStatement);
         expect(stmt.extendsKeyword.text).to.equal('extends');
-        expect(stmt.parentClassName.getName(ParseMode.BrighterScript)).to.equal('Person');
+        expect(stmt.parentClassName.getName()).to.equal('Person');
     });
 
     it('catches missing identifier after "extends" keyword', () => {

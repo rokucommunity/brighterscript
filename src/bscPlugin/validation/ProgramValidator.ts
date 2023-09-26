@@ -1,10 +1,12 @@
 import { isBrsFile } from '../../astUtils/reflection';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
-import type { Program } from '../../Program';
+import type { AfterProgramValidateEvent } from '../../interfaces';
 import util from '../../util';
 
 export class ProgramValidator {
-    constructor(private program: Program) { }
+    constructor(
+        private event: AfterProgramValidateEvent
+    ) { }
 
     public process() {
         this.flagScopelessBrsFiles();
@@ -14,19 +16,19 @@ export class ProgramValidator {
      * Flag any files that are included in 0 scopes.
      */
     private flagScopelessBrsFiles() {
-        for (const key in this.program.files) {
-            const file = this.program.files[key];
+        for (const key in this.event.program.files) {
+            const file = this.event.program.files[key];
 
             if (
                 //if this isn't a brs file, skip
                 !isBrsFile(file) ||
                 //if the file is included in at least one scope, skip
-                this.program.getFirstScopeForFile(file)
+                this.event.program.getFirstScopeForFile(file)
             ) {
                 continue;
             }
 
-            this.program.addDiagnostics([{
+            this.event.program.addDiagnostics([{
                 ...DiagnosticMessages.fileNotReferencedByAnyOtherFile(),
                 file: file,
                 range: util.createRange(0, 0, 0, Number.MAX_VALUE)

@@ -1,8 +1,5 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { BrsFile } from '../files/BrsFile';
-import type { XmlFile } from '../files/XmlFile';
-import type { AfterPrepareFileEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideFileEvent, ProvideHoverEvent, WriteFileEvent } from '../interfaces';
-import type { Program } from '../Program';
+import type { CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, AfterProgramValidateEvent, ProvideFileEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, WriteFileEvent, OnPrepareFileEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { FileProvider } from './fileProviders/FileProvider';
@@ -10,12 +7,15 @@ import { FileSerializer } from './serialize/FileSerializer';
 import { FileWriter } from './FileWriter';
 import { HoverProcessor } from './hover/HoverProcessor';
 import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
-import { BrsFilePreTranspileProcessor as BrsFileTranspileProcessor } from './transpile/BrsFileTranspileProcessor';
 import { BrsFileValidator } from './validation/BrsFileValidator';
 import { ProgramValidator } from './validation/ProgramValidator';
 import { ScopeValidator } from './validation/ScopeValidator';
 import { XmlFileValidator } from './validation/XmlFileValidator';
 import { BslibManager } from './serialize/BslibManager';
+import { BrsFilePreTranspileProcessor } from './transpile/BrsFileTranspileProcessor';
+import { XmlFilePreTranspileProcessor } from './transpile/XmlFilePreTranspileProcessor';
+import type { BrsFile } from '../files/BrsFile';
+import type { XmlFile } from '../files/XmlFile';
 
 export class BscPlugin implements CompilerPlugin {
     public name = 'BscPlugin';
@@ -56,8 +56,8 @@ export class BscPlugin implements CompilerPlugin {
         this.scopeValidator.processEvent(event);
     }
 
-    public afterProgramValidate(program: Program) {
-        new ProgramValidator(program).process();
+    public afterProgramValidate(event: AfterProgramValidateEvent) {
+        new ProgramValidator(event).process();
         //release memory once the validation cycle has finished
         this.scopeValidator.reset();
     }
@@ -70,9 +70,11 @@ export class BscPlugin implements CompilerPlugin {
     /**
      * Do transpiling-related work after all plugins had a chance to operate on the files
      */
-    public afterPrepareFile(event: AfterPrepareFileEvent) {
+    public prepareFile(event: OnPrepareFileEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFileTranspileProcessor(event as any).process();
+            return new BrsFilePreTranspileProcessor(event as OnPrepareFileEvent<BrsFile>).process();
+        } else if (isXmlFile(event.file)) {
+            return new XmlFilePreTranspileProcessor(event as OnPrepareFileEvent<XmlFile>).process();
         }
     }
 

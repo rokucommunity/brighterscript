@@ -168,7 +168,11 @@ describe('Editor', () => {
     });
 
     describe('overrideTranspileResult', () => {
-        const state = new BrsTranspileState(new BrsFile('', '', new Program({})));
+        const state = new BrsTranspileState(new BrsFile({
+            srcPath: '',
+            destPath: '',
+            program: new Program({})
+        }));
         function transpileToString(transpilable: { transpile: (state: BrsTranspileState) => any }) {
             if (transpilable.transpile) {
                 const result = transpilable.transpile(state);
