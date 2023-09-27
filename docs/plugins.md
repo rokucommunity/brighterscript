@@ -394,3 +394,26 @@ export default function plugin() {
     } as CompilerPlugin;
 }
 ```
+
+## Modifying `bsconfig.json` via a plugin
+
+In some cases you may want to modify the project's configuration via a plugin, such as to change settings based on environment variables or to dynamically modify the project's `files` array. Plugins may do so in the `beforeProgramCreate` step. For example, here's a plugin which adds an additional file to the build:
+```typescript
+import { CompilerPlugin, ProgramBuilder } from 'brighterscript';
+
+export default function plugin() {
+    return {
+        name: 'addFilesDynamically',
+        beforeProgramCreate: (builder: ProgramBuilder) => {
+            if (!builder.options.files) {
+                builder.options.files = [];
+            }
+
+            builder.options.files.push({
+                src: "path/to/plugin/file.bs",
+                dest: "some/destination/path/goes/here"
+            })
+        }
+    } as CompilerPlugin;
+}
+```
