@@ -232,6 +232,31 @@ describe('util', () => {
     });
 
     describe('normalizeAndResolveConfig', () => {
+        it('loads project by default', () => {
+            fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+                rootDir: s`${cwd}/TEST`
+            });
+            expect(
+                util.normalizeAndResolveConfig({
+                    cwd: rootDir
+                }).rootDir
+            ).to.eql(
+                s`${cwd}/TEST`
+            );
+        });
+
+        it('noproject skips loading the local bsconfig.json', () => {
+            fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+                rootDir: s`${cwd}/TEST`
+            });
+            expect(
+                util.normalizeAndResolveConfig({
+                    cwd: rootDir,
+                    noProject: true
+                }).rootDir
+            ).to.be.undefined;
+        });
+
         it('throws for missing project file', () => {
             expect(() => {
                 util.normalizeAndResolveConfig({ project: 'path/does/not/exist/bsconfig.json' });

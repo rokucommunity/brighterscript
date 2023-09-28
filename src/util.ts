@@ -301,22 +301,19 @@ export class Util {
             return result;
         }
 
-        result.project = null;
-        if (config?.project) {
-            result.project = config?.project;
+        //if no options were provided, try to find a bsconfig.json file
+        if (!config || !config.project) {
+            result.project = this.getConfigFilePath(config?.cwd);
         } else {
-            if (config?.cwd) {
-                result.project = this.getConfigFilePath(config?.cwd);
-            }
+            //use the config's project link
+            result.project = config.project;
         }
         if (result.project) {
             let configFile = this.loadConfigFile(result.project, null, config?.cwd);
             result = Object.assign(result, configFile);
         }
-
         //override the defaults with the specified options
         result = Object.assign(result, config);
-
         return result;
     }
 
