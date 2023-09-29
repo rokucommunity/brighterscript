@@ -1,4 +1,4 @@
-export class Deferred<T = void> {
+export class Deferred<T = void, TReject = any> {
     constructor() {
         this._promise = new Promise<T>((resolve, reject) => {
             this._resolve = resolve;
@@ -50,7 +50,7 @@ export class Deferred<T = void> {
     /**
      * Reject the promise
      */
-    public reject(value: T) {
+    public reject(value: TReject) {
         if (this._isCompleted) {
             throw new Error('Already completed.');
         }
@@ -58,5 +58,5 @@ export class Deferred<T = void> {
         this._isRejected = true;
         this._reject(value);
     }
-    private _reject: (value: T) => void;
+    private _reject: (value: TReject) => void;
 }
