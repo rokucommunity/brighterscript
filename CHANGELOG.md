@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.65.7](https://github.com/rokucommunity/brighterscript/compare/v0.65.6...v0.65.7) - 2023-09-28
+### Fixed
+ - fix bug in --noproject flag logic ([#922](https://github.com/rokucommunity/brighterscript/pull/922))
+
+
+
 ## [0.65.6](https://github.com/rokucommunity/brighterscript/compare/v0.65.5...v0.65.6) - 2023-09-28
 ### Added
  - `noProject` flag to bsc so `bsconfig.json` loading can be skipped entirely even if present ([#868](https://github.com/rokucommunity/brighterscript/pull/868))
