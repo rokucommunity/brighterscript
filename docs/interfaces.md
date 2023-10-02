@@ -92,3 +92,20 @@ end interface
 
 ```
 </details>
+
+</details>
+
+## Methods
+Interfaces can describe complex methods as well
+```brighterscript
+interface Dog
+    sub barkAt(nemesis as Cat)
+end interface
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+```BrightScript
+```
+</details>
