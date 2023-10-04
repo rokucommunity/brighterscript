@@ -1,5 +1,5 @@
 import type { TypeCompatibilityData } from '..';
-import { isArrayType, isDynamicType, isObjectType } from '../astUtils/reflection';
+import { isArrayType, isDynamicType, isInterfaceType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import type { BuiltInInterfaceOverride } from './BuiltInInterfaceAdder';
@@ -35,6 +35,8 @@ export class ArrayType extends BscType {
         } else if (isObjectType(targetType)) {
             return true;
         } else if (isUnionTypeCompatible(this, targetType)) {
+            return true;
+        } else if (isInterfaceType(targetType) && targetType.name.toLowerCase() === 'roarray') {
             return true;
         } else if (isArrayType(targetType)) {
             return this.defaultType.isTypeCompatible(targetType.defaultType, data);

@@ -1,8 +1,9 @@
 import type { TypeCompatibilityData } from '..';
 import { SymbolTypeFlag } from '../SymbolTable';
-import { isDynamicType, isInterfaceType, isUnionType, isInheritableType, isObjectType, isAssociativeArrayType } from '../astUtils/reflection';
+import { isDynamicType, isInterfaceType, isUnionType, isInheritableType, isObjectType, isAssociativeArrayType, isArrayType, isStringType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { InheritableType } from './InheritableType';
 import { isUnionTypeCompatible } from './helpers';
 
@@ -20,10 +21,9 @@ export class InterfaceType extends InheritableType {
         if (isDynamicType(targetType) || isObjectType(targetType) || isUnionTypeCompatible(this, targetType, data)) {
             return true;
         }
-        if (isAssociativeArrayType(targetType) && this.name.toLowerCase() === 'roassociativearray') {
+        if (BuiltInInterfaceAdder.getMatchingRokuComponentName(targetType)?.toLowerCase() === this.name?.toLowerCase()) {
             return true;
         }
-        //TODO: We need to make sure that things don't get assigned to built-in types
         if (this.isEqual(targetType)) {
             return true;
         }
