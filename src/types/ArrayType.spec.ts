@@ -24,7 +24,7 @@ describe('ArrayType', () => {
         expect(new ArrayType().isEqual(new BooleanType())).to.be.false;
     });
 
-    describe('isTypeCompatible', () => {
+    it('isTypeCompatible', () => {
         expect(new ArrayType().isTypeCompatible(new BooleanType())).to.be.false;
         expect(new ArrayType().isTypeCompatible(new ArrayType())).to.be.true;
     });

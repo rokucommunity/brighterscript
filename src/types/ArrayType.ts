@@ -1,5 +1,7 @@
-import type { TypeCompatibilityData } from '..';
+
+import { SymbolTypeFlag } from '../SymbolTable';
 import { isArrayType, isDynamicType, isObjectType } from '../astUtils/reflection';
+import type { TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import type { BuiltInInterfaceOverride } from './BuiltInInterfaceAdder';
@@ -38,6 +40,8 @@ export class ArrayType extends BscType {
             return true;
         } else if (isArrayType(targetType)) {
             return this.defaultType.isTypeCompatible(targetType.defaultType, data);
+        } else if (this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data)) {
+            return true;
         }
         return false;
     }
