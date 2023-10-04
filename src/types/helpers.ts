@@ -158,6 +158,7 @@ export function isEnumTypeCompatible(thisType: BscType, maybeEnumType: BscType, 
 
 export function isNativeInterfaceCompatible(thisType: BscType, otherType: BscType, allowedType: string, data?: TypeCompatibilityData): boolean {
     if (isInterfaceType(otherType)) {
+        // TODO: it is not great to do type checking based on interface name
         const lowerOtherName = otherType.name.toLowerCase();
         return allowedType === lowerOtherName;
     }
@@ -166,8 +167,8 @@ export function isNativeInterfaceCompatible(thisType: BscType, otherType: BscTyp
 
 export function isNativeInterfaceCompatibleNumber(thisType: BscType, otherType: BscType, data?: TypeCompatibilityData): boolean {
     if (isInterfaceType(otherType)) {
+        // TODO: it is not great to do type checking based on interface name
         const lowerOtherName = otherType.name.toLowerCase();
-
         return lowerOtherName === 'roint' ||
             lowerOtherName === 'rofloat' ||
             lowerOtherName === 'rodouble' ||
