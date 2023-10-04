@@ -1,7 +1,7 @@
 import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
-import { isEnumTypeCompatible, isUnionTypeCompatible } from './helpers';
+import { isEnumTypeCompatible, isNativeInterfaceCompatibleNumber, isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
 
@@ -25,7 +25,8 @@ export class IntegerType extends BscType {
             isDoubleType(targetType) ||
             isLongIntegerType(targetType) ||
             isUnionTypeCompatible(this, targetType, data) ||
-            isEnumTypeCompatible(this, targetType, data)
+            isEnumTypeCompatible(this, targetType, data) ||
+            isNativeInterfaceCompatibleNumber(this, targetType, data)
         );
     }
 

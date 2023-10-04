@@ -1,5 +1,5 @@
-import type { TypeCompatibilityData } from '..';
-import { isArrayType, isDynamicType, isInterfaceType, isObjectType } from '../astUtils/reflection';
+import { SymbolTypeFlag, type TypeCompatibilityData } from '..';
+import { isArrayType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import type { BuiltInInterfaceOverride } from './BuiltInInterfaceAdder';
@@ -7,7 +7,7 @@ import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { DynamicType } from './DynamicType';
 import { IntegerType } from './IntegerType';
 import { unionTypeFactory } from './UnionType';
-import { getUniqueType, isUnionTypeCompatible } from './helpers';
+import { getUniqueType, isNativeInterfaceCompatible, isUnionTypeCompatible } from './helpers';
 
 export class ArrayType extends BscType {
     constructor(...innerTypes: BscType[]) {
@@ -36,10 +36,10 @@ export class ArrayType extends BscType {
             return true;
         } else if (isUnionTypeCompatible(this, targetType)) {
             return true;
-        } else if (isInterfaceType(targetType) && targetType.name.toLowerCase() === 'roarray') {
-            return true;
         } else if (isArrayType(targetType)) {
             return this.defaultType.isTypeCompatible(targetType.defaultType, data);
+        } else if (this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data)) {
+            return true;
         }
         return false;
     }

@@ -8,6 +8,8 @@ import { ObjectType } from './ObjectType';
 import { StringType } from './StringType';
 import type { ReferenceType } from './ReferenceType';
 import { SymbolTypeFlag } from '../SymbolTable';
+import { ArrayType, BooleanType } from '..';
+import { AssociativeArrayType } from './AssociativeArrayType';
 
 describe('InterfaceType', () => {
     describe('toJSString', () => {
@@ -40,6 +42,16 @@ describe('InterfaceType', () => {
                 name: new StringType()
             });
         });
+
+        it('roku component types are compatible with BscTypes', () => {
+            expectTypeCrossCompatible(new StringType(), new InterfaceType('roString'));
+            expectTypeCrossCompatible(new ArrayType(), new InterfaceType('roArray'));
+            expectTypeCrossCompatible(new AssociativeArrayType(), new InterfaceType('roAssociativeArray'));
+            expectTypeCrossCompatible(new BooleanType(), new InterfaceType('roBoolean'));
+            expectTypeCrossCompatible(new IntegerType(), new InterfaceType('roInt'));
+        });
+
+
     });
 
     describe('equals', () => {
@@ -218,5 +230,14 @@ function expectNotCompatible(sourceMembers: Record<string, BscType>, targetMembe
     const sourceIface = iface(sourceMembers);
     if (sourceIface.isTypeCompatible(targetIface)) {
         assert.fail(`expected type ${(targetIface as any).toJSString()} to not be assignable to type ${(sourceIface as any).toJSString()}`);
+    }
+}
+
+function expectTypeCrossCompatible(source: BscType, target: BscType) {
+    if (!source.isTypeCompatible(target)) {
+        assert.fail(`expected type ${target.toString()} to be assignable to type ${(source).toString()}`);
+    }
+    if (!target.isTypeCompatible(source)) {
+        assert.fail(`expected type ${source.toString()} to be assignable to type ${(target).toString()}`);
     }
 }
