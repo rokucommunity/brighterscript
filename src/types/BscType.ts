@@ -71,11 +71,12 @@ export abstract class BscType {
         throw new Error('Method not implemented.');
     }
 
-
     checkCompatibilityBasedOnMembers(targetType: BscType, flags: SymbolTypeFlag, data: TypeCompatibilityData = {}) {
         let isSuperSet = true;
         data.missingFields ||= [];
         data.fieldMismatches ||= [];
+        this.addBuiltInInterfaces();
+        targetType.addBuiltInInterfaces();
 
         const mySymbols = this.getMemberTable()?.getAllSymbols(flags);
         for (const memberSymbol of mySymbols) {

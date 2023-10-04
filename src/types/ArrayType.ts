@@ -1,5 +1,7 @@
-import { SymbolTypeFlag, type TypeCompatibilityData } from '..';
+
+import { SymbolTypeFlag } from '../SymbolTable';
 import { isArrayType, isDynamicType, isObjectType } from '../astUtils/reflection';
+import type { TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import type { BuiltInInterfaceOverride } from './BuiltInInterfaceAdder';
@@ -7,7 +9,7 @@ import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { DynamicType } from './DynamicType';
 import { IntegerType } from './IntegerType';
 import { unionTypeFactory } from './UnionType';
-import { getUniqueType, isNativeInterfaceCompatible, isUnionTypeCompatible } from './helpers';
+import { getUniqueType, isUnionTypeCompatible } from './helpers';
 
 export class ArrayType extends BscType {
     constructor(...innerTypes: BscType[]) {
