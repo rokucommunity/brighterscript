@@ -1,7 +1,7 @@
 import { isBooleanType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
-import { isUnionTypeCompatible } from './helpers';
+import { isNativeInterfaceCompatible, isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
 
@@ -21,7 +21,8 @@ export class BooleanType extends BscType {
             isBooleanType(targetType) ||
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
-            isUnionTypeCompatible(this, targetType)
+            isUnionTypeCompatible(this, targetType) ||
+            isNativeInterfaceCompatible(this, targetType, 'roboolean', data)
         );
     }
 

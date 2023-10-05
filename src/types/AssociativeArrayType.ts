@@ -1,5 +1,5 @@
 import { SymbolTypeFlag } from '../SymbolTable';
-import { isAssociativeArrayType, isClassType, isDynamicType, isInterfaceType, isObjectType } from '../astUtils/reflection';
+import { isAssociativeArrayType, isClassType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -20,7 +20,7 @@ export class AssociativeArrayType extends BscType {
             return true;
         } else if (isAssociativeArrayType(targetType)) {
             return true;
-        } else if (isInterfaceType(targetType) && targetType.name.toLowerCase() === 'roassociativearray') {
+        } else if (this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data)) {
             return true;
         } else if (isClassType(targetType)) {
             return true;

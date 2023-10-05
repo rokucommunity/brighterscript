@@ -1099,6 +1099,110 @@ describe('ScopeValidator', () => {
             expectTypeToBe(data.fieldMismatches[0].expectedType, IntegerType);
             expectTypeToBe(data.fieldMismatches[0].actualType, StringType);
         });
+
+
+        describe('array compatibility', () => {
+            it('accepts dynamic when assigning to a roArray', () => {
+                program.setFile('source/util.bs', `
+                    sub takesArray(arr as roArray)
+                    end sub
+
+                    sub doStuff(someArray)
+                        takesArray(someArray)
+                    end sub
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
+
+            it('accepts roArray when assigning to a roArray', () => {
+                program.setFile('source/util.bs', `
+                    sub takesArray(arr as roArray)
+                    end sub
+
+                    sub doStuff(someArray as roArray)
+                        takesArray(someArray)
+                    end sub
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
+
+            it('accepts typed arrays when assigning to a roArray', () => {
+                program.setFile('source/util.bs', `
+                    sub takesArray(arr as roArray)
+                    end sub
+
+                    sub doStuff(someArray as dynamic[])
+                        takesArray(someArray)
+                    end sub
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
+
+
+            it('accepts roArray when assigning to dynamic[]', () => {
+                program.setFile('source/util.bs', `
+                    sub takesArray(arr as dynamic[])
+                    end sub
+
+                    sub doStuff(someArray as roArray)
+                        takesArray(someArray)
+                    end sub
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
+
+            it('accepts roArray when assigning to typed array', () => {
+                program.setFile('source/util.bs', `
+                    sub takesArray(arr as string[])
+                    end sub
+
+                    sub doStuff(someArray as roArray)
+                        takesArray(someArray)
+                    end sub
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates when typed array types are incompatible', () => {
+                program.setFile('source/util.bs', `
+                    sub takesArray(arr as string[])
+                    end sub
+
+                    sub doStuff(someArray as integer[])
+                        takesArray(someArray)
+                    end sub
+                `);
+                program.validate();
+                //should have errors
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('Array<integer>', 'Array<string>').message
+                ]);
+            });
+
+            it('accepts when typed array types are compatible', () => {
+                program.setFile('source/util.bs', `
+                    sub takesArray(arr as float[])
+                    end sub
+
+                    sub doStuff(someArray as integer[])
+                        takesArray(someArray)
+                    end sub
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
+        });
     });
 
     describe('cannotFindName', () => {

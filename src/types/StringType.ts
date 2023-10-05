@@ -1,7 +1,7 @@
 import { isDynamicType, isObjectType, isStringType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
-import { isEnumTypeCompatible, isUnionTypeCompatible } from './helpers';
+import { isEnumTypeCompatible, isNativeInterfaceCompatible, isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
 
@@ -25,7 +25,8 @@ export class StringType extends BscType {
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
             isUnionTypeCompatible(this, targetType, data) ||
-            isEnumTypeCompatible(this, targetType, data)
+            isEnumTypeCompatible(this, targetType, data) ||
+            isNativeInterfaceCompatible(this, targetType, 'rostring', data)
         );
     }
 

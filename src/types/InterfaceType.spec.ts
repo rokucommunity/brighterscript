@@ -8,6 +8,10 @@ import { ObjectType } from './ObjectType';
 import { StringType } from './StringType';
 import type { ReferenceType } from './ReferenceType';
 import { SymbolTypeFlag } from '../SymbolTable';
+import { AssociativeArrayType } from './AssociativeArrayType';
+import { ArrayType } from './ArrayType';
+import { BooleanType } from './BooleanType';
+import { typeCompatibilityMessage } from '../DiagnosticMessages';
 
 describe('InterfaceType', () => {
     describe('toJSString', () => {
@@ -40,6 +44,18 @@ describe('InterfaceType', () => {
                 name: new StringType()
             });
         });
+
+        it('roku component types are compatible with BscTypes', () => {
+            // TODO: Fix String type compatibility -  reason is because of overloaded members (Mid(), StartsWith(), etc)
+            // SEE: https://github.com/rokucommunity/brighterscript/issues/926
+            // expectTypeCrossCompatible(new StringType(), new InterfaceType('roString'));
+            expectTypeCrossCompatible(new ArrayType(), new InterfaceType('roArray'));
+            expectTypeCrossCompatible(new AssociativeArrayType(), new InterfaceType('roAssociativeArray'));
+            expectTypeCrossCompatible(new BooleanType(), new InterfaceType('roBoolean'));
+            expectTypeCrossCompatible(new IntegerType(), new InterfaceType('roInt'));
+        });
+
+
     });
 
     describe('equals', () => {
@@ -218,5 +234,16 @@ function expectNotCompatible(sourceMembers: Record<string, BscType>, targetMembe
     const sourceIface = iface(sourceMembers);
     if (sourceIface.isTypeCompatible(targetIface)) {
         assert.fail(`expected type ${(targetIface as any).toJSString()} to not be assignable to type ${(sourceIface as any).toJSString()}`);
+    }
+}
+
+function expectTypeCrossCompatible(source: BscType, target: BscType) {
+    let data = {};
+    if (!source.isTypeCompatible(target, data)) {
+        assert.fail(typeCompatibilityMessage(target.toString(), source.toString(), data));
+    }
+    data = {};
+    if (!target.isTypeCompatible(source, data)) {
+        assert.fail(typeCompatibilityMessage(source.toString(), target.toString(), data));
     }
 }
