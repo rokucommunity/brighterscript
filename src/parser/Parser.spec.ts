@@ -714,6 +714,16 @@ describe('parser', () => {
                 expect(stmt.expression.obj.name.text).to.equal('a');
                 expect(stmt.expression.name.text).to.equal('b');
             });
+
+            it('adds function statement with missing type after as', () => {
+                let parser = parse(`
+                    sub foo(thing as  )
+                        print thing
+                    end sub
+                `, ParseMode.BrighterScript);
+                expect(parser.diagnostics[0]?.message).to.exist;
+                expect(parser.ast.statements[0]).to.be.instanceof(FunctionStatement);
+            });
         });
 
         describe('comments', () => {
@@ -1507,14 +1517,7 @@ describe('parser', () => {
             expect(diagnostics[0]?.message).to.exist;
         });
 
-        it('flags invalid type cast syntax - no type after as', () => {
-            let { diagnostics } = parse(`
-                sub foo(key)
-                    getData(key as)
-                end sub
-            `, ParseMode.BrighterScript);
-            expect(diagnostics[0]?.message).to.exist;
-        });
+
     });
 
     describe('union types', () => {

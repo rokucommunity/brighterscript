@@ -1,4 +1,4 @@
-import { isDynamicType, isEnumMemberType, isEnumType, isObjectType, isStringType } from '../astUtils/reflection';
+import { isDynamicType, isObjectType, isStringType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isEnumTypeCompatible, isUnionTypeCompatible } from './helpers';

@@ -1595,4 +1595,66 @@ describe('CompletionsProcessor', () => {
         });
     });
 
+    describe('type expressions', () => {
+        it('finds built in types', () => {
+            program.setFile('source/main.bs', `
+                sub foo(thing as  )
+                    print thing
+                end sub
+            `);
+            program.validate();
+            //  sub foo(thing as | )
+            const completions = program.getCompletions('source/main.bs', util.createPosition(1, 34));
+            expectCompletionsIncludes(completions, [{
+                label: 'integer',
+                kind: CompletionItemKind.Keyword
+            }]);
+            expectCompletionsIncludes(completions, [{
+                label: 'roSGNode',
+                kind: CompletionItemKind.Interface
+            }]);
+        });
+
+        it('finds custom types', () => {
+            program.setFile('source/main.bs', `
+                sub foo(thing as  )
+                    print thing
+                end sub
+
+                class SomeKlass
+                end class
+            `);
+            program.validate();
+            //  sub foo(thing as | )
+            const completions = program.getCompletions('source/main.bs', util.createPosition(1, 34));
+            expectCompletionsIncludes(completions, [{
+                label: 'SomeKlass',
+                kind: CompletionItemKind.Class
+            }]);
+        });
+
+        it('only shows intrinsic/native types in brightscript', () => {
+            program.setFile('source/main.brs', `
+                sub foo(thing as  )
+                    print thing
+                end sub
+            `);
+            program.validate();
+            //  sub foo(thing as | )
+            const completions = program.getCompletions('source/main.brs', util.createPosition(1, 34));
+            expectCompletionsIncludes(completions, [{
+                label: 'integer',
+                kind: CompletionItemKind.Keyword
+            }]);
+            expectCompletionsIncludes(completions, [{
+                label: 'function',
+                kind: CompletionItemKind.Keyword
+            }]);
+            expectCompletionsExcludes(completions, [{
+                label: 'roSGNode'
+            }]);
+        });
+
+    });
+
 });
