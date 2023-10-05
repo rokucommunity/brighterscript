@@ -1517,7 +1517,14 @@ describe('parser', () => {
             expect(diagnostics[0]?.message).to.exist;
         });
 
-
+        it('flags invalid type cast syntax - no type after as', () => {
+            let { diagnostics } = parse(`
+                sub foo(key)
+                    getData(key as)
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).to.exist;
+        });
     });
 
     describe('union types', () => {
