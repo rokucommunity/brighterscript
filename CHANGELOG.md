@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.65.8](https://github.com/rokucommunity/brighterscript/compare/v0.65.7...v0.65.8) - 2023-10-06
+### Added
+ - interface parameter support ([#924](https://github.com/rokucommunity/brighterscript/pull/924))
+### Changed
+ - Bump postcss from 8.2.15 to 8.4.31 ([#928](https://github.com/rokucommunity/brighterscript/pull/928))
+### Fixed
+ - chore: fix typescript typing for `Deferred` ([#923](https://github.com/rokucommunity/brighterscript/pull/923))
+
+
+
 ## [0.65.7](https://github.com/rokucommunity/brighterscript/compare/v0.65.6...v0.65.7) - 2023-09-28
 ### Fixed
  - fix bug in --noproject flag logic ([#922](https://github.com/rokucommunity/brighterscript/pull/922))
@@ -1674,13 +1684,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0](https://github.com/rokucommunity/brighterscript/compare/v0.1.0...v0.1.0) - 2019-08-10
 ### Changed
  - Cloned from [brightscript-language](https://github.com/rokucommunity/brightscript-language)
-
-
-
-
-
-
-
-
-
-
