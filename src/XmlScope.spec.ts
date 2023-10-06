@@ -3,7 +3,7 @@ import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
-import { expectDiagnostics, expectTypeToBe, trim } from './testHelpers.spec';
+import { expectDiagnostics, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { standardizePath as s, util } from './util';
 let rootDir = s`${process.cwd()}/rootDir`;
 import { createSandbox } from 'sinon';
@@ -219,7 +219,7 @@ describe('XmlScope', () => {
             program.setFile('components/Widget.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Widget" extends="Group">
-                     <script uri="Widget.brs"/>
+                    <script uri="Widget.brs"/>
                     <interface>
                         <function name="someFunc" />
                     </interface>
@@ -237,6 +237,30 @@ describe('XmlScope', () => {
             // 'someFunc' isn't a regular member
             expect(widgetType.getMemberType('someFunc', { flags: SymbolTypeFlag.runtime }).isResolvable()).to.be.false;
             expectTypeToBe(widgetType.getCallFuncType('someFunc', { flags: SymbolTypeFlag.runtime }), TypedFunctionType);
+        });
+
+        it('allows .callFunc() on components', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.brs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.brs', `
+                sub someFunc(input as object)
+                    print input
+                end sub
+            `);
+            program.setFile('source/util.brs', `
+                sub useCallFunc(input as roSGNodeWidget)
+                    input.callFunc("someFunc", {hello: "world"})
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
 
     });
