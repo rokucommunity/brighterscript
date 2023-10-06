@@ -25,6 +25,11 @@ export class TypedFunctionType extends BaseFunctionType {
      */
     public isSub = false;
 
+    /**
+     * Does this function accept more args than just those in this.params
+     */
+    public isVariadic = false;
+
     public params = [] as Array<{ name: string; type: BscType; isOptional: boolean }>;
 
     public setName(name: string) {
@@ -57,8 +62,14 @@ export class TypedFunctionType extends BaseFunctionType {
         for (let param of this.params) {
             paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString()}`);
         }
-        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
-
+        let variadicText = '';
+        if (this.isVariadic) {
+            if (paramTexts.length > 0) {
+                variadicText += ', ';
+            }
+            variadicText += '...';
+        }
+        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}${variadicText}) as ${this.returnType.toString()}`;
     }
 
     public toTypeString(): string {
@@ -72,13 +83,17 @@ export class TypedFunctionType extends BaseFunctionType {
             for (let i = 0; i < len; i++) {
                 let myParam = this.params[i];
                 let targetParam = targetType.params[i];
-                if (!myParam || !targetParam || !myParam.type.isAssignableTo(targetParam.type)) {
+                if (!myParam || !targetParam || !myParam.type.isEqual(targetParam.type)) {
                     return false;
                 }
             }
 
             //compare return type
-            if (!this.returnType || !targetType.returnType || !this.returnType.isAssignableTo(targetType.returnType)) {
+            if (!this.returnType || !targetType.returnType || !this.returnType.isEqual(targetType.returnType)) {
+                return false;
+            }
+
+            if (this.isVariadic !== targetType.isVariadic) {
                 return false;
             }
 

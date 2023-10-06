@@ -9,9 +9,9 @@ import { isXmlFile } from './astUtils/reflection';
 import { SGFieldTypes } from './parser/SGTypes';
 import type { SGElement } from './parser/SGTypes';
 import { SymbolTypeFlag } from './SymbolTable';
-import { DynamicType } from './types';
 import type { BaseFunctionType } from './types/BaseFunctionType';
-import { ComponentType } from './types/ComponentType';
+import { CallFuncDescription, CallFuncMemberMethod, ComponentType } from './types/ComponentType';
+import { DynamicType } from './types/DynamicType';
 
 export class XmlScope extends Scope {
     constructor(
@@ -69,6 +69,8 @@ export class XmlScope extends Scope {
                 result.addCallFuncMember(func.name, {}, componentFuncType as BaseFunctionType, SymbolTypeFlag.runtime);
             }
         }
+        // add "callfunc" method member:
+        result.addMember('callFunc', { description: CallFuncDescription }, CallFuncMemberMethod, SymbolTypeFlag.runtime);
         //add fields
         for (const field of iface.fields ?? []) {
             if (field.id) {

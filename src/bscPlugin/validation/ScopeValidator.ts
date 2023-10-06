@@ -12,7 +12,8 @@ import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
 import { type AstNode, type Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, CallExpression, BinaryExpression, UnaryExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression } from '../../parser/Expression';
+import { CallExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import { TokenKind } from '../../lexer/TokenKind';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
@@ -437,6 +438,10 @@ export class ScopeValidator {
                 if (param.isOptional !== true) {
                     minParams++;
                 }
+            }
+            if (funcType.isVariadic) {
+                // function accepts variable number of arguments
+                maxParams = CallExpression.MaximumArguments;
             }
             let expCallArgCount = expression.args.length;
             if (expCallArgCount > maxParams || expCallArgCount < minParams) {
