@@ -714,6 +714,16 @@ describe('parser', () => {
                 expect(stmt.expression.obj.name.text).to.equal('a');
                 expect(stmt.expression.name.text).to.equal('b');
             });
+
+            it('adds function statement with missing type after as', () => {
+                let parser = parse(`
+                    sub foo(thing as  )
+                        print thing
+                    end sub
+                `, ParseMode.BrighterScript);
+                expect(parser.diagnostics[0]?.message).to.exist;
+                expect(parser.ast.statements[0]).to.be.instanceof(FunctionStatement);
+            });
         });
 
         describe('comments', () => {

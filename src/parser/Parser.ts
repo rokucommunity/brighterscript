@@ -412,6 +412,11 @@ export class Parser {
                 });
                 //consume the statement separator
                 this.consumeStatementSeparators();
+            } else if (this.peek().kind !== TokenKind.Identifier && !this.checkAny(...DeclarableTypes, ...AllowedTypeIdentifiers)) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedIdentifierAfterKeyword(asToken.text),
+                    range: asToken.range
+                });
             } else {
                 typeExpression = this.typeExpression();
             }

@@ -366,15 +366,23 @@ export function isNumberType(value: any): value is IntegerType | LongIntegerType
 }
 
 const primitiveTypeKinds = [
-    BscTypeKind.IntegerType,
-    BscTypeKind.LongIntegerType,
-    BscTypeKind.FloatType,
-    BscTypeKind.DoubleType,
+    ...numberTypeKinds,
     BscTypeKind.BooleanType,
     BscTypeKind.StringType
 ];
 export function isPrimitiveType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType {
     return primitiveTypeKinds.includes(value?.kind);
+}
+
+const nativeTypeKinds = [
+    ...primitiveTypeKinds,
+    BscTypeKind.DynamicType,
+    BscTypeKind.ObjectType,
+    BscTypeKind.VoidType,
+    BscTypeKind.FunctionType
+];
+export function isNativeType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType | VoidType | DynamicType | ObjectType | FunctionType {
+    return nativeTypeKinds.includes(value?.kind);
 }
 
 

@@ -1,14 +1,15 @@
 import type { Range } from 'vscode-languageserver-protocol';
 import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isCallExpression, isClassType, isNamespaceStatement, isNewExpression } from '../../astUtils/reflection';
+import { isCallExpression, isCallableType, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isNamespaceStatement, isNamespaceType, isNativeType, isNewExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
-import type { OnGetSemanticTokensEvent } from '../../interfaces';
+import type { ExtraSymbolData, OnGetSemanticTokensEvent } from '../../interfaces';
 import type { Locatable } from '../../lexer/Token';
 import { ParseMode } from '../../parser/Parser';
 import type { NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 import { SymbolTypeFlag } from '../../SymbolTable';
+import type { BscType } from '../../types/BscType';
 
 export class BrsFileSemanticTokensProcessor {
     public constructor(
@@ -92,7 +93,7 @@ export class BrsFileSemanticTokensProcessor {
         if (!scope) {
             return;
         }
-
+        scope.linkSymbolTable();
         const nodes = [
             ...this.event.file.parser.references.expressions,
             //make a new VariableExpression to wrap the name. This is a hack, we could probably do it better
@@ -120,14 +121,47 @@ export class BrsFileSemanticTokensProcessor {
                     this.addToken(token, SemanticTokenTypes.enum);
                 } else if (scope.getClass(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.class);
+                } else if (scope.getInterface(entityName, containingNamespaceNameLower)) {
+                    this.addToken(token, SemanticTokenTypes.interface);
                 } else if (scope.getCallableByName(entityName)) {
                     this.addToken(token, SemanticTokenTypes.function);
                 } else if (scope.getNamespace(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.namespace);
                 } else if (scope.getConstFileLink(entityName, containingNamespaceNameLower)) {
                     this.addToken(token, SemanticTokenTypes.variable, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]);
+                } else {
+                    const extraData = {};
+                    const symbolType = scope.symbolTable.getSymbolType(token.text, { flags: SymbolTypeFlag.typetime, data: extraData });
+                    if (symbolType?.isResolvable()) {
+                        this.addToken(token, this.getSemanticTokenTypeFromType(symbolType, extraData, !!containingNamespaceNameLower));
+                    }
                 }
             }
         }
+        scope.unlinkSymbolTable();
+    }
+
+    // TODO: We can use the actual symbol tables to find methods and member fields.
+    private getSemanticTokenTypeFromType(type: BscType, extraData: ExtraSymbolData, areMembers = false) {
+        if (isConstStatement(extraData?.definingNode)) {
+            return SemanticTokenTypes.variable;
+        } else if (isClassType(type)) {
+            return SemanticTokenTypes.class;
+        } else if (isCallableType(type)) {
+            return areMembers ? SemanticTokenTypes.method : SemanticTokenTypes.function;
+        } else if (isInterfaceType(type)) {
+            return SemanticTokenTypes.interface;
+        } else if (isComponentType(type)) {
+            return SemanticTokenTypes.class;
+        } else if (isEnumType(type)) {
+            return SemanticTokenTypes.enum;
+        } else if (isEnumMemberType(type)) {
+            return SemanticTokenTypes.enumMember;
+        } else if (isNamespaceType(type)) {
+            return SemanticTokenTypes.namespace;
+        } else if (isNativeType(type)) {
+            return SemanticTokenTypes.type;
+        }
+        return areMembers ? SemanticTokenTypes.property : SemanticTokenTypes.variable;
     }
 }
