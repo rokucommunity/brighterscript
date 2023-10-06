@@ -610,7 +610,6 @@ export const DeclarableTypes = [
     TokenKind.Double,
     TokenKind.String,
     TokenKind.Object,
-    TokenKind.Interface,
     TokenKind.Dynamic,
     TokenKind.Void,
     TokenKind.Function

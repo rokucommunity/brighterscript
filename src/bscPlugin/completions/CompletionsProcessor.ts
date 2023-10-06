@@ -1,6 +1,6 @@
-import { isBrsFile, isCallableType, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isMethodStatement, isNamespaceType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isCallableType, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isMethodStatement, isNamespaceType, isNativeType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { BscFile, ExtraSymbolData, FileReference, ProvideCompletionsEvent } from '../../interfaces';
-import { Keywords, TokenKind } from '../../lexer/TokenKind';
+import { DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
 import type { XmlScope } from '../../XmlScope';
 import { util } from '../../util';
 import type { Scope } from '../../Scope';
@@ -156,6 +156,7 @@ export class CompletionsProcessor {
         let expression: AstNode;
         let shouldLookForMembers = false;
         let shouldLookForCallFuncMembers = false;
+        let symbolTableLookupFlag = SymbolTypeFlag.runtime;
 
         if (file.tokenFollows(currentToken, TokenKind.Goto)) {
             let functionScope = file.getFunctionScopeAtPosition(position);
@@ -173,6 +174,13 @@ export class CompletionsProcessor {
             const beforeDotToken = file.getTokenBefore(dotToken);
             expression = file.getClosestExpression(beforeDotToken?.range.end);
             shouldLookForCallFuncMembers = true;
+        } else if (file.getPreviousToken(currentToken)?.kind === TokenKind.As || file.isTokenNextToTokenKind(currentToken, TokenKind.As)) {
+
+            if (file.parseMode === ParseMode.BrightScript) {
+                return NativeTypeCompletions;
+            }
+            expression = file.getClosestExpression(this.event.position);
+            symbolTableLookupFlag = SymbolTypeFlag.typetime;
         } else {
             expression = file.getClosestExpression(this.event.position);
         }
@@ -212,7 +220,7 @@ export class CompletionsProcessor {
 
         for (const scope of this.event.scopes) {
             scope.linkSymbolTable();
-            let currentSymbols = getSymbolTableForLookups()?.getAllSymbols(SymbolTypeFlag.runtime) ?? [];
+            let currentSymbols = getSymbolTableForLookups()?.getAllSymbols(symbolTableLookupFlag) ?? [];
             // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
             switch (tokenBefore.kind) {
                 case TokenKind.New:
@@ -279,6 +287,8 @@ export class CompletionsProcessor {
             return CompletionItemKind.EnumMember;
         } else if (isNamespaceType(type)) {
             return CompletionItemKind.Module;
+        } else if (isNativeType(type)) {
+            return CompletionItemKind.Keyword;
         }
         return areMembers ? CompletionItemKind.Field : CompletionItemKind.Variable;
     }
@@ -409,7 +419,6 @@ export class CompletionsProcessor {
         //no other result is possible in this case
         return completionsArray;
     }
-
 }
 
 /**
@@ -423,6 +432,20 @@ export const KeywordCompletions = Object.keys(Keywords)
     .map(x => {
         return {
             label: x,
+            kind: CompletionItemKind.Keyword
+        } as CompletionItem;
+    });
+
+
+/**
+ * List of completions for all valid intrinsic types.
+ * Build this list once because it won't change for the lifetime of this process
+ */
+export const NativeTypeCompletions = DeclarableTypes
+    //create completions
+    .map(x => {
+        return {
+            label: x.toLowerCase(),
             kind: CompletionItemKind.Keyword
         } as CompletionItem;
     });
