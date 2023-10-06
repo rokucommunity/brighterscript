@@ -5,7 +5,6 @@ import { BscTypeKind } from './BscTypeKind';
 import { isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
-import { boolean } from 'yargs';
 
 export class TypedFunctionType extends BaseFunctionType {
     constructor(
