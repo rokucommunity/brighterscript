@@ -1,7 +1,7 @@
 import * as sinonImport from 'sinon';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Program } from '../../Program';
-import { expectDiagnostics, expectTypeToBe, expectZeroDiagnostics } from '../../testHelpers.spec';
+import { expectDiagnostics, expectTypeToBe, expectZeroDiagnostics, trim } from '../../testHelpers.spec';
 import { expect } from 'chai';
 import type { TypeCompatibilityData } from '../../interfaces';
 import { IntegerType } from '../../types/IntegerType';
@@ -138,6 +138,59 @@ describe('ScopeValidator', () => {
                 `);
             program.validate();
             //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('checks for at least the number of non-optional args on variadic (callFunc) functions', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.brs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.brs', `
+                sub someFunc(input as object)
+                    print input
+                end sub
+            `);
+            program.setFile('source/util.brs', `
+                sub useCallFunc(input as roSGNodeWidget)
+                    input.callFunc()
+                end sub
+            `);
+            program.validate();
+            //should have an error
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount('1-32', 0)
+            ]);
+        });
+
+        it('any number number of args on variadic (callFunc) functions', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.brs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.brs', `
+                sub someFunc(input as object)
+                    print input
+                end sub
+            `);
+            program.setFile('source/util.brs', `
+                sub useCallFunc(input as roSGNodeWidget)
+                    input.callFunc("someFunc", 1, 2, 3, {})
+                end sub
+            `);
+            program.validate();
+            //TODO: do a better job of handling callFunc() invocations!
+            //should have an error
             expectZeroDiagnostics(program);
         });
     });

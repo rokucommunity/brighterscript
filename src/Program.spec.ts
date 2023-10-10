@@ -2278,7 +2278,7 @@ describe('Program', () => {
             expectTypeToBe(table.getSymbolType('ifDeviceInfo', opts).getMemberType('GetRandomUUID', rtOpts), TypedFunctionType);
 
             expectTypeToBe(table.getSymbolType('ifSGNodeField', opts), InterfaceType);
-            expectTypeToBe(table.getSymbolType('ifSGNodeField', opts).getMemberType('observeField', rtOpts), TypedFunctionType);
+            expectTypeToBe(table.getSymbolType('ifSGNodeField', opts).getMemberType('addFields', rtOpts), TypedFunctionType);
         });
 
         it('adds brightscript events', () => {

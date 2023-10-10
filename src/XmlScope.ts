@@ -9,9 +9,9 @@ import { isXmlFile } from './astUtils/reflection';
 import { SGFieldTypes } from './parser/SGTypes';
 import type { SGElement } from './parser/SGTypes';
 import { SymbolTypeFlag } from './SymbolTable';
-import { DynamicType } from './types';
 import type { BaseFunctionType } from './types/BaseFunctionType';
 import { ComponentType } from './types/ComponentType';
+import { DynamicType } from './types/DynamicType';
 
 export class XmlScope extends Scope {
     constructor(
@@ -53,6 +53,7 @@ export class XmlScope extends Scope {
             ? this.symbolTable.getSymbolType(util.getSgNodeTypeName(componentElement?.extends), { flags: SymbolTypeFlag.typetime, fullName: componentElement?.extends, tableProvider: () => this.symbolTable })
             : undefined;
         const result = new ComponentType(componentElement.name, parentComponentType as ComponentType);
+        result.addBuiltInInterfaces();
         const iface = componentElement.interfaceElement;
         if (!iface) {
             return result;

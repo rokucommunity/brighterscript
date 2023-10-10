@@ -75,6 +75,9 @@ export class ComponentType extends InheritableType {
 
     addBuiltInFields() {
         if (!this.hasAddedBuiltInFields) {
+            if (isComponentType(this.parentType)) {
+                this.parentType.addBuiltInFields();
+            }
             BuiltInInterfaceAdder.addBuiltInFieldsToNodeType(this);
         }
         this.hasAddedBuiltInFields = true;
@@ -94,3 +97,4 @@ export class ComponentType extends InheritableType {
         return this.callFuncMemberTable.getSymbolType(name, options);
     }
 }
+

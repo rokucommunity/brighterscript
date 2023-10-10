@@ -1,4 +1,4 @@
-import type { BRSInterfaceData, SGNodeData } from '../roku-types';
+import type { BRSInterfaceData, BRSInterfaceMethodData, SGNodeData } from '../roku-types';
 import { components, events, interfaces, nodes } from '../roku-types';
 import { Cache } from '../Cache';
 import type { TypedFunctionType } from './TypedFunctionType';
@@ -48,16 +48,7 @@ export class BuiltInInterfaceAdder {
             const lowerIfaceName = iface.name.toLowerCase();
             const ifaceData = (interfaces[lowerIfaceName] ?? events[lowerIfaceName]) as BRSInterfaceData;
             for (const method of ifaceData.methods ?? []) {
-                const override = overrides?.get(method.name.toLowerCase());
-                const returnType = override?.returnType ?? this.getPrimitiveType(method.returnType);
-                const methodFuncType = this.typedFunctionFactory(returnType);
-                methodFuncType.name = method.name;
-                // eslint-disable-next-line @typescript-eslint/prefer-for-of
-                for (let i = 0; i < method.params.length; i++) {
-                    const param = method.params[i];
-                    const paramType = override?.parameterTypes?.[i] ?? this.getPrimitiveType(param.type);
-                    methodFuncType.addParameter(param.name, paramType, !param.isRequired);
-                }
+                const methodFuncType = this.buildMethodFromDocData(method, overrides);
                 memberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, SymbolTypeFlag.runtime);
             }
             for (const property of ifaceData.properties ?? []) {
@@ -65,6 +56,21 @@ export class BuiltInInterfaceAdder {
                 memberTable.addSymbol(property.name, { description: property.description, completionPriority: 1 }, override?.type ?? this.getPrimitiveType(property.type), SymbolTypeFlag.runtime);
             }
         }
+    }
+
+    private static buildMethodFromDocData(method: BRSInterfaceMethodData, overrides?: Map<string, BuiltInInterfaceOverride>): TypedFunctionType {
+        const override = overrides?.get(method.name.toLowerCase());
+        const returnType = override?.returnType ?? this.getPrimitiveType(method.returnType);
+        const methodFuncType = this.typedFunctionFactory(returnType);
+        methodFuncType.name = method.name;
+        methodFuncType.isVariadic = method.isVariadic ?? false;
+        // eslint-disable-next-line @typescript-eslint/prefer-for-of
+        for (let i = 0; i < method.params.length; i++) {
+            const param = method.params[i];
+            const paramType = override?.parameterTypes?.[i] ?? this.getPrimitiveType(param.type);
+            methodFuncType.addParameter(param.name, paramType, !param.isRequired);
+        }
+        return methodFuncType;
     }
 
     private static getPrimitiveType(typeName: string): BscType {
@@ -138,6 +144,10 @@ export class BuiltInInterfaceAdder {
         const lookupTable = this.getLookupTable();
         for (const field of builtInNode.fields) {
             memberTable.addSymbol(field.name, { description: field.description, completionPriority: 1 }, util.getNodeFieldType(field.type, lookupTable), SymbolTypeFlag.runtime);
+        }
+        for (const method of builtInNode.methods ?? []) {
+            const methodFuncType = this.buildMethodFromDocData(method);
+            memberTable.addSymbol(method.name, { description: method.description, completionPriority: 1 }, methodFuncType, SymbolTypeFlag.runtime);
         }
     }
 

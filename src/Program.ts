@@ -128,7 +128,7 @@ export class Program {
             nodeType.addBuiltInInterfaces();
             this.globalScope.symbolTable.addSymbol(nodeName, { description: nodeData.description }, nodeType, SymbolTypeFlag.typetime);
         } else {
-            nodeType = this.globalScope.symbolTable.getSymbolType(nodeData.name, { flags: SymbolTypeFlag.typetime }) as ComponentType;
+            nodeType = this.globalScope.symbolTable.getSymbolType(nodeName, { flags: SymbolTypeFlag.typetime }) as ComponentType;
         }
 
         return nodeType;
