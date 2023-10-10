@@ -10,7 +10,7 @@ import { SGFieldTypes } from './parser/SGTypes';
 import type { SGElement } from './parser/SGTypes';
 import { SymbolTypeFlag } from './SymbolTable';
 import type { BaseFunctionType } from './types/BaseFunctionType';
-import { CallFuncDescription, CallFuncMemberMethod, ComponentType } from './types/ComponentType';
+import { ComponentType } from './types/ComponentType';
 import { DynamicType } from './types/DynamicType';
 
 export class XmlScope extends Scope {
@@ -53,6 +53,7 @@ export class XmlScope extends Scope {
             ? this.symbolTable.getSymbolType(util.getSgNodeTypeName(componentElement?.extends), { flags: SymbolTypeFlag.typetime, fullName: componentElement?.extends, tableProvider: () => this.symbolTable })
             : undefined;
         const result = new ComponentType(componentElement.name, parentComponentType as ComponentType);
+        result.addBuiltInInterfaces();
         const iface = componentElement.interfaceElement;
         if (!iface) {
             return result;
@@ -69,8 +70,6 @@ export class XmlScope extends Scope {
                 result.addCallFuncMember(func.name, {}, componentFuncType as BaseFunctionType, SymbolTypeFlag.runtime);
             }
         }
-        // add "callfunc" method member:
-        result.addMember('callFunc', { description: CallFuncDescription }, CallFuncMemberMethod, SymbolTypeFlag.runtime);
         //add fields
         for (const field of iface.fields ?? []) {
             if (field.id) {

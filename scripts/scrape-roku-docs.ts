@@ -757,6 +757,26 @@ class Runner {
     private mergeOverrides() {
         this.result = deepmerge(this.result, {
             nodes: {
+                node: {
+                    // Taken from: https://developer.roku.com/en-ca/docs/developer-program/core-concepts/handling-application-events.md#functional-fields
+                    methods: [
+                        {
+                            description: `callFunc() is a synchronized interface on roSGNode. It will always execute in the component's owning ScriptEngine and thread (by rendezvous if necessary), and it will always use the m and m.top of the owning component. Any context from the caller can be passed via one or more method parameters, which may be of any type (previously, callFunc() only supported a single associative array parameter).\n\nTo call the function, use the \`callFunc\` field with the required method signature. A return value, if any, can be an object that is similarly arbitrary. The method being called must determine how to interpret the parameters included in the \`callFunc\` field.`,
+                            name: 'callFunc',
+                            params: [
+                                {
+                                    default: null,
+                                    description: 'The function name to call.',
+                                    isRequired: true,
+                                    name: 'functionName',
+                                    type: 'String'
+                                }
+                            ],
+                            isVariadic: true,
+                            returnType: 'Dynamic'
+                        }
+                    ]
+                }
             },
             components: {},
             events: {},
@@ -1205,6 +1225,7 @@ interface SceneGraphNode {
     interfaces: Reference[];
     events: Reference[];
     fields: SceneGraphNodeField[];
+    methods: Func[];
 }
 
 interface SceneGraphNodeField {
@@ -1239,6 +1260,7 @@ interface Signature {
     params: Param[];
     returnType: string;
     returnDescription: string;
+    isVariadic?: boolean;
 }
 interface ElementFilter {
     id?: string;

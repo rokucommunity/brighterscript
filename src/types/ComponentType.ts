@@ -78,6 +78,9 @@ export class ComponentType extends InheritableType {
 
     addBuiltInFields() {
         if (!this.hasAddedBuiltInFields) {
+            if (isComponentType(this.parentType)) {
+                this.parentType.addBuiltInFields();
+            }
             BuiltInInterfaceAdder.addBuiltInFieldsToNodeType(this);
         }
         this.hasAddedBuiltInFields = true;
@@ -98,9 +101,3 @@ export class ComponentType extends InheritableType {
     }
 }
 
-export const CallFuncMemberMethod = new TypedFunctionType(DynamicType.instance);
-CallFuncMemberMethod.addParameter('functionName', StringType.instance, false);
-CallFuncMemberMethod.isVariadic = true;
-
-// Taken from: https://developer.roku.com/en-ca/docs/developer-program/core-concepts/handling-application-events.md#functional-fields
-export const CallFuncDescription = `callFunc() is a synchronized interface on roSGNode. It will always execute in the component's owning ScriptEngine and thread (by rendezvous if necessary), and it will always use the m and m.top of the owning component. Any context from the caller can be passed via one or more method parameters, which may be of any type (previously, callFunc() only supported a single associative array parameter).\n\nTo call the function, use the \`callFunc\` field with the required method signature. A return value, if any, can be an object that is similarly arbitrary. The method being called must determine how to interpret the parameters included in the \`callFunc\` field.`;
