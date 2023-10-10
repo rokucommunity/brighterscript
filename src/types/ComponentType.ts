@@ -9,9 +9,6 @@ import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { InheritableType } from './InheritableType';
 import { isUnionTypeCompatible } from './helpers';
 import util from '../util';
-import { TypedFunctionType } from './TypedFunctionType';
-import { DynamicType } from './DynamicType';
-import { StringType } from './StringType';
 
 export class ComponentType extends InheritableType {
 
