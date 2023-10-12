@@ -1,4 +1,5 @@
-import { isAnyReferenceType, isDynamicType, isInheritableType, isUnionType } from '../astUtils/reflection';
+import type { TypeCompatibilityData } from '../interfaces';
+import { isAnyReferenceType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isUnionType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[]) {
@@ -135,14 +136,43 @@ export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscTyp
 }
 
 
-export function isUnionTypeCompatible(thisType: BscType, maybeUnionType: BscType): boolean {
+export function isUnionTypeCompatible(thisType: BscType, maybeUnionType: BscType, data?: TypeCompatibilityData): boolean {
     if (isUnionType(maybeUnionType)) {
         for (const innerType of maybeUnionType.types) {
-            if (!thisType.isTypeCompatible(innerType)) {
+            if (!thisType.isTypeCompatible(innerType, data)) {
                 return false;
             }
         }
         return true;
+    }
+    return false;
+}
+
+
+export function isEnumTypeCompatible(thisType: BscType, maybeEnumType: BscType, data?: TypeCompatibilityData): boolean {
+    if (isEnumMemberType(maybeEnumType) || isEnumType(maybeEnumType)) {
+        return thisType.isTypeCompatible(maybeEnumType.underlyingType, data);
+    }
+    return false;
+}
+
+export function isNativeInterfaceCompatible(thisType: BscType, otherType: BscType, allowedType: string, data?: TypeCompatibilityData): boolean {
+    if (isInterfaceType(otherType)) {
+        // TODO: it is not great to do type checking based on interface name
+        const lowerOtherName = otherType.name.toLowerCase();
+        return allowedType === lowerOtherName;
+    }
+    return false;
+}
+
+export function isNativeInterfaceCompatibleNumber(thisType: BscType, otherType: BscType, data?: TypeCompatibilityData): boolean {
+    if (isInterfaceType(otherType)) {
+        // TODO: it is not great to do type checking based on interface name
+        const lowerOtherName = otherType.name.toLowerCase();
+        return lowerOtherName === 'roint' ||
+            lowerOtherName === 'rofloat' ||
+            lowerOtherName === 'rodouble' ||
+            lowerOtherName === 'rolonginteger';
     }
     return false;
 }

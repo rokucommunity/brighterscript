@@ -1,8 +1,9 @@
 import { isDoubleType, isDynamicType, isFloatType, isIntegerType, isLongIntegerType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
-import { isUnionTypeCompatible } from './helpers';
+import { isEnumTypeCompatible, isNativeInterfaceCompatibleNumber, isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import type { TypeCompatibilityData } from '../interfaces';
 
 export class LongIntegerType extends BscType {
     constructor(
@@ -15,7 +16,7 @@ export class LongIntegerType extends BscType {
 
     public static instance = new LongIntegerType('longinteger');
 
-    public isTypeCompatible(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
@@ -23,7 +24,9 @@ export class LongIntegerType extends BscType {
             isFloatType(targetType) ||
             isDoubleType(targetType) ||
             isLongIntegerType(targetType) ||
-            isUnionTypeCompatible(this, targetType)
+            isUnionTypeCompatible(this, targetType, data) ||
+            isEnumTypeCompatible(this, targetType, data) ||
+            isNativeInterfaceCompatibleNumber(this, targetType, data)
         );
     }
 

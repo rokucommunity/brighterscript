@@ -4,7 +4,7 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
-import type { Diagnostic, Position, Range, Location } from 'vscode-languageserver';
+import { type Diagnostic, type Position, type Range, type Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
@@ -24,7 +24,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { Logger, LogLevel } from './Logger';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isDynamicType, isExpression, isFloatType, isIndexedGetExpression, isIntegerType, isInvalidType, isLongIntegerType, isStringType, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBooleanType, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDoubleType, isDynamicType, isEnumMemberType, isExpression, isFloatType, isIndexedGetExpression, isInvalidType, isLongIntegerType, isNumberType, isStringType, isTypeExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -32,11 +32,16 @@ import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { AstNode } from './parser/AstNode';
 import { AstNodeKind, type Expression, type Statement } from './parser/AstNode';
-import { createIdentifier } from './astUtils/creators';
+import { createIdentifier, createToken } from './astUtils/creators';
 import type { BscType } from './types/BscType';
 import type { AssignmentStatement } from './parser/Statement';
 import { FunctionType } from './types/FunctionType';
-import { BinaryOperatorReferenceType } from './types';
+import { ArrayType, BinaryOperatorReferenceType } from './types';
+import type { SymbolTable } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTable';
+import { AssociativeArrayType } from './types/AssociativeArrayType';
+import { ComponentType } from './types/ComponentType';
+import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
 
 export class Util {
     public clearConsole() {
@@ -625,6 +630,16 @@ export class Util {
     }
 
     /**
+     * Prefixes a component name so it can be used as type in the symbol table, without polluting available symbols
+     *
+     * @param sgNodeName the Name of the component
+     * @returns the node name, prefixed with `roSGNode`
+     */
+    public getSgNodeTypeName(sgNodeName: string) {
+        return 'roSGNode' + sgNodeName;
+    }
+
+    /**
      * Parse an xml file and get back a javascript object containing its results
      */
     public parseXml(text: string) {
@@ -656,6 +671,7 @@ export class Util {
         }
         return subject;
     }
+
 
     /**
      * Given a URI, convert that to a regular fs path
@@ -1138,13 +1154,68 @@ export class Util {
         }
     }
 
-    public isNumberType(targetType: BscType): boolean {
-        return isIntegerType(targetType) ||
-            isFloatType(targetType) ||
-            isDoubleType(targetType) ||
-            isLongIntegerType(targetType);
-    }
+    /**
+     * Deciphers the correct types for fields based on docs
+     * https://developer.roku.com/en-ca/docs/references/scenegraph/xml-elements/interface.md
+     * @param typeDescriptor the type descriptor from the docs
+     * @returns {BscType} the known type, or dynamic
+     */
+    public getNodeFieldType(typeDescriptor: string, lookupTable?: SymbolTable): BscType {
+        const typeDescriptorLower = typeDescriptor.toLowerCase().trim();
+        const bscType = this.tokenToBscType(createToken(TokenKind.Identifier, typeDescriptorLower));
+        if (bscType) {
+            return bscType;
+        }
+        if (typeDescriptorLower.startsWith('array of ')) {
+            let arrayOfTypeName = typeDescriptorLower.substring(9); //cut off beginning 'array of'
+            if (arrayOfTypeName.endsWith('s')) {
+                // remove "s" in "floats", etc.
+                arrayOfTypeName = arrayOfTypeName.substring(0, arrayOfTypeName.length - 1);
+            }
+            if (arrayOfTypeName.endsWith('\'')) {
+                // remove "'" in "float's", etc.
+                arrayOfTypeName = arrayOfTypeName.substring(0, arrayOfTypeName.length - 1);
+            }
+            let arrayType = this.getNodeFieldType(arrayOfTypeName, lookupTable);
+            return new ArrayType(arrayType);
+        } else if (typeDescriptorLower.startsWith('option ')) {
+            const actualTypeName = typeDescriptorLower.substring('option '.length); //cut off beginning 'option '
+            return this.getNodeFieldType(actualTypeName, lookupTable);
+        } else if (typeDescriptorLower.startsWith('value ')) {
+            const actualTypeName = typeDescriptorLower.substring('value '.length); //cut off beginning 'value '
+            return this.getNodeFieldType(actualTypeName, lookupTable);
+        } else if (typeDescriptorLower === 'uri') {
+            return StringType.instance;
+        } else if (typeDescriptorLower === 'vector2d' || typeDescriptorLower === 'floatarray') {
+            return new ArrayType(FloatType.instance);
+        } else if (typeDescriptorLower === 'intarray') {
+            return new ArrayType(IntegerType.instance);
+        } else if (typeDescriptorLower === 'boolarray') {
+            return new ArrayType(BooleanType.instance);
+        } else if (typeDescriptorLower === 'stringarray' || typeDescriptorLower === 'strarray') {
+            return new ArrayType(StringType.instance);
+        } else if (typeDescriptorLower === 'int') {
+            return IntegerType.instance;
+        } else if (typeDescriptorLower === 'time') {
+            return FloatType.instance;
+        } else if (typeDescriptorLower === 'str') {
+            return StringType.instance;
+        } else if (typeDescriptorLower === 'bool') {
+            return BooleanType.instance;
+        } else if (typeDescriptorLower === 'assocarray' || typeDescriptorLower === 'associative array') {
+            return new AssociativeArrayType();
+        } else if (typeDescriptorLower === 'node') {
+            return ComponentType.instance;
+        } else if (typeDescriptorLower === 'nodearray') {
+            return new ArrayType(ComponentType.instance);
+        } else if (lookupTable) {
+            //try doing a lookup
+            return lookupTable.getSymbolType(typeDescriptorLower, { flags: SymbolTypeFlag.typetime });
+        }
 
+        //  TODO: Handle  'rect2d', 'rect2dArray', 'color', 'colorarray', 'time'
+        return DynamicType.instance;
+    }
 
     /**
      * Return the type of the result of a binary operator
@@ -1157,14 +1228,20 @@ export class Util {
                 return this.binaryOperatorResultType(lhs, op, rhs);
             });
         }
+        if (isEnumMemberType(leftType)) {
+            leftType = leftType.underlyingType;
+        }
+        if (isEnumMemberType(rightType)) {
+            rightType = rightType.underlyingType;
+        }
         let hasDouble = isDoubleType(leftType) || isDoubleType(rightType);
         let hasFloat = isFloatType(leftType) || isFloatType(rightType);
         let hasLongInteger = isLongIntegerType(leftType) || isLongIntegerType(rightType);
         let hasInvalid = isInvalidType(leftType) || isInvalidType(rightType);
         let hasDynamic = isDynamicType(leftType) || isDynamicType(rightType);
-        let bothNumbers = this.isNumberType(leftType) && this.isNumberType(rightType);
+        let bothNumbers = isNumberType(leftType) && isNumberType(rightType);
         let bothStrings = isStringType(leftType) && isStringType(rightType);
-        let eitherBooleanOrNum = (this.isNumberType(leftType) || isBooleanType(leftType)) && (this.isNumberType(rightType) || isBooleanType(rightType));
+        let eitherBooleanOrNum = (isNumberType(leftType) || isBooleanType(leftType)) && (isNumberType(rightType) || isBooleanType(rightType));
 
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (operator.kind) {
@@ -1276,7 +1353,7 @@ export class Util {
         switch (operator.kind) {
             // Math operators
             case TokenKind.Minus:
-                if (this.isNumberType(exprType)) {
+                if (isNumberType(exprType)) {
                     // a negative number will be the same type, eg, double->double, int->int, etc.
                     return exprType;
                 }
@@ -1284,7 +1361,7 @@ export class Util {
             case TokenKind.Not:
                 if (isBooleanType(exprType)) {
                     return BooleanType.instance;
-                } else if (this.isNumberType(exprType)) {
+                } else if (isNumberType(exprType)) {
                     //numbers can be "notted"
                     // by default they go to ints, except longints, which stay that way
                     if (isLongIntegerType(exprType)) {
@@ -1419,11 +1496,20 @@ export class Util {
      * @param relatedInformationFallbackLocation a default location to use for all `relatedInformation` entries that are missing a location
      */
     public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic, relatedInformationFallbackLocation: string) {
+        let relatedInformation = diagnostic.relatedInformation ?? [];
+        if (relatedInformation.length > MAX_RELATED_INFOS_COUNT) {
+            const relatedInfoLength = relatedInformation.length;
+            relatedInformation = relatedInformation.slice(0, MAX_RELATED_INFOS_COUNT);
+            relatedInformation.push({
+                message: `...and ${relatedInfoLength - MAX_RELATED_INFOS_COUNT} more`,
+                location: util.createLocation('   ', util.createRange(0, 0, 0, 0))
+            });
+        }
         return {
             severity: diagnostic.severity,
             range: diagnostic.range,
             message: diagnostic.message,
-            relatedInformation: diagnostic.relatedInformation?.map(x => {
+            relatedInformation: relatedInformation.map(x => {
 
                 //clone related information just in case a plugin added circular ref info here
                 const clone = { ...x };
@@ -1724,13 +1810,14 @@ export class Util {
         let containsDynamic = false;
         for (let i = 0; i < typeChain.length; i++) {
             const chainItem = typeChain[i];
+            const dotSep = chainItem.separatorToken?.text ?? '.';
             if (i > 0) {
-                fullChainName += '.';
+                fullChainName += dotSep;
             }
             fullChainName += chainItem.name;
             parentTypeName = previousTypeName;
-            fullErrorName = previousTypeName ? `${previousTypeName}.${chainItem.name}` : chainItem.name;
-            previousTypeName = chainItem.type.toString();
+            fullErrorName = previousTypeName ? `${previousTypeName}${dotSep}${chainItem.name}` : chainItem.name;
+            previousTypeName = chainItem.type?.toString() ?? '';
             itemName = chainItem.name;
             containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
             if (!chainItem.isResolved) {
@@ -1746,6 +1833,61 @@ export class Util {
             range: errorRange,
             containsDynamic: containsDynamic
         };
+    }
+
+    public truncate<T>(options: {
+        leadingText: string;
+        items: T[];
+        trailingText?: string;
+        maxLength: number;
+        itemSeparator?: string;
+        partBuilder?: (item: T) => string;
+    }): string {
+        let leadingText = options.leadingText;
+        let items = options?.items ?? [];
+        let trailingText = options?.trailingText ?? '';
+        let maxLength = options?.maxLength ?? 160;
+        let itemSeparator = options?.itemSeparator ?? ', ';
+        let partBuilder = options?.partBuilder ?? ((x) => x.toString());
+
+        let parts = [];
+        let length = leadingText.length + (trailingText?.length ?? 0);
+
+        //calculate the max number of items we could fit in the given space
+        for (let i = 0; i < items.length; i++) {
+            let part = partBuilder(items[i]);
+            if (i > 0) {
+                part = itemSeparator + part;
+            }
+            parts.push(part);
+            length += part.length;
+            //exit the loop if we've maxed out our length
+            if (length >= maxLength) {
+                break;
+            }
+        }
+        let message: string;
+        //we have enough space to include all the parts
+        if (parts.length >= items.length) {
+            message = leadingText + parts.join('') + trailingText;
+
+            //we require truncation
+        } else {
+            //account for truncation message length including max possible "more" items digits, trailing text length, and the separator between last item and trailing text
+            length = leadingText.length + `...and ${items.length} more`.length + itemSeparator.length + (trailingText?.length ?? 0);
+            message = leadingText;
+            for (let i = 0; i < parts.length; i++) {
+                //always include at least 2 items. if this part would overflow the max, then skip it and finalize the message
+                if (i > 1 && length + parts[i].length > maxLength) {
+                    message += itemSeparator + `...and ${items.length - i} more` + trailingText;
+                    return message;
+                } else {
+                    message += parts[i];
+                    length += parts[i].length;
+                }
+            }
+        }
+        return message;
     }
 }
 

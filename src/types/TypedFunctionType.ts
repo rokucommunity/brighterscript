@@ -4,6 +4,7 @@ import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import type { TypeCompatibilityData } from '../interfaces';
 
 export class TypedFunctionType extends BaseFunctionType {
     constructor(
@@ -24,6 +25,11 @@ export class TypedFunctionType extends BaseFunctionType {
      */
     public isSub = false;
 
+    /**
+     * Does this function accept more args than just those in this.params
+     */
+    public isVariadic = false;
+
     public params = [] as Array<{ name: string; type: BscType; isOptional: boolean }>;
 
     public setName(name: string) {
@@ -40,15 +46,18 @@ export class TypedFunctionType extends BaseFunctionType {
         return this;
     }
 
-    public isTypeCompatible(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         if (
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
-            isUnionTypeCompatible(this, targetType)
+            isUnionTypeCompatible(this, targetType, data)
         ) {
             return true;
         }
-        return this.isEqual(targetType);
+        if (isTypedFunctionType(targetType)) {
+            return this.checkParamsAndReturnValue(targetType, true, (t1, t2) => t1.isTypeCompatible(t2));
+        }
+        return false;
     }
 
     public toString() {
@@ -56,8 +65,14 @@ export class TypedFunctionType extends BaseFunctionType {
         for (let param of this.params) {
             paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString()}`);
         }
-        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
-
+        let variadicText = '';
+        if (this.isVariadic) {
+            if (paramTexts.length > 0) {
+                variadicText += ', ';
+            }
+            variadicText += '...';
+        }
+        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}${variadicText}) as ${this.returnType.toString()}`;
     }
 
     public toTypeString(): string {
@@ -66,25 +81,40 @@ export class TypedFunctionType extends BaseFunctionType {
 
     isEqual(targetType: BscType) {
         if (isTypedFunctionType(targetType)) {
-            //compare all parameters
-            let len = Math.max(this.params.length, targetType.params.length);
-            for (let i = 0; i < len; i++) {
-                let myParam = this.params[i];
-                let targetParam = targetType.params[i];
-                if (!myParam || !targetParam || !myParam.type.isAssignableTo(targetParam.type)) {
-                    return false;
-                }
-            }
-
-            //compare return type
-            if (!this.returnType || !targetType.returnType || !this.returnType.isAssignableTo(targetType.returnType)) {
-                return false;
-            }
-
-            //made it here, all params and return type are equivalent
-            return true;
+            return this.checkParamsAndReturnValue(targetType, false, (t1, t2) => t1.isEqual(t2));
         }
         return false;
+    }
+
+    private checkParamsAndReturnValue(targetType: TypedFunctionType, allowOptionalParamDifferences: boolean, predicate: (type1: BscType, type2: BscType) => boolean) {
+        //compare all parameters
+        let len = Math.max(this.params.length, targetType.params.length);
+        for (let i = 0; i < len; i++) {
+            let myParam = this.params[i];
+            let targetParam = targetType.params[i];
+            if (allowOptionalParamDifferences && !myParam && targetParam.isOptional) {
+                // target func has MORE (optional) params... that's ok
+                break;
+            }
+
+            if (!myParam || !targetParam || !predicate(targetParam.type, myParam.type)) {
+                return false;
+            }
+            if (!allowOptionalParamDifferences && myParam.isOptional !== targetParam.isOptional) {
+                return false;
+            } else if (!myParam.isOptional && targetParam.isOptional) {
+                return false;
+            }
+        }
+        //compare return type
+        if (!this.returnType || !targetType.returnType || !predicate(this.returnType, targetType.returnType)) {
+            return false;
+        }
+        if (this.isVariadic !== targetType.isVariadic) {
+            return false;
+        }
+        //made it here, all params and return type  pass predicate
+        return true;
     }
 }
 

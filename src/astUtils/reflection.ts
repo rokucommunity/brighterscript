@@ -1,5 +1,5 @@
 import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement } from '../parser/Statement';
-import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypeExpression, TypeCastExpression } from '../parser/Expression';
+import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypeExpression, TypeCastExpression, TypedArrayExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { TypedefProvider } from '../interfaces';
@@ -10,10 +10,10 @@ import type { TypedFunctionType } from '../types/TypedFunctionType';
 import type { FunctionType } from '../types/FunctionType';
 import type { StringType } from '../types/StringType';
 import type { BooleanType } from '../types/BooleanType';
-import { IntegerType } from '../types/IntegerType';
-import { LongIntegerType } from '../types/LongIntegerType';
-import { FloatType } from '../types/FloatType';
-import { DoubleType } from '../types/DoubleType';
+import type { IntegerType } from '../types/IntegerType';
+import type { LongIntegerType } from '../types/LongIntegerType';
+import type { FloatType } from '../types/FloatType';
+import type { DoubleType } from '../types/DoubleType';
 import type { ClassType } from '../types/ClassType';
 import type { Scope } from '../Scope';
 import type { XmlScope } from '../XmlScope';
@@ -33,6 +33,9 @@ import { BscTypeKind } from '../types/BscTypeKind';
 import type { NamespaceType } from '../types/NamespaceType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
 import type { File } from '../files/File';
+import type { ComponentType } from '../types/ComponentType';
+import type { AssociativeArrayType } from '../types/AssociativeArrayType';
+import { TokenKind } from '../lexer/TokenKind';
 
 // File reflection
 export function isBrsFile(file: File): file is BrsFile {
@@ -265,6 +268,9 @@ export function isTypeExpression(element: any): element is TypeExpression {
 export function isTypeCastExpression(element: any): element is TypeCastExpression {
     return element?.kind === AstNodeKind.TypeCastExpression;
 }
+export function isTypedArrayExpression(element: any): element is TypedArrayExpression {
+    return element?.kind === AstNodeKind.TypedArrayExpression;
+}
 
 // BscType reflection
 export function isStringType(value: any): value is StringType {
@@ -299,6 +305,9 @@ export function isVoidType(value: any): value is VoidType {
 }
 export function isClassType(value: any): value is ClassType {
     return value?.kind === BscTypeKind.ClassType;
+}
+export function isComponentType(value: any): value is ComponentType {
+    return value?.kind === BscTypeKind.ComponentType;
 }
 export function isDynamicType(value: any): value is DynamicType {
     return value?.kind === BscTypeKind.DynamicType;
@@ -336,9 +345,11 @@ export function isUninitializedType(value: any): value is UninitializedType {
 export function isArrayType(value: any): value is ArrayType {
     return value?.kind === BscTypeKind.ArrayType;
 }
-
+export function isAssociativeArrayType(value: any): value is AssociativeArrayType {
+    return value?.kind === BscTypeKind.AssociativeArrayType;
+}
 export function isInheritableType(target): target is InheritableType {
-    return isClassType(target) || isInterfaceType(target);
+    return isClassType(target) || isInterfaceType(target) || isComponentType(target);
 }
 
 export function isCallableType(target): target is BaseFunctionType {
@@ -350,20 +361,41 @@ export function isAnyReferenceType(target): target is ReferenceType | TypeProper
     return name === 'ReferenceType' || name === 'TypePropertyReferenceType' || name === 'BinaryOperatorReferenceType';
 }
 
-const numberConstructorNames = [
-    IntegerType.name,
-    LongIntegerType.name,
-    FloatType.name,
-    DoubleType.name
+const numberTypeKinds = [
+    BscTypeKind.IntegerType,
+    BscTypeKind.LongIntegerType,
+    BscTypeKind.FloatType,
+    BscTypeKind.DoubleType
 ];
 export function isNumberType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType {
-    return numberConstructorNames.includes(value?.constructor.name);
+    return numberTypeKinds.includes(value?.kind);
 }
+
+const primitiveTypeKinds = [
+    ...numberTypeKinds,
+    BscTypeKind.BooleanType,
+    BscTypeKind.StringType
+];
+export function isPrimitiveType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType {
+    return primitiveTypeKinds.includes(value?.kind);
+}
+
+const nativeTypeKinds = [
+    ...primitiveTypeKinds,
+    BscTypeKind.DynamicType,
+    BscTypeKind.ObjectType,
+    BscTypeKind.VoidType,
+    BscTypeKind.FunctionType
+];
+export function isNativeType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType | VoidType | DynamicType | ObjectType | FunctionType {
+    return nativeTypeKinds.includes(value?.kind);
+}
+
 
 // Literal reflection
 
 export function isLiteralInvalid(value: any): value is LiteralExpression & { type: InvalidType } {
-    return isLiteralExpression(value) && isInvalidType(value.getType());
+    return isLiteralExpression(value) && value.token.kind === TokenKind.Invalid;
 }
 export function isLiteralBoolean(value: any): value is LiteralExpression & { type: BooleanType } {
     return isLiteralExpression(value) && isBooleanType(value.getType());
@@ -373,4 +405,16 @@ export function isLiteralString(value: any): value is LiteralExpression & { type
 }
 export function isLiteralNumber(value: any): value is LiteralExpression & { type: IntegerType | LongIntegerType | FloatType | DoubleType } {
     return isLiteralExpression(value) && isNumberType(value.getType());
+}
+export function isLiteralInteger(value: any): value is LiteralExpression & { type: IntegerType } {
+    return isLiteralExpression(value) && isIntegerType(value.getType());
+}
+export function isLiteralLongInteger(value: any): value is LiteralExpression & { type: LongIntegerType } {
+    return isLiteralExpression(value) && isLongIntegerType(value.getType());
+}
+export function isLiteralFloat(value: any): value is LiteralExpression & { type: FloatType } {
+    return isLiteralExpression(value) && isFloatType(value.getType());
+}
+export function isLiteralDouble(value: any): value is LiteralExpression & { type: DoubleType } {
+    return isLiteralExpression(value) && isDoubleType(value.getType());
 }

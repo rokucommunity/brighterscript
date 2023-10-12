@@ -422,4 +422,29 @@ describe('BrsFileSemanticTokensProcessor', () => {
             }
         ]);
     });
+
+
+    it('matches native interfaces', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub init()
+                m.alien = new Humanoids.Aliens.Alien.NOT_A_CLASS() 'bs:disable-line
+            end sub
+
+            namespace Humanoids.Aliens
+                class Alien
+                end class
+            end namespace
+        `);
+        expectSemanticTokens(file, [{
+            range: util.createRange(2, 30, 2, 39),
+            tokenType: SemanticTokenTypes.namespace
+        }, {
+            range: util.createRange(2, 40, 2, 46),
+            tokenType: SemanticTokenTypes.namespace
+        }, {
+            range: util.createRange(2, 47, 2, 52),
+            tokenType: SemanticTokenTypes.class
+        }]);
+    });
+
 });

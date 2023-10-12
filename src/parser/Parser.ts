@@ -412,6 +412,11 @@ export class Parser {
                 });
                 //consume the statement separator
                 this.consumeStatementSeparators();
+            } else if (this.peek().kind !== TokenKind.Identifier && !this.checkAny(...DeclarableTypes, ...AllowedTypeIdentifiers)) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedIdentifierAfterKeyword(asToken.text),
+                    range: asToken.range
+                });
             } else {
                 typeExpression = this.typeExpression();
             }
@@ -427,7 +432,19 @@ export class Parser {
         const name = this.identifier(...AllowedProperties);
         const leftParen = this.consumeToken(TokenKind.LeftParen);
 
-        const params = [];
+        let params = [] as FunctionParameterExpression[];
+        if (!this.check(TokenKind.RightParen)) {
+            do {
+                if (params.length >= CallExpression.MaximumArguments) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.tooManyCallableParameters(params.length, CallExpression.MaximumArguments),
+                        range: this.peek().range
+                    });
+                }
+
+                params.push(this.functionParameter());
+            } while (this.match(TokenKind.Comma));
+        }
         const rightParen = this.consumeToken(TokenKind.RightParen);
         // let asToken = null as Token;
         // let returnTypeExpression: TypeExpression;

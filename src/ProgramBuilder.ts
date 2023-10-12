@@ -326,7 +326,7 @@ export class ProgramBuilder {
             for (let diagnostic of sortedDiagnostics) {
                 //default the severity to error if undefined
                 let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
-                let relatedInformation = (diagnostic.relatedInformation ?? []).map(x => {
+                let relatedInformation = (util.toDiagnostic(diagnostic, diagnostic.source)?.relatedInformation ?? []).map(x => {
                     let relatedInfoFilePath = URI.parse(x.location.uri).fsPath;
                     if (!emitFullPaths) {
                         relatedInfoFilePath = path.relative(cwd, relatedInfoFilePath);

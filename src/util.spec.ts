@@ -13,12 +13,13 @@ import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
 import { ReferenceType } from './types/ReferenceType';
 import { SymbolTypeFlag } from './SymbolTable';
-import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InvalidType, LongIntegerType, StringType } from './types';
+import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InvalidType, LongIntegerType, StringType, TypedFunctionType, VoidType } from './types';
 import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
 import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
 import { Parser } from './parser/Parser';
 import type { FunctionStatement } from './parser/Statement';
+import { ComponentType } from './types/ComponentType';
 
 const sinon = createSandbox();
 
@@ -892,6 +893,16 @@ describe('util', () => {
             expect(result.fullNameOfItem).to.eql('Beta.CharlieProp');
             expect(result.range).to.eql(util.createRange(3, 3, 4, 4));
         });
+
+        it('respects the separatorToken', () => {
+            const chain = [
+                new TypeChainEntry('roSGNodeCustom', new ComponentType('Custom'), util.createRange(1, 1, 2, 2)),
+                new TypeChainEntry('someCallFunc', new TypedFunctionType(VoidType.instance), util.createRange(2, 2, 3, 3), createToken(TokenKind.Callfunc))
+            ];
+
+            const result = util.processTypeChain(chain);
+            expect(result.fullChainName).to.eql('roSGNodeCustom@.someCallFunc');
+        });
     });
 
     describe('binaryOperatorResultType', () => {
@@ -1032,6 +1043,76 @@ describe('util', () => {
             `);
             const docs = util.getTokenDocumentation(tokens, (statements[1] as FunctionStatement).func.functionType);
             expect(docs).to.eql('Add 1 to a number\n\n\n_@public_\n\n_@param_ {integer} the number to add to\n\n_@return_ {integer} the result');
+        });
+    });
+
+    describe('truncate', () => {
+        const items = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
+
+        it('returns whole string when under the limit', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 1000
+                })
+            ).to.eql(
+                'We have numbers: ' + items.join(', ')
+            );
+        });
+
+        it('truncates to max length', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 50
+                })
+            ).to.eql(
+                'We have numbers: one, two, three, ...and 17 more'
+            );
+        });
+
+        it('shows at least 2 items, even if going over the length', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 30
+                })
+            ).to.eql(
+                'We have numbers: one, two, ...and 18 more'
+            );
+        });
+
+        it('Accounts for extra wrapping around items', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => `--${item}--`,
+                    maxLength: 60
+                })
+            ).to.eql(
+                'We have numbers: --one--, --two--, --three--, ...and 17 more'
+            );
+        });
+
+        it('includes trailing text', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    trailingText: '!',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 50
+                })
+            ).to.eql(
+                'We have numbers: one, two, three, ...and 17 more!'
+            );
         });
     });
 });

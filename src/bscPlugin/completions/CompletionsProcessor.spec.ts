@@ -3,7 +3,7 @@ import { Program } from '../../Program';
 import util, { standardizePath as s } from '../../util';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
-import { expectCompletionsExcludes, expectCompletionsIncludes, tempDir, rootDir, stagingDir, trim } from '../../testHelpers.spec';
+import { expectCompletionsExcludes, expectCompletionsIncludes, tempDir, rootDir, stagingDir, trim, expectZeroDiagnostics } from '../../testHelpers.spec';
 import { XmlFile } from '../../files/XmlFile';
 import { Keywords } from '../../lexer/TokenKind';
 import { CompletionsProcessor } from './CompletionsProcessor';
@@ -535,10 +535,10 @@ describe('CompletionsProcessor', () => {
             ).to.eql(['MyClassA', 'MyClassB', 'MyClassC']);
         });
 
-        it('gets completions when using callfunc inovation', () => {
+        it('gets completions when using callfunc invocation', () => {
             program.setFile('source/main.bs', `
-                function main()
-                    myNode@.sayHello(arg1)
+                function doStuff(myNode)
+                    myNode@.sayHello(1, 2)
                 end function
             `);
             program.setFile('components/MyNode.bs', `
@@ -554,6 +554,7 @@ describe('CompletionsProcessor', () => {
                 </interface>
             </component>`);
             program.validate();
+            expectZeroDiagnostics(program);
 
             expect(
                 (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
@@ -1508,6 +1509,153 @@ describe('CompletionsProcessor', () => {
             expectCompletionsIncludes(program.getCompletions('source/main.bs', util.createPosition(2, 32)), [{
                 label: 'Replace',
                 kind: CompletionItemKind.Method
+            }]);
+        });
+    });
+
+    describe('global callables', () => {
+        it('finds built in members', () => {
+            program.setFile('source/main.bs', `
+                sub foo(name as string)
+                    print
+                end sub
+            `);
+            program.validate();
+            // print |
+            const completions = program.getCompletions('source/main.bs', util.createPosition(2, 27));
+            expectCompletionsIncludes(completions, [{
+                label: 'LCase',
+                kind: CompletionItemKind.Function
+            }]);
+            expectCompletionsIncludes(completions, [{
+                label: 'CreateObject',
+                kind: CompletionItemKind.Function
+            }]);
+        });
+
+    });
+
+    describe('callfunc completions', () => {
+        it('finds callfunc members', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                     <script uri="Widget.brs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.brs', `
+                function someFunc(input as string) as float
+                    return input.toFloat()
+                end function
+            `);
+            program.setFile('source/util.bs', `
+                sub callWidgetSomeFunc(widget as roSGNodeWidget)
+                    print widget@.
+                end sub
+            `);
+            program.validate();
+            // print widget@.|
+            let completions = program.getCompletions('source/util.bs', util.createPosition(2, 34));
+            expect(completions.length).to.eql(1);
+            expectCompletionsIncludes(completions, [{
+                label: 'someFunc',
+                kind: CompletionItemKind.Function
+            }]);
+        });
+
+        it('includes documentation', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                     <script uri="Widget.brs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.brs', `
+                ' This is documentation
+                function someFunc(input as string) as float
+                    return input.toFloat()
+                end function
+            `);
+            program.setFile('source/util.bs', `
+                sub callWidgetSomeFunc(widget as roSGNodeWidget)
+                    print widget@.
+                end sub
+            `);
+            program.validate();
+            // print widget@.|
+            let completions = program.getCompletions('source/util.bs', util.createPosition(2, 34));
+            expect(completions.length).to.eql(1);
+            expectCompletionsIncludes(completions, [{
+                label: 'someFunc',
+                kind: CompletionItemKind.Function,
+                documentation: 'This is documentation'
+            }]);
+        });
+    });
+
+    describe('type expressions', () => {
+        it('finds built in types', () => {
+            program.setFile('source/main.bs', `
+                sub foo(thing as  )
+                    print thing
+                end sub
+            `);
+            program.validate();
+            //  sub foo(thing as | )
+            const completions = program.getCompletions('source/main.bs', util.createPosition(1, 34));
+            expectCompletionsIncludes(completions, [{
+                label: 'integer',
+                kind: CompletionItemKind.Keyword
+            }]);
+            expectCompletionsIncludes(completions, [{
+                label: 'roSGNode',
+                kind: CompletionItemKind.Interface
+            }]);
+        });
+
+        it('finds custom types', () => {
+            program.setFile('source/main.bs', `
+                sub foo(thing as  )
+                    print thing
+                end sub
+
+                class SomeKlass
+                end class
+            `);
+            program.validate();
+            //  sub foo(thing as | )
+            const completions = program.getCompletions('source/main.bs', util.createPosition(1, 34));
+            expectCompletionsIncludes(completions, [{
+                label: 'SomeKlass',
+                kind: CompletionItemKind.Class
+            }]);
+        });
+
+        it('only shows intrinsic/native types in brightscript', () => {
+            program.setFile('source/main.brs', `
+                sub foo(thing as  )
+                    print thing
+                end sub
+            `);
+            program.validate();
+            //  sub foo(thing as | )
+            const completions = program.getCompletions('source/main.brs', util.createPosition(1, 34));
+            expectCompletionsIncludes(completions, [{
+                label: 'integer',
+                kind: CompletionItemKind.Keyword
+            }]);
+            expectCompletionsIncludes(completions, [{
+                label: 'function',
+                kind: CompletionItemKind.Keyword
+            }]);
+            expectCompletionsExcludes(completions, [{
+                label: 'roSGNode'
             }]);
         });
 

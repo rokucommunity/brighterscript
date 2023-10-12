@@ -1,19 +1,19 @@
 import { URI } from 'vscode-uri';
-import { isAssignmentStatement, isBinaryExpression, isBrsFile, isClassType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isTypeExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBinaryExpression, isBrsFile, isClassType, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isObjectType, isPrimitiveType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
+import type { BsDiagnostic, OnScopeValidateEvent, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTable';
-import type { AssignmentStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
+import type { AssignmentStatement, DottedSetStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
-import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { type AstNode, type Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, CallExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression } from '../../parser/Expression';
+import { CallExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import { TokenKind } from '../../lexer/TokenKind';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
@@ -62,6 +62,15 @@ export class ScopeValidator {
                     },
                     ReturnStatement: (returnStatement) => {
                         this.validateReturnStatement(file, returnStatement);
+                    },
+                    DottedSetStatement: (dottedSetStmt) => {
+                        this.validateDottedSetStatement(file, dottedSetStmt);
+                    },
+                    BinaryExpression: (binaryExpr) => {
+                        this.validateBinaryExpression(file, binaryExpr);
+                    },
+                    UnaryExpression: (unaryExpr) => {
+                        this.validateUnaryExpression(file, unaryExpr);
                     }
 
                 }), {
@@ -73,9 +82,11 @@ export class ScopeValidator {
 
 
     private checkIfUsedAsTypeExpression(expression: AstNode): boolean {
-        //TODO: this is much faster than node.findAncestor(), but will not work for "complicated" type expressions like UnionTypes
+        //TODO: this is much faster than node.findAncestor(), but may need to be updated for "complicated" type expressions
         if (isTypeExpression(expression) ||
-            isTypeExpression(expression.parent)) {
+            isTypeExpression(expression.parent) ||
+            isTypedArrayExpression(expression) ||
+            isTypedArrayExpression(expression.parent)) {
             return true;
         }
         if (isBinaryExpression(expression.parent)) {
@@ -83,7 +94,7 @@ export class ScopeValidator {
             while (isBinaryExpression(currentExpr) && currentExpr.operator.kind === TokenKind.Or) {
                 currentExpr = currentExpr.parent;
             }
-            return isTypeExpression(currentExpr);
+            return isTypeExpression(currentExpr) || isTypedArrayExpression(currentExpr);
         }
         return false;
     }
@@ -164,13 +175,13 @@ export class ScopeValidator {
                             ...DiagnosticMessages.itemCannotBeUsedAsType(typeChainScan.fullChainName),
                             range: info.expression.range,
                             file: file
-                        }, 'When used in scope');
+                        });
                     } else {
                         this.addMultiScopeDiagnostic({
                             ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedType.toString()),
                             range: info.expression.range,
                             file: file
-                        }, 'When used in scope');
+                        });
                     }
                     continue;
                 }
@@ -183,7 +194,6 @@ export class ScopeValidator {
                 });
                 //skip to the next expression
                 continue;
-
             }
             const enumStatement = scope.getEnum(firstNamespacePartLower, info.enclosingNamespaceNameLower);
 
@@ -245,7 +255,7 @@ export class ScopeValidator {
                     ...DiagnosticMessages.itemCannotBeUsedAsVariable('enum'),
                     range: info.expression.range,
                     file: file
-                }, 'When used in scope');
+                });
             }
 
             //if the full expression is a namespace path, this is an illegal statement because namespaces don't exist at runtme
@@ -254,7 +264,7 @@ export class ScopeValidator {
                     ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
                     range: info.expression.range,
                     file: file
-                }, 'When used in scope');
+                });
             }
         }
     }
@@ -430,6 +440,10 @@ export class ScopeValidator {
                     minParams++;
                 }
             }
+            if (funcType.isVariadic) {
+                // function accepts variable number of arguments
+                maxParams = CallExpression.MaximumArguments;
+            }
             let expCallArgCount = expression.args.length;
             if (expCallArgCount > maxParams || expCallArgCount < minParams) {
                 let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
@@ -449,9 +463,10 @@ export class ScopeValidator {
                     // unable to find a paramType -- maybe there are more args than params
                     break;
                 }
-                if (!paramType?.isTypeCompatible(argType)) {
+                const compatibilityData: TypeCompatibilityData = {};
+                if (!paramType?.isTypeCompatible(argType, compatibilityData)) {
                     this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), paramType.toString()),
+                        ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), paramType.toString(), compatibilityData),
                         range: arg.range,
                         //TODO detect end of expression call
                         file: file
@@ -474,14 +489,141 @@ export class ScopeValidator {
         let funcType = returnStmt.findAncestor(isFunctionExpression).getType({ flags: SymbolTypeFlag.typetime });
         if (isTypedFunctionType(funcType)) {
             const actualReturnType = returnStmt.value?.getType(getTypeOptions);
-            if (actualReturnType && !funcType.returnType.isTypeCompatible(actualReturnType)) {
+            const compatibilityData: TypeCompatibilityData = {};
+
+            if (actualReturnType && !funcType.returnType.isTypeCompatible(actualReturnType, compatibilityData)) {
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.returnTypeMismatch(actualReturnType.toString(), funcType.returnType.toString()),
+                    ...DiagnosticMessages.returnTypeMismatch(actualReturnType.toString(), funcType.returnType.toString(), compatibilityData),
                     range: returnStmt.value.range,
                     file: file
                 });
 
             }
+        }
+        this.event.scope.addDiagnostics(diagnostics);
+    }
+
+    /**
+     * Detect return statements with incompatible types vs. declared return type
+     */
+    private validateDottedSetStatement(file: BrsFile, dottedSetStmt: DottedSetStatement) {
+        const diagnostics: BsDiagnostic[] = [];
+        const getTypeOpts = { flags: SymbolTypeFlag.runtime };
+
+        const expectedLHSType = dottedSetStmt?.obj?.getType(getTypeOpts)?.getMemberType(dottedSetStmt.name.text, getTypeOpts);
+        const actualRHSType = dottedSetStmt?.value?.getType(getTypeOpts);
+        const compatibilityData: TypeCompatibilityData = {};
+
+        if (expectedLHSType?.isResolvable() && !expectedLHSType?.isTypeCompatible(actualRHSType, compatibilityData)) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.assignmentTypeMismatch(actualRHSType.toString(), expectedLHSType.toString(), compatibilityData),
+                range: dottedSetStmt.range,
+                file: file
+            });
+        }
+        this.event.scope.addDiagnostics(diagnostics);
+    }
+
+    /**
+     * Detect invalid use of a binary operator
+     */
+    private validateBinaryExpression(file: BrsFile, binaryExpr: BinaryExpression) {
+        const diagnostics: BsDiagnostic[] = [];
+        const getTypeOpts = { flags: SymbolTypeFlag.runtime };
+
+        if (this.checkIfUsedAsTypeExpression(binaryExpr)) {
+            return;
+        }
+
+        let leftType = binaryExpr.left.getType(getTypeOpts);
+        let rightType = binaryExpr.right.getType(getTypeOpts);
+
+        if (!leftType.isResolvable() || !rightType.isResolvable()) {
+            // Can not find the type. error handled elsewhere
+            return;
+        }
+        let leftTypeToTest = leftType;
+        let rightTypeToTest = rightType;
+
+        if (isEnumMemberType(leftType) || isEnumType(leftType)) {
+            leftTypeToTest = leftType.underlyingType;
+        }
+        if (isEnumMemberType(rightType) || isEnumType(rightType)) {
+            rightTypeToTest = rightType.underlyingType;
+        }
+
+        if (isUnionType(leftType) || isUnionType(rightType)) {
+            // TODO: it is possible to validate based on innerTypes, but more complicated
+            // Because you need to verify each combination of types
+            return;
+        }
+        const leftIsPrimitive = isPrimitiveType(leftTypeToTest);
+        const rightIsPrimitive = isPrimitiveType(rightTypeToTest);
+        const leftIsAny = isDynamicType(leftTypeToTest) || isObjectType(leftTypeToTest);
+        const rightIsAny = isDynamicType(rightTypeToTest) || isObjectType(rightTypeToTest);
+
+
+        if (leftIsAny && rightIsAny) {
+            // both operands are basically "any" type... ignore;
+            return;
+        } else if ((leftIsAny && rightIsPrimitive) || (leftIsPrimitive && rightIsAny)) {
+            // one operand is basically "any" type... ignore;
+            return;
+        }
+        const opResult = util.binaryOperatorResultType(leftTypeToTest, binaryExpr.operator, rightTypeToTest);
+
+        if (isDynamicType(opResult)) {
+            // if the result was dynamic, that means there wasn't a valid operation
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.operatorTypeMismatch(binaryExpr.operator.text, leftType.toString(), rightType.toString()),
+                range: binaryExpr.range,
+                file: file
+            });
+        }
+
+        this.event.scope.addDiagnostics(diagnostics);
+    }
+
+    /**
+     * Detect invalid use of a Unary operator
+     */
+    private validateUnaryExpression(file: BrsFile, unaryExpr: UnaryExpression) {
+        const diagnostics: BsDiagnostic[] = [];
+        const getTypeOpts = { flags: SymbolTypeFlag.runtime };
+
+        let rightType = unaryExpr.right.getType(getTypeOpts);
+
+        if (!rightType.isResolvable()) {
+            // Can not find the type. error handled elsewhere
+            return;
+        }
+        let rightTypeToTest = rightType;
+        if (isEnumMemberType(rightType)) {
+            rightTypeToTest = rightType.underlyingType;
+        }
+        if (isUnionType(rightTypeToTest)) {
+            // TODO: it is possible to validate based on innerTypes, but more complicated
+            // Because you need to verify each combination of types
+            return;
+        } else if (isDynamicType(rightTypeToTest) || isObjectType(rightTypeToTest)) {
+            // operand is basically "any" type... ignore;
+            return;
+        } else if (isPrimitiveType(rightType)) {
+            const opResult = util.unaryOperatorResultType(unaryExpr.operator, rightTypeToTest);
+            if (isDynamicType(opResult)) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.operator.text, rightType.toString()),
+                    range: unaryExpr.range,
+                    file: file
+                });
+            }
+        } else {
+            // rhs is not a primitive, so no binary operator is allowed
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.operator.text, rightType.toString()),
+                range: unaryExpr.range,
+                file: file
+            });
         }
         this.event.scope.addDiagnostics(diagnostics);
     }
@@ -505,7 +647,7 @@ export class ScopeValidator {
     /**
      * Add a diagnostic (to the first scope) that will have `relatedInformation` for each affected scope
      */
-    private addMultiScopeDiagnostic(diagnostic: BsDiagnostic, message = 'Not defined in scope') {
+    private addMultiScopeDiagnostic(diagnostic: BsDiagnostic) {
         diagnostic = this.multiScopeCache.getOrAdd(`${diagnostic.file?.srcPath}-${diagnostic.code}-${diagnostic.message}-${util.rangeToString(diagnostic.range)}`, () => {
             if (!diagnostic.relatedInformation) {
                 diagnostic.relatedInformation = [];
@@ -513,21 +655,23 @@ export class ScopeValidator {
             this.addDiagnostic(diagnostic);
             return diagnostic;
         });
-        const info = {
-            message: `${message} '${this.event.scope.name}'`
-        } as DiagnosticRelatedInformation;
         if (isXmlScope(this.event.scope) && this.event.scope.xmlFile?.srcPath) {
-            info.location = util.createLocation(
-                URI.file(this.event.scope.xmlFile.srcPath).toString(),
-                this.event.scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.range ?? util.createRange(0, 0, 0, 10)
-            );
+            diagnostic.relatedInformation.push({
+                message: `In component scope '${this.event.scope?.xmlFile?.componentName?.text}'`,
+                location: util.createLocation(
+                    URI.file(this.event.scope.xmlFile.srcPath).toString(),
+                    this.event.scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.tokens?.value?.range ?? util.createRange(0, 0, 0, 10)
+                )
+            });
         } else {
-            info.location = util.createLocation(
-                URI.file(diagnostic.file.srcPath).toString(),
-                diagnostic.range
-            );
+            diagnostic.relatedInformation.push({
+                message: `In scope '${this.event.scope.name}'`,
+                location: util.createLocation(
+                    URI.file(diagnostic.file.srcPath).toString(),
+                    diagnostic.range
+                )
+            });
         }
-        diagnostic.relatedInformation.push(info);
     }
 
     private multiScopeCache = new Cache<string, BsDiagnostic>();

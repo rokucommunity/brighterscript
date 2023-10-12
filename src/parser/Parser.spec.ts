@@ -66,7 +66,9 @@ describe('parser', () => {
             });
         }
 
-        it('works for references.expressions', () => {
+        // eslint-disable-next-line func-names, prefer-arrow-callback
+        it('works for references.expressions', function () {
+            this.timeout(5000); // this test takes a long time on github
             const parser = Parser.parse(`
                 b += "plus-equal"
                 a += 1 + 2
@@ -715,6 +717,16 @@ describe('parser', () => {
                 expect(isDottedGetExpression((stmt).expression)).to.be.true;
                 expect(stmt.expression.obj.name.text).to.equal('a');
                 expect(stmt.expression.name.text).to.equal('b');
+            });
+
+            it('adds function statement with missing type after as', () => {
+                let parser = parse(`
+                    sub foo(thing as  )
+                        print thing
+                    end sub
+                `, ParseMode.BrighterScript);
+                expect(parser.diagnostics[0]?.message).to.exist;
+                expect(parser.ast.statements[0]).to.be.instanceof(FunctionStatement);
             });
         });
 

@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallExpression, isCallableType, isCallfuncExpression, isCommentStatement, isComponentType, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isReferenceType, isStringType, isUnaryExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import type { BscType } from '../types/BscType';
@@ -26,6 +26,9 @@ import { VoidType } from '../types/VoidType';
 import { TypePropertyReferenceType } from '../types/ReferenceType';
 import { UnionType } from '../types/UnionType';
 import { ArrayType } from '../types';
+import { AssociativeArrayType } from '../types/AssociativeArrayType';
+import type { ComponentType } from '../types/ComponentType';
+import { createToken } from '../astUtils/creators';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -141,6 +144,9 @@ export class CallExpression extends Expression {
 
     getType(options: GetTypeOptions) {
         const calleeType = this.callee.getType(options);
+        if (options.ignoreCall) {
+            return calleeType;
+        }
         if (isNewExpression(this.parent)) {
             return calleeType;
         }
@@ -856,19 +862,13 @@ export class AALiteralExpression extends Expression {
     }
 
     getType(options: GetTypeOptions): BscType {
-        return super.getType(options);
-
-        // TODO: create an AssocArray type, and populate its members:
-        /*
-        const resultType = new AssocArrayType();
+        const resultType = new AssociativeArrayType();
         for (const element of this.elements) {
             if (isAAMemberExpression(element)) {
-                resultType.addMember(element.keyToken.text, element.range, element.getType(options), SymbolTypeFlags.runtime);
+                resultType.addMember(element.keyToken.text, { definingNode: element }, element.getType(options), SymbolTypeFlag.runtime);
             }
-
         }
         return resultType;
-        */
     }
 }
 
@@ -952,7 +952,7 @@ export class VariableExpression extends Expression {
         const nameKey = this.name.text;
         if (!resultType) {
             const symbolTable = this.getSymbolTable();
-            resultType = symbolTable.getSymbolType(nameKey, { ...options, fullName: nameKey, tableProvider: () => this.getSymbolTable() });
+            resultType = symbolTable?.getSymbolType(nameKey, { ...options, fullName: nameKey, tableProvider: () => this.getSymbolTable() });
         }
         options.typeChain?.push(new TypeChainEntry(nameKey, resultType, this.range));
         return resultType;
@@ -1160,7 +1160,30 @@ export class CallfuncExpression extends Expression {
     }
 
     getType(options: GetTypeOptions) {
-        return this.callee.getType(options);
+        let result: BscType = DynamicType.instance;
+        // a little hacky here with checking options.ignoreCall because callFuncExpression has the method name
+        // It's nicer for CallExpression, because it's a call on any expression.
+
+        const calleeType = this.callee.getType({ ...options, flags: SymbolTypeFlag.runtime });
+        if (isComponentType(calleeType) || isReferenceType(calleeType)) {
+            const funcType = (calleeType as ComponentType).getCallFuncType(this.methodName.text, options);
+            options.typeChain?.push(new TypeChainEntry(this.methodName.text, funcType, this.methodName.range, createToken(TokenKind.Callfunc)));
+            if (options.ignoreCall) {
+                result = funcType;
+            }
+            /* TODO:
+                make callfunc return types work
+            else if (isCallableType(funcType) && (!isReferenceType(funcType.returnType) || funcType.returnType.isResolvable())) {
+                result = funcType.returnType;
+            } else if (!isReferenceType(funcType) && (funcType as any)?.returnType?.isResolvable()) {
+                result = (funcType as any).returnType;
+            } else {
+                return new TypePropertyReferenceType(funcType, 'returnType');
+            }
+            */
+        }
+
+        return result;
     }
 }
 
@@ -1788,7 +1811,7 @@ export class TypedArrayExpression extends Expression {
         );
     }
 
-    public readonly kind = AstNodeKind.ArrayTypeExpression;
+    public readonly kind = AstNodeKind.TypedArrayExpression;
 
     public range: Range;
 

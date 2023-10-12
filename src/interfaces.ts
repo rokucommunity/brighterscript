@@ -19,6 +19,8 @@ import type { FileFactory } from './files/Factory';
 import type { LazyFileData } from './files/LazyFileData';
 import type { SymbolTypeFlag } from './SymbolTable';
 import type { CallExpression } from './parser/Expression';
+import { createToken } from './astUtils/creators';
+import { TokenKind } from './lexer/TokenKind';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
@@ -757,10 +759,11 @@ export interface GetTypeOptions {
     flags: SymbolTypeFlag;
     typeChain?: TypeChainEntry[];
     data?: ExtraSymbolData;
+    ignoreCall?: boolean; // get the type of this expression, NOT it's return type
 }
 
 export class TypeChainEntry {
-    constructor(public name: string, public type: BscType, public range: Range) {
+    constructor(public name: string, public type: BscType, public range: Range, public separatorToken: Token = createToken(TokenKind.Dot)) {
     }
     get isResolved() {
         return this.type?.isResolvable();
@@ -774,4 +777,9 @@ export interface TypeChainProcessResult {
     fullChainName: string;
     range: Range;
     containsDynamic: boolean;
+}
+
+export interface TypeCompatibilityData {
+    missingFields?: { name: string; expectedType: BscType }[];
+    fieldMismatches?: { name: string; expectedType: BscType; actualType: BscType }[];
 }

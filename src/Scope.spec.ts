@@ -24,6 +24,9 @@ import { DoubleType } from './types/DoubleType';
 import { UnionType } from './types/UnionType';
 import { isFunctionStatement, isNamespaceStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
+import { AssociativeArrayType } from './types/AssociativeArrayType';
+import { InterfaceType } from '.';
+import { ComponentType } from './types/ComponentType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -342,7 +345,7 @@ describe('Scope', () => {
                         srcPath: buttonPrimary.srcPath
                     },
                     relatedInformation: [{
-                        message: `Not defined in scope '${s('components/ButtonPrimary.xml')}'`
+                        message: `In component scope 'ButtonPrimary'`
                     }]
                 }, {
                     message: DiagnosticMessages.cannotFindName('delta').message,
@@ -350,7 +353,7 @@ describe('Scope', () => {
                         srcPath: buttonSecondary.srcPath
                     },
                     relatedInformation: [{
-                        message: `Not defined in scope '${s('components/ButtonSecondary.xml')}'`
+                        message: `In component scope 'ButtonSecondary'`
                     }]
                 }
             ]);
@@ -1003,6 +1006,51 @@ describe('Scope', () => {
             program.validate();
             expectDiagnostics(program, [
                 DiagnosticMessages.mismatchArgumentCount(0, 1).message
+            ]);
+        });
+
+        it('detects calling interface function with too few args', () => {
+            program.setFile('source/file.bs', `
+                sub init(arg as Tester)
+                    arg.test()
+                end sub
+                interface Tester
+                    sub test(param1)
+                end interface
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(1, 0).message
+            ]);
+        });
+
+        it('detects calling interface function with too many args', () => {
+            program.setFile('source/file.bs', `
+                sub init(arg as Tester)
+                    arg.test(1, 2)
+                end sub
+                interface Tester
+                    sub test(param1)
+                end interface
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(1, 2).message
+            ]);
+        });
+
+        it('detects calling interface function with mismatch argument type', () => {
+            program.setFile('source/file.bs', `
+                sub init(arg as Tester)
+                    arg.test(1)
+                end sub
+                interface Tester
+                    sub test(param1 as string)
+                end interface
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
             ]);
         });
 
@@ -2682,9 +2730,38 @@ describe('Scope', () => {
                 expectTypeToBe(symbolTable.getSymbolType('a', opts), IntegerType);
                 expectTypeToBe(symbolTable.getSymbolType('b', opts), DoubleType);
                 expectTypeToBe(symbolTable.getSymbolType('c', opts), StringType);
-                expectTypeToBe(symbolTable.getSymbolType('d', opts), DynamicType);
+                expectTypeToBe(symbolTable.getSymbolType('d', opts), AssociativeArrayType);
                 expectTypeToBe(symbolTable.getSymbolType('f', opts), DynamicType);
                 expectTypeToBe(symbolTable.getSymbolType('e', opts), BooleanType);
+            });
+
+            it('should set correct type for aa literals', () => {
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub process(intVal as integer, dblVal as double, strVal as string)
+                        myAA = {
+                            a: intVal
+                            b: dblVal
+                            c: strVal
+                            d: {}
+                            f :m.foo
+                            e: true
+                        }
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const myAA = symbolTable.getSymbolType('myAA', opts);
+                expectTypeToBe(myAA, AssociativeArrayType);
+                expectTypeToBe(myAA.getMemberType('a', opts), IntegerType);
+                expectTypeToBe(myAA.getMemberType('b', opts), DoubleType);
+                expectTypeToBe(myAA.getMemberType('c', opts), StringType);
+                expectTypeToBe(myAA.getMemberType('d', opts), AssociativeArrayType);
+                expectTypeToBe(myAA.getMemberType('f', opts), DynamicType);
+                expectTypeToBe(myAA.getMemberType('e', opts), BooleanType);
+                expectTypeToBe(myAA.getMemberType('someUnsetThing', opts), DynamicType);
             });
 
             it('should set correct type on compound equals', () => {
@@ -2857,6 +2934,104 @@ describe('Scope', () => {
                 expectTypeToBe(unionDefaultType, UnionType);
                 expect((unionDefaultType as UnionType).types).to.include(StringType.instance);
                 expect((unionDefaultType as UnionType).types).to.include(IntegerType.instance);
+            });
+
+            it('should allow built in component types', () => {
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
+                    sub process(data as roAssociativeArray[])
+                        for each datum in data
+                            print datum
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('data', opts), ArrayType);
+                expectTypeToBe(symbolTable.getSymbolType('datum', opts), InterfaceType);
+            });
+
+            it('should allow class types', () => {
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
+                    sub process(data as Klass[])
+                        for each datum in data
+                            print datum.name
+                        end for
+                    end sub
+
+
+                    class Klass
+                        name as string
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const dataType = symbolTable.getSymbolType('data', opts);
+                expectTypeToBe(dataType, ArrayType);
+                expectTypeToBe((dataType as ArrayType).defaultType, ClassType);
+                expect((dataType as ArrayType).defaultType.toString()).to.equal('Klass');
+            });
+
+            it('should allow component types', () => {
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
+                    sub process(labels as roSgNodeLabel[])
+                        for each label in labels
+                            print label.text
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const dataType = symbolTable.getSymbolType('labels', opts);
+                expectTypeToBe(dataType, ArrayType);
+                expectTypeToBe((dataType as ArrayType).defaultType, ComponentType);
+                expect((dataType as ArrayType).defaultType.toString()).to.equal('roSGNodeLabel');
+            });
+        });
+
+        describe('callFunc invocations', () => {
+            it('TODO: should set correct return type', () => {
+
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="Widget.brs"/>
+                        <interface>
+                            <function name="getFloatFromString" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile('components/Widget.brs', `
+                    function getFloatFromString(input as string) as float
+                        return input.toFloat()
+                    end function
+                `);
+
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
+                    sub someFunc(widget as roSGNodeWidget)
+                        pi = widget@.getFloatFromString("3.14")
+                        print pi
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(3, 31));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const sourceScope = program.getScopeByName('source');
+                sourceScope.linkSymbolTable();
+                //TODO: This *SHOULD* be float, but callfunc returns aren't inferred yet
+                expectTypeToBe(symbolTable.getSymbolType('pi', opts), DynamicType);
+                sourceScope.unlinkSymbolTable();
             });
         });
     });

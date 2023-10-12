@@ -1,5 +1,6 @@
+import type { TypeCompatibilityData } from '../interfaces';
 import { SymbolTypeFlag } from '../SymbolTable';
-import { isDynamicType, isInterfaceType, isUnionType, isInheritableType, isObjectType } from '../astUtils/reflection';
+import { isDynamicType, isInterfaceType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { InheritableType } from './InheritableType';
@@ -15,11 +16,10 @@ export class InterfaceType extends InheritableType {
 
     public readonly kind = BscTypeKind.InterfaceType;
 
-    public isTypeCompatible(targetType: BscType) {
-        if (isDynamicType(targetType) || isObjectType(targetType) || isUnionTypeCompatible(this, targetType)) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        if (isDynamicType(targetType) || isObjectType(targetType) || isUnionTypeCompatible(this, targetType, data)) {
             return true;
         }
-        //TODO: We need to make sure that things don't get assigned to built-in types
         if (this.isEqual(targetType)) {
             return true;
         }
@@ -27,10 +27,7 @@ export class InterfaceType extends InheritableType {
         if (ancestorTypes?.find(ancestorType => ancestorType.isEqual(targetType))) {
             return true;
         }
-        if (isInheritableType(targetType) || isUnionType(targetType)) {
-            return this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime);
-        }
-        return false;
+        return this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data);
     }
 
     /**

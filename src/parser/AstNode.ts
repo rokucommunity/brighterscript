@@ -237,5 +237,5 @@ export enum AstNodeKind {
     Block = 'Block',
     TypeExpression = 'TypeExpression',
     TypeCastExpression = 'TypeCastExpression',
-    ArrayTypeExpression = 'ArrayTypeExpression'
+    TypedArrayExpression = 'TypedArrayExpression'
 }

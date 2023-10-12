@@ -9,6 +9,10 @@ import { isXmlFile } from './astUtils/reflection';
 import { SGFieldTypes } from './parser/SGTypes';
 import type { File } from './files/File';
 import type { SGElement } from './parser/SGTypes';
+import { SymbolTypeFlag } from './SymbolTable';
+import type { BaseFunctionType } from './types/BaseFunctionType';
+import { ComponentType } from './types/ComponentType';
+import { DynamicType } from './types/DynamicType';
 
 export class XmlScope extends Scope {
     constructor(
@@ -39,6 +43,43 @@ export class XmlScope extends Scope {
                 return this.program.globalScope;
             }
         });
+    }
+
+    public getComponentType() {
+        let componentElement = this.xmlFile.ast.componentElement;
+        if (!componentElement?.name) {
+            return;
+        }
+        const parentComponentType = componentElement?.extends
+            ? this.symbolTable.getSymbolType(util.getSgNodeTypeName(componentElement?.extends), { flags: SymbolTypeFlag.typetime, fullName: componentElement?.extends, tableProvider: () => this.symbolTable })
+            : undefined;
+        const result = new ComponentType(componentElement.name, parentComponentType as ComponentType);
+        result.addBuiltInInterfaces();
+        const iface = componentElement.interfaceElement;
+        if (!iface) {
+            return result;
+        }
+        //add functions
+        for (const func of iface.functions ?? []) {
+            if (func.name) {
+                const componentFuncType = this.symbolTable.getSymbolType(func.name, { flags: SymbolTypeFlag.runtime, fullName: func.name, tableProvider: () => this.symbolTable });
+                // TODO: Get correct function type, and fully resolve all param and return types of function
+                // eg.:
+                // callFuncType = new CallFuncType(componentFuncType) // does something to fully resolve & store all associated types
+
+                //TODO: add documentation - need to get previous comment from XML
+                result.addCallFuncMember(func.name, {}, componentFuncType as BaseFunctionType, SymbolTypeFlag.runtime);
+            }
+        }
+        //add fields
+        for (const field of iface.fields ?? []) {
+            if (field.id) {
+                const actualFieldType = field.type ? util.getNodeFieldType(field.type, this.symbolTable) : DynamicType.instance;
+                //TODO: add documentation - need to get previous comment from XML
+                result.addMember(field.id, {}, actualFieldType, SymbolTypeFlag.runtime);
+            }
+        }
+        return result;
     }
 
     protected _validate(callableContainerMap: CallableContainerMap) {

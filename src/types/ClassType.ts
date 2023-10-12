@@ -1,5 +1,6 @@
 import { SymbolTable } from '../SymbolTable';
 import { isClassType, isDynamicType, isObjectType } from '../astUtils/reflection';
+import type { TypeCompatibilityData } from '../interfaces';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
@@ -14,12 +15,12 @@ export class ClassType extends InheritableType {
 
     public readonly kind = BscTypeKind.ClassType;
 
-    public isTypeCompatible(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         if (this.isEqual(targetType)) {
             return true;
         } else if (isDynamicType(targetType) ||
             isObjectType(targetType) ||
-            isUnionTypeCompatible(this, targetType)) {
+            isUnionTypeCompatible(this, targetType, data)) {
             return true;
         } else if (isClassType(targetType)) {
             return this.isTypeDescendent(targetType);

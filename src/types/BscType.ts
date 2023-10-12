@@ -2,7 +2,7 @@ import type { GetSymbolTypeOptions, SymbolTableProvider } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
-import type { ExtraSymbolData } from '../interfaces';
+import type { ExtraSymbolData, TypeCompatibilityData } from '../interfaces';
 
 export abstract class BscType {
 
@@ -57,7 +57,7 @@ export abstract class BscType {
      * Check if a different type can be assigned to this type - eg. does the other type convert into this type?
      * @param _otherType the type to check if it can be used as this type, or can automatically be converted into this type
      */
-    isTypeCompatible(_otherType: BscType): boolean {
+    isTypeCompatible(_otherType: BscType, data?: TypeCompatibilityData): boolean {
         throw new Error('Method not implemented.');
     }
     toString(): string {
@@ -71,21 +71,35 @@ export abstract class BscType {
         throw new Error('Method not implemented.');
     }
 
-
-    checkCompatibilityBasedOnMembers(targetType: BscType, flags: SymbolTypeFlag) {
+    checkCompatibilityBasedOnMembers(targetType: BscType, flags: SymbolTypeFlag, data: TypeCompatibilityData = {}) {
         let isSuperSet = true;
-        const targetSymbols = targetType.memberTable?.getAllSymbols(flags);
-        for (const targetSymbol of targetSymbols) {
-            const myTypesOfTargetSymbol = this.memberTable
-                .getSymbolTypes(targetSymbol.name, { flags: flags })
+        data.missingFields ||= [];
+        data.fieldMismatches ||= [];
+        this.addBuiltInInterfaces();
+        targetType.addBuiltInInterfaces();
+
+        const mySymbols = this.getMemberTable()?.getAllSymbols(flags);
+        for (const memberSymbol of mySymbols) {
+            const targetTypesOfSymbol = targetType.getMemberTable()
+                .getSymbolTypes(memberSymbol.name, { flags: flags })
                 ?.map(symbol => symbol.type);
-            isSuperSet = isSuperSet && myTypesOfTargetSymbol && myTypesOfTargetSymbol.length > 0 &&
-                myTypesOfTargetSymbol.reduce((acc, myTypeOfTarget) => {
-                    return acc && myTypeOfTarget.isTypeCompatible(targetSymbol.type);
-                }, true);
-            if (!isSuperSet) {
-                return false;
+            if (!targetTypesOfSymbol || targetTypesOfSymbol.length === 0) {
+                data.missingFields.push({ name: memberSymbol.name, expectedType: memberSymbol.type });
+                isSuperSet = false;
+            } else {
+                isSuperSet =
+                    (targetTypesOfSymbol ?? []).reduce((acc, typeOfTargetSymbol) => {
+                        if (!acc) {
+                            return acc;
+                        }
+                        const myMemberAllowsTargetType = memberSymbol.type.isTypeCompatible(typeOfTargetSymbol);
+                        if (!myMemberAllowsTargetType) {
+                            data.fieldMismatches.push({ name: memberSymbol.name, expectedType: memberSymbol.type, actualType: targetType.getMemberType(memberSymbol.name, { flags: flags }) });
+                        }
+                        return acc && myMemberAllowsTargetType;
+                    }, true) && isSuperSet;
             }
+
         }
         return isSuperSet;
     }

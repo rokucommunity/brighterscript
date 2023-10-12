@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2023-07-27T11:52:31.001Z",
+    "generatedDate": "2023-10-10T19:19:46.253Z",
     "nodes": {
         "animation": {
             "description": "Extends [**AnimationBase**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/animationbase.md\n\nThe Animation node class provides animations of renderable nodes, by applying interpolator functions to the values in specified renderable node fields. For an animation to take effect, an Animation node definition must include a child field interpolator node ([FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md\"FloatFieldInterpolator\"), [Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md\"Vector2DFieldInterpolator\"), [ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md\"ColorFieldInterpolator\")) definition for each renderable node field that is animated.\n\nThe Animation node class provides a simple linear interpolator function, where the animation takes place smoothly and simply from beginning to end. The Animation node class also provides several more complex interpolator functions to allow custom animation effects. For example, you can move a graphic image around the screen at differing speeds and curved trajectories at different times in the animation by specifying the appropriate function in the easeFunction field (quadratic and exponential are two examples of functions that can be specified). The interpolator functions are divided into two parts: the beginning of the animation (ease-in), and the end of the animation (ease-out). You can apply a specified interpolator function to either or both ease-in and ease-out, or specify no function for either or both (which is the linear function). You can also change the portion of the animation that is ease-in and ease-out to arbitrary fractional values for a quadratic interpolator function applied to both ease-in and ease-out.",
@@ -443,7 +443,7 @@
                 {
                     "accessPermission": "READ_ONLY",
                     "default": "",
-                    "description": "Contains the format of the currently playing audio.\n\n| Value | Meaning |\n| --- | --- |\n| \"\" | No stream playing |\n| aac | ISO/IEC 14496-3, Advanced Audio Coding |\n| aac\\_adif | ISO/IEC 14496-3, Advanced Audio Coding, ADIF container |\n| aac\\_adts | ISO/IEC 14496-3, Advanced Audio Coding, ADTS container |\n| aac\\_latm | ISO/IEC 14496-3, Advanced Audio Coding, LATM container |\n| ac3 | Dolby Digital |\n| alac | Apple Lossless |\n| dts | DTS Coherent Acoustics |\n| eac3 | Dolby Digital Plus |\n| flac | Free Lossless Audio Codec |\n| mp2 | ISO/IEC 11172-3, MPEG Audio Layer II |\n| mp3 | ISO/IEC 11172-3, MPEG Audio Layer III |\n| none | Stream contains no playable audio |\n| pcm | linear PCM |\n| unknown | Stream contains unknown audio |\n| vorbis | Ogg Vorbis |\n| wma   _deprecated_ | Microsoft Windows Media Audio.      As of Roku OS 10.5, the Roku platform no longer supports this audio format. |\n| wmapro   _deprecated_ | Microsoft Windows Media Pro Audio.      As of Roku OS 10.5, the Roku platform no longer supports this audio format. |",
+                    "description": "Contains the format of the currently playing audio.\n\n| Value | Meaning |\n| --- | --- |\n| \"\" | No stream playing |\n| aac | ISO/IEC 14496-3, Advanced Audio Coding |\n| aac\\_adif | ISO/IEC 14496-3, Advanced Audio Coding, ADIF container |\n| aac\\_adts | ISO/IEC 14496-3, Advanced Audio Coding, ADTS container |\n| aac\\_latm | ISO/IEC 14496-3, Advanced Audio Coding, LATM container |\n| ac3 | Dolby Digital |\n| alac | Apple Lossless |\n| dts | DTS Coherent Acoustics |\n| eac3 | Dolby Digital Plus |\n| flac | Free Lossless Audio Codec |\n| mp2 | ISO/IEC 11172-3, MPEG Audio Layer II |\n| mp3 | ISO/IEC 11172-3, MPEG Audio Layer III |\n| none | Stream contains no playable audio |\n| pcm | linear PCM |\n| unknown | Stream contains unknown audio |\n| vorbis | Ogg Vorbis |\n| wma   _sunset as of Roku OS 12.5_ | Microsoft Windows Media Audio.      As of Roku OS 10.5, the Roku platform no longer supports this audio format. As part of the Roku OS 12.5 release, this format was officially sunset. |\n| wmapro   _sunset as of Roku OS 12.5_ | Microsoft Windows Media Pro Audio.      As of Roku OS 10.5, the Roku platform no longer supports this audio format. As part of the Roku OS 12.5 release, this format was officially sunset. |",
                     "name": "audioFormat",
                     "type": "string"
                 },
@@ -1007,7 +1007,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md"
         },
         "componentlibrary": {
-            "description": "Extends [**Node**](https://developer.roku.com/docs/references/scenegraph/node.md\n\nThe ComponentLibrary node class downloads a library of custom SceneGraph components to be used in an application. The ComponentLibrary node should be used in a Scene node, such as Scene or OverhangPanelSetScene. One way to ensure that the library downloads before the SceneGraph application begins to compile the components for the application, is to begin the download in the main.brs file that creates the Scene node, by adding an field to the Scene node that can be used to monitor the download, and starts the application when the download is complete.",
+            "description": "Extends [**Node**](https://developer.roku.com/docs/references/scenegraph/node.md\n\nThe ComponentLibrary node class downloads a library of custom SceneGraph components to be used in an application. The ComponentLibrary node should be used in a Scene node, such as Scene or OverhangPanelSetScene. One way to ensure that the library downloads before the SceneGraph application begins to compile the components for the application, is to begin the download in the main.brs file that creates the Scene node, by adding an / field to the Scene node that can be used to monitor the download, and starts the application when the download is complete.",
             "events": [],
             "extends": {
                 "name": "Node",
@@ -1405,7 +1405,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "not set",
-                    "description": "The RSGPalette node contains the set of color values used by this DynamicKeyGrid node. By default, no RSGPalette is specified; therefore, the RSGPalette colors are inherited from the ancestor nodes in the scene graph. If the DynamicKeyboardBase node is used within a StandardDialog node, the following rules determine the color palette used by the keyboard: \\* If the \\*\\*palette\\*\\* field is set, the key grid uses it. \\* If the \\*\\*palette\\*\\* field is not set, the key grid looks up the scene graph until it finds a \\*\\*PaletteGroup\\*\\* node with its \\*\\*palette\\*\\* field set. This may be found in a \\*\\*DynamicKeyboard\\*\\* node, a \\*\\*StandardDialog\\*\\* node, or the \\*\\*Scene\\*\\* itself. \\* If no node has its \\*\\*palette\\*\\* field set, the key grid uses the default palette (gray background/white text). The RSGPalette color values used by the DynamicKeyboardBase are as follows:\n\n| Palette Color Name | Usages |\n| --- | --- |\n| KeyboardColor | Blend color for key background bitmap. |\n| PrimaryTextColor | Text color used for non-focused keys.   Blend color for the icons of non-focused keys.   Text color for the label of focused key suggestion items. |\n| SecondaryItemColor | Text color for disabled keys.   Blend color for the icons of disabled keys. |\n| FocusColor | Blend color for the focus indicator.   Blend color for the background of key suggestion pop-us. |\n| FocusItemColor | Text color for the label of the focused key.   Blend color for the icons of the focused key and the focus indicator in key suggestion pop-ups.   Text color for the labels of non-focused key suggestion items. |",
+                    "description": "The \\[RSGPalette node\\](https://developer.roku.com/docs/references/scenegraph/scene.md contains the set of color values used by this DynamicKeyGrid node. By default, no RSGPalette is specified; therefore, the RSGPalette colors are inherited from the ancestor nodes in the scene graph. If the DynamicKeyboardBase node is used within a StandardDialog node, the following rules determine the color palette used by the keyboard: \\* If the \\*\\*palette\\*\\* field is set, the key grid uses it. \\* If the \\*\\*palette\\*\\* field is not set, the key grid looks up the scene graph until it finds a \\*\\*PaletteGroup\\*\\* node with its \\*\\*palette\\*\\* field set. This may be found in a \\*\\*DynamicKeyboard\\*\\* node, a \\*\\*StandardDialog\\*\\* node, or the \\*\\*Scene\\*\\* itself. \\* If no node has its \\*\\*palette\\*\\* field set, the key grid uses the default palette (gray background/white text). The RSGPalette color values used by the DynamicKeyboardBase are as follows:\n\n| Palette Color Name | Usages |\n| --- | --- |\n| KeyboardColor | Blend color for key background bitmap. |\n| PrimaryTextColor | Text color used for non-focused keys.   Blend color for the icons of non-focused keys.   Text color for the label of focused key suggestion items. |\n| SecondaryItemColor | Text color for disabled keys.   Blend color for the icons of disabled keys. |\n| FocusColor | Blend color for the focus indicator.   Blend color for the background of key suggestion pop-us. |\n| FocusItemColor | Text color for the label of the focused key.   Blend color for the icons of the focused key and the focus indicator in key suggestion pop-ups.   Text color for the labels of non-focused key suggestion items. |",
                     "name": "palette",
                     "type": "RSGPalette node"
                 },
@@ -2230,7 +2230,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "top",
-                    "description": "Specifies the alignment point in the vertical direction. The effect of the value set depends on the whether the layoutDirection field value is set to either horiz or vert\n\n| Value | layoutDirection | Use |\n| --- | --- | --- |\n| top | horiz | Aligns the top edges of each child in the row, and sets the **LayoutGroup** node local y-coordinate origin at the top edge of the children |\n| top | vert | Sets the LayoutGroup node local y-coordinate origin at the top edge of the first child |\n| center | horiz | Aligns the centers of each child in the row, and sets the LayoutGroup node local y-coordinate origin at the center alignment point |\n| vert | vert | Sets the **LayoutGroup** node local y-coordinate origin at the center of the vertical column of children |\n| bottom | horiz | Aligns the bottom edges of each child in the row, and sets the **LayoutGroup** node local y-coordinate origin at the bottom edge of the children |\n| bottom | vert | Sets the LayoutGroup node local y-coordinate origin at the bottom edge of the last child |\n| custom | horiz | Explicitly set the y translation of each child of the LayoutGroup. If the layoutDirection is \"vert\", custom will not be a valid setting. Instead, \"top\" will be used to do the child layout. |",
+                    "description": "Specifies the alignment point in the vertical direction. The effect of the value set depends on the whether the layoutDirection field value is set to either horiz or vert\n\n| Value | layoutDirection | Use |\n| --- | --- | --- |\n| top | horiz | Aligns the top edges of each child in the row, and sets the **LayoutGroup** node local y-coordinate origin at the top edge of the children |\n| top | vert | Sets the LayoutGroup node local y-coordinate origin at the top edge of the first child |\n| center | horiz | Aligns the centers of each child in the row, and sets the LayoutGroup node local y-coordinate origin at the center alignment point |\n| center | vert | Sets the **LayoutGroup** node local y-coordinate origin at the center of the vertical column of children |\n| bottom | horiz | Aligns the bottom edges of each child in the row, and sets the **LayoutGroup** node local y-coordinate origin at the bottom edge of the children |\n| bottom | vert | Sets the LayoutGroup node local y-coordinate origin at the bottom edge of the last child |\n| custom | horiz | Explicitly set the y translation of each child of the LayoutGroup. If the layoutDirection is \"vert\", custom will not be a valid setting. Instead, \"top\" will be used to do the child layout. |",
                     "name": "vertAlignment",
                     "type": "string"
                 }
@@ -2922,6 +2922,23 @@
                 {
                     "name": "ifSGNodeHttpAgentAccess",
                     "url": "https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodehttpagentaccess.md"
+                }
+            ],
+            "methods": [
+                {
+                    "description": "callFunc() is a synchronized interface on roSGNode. It will always execute in the component's owning ScriptEngine and thread (by rendezvous if necessary), and it will always use the m and m.top of the owning component. Any context from the caller can be passed via one or more method parameters, which may be of any type (previously, callFunc() only supported a single associative array parameter).\n\nTo call the function, use the `callFunc` field with the required method signature. A return value, if any, can be an object that is similarly arbitrary. The method being called must determine how to interpret the parameters included in the `callFunc` field.",
+                    "isVariadic": true,
+                    "name": "callFunc",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "The function name to call.",
+                            "isRequired": true,
+                            "name": "functionName",
+                            "type": "String"
+                        }
+                    ],
+                    "returnType": "Dynamic"
                 }
             ],
             "name": "Node",
@@ -5676,6 +5693,13 @@
             },
             "fields": [
                 {
+                    "accessPermission": "WRITE_ONLY",
+                    "default": "{ }",
+                    "description": "The significance and priority order of the attributes and values for the audio tracks available in the video stream. > A language matching any country code does not match a track that specifies the same language but with no country code. Provide the attribute fields from highest to lowest significance (for example, if the \\*\\*language\\*\\* should take precedence over the \\*\\*description\\*\\*, list \\*\\*language\\*\\* first. For the audio track languages, provide the language code values from highest to lowest priority (for example, if English for the United States \\\\\\[\"en-US\"\\\\\\] has precedence over English for the United Kingdom \\\\\\[\"en-UK\"\\\\\\], list the language codes in the following order: \\\\\\[\"en-US\", \"en-UK\"\\\\\\].\n\n| Field | Type | Description |\n| --- | --- | --- |\n| values | roAssociativeArray | Specify values for the following audio track attributes. List the attributes from highest to lowest significance.    <table><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td>language</td><td>array of Strings</td><td>A list of (ISO-639)/country (ISO-3166) codes for the audio track. List the languages in priority order (highest to lowest).</td></tr><tr><td>descriptive</td><td>array of Strings</td><td>A flag indicating whether descriptives exist for the video playing in the stream. This is equivalent to the HLS \"public.accessibility.describes-video\" characteristic.</td></tr></tbody></table>   |\n| overrideSystem | boolean | Specify whether to use the channel's preferences over the system preferences (true) or use the channel's preferences only when the system preferences do not match any of the available tracks (false), which allows the channel to provide additional rules in this case. The default value is false. |\n\n\\*\\*Example\\*\\* \\`\\`\\` video.audioSelectionPreferences = { values: \\[ { language: \\[\"en-US\", \"en-UK\", \"en\", \"en-\\*\"\\] }, { descriptive: \"false\" } \\], overrideSystem: true } \\`\\`\\` \\*\\*Explanation\\*\\* The audio language with the highest priority is \"en-US\". The next highest priority language is \"en-UK\", then \"en\" with no country code, and finally \"en\" with any country code.",
+                    "name": "audioSelectionPreferences      (_Available since Roku OS 12.5_)",
+                    "type": "roAssociativeArray"
+                },
+                {
                     "accessPermission": "READ_WRITE",
                     "default": "NULL",
                     "description": "The ContentNode with the \\[Content Meta-Data\\](/docs/developer-program/getting-started/architecture/content-metadata.md) for the video, or a video playlist (a sequence of videos) to be played. If a video playlist is to be played, the children of this ContentNode comprise the playlist, and each ContentNode child must have all attributes required to play that video. For example, if the videos \"A\" and \"B\" are to be played, three ContentNodes must be created: the parent ContentNode (which is largely ignored), one ContentNode child for \"A,\" and one ContentNode child for \"B.\" The parent node is set into this content field, and when video playback is started, all of its children will be played in sequence. Any changes made to the playlist after playback has started are ignored. See the \\`contentIsPlaylist\\` and \\`contentIndex\\` fields, for more information on playlists.",
@@ -5828,6 +5852,13 @@
                     "description": "Describes the current video play state, such as if the video play has been paused.\n\n| Value | Meaning |\n| --- | --- |\n| none | No current play state |\n| buffering | Video stream is currently buffering |\n| playing | Video is currently playing |\n| paused | Video is currently paused |\n| stopped | Video is currently stopped |\n| finished | Video has successfully completed playback |\n| error | An error has occurred in the video play. The error code, message, and diagnostics can be found in the `errorCode`, `errorMsg`, and `errorStr` fields respectively. |",
                     "name": "state",
                     "type": "value string"
+                },
+                {
+                    "accessPermission": "WRITE_ONLY",
+                    "default": "{ }",
+                    "description": "The significance and priority order of the attributes and values for the subtitle tracks available in the video stream. Provide the attribute fields from highest to lowest significance (for example, if \\*\\*language\\*\\* should take precedence over all other attributes, list it first). For the subtitle track languages, provide the language codes from highest to lowest priority (for example, if Spanish for Latin America and the Caribbean \\\\\\[\"es-419\"\\\\\\] has precedence over Spanish \\\\\\[\"es\"\\\\\\], list the language codes in the following order: \\\\\\[\"es-419\", \"es\"\\\\\\].\n\n| Field | Type | Description |\n| --- | --- | --- |\n| values | roAssociativeArray | Specify values for the following subtitle track attributes. List the attributes from highest to lowest significance.    <table><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody><tr><td>language</td><td>array of Strings</td><td>A list of language (ISO-639)/country (ISO-3166) codes for the subtitles. List the language codes in priority order (highest to lowest).</td></tr><tr><td>caption</td><td>array of Strings</td><td>A flag indicating whether captions exist for the video stream. This is equivalent to the HLS \"public.accessibility.transcribes-spoken-dialog\" characteristic.</td></tr><tr><td>descriptive</td><td>array of Strings</td><td>A flag indicating whether descriptives exist for the music and sounds in the video stream. This is equivalent to the HLS \"public.accessibility.describes-music-and-sound\" characteristic.</td></tr><tr><td>easyReader</td><td>array of Strings</td><td>A flag indicating whether subtitles are easy to read.</td></tr></tbody></table>   |\n| overrideSystem | boolean | Specify whether to use the channel's preferences over the system preferences (true) or use the channel's preferences only when the system preferences do not match any of the available tracks (false), which allows the channel to provide additional rules in this case. The default value is false. |\n\n\\*\\*Example\\*\\* \\`\\`\\` video.subtitleSelectionPreferences = { values: \\[ { language: \\[\"es-419\", \"es\", \"es-\\*\", \"fr\", \"en-US\", \"en-UK\", \"en\"\\] }, { caption: \"true\" }, { descriptive: \\[\"false\"\\] }, { easyReader: \"true\" } \\], overrideSystem: true } \\`\\`\\` \\*\\*Explanation\\*\\* The subititle language with the highest priority is \"es\" with a country code of \"419\". The next highest priority language is \"es\" with no country code, and then \"es\" with any country code.",
+                    "name": "subtitleSelectionPreferences      (_Available since Roku OS 12.5_)",
+                    "type": "roAssociativeArray"
                 }
             ],
             "interfaces": [],
@@ -5927,7 +5958,7 @@
         "roappmemorymonitor": {
             "availableSince": "10.5",
             "constructors": [],
-            "description": "_Available since Roku OS 10.5_\n\nThe **roAppMemoryMonitor** component is used to subscribe channels to low-memory notifications. When a channel is subscribed, it receives a [roAppMemoryMonitorEvent](https://developer.roku.com/docs/references/brightscript/events/roappmemorymonitorevent.md when it reaches a specific percentage of the per-channel memory limit (80%).\n\n> To use the roAppMemoryMonitor functions, you must add the **run\\_as\\_process=1** attribute to the [channel manifest](/docs/developer-program/getting-started/architecture/channel-manifest.md).\n> \n> This feature is only supported on [current Roku device models](/docs/specs/hardware.md#current-roku-models).",
+            "description": "_Available since Roku OS 10.5_\n\nThe **roAppMemoryMonitor** component is used to subscribe channels to low-memory notifications. When a channel is subscribed, it receives a [roAppMemoryMonitorEvent](https://developer.roku.com/docs/references/brightscript/events/roappmemorymonitorevent.md when it reaches a specific percentage of the per-channel memory limit (80%).\n\n> The roAppMemoryMonitor functions are supported on all [current and updatable device models](/docs/specs/hardware.md), except for Liberty, Austin, Mustang and Littlefield.",
             "events": [
                 {
                     "name": "roAppMemoryMonitorEvent",
@@ -5948,14 +5979,16 @@
                 {
                     "params": [
                         {
+                            "default": null,
                             "isRequired": true,
-                            "name": "param1",
-                            "type": "dynamic"
+                            "name": "size",
+                            "type": "Integer"
                         },
                         {
+                            "default": null,
                             "isRequired": true,
-                            "name": "param2",
-                            "type": "dynamic"
+                            "name": "resize",
+                            "type": "Boolean"
                         }
                     ],
                     "returnType": "roArray"
@@ -6116,6 +6149,17 @@
         },
         "robitmap": {
             "constructors": [
+                {
+                    "params": [
+                        {
+                            "default": null,
+                            "isRequired": true,
+                            "name": "bitmapProps",
+                            "type": "Object"
+                        }
+                    ],
+                    "returnType": "roBitmap"
+                },
                 {
                     "params": [
                         {
@@ -6921,7 +6965,7 @@
                     "returnType": "roRegistry"
                 }
             ],
-            "description": "The Registry is an area of non-volatile storage where a small number of persistent settings can be stored.\n\nThe Registry provides a means for an application to write and read small amounts of data such as settings, scores, etc. The data persists even if the user exits the application and even if the player is rebooted. Registry data is removed only when the application explicitly removes it, the user uninstalls the application, which remove the registry for the application, or the user performs a factory reset, which removes the registry for all applications.\n\nAccess to the registry is available through the roRegistry object. This object is created with no parameters:\n\n`CreateObject(\"roRegistry\")`\n\nThere is a separate registry for each [developer ID](/docs/developer-program/publishing/packaging-channels.md#step-3-run-the-genkey-utility-to-create-a-signing-key \"developer ID\"). This allows multiple applications to use the registry without being able to read or modify the registry from other applications. If desired, a single registry can be shared across multiple applications by using the same developer ID to package the applications. This is the conventional way that an \"application suite\" with shared preferences and other shared information should work. Each registry is divided into sections which are specified by the developer for organization and grouping of attributes. Methods in ifRegistry are provided to list the sections in the registry and to provide access to the data in each section.\n\n> The maximum size of each zlib-compressed application registry is **16K bytes**. Channels should minimize the amount of data stored in the registry and the frequency in which they update it.\n> \n> Use the **ifRegistry.GetSpaceAvailable()** function to check the number of bytes available in the registry.\n\nThe Registry also supports the use of a special transient registry section. A registry section named \"Transient\" can be used to store attributes that have the lifetime of a single boot. Within a specific boot session, these values will be persistent to the application and stored as any other registry value. Whenever the user reboots the Roku Streaming Player, all \"Transient\" registry sections are removed and the values no longer persist. This technique is useful for caching data to minimize network access, yet still ensuring that this data is always fresh after a system reboot.\n\nThe registry is encrypted, and updates are relatively performance intensive and should be used sparingly. Note that all writes to the registry are delayed, and not committed to non-volatile storage until ifRegistry.Flush() or ifRegistrySection.Flush() is explicitly called. The platform may choose opportune times to flush data on its own, but no application is technically correct unless it explicitly calls Flush() at appropriate times. Flushing the registry is a relatively time-consuming operation, so it should be done as infrequently as possible. The Registry data is stored in a fault tolerant manner by preserving a backup for each write which is automatically rolled-back in the event of a failure.",
+            "description": "The Registry is an area of non-volatile storage where a small number of persistent settings can be stored.\n\nThe Registry provides a means for an application to write and read small amounts of data such as settings, scores, etc. The data persists even if the user exits the application and even if the player is rebooted. Registry data is removed only when the application explicitly removes it, the user uninstalls the application, which remove the registry for the application, or the user performs a factory reset, which removes the registry for all applications.\n\nAccess to the registry is available through the roRegistry object. This object is created with no parameters:\n\n`CreateObject(\"roRegistry\")`\n\nThere is a separate registry for each [developer ID](/docs/developer-program/publishing/packaging-channels.md#step-3-run-the-genkey-utility-to-create-a-signing-key \"developer ID\"). This allows multiple applications to use the registry without being able to read or modify the registry from other applications. If desired, a single registry can be shared across multiple applications by using the same developer ID to package the applications. This is the conventional way that an \"application suite\" with shared preferences and other shared information should work. Each registry is divided into sections which are specified by the developer for organization and grouping of attributes. Methods in ifRegistry are provided to list the sections in the registry and to provide access to the data in each section.\n\n> The maximum size of each zlib-compressed application registry is **32K bytes**. Channels should minimize the amount of data stored in the registry and the frequency in which they update it.\n> \n> Use the **ifRegistry.GetSpaceAvailable()** function to check the number of bytes available in the registry.\n\nThe Registry also supports the use of a special transient registry section. A registry section named \"Transient\" can be used to store attributes that have the lifetime of a single boot. Within a specific boot session, these values will be persistent to the application and stored as any other registry value. Whenever the user reboots the Roku Streaming Player, all \"Transient\" registry sections are removed and the values no longer persist. This technique is useful for caching data to minimize network access, yet still ensuring that this data is always fresh after a system reboot.\n\nThe registry is encrypted, and updates are relatively performance intensive and should be used sparingly. Note that all writes to the registry are delayed, and not committed to non-volatile storage until ifRegistry.Flush() or ifRegistrySection.Flush() is explicitly called. The platform may choose opportune times to flush data on its own, but no application is technically correct unless it explicitly calls Flush() at appropriate times. Flushing the registry is a relatively time-consuming operation, so it should be done as infrequently as possible. The Registry data is stored in a fault tolerant manner by preserving a backup for each write which is automatically rolled-back in the event of a failure.",
             "events": [],
             "interfaces": [
                 {
@@ -6934,6 +6978,17 @@
         },
         "roregistrysection": {
             "constructors": [
+                {
+                    "params": [
+                        {
+                            "default": null,
+                            "isRequired": true,
+                            "name": "section",
+                            "type": "String"
+                        }
+                    ],
+                    "returnType": "roRegistrySection"
+                },
                 {
                     "params": [
                         {
@@ -7692,6 +7747,13 @@
                     "returnType": "Boolean"
                 },
                 {
+                    "description": "Returns the estimated kilobytes (Kb) of memory available for the channel. This can be used to determine when to release memory when a channel receives low-memory warnings.",
+                    "name": "GetChannelAvailableMemory",
+                    "params": [],
+                    "returnDescription": "An integer indicating the estimated available memory remaining for the channel or the available memory for the device, whichever is lower.",
+                    "returnType": "dynamic"
+                },
+                {
                     "description": "Returns the usage percentage of memory limit for the channel.",
                     "name": "GetMemoryLimitPercent",
                     "params": [],
@@ -7969,7 +8031,7 @@
                         {
                             "default": null,
                             "description": "Items are arbitrarily grouped by comparable type of number or string, and are sorted within the group with a logical comparison.      If \"r\" is included in flags, a reverse sort is performed. If \"i\" is included in flags, a case-insensitive sort is performed. If invalid flags are specified, the sort is not performed.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "flags",
                             "type": "String"
                         }
@@ -7990,7 +8052,7 @@
                         {
                             "default": null,
                             "description": "Items are arbitrarily grouped by comparable type of number or string, and are sorted within the group with a logical comparison.      If \"r\" is included in flags, a reverse sort is performed. If \"i\" is included in flags, a case-insensitive sort is performed. If invalid flags are specified, the sort is not performed.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "flags",
                             "type": "String"
                         }
@@ -9486,7 +9548,7 @@
                     "params": [
                         {
                             "default": null,
-                            "description": "An associative array with the audio format to be checked. The general format of the associative arrays for CanDecodeAudio() is similar to the parameter and return associative arrays used in [CanDecodeVideo()](https://developer.roku.com/docs/references/brightscript/interfaces/ifdeviceinfo.mdcandecodevideovideo_format-as-object-as-object):  \n| Key        | Type    | Value                                                                                                                                                                                                                                                                                                                                                                                                                   | Requirement |\n| ---------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |\n| Codec      | string  | Specifies the audio codec: “aac”, “ac3”, “eac3”, \"alac\", \"flac\", “mp2”, “mp3”, “vorbis”, “wma” (deprecated), “wma pro” (deprecated), “dts”, \"ac4\"                                                                                                                                                                                                                                                                       | Required    |\n| Profile    | string  | Specifies the codec profile:CodecProfile\"h.265/h.265\"\"main\", \"high\", \"main 10\"\"vp9\"\"profile 0\", \"profile 2\"\"AAC codec profiles\"\"mp2 lc\", \"mp4 he\"                                                                                                                                                                                                                                                                       | Optional    |\n| Level      | String  | Specifies the codec level:CodecLevel\"h.265/h.265\"4.1, 4.2, 5.0, 5.1\"vp9\"3.0, 3.1, 4.0, 4.1, 5.0, 5.1                                                                                                                                                                                                                                                                                                                    | Optional    |\n| ChCnt      | integer | Specifies the required number of audio channels                                                                                                                                                                                                                                                                                                                                                                         | Optional    |\n| PassThru   | integer | Specifies whether the bitstream needs to be decoded on the device. By default, this reports the codec properties of both the Roku device and the attached HDMI device.You can filter the values returned by including one of the following options:**0** \\- Reports only codecs that are supported on the Roku device itself.**1** \\- Reports only codecs of the attached HDMI device (for example, an audio receiver). | Optional    |\n| Atmos      | Integer | Specifies whether atmos is required. Include 'atmos=1' if it is.                                                                                                                                                                                                                                                                                                                                                        | Optional    |\n| SampleRate | integer | Specifies the sample rate                                                                                                                                                                                                                                                                                                                                                                                               | Optional    |\n| BitRate    | integer | Specifies the bit rate in Kbit/sec                                                                                                                                                                                                                                                                                                                                                                                      | Optional    |\n| Container  | string  | Specifies the container format                                                                                                                                                                                                                                                                                                                                                                                          | Optional    |\n",
+                            "description": "An associative array with the audio format to be checked. The general format of the associative arrays for CanDecodeAudio() is similar to the parameter and return associative arrays used in [CanDecodeVideo()](https://developer.roku.com/docs/references/brightscript/interfaces/ifdeviceinfo.mdcandecodevideovideo_format-as-object-as-object):  \n| Key        | Type    | Value                                                                                                                                                                                                                                                                                                                                                                                                                   | Requirement |\n| ---------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |\n| Codec      | string  | Specifies the audio codec: “aac”, “ac3”, “eac3”, \"alac\", \"flac\", “mp2”, “mp3”, “vorbis”, “wma” (sunset as of Roku OS 12.5), “wma pro” (sunset as of Roku OS 12.5), “dts”, \"ac4\"                                                                                                                                                                                                                                         | Required    |\n| Profile    | string  | Specifies the codec profile:CodecProfile\"h.265/h.265\"\"main\", \"high\", \"main 10\"\"vp9\"\"profile 0\", \"profile 2\"\"AAC codec profiles\"\"mp2 lc\", \"mp4 he\"                                                                                                                                                                                                                                                                       | Optional    |\n| Level      | String  | Specifies the codec level:CodecLevel\"h.265/h.265\"4.1, 4.2, 5.0, 5.1\"vp9\"3.0, 3.1, 4.0, 4.1, 5.0, 5.1                                                                                                                                                                                                                                                                                                                    | Optional    |\n| ChCnt      | integer | Specifies the required number of audio channels                                                                                                                                                                                                                                                                                                                                                                         | Optional    |\n| PassThru   | integer | Specifies whether the bitstream needs to be decoded on the device. By default, this reports the codec properties of both the Roku device and the attached HDMI device.You can filter the values returned by including one of the following options:**0** \\- Reports only codecs that are supported on the Roku device itself.**1** \\- Reports only codecs of the attached HDMI device (for example, an audio receiver). | Optional    |\n| Atmos      | Integer | Specifies whether atmos is required. Include 'atmos=1' if it is.                                                                                                                                                                                                                                                                                                                                                        | Optional    |\n| SampleRate | integer | Specifies the sample rate                                                                                                                                                                                                                                                                                                                                                                                               | Optional    |\n| BitRate    | integer | Specifies the bit rate in Kbit/sec                                                                                                                                                                                                                                                                                                                                                                                      | Optional    |\n| Container  | string  | Specifies the container format                                                                                                                                                                                                                                                                                                                                                                                          | Optional    |\n",
                             "isRequired": true,
                             "name": "audio_format",
                             "type": "Object"
@@ -15721,14 +15783,14 @@
                             "default": null,
                             "description": "The string of characters within the roString object to be replaced.",
                             "isRequired": true,
-                            "name": "from",
+                            "name": "fromStr",
                             "type": "String"
                         },
                         {
                             "default": null,
                             "description": "The string of characters that will replace all instances of the **from** string.",
                             "isRequired": true,
-                            "name": "to",
+                            "name": "toStr",
                             "type": "String"
                         }
                     ],
@@ -16544,6 +16606,13 @@
                     "name": "GetUrl",
                     "params": [],
                     "returnDescription": "The URL.",
+                    "returnType": "String"
+                },
+                {
+                    "description": "Returns the user agent of the device, which can then be passed into server-side ad requests.",
+                    "name": "GetUserAgent",
+                    "params": [],
+                    "returnDescription": "The device user agent, which has the following syntax: \"Roku/DVP-major.minor (major.minor.revision.build-plid)\". For example, Roku/DVP‑12.0 (12.0.0.4171‑29).",
                     "returnType": "String"
                 },
                 {

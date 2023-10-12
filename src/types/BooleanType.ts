@@ -1,8 +1,9 @@
 import { isBooleanType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
-import { isUnionTypeCompatible } from './helpers';
+import { isNativeInterfaceCompatible, isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import type { TypeCompatibilityData } from '../interfaces';
 
 export class BooleanType extends BscType {
     constructor(
@@ -15,12 +16,13 @@ export class BooleanType extends BscType {
 
     public static instance = new BooleanType('boolean');
 
-    public isTypeCompatible(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isBooleanType(targetType) ||
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
-            isUnionTypeCompatible(this, targetType)
+            isUnionTypeCompatible(this, targetType) ||
+            isNativeInterfaceCompatible(this, targetType, 'roboolean', data)
         );
     }
 

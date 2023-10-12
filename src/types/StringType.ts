@@ -1,8 +1,9 @@
-import { isDynamicType, isEnumMemberType, isEnumType, isObjectType, isStringType } from '../astUtils/reflection';
+import { isDynamicType, isObjectType, isStringType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
-import { isUnionTypeCompatible } from './helpers';
+import { isEnumTypeCompatible, isNativeInterfaceCompatible, isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import type { TypeCompatibilityData } from '../interfaces';
 
 export class StringType extends BscType {
     constructor(
@@ -18,16 +19,14 @@ export class StringType extends BscType {
      */
     public static instance = new StringType('string');
 
-    public isTypeCompatible(targetType: BscType) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isStringType(targetType) ||
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
-            isUnionTypeCompatible(this, targetType) ||
-            //string enums are compatible with strings
-            (
-                (isEnumType(targetType) || isEnumMemberType(targetType)) && isStringType(targetType.underlyingType)
-            )
+            isUnionTypeCompatible(this, targetType, data) ||
+            isEnumTypeCompatible(this, targetType, data) ||
+            isNativeInterfaceCompatible(this, targetType, 'rostring', data)
         );
     }
 

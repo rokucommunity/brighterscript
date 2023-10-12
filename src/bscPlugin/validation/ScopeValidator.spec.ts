@@ -1,8 +1,11 @@
 import * as sinonImport from 'sinon';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Program } from '../../Program';
-import { expectDiagnostics, expectZeroDiagnostics } from '../../testHelpers.spec';
+import { expectDiagnostics, expectTypeToBe, expectZeroDiagnostics, trim } from '../../testHelpers.spec';
 import { expect } from 'chai';
+import type { TypeCompatibilityData } from '../../interfaces';
+import { IntegerType } from '../../types/IntegerType';
+import { StringType } from '../../types/StringType';
 
 describe('ScopeValidator', () => {
 
@@ -135,6 +138,59 @@ describe('ScopeValidator', () => {
                 `);
             program.validate();
             //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('checks for at least the number of non-optional args on variadic (callFunc) functions', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.brs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.brs', `
+                sub someFunc(input as object)
+                    print input
+                end sub
+            `);
+            program.setFile('source/util.brs', `
+                sub useCallFunc(input as roSGNodeWidget)
+                    input.callFunc()
+                end sub
+            `);
+            program.validate();
+            //should have an error
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount('1-32', 0)
+            ]);
+        });
+
+        it('any number number of args on variadic (callFunc) functions', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.brs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/Widget.brs', `
+                sub someFunc(input as object)
+                    print input
+                end sub
+            `);
+            program.setFile('source/util.brs', `
+                sub useCallFunc(input as roSGNodeWidget)
+                    input.callFunc("someFunc", 1, 2, 3, {})
+                end sub
+            `);
+            program.validate();
+            //TODO: do a better job of handling callFunc() invocations!
+            //should have an error
             expectZeroDiagnostics(program);
         });
     });
@@ -279,7 +335,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.argumentTypeMismatch('string', 'Direction')
+                DiagnosticMessages.argumentTypeMismatch('string', 'Direction').message
             ]);
         });
 
@@ -933,6 +989,273 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.argumentTypeMismatch('function () as dynamic', 'integer').message
             ]);
         });
+
+
+        it('allows AAs that match an interface to be passed as args', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    takesMyIface({beta: "hello", charlie: "world"})
+                end sub
+
+                sub takesMyIface(iFace as MyIFace)
+                end sub
+
+                interface MyIFace
+                    beta as string
+                    charlie as string
+                end interface
+            `);
+            program.validate();
+            //should have error
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates empty AAs that are passed as args to param expecting interface', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    takesMyIface({})
+                end sub
+
+                sub takesMyIface(iFace as MyIFace)
+                end sub
+
+                interface MyIFace
+                    beta as string
+                    charlie as string
+                end interface
+            `);
+            program.validate();
+            //should have error
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', 'MyIFace', {
+                    missingFields: [{ name: 'beta', expectedType: StringType.instance }, { name: 'charlie', expectedType: StringType.instance }]
+                }).message
+            ]);
+        });
+
+        it('includes data on missing fields', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    takesMyIface({charlie: "hello"})
+                end sub
+
+                sub takesMyIface(iFace as MyIFace)
+                end sub
+
+                interface MyIFace
+                    beta as string
+                    charlie as integer
+                end interface
+            `);
+            program.validate();
+
+            //should have error
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', 'MyIFace', {
+                    missingFields: [{ name: 'beta', expectedType: StringType.instance }],
+                    fieldMismatches: [{ name: 'charlie', expectedType: IntegerType.instance, actualType: StringType.instance }]
+                }).message
+            ]);
+
+            //The aa should have 'beta' and 'charlie' properties of type string and integer
+            const diagnostics = program.getDiagnostics();
+            expect(diagnostics.length).to.eq(1);
+            const data: TypeCompatibilityData = diagnostics[0].data;
+            expect(data.missingFields.length).to.eq(1);
+            expect(data.missingFields[0].name).to.eq('beta');
+            expectTypeToBe(data.missingFields[0].expectedType, StringType);
+            expect(data.fieldMismatches.length).to.eq(1);
+            expect(data.fieldMismatches[0].name).to.eq('charlie');
+            expectTypeToBe(data.fieldMismatches[0].expectedType, IntegerType);
+            expectTypeToBe(data.fieldMismatches[0].actualType, StringType);
+        });
+
+        it('allows interfaces that have a superset of properties', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    takesMyIface({alpha: true, beta: "hello", charlie: 1})
+                end sub
+
+                sub takesMyIface(iFace as MyIFace)
+                end sub
+
+                interface MyIFace
+                    beta as string
+                    charlie as integer
+                end interface
+            `);
+            program.validate();
+
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows interfaces that have a superset of properties', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(otherFace as MyOtherFace)
+                    takesMyIface(otherFace)
+                end sub
+
+                sub takesMyIface(iFace as MyIFace)
+                end sub
+
+                interface MyIFace
+                    beta as string
+                    charlie as integer
+                end interface
+
+                interface MyOtherFace
+                    alpha as boolean
+                    beta as string
+                    charlie as integer
+                end interface
+            `);
+            program.validate();
+
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('includes data on missing fields', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    takesMyIface({charlie: "hello"})
+                end sub
+
+                sub takesMyIface(iFace as MyIFace)
+                end sub
+
+                interface MyIFace
+                    beta as string
+                    charlie as integer
+                end interface
+            `);
+            program.validate();
+
+            //should have error
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', 'MyIFace', {
+                    missingFields: [{ name: 'beta', expectedType: StringType.instance }],
+                    fieldMismatches: [{ name: 'charlie', expectedType: IntegerType.instance, actualType: StringType.instance }]
+                }).message
+            ]);
+
+            //The aa should have 'beta' and 'charlie' properties of type string and integer
+            const diagnostics = program.getDiagnostics();
+            expect(diagnostics.length).to.eq(1);
+            const data: TypeCompatibilityData = diagnostics[0].data;
+            expect(data.missingFields.length).to.eq(1);
+            expect(data.missingFields[0].name).to.eq('beta');
+            expectTypeToBe(data.missingFields[0].expectedType, StringType);
+            expect(data.fieldMismatches.length).to.eq(1);
+            expect(data.fieldMismatches[0].name).to.eq('charlie');
+            expectTypeToBe(data.fieldMismatches[0].expectedType, IntegerType);
+            expectTypeToBe(data.fieldMismatches[0].actualType, StringType);
+        });
+
+
+        describe('array compatibility', () => {
+            it('accepts dynamic when assigning to a roArray', () => {
+                program.setFile('source/util.bs', `
+                    sub takesArray(arr as roArray)
+                    end sub
+
+                    sub doStuff(someArray)
+                        takesArray(someArray)
+                    end sub
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
+
+            it('accepts roArray when assigning to a roArray', () => {
+                program.setFile('source/util.bs', `
+                    sub takesArray(arr as roArray)
+                    end sub
+
+                    sub doStuff(someArray as roArray)
+                        takesArray(someArray)
+                    end sub
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
+
+            it('accepts typed arrays when assigning to a roArray', () => {
+                program.setFile('source/util.bs', `
+                    sub takesArray(arr as roArray)
+                    end sub
+
+                    sub doStuff(someArray as dynamic[])
+                        takesArray(someArray)
+                    end sub
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
+
+
+            it('accepts roArray when assigning to dynamic[]', () => {
+                program.setFile('source/util.bs', `
+                    sub takesArray(arr as dynamic[])
+                    end sub
+
+                    sub doStuff(someArray as roArray)
+                        takesArray(someArray)
+                    end sub
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
+
+            it('accepts roArray when assigning to typed array', () => {
+                program.setFile('source/util.bs', `
+                    sub takesArray(arr as string[])
+                    end sub
+
+                    sub doStuff(someArray as roArray)
+                        takesArray(someArray)
+                    end sub
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates when typed array types are incompatible', () => {
+                program.setFile('source/util.bs', `
+                    sub takesArray(arr as string[])
+                    end sub
+
+                    sub doStuff(someArray as integer[])
+                        takesArray(someArray)
+                    end sub
+                `);
+                program.validate();
+                //should have errors
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('Array<integer>', 'Array<string>').message
+                ]);
+            });
+
+            it('accepts when typed array types are compatible', () => {
+                program.setFile('source/util.bs', `
+                    sub takesArray(arr as float[])
+                    end sub
+
+                    sub doStuff(someArray as integer[])
+                        takesArray(someArray)
+                    end sub
+                `);
+                program.validate();
+                //should have no errors
+                expectZeroDiagnostics(program);
+            });
+        });
     });
 
     describe('cannotFindName', () => {
@@ -1056,5 +1379,403 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.returnTypeMismatch('string', 'void').message
             ]);
         });
+
+        it('allows returning enums with the default type that matches the declared return type', () => {
+            program.setFile('source/util.bs', `
+                enum MyEnum
+                    val1
+                    val2
+                end enum
+
+                function getInt() as integer
+                    return MyEnum.val1
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows returning enums passed as a param with the default type that matches the declared return type', () => {
+            program.setFile('source/util.bs', `
+                enum MyEnum
+                    val1
+                    val2
+                end enum
+
+                function getInt(enumVal as MyEnum) as integer
+                    return enumVal
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows returning enums with the default type that matches the declared return type for string enums', () => {
+            program.setFile('source/util.bs', `
+                enum MyEnum
+                    val1 = "hello"
+                    val2 = "world"
+                end enum
+
+                function getInt() as string
+                    return MyEnum.val1
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags returning enums with the default type that does not matches the declared return type', () => {
+            program.setFile('source/util.bs', `
+                enum MyEnum
+                    val1 = "hello"
+                    val2 = "world"
+                end enum
+
+                function getInt() as integer
+                    return MyEnum.val1
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.returnTypeMismatch('MyEnum', 'integer').message
+            ]);
+        });
+
+        it('flags returning enums passed as params with the default type that does not matches the declared return type', () => {
+            program.setFile('source/util.bs', `
+                enum MyEnum
+                    val1 = "hello"
+                    val2 = "world"
+                end enum
+
+                function getInt(enumVal as MyEnum) as integer
+                    return enumVal
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.returnTypeMismatch('MyEnum', 'integer').message
+            ]);
+        });
+
+        it('flags returning enums type', () => {
+            program.setFile('source/util.bs', `
+                enum MyEnum
+                    val1 = "hello"
+                    val2 = "world"
+                end enum
+
+
+                function getInt() as integer
+                    return MyEnum
+                end function
+            `);
+            program.validate();
+            expect(program.getDiagnostics().length).to.be.greaterThan(0);
+        });
+
+        it('allows returning an Enum', () => {
+            program.setFile('source/util.bs', `
+                enum MyEnum
+                    val1 = "hello"
+                    val2 = "world"
+                end enum
+
+
+                function getInt() as MyEnum
+                    return MyEnum.val1
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
+    describe('assignmentTypeMismatch', () => {
+        it('finds when the type of the lhs is not compatible with the expected type', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(thing as iThing)
+                    thing.name = 123
+                end sub
+
+                interface iThing
+                    name as string
+                end interface
+            `);
+            program.validate();
+            //should have error - assignment value should be a string, not a float
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('integer', 'string').message
+            ]);
+        });
+
+
+        it('allows setting a member with correct type that is a union type', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(thing as iThing)
+                    thing.name = 123
+                end sub
+
+                interface iThing
+                    name as string or integer
+                end interface
+            `);
+            program.validate();
+            //should have no error - assignment value should be a string, not a float
+            expectZeroDiagnostics(program);
+        });
+
+        it('finds when the rhs type is not compatible with the lhs, which is a union type', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(thing as iThing)
+                    thing.name = false
+                end sub
+
+                interface iThing
+                    name as string or integer
+                end interface
+            `);
+            program.validate();
+            //should have error - assignment value should be a string or integer, not a boolean
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('boolean', 'string or integer').message
+            ]);
+        });
+
+        it('validates when trying to assign to a class method', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(myThing as Thing)
+                    myThing.getPi = 3.14
+                end sub
+
+                class Thing
+                    function getPi() as float
+                        return 3.14
+                    end function
+                end class
+            `);
+            program.validate();
+            //should have error
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('float', 'function getPi() as float').message
+            ]);
+        });
+
+        it('allows adding new properties to a class (but why would you want to?)', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(myThing as Thing)
+                    myThing.getPi = 3.14
+                end sub
+
+                class Thing
+                end class
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates class constructors', () => {
+            program.setFile('source/util.bs', `
+                class Video
+                    sub new(url as integer)
+                        m.url = url 'this should be a compile error
+                    end sub
+                    public url as string
+                end class
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('integer', 'string').message
+            ]);
+        });
+
+        it('validates when assigning to a sgNode', () => {
+            program.setFile('source/util.bs', `
+                sub setLabelText(label as roSGNodeLabel)
+                    label.text = 1234
+                end sub
+
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('integer', 'string').message
+            ]);
+        });
+
+    });
+
+    describe('operatorTypeMismatch', () => {
+        it('finds when the type of the lhs is not compatible with the rhs type', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    a = 1 + true
+                    b = "hello" * 2
+                end sub
+
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+', 'integer', 'boolean').message,
+                DiagnosticMessages.operatorTypeMismatch('*', 'string', 'integer').message
+            ]);
+        });
+
+        it('allows when the type of the lhs is compatible with the rhs type', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    a = 10 << 1
+                    b = "hello" + "world"
+                    c = 78 / 34
+                    d = 100 \\ 5
+                    thing = new Klass()
+                    e = thing <> invalid
+                end sub
+
+                class Klass
+                end class
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows tests against invalid', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    thing = new Klass()
+                    x = thing <> invalid
+                end sub
+
+                class Klass
+                end class
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('disallows equality tests of classes', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    thing = new Klass()
+                    thing2 = new Klass()
+                    x = thing = thing2
+                end sub
+
+                class Klass
+                end class
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('=', 'Klass', 'Klass').message
+            ]);
+        });
+
+        it('disallows operations between dynamic and custom types', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(input)
+                    thing = new Klass()
+                    x = thing + input
+                end sub
+
+                class Klass
+                end class
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+', 'Klass', 'dynamic').message
+            ]);
+        });
+
+        it('allows valid operations on enum members', () => {
+            program.setFile('source/util.bs', `
+                sub makeEasterly(d as Direction)
+                    print d + "e"
+                    print Direction.north + "east"
+                end sub
+
+                function getTax(itemAmt as ItemCost) as Float
+                    return itemAmt * 1.15
+                end function
+
+                enum Direction
+                    north = "n"
+                    south = "s"
+                end enum
+
+                enum ItemCost
+                    x = 99.99
+                    y = 29.99
+                end enum
+
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
+        it('finds invalid operations on enum members', () => {
+            program.setFile('source/util.bs', `
+                enum Direction
+                    north = "n"
+                    south = "s"
+                end enum
+
+                sub makeEasterly(d as Direction)
+                    print d + 2
+                    print 3.14 * Direction.north
+                end sub
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+', 'Direction', 'integer').message,
+                DiagnosticMessages.operatorTypeMismatch('*', 'float', 'Direction').message
+            ]);
+        });
+
+        it('validates unary operators', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff()
+                    x = - "hello world"
+                end sub
+            `);
+            program.validate();
+            //should have errors
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('-', 'string').message
+            ]);
+        });
+
+        it('allows unary on dynamic and union types', () => {
+            program.setFile('source/util.bs', `
+                sub doStuff(x)
+                    y = -x
+                    print y
+                end sub
+
+                sub doOtherStuff(x as float or integer)
+                    y = -x
+                    print y
+                end sub
+
+                sub doEventMoreStuff(x as boolean or dynamic)
+                    if not x
+                        print "ok"
+                    end if
+                end sub
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
     });
 });
