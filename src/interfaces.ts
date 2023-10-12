@@ -775,4 +775,3 @@ export interface TypeChainProcessResult {
     range: Range;
     containsDynamic: boolean;
 }
-

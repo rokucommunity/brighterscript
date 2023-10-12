@@ -2976,8 +2976,8 @@ describe('BrsFile', () => {
                 function plugin() {
                     return {
                         name: 'lower-file-name',
-                        afterFileParse: (evt) => {
-                            evt.file._customProp = true;
+                        afterProvideFile: (evt) => {
+                            evt.files[0]._customProp = true;
                         }
                     };
                 }

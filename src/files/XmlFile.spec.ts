@@ -43,8 +43,8 @@ describe('XmlFile', () => {
             const expected = 'OtherName';
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
-                afterFileParse: (event) => {
-                    const file = event.file as XmlFile;
+                afterProvideFile: (event) => {
+                    const file = event.files[0] as XmlFile;
                     if (isXmlFile(file) && file.parser.ast.rootElement?.attributes?.[0]?.value) {
                         file.parser.ast.rootElement.attributes[0].value = expected;
                     }
@@ -605,9 +605,9 @@ describe('XmlFile', () => {
         it(`honors the 'needsTranspiled' flag when set in 'afterFileParse'`, () => {
             program.plugins.add({
                 name: 'test',
-                afterFileParse: (event) => {
+                afterProvideFile: (event) => {
                     //enable transpile for every file
-                    (event.file as BrsFile).needsTranspiled = true;
+                    (event.files[0] as BrsFile).needsTranspiled = true;
                 }
             });
             const file = program.setFile('components/file.xml', trim`
@@ -927,7 +927,7 @@ describe('XmlFile', () => {
             });
             program.plugins.add({
                 name: 'Transform plugins',
-                afterFileParse: event => validateXml(event.file as XmlFile)
+                onFileValidate: event => validateXml(event.file as XmlFile)
             });
             file = program.setFile<XmlFile>('components/component.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -951,14 +951,16 @@ describe('XmlFile', () => {
     it('plugin diagnostics work for xml files', () => {
         program.plugins.add({
             name: 'Xml diagnostic test',
-            afterFileParse: (event) => {
-                if (event.file.srcPath.endsWith('.xml')) {
-                    event.file.diagnostics.push({
-                        file: event.file,
-                        message: 'Test diagnostic',
-                        range: Range.create(0, 0, 0, 0),
-                        code: 9999
-                    });
+            afterProvideFile: (event) => {
+                for (const file of event.files) {
+                    if (file.srcPath.endsWith('.xml')) {
+                        file.diagnostics.push({
+                            file: file,
+                            message: 'Test diagnostic',
+                            range: Range.create(0, 0, 0, 0),
+                            code: 9999
+                        });
+                    }
                 }
             }
         });

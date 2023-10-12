@@ -1164,6 +1164,16 @@ export class Program {
             }
         }
 
+        files.sort((a, b) => {
+            if (a.pkgPath < b.pkgPath) {
+                return -1;
+            } else if (a.pkgPath > b.pkgPath) {
+                return 1;
+            } else {
+                return 1;
+            }
+        });
+
         await this.plugins.emitAsync('beforePrepareProgram', programEvent);
         await this.plugins.emitAsync('prepareProgram', programEvent);
 

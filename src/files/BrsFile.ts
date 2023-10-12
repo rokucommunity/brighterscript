@@ -36,8 +36,17 @@ import { Editor } from '../astUtils/Editor';
  */
 export class BrsFile implements File {
     constructor(options: {
+        /**
+         * The path to the file in its source location (where the source code lives in the file system)
+         */
         srcPath: string;
+        /**
+         * The path to the file where it should exist in the program. This is similar to pkgPath, but retains its original file extensions from srcPath
+         */
         destPath: string;
+        /**
+         * The final path in the zip. This has the extensions changed. Typically this is the same as destPath, but with file extensions changed for transpiled files.
+         */
         pkgPath?: string;
         program: Program;
     }) {
@@ -47,12 +56,16 @@ export class BrsFile implements File {
             this.program = options.program;
 
             this.extension = util.getExtension(this.srcPath);
-
-            //don't rename .d.bs files to .d.brs
-            if (this.extension === '.d.bs') {
-                this.pkgPath = this.destPath;
+            if (options.pkgPath) {
+                this.pkgPath = options.pkgPath;
             } else {
-                this.pkgPath = this.destPath.replace(/\.bs$/i, '.brs');
+
+                //don't rename .d.bs files to .d.brs
+                if (this.extension === '.d.bs') {
+                    this.pkgPath = this.destPath;
+                } else {
+                    this.pkgPath = this.destPath.replace(/\.bs$/i, '.brs');
+                }
             }
 
             //all BrighterScript files need to be transpiled
@@ -1327,4 +1340,3 @@ export class BrsFile implements File {
         delete this.scopesByFunc;
     }
 }
-

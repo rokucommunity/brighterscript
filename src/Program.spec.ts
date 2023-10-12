@@ -20,7 +20,7 @@ import { AssetFile } from './files/AssetFile';
 import * as path from 'path';
 import type { SinonSpy } from 'sinon';
 import { createSandbox } from 'sinon';
-import type { AfterFileAddEvent, AfterFileRemoveEvent, AfterProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, BeforeProvideFileEvent, CompilerPlugin, ProvideFileEvent } from './interfaces';
+import type { AfterFileAddEvent, AfterFileRemoveEvent, AfterProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, BeforePrepareProgramEvent, BeforeProvideFileEvent, CompilerPlugin, ProvideFileEvent } from './interfaces';
 
 const sinon = createSandbox();
 
@@ -1093,7 +1093,7 @@ describe('Program', () => {
 
             program.validate();
 
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, util.createPosition(2, 10));
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, util.createPosition(3, 10));
             let labels = completions.map(x => pick(x, 'label'));
 
             expect(labels).to.deep.include({ label: 'Main' });
@@ -1123,6 +1123,7 @@ describe('Program', () => {
                     shoeSize = 10
                 end sub
             `);
+            program.validate();
             let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
             let labels = completions.map(x => pick(x, 'label'));
 
@@ -1137,7 +1138,7 @@ describe('Program', () => {
             end sub
         `);
         program.validate();
-        await program.build({ files: [], stagingDir: program.options.stagingDir });
+        await program.build({ stagingDir: program.options.stagingDir });
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.false;
     });
@@ -1247,7 +1248,14 @@ describe('Program', () => {
         });
     });
 
-    it('beforeProgramTranspile sends entries in alphabetical order', () => {
+    it('beforeProgramTranspile sends entries in alphabetical order', async () => {
+        const destPaths: string[] = [];
+        program.plugins.add({
+            name: 'test',
+            beforePrepareFile: (e) => {
+                destPaths.push(e.file.destPath);
+            }
+        });
         program.setFile('source/main.bs', trim`
             sub main()
                 print "hello world"
@@ -1260,21 +1268,14 @@ describe('Program', () => {
             end sub
         `);
 
-        //send the files out of order
-        const result = program['beforeProgramTranspile']([{
-            src: s`${rootDir}/source/main.bs`,
-            dest: 'source/main.bs'
-        }, {
-            src: s`${rootDir}/source/main.bs`,
-            dest: 'source/main.bs'
-        }], program.options.stagingDir);
+        await program['prepare'](Object.values(program.files));
 
         //entries should now be in alphabetic order
         expect(
-            result.entries.map(x => x.outputPath)
+            destPaths
         ).to.eql([
-            s`${stagingDir}/source/common.brs`,
-            s`${stagingDir}/source/main.brs`
+            s`source/common.bs`,
+            s`source/main.bs`
         ]);
     });
 

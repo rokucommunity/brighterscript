@@ -103,7 +103,7 @@ describe('astUtils visitors', () => {
             const walker = functionsWalker(visitor);
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: event => walker(event.file as BrsFile)
+                afterProvideFile: event => walker(event.files[0] as BrsFile)
             });
             program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
@@ -140,7 +140,7 @@ describe('astUtils visitors', () => {
             const walker = functionsWalker(s => actual.push(s.constructor.name), cancel.token);
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: event => walker(event.file as BrsFile)
+                afterProvideFile: event => walker(event.files[0] as BrsFile)
             });
             program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
@@ -185,7 +185,7 @@ describe('astUtils visitors', () => {
             }, cancel.token);
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: event => walker(event.file as BrsFile)
+                afterProvideFile: event => walker(event.files[0] as BrsFile)
             });
             program.setFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
@@ -291,7 +291,7 @@ describe('astUtils visitors', () => {
             });
             program.plugins.add({
                 name: 'walker',
-                afterFileParse: (event) => walker(event.file as BrsFile)
+                afterProvideFile: (event) => walker(event.files[0] as BrsFile)
             });
 
             program.setFile('source/main.brs', EXPRESSIONS_SRC);
