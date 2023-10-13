@@ -16,8 +16,7 @@ import * as he from 'he';
 import * as deepmerge from 'deepmerge';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
 import { isVariableExpression } from '../src/astUtils/reflection';
-import { BscType, SymbolTypeFlag } from '../src';
-import { each } from 'benchmark';
+import { SymbolTypeFlag } from '../src';
 
 type Token = marked.Token;
 
@@ -799,11 +798,15 @@ class Runner {
 
 function fixOverloadedMethod(iface: RokuInterface, funcName: string) {
     const originalOverloads = iface.methods.filter(method => method.name.toLowerCase() === funcName.toLowerCase());
+    const descriptions: string[] = [];
     const returnDescriptions: string[] = [];
     const returnTypes: string[] = [];
     for (const originalOverload of originalOverloads) {
-        if (!returnDescriptions.includes(originalOverload.description)) {
-            returnDescriptions.push(originalOverload.description);
+        if (!descriptions.includes(originalOverload.description)) {
+            descriptions.push(originalOverload.description);
+        }
+        if (!returnDescriptions.includes(originalOverload.returnDescription)) {
+            returnDescriptions.push(originalOverload.returnDescription);
         }
         if (!returnTypes.includes(originalOverload.returnType)) {
             returnTypes.push(originalOverload.returnType);
@@ -812,7 +815,7 @@ function fixOverloadedMethod(iface: RokuInterface, funcName: string) {
     const mergedFunc: Func = {
         name: originalOverloads[0].name,
         params: [],
-        description: `**OVERLOADED METHOD**\n\n` + returnDescriptions.join('\n\n or \n\n'),
+        description: `**OVERLOADED METHOD**\n\n` + descriptions.join('\n\n or \n\n'),
         returnType: returnTypes.length > 0 ? returnTypes.join(' or ') : '',
         returnDescription: returnDescriptions.length > 0 ? returnDescriptions.join('\n\n or \n\n') : ''
     };
