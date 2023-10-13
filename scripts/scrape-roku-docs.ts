@@ -16,7 +16,8 @@ import * as he from 'he';
 import * as deepmerge from 'deepmerge';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
 import { isVariableExpression } from '../src/astUtils/reflection';
-import { SymbolTypeFlag } from '../src';
+import { BscType, SymbolTypeFlag } from '../src';
+import { each } from 'benchmark';
 
 type Token = marked.Token;
 
@@ -782,7 +783,88 @@ class Runner {
             events: {},
             interfaces: {}
         });
+
+
+        // fix ifStringOp overloads
+        fixOverloadedMethod(this.result.interfaces.ifstringops, 'instr');
+        fixOverloadedMethod(this.result.interfaces.ifstringops, 'mid');
+        fixOverloadedMethod(this.result.interfaces.ifstringops, 'startsWith');
+        fixOverloadedMethod(this.result.interfaces.ifstringops, 'endswith');
+
+        // fix ifSGNodeField overloads
+        fixOverloadedMethod(this.result.interfaces.ifsgnodefield, 'observeField');
+        fixOverloadedMethod(this.result.interfaces.ifsgnodefield, 'observeFieldScoped');
     }
+}
+
+function fixOverloadedMethod(iface: RokuInterface, funcName: string) {
+    const originalOverloads = iface.methods.filter(method => method.name.toLowerCase() === funcName.toLowerCase());
+    const returnDescriptions: string[] = [];
+    const returnTypes: string[] = [];
+    for (const originalOverload of originalOverloads) {
+        if (!returnDescriptions.includes(originalOverload.description)) {
+            returnDescriptions.push(originalOverload.description);
+        }
+        if (!returnTypes.includes(originalOverload.returnType)) {
+            returnTypes.push(originalOverload.returnType);
+        }
+    }
+    const mergedFunc: Func = {
+        name: originalOverloads[0].name,
+        params: [],
+        description: `**OVERLOADED METHOD**\n\n` + returnDescriptions.join('\n\n or \n\n'),
+        returnType: returnTypes.length > 0 ? returnTypes.join(' or ') : '',
+        returnDescription: returnDescriptions.length > 0 ? returnDescriptions.join('\n\n or \n\n') : ''
+    };
+
+    const maxParamsInAnyOverload = Math.max(...originalOverloads.map(x => x.params.length));
+    for (let i = 0; i < maxParamsInAnyOverload; i++) {
+        const paramNames: string[] = [];
+        let paramIsRequired = true;
+        const paramDescriptions: string[] = [];
+        const paramDefaults: string[] = [];
+        const paramTypes: string[] = [];
+
+        for (const originalMethod of originalOverloads) {
+            let p = originalMethod.params[i];
+            if (p) {
+                if (!paramNames.includes(p.name)) {
+                    paramNames.push(p.name);
+                }
+                if (!paramDescriptions.includes(p.description)) {
+                    paramDescriptions.push(p.description);
+                }
+                if (p.default && !paramDefaults.includes(p.default)) {
+                    paramDefaults.push(p.default);
+                }
+                const pTypes = Array.isArray(p.type) ? p.type : [p.type];
+                for (const pType of pTypes) {
+                    if (!paramTypes.includes(pType)) {
+                        paramTypes.push(pType);
+                    }
+                }
+                paramIsRequired = paramIsRequired && p.isRequired;
+            } else {
+                paramIsRequired = false;
+            }
+        }
+        // camelCase param names
+        let mergedParamName = paramNames.map((name, index) => {
+            return index === 0 ? name : name.charAt(0).toUpperCase() + name.slice(1);
+        }).join('Or');
+
+        mergedFunc.params.push({
+            name: mergedParamName,
+            description: paramDescriptions.join(' OR '),
+            default: paramDefaults.length > 0 ? paramDefaults.join(' or ') : null,
+            isRequired: paramIsRequired,
+            type: paramTypes.join(' or ')
+        });
+    }
+    // remove existing
+    iface.methods = iface.methods.filter(method => method.name.toLowerCase() !== funcName.toLowerCase());
+    // add to list
+    iface.methods.push(mergedFunc);
 }
 
 let cache: Record<string, string>;

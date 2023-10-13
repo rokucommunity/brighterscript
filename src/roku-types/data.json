@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2023-10-10T19:19:46.253Z",
+    "generatedDate": "2023-10-13T19:53:06.754Z",
     "nodes": {
         "animation": {
             "description": "Extends [**AnimationBase**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/animationbase.md\n\nThe Animation node class provides animations of renderable nodes, by applying interpolator functions to the values in specified renderable node fields. For an animation to take effect, an Animation node definition must include a child field interpolator node ([FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md\"FloatFieldInterpolator\"), [Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md\"Vector2DFieldInterpolator\"), [ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md\"ColorFieldInterpolator\")) definition for each renderable node field that is animated.\n\nThe Animation node class provides a simple linear interpolator function, where the animation takes place smoothly and simply from beginning to end. The Animation node class also provides several more complex interpolator functions to allow custom animation effects. For example, you can move a graphic image around the screen at differing speeds and curved trajectories at different times in the animation by specifying the appropriate function in the easeFunction field (quadratic and exponential are two examples of functions that can be specified). The interpolator functions are divided into two parts: the beginning of the animation (ease-in), and the end of the animation (ease-out). You can apply a specified interpolator function to either or both ease-in and ease-out, or specify no function for either or both (which is the linear function). You can also change the portion of the animation that is ease-in and ease-out to arbitrary fractional values for a quadratic interpolator function applied to both ease-in and ease-out.",
@@ -13906,7 +13906,7 @@
                     "returnType": "Boolean"
                 },
                 {
-                    "description": "Calls a function when a field of the subject node changes. The function called must be in the scope of the current component.",
+                    "description": "**OVERLOADED METHOD**\n\nCalls a function when a field of the subject node changes. The function called must be in the scope of the current component.\n\n or \n\nThis overloaded form sends an [roSGNodeEvent](https://developer.roku.com/docs/references/brightscript/components/rosgnode.md\"roSGNodeEvent\") message to the [roMessagePort](https://developer.roku.com/docs/references/brightscript/components/romessageport.md\"roMessagePort\") identified by port when the subject node field identified by fieldName changes value.",
                     "name": "observeField",
                     "params": [
                         {
@@ -13918,10 +13918,10 @@
                         },
                         {
                             "default": null,
-                            "description": "The name of the method to be executed when the value of the field changes.",
+                            "description": "The name of the method to be executed when the value of the field changes. OR The [roMessagePort](https://developer.roku.com/docs/references/brightscript/components/romessageport.md\"roMessagePort\") to receive a [roSGNodeEvent](https://developer.roku.com/docs/references/brightscript/components/rosgnode.md\"roSGNodeEvent\") message when the value of the field changes.",
                             "isRequired": true,
-                            "name": "functionName",
-                            "type": "String"
+                            "name": "functionNameOrPort",
+                            "type": "String or Object"
                         },
                         {
                             "default": null,
@@ -13931,40 +13931,11 @@
                             "type": "Object"
                         }
                     ],
-                    "returnDescription": "A flag indicating whether this operation was successful.",
+                    "returnDescription": "Calls a function when a field of the subject node changes. The function called must be in the scope of the current component.\n\n or \n\nThis overloaded form sends an [roSGNodeEvent](/docs/references/brightscript/components/rosgnode.md \"roSGNodeEvent\") message to the [roMessagePort](/docs/references/brightscript/components/romessageport.md \"roMessagePort\") identified by port when the subject node field identified by fieldName changes value.",
                     "returnType": "Boolean"
                 },
                 {
-                    "description": "This overloaded form sends an [roSGNodeEvent](https://developer.roku.com/docs/references/brightscript/components/rosgnode.md\"roSGNodeEvent\") message to the [roMessagePort](https://developer.roku.com/docs/references/brightscript/components/romessageport.md\"roMessagePort\") identified by port when the subject node field identified by fieldName changes value.",
-                    "name": "observeField",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The name of the field to be monitored.",
-                            "isRequired": true,
-                            "name": "fieldName",
-                            "type": "String"
-                        },
-                        {
-                            "default": null,
-                            "description": "The [roMessagePort](https://developer.roku.com/docs/references/brightscript/components/romessageport.md\"roMessagePort\") to receive a [roSGNodeEvent](https://developer.roku.com/docs/references/brightscript/components/rosgnode.md\"roSGNodeEvent\") message when the value of the field changes.",
-                            "isRequired": true,
-                            "name": "port",
-                            "type": "Object"
-                        },
-                        {
-                            "default": null,
-                            "description": "Optional. Names of \"context\" field values to be reported via getInfo() when the monitored field changes.",
-                            "isRequired": false,
-                            "name": "infoFields",
-                            "type": "Object"
-                        }
-                    ],
-                    "returnDescription": "A flag indicating whether this operation was successful.",
-                    "returnType": "Boolean"
-                },
-                {
-                    "description": "Sets up a connection between the observed node's field and the current component from which this call is made. This method is similar to the [observeField()](https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodefield.mdobservefieldfieldname-as-string-functionname-as-string-as-boolean \"observeField(fieldName as String, functionName as String)\") method.",
+                    "description": "**OVERLOADED METHOD**\n\nSets up a connection between the observed node's field and the current component from which this call is made. This method is similar to the [observeField()](https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodefield.mdobservefieldfieldname-as-string-functionname-as-string-as-boolean \"observeField(fieldName as String, functionName as String)\") method.",
                     "name": "observeFieldScoped",
                     "params": [
                         {
@@ -13976,10 +13947,10 @@
                         },
                         {
                             "default": null,
-                            "description": "The name of the method to be executed when the value of the field changes.",
+                            "description": "The name of the method to be executed when the value of the field changes. OR The [roMessagePort](https://developer.roku.com/docs/references/brightscript/components/romessageport.md\"roMessagePort\") to receive a [roSGNodeEvent](https://developer.roku.com/docs/references/brightscript/components/rosgnode.md\"roSGNodeEvent\") message when the value of the field changes.",
                             "isRequired": true,
-                            "name": "functionName",
-                            "type": "String"
+                            "name": "functionNameOrPort",
+                            "type": "String or Object"
                         },
                         {
                             "default": null,
@@ -13989,36 +13960,7 @@
                             "type": "Object"
                         }
                     ],
-                    "returnDescription": "A flag indicating whether this operation was successful.",
-                    "returnType": "Boolean"
-                },
-                {
-                    "description": "Sets up a connection between the observed node's field and the current component from which this call is made. This method is similar to the [observeField()](https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodefield.mdobservefieldfieldname-as-string-functionname-as-string-as-boolean \"observeField(fieldName as String, functionName as String)\") method.",
-                    "name": "observeFieldScoped",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The name of the field to be monitored.",
-                            "isRequired": true,
-                            "name": "fieldName",
-                            "type": "String"
-                        },
-                        {
-                            "default": null,
-                            "description": "The [roMessagePort](https://developer.roku.com/docs/references/brightscript/components/romessageport.md\"roMessagePort\") to receive a [roSGNodeEvent](https://developer.roku.com/docs/references/brightscript/components/rosgnode.md\"roSGNodeEvent\") message when the value of the field changes.",
-                            "isRequired": true,
-                            "name": "port",
-                            "type": "Object"
-                        },
-                        {
-                            "default": null,
-                            "description": "Optional. Names of \"context\" field values to be reported via getInfo() when the monitored field changes.",
-                            "isRequired": false,
-                            "name": "infoFields",
-                            "type": "Object"
-                        }
-                    ],
-                    "returnDescription": "A flag indicating whether this operation was successful.",
+                    "returnDescription": "Sets up a connection between the observed node's field and the current component from which this call is made. This method is similar to the [observeField()](/docs/references/brightscript/interfaces/ifsgnodefield.md#observefieldfieldname-as-string-functionname-as-string-as-boolean \"observeField(fieldName as String, functionName as String)\") method.",
                     "returnType": "Boolean"
                 },
                 {
@@ -15635,35 +15577,25 @@
                     "returnType": "String"
                 },
                 {
+                    "description": "**OVERLOADED METHOD**\n\n",
                     "name": "EndsWith",
                     "params": [
                         {
                             "default": null,
-                            "isRequired": true,
-                            "name": "matchString",
-                            "type": "String"
-                        }
-                    ],
-                    "returnDescription": "A flag indicating whether a matching substring was found.",
-                    "returnType": "Boolean"
-                },
-                {
-                    "name": "EndsWith",
-                    "params": [
-                        {
-                            "default": null,
+                            "description": "",
                             "isRequired": true,
                             "name": "matchString",
                             "type": "String"
                         },
                         {
                             "default": null,
-                            "isRequired": true,
+                            "description": "",
+                            "isRequired": false,
                             "name": "length",
                             "type": "Integer"
                         }
                     ],
-                    "returnDescription": "A flag indicating whether a matching substring was found.",
+                    "returnDescription": "",
                     "returnType": "Boolean"
                 },
                 {
@@ -15681,40 +15613,25 @@
                     "returnType": "String"
                 },
                 {
-                    "description": "Returns the zero-based index of the first occurrence of substring in the string. If the substring does not occur in the string, this method returns -1",
+                    "description": "**OVERLOADED METHOD**\n\nReturns the zero-based index of the first occurrence of substring in the string. If the substring does not occur in the string, this method returns -1\n\n or \n\nReturns the zero-based index of the first occurrence of substring in the string, starting at the specified zero-based start\\_index. If the substring does not occur in the string after start\\_index, returns -1",
                     "name": "Instr",
                     "params": [
                         {
                             "default": null,
-                            "description": "The substring within the roString object to be returned.",
+                            "description": "The substring within the roString object to be returned. OR The position in the roString object from which to start looking for and returning the **substring**.",
                             "isRequired": true,
-                            "name": "substring",
-                            "type": "String"
-                        }
-                    ],
-                    "returnDescription": "The index of the first instance of the substring within the string.",
-                    "returnType": "Integer"
-                },
-                {
-                    "description": "Returns the zero-based index of the first occurrence of substring in the string, starting at the specified zero-based start\\_index. If the substring does not occur in the string after start\\_index, returns -1",
-                    "name": "Instr",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The position in the roString object from which to start looking for and returning the **substring**.",
-                            "isRequired": true,
-                            "name": "start_index",
-                            "type": "Integer"
+                            "name": "substringOrStart_index",
+                            "type": "String or Integer"
                         },
                         {
                             "default": null,
                             "description": "The substring within the roString object to be found.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "substring",
                             "type": "String"
                         }
                     ],
-                    "returnDescription": "The index of the first instance of the substring within the string, based on the specified starting position.",
+                    "returnDescription": "Returns the zero-based index of the first occurrence of substring in the string. If the substring does not occur in the string, this method returns -1\n\n or \n\nReturns the zero-based index of the first occurrence of substring in the string, starting at the specified zero-based start\\_index. If the substring does not occur in the string after start\\_index, returns -1",
                     "returnType": "Integer"
                 },
                 {
@@ -15740,27 +15657,12 @@
                     "returnType": "Integer"
                 },
                 {
-                    "description": "Returns a string consisting of the last characters of the string, starting at the zero-based start\\_index.",
+                    "description": "**OVERLOADED METHOD**\n\nReturns a string consisting of the last characters of the string, starting at the zero-based start\\_index.\n\n or \n\nReturns a string consisting of num\\_chars characters of the string, starting at the zero-based start\\_index. If there are fewer than num\\_chars in the string after start\\_index, returns the remaining characters in the string.",
                     "name": "Mid",
                     "params": [
                         {
                             "default": null,
-                            "description": "The position in the roString object from which to return the remaining characters.",
-                            "isRequired": true,
-                            "name": "start_index",
-                            "type": "Integer"
-                        }
-                    ],
-                    "returnDescription": "The string generated by the method.",
-                    "returnType": "String"
-                },
-                {
-                    "description": "Returns a string consisting of num\\_chars characters of the string, starting at the zero-based start\\_index. If there are fewer than num\\_chars in the string after start\\_index, returns the remaining characters in the string.",
-                    "name": "Mid",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The position in the roString object from which to return the number of characters specified by num\\_chars.",
+                            "description": "The position in the roString object from which to return the remaining characters. OR The position in the roString object from which to return the number of characters specified by num\\_chars.",
                             "isRequired": true,
                             "name": "start_index",
                             "type": "Integer"
@@ -15768,11 +15670,12 @@
                         {
                             "default": null,
                             "description": "The number of characters in the remaining part of the roString object to be retrieved.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "num_chars",
                             "type": "Integer"
                         }
                     ],
+                    "returnDescription": "Returns a string consisting of the last characters of the string, starting at the zero-based start\\_index.\n\n or \n\nReturns a string consisting of num\\_chars characters of the string, starting at the zero-based start\\_index. If there are fewer than num\\_chars in the string after start\\_index, returns the remaining characters in the string.",
                     "returnType": "String"
                 },
                 {
@@ -15848,35 +15751,25 @@
                     "returnType": "Object"
                 },
                 {
+                    "description": "**OVERLOADED METHOD**\n\n",
                     "name": "StartsWith",
                     "params": [
                         {
                             "default": null,
-                            "isRequired": true,
-                            "name": "matchString",
-                            "type": "String"
-                        }
-                    ],
-                    "returnDescription": "A flag indicating whether a matching substring was found.",
-                    "returnType": "Boolean"
-                },
-                {
-                    "name": "StartsWith",
-                    "params": [
-                        {
-                            "default": null,
+                            "description": "",
                             "isRequired": true,
                             "name": "matchString",
                             "type": "String"
                         },
                         {
                             "default": null,
-                            "isRequired": true,
+                            "description": "",
+                            "isRequired": false,
                             "name": "matchPos",
                             "type": "Integer"
                         }
                     ],
-                    "returnDescription": "A flag indicating whether a matching substring was found.",
+                    "returnDescription": "",
                     "returnType": "Boolean"
                 },
                 {
