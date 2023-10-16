@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.66.0-alpha.7](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.6...v0.66.0-alpha.7) - 2023-10-16
+### Changed
+ - all changes from [v0.65.6](https://github.com/rokucommunity/brighterscript/compare/v0.65.5...v0.65.6) and [v0.65.7](https://github.com/rokucommunity/brighterscript/compare/v0.65.6...v0.65.7)
+ - Better multi-scope messages ([#904](https://github.com/rokucommunity/brighterscript/pull/904))
+ - Refine type compatibility message ([#908](https://github.com/rokucommunity/brighterscript/pull/908))
+ - Allow classes and native components in Typed Arrays ([#919](https://github.com/rokucommunity/brighterscript/pull/919))
+ - Fixes some enum validation stuff ([#920](https://github.com/rokucommunity/brighterscript/pull/920))
+ - Fixes compatibility of built in types (roArray -> typed arrays) ([#925](https://github.com/rokucommunity/brighterscript/pull/925))
+ - Semantic Tokes for Native Components and Type completion in Type Expressions ([#927](https://github.com/rokucommunity/brighterscript/pull/927))
+ - Adds callFunc as member method to Custom Components ([#929](https://github.com/rokucommunity/brighterscript/pull/929))
+ - Allows scrape-roku-docs to consolidate overloaded methods ([#930](https://github.com/rokucommunity/brighterscript/pull/930))
+ - File api ([#408](https://github.com/rokucommunity/brighterscript/pull/408))
+
+
+
 ## [0.66.0-alpha.6](https://github.com/rokucommunity/brighterscript/compare/v0.66.0-alpha.5...v0.66.0-alpha.6) - 2023-09-20
 ### Changed
  - Validates DottedSetStatements for type compatibility ([#894](https://github.com/rokucommunity/brighterscript/pull/894))
