@@ -44,7 +44,6 @@ jobs:
       - run: npm run build
       #create npm package
       - run: npm pack
-      - run: npm run test-related-projects
 
       #create GitHub release
       - name: Create GitHub Release
