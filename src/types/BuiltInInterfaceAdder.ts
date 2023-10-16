@@ -8,6 +8,7 @@ import type { BscType } from './BscType';
 import { isArrayType, isAssociativeArrayType, isBooleanType, isCallableType, isClassType, isComponentType, isDoubleType, isEnumMemberType, isFloatType, isIntegerType, isInterfaceType, isInvalidType, isLongIntegerType, isStringType } from '../astUtils/reflection';
 import type { ComponentType } from './ComponentType';
 import util from '../util';
+import type { UnionType } from './UnionType';
 
 
 export interface BuiltInInterfaceOverride {
@@ -22,6 +23,7 @@ export class BuiltInInterfaceAdder {
     static readonly primitiveTypeInstanceCache = new Cache<string, BscType>();
 
     static typedFunctionFactory: (type: BscType) => TypedFunctionType;
+    static unionTypeFactory: (types: BscType[]) => UnionType;
 
     static getLookupTable: () => SymbolTable;
 
@@ -74,6 +76,14 @@ export class BuiltInInterfaceAdder {
     }
 
     private static getPrimitiveType(typeName: string): BscType {
+        if (typeName.includes(' or ')) {
+            if (!this.unionTypeFactory) {
+                throw new Error(`Unable to build union types - no union type factory`);
+            }
+            // union types!
+            const unionOfTypeNames = typeName.split(' or ');
+            return this.unionTypeFactory(unionOfTypeNames.map(name => this.getPrimitiveType(name)));
+        }
         const returnType = this.primitiveTypeInstanceCache.get(typeName.toLowerCase());
         if (!returnType) {
             if (!this.getLookupTable) {
