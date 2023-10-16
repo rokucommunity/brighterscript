@@ -302,6 +302,10 @@ export class Util {
     public normalizeAndResolveConfig(config: BsConfig) {
         let result = this.normalizeConfig({});
 
+        if (config?.noProject) {
+            return result;
+        }
+
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
             result.project = this.getConfigFilePath(config?.cwd);
@@ -313,10 +317,8 @@ export class Util {
             let configFile = this.loadConfigFile(result.project, null, config?.cwd);
             result = Object.assign(result, configFile);
         }
-
         //override the defaults with the specified options
         result = Object.assign(result, config);
-
         return result;
     }
 
@@ -353,6 +355,11 @@ export class Util {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
         }
         config.logLevel = config.logLevel ?? LogLevel.log;
+        config.bslibDestinationDir = config.bslibDestinationDir ?? 'source';
+        if (config.bslibDestinationDir !== 'source') {
+            // strip leading and trailing slashes
+            config.bslibDestinationDir = config.bslibDestinationDir.replace(/^(\/*)(.*?)(\/*)$/, '$2');
+        }
         return config;
     }
 

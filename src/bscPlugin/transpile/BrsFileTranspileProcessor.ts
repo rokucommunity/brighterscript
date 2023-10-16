@@ -1,6 +1,6 @@
 import { createToken } from '../../astUtils/creators';
 import type { Editor } from '../../astUtils/Editor';
-import { isDottedGetExpression, isLiteralExpression, isVariableExpression } from '../../astUtils/reflection';
+import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnPrepareFileEvent } from '../../interfaces';
@@ -43,7 +43,11 @@ export class BrsFilePreTranspileProcessor {
         const scope = this.event.program.getFirstScopeForFile(this.event.file);
         for (let expression of this.event.file.parser.references.expressions) {
             if (expression) {
-                this.processExpression(expression, scope);
+                if (isUnaryExpression(expression)) {
+                    this.processExpression(expression.right, scope);
+                } else {
+                    this.processExpression(expression, scope);
+                }
             }
         }
     }

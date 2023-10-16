@@ -264,6 +264,31 @@ describe('util', () => {
     });
 
     describe('normalizeAndResolveConfig', () => {
+        it('loads project by default', () => {
+            fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+                rootDir: s`${cwd}/TEST`
+            });
+            expect(
+                util.normalizeAndResolveConfig({
+                    cwd: rootDir
+                }).rootDir
+            ).to.eql(
+                s`${cwd}/TEST`
+            );
+        });
+
+        it('noproject skips loading the local bsconfig.json', () => {
+            fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+                rootDir: s`${cwd}/TEST`
+            });
+            expect(
+                util.normalizeAndResolveConfig({
+                    cwd: rootDir,
+                    noProject: true
+                }).rootDir
+            ).to.be.undefined;
+        });
+
         it('throws for missing project file', () => {
             expect(() => {
                 util.normalizeAndResolveConfig({ project: 'path/does/not/exist/bsconfig.json' });
@@ -380,6 +405,16 @@ describe('util', () => {
         it('properly handles default for watch', () => {
             let config = util.normalizeAndResolveConfig({ watch: true });
             expect(config.watch).to.be.true;
+        });
+
+        it('sets default value for bslibDestinationDir', () => {
+            expect(util.normalizeConfig(<any>{ }).bslibDestinationDir).to.equal('source');
+        });
+
+        it('strips leading and/or trailing slashes from bslibDestinationDir', () => {
+            ['source/opt', '/source/opt', 'source/opt/', '/source/opt/'].forEach(input => {
+                expect(util.normalizeConfig(<any>{ bslibDestinationDir: input }).bslibDestinationDir).to.equal('source/opt');
+            });
         });
     });
 

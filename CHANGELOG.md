@@ -78,6 +78,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.66.0-alpha.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.66.0-alpha.0) - 2023-06-09
 ### Changed
  - all the type tracking stuff!
+## [0.65.8](https://github.com/rokucommunity/brighterscript/compare/v0.65.7...v0.65.8) - 2023-10-06
+### Added
+ - interface parameter support ([#924](https://github.com/rokucommunity/brighterscript/pull/924))
+### Changed
+ - Bump postcss from 8.2.15 to 8.4.31 ([#928](https://github.com/rokucommunity/brighterscript/pull/928))
+### Fixed
+ - chore: fix typescript typing for `Deferred` ([#923](https://github.com/rokucommunity/brighterscript/pull/923))
+
+
+
+## [0.65.7](https://github.com/rokucommunity/brighterscript/compare/v0.65.6...v0.65.7) - 2023-09-28
+### Fixed
+ - fix bug in --noproject flag logic ([#922](https://github.com/rokucommunity/brighterscript/pull/922))
+
+
+
+## [0.65.6](https://github.com/rokucommunity/brighterscript/compare/v0.65.5...v0.65.6) - 2023-09-28
+### Added
+ - `noProject` flag to bsc so `bsconfig.json` loading can be skipped entirely even if present ([#868](https://github.com/rokucommunity/brighterscript/pull/868))
+### Changed
+ - docs: add some more details to the plugins ([#913](https://github.com/rokucommunity/brighterscript/pull/913))
+ - docs: add missing emitDefinitions ([#893](https://github.com/rokucommunity/brighterscript/pull/893))
+### Fixed
+ - incorrect quasi location in template string ([#921](https://github.com/rokucommunity/brighterscript/pull/921))
+ - `UnaryExpression` transpile for namespace and const ([#914](https://github.com/rokucommunity/brighterscript/pull/914))
+
+
+
+## [0.65.5](https://github.com/rokucommunity/brighterscript/compare/v0.65.4...v0.65.5) - 2023-09-06
+### Added
+ - support overriding bs_const values in bsconfig ([#887](https://github.com/rokucommunity/brighterscript/pull/887))
+ - allow optionally specifying bslib destination directory ([#871](https://github.com/rokucommunity/brighterscript/pull/871))
+ - Print diagnostic related information ([#867](https://github.com/rokucommunity/brighterscript/pull/867))
+### Fixed
+ - ensure consistent insertion of bslib.brs ([#870](https://github.com/rokucommunity/brighterscript/pull/870))
+ - Fix crashes in util for null ranges ([#869](https://github.com/rokucommunity/brighterscript/pull/869))
+ - Fix tab issue when printing diagnostics ([#865](https://github.com/rokucommunity/brighterscript/pull/865))
 
 
 
@@ -1719,13 +1756,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0](https://github.com/rokucommunity/brighterscript/compare/v0.1.0...v0.1.0) - 2019-08-10
 ### Changed
  - Cloned from [brightscript-language](https://github.com/rokucommunity/brightscript-language)
-
-
-
-
-
-
-
-
-
-

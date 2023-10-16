@@ -629,7 +629,7 @@ export class Lexer {
                     this.scanToken();
                 }
                 if (this.check('}')) {
-                    this.current++;
+                    this.advance();
                     this.addToken(TokenKind.TemplateStringExpressionEnd);
                 } else {
 

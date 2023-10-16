@@ -93,6 +93,8 @@ end interface
 ```
 </details>
 
+</details>
+
 ## Methods
 Interfaces can describe complex methods as well
 ```brighterscript
@@ -105,6 +107,5 @@ end interface
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-
 ```
 </details>
