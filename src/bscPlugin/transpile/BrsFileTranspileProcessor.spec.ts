@@ -30,6 +30,7 @@ describe('BrsFileTranspileProcessor', () => {
     });
 
     it('properly prefixes functions from bslib', async () => {
+        program.options.stagingDir = s`${tempDir}/staging`;
         program.setFile('source/main.bs', `
             sub main()
                 print true ? true : false
@@ -42,4 +43,3 @@ describe('BrsFileTranspileProcessor', () => {
         ).to.include('bslib_toString');
     });
 });
-
