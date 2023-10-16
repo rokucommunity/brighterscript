@@ -1,6 +1,7 @@
 import type { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { BscFile, BsDiagnostic, CommentFlag, DiagnosticCode } from './interfaces';
+import type { File } from './files/File';
+import type { BsDiagnostic, CommentFlag, DiagnosticCode } from './interfaces';
 import { util } from './util';
 
 export class CommentFlagProcessor {
@@ -8,7 +9,7 @@ export class CommentFlagProcessor {
         /**
          * The file this processor applies to
          */
-        public file: BscFile,
+        public file: File,
         /**
          * An array of strings containing the types of text that a comment starts with. (i.e. `REM`, `'`, `<!--`)
          */

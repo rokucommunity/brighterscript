@@ -1026,18 +1026,10 @@ export class SourceLiteralExpression extends Expression {
                 text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.token.range.start.line + 1}"`;
                 break;
             case TokenKind.PkgPathLiteral:
-                let pkgPath1 = `pkg:/${state.file.pkgPath}`
-                    .replace(/\\/g, '/')
-                    .replace(/\.bs$/i, '.brs');
-
-                text = `"${pkgPath1}"`;
+                text = `"${util.sanitizePkgPath(state.file.pkgPath)}"`;
                 break;
             case TokenKind.PkgLocationLiteral:
-                let pkgPath2 = `pkg:/${state.file.pkgPath}`
-                    .replace(/\\/g, '/')
-                    .replace(/\.bs$/i, '.brs');
-
-                text = `"${pkgPath2}:" + str(LINE_NUM)`;
+                text = `"${util.sanitizePkgPath(state.file.pkgPath)}:" + str(LINE_NUM)`;
                 break;
             case TokenKind.LineNumLiteral:
             default:

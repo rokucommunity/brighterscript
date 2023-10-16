@@ -3,45 +3,100 @@ import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticCodeMap, diagnosticCodes } from '../DiagnosticMessages';
-import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag, BscFile } from '../interfaces';
+import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag, SerializedCodeFile } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
+import { standardizePath as s } from '../util';
 import SGParser from '../parser/SGParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import type { DependencyGraph } from '../DependencyGraph';
-import type { SGToken } from '../parser/SGTypes';
+import { type SGToken } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';
+import type { File } from './File';
+import type { Editor } from '../astUtils/Editor';
 import type { FunctionScope } from '../FunctionScope';
 
-export class XmlFile {
-    constructor(
+export class XmlFile implements File {
+    /**
+     * Create a new instance of BrsFile
+     */
+    constructor(options: {
         /**
          * The absolute path to the source file on disk (e.g. '/usr/you/projects/RokuApp/source/main.brs' or 'c:/projects/RokuApp/source/main.brs').
          */
-        public srcPath: string,
+        srcPath: string;
         /**
          * The absolute path to the file on-device (i.e. 'source/main.brs') without the leading `pkg:/`
          */
-        public pkgPath: string,
-        public program: Program
-    ) {
-        this.extension = path.extname(this.srcPath).toLowerCase();
+        destPath: string;
+        pkgPath?: string;
+        program: Program;
+    }) {
+        if (options) {
+            this.srcPath = s`${options.srcPath}`;
+            this.destPath = s`${options.destPath}`;
+            this.pkgPath = s`${options.pkgPath ?? options.destPath}`;
+            this.program = options.program;
 
-        this.possibleCodebehindPkgPaths = [
-            this.pkgPath.replace('.xml', '.bs'),
-            this.pkgPath.replace('.xml', '.brs')
-        ];
+            this.extension = path.extname(this.srcPath).toLowerCase();
+
+            this.possibleCodebehindDestPaths = [
+                this.pkgPath.replace(/\.xml$/, '.bs'),
+                this.pkgPath.replace(/\.xml$/, '.brs')
+            ];
+        }
+    }
+
+    public type = 'XmlFile';
+
+    /**
+     * The absolute path to the source file on disk (e.g. '/usr/you/projects/RokuApp/source/main.brs' or 'c:/projects/RokuApp/source/main.brs').
+     */
+    public srcPath: string;
+    /**
+     * The absolute path to the file on-device (i.e. 'source/main.brs') without the leading `pkg:/`
+     */
+    public destPath: string;
+    public pkgPath: string;
+
+    public program: Program;
+
+    /**
+     * An editor assigned during the build flow that manages edits that will be undone once the build process is complete.
+     */
+    public editor?: Editor;
+
+    /**
+     * The absolute path to the source location for this file
+     * @deprecated use `srcPath` instead
+     */
+    public get pathAbsolute() {
+        return this.srcPath;
+    }
+    public set pathAbsolute(value) {
+        this.srcPath = value;
     }
 
     private cache = new Cache();
 
     /**
      * The list of possible autoImport codebehind pkg paths.
+     * @deprecated use `possibleCodebehindDestPaths` instead.
      */
-    public possibleCodebehindPkgPaths: string[];
+    public get possibleCodebehindPkgPaths() {
+        return this.possibleCodebehindDestPaths;
+    }
+    public set possibleCodebehindPkgPaths(value) {
+        this.possibleCodebehindDestPaths = value;
+    }
+
+    /**
+     * The list of possible autoImport codebehind destPath values
+     */
+    public possibleCodebehindDestPaths: string[];
 
     /**
      * An unsubscribe function for the dependencyGraph subscription
@@ -74,7 +129,7 @@ export class XmlFile {
     }
 
     /**
-     * List of all pkgPaths to scripts that this XmlFile depends, regardless of whether they are loaded in the program or not.
+     * List of all `destPath` values pointing to scripts that this XmlFile depends on, regardless of whether they are loaded in the program or not.
      * This includes own dependencies and all parent compoent dependencies
      * coming from:
      *  - script tags
@@ -89,7 +144,7 @@ export class XmlFile {
     }
 
     /**
-     * List of all pkgPaths to scripts that this XmlFile depends on directly, regardless of whether they are loaded in the program or not.
+     * List of all destPaths to scripts that this XmlFile depends on directly, regardless of whether they are loaded in the program or not.
      * This does not account for parent component scripts
      * coming from:
      *  - script tags
@@ -104,7 +159,7 @@ export class XmlFile {
     }
 
     /**
-     * List of all pkgPaths to scripts that this XmlFile depends on that are actually loaded into the program.
+     * List of all destPaths to scripts that this XmlFile depends on that are actually loaded into the program.
      * This does not account for parent component scripts.
      * coming from:
      *  - script tags
@@ -121,7 +176,7 @@ export class XmlFile {
             let result = [] as string[];
             let filesInProgram = this.program.getFiles(allDependencies);
             for (let file of filesInProgram) {
-                result.push(file.pkgPath);
+                result.push(file.destPath);
             }
             this.logDebug('computed allAvailableScriptImports', () => result);
             return result;
@@ -173,19 +228,23 @@ export class XmlFile {
     }
 
     /**
-     * Does this file need to be transpiled? Auto-calculated based on file contents, but can be overridden by setting the value explicitly
+     * Does this file need to be transpiled?
+     * @deprecated use the `.editor` property to push changes to the file, which will force transpilation
      */
     public get needsTranspiled() {
-        //needsTranspiled should be true if an import is brighterscript
-        return this._needsTranspiled || this.ast?.componentElement?.scriptElements?.some(
-            script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
+        if (this._needsTranspiled !== undefined) {
+            return this._needsTranspiled;
+        }
+        return !!(
+            this.editor?.hasChanges || this.ast.componentElement?.scriptElements?.some(
+                script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
+            )
         );
     }
-    public set needsTranspiled(value: boolean) {
+    public set needsTranspiled(value) {
         this._needsTranspiled = value;
     }
-
-    private _needsTranspiled = false;
+    public _needsTranspiled: boolean;
 
     /**
      * The AST for this file
@@ -206,12 +265,23 @@ export class XmlFile {
     public parse(fileContents: string) {
         this.fileContents = fileContents;
 
-        this.parser.parse(this.pkgPath, fileContents);
+        this.parser.parse(this.destPath, fileContents);
         this.diagnostics = this.parser.diagnostics.map(diagnostic => ({
             ...diagnostic,
             file: this
         }));
         this.getCommentFlags(this.parser.tokens as any[]);
+    }
+
+    /**
+     * Generate the code, map, and typedef for this file
+     */
+    public serialize(): SerializedCodeFile {
+        const result = this.transpile();
+        return {
+            code: result?.code,
+            map: result?.map?.toString()
+        };
     }
 
     /**
@@ -237,32 +307,34 @@ export class XmlFile {
 
     private dependencyGraph: DependencyGraph;
 
+    public onDependenciesChanged() {
+        this.logDebug('clear cache because dependency graph changed');
+        this.cache.clear();
+    }
+
     /**
      * Attach the file to the dependency graph so it can monitor changes.
      * Also notify the dependency graph of our current dependencies so other dependents can be notified.
+     * @deprecated this does nothing. This functionality is now handled by the file api and will be deleted in v1
      */
     public attachDependencyGraph(dependencyGraph: DependencyGraph) {
         this.dependencyGraph = dependencyGraph;
-        if (this.unsubscribeFromDependencyGraph) {
-            this.unsubscribeFromDependencyGraph();
-        }
+    }
 
-        //anytime a dependency changes, clean up some cached values
-        this.unsubscribeFromDependencyGraph = dependencyGraph.onchange(this.dependencyGraphKey, () => {
-            this.logDebug('clear cache because dependency graph changed');
-            this.cache.clear();
-        });
-
-        let dependencies = [
-            ...this.scriptTagImports.map(x => x.pkgPath.toLowerCase())
+    /**
+     * The list of files that this file depends on
+     */
+    public get dependencies() {
+        const dependencies = [
+            ...this.scriptTagImports.map(x => x.destPath.toLowerCase())
         ];
         //if autoImportComponentScript is enabled, add the .bs and .brs files with the same name
-        if (this.program.options.autoImportComponentScript) {
+        if (this.program?.options?.autoImportComponentScript) {
             dependencies.push(
                 //add the codebehind file dependencies.
                 //These are kind of optional, so it doesn't hurt to just add both extension versions
-                this.pkgPath.replace(/\.xml$/i, '.bs').toLowerCase(),
-                this.pkgPath.replace(/\.xml$/i, '.brs').toLowerCase()
+                this.destPath.replace(/\.xml$/i, '.bs').toLowerCase(),
+                this.destPath.replace(/\.xml$/i, '.brs').toLowerCase()
             );
         }
         const len = dependencies.length;
@@ -278,7 +350,7 @@ export class XmlFile {
         if (this.parentComponentName) {
             dependencies.push(this.parentComponentDependencyGraphKey);
         }
-        this.dependencyGraph.addOrReplace(this.dependencyGraphKey, dependencies);
+        return dependencies;
     }
 
     /**
@@ -293,14 +365,14 @@ export class XmlFile {
     /**
      * The key used in the dependency graph for this file.
      * If we have a component name, we will use that so we can be discoverable by child components.
-     * If we don't have a component name, use the pkgPath so at least we can self-validate
+     * If we don't have a component name, use the destPath so at least we can self-validate
      */
     public get dependencyGraphKey() {
         let key: string;
         if (this.componentName) {
             key = `component:${this.componentName.text}`.toLowerCase();
         } else {
-            key = this.pkgPath.toLowerCase();
+            key = this.destPath.toLowerCase();
         }
         //if our index is not zero, then we are not the primary component with that name, and need to
         //append our index to the dependency graph key as to prevent collisions in the program.
@@ -308,6 +380,10 @@ export class XmlFile {
             key += '[' + this.dependencyGraphIndex + ']';
         }
         return key;
+    }
+
+    public set dependencyGraphKey(value) {
+        //do nothing, we override this value in the getter
     }
 
     /**
@@ -325,20 +401,20 @@ export class XmlFile {
     /**
      * Determines if this xml file has a reference to the specified file (or if it's itself)
      */
-    public doesReferenceFile(file: BscFile) {
-        return this.cache.getOrAdd(`doesReferenceFile: ${file.pkgPath}`, () => {
+    public doesReferenceFile(file: File) {
+        return this.cache.getOrAdd(`doesReferenceFile: ${file.destPath}`, () => {
             if (file === this) {
                 return true;
             }
             let allDependencies = this.getOwnDependencies();
-            for (let importPkgPath of allDependencies) {
-                if (importPkgPath.toLowerCase() === file.pkgPath.toLowerCase()) {
+            for (let destPath of allDependencies) {
+                if (destPath.toLowerCase() === file.destPath.toLowerCase()) {
                     return true;
                 }
             }
 
             //if this is an xml file...do we extend the component it defines?
-            if (path.extname(file.pkgPath).toLowerCase() === '.xml') {
+            if (path.extname(file.destPath).toLowerCase() === '.xml') {
 
                 //didn't find any script imports for this file
                 return false;
@@ -371,7 +447,7 @@ export class XmlFile {
      * Walk up the ancestor chain and aggregate all of the script tag imports
      */
     public getAncestorScriptTagImports() {
-        let result = [];
+        let result: FileReference[] = [];
         let parent = this.parentComponent;
         while (parent) {
             result.push(...parent.scriptTagImports);
@@ -401,14 +477,14 @@ export class XmlFile {
 
         let parentImports = this.parentComponent?.getAvailableScriptImports() ?? [];
 
-        let parentMap = parentImports.reduce((map, pkgPath) => {
-            map[pkgPath.toLowerCase()] = true;
+        let parentMap = parentImports.reduce((map, destPath) => {
+            map[destPath.toLowerCase()] = true;
             return map;
         }, {});
 
         //if the XML already has this import, skip this one
         let alreadyThereScriptImportMap = this.scriptTagImports.reduce((map, fileReference) => {
-            map[fileReference.pkgPath.toLowerCase()] = true;
+            map[fileReference.destPath.toLowerCase()] = true;
             return map;
         }, {});
 
@@ -432,7 +508,7 @@ export class XmlFile {
     }
 
     private logDebug(...args) {
-        this.program.logger.debug('XmlFile', chalk.green(this.pkgPath), ...args);
+        this.program?.logger?.debug('XmlFile', chalk.green(this.destPath), ...args);
     }
 
     /**

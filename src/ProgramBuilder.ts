@@ -2,7 +2,7 @@ import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import { rokuDeploy } from 'roku-deploy';
 import type { BsConfig } from './BsConfig';
-import type { BscFile, BsDiagnostic, FileObj, FileResolver } from './interfaces';
+import type { BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
@@ -13,6 +13,9 @@ import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
 import * as requireRelative from 'require-relative';
 import { Throttler } from './Throttler';
+import { AssetFile } from './files/AssetFile';
+import type { File } from './files/File';
+import type { BrsFile } from './files/BrsFile';
 import { URI } from 'vscode-uri';
 
 /**
@@ -23,9 +26,7 @@ export class ProgramBuilder {
     public constructor() {
         //add the default file resolver (used to load source file contents).
         this.addFileResolver((filePath) => {
-            return fsExtra.readFile(filePath).then((value) => {
-                return value.toString();
-            });
+            return fsExtra.readFile(filePath);
         });
     }
     /**
@@ -55,7 +56,7 @@ export class ProgramBuilder {
         let reversedResolvers = [...this.fileResolvers].reverse();
         for (let fileResolver of reversedResolvers) {
             let result = await fileResolver(srcPath);
-            if (typeof result === 'string') {
+            if (typeof result === 'string' || Buffer.isBuffer(result)) {
                 return result;
             }
         }
@@ -68,16 +69,18 @@ export class ProgramBuilder {
     private staticDiagnostics = [] as BsDiagnostic[];
 
     public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
-        let file: BscFile = this.program.getFile(srcPath);
+        let file: File = this.program.getFile(srcPath);
         if (!file) {
-            file = {
-                pkgPath: this.program.getPkgPath(srcPath),
-                srcPath: srcPath,
-                getDiagnostics: () => {
-                    return [<any>diagnostic];
-                }
-            } as BscFile;
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            const paths = this.program['getPaths'](srcPath, this.program.options.rootDir ?? this.options.rootDir);
+            file = new AssetFile(paths);
+            //keep this for backwards-compatibility. TODO remove in v1
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            file['pathAbsolute'] = file.srcPath;
+            diagnostic.file = file;
+            file.diagnostics = [diagnostic as any];
         }
+
         diagnostic.file = file;
         this.staticDiagnostics.push(<any>diagnostic);
     }
@@ -121,7 +124,7 @@ export class ProgramBuilder {
         this.program = this.createProgram();
 
         //parse every file in the entire project
-        await this.loadAllFilesAST();
+        await this.loadFiles();
     }
 
     public async run(options: BsConfig) {
@@ -318,7 +321,7 @@ export class ProgramBuilder {
             //load the file text
             const file = this.program?.getFile(srcPath);
             //get the file's in-memory contents if available
-            const lines = file?.fileContents?.split(/\r?\n/g) ?? [];
+            const lines = (file as BrsFile)?.fileContents?.split(/\r?\n/g) ?? [];
 
             for (let diagnostic of sortedDiagnostics) {
                 //default the severity to error if undefined
@@ -409,23 +412,20 @@ export class ProgramBuilder {
         }
     }
 
-    private transpileThrottler = new Throttler(0);
-    /**
-     * Transpiles the entire program into the staging folder
-     */
-    public async transpile() {
-        await this.transpileThrottler.run(async () => {
-            let options = util.cwdWork(this.options.cwd, () => {
-                return rokuDeploy.getOptions({
-                    ...this.options,
-                    logLevel: this.options.logLevel as LogLevel,
-                    outDir: util.getOutDir(this.options),
-                    outFile: path.basename(this.options.outFile)
-                });
-            });
+    private buildThrottler = new Throttler(0);
 
+    /**
+     * Build the entire project and place the contents into the staging directory
+     */
+    public async build() {
+        await this.buildThrottler.run(async () => {
             //get every file referenced by the files array
-            let fileMap = await rokuDeploy.getFilePaths(options.files, options.rootDir);
+            let fileMap = Object.values(this.program.files).map(x => {
+                return {
+                    src: x.srcPath,
+                    dest: x.destPath
+                };
+            });
 
             //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
             let filteredFileMap = [] as FileObj[];
@@ -434,36 +434,20 @@ export class ProgramBuilder {
                     filteredFileMap.push(fileEntry);
                 }
             }
-            const prepublishEvent = {
-                builder: this,
-                program: this.program,
-                files: filteredFileMap
-            };
-            this.plugins.emit('beforePrepublish', prepublishEvent);
 
-            await this.logger.time(LogLevel.log, ['Copying to staging directory'], async () => {
-                //prepublish all non-program-loaded files to staging
-                await rokuDeploy.prepublishToStaging({
-                    ...options,
-                    files: filteredFileMap
-                });
-            });
-
-            this.plugins.emit('afterPrepublish', prepublishEvent);
-            const publishEvent = {
-                builder: this,
-                program: this.program,
-                files: fileMap
-            };
-            this.plugins.emit('beforePublish', publishEvent);
-
-            await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
+            await this.logger.time(LogLevel.log, ['Building'], async () => {
                 //transpile any brighterscript files
-                await this.program.transpile(fileMap, options.stagingDir);
+                await this.program.build();
             });
-
-            this.plugins.emit('afterPublish', publishEvent);
         });
+    }
+
+    /**
+     * Transpiles the entire program into the staging folder
+     * @deprecated use `.build()` instead
+     */
+    public async transpile() {
+        return this.build();
     }
 
     private async deployPackageIfEnabled() {
@@ -481,15 +465,15 @@ export class ProgramBuilder {
     }
 
     /**
-     * Parse and load the AST for every file in the project
+     * Load every file into the project
      */
-    private async loadAllFilesAST() {
-        await this.logger.time(LogLevel.log, ['Parsing files'], async () => {
+    private async loadFiles() {
+        await this.logger.time(LogLevel.log, ['load files'], async () => {
             let errorCount = 0;
             let files = await this.logger.time(LogLevel.debug, ['getFilePaths'], async () => {
                 return util.getFilePaths(this.options);
             });
-            this.logger.trace('ProgramBuilder.loadAllFilesAST() files:', files);
+            this.logger.trace('ProgramBuilder.loadFiles() files:', files);
 
             const typedefFiles = [] as FileObj[];
             const nonTypedefFiles = [] as FileObj[];
@@ -517,20 +501,14 @@ export class ProgramBuilder {
                 })
             );
 
-            const acceptableExtensions = ['.bs', '.brs', '.xml'];
-            //parse every file other than the type definitions
+            // load every file other than the type definitions into the program3
             await Promise.all(
                 nonTypedefFiles.map(async (fileObj) => {
                     try {
-                        let fileExtension = path.extname(fileObj.src).toLowerCase();
-
-                        //only process certain file types
-                        if (acceptableExtensions.includes(fileExtension)) {
-                            this.program.setFile(
-                                fileObj,
-                                await this.getFileContents(fileObj.src)
-                            );
-                        }
+                        this.program.setFile(
+                            fileObj,
+                            await this.getFileContents(fileObj.src)
+                        );
                     } catch (e) {
                         //log the error, but don't fail this process because the file might be fixable later
                         this.logger.log(e);

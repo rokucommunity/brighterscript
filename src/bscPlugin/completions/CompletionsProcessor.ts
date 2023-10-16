@@ -1,5 +1,6 @@
 import { isBrsFile, isCallableType, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isInterfaceType, isMethodStatement, isNamespaceType, isNativeType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
-import type { BscFile, ExtraSymbolData, FileReference, ProvideCompletionsEvent } from '../../interfaces';
+import type { ExtraSymbolData, FileReference, ProvideCompletionsEvent } from '../../interfaces';
+import type { File } from '../../files/File';
 import { DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
 import type { XmlScope } from '../../XmlScope';
 import { util } from '../../util';
@@ -89,9 +90,10 @@ export class CompletionsProcessor {
         //restrict to only .brs files
         for (let key in program.files) {
             let file = program.files[key];
+            const ext = util.getExtension(file.srcPath);
             if (
                 //is a BrightScript or BrighterScript file
-                (file.extension === '.bs' || file.extension === '.brs') &&
+                (ext === '.bs' || ext === '.brs') &&
                 //this file is not the current file
                 lowerSourcePkgPath !== file.pkgPath.toLowerCase()
             ) {
@@ -375,22 +377,21 @@ export class CompletionsProcessor {
 
     public getAllClassMemberCompletions(scope: Scope) {
         let results = new Map<string, CompletionItem>();
-        let filesSearched = new Set<BscFile>();
+        let filesSearched = new Set<File>();
         for (const file of scope.getAllFiles()) {
-            if (isXmlFile(file) || filesSearched.has(file)) {
-                continue;
-            }
-            filesSearched.add(file);
-            for (let cs of file.parser.references.classStatements) {
-                for (let s of [...cs.methods, ...cs.fields]) {
-                    if (!results.has(s.name.text) && s.name.text.toLowerCase() !== 'new') {
-                        results.set(s.name.text, {
-                            label: s.name.text,
-                            kind: isMethodStatement(s) ? CompletionItemKind.Method : CompletionItemKind.Field
-                        });
+            if (isBrsFile(file) && !filesSearched.has(file)) {
+                for (let cs of file.parser.references.classStatements) {
+                    for (let s of [...cs.methods, ...cs.fields]) {
+                        if (!results.has(s.name.text) && s.name.text.toLowerCase() !== 'new') {
+                            results.set(s.name.text, {
+                                label: s.name.text,
+                                kind: isMethodStatement(s) ? CompletionItemKind.Method : CompletionItemKind.Field
+                            });
+                        }
                     }
                 }
             }
+            filesSearched.add(file);
         }
         return results;
     }

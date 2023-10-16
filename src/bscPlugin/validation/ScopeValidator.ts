@@ -3,7 +3,7 @@ import { isAssignmentStatement, isBinaryExpression, isBrsFile, isClassType, isDy
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BscFile, BsDiagnostic, OnScopeValidateEvent, TypeCompatibilityData } from '../../interfaces';
+import type { BsDiagnostic, OnScopeValidateEvent, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTable';
 import type { AssignmentStatement, DottedSetStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
@@ -18,6 +18,7 @@ import { ParseMode } from '../../parser/Parser';
 import { TokenKind } from '../../lexer/TokenKind';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import type { BscType } from '../../types';
+import type { File } from '../../files/File';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -187,7 +188,7 @@ export class ScopeValidator {
 
                 const typeChainScan = util.processTypeChain(typeChain);
                 this.addMultiScopeDiagnostic({
-                    file: file as BscFile,
+                    file: file as File,
                     ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem),
                     range: typeChainScan.range
                 });
@@ -364,21 +365,21 @@ export class ScopeValidator {
                 const unquotedComponentName = componentName?.text?.replace(/"/g, '');
                 if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !this.event.program.getComponent(unquotedComponentName)) {
                     this.addDiagnosticOnce({
-                        file: file as BscFile,
+                        file: file as File,
                         ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
                         range: componentName.range
                     });
                 } else if (call?.args.length !== 2) {
                     // roSgNode should only ever have 2 args in `createObject`
                     this.addDiagnosticOnce({
-                        file: file as BscFile,
+                        file: file as File,
                         ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, [2], call?.args.length),
                         range: call.range
                     });
                 }
             } else if (!platformComponentNames.has(firstParamStringValue.toLowerCase())) {
                 this.addDiagnosticOnce({
-                    file: file as BscFile,
+                    file: file as File,
                     ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
                     range: firstParamToken.range
                 });
@@ -395,7 +396,7 @@ export class ScopeValidator {
                 if (!validArgCounts.includes(call?.args.length)) {
                     // Incorrect number of arguments included in `createObject()`
                     this.addDiagnosticOnce({
-                        file: file as BscFile,
+                        file: file as File,
                         ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, validArgCounts, call?.args.length),
                         range: call.range
                     });
@@ -404,7 +405,7 @@ export class ScopeValidator {
                 // Test for deprecation
                 if (brightScriptComponent.isDeprecated) {
                     this.addDiagnosticOnce({
-                        file: file as BscFile,
+                        file: file as File,
                         ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),
                         range: call.range
                     });

@@ -5,9 +5,10 @@ import type { CodeAction, Position, Range, SignatureInformation, Location } from
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { BrsFile } from './files/BrsFile';
-import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, BeforeFileParseEvent } from './interfaces';
+import type { BrsFile } from './files/BrsFile';
+import type { XmlFile } from './files/XmlFile';
+import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj } from './interfaces';
+import type { File } from './files/File';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -21,9 +22,7 @@ import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUtils/reflection';
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
-import { AstEditor } from './astUtils/AstEditor';
-import type { SourceMapGenerator } from 'source-map';
-import { rokuDeploy } from 'roku-deploy';
+import { Editor } from './astUtils/Editor';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
@@ -39,26 +38,19 @@ import { LongIntegerType } from './types/LongIntegerType';
 import { ObjectType } from './types/ObjectType';
 import { VoidType } from './types/VoidType';
 import { FunctionType } from './types/FunctionType';
+import { FileFactory } from './files/Factory';
+import { ActionPipeline } from './ActionPipeline';
+import type { FileData } from './files/LazyFileData';
+import { LazyFileData } from './files/LazyFileData';
+import { rokuDeploy } from 'roku-deploy';
 import type { SGNodeData, BRSComponentData, BRSEventData, BRSInterfaceData } from './roku-types';
 import { nodes, components, interfaces, events } from './roku-types';
 import { ComponentType } from './types/ComponentType';
 import { InterfaceType } from './types';
 import { BuiltInInterfaceAdder } from './types/BuiltInInterfaceAdder';
 
-const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
-
-export interface SourceObj {
-    srcPath: string;
-    source: string;
-    definitions?: string;
-}
-
-export interface TranspileObj {
-    file: BscFile;
-    outputPath: string;
-}
 
 export interface SignatureInfoObj {
     index: number;
@@ -86,9 +78,21 @@ export class Program {
         this.options.rootDir = util.getRootDir(this.options);
 
         this.createGlobalScope();
+
+        this.fileFactory = new FileFactory(this);
     }
 
     public logger: Logger;
+
+    /**
+     * An editor that plugins can use to modify program-level things during the build flow. Don't use this to edit files (they have their own `.editor`)
+     */
+    public editor = new Editor();
+
+    /**
+     * A factory that creates `File` instances
+     */
+    private fileFactory: FileFactory;
 
     private createGlobalScope() {
         //create the 'global' scope
@@ -238,8 +242,17 @@ export class Program {
     /**
      * A map of every file loaded into this program, indexed by its original file location
      */
-    public files = {} as Record<string, BscFile>;
-    private pkgMap = {} as Record<string, BscFile>;
+    public files = {} as Record<string, File>;
+    /**
+     * A map of every file loaded into this program, indexed by its destPath
+     */
+    private destMap = new Map<string, File>();
+    /**
+     * Plugins can contribute multiple virtual files for a single physical file.
+     * This collection links the virtual files back to the physical file that produced them.
+     * The key is the standardized and lower-cased srcPath
+     */
+    private fileClusters = new Map<string, File[]>();
 
     private scopes = {} as Record<string, Scope>;
 
@@ -261,7 +274,7 @@ export class Program {
     public getComponent(componentName: string) {
         if (componentName) {
             //return the first compoment in the list with this name
-            //(components are ordered in this list by pkgPath to ensure consistency)
+            //(components are ordered in this list by destPath to ensure consistency)
             return this.components[componentName.toLowerCase()]?.[0];
         } else {
             return undefined;
@@ -286,8 +299,8 @@ export class Program {
             scope: scope
         });
         this.components[key].sort((a, b) => {
-            const pathA = a.file.pkgPath.toLowerCase();
-            const pathB = b.file.pkgPath.toLowerCase();
+            const pathA = a.file.destPath.toLowerCase();
+            const pathB = b.file.destPath.toLowerCase();
             if (pathA < pathB) {
                 return -1;
             } else if (pathA > pathB) {
@@ -368,6 +381,7 @@ export class Program {
             //attach (or re-attach) the dependencyGraph for every component whose position changed
             if (file.dependencyGraphIndex !== i) {
                 file.dependencyGraphIndex = i;
+                this.dependencyGraph.addOrReplace(file.dependencyGraphKey, file.dependencies);
                 file.attachDependencyGraph(this.dependencyGraph);
                 scope.attachDependencyGraph(this.dependencyGraph);
             }
@@ -412,7 +426,7 @@ export class Program {
             let unreferencedFiles = this.getUnreferencedFiles();
             for (let file of unreferencedFiles) {
                 diagnostics.push(
-                    ...file.getDiagnostics()
+                    ...file.diagnostics
                 );
             }
             const filteredDiagnostics = this.logger.time(LogLevel.debug, ['filter diagnostics'], () => {
@@ -446,12 +460,9 @@ export class Program {
         return !!this.getFile(filePath, normalizePath);
     }
 
-    public getPkgPath(...args: any[]): any { //eslint-disable-line
-        throw new Error('Not implemented');
-    }
-
     /**
      * roku filesystem is case INsensitive, so find the scope by key case insensitive
+     * @param scopeName xml scope names are their `destPath`. Source scope is stored with the key `"source"`
      */
     public getScopeByName(scopeName: string): Scope {
         if (!scopeName) {
@@ -481,18 +492,28 @@ export class Program {
     /**
      * Update internal maps with this file reference
      */
-    private assignFile<T extends BscFile = BscFile>(file: T) {
+    private assignFile<T extends File = File>(file: T) {
+        const fileAddEvent: BeforeFileAddEvent = {
+            file: file,
+            program: this
+        };
+
+        this.plugins.emit('beforeFileAdd', fileAddEvent);
+
         this.files[file.srcPath.toLowerCase()] = file;
-        this.pkgMap[file.pkgPath.toLowerCase()] = file;
+        this.destMap.set(file.destPath.toLowerCase(), file);
+
+        this.plugins.emit('afterFileAdd', fileAddEvent);
+
         return file;
     }
 
     /**
      * Remove this file from internal maps
      */
-    private unassignFile<T extends BscFile = BscFile>(file: T) {
+    private unassignFile<T extends File = File>(file: T) {
         delete this.files[file.srcPath.toLowerCase()];
-        delete this.pkgMap[file.pkgPath.toLowerCase()];
+        this.destMap.delete(file.destPath.toLowerCase());
         return file;
     }
 
@@ -500,132 +521,131 @@ export class Program {
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
      * @param srcDestOrPkgPath the absolute path, the pkg path (i.e. `pkg:/path/to/file.brs`), or the destPath (i.e. `path/to/file.brs` relative to `pkg:/`)
-     * @param fileContents the file contents
+     * @param fileData the file contents. omit or pass `undefined` to prevent loading the data at this time
      */
-    public setFile<T extends BscFile>(srcDestOrPkgPath: string, fileContents: string): T;
+    public setFile<T extends File>(srcDestOrPkgPath: string, fileData?: FileData): T;
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * @param fileEntry an object that specifies src and dest for the file.
-     * @param fileContents the file contents. If not provided, the file will be loaded from disk
+     * @param fileData the file contents. omit or pass `undefined` to prevent loading the data at this time
      */
-    public setFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
-    public setFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
+    public setFile<T extends File>(fileEntry: FileObj, fileData: FileData): T;
+    public setFile<T extends File>(fileParam: FileObj | string, fileData: FileData): T {
         //normalize the file paths
-        const { srcPath, pkgPath } = this.getPaths(fileParam, this.options.rootDir);
+        const { srcPath, destPath } = this.getPaths(fileParam, this.options.rootDir);
 
         let file = this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
             //if the file is already loaded, remove it
             if (this.hasFile(srcPath)) {
                 this.removeFile(srcPath);
             }
-            let fileExtension = path.extname(srcPath).toLowerCase();
-            let file: BscFile | undefined;
 
-            if (fileExtension === '.brs' || fileExtension === '.bs') {
-                //add the file to the program
-                const brsFile = this.assignFile(
-                    new BrsFile(srcPath, pkgPath, this)
+            const data = new LazyFileData(fileData);
+
+            const event = new ProvideFileEventInternal(this, srcPath, destPath, data, this.fileFactory);
+
+            this.plugins.emit('beforeProvideFile', event);
+            this.plugins.emit('provideFile', event);
+            this.plugins.emit('afterProvideFile', event);
+
+            //if no files were provided, create a AssetFile to represent it.
+            if (event.files.length === 0) {
+                event.files.push(
+                    this.fileFactory.AssetFile({
+                        srcPath: event.srcPath,
+                        destPath: event.destPath,
+                        pkgPath: event.destPath,
+                        data: data
+                    })
                 );
+            }
 
-                //add file to the `source` dependency list
-                if (brsFile.pkgPath.startsWith(startOfSourcePkgPath)) {
-                    this.createSourceScope();
-                    this.dependencyGraph.addDependency('scope:source', brsFile.dependencyGraphKey);
+            //find the file instance for the srcPath that triggered this action.
+            const primaryFile = event.files.find(x => x.srcPath === srcPath);
+
+            if (!primaryFile) {
+                throw new Error(`No file provided for srcPath '${srcPath}'. Instead, received ${JSON.stringify(event.files.map(x => ({
+                    type: x.type,
+                    srcPath: x.srcPath,
+                    destPath: x.destPath
+                })))}`);
+            }
+
+            //link the virtual files to the primary file
+            this.fileClusters.set(primaryFile.srcPath?.toLowerCase(), event.files);
+
+            for (const file of event.files) {
+                file.srcPath = s(file.srcPath);
+                if (file.destPath) {
+                    file.destPath = s`${util.replaceCaseInsensitive(file.destPath, this.options.rootDir, '')}`;
+                }
+                if (file.pkgPath) {
+                    file.pkgPath = s`${util.replaceCaseInsensitive(file.pkgPath, this.options.rootDir, '')}`;
+                } else {
+                    file.pkgPath = file.destPath;
+                }
+                file.excludeFromOutput = file.excludeFromOutput === true;
+
+                //set the dependencyGraph key for every file to its destPath
+                file.dependencyGraphKey = file.destPath.toLowerCase();
+
+                this.assignFile(file);
+
+                //register a callback anytime this file's dependencies change
+                if (typeof file.onDependenciesChanged === 'function') {
+                    file.disposables ??= [];
+                    file.disposables.push(
+                        this.dependencyGraph.onchange(file.dependencyGraphKey, file.onDependenciesChanged.bind(file))
+                    );
                 }
 
-                let beforeFileParseEvent: BeforeFileParseEvent = {
-                    program: this,
-                    srcPath: srcPath,
-                    source: fileContents
-                };
-                this.plugins.emit('beforeFileParse', beforeFileParseEvent);
+                //register this file (and its dependencies) with the dependency graph
+                this.dependencyGraph.addOrReplace(file.dependencyGraphKey, file.dependencies ?? []);
 
-                this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
-                    brsFile.parse(beforeFileParseEvent.source);
-                });
+                //if this is a `source` file, add it to the source scope's dependency list
+                if (this.isSourceBrsFile(file)) {
+                    this.createSourceScope();
+                    this.dependencyGraph.addDependency('scope:source', file.dependencyGraphKey);
+                }
 
-                //notify plugins that this file has finished parsing
-                this.plugins.emit('afterFileParse', {
-                    program: this,
-                    file: brsFile
-                });
+                //if this is an xml file in the components folder, register it as a component
+                if (this.isComponentsXmlFile(file)) {
+                    //create a new scope for this xml file
+                    let scope = new XmlScope(file, this);
+                    this.addScope(scope);
 
-                file = brsFile;
+                    //register this compoent now that we have parsed it and know its component name
+                    this.registerComponent(file, scope);
 
-                brsFile.attachDependencyGraph(this.dependencyGraph);
-
-            } else if (
-                //is xml file
-                fileExtension === '.xml' &&
-                //resides in the components folder (Roku will only parse xml files in the components folder)
-                pkgPath.toLowerCase().startsWith(util.pathSepNormalize(`components/`))
-            ) {
-                //add the file to the program
-                const xmlFile = this.assignFile(
-                    new XmlFile(srcPath, pkgPath, this)
-                );
-
-                let event: BeforeFileParseEvent = {
-                    program: this,
-                    srcPath: srcPath,
-                    source: fileContents
-                };
-                this.plugins.emit('beforeFileParse', event);
-
-                this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
-                    xmlFile.parse(event.source);
-                });
-
-                //notify plugins that this file has finished parsing
-                this.plugins.emit('afterFileParse', {
-                    program: this,
-                    file: xmlFile
-                });
-
-                file = xmlFile;
-
-                //create a new scope for this xml file
-                let scope = new XmlScope(xmlFile, this);
-                this.addScope(scope);
-
-                //register this component now that we have parsed it and know its component name
-                this.registerComponent(xmlFile, scope);
-
-                //notify plugins that the scope is created and the component is registered
-                this.plugins.emit('afterScopeCreate', {
-                    program: this,
-                    scope: scope
-                });
-            } else {
-                //TODO do we actually need to implement this? Figure out how to handle img paths
-                // let genericFile = this.files[srcPath] = <any>{
-                //     srcPath: srcPath,
-                //     pkgPath: pkgPath,
-                //     wasProcessed: true
-                // } as File;
-                // file = <any>genericFile;
+                    //notify plugins that the scope is created and the component is registered
+                    this.plugins.emit('afterScopeCreate', {
+                        program: this,
+                        scope: scope
+                    });
+                }
             }
-            return file;
+
+            return primaryFile;
         });
         return file as T;
     }
 
     /**
-     * Given a srcPath, a pkgPath, or both, resolve whichever is missing, relative to rootDir.
+     * Given a srcPath, a destPath, or both, resolve whichever is missing, relative to rootDir.
      * @param fileParam an object representing file paths
      * @param rootDir must be a pre-normalized path
      */
-    private getPaths(fileParam: string | FileObj | { srcPath?: string; pkgPath?: string }, rootDir: string) {
+    private getPaths(fileParam: string | FileObj, rootDir: string) {
         let srcPath: string;
-        let pkgPath: string;
+        let destPath: string;
 
         assert.ok(fileParam, 'fileParam is required');
 
-        //lift the srcPath and pkgPath vars from the incoming param
+        //lift the path vars from the incoming param
         if (typeof fileParam === 'string') {
             fileParam = this.removePkgPrefix(fileParam);
             srcPath = s`${path.resolve(rootDir, fileParam)}`;
-            pkgPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
+            destPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
         } else {
             let param: any = fileParam;
 
@@ -636,34 +656,34 @@ export class Program {
                 srcPath = s`${param.srcPath}`;
             }
             if (param.dest) {
-                pkgPath = s`${this.removePkgPrefix(param.dest)}`;
+                destPath = s`${this.removePkgPrefix(param.dest)}`;
             }
             if (param.pkgPath) {
-                pkgPath = s`${this.removePkgPrefix(param.pkgPath)}`;
+                destPath = s`${this.removePkgPrefix(param.pkgPath)}`;
             }
         }
 
-        //if there's no srcPath, use the pkgPath to build an absolute srcPath
+        //if there's no srcPath, use the destPath to build an absolute srcPath
         if (!srcPath) {
-            srcPath = s`${rootDir}/${pkgPath}`;
+            srcPath = s`${rootDir}/${destPath}`;
         }
         //coerce srcPath to an absolute path
         if (!path.isAbsolute(srcPath)) {
             srcPath = util.standardizePath(srcPath);
         }
 
-        //if there's no pkgPath, compute relative path from rootDir
-        if (!pkgPath) {
-            pkgPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
+        //if destPath isn't set, compute it from the other paths
+        if (!destPath) {
+            destPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
         }
 
         assert.ok(srcPath, 'fileEntry.src is required');
-        assert.ok(pkgPath, 'fileEntry.dest is required');
+        assert.ok(destPath, 'fileEntry.dest is required');
 
         return {
             srcPath: srcPath,
-            //remove leading slash from pkgPath
-            pkgPath: pkgPath.replace(/^[\/\\]+/, '')
+            //remove leading slash
+            destPath: destPath.replace(/^[\/\\]+/, '')
         };
     }
 
@@ -672,6 +692,20 @@ export class Program {
      */
     private removePkgPrefix(path: string) {
         return path.replace(/^pkg:\//i, '');
+    }
+
+    /**
+     * Is this file a .brs file found somewhere within the `pkg:/source/` folder?
+     */
+    private isSourceBrsFile(file: File) {
+        return !!/^(pkg:\/)?source[\/\\]/.exec(file.destPath);
+    }
+
+    /**
+     * Is this file a .brs file found somewhere within the `pkg:/source/` folder?
+     */
+    private isComponentsXmlFile(file: File): file is XmlFile {
+        return isXmlFile(file) && !!/^(pkg:\/)?components[\/\\]/.exec(file.destPath);
     }
 
     /**
@@ -703,32 +737,38 @@ export class Program {
 
     /**
      * Remove a file from the program
-     * @param filePath can be a srcPath, a pkgPath, or a destPath (same as pkgPath but without `pkg:/`)
+     * @param filePath can be a srcPath, a destPath, or a destPath with leading `pkg:/`
      * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
     public removeFile(filePath: string, normalizePath = true) {
         this.logger.debug('Program.removeFile()', filePath);
+        const paths = this.getPaths(filePath, this.options.rootDir);
 
-        let file = this.getFile(filePath, normalizePath);
-        if (file) {
-            const fileDisposeEvent = {
-                program: this,
-                file: file
-            };
-            this.plugins.emit('beforeFileDispose', fileDisposeEvent);
+        //there can be one or more File entries for a single srcPath, so get all of them and remove them all
+        const files = this.fileClusters.get(paths.srcPath?.toLowerCase()) ?? [this.getFile(filePath, normalizePath)];
+
+        for (const file of files) {
+            //if a file has already been removed, nothing more needs to be done here
+            if (!file || !this.hasFile(file.srcPath)) {
+                continue;
+            }
+
+            const event: BeforeFileRemoveEvent = { file: file, program: this };
+            this.plugins.emit('beforeFileRemove', event);
 
             //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
-            let scope = this.scopes[file.pkgPath];
+            let scope = this.scopes[file.destPath];
             if (scope) {
                 const scopeDisposeEvent = {
                     program: this,
                     scope: scope
                 };
                 this.plugins.emit('beforeScopeDispose', scopeDisposeEvent);
+                this.plugins.emit('onScopeDispose', scopeDisposeEvent);
                 scope.dispose();
                 //notify dependencies of this scope that it has been removed
                 this.dependencyGraph.remove(scope.dependencyGraphKey);
-                delete this.scopes[file.pkgPath];
+                delete this.scopes[file.destPath];
                 this.plugins.emit('afterScopeDispose', scopeDisposeEvent);
             }
             //remove the file from the program
@@ -737,7 +777,7 @@ export class Program {
             this.dependencyGraph.remove(file.dependencyGraphKey);
 
             //if this is a pkg:/source file, notify the `source` scope that it has changed
-            if (file.pkgPath.startsWith(startOfSourcePkgPath)) {
+            if (this.isSourceBrsFile(file)) {
                 this.dependencyGraph.removeDependency('scope:source', file.dependencyGraphKey);
             }
 
@@ -745,9 +785,14 @@ export class Program {
             if (isXmlFile(file)) {
                 this.unregisterComponent(file);
             }
+            //dispose any disposable things on the file
+            for (const disposable of file?.disposables ?? []) {
+                disposable();
+            }
             //dispose file
-            file?.dispose();
-            this.plugins.emit('afterFileDispose', fileDisposeEvent);
+            file?.dispose?.();
+
+            this.plugins.emit('afterFileRemove', event);
         }
     }
 
@@ -761,6 +806,7 @@ export class Program {
                 program: this
             };
             this.plugins.emit('beforeProgramValidate', programValidateEvent);
+            this.plugins.emit('onProgramValidate', programValidateEvent);
 
             //validate every file
             for (const file of Object.values(this.files)) {
@@ -848,7 +894,7 @@ export class Program {
      * @param filePaths can be an array of srcPath or a destPath strings
      * @param normalizePath should this function repair and standardize the paths? Passing false should have a performance boost if you can guarantee your paths are already sanitized
      */
-    public getFiles<T extends BscFile>(filePaths: string[], normalizePath = true) {
+    public getFiles<T extends File>(filePaths: string[], normalizePath = true) {
         return filePaths
             .map(filePath => this.getFile(filePath, normalizePath))
             .filter(file => file !== undefined) as T[];
@@ -859,17 +905,18 @@ export class Program {
      * @param filePath can be a srcPath or a destPath
      * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
-    public getFile<T extends BscFile>(filePath: string, normalizePath = true) {
+    public getFile<T extends File>(filePath: string, normalizePath = true) {
         if (typeof filePath !== 'string') {
             return undefined;
-        } else if (path.isAbsolute(filePath)) {
+            //is the path absolute (or the `virtual:` prefix)
+        } else if (/^(?:(?:virtual:[\/\\])|(?:\w:)|(?:[\/\\]))/gmi.exec(filePath)) {
             return this.files[
                 (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase()
             ] as T;
         } else {
-            return this.pkgMap[
+            return this.destMap.get(
                 (normalizePath ? util.standardizePath(filePath) : filePath).toLowerCase()
-            ] as T;
+            ) as T;
         }
     }
 
@@ -877,7 +924,7 @@ export class Program {
      * Get a list of all scopes the file is loaded into
      * @param file the file
      */
-    public getScopesForFile(file: XmlFile | BrsFile | string) {
+    public getScopesForFile(file: File | string) {
         if (typeof file === 'string') {
             file = this.getFile(file);
         }
@@ -897,7 +944,7 @@ export class Program {
     /**
      * Get the first found scope for a file.
      */
-    public getFirstScopeForFile(file: XmlFile | BrsFile): Scope {
+    public getFirstScopeForFile(file: File): Scope {
         for (let key in this.scopes) {
             let scope = this.scopes[key];
 
@@ -915,7 +962,8 @@ export class Program {
         //look through all files in scope for matches
         for (const scope of this.getScopesForFile(originFile)) {
             for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || filesSearched.has(file)) {
+                //skip non-brs files, or files we've already processed
+                if (!isBrsFile(file) || filesSearched.has(file)) {
                     continue;
                 }
                 filesSearched.add(file);
@@ -951,7 +999,8 @@ export class Program {
 
         //look through all files in scope for matches
         for (const file of scope.getOwnFiles()) {
-            if (isXmlFile(file) || filesSearched.has(file)) {
+            //skip non-brs files, or files we've already processed
+            if (!isBrsFile(file) || filesSearched.has(file)) {
                 continue;
             }
             filesSearched.add(file);
@@ -1119,11 +1168,11 @@ export class Program {
     public getReferences(srcPath: string, position: Position) {
         //find the file
         let file = this.getFile(srcPath);
-        if (!file) {
+        if (isBrsFile(file) || isXmlFile(file)) {
+            return file.getReferences(position);
+        } else {
             return null;
         }
-
-        return file.getReferences(position);
     }
 
     /**
@@ -1134,205 +1183,256 @@ export class Program {
      * Internal usage should call `_getTranspiledFileContents` instead.
      * @param filePath can be a srcPath or a destPath
      */
-    public async getTranspiledFileContents(filePath: string) {
-        let fileMap = await rokuDeploy.getFilePaths(this.options.files, this.options.rootDir);
-        //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
-        let filteredFileMap = [] as FileObj[];
-        for (let fileEntry of fileMap) {
-            if (this.hasFile(fileEntry.src) === false) {
-                filteredFileMap.push(fileEntry);
+    public async getTranspiledFileContents(filePath: string): Promise<FileTranspileResult> {
+        const file = this.getFile(filePath);
+
+        return this.getTranspiledFileContentsPipeline.run(async () => {
+
+            const result = {
+                destPath: file.destPath,
+                pkgPath: file.pkgPath,
+                srcPath: file.srcPath
+            } as FileTranspileResult;
+
+            const expectedPkgPath = file.pkgPath.toLowerCase();
+            const expectedMapPath = `${expectedPkgPath}.map`;
+            const expectedTypedefPkgPath = expectedPkgPath.replace(/\.brs$/i, '.d.bs');
+
+            //add a temporary plugin to tap into the file writing process
+            const plugin = this.plugins.addFirst({
+                name: 'getTranspiledFileContents',
+                beforeWriteFile: (event) => {
+                    const pkgPath = event.file.pkgPath.toLowerCase();
+                    switch (pkgPath) {
+                        //this is the actual transpiled file
+                        case expectedPkgPath:
+                            result.code = event.file.data.toString();
+                            break;
+                        //this is the sourcemap
+                        case expectedMapPath:
+                            result.map = event.file.data.toString();
+                            break;
+                        //this is the typedef
+                        case expectedTypedefPkgPath:
+                            result.typedef = event.file.data.toString();
+                            break;
+                        default:
+                        //no idea what this file is. just ignore it
+                    }
+                    //mark every file as processed so it they don't get written to the output directory
+                    event.processedFiles.add(event.file);
+                }
+            });
+
+            try {
+                //now that the plugin has been registered, run the build with just this file
+                await this.build({
+                    files: [file]
+                });
+            } finally {
+                this.plugins.remove(plugin);
             }
+            return result;
+        });
+    }
+    private getTranspiledFileContentsPipeline = new ActionPipeline();
+
+    /**
+     * Get the absolute output path for a file
+     */
+    private getOutputPath(file: { pkgPath?: string }, stagingDir = this.getStagingDir()) {
+        return s`${stagingDir}/${file.pkgPath}`;
+    }
+
+    private getStagingDir(stagingDir?: string) {
+        let result = stagingDir ?? this.options.stagingDir ?? this.options.stagingDir;
+        if (!result) {
+            result = rokuDeploy.getOptions(this.options as any).stagingDir;
         }
-        const { entries, astEditor } = this.beforeProgramTranspile(fileMap, this.options.stagingDir);
-        const result = this._getTranspiledFileContents(
-            this.getFile(filePath)
-        );
-        this.afterProgramTranspile(entries, astEditor);
+        result = s`${path.resolve(this.options.cwd ?? process.cwd(), result ?? '/')}`;
         return result;
     }
 
     /**
-     * Internal function used to transpile files.
-     * This does not write anything to the file system
+     * Prepare the program for building
+     * @param files the list of files that should be prepared
      */
-    private _getTranspiledFileContents(file: BscFile, outputPath?: string): FileTranspileResult {
-        const editor = new AstEditor();
-
-        this.plugins.emit('beforeFileTranspile', {
+    private async prepare(files: File[]) {
+        const programEvent = {
             program: this,
-            file: file,
-            outputPath: outputPath,
-            editor: editor
+            editor: this.editor,
+            files: files
+        } as PrepareProgramEvent;
+
+        //assign an editor to every file
+        for (const file of files) {
+            //if the file doesn't have an editor yet, assign one now
+            if (!file.editor) {
+                file.editor = new Editor();
+            }
+        }
+
+        files.sort((a, b) => {
+            if (a.pkgPath < b.pkgPath) {
+                return -1;
+            } else if (a.pkgPath > b.pkgPath) {
+                return 1;
+            } else {
+                return 1;
+            }
         });
 
-        //if we have any edits, assume the file needs to be transpiled
-        if (editor.hasChanges) {
-            //use the `editor` because it'll track the previous value for us and revert later on
-            editor.setProperty(file, 'needsTranspiled', true);
-        }
+        await this.plugins.emitAsync('beforePrepareProgram', programEvent);
+        await this.plugins.emitAsync('prepareProgram', programEvent);
 
-        //transpile the file
-        const result = file.transpile();
+        const stagingDir = this.getStagingDir();
 
-        //generate the typedef if enabled
-        let typedef: string;
-        if (isBrsFile(file) && this.options.emitDefinitions) {
-            typedef = file.getTypedef();
-        }
+        const entries: TranspileObj[] = [];
 
-        const event: AfterFileTranspileEvent = {
-            program: this,
-            file: file,
-            outputPath: outputPath,
-            editor: editor,
-            code: result.code,
-            map: result.map,
-            typedef: typedef
-        };
-        this.plugins.emit('afterFileTranspile', event);
-
-        //undo all `editor` edits that may have been applied to this file.
-        editor.undoAll();
-
-        return {
-            srcPath: file.srcPath,
-            pkgPath: file.pkgPath,
-            code: event.code,
-            map: event.map,
-            typedef: event.typedef
-        };
-    }
-
-    private beforeProgramTranspile(fileEntries: FileObj[], stagingDir: string) {
-        // map fileEntries using their path as key, to avoid excessive "find()" operations
-        const mappedFileEntries = fileEntries.reduce<Record<string, FileObj>>((collection, entry) => {
-            collection[s`${entry.src}`] = entry;
-            return collection;
-        }, {});
-
-        const getOutputPath = (file: BscFile) => {
-            let filePathObj = mappedFileEntries[s`${file.srcPath}`];
-            if (!filePathObj) {
-                //this file has been added in-memory, from a plugin, for example
-                filePathObj = {
-                    //add an interpolated src path (since it doesn't actually exist in memory)
-                    src: `bsc:/${file.pkgPath}`,
-                    dest: file.pkgPath
-                };
+        for (const file of files) {
+            //if the file doesn't have an editor yet, assign one now
+            if (!file.editor) {
+                file.editor = new Editor();
             }
-            //replace the file extension
-            let outputPath = filePathObj.dest.replace(/\.bs$/gi, '.brs');
-            //prepend the staging folder path
-            outputPath = s`${stagingDir}/${outputPath}`;
-            return outputPath;
-        };
-
-        const entries = Object.values(this.files).map(file => {
-            return {
+            const event = {
+                program: this,
                 file: file,
-                outputPath: getOutputPath(file)
+                editor: file.editor,
+                outputPath: this.getOutputPath(file, stagingDir)
+            } as PrepareFileEvent & { outputPath: string };
+
+            await this.plugins.emitAsync('beforePrepareFile', event);
+            await this.plugins.emitAsync('prepareFile', event);
+            await this.plugins.emitAsync('afterPrepareFile', event);
+
+            //TODO remove this in v1
+            entries.push(event);
+        }
+
+        await this.plugins.emitAsync('afterPrepareProgram', programEvent);
+        return files;
+    }
+
+    /**
+     * Generate the contents of every file
+     */
+    private async serialize(files: File[]) {
+
+        const allFiles = new Map<File, SerializedFile[]>();
+
+        const serializeProgramEvent = await this.plugins.emitAsync('beforeSerializeProgram', {
+            program: this,
+            files: files,
+            result: allFiles
+        });
+        await this.plugins.emitAsync('onSerializeProgram', {
+            program: this,
+            files: files,
+            result: allFiles
+        });
+
+        //sort the entries to make transpiling more deterministic
+        files = serializeProgramEvent.files.sort((a, b) => {
+            return a.srcPath < b.srcPath ? -1 : 1;
+        });
+
+        // serialize each file
+        for (const file of files) {
+            const event = {
+                program: this,
+                file: file,
+                result: allFiles
             };
-            //sort the entries to make transpiling more deterministic
-        }).sort((a, b) => {
-            return a.file.srcPath < b.file.srcPath ? -1 : 1;
-        });
+            await this.plugins.emitAsync('beforeSerializeFile', event);
+            await this.plugins.emitAsync('serializeFile', event);
+            await this.plugins.emitAsync('afterSerializeFile', event);
+        }
 
-        const astEditor = new AstEditor();
-
-        this.plugins.emit('beforeProgramTranspile', {
+        this.plugins.emit('afterSerializeProgram', {
             program: this,
-            entries: entries,
-            editor: astEditor
+            files: files,
+            result: allFiles
         });
-        return {
-            entries: entries,
-            getOutputPath: getOutputPath,
-            astEditor: astEditor
-        };
+
+        return allFiles;
     }
 
-    public async transpile(fileEntries: FileObj[], stagingDir: string) {
-        const { entries, getOutputPath, astEditor } = this.beforeProgramTranspile(fileEntries, stagingDir);
-
-        const processedFiles = new Set<string>();
-
-        const transpileFile = async (srcPath: string, outputPath?: string) => {
-            //find the file in the program
-            const file = this.getFile(srcPath);
-            //mark this file as processed so we don't process it more than once
-            processedFiles.add(outputPath?.toLowerCase());
-
-            //skip transpiling typedef files
-            if (isBrsFile(file) && file.isTypedef) {
-                return;
-            }
-
-            const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
-
-            //make sure the full dir path exists
-            await fsExtra.ensureDir(path.dirname(outputPath));
-
-            if (await fsExtra.pathExists(outputPath)) {
-                throw new Error(`Error while transpiling "${file.srcPath}". A file already exists at "${outputPath}" and will not be overwritten.`);
-            }
-            const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, fileTranspileResult.map.toString()) : null;
-            await Promise.all([
-                fsExtra.writeFile(outputPath, fileTranspileResult.code),
-                writeMapPromise
-            ]);
-
-            if (fileTranspileResult.typedef) {
-                const typedefPath = outputPath.replace(/\.brs$/i, '.d.bs');
-                await fsExtra.writeFile(typedefPath, fileTranspileResult.typedef);
-            }
-        };
-
-        let promises = entries.map(async (entry) => {
-            return transpileFile(entry?.file?.srcPath, entry.outputPath);
+    /**
+     * Write the entire project to disk
+     */
+    private async write(stagingDir: string, files: Map<File, SerializedFile[]>) {
+        const programEvent = await this.plugins.emitAsync('beforeWriteProgram', {
+            program: this,
+            files: files,
+            stagingDir: stagingDir
         });
+        //empty the staging directory
+        await fsExtra.emptyDir(stagingDir);
 
-        //if there's no bslib file already loaded into the program, copy it to the staging directory
-        if (!this.getFile(bslibAliasedRokuModulesPkgPath) && !this.getFile(s`source/bslib.brs`)) {
-            promises.push(util.copyBslibToStaging(stagingDir));
-        }
-        await Promise.all(promises);
+        const serializedFiles = [...files]
+            .map(([, serializedFiles]) => serializedFiles)
+            .flat();
 
-        //transpile any new files that plugins added since the start of this transpile process
-        do {
-            promises = [];
-            for (const key in this.files) {
-                const file = this.files[key];
-                //this is a new file
-                const outputPath = getOutputPath(file);
-                if (!processedFiles.has(outputPath?.toLowerCase())) {
-                    promises.push(
-                        transpileFile(file?.srcPath, outputPath)
-                    );
-                }
-            }
-            if (promises.length > 0) {
-                this.logger.info(`Transpiling ${promises.length} new files`);
-                await Promise.all(promises);
-            }
-        }
-        while (promises.length > 0);
-        this.afterProgramTranspile(entries, astEditor);
+        //write all the files to disk (asynchronously)
+        await Promise.all(
+            serializedFiles.map(async (file) => {
+                const event = await this.plugins.emitAsync('beforeWriteFile', {
+                    program: this,
+                    file: file,
+                    outputPath: this.getOutputPath(file, stagingDir),
+                    processedFiles: new Set<SerializedFile>()
+                });
+
+                await this.plugins.emitAsync('writeFile', event);
+
+                await this.plugins.emitAsync('afterWriteFile', event);
+            })
+        );
+
+        await this.plugins.emitAsync('afterWriteProgram', programEvent);
     }
 
-    private afterProgramTranspile(entries: TranspileObj[], astEditor: AstEditor) {
-        this.plugins.emit('afterProgramTranspile', {
-            program: this,
-            entries: entries,
-            editor: astEditor
+    private buildPipeline = new ActionPipeline();
+
+    /**
+     * Build the project. This transpiles/transforms/copies all files and moves them to the staging directory
+     * @param options the list of options used to build the program
+     */
+    public async build(options?: ProgramBuildOptions) {
+        //run a single build at a time
+        await this.buildPipeline.run(async () => {
+            const stagingDir = this.getStagingDir(options?.stagingDir);
+
+            const event = await this.plugins.emitAsync('beforeBuildProgram', {
+                program: this,
+                editor: this.editor,
+                files: options?.files ?? Object.values(this.files)
+            });
+
+            //prepare the program (and files) for building
+            event.files = await this.prepare(event.files);
+
+            //stage the entire program
+            const serializedFilesByFile = await this.serialize(event.files);
+
+            await this.write(stagingDir, serializedFilesByFile);
+
+            await this.plugins.emitAsync('afterBuildProgram', event);
+
+            //undo all edits for the program
+            this.editor.undoAll();
+            //undo all edits for each file
+            for (const file of event.files) {
+                file.editor.undoAll();
+            }
         });
-        astEditor.undoAll();
     }
 
     /**
      * Find a list of files in the program that have a function with the given name (case INsensitive)
      */
     public findFilesForFunction(functionName: string) {
-        const files = [] as BscFile[];
+        const files = [] as File[];
         const lowerFunctionName = functionName.toLowerCase();
         //find every file with this function defined
         for (const file of Object.values(this.files)) {
@@ -1351,7 +1451,7 @@ export class Program {
      * Find a list of files in the program that have a class with the given name (case INsensitive)
      */
     public findFilesForClass(className: string) {
-        const files = [] as BscFile[];
+        const files = [] as File[];
         const lowerClassName = className.toLowerCase();
         //find every file with this class defined
         for (const file of Object.values(this.files)) {
@@ -1367,7 +1467,7 @@ export class Program {
     }
 
     public findFilesForNamespace(name: string) {
-        const files = [] as BscFile[];
+        const files = [] as File[];
         const lowerName = name.toLowerCase();
         //find every file with this class defined
         for (const file of Object.values(this.files)) {
@@ -1389,7 +1489,7 @@ export class Program {
     }
 
     public findFilesForEnum(name: string) {
-        const files = [] as BscFile[];
+        const files = [] as File[];
         const lowerName = name.toLowerCase();
         //find every file with this class defined
         for (const file of Object.values(this.files)) {
@@ -1428,20 +1528,50 @@ export class Program {
         this.plugins.emit('beforeProgramDispose', { program: this });
 
         for (let filePath in this.files) {
-            this.files[filePath].dispose();
+            this.files[filePath]?.dispose?.();
         }
         for (let name in this.scopes) {
-            this.scopes[name].dispose();
+            this.scopes[name]?.dispose?.();
         }
-        this.globalScope.dispose();
-        this.dependencyGraph.dispose();
+        this.globalScope?.dispose?.();
+        this.dependencyGraph?.dispose?.();
     }
 }
 
 export interface FileTranspileResult {
     srcPath: string;
+    destPath: string;
     pkgPath: string;
     code: string;
-    map: SourceMapGenerator;
+    map: string;
     typedef: string;
+}
+
+
+class ProvideFileEventInternal<TFile extends File = File> implements ProvideFileEvent<TFile> {
+    constructor(
+        public program: Program,
+        public srcPath: string,
+        public destPath: string,
+        public data: LazyFileData,
+        public fileFactory: FileFactory
+    ) {
+        this.srcExtension = path.extname(srcPath)?.toLowerCase();
+    }
+
+    public srcExtension: string;
+
+    public files: TFile[] = [];
+}
+
+export interface ProgramBuildOptions {
+    /**
+     * The directory where the final built files should be placed. This directory will be cleared before running
+     */
+    stagingDir?: string;
+    /**
+     * An array of files to build. If omitted, the entire list of files from the program will be used instead.
+     * Typically you will want to leave this blank
+     */
+    files?: File[];
 }

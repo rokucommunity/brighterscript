@@ -1,24 +1,42 @@
 import { createToken } from '../../astUtils/creators';
-import { isBrsFile, isDottedGetExpression, isLiteralExpression, isVariableExpression } from '../../astUtils/reflection';
+import type { Editor } from '../../astUtils/Editor';
+import { isDottedGetExpression, isLiteralExpression, isVariableExpression } from '../../astUtils/reflection';
+import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BeforeFileTranspileEvent } from '../../interfaces';
+import type { OnPrepareFileEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { Expression } from '../../parser/AstNode';
 import { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { Scope } from '../../Scope';
 import util from '../../util';
+import { BslibManager } from '../serialize/BslibManager';
 
 export class BrsFilePreTranspileProcessor {
     public constructor(
-        private event: BeforeFileTranspileEvent<BrsFile>
+        private event: OnPrepareFileEvent<BrsFile>
     ) {
     }
 
     public process() {
-        if (isBrsFile(this.event.file)) {
-            this.iterateExpressions();
+        this.iterateExpressions();
+        //apply prefixes to bslib
+        if (BslibManager.isBslibPkgPath(this.event.file.pkgPath)) {
+            this.applyPrefixesIfMissing(this.event.file, this.event.editor);
         }
+    }
+
+    public applyPrefixesIfMissing(file: BrsFile, editor: Editor) {
+        file.ast.walk(createVisitor({
+            FunctionStatement: (statement) => {
+                //add the bslib prefix
+                if (!statement.name.text.startsWith('bslib_')) {
+                    editor.setProperty(statement.name, 'text', `bslib_${statement.name.text}`);
+                }
+            }
+        }), {
+            walkMode: WalkMode.visitAllRecursive
+        });
     }
 
     private iterateExpressions() {

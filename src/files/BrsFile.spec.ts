@@ -14,10 +14,8 @@ import { Lexer } from '../lexer/Lexer';
 import { TokenKind } from '../lexer/TokenKind';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util, { standardizePath as s } from '../util';
-import PluginInterface from '../PluginInterface';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
-import { Logger } from '../Logger';
 import { ImportStatement } from '../parser/Statement';
 import { createToken } from '../astUtils/creators';
 import * as fsExtra from 'fs-extra';
@@ -38,11 +36,46 @@ describe('BrsFile', () => {
     beforeEach(() => {
         fsExtra.emptyDirSync(tempDir);
         program = new Program({ rootDir: rootDir, sourceMap: true });
-        file = new BrsFile(srcPath, destPath, program);
+        file = new BrsFile({
+            srcPath: srcPath,
+            destPath: destPath,
+            program: program
+        });
     });
     afterEach(() => {
         sinon.restore();
         program.dispose();
+    });
+
+    describe('constructor', () => {
+        it('calculates correct paths when no pkgPath specified', () => {
+            expect(
+                new BrsFile({
+                    srcPath: s`${rootDir}/source/main.bs`,
+                    destPath: s`source/main.bs`,
+                    program: program
+                })
+            ).to.include({
+                srcPath: s`${rootDir}/source/main.bs`,
+                destPath: s`source/main.bs`,
+                pkgPath: s`source/main.brs`
+            });
+        });
+
+        it('uses supplied pkgPath', () => {
+            expect(
+                new BrsFile({
+                    srcPath: s`${rootDir}/source/main.bs`,
+                    destPath: s`source/main.bs`,
+                    pkgPath: s`source/main.transpiled.brs`,
+                    program: program
+                })
+            ).to.include({
+                srcPath: s`${rootDir}/source/main.bs`,
+                destPath: s`source/main.bs`,
+                pkgPath: s`source/main.transpiled.brs`
+            });
+        });
     });
 
     describe('allowBrighterScriptInBrightScript', () => {
@@ -145,9 +178,17 @@ describe('BrsFile', () => {
 
     it('sets needsTranspiled to true for .bs files', () => {
         //BrightScript
-        expect(new BrsFile(`${rootDir}/source/main.brs`, 'source/main.brs', program).needsTranspiled).to.be.false;
+        expect(new BrsFile({
+            srcPath: `${rootDir}/source/main.brs`,
+            destPath: 'source/main.brs',
+            program: program
+        })['needsTranspiled']).to.be.false;
         //BrighterScript
-        expect(new BrsFile(`${rootDir}/source/main.bs`, 'source/main.bs', program).needsTranspiled).to.be.true;
+        expect(new BrsFile({
+            srcPath: `${rootDir}/source/main.bs`,
+            destPath: 'source/main.bs',
+            program: program
+        })['needsTranspiled']).to.be.true;
     });
 
     it('computes new import statements after clearing parser references', () => {
@@ -266,12 +307,12 @@ describe('BrsFile', () => {
                         something = true 'bs:disable-line: LINT1005
                     end sub
                 `);
-                file.addDiagnostics([{
+                file.diagnostics.push({
                     code: 'LINT1005',
                     file: file,
                     message: 'Something is not right',
                     range: util.createRange(2, 16, 2, 26)
-                }]);
+                });
                 const scope = program.getScopesForFile(file)[0];
                 expectZeroDiagnostics(scope);
             });
@@ -1001,7 +1042,7 @@ describe('BrsFile', () => {
         });
 
         it('succeeds when finding variables with "sub" in them', () => {
-            let file = program.setFile('source/main.brs', `
+            let file = program.setFile<BrsFile>('source/main.brs', `
                 function DoSomething()
                     return value.subType()
                 end function
@@ -1021,7 +1062,11 @@ describe('BrsFile', () => {
         });
 
         it('finds line and column numbers for functions', () => {
-            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            let file = new BrsFile({
+                srcPath: 'absolute_path/file.brs',
+                destPath: 'relative_path/file.brs',
+                program: program
+            });
             file.parse(`
                 function DoA()
                     print "A"
@@ -1039,7 +1084,11 @@ describe('BrsFile', () => {
         });
 
         it('throws an error if the file has already been parsed', () => {
-            let file = new BrsFile('abspath', 'relpath', program);
+            let file = new BrsFile({
+                srcPath: 'abspath',
+                destPath: 'relpath',
+                program: program
+            });
             file.parse(`'a comment`);
             try {
                 file.parse(`'a new comment`);
@@ -1050,7 +1099,11 @@ describe('BrsFile', () => {
         });
 
         it('finds and registers duplicate callables', () => {
-            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            let file = new BrsFile({
+                srcPath: 'absolute_path/file.brs',
+                destPath: 'relative_path/file.brs',
+                program: program
+            });
             file.parse(`
                 function DoA()
                     print "A"
@@ -1069,7 +1122,11 @@ describe('BrsFile', () => {
         });
 
         it('finds function call line and column numbers', () => {
-            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            let file = new BrsFile({
+                srcPath: 'absolute_path/file.brs',
+                destPath: 'relative_path/file.brs',
+                program: program
+            });
             file.parse(`
                 function DoA()
                     DoB("a")
@@ -1088,7 +1145,11 @@ describe('BrsFile', () => {
         });
 
         it('finds function calls that are unfinished', () => {
-            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            let file = new BrsFile({
+                srcPath: 'absolute_path/file.brs',
+                destPath: 'relative_path/file.brs',
+                program: program
+            });
             file.parse(`
                 function DoA()
                     DoB("a"
@@ -1114,7 +1175,11 @@ describe('BrsFile', () => {
         });
 
         it('sanitizes brs errors', () => {
-            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            let file = new BrsFile({
+                srcPath: 'absolute_path/file.brs',
+                destPath: 'relative_path/file.brs',
+                program: program
+            });
             file.parse(`
                 function DoSomething
                 end function
@@ -1125,7 +1190,11 @@ describe('BrsFile', () => {
         });
 
         it('supports using the `next` keyword in a for loop', () => {
-            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            let file = new BrsFile({
+                srcPath: 'absolute_path/file.brs',
+                destPath: 'relative_path/file.brs',
+                program: program
+            });
             file.parse(`
                 sub countit()
                     for each num in [1,2,3]
@@ -1138,7 +1207,11 @@ describe('BrsFile', () => {
 
         //test is not working yet, but will be enabled when brs supports this syntax
         it('supports assigning functions to objects', () => {
-            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            let file = new BrsFile({
+                srcPath: 'absolute_path/file.brs',
+                destPath: 'relative_path/file.brs',
+                program: program
+            });
             file.parse(`
                 function main()
                     o = CreateObject("roAssociativeArray")
@@ -1168,7 +1241,11 @@ describe('BrsFile', () => {
 
     describe('findCallables', () => {
         it('finds range', () => {
-            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            let file = new BrsFile({
+                srcPath: 'absolute_path/file.brs',
+                destPath: 'relative_path/file.brs',
+                program: program
+            });
             file.parse(`
                 sub Sum()
                     print "hello world"
@@ -1179,7 +1256,11 @@ describe('BrsFile', () => {
         });
 
         it('finds correct body range even with inner function', () => {
-            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            let file = new BrsFile({
+                srcPath: 'absolute_path/file.brs',
+                destPath: 'relative_path/file.brs',
+                program: program
+            });
             file.parse(`
                 sub Sum()
                     sayHi = sub()
@@ -1193,7 +1274,11 @@ describe('BrsFile', () => {
         });
 
         it('finds callable parameters', () => {
-            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            let file = new BrsFile({
+                srcPath: 'absolute_path/file.brs',
+                destPath: 'relative_path/file.brs',
+                program: program
+            });
             file.parse(`
                 function Sum(a, b, c)
 
@@ -1223,7 +1308,11 @@ describe('BrsFile', () => {
         });
 
         it('finds optional parameters', () => {
-            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            let file = new BrsFile({
+                srcPath: 'absolute_path/file.brs',
+                destPath: 'relative_path/file.brs',
+                program: program
+            });
             file.parse(`
                 function Sum(a=2)
 
@@ -1239,7 +1328,11 @@ describe('BrsFile', () => {
         });
 
         it('finds parameter types', () => {
-            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            let file = new BrsFile({
+                srcPath: 'absolute_path/file.brs',
+                destPath: 'relative_path/file.brs',
+                program: program
+            });
             file.parse(`
                 function Sum(a, b as integer, c as string)
 
@@ -1271,7 +1364,11 @@ describe('BrsFile', () => {
 
     describe('findCallableInvocations', () => {
         it('finds arguments with literal values', () => {
-            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            let file = new BrsFile({
+                srcPath: 'absolute_path/file.brs',
+                destPath: 'relative_path/file.brs',
+                program: program
+            });
             file.parse(`
                 function Sum()
                     DoSomething("name", 12, true)
@@ -1313,7 +1410,11 @@ describe('BrsFile', () => {
         });
 
         it('finds arguments with variable values', () => {
-            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            let file = new BrsFile({
+                srcPath: 'absolute_path/file.brs',
+                destPath: 'relative_path/file.brs',
+                program: program
+            });
             file.parse(`
                 function Sum()
                     count = 1
@@ -1341,13 +1442,17 @@ describe('BrsFile', () => {
     describe('findCallables', () => {
         //this test is to help with code coverage
         it('skips top-level statements', () => {
-            let file = new BrsFile('absolute', 'relative', program);
+            let file = new BrsFile({
+                srcPath: 'absolute',
+                destPath: 'relative',
+                program: program
+            });
             file.parse('name = "Bob"');
             expect(file.callables.length).to.equal(0);
         });
 
         it('finds return type', () => {
-            let file = program.setFile('source/main.brs', `
+            let file = program.setFile<BrsFile>('source/main.brs', `
                 function DoSomething() as string
                 end function
             `);
@@ -1450,7 +1555,7 @@ describe('BrsFile', () => {
         });
 
         it('finds value from global return', () => {
-            let file = program.setFile('source/main.brs', `
+            let file = program.setFile<BrsFile>('source/main.brs', `
                 sub Main()
                    myName = GetName()
                 end sub
@@ -1472,7 +1577,7 @@ describe('BrsFile', () => {
         });
 
         it('finds variable type from other variable', () => {
-            let file = program.setFile('source/main.brs', `
+            let file = program.setFile<BrsFile>('source/main.brs', `
                 sub Main()
                    name = "bob"
                    nameCopy = name
@@ -1513,7 +1618,7 @@ describe('BrsFile', () => {
             end sub
         `);
 
-        expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
+        expectZeroDiagnostics(mainFile);
         mainFile = program.setFile('source/main.brs', `
             sub Main()
                 if true Then
@@ -1521,7 +1626,7 @@ describe('BrsFile', () => {
                 end if
             end sub
         `);
-        expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
+        expectZeroDiagnostics(mainFile);
 
         mainFile = program.setFile('source/main.brs', `
             sub Main()
@@ -1530,7 +1635,7 @@ describe('BrsFile', () => {
                 end if
             end sub
         `);
-        expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
+        expectZeroDiagnostics(mainFile);
     });
 
     it('does not throw when encountering incomplete import statement', () => {
@@ -1544,8 +1649,8 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
-        it('excludes trailing commas in array literals', () => {
-            testTranspile(`
+        it('excludes trailing commas in array literals', async () => {
+            await testTranspile(`
                 sub main()
                     arr = [
                         1,
@@ -1574,7 +1679,7 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('transpiles if statement keywords as provided', () => {
+        it('transpiles if statement keywords as provided', async () => {
             const code = `
                 sub main()
                     If True Then
@@ -1588,13 +1693,13 @@ describe('BrsFile', () => {
                     End If
                 end sub
             `;
-            testTranspile(code);
-            testTranspile(code.toLowerCase());
-            testTranspile(code.toUpperCase());
+            await testTranspile(code);
+            await testTranspile(code.toLowerCase());
+            await testTranspile(code.toUpperCase());
         });
 
-        it('does not transpile `then` tokens', () => {
-            testTranspile(`
+        it('does not transpile `then` tokens', async () => {
+            await testTranspile(`
                 sub main()
                     if true
                         print true
@@ -1605,8 +1710,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('honors spacing between multi-word tokens', () => {
-            testTranspile(`
+        it('honors spacing between multi-word tokens', async () => {
+            await testTranspile(`
                 sub main()
                     if true
                         print true
@@ -1617,8 +1722,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('handles when only some of the statements have `then`', () => {
-            testTranspile(`
+        it('handles when only some of the statements have `then`', async () => {
+            await testTranspile(`
                 sub main()
                     if true
                     else if true then
@@ -1632,26 +1737,26 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('retains casing of parameter types', () => {
-            function test(type: string) {
-                testTranspile(`
+        it('retains casing of parameter types', async () => {
+            async function test(type: string) {
+                await testTranspile(`
                     sub one(a as ${type}, b as ${type.toUpperCase()}, c as ${type.toLowerCase()})
                     end sub
                 `);
             }
-            test('Boolean');
-            test('Double');
-            test('Dynamic');
-            test('Float');
-            test('Integer');
-            test('LongInteger');
-            test('Object');
-            test('String');
+            await test('Boolean');
+            await test('Double');
+            await test('Dynamic');
+            await test('Float');
+            await test('Integer');
+            await test('LongInteger');
+            await test('Object');
+            await test('String');
         });
 
-        it('retains casing of return types', () => {
-            function test(type: string) {
-                testTranspile(`
+        it('retains casing of return types', async () => {
+            async function test(type: string) {
+                await testTranspile(`
                     sub one() as ${type}
                     end sub
 
@@ -1662,20 +1767,20 @@ describe('BrsFile', () => {
                     end sub
                 `);
             }
-            test('Boolean');
-            test('Double');
-            test('Dynamic');
-            test('Float');
-            test('Integer');
-            test('LongInteger');
-            test('Object');
-            test('String');
-            test('Void');
+            await test('Boolean');
+            await test('Double');
+            await test('Dynamic');
+            await test('Float');
+            await test('Integer');
+            await test('LongInteger');
+            await test('Object');
+            await test('String');
+            await test('Void');
         });
 
-        it('retains casing of literal types', () => {
-            function test(type: string) {
-                testTranspile(`
+        it('retains casing of literal types', async () => {
+            async function test(type: string) {
+                await testTranspile(`
                     sub main()
                         thing = ${type}
                         thing = ${type.toLowerCase()}
@@ -1683,13 +1788,13 @@ describe('BrsFile', () => {
                     end sub
                 `);
             }
-            test('Invalid');
-            test('True');
-            test('False');
+            await test('Invalid');
+            await test('True');
+            await test('False');
         });
         describe('throwStatement', () => {
-            it('transpiles properly', () => {
-                testTranspile(`
+            it('transpiles properly', async () => {
+                await testTranspile(`
                     sub main()
                         try
                             throw "some message"
@@ -1701,8 +1806,8 @@ describe('BrsFile', () => {
         });
 
         describe('try/catch', () => {
-            it('transpiles properly', () => {
-                testTranspile(`
+            it('transpiles properly', async () => {
+                await testTranspile(`
                     sub main()
                         try
                             print m.b.c
@@ -1715,8 +1820,8 @@ describe('BrsFile', () => {
         });
 
         describe('namespaces', () => {
-            it('properly transpiles namespace functions for assignments', () => {
-                testTranspile(`
+            it('properly transpiles namespace functions for assignments', async () => {
+                await testTranspile(`
                     namespace NameA.NameB
                         sub Speak()
                         end sub
@@ -1738,8 +1843,8 @@ describe('BrsFile', () => {
                 `);
             });
 
-            it('properly transpiles inferred namespace function for assignment', () => {
-                testTranspile(`
+            it('properly transpiles inferred namespace function for assignment', async () => {
+                await testTranspile(`
                     namespace NameA.NameB
                         sub Speak()
                         end sub
@@ -1759,8 +1864,8 @@ describe('BrsFile', () => {
                 `);
             });
         });
-        it('includes all text to end of line for a non-terminated string', () => {
-            testTranspile(
+        it('includes all text to end of line for a non-terminated string', async () => {
+            await testTranspile(
                 'sub main()\n    name = "john \nend sub',
                 'sub main()\n    name = "john "\nend sub',
                 null,
@@ -1768,24 +1873,24 @@ describe('BrsFile', () => {
                 false
             );
         });
-        it('escapes quotes in string literals', () => {
-            testTranspile(`
+        it('escapes quotes in string literals', async () => {
+            await testTranspile(`
                 sub main()
                     expected = "Hello"
                     expected += chr(10) + " version=""2.0"""
                 end sub
             `);
         });
-        it('keeps function parameter types in proper order', () => {
-            testTranspile(`
+        it('keeps function parameter types in proper order', async () => {
+            await testTranspile(`
                 function CreateTestStatistic(name as string, result = "Success" as string, time = 0 as integer, errorCode = 0 as integer, errorMessage = "" as string) as object
                 end function
             `);
         });
 
-        it('discard parameter types when removeParameterTypes is true', () => {
+        it('discard parameter types when removeParameterTypes is true', async () => {
             program.options.removeParameterTypes = true;
-            testTranspile(`
+            await testTranspile(`
                 sub one(a as integer, b = "" as string, c = invalid as dynamic)
                 end sub
             `, `
@@ -1794,9 +1899,9 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('discard return type when removeParameterTypes is true', () => {
+        it('discard return type when removeParameterTypes is true', async () => {
             program.options.removeParameterTypes = true;
-            testTranspile(`
+            await testTranspile(`
                 function one() as string
                     return ""
                 end function
@@ -1807,8 +1912,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('transpiles local var assignment operators', () => {
-            testTranspile(`
+        it('transpiles local var assignment operators', async () => {
+            await testTranspile(`
                 sub main()
                     count = 0
                     count += 1
@@ -1822,8 +1927,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('transpiles AA property assignment operators', () => {
-            testTranspile(`
+        it('transpiles AA property assignment operators', async () => {
+            await testTranspile(`
                 sub main()
                     person = {
                         count: 0
@@ -1833,8 +1938,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('transpiles AA indexed assignment operators', () => {
-            testTranspile(`
+        it('transpiles AA indexed assignment operators', async () => {
+            await testTranspile(`
                 sub main()
                     person = {
                         count: 0
@@ -1844,8 +1949,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('relative-referenced namespaced functions get prefixed', () => {
-            testTranspile(`
+        it('relative-referenced namespaced functions get prefixed', async () => {
+            await testTranspile(`
                 namespace Vertibrates.Birds
                     function GetAllBirds()
                         return [
@@ -1876,8 +1981,8 @@ describe('BrsFile', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('transpiles namespaced functions', () => {
-            testTranspile(`
+        it('transpiles namespaced functions', async () => {
+            await testTranspile(`
                 namespace NameA
                     sub alert()
                     end sub
@@ -1894,9 +1999,9 @@ describe('BrsFile', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('transpiles dim', () => {
-            function doTest(code: string) {
-                testTranspile(`
+        it('transpiles dim', async () => {
+            async function doTest(code: string) {
+                await testTranspile(`
                     sub main()
                         requestList = []
                         ${code}
@@ -1908,20 +2013,20 @@ describe('BrsFile', () => {
                     end sub
                 `);
             }
-            doTest(`Dim c[5]`);
-            doTest(`Dim c[5, 4]`);
-            doTest(`Dim c[5, 4, 6]`);
-            doTest(`Dim requestData[requestList.count()]`);
-            doTest(`Dim requestData[1, requestList.count()]`);
-            doTest(`Dim requestData[1, requestList.count(), 2]`);
-            doTest(`Dim requestData[requestList[2]]`);
-            doTest(`Dim requestData[1, requestList[2]]`);
-            doTest(`Dim requestData[1, requestList[2], 2]`);
-            doTest(`Dim requestData[requestList["2"]]`);
-            doTest(`Dim requestData[1, requestList["2"]]`);
-            doTest(`Dim requestData[1, requestList["2"], 2]`);
-            doTest(`Dim requestData[1, StrToI("1"), 2]`);
-            testTranspile(`
+            await doTest(`Dim c[5]`);
+            await doTest(`Dim c[5, 4]`);
+            await doTest(`Dim c[5, 4, 6]`);
+            await doTest(`Dim requestData[requestList.count()]`);
+            await doTest(`Dim requestData[1, requestList.count()]`);
+            await doTest(`Dim requestData[1, requestList.count(), 2]`);
+            await doTest(`Dim requestData[requestList[2]]`);
+            await doTest(`Dim requestData[1, requestList[2]]`);
+            await doTest(`Dim requestData[1, requestList[2], 2]`);
+            await doTest(`Dim requestData[requestList["2"]]`);
+            await doTest(`Dim requestData[1, requestList["2"]]`);
+            await doTest(`Dim requestData[1, requestList["2"], 2]`);
+            await doTest(`Dim requestData[1, StrToI("1"), 2]`);
+            await testTranspile(`
                 function getValue(param1)
                 end function
 
@@ -1934,8 +2039,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('transpiles calls to fully-qualified namespaced functions', () => {
-            testTranspile(`
+        it('transpiles calls to fully-qualified namespaced functions', async () => {
+            await testTranspile(`
                 namespace NameA
                     sub alert()
                     end sub
@@ -1961,16 +2066,16 @@ describe('BrsFile', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('keeps end-of-line comments with their line', () => {
-            testTranspile(`
+        it('keeps end-of-line comments with their line', async () => {
+            await testTranspile(`
                 function DoSomething() 'comment 1
                     name = "bob" 'comment 2
                 end function 'comment 3
             `);
         });
 
-        it('works for functions', () => {
-            testTranspile(`
+        it('works for functions', async () => {
+            await testTranspile(`
                 function DoSomething()
                     'lots of empty white space
                     'that will be removed during transpile
@@ -1986,8 +2091,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('keeps empty AAs and arrays on same line', () => {
-            testTranspile(`
+        it('keeps empty AAs and arrays on same line', async () => {
+            await testTranspile(`
                 sub a()
                     person = {}
                     stuff = []
@@ -1995,8 +2100,8 @@ describe('BrsFile', () => {
         `, null, 'trim');
         });
 
-        it('does not add leading or trailing newlines', () => {
-            testTranspile(`function abc()\nend function`, undefined, 'none');
+        it('does not add leading or trailing newlines', async () => {
+            await testTranspile(`function abc()\nend function`, undefined, 'none');
         });
 
         it('handles sourcemap edge case', async () => {
@@ -2007,9 +2112,9 @@ describe('BrsFile', () => {
                 '\n' +
                 'end sub';
             program.options.sourceMap = true;
-            let result = testTranspile(source, `sub main()\n    print 1\nend sub`, 'none', 'source/main.bs');
+            let result = await testTranspile(source, `sub main()\n    print 1\nend sub`, 'none', 'source/main.bs');
             //load the source map
-            let location = await SourceMapConsumer.with(result.map.toJSON(), null, (consumer) => {
+            let location = await SourceMapConsumer.with(result.map, null, (consumer) => {
                 return consumer.generatedPositionFor({
                     line: 3,
                     column: 0,
@@ -2028,7 +2133,7 @@ describe('BrsFile', () => {
                 .filter(x => x.kind !== TokenKind.Eof && x.kind !== TokenKind.Newline);
 
             program.options.sourceMap = true;
-            let result = testTranspile(source, source, 'none');
+            let result = await testTranspile(source, source, 'none');
             //load the source map
             await SourceMapConsumer.with(result.map.toString(), null, (consumer) => {
                 let tokenResult = tokens.map(token => ({
@@ -2054,8 +2159,8 @@ describe('BrsFile', () => {
             });
         });
 
-        it('handles empty if block', () => {
-            testTranspile(`
+        it('handles empty if block', async () => {
+            await testTranspile(`
                 sub main()
                     if true then
                     end if
@@ -2077,8 +2182,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('handles empty elseif block', () => {
-            testTranspile(`
+        it('handles empty elseif block', async () => {
+            await testTranspile(`
                 sub main()
                     if true then
                         print "if"
@@ -2093,8 +2198,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('handles empty else block', () => {
-            testTranspile(`
+        it('handles empty else block', async () => {
+            await testTranspile(`
                 sub main()
                     if true then
                         print "if"
@@ -2110,8 +2215,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('handles else block with a leading comment', () => {
-            testTranspile(`
+        it('handles else block with a leading comment', async () => {
+            await testTranspile(`
                 sub main()
                     if true then
                         print "if"
@@ -2123,8 +2228,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('works for function parameters', () => {
-            testTranspile(`
+        it('works for function parameters', async () => {
+            await testTranspile(`
                 function DoSomething(name, age as integer, text as string)
                 end function
             `, `
@@ -2133,8 +2238,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('adds newlines between top-level statements', () => {
-            testTranspile(`
+        it('adds newlines between top-level statements', async () => {
+            await testTranspile(`
                 function a()
                 end function
 
@@ -2143,8 +2248,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('properly indents nested AA literals', () => {
-            testTranspile(`
+        it('properly indents nested AA literals', async () => {
+            await testTranspile(`
                 sub doSomething()
                     grandparent = {
                         parent: {
@@ -2159,8 +2264,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('does not add comma after final object property even when comments are present', () => {
-            testTranspile(`
+        it('does not add comma after final object property even when comments are present', async () => {
+            await testTranspile(`
                 sub doSomething()
                     person = {
                         age: 12 'comment
@@ -2184,8 +2289,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('works for a complex function with comments all over the place', () => {
-            testTranspile(`
+        it('works for a complex function with comments all over the place', async () => {
+            await testTranspile(`
                 'import some library
                 library "v30/bslCore.brs" 'comment
 
@@ -2272,31 +2377,31 @@ describe('BrsFile', () => {
         });
 
         it('simple mapped files include a reference to the source map', () => {
-            let file = program.setFile('source/logger.brs', trim`
+            let file = program.setFile<BrsFile>('source/logger.brs', trim`
                 sub logInfo()
                 end sub
             `);
-            file.needsTranspiled = false;
+            file['needsTranspiled'] = false;
             const { code } = file.transpile();
             expect(code.endsWith(`'//# sourceMappingURL=./logger.brs.map`)).to.be.true;
         });
 
         it('AST generated files include a reference to the source map', () => {
-            let file = program.setFile('source/logger.brs', trim`
+            let file = program.setFile<BrsFile>('source/logger.brs', trim`
                 sub logInfo()
                 end sub
             `);
-            file.needsTranspiled = true;
+            file['needsTranspiled'] = true;
             const { code } = file.transpile();
             expect(code.endsWith(`'//# sourceMappingURL=./logger.brs.map`)).to.be.true;
         });
 
-        it('replaces custom types in parameter types and return types', () => {
+        it('replaces custom types in parameter types and return types', async () => {
             program.setFile('source/SomeKlass.bs', `
                 class SomeKlass
                 end class
             `);
-            testTranspile(`
+            await testTranspile(`
                 function foo() as SomeKlass
                     return new SomeKlass()
                 end function
@@ -2328,8 +2433,8 @@ describe('BrsFile', () => {
                 expectZeroDiagnostics(program);
             });
 
-            it('sets invalid on empty callfunc', () => {
-                testTranspile(`
+            it('sets invalid on empty callfunc', async () => {
+                await testTranspile(`
                     sub main()
                         node = invalid
                         node@.doSomething()
@@ -2346,8 +2451,8 @@ describe('BrsFile', () => {
                 `);
             });
 
-            it('includes original arguments', () => {
-                testTranspile(`
+            it('includes original arguments', async () => {
+                await testTranspile(`
                     sub main()
                         node = invalid
                         node@.doSomething(1, true, m.top.someVal)
@@ -2412,7 +2517,6 @@ describe('BrsFile', () => {
         });
     });
 
-
     describe('type definitions', () => {
         it('only exposes defined functions even if source has more', () => {
             //parse the .brs file first so it doesn't know about the typedef
@@ -2469,8 +2573,8 @@ describe('BrsFile', () => {
     });
 
     describe('typedef', () => {
-        it('includes enum and interface types', () => {
-            testGetTypedef(`
+        it('includes enum and interface types', async () => {
+            await testGetTypedef(`
                 interface Foo
                     field as string
                 end interface
@@ -2872,8 +2976,8 @@ describe('BrsFile', () => {
                 function plugin() {
                     return {
                         name: 'lower-file-name',
-                        afterFileParse: (evt) => {
-                            evt.file._customProp = true;
+                        afterProvideFile: (evt) => {
+                            evt.files[0]._customProp = true;
                         }
                     };
                 }
@@ -2882,23 +2986,17 @@ describe('BrsFile', () => {
         });
 
         it('can load an absolute plugin which receives callbacks', () => {
-            program.plugins = new PluginInterface(
-                util.loadPlugins(tempDir, [
-                    s`${tempDir}/plugins/${pluginFileName}`
-                ]),
-                { logger: new Logger() }
-            );
+            for (const plugin of util.loadPlugins(tempDir, [s`${tempDir}/plugins/${pluginFileName}`])) {
+                program.plugins.add(plugin);
+            }
             const file = program.setFile<any>('source/MAIN.brs', '');
             expect(file._customProp).to.exist;
         });
 
         it('can load a relative plugin which receives callbacks', () => {
-            program.plugins = new PluginInterface(
-                util.loadPlugins(tempDir, [
-                    `./plugins/${pluginFileName}`
-                ]),
-                { logger: new Logger() }
-            );
+            for (const plugin of util.loadPlugins(tempDir, [`./plugins/${pluginFileName}`])) {
+                program.plugins.add(plugin);
+            }
             const file = program.setFile<any>('source/MAIN.brs', '');
             expect(file._customProp).to.exist;
         });

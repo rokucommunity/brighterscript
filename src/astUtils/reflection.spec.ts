@@ -14,8 +14,8 @@ describe('reflection', () => {
     describe('Files', () => {
         it('recognizes files', () => {
             const program = new Program({});
-            const file = new BrsFile('path/to/source/file.brs', 'pkg:/source/file.brs', program);
-            const comp = new XmlFile('path/to/components/file.xml', 'pkg:/components/file.brs', program);
+            const file = new BrsFile({ srcPath: 'path/to/source/file.brs', destPath: 'source/file.brs', program: program });
+            const comp = new XmlFile({ srcPath: 'path/to/components/file.xml', destPath: 'components/file.brs', program: program });
             expect(isBrsFile(file)).to.be.true;
             expect(isXmlFile(file)).to.be.false;
             expect(isBrsFile(comp)).to.be.false;

@@ -2,7 +2,7 @@ import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStat
 import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypeExpression, TypeCastExpression, TypedArrayExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
-import type { BscFile, File, TypedefProvider } from '../interfaces';
+import type { TypedefProvider } from '../interfaces';
 import type { InvalidType } from '../types/InvalidType';
 import type { VoidType } from '../types/VoidType';
 import { InternalWalkMode } from './visitors';
@@ -21,6 +21,7 @@ import type { DynamicType } from '../types/DynamicType';
 import type { InterfaceType } from '../types/InterfaceType';
 import type { ObjectType } from '../types/ObjectType';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
+import type { AssetFile } from '../files/AssetFile';
 import { AstNodeKind } from '../parser/AstNode';
 import type { TypePropertyReferenceType, ReferenceType, BinaryOperatorReferenceType } from '../types/ReferenceType';
 import type { EnumMemberType, EnumType } from '../types/EnumType';
@@ -31,17 +32,22 @@ import type { InheritableType } from '../types/InheritableType';
 import { BscTypeKind } from '../types/BscTypeKind';
 import type { NamespaceType } from '../types/NamespaceType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
+import type { File } from '../files/File';
 import type { ComponentType } from '../types/ComponentType';
 import type { AssociativeArrayType } from '../types/AssociativeArrayType';
 import { TokenKind } from '../lexer/TokenKind';
 
 // File reflection
-export function isBrsFile(file: (BscFile | File)): file is BrsFile {
+export function isBrsFile(file: File): file is BrsFile {
     return file?.constructor.name === 'BrsFile';
 }
 
-export function isXmlFile(file: (BscFile)): file is XmlFile {
+export function isXmlFile(file: (File | XmlFile)): file is XmlFile {
     return file?.constructor.name === 'XmlFile';
+}
+
+export function isAssetFile(file: (File | AssetFile)): file is AssetFile {
+    return file?.constructor.name === 'AssetFile';
 }
 
 export function isXmlScope(scope: (Scope)): scope is XmlScope {
@@ -412,5 +418,3 @@ export function isLiteralFloat(value: any): value is LiteralExpression & { type:
 export function isLiteralDouble(value: any): value is LiteralExpression & { type: DoubleType } {
     return isLiteralExpression(value) && isDoubleType(value.getType());
 }
-
-

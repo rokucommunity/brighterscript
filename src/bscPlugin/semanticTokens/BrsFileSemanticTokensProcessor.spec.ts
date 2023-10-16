@@ -1,7 +1,8 @@
 import { expect } from '../../chai-config.spec';
 import { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver-protocol';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BscFile, SemanticToken } from '../../interfaces';
+import type { File } from '../../files/File';
+import type { SemanticToken } from '../../interfaces';
 import { Program } from '../../Program';
 import { expectZeroDiagnostics } from '../../testHelpers.spec';
 import { util } from '../../util';
@@ -18,7 +19,7 @@ describe('BrsFileSemanticTokensProcessor', () => {
         program.dispose();
     });
 
-    function expectSemanticTokens(file: BscFile, tokens: SemanticToken[], validateDiagnostics = true) {
+    function expectSemanticTokens(file: File, tokens: SemanticToken[], validateDiagnostics = true) {
         program.validate();
         if (validateDiagnostics) {
             expectZeroDiagnostics(program);

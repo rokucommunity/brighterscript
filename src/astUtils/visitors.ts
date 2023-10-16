@@ -3,7 +3,7 @@ import type { CancellationToken } from 'vscode-languageserver';
 import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, EnumStatement, EnumMemberStatement, DimStatement, TryCatchStatement, CatchStatement, ThrowStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement, FieldStatement, MethodStatement, ConstStatement, ContinueStatement } from '../parser/Statement';
 import type { AALiteralExpression, AAMemberExpression, AnnotationExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NewExpression, NullCoalescingExpression, RegexLiteralExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypeCastExpression, TypeExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
 import { isExpression, isStatement } from './reflection';
-import type { AstEditor } from './AstEditor';
+import type { Editor } from './Editor';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
 
 
@@ -181,9 +181,9 @@ export interface WalkOptions {
      */
     cancel?: CancellationToken;
     /**
-     * If provided, any AST replacements will be done using this AstEditor instead of directly against the AST itself
+     * If provided, any AST replacements will be done using this Editor instead of directly against the AST itself
      */
-    editor?: AstEditor;
+    editor?: Editor;
 }
 
 /**

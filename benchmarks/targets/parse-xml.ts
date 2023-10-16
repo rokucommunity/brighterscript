@@ -16,10 +16,10 @@ module.exports = async (options: TargetOptions) => {
         ...options.additionalConfig
     });
     //collect all the XML file contents
-    const xmlFiles = Object.values(builder.program.files).filter(x => x.extension === '.xml').map(x => ({
+    const xmlFiles = Object.values(builder.program.files).filter(x => (x as any)?.extension === '.xml').map(x => ({
         srcPath: x.srcPath ?? (x as any).pathAbsolute,
         pkgPath: x.pkgPath,
-        fileContents: x.fileContents
+        fileContents: (x as any).fileContents
     }));
     if (xmlFiles.length === 0) {
         console.log('[xml-parser] No XML files found in program');
@@ -28,7 +28,11 @@ module.exports = async (options: TargetOptions) => {
     suite.add(fullName, (deferred) => {
         const wait: Promise<any>[] = [];
         for (const x of xmlFiles) {
-            const xmlFile = new XmlFile(x.srcPath, x.pkgPath, builder.program);
+            let xmlFile = new XmlFile({ srcPath: x.srcPath, destPath: (x as any)?.destPath ?? x.pkgPath, program: builder.program });
+            if (typeof xmlFile.srcPath !== 'string') {
+                //fallback to legacy constructor signature
+                xmlFile = (XmlFile as any)(x.srcPath, x.pkgPath, builder.program);
+            }
             //handle async and sync parsing
             const prom = xmlFile.parse(x.fileContents);
             if (prom as any) {

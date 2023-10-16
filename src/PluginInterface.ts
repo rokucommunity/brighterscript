@@ -14,22 +14,15 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
             logger: Logger;
             suppressErrors?: boolean;
         }
-    );
-    constructor(
-        private plugins: CompilerPlugin[],
-        options: {
-            logger: Logger;
-            suppressErrors?: boolean;
-        } | Logger
     ) {
-        if (options?.constructor.name === 'Logger') {
-            this.logger = options as unknown as Logger;
-        } else {
-            this.logger = (options as any)?.logger;
-            this.suppressErrors = (options as any)?.suppressErrors === false ? false : true;
+        this.logger = options?.logger;
+        this.suppressErrors = (options as any)?.suppressErrors === false ? false : true;
+        for (const plugin of plugins) {
+            this.add(plugin);
         }
     }
 
+    private plugins: CompilerPlugin[] = [];
     private logger: Logger;
 
     /**
@@ -40,21 +33,42 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
     /**
      * Call `event` on plugins
      */
-    public emit<K extends keyof T & string>(event: K, ...args: Arguments<T[K]>) {
+    public emit<K extends keyof T & string>(event: K, ...args: Arguments<T[K]>): Arguments<T[K]>[0] {
         for (let plugin of this.plugins) {
             if ((plugin as any)[event]) {
                 try {
-                    this.logger.time(LogLevel.debug, [plugin.name, event], () => {
+                    this.logger?.time(LogLevel.debug, [plugin.name, event], () => {
                         (plugin as any)[event](...args);
                     });
                 } catch (err) {
-                    this.logger.error(`Error when calling plugin ${plugin.name}.${event}:`, err);
+                    this.logger?.error(`Error when calling plugin ${plugin.name}.${event}:`, err);
                     if (!this.suppressErrors) {
                         throw err;
                     }
                 }
             }
         }
+        return args[0];
+    }
+
+    /**
+     * Call `event` on plugins, but allow the plugins to return promises that will be awaited before the next plugin is notified
+     */
+    public async emitAsync<K extends keyof T & string>(event: K, ...args: Arguments<T[K]>): Promise<Arguments<T[K]>[0]> {
+        for (let plugin of this.plugins) {
+            if ((plugin as any)[event]) {
+                try {
+                    await this.logger?.time(LogLevel.debug, [plugin.name, event], async () => {
+                        await Promise.resolve(
+                            (plugin as any)[event](...args)
+                        );
+                    });
+                } catch (err) {
+                    this.logger?.error(`Error when calling plugin ${plugin.name}.${event}:`, err);
+                }
+            }
+        }
+        return args[0];
     }
 
     /**
@@ -72,9 +86,50 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
      */
     public add<T extends CompilerPlugin = CompilerPlugin>(plugin: T) {
         if (!this.has(plugin)) {
+            this.sanitizePlugin(plugin);
             this.plugins.push(plugin);
         }
         return plugin;
+    }
+
+    /**
+     * Find deprecated or removed historic plugin hooks, and warn about them.
+     * Some events can be forwards-converted
+     */
+    private sanitizePlugin(plugin: CompilerPlugin) {
+        const removedHooks = [
+            'beforePrepublish',
+            'afterPrepublish'
+        ];
+        for (const removedHook of removedHooks) {
+            if (plugin[removedHook]) {
+                this.logger?.error(`Plugin "${plugin.name}": event ${removedHook} is no longer supported and will never be called`);
+            }
+        }
+
+        const upgradeWithWarn = {
+            beforePublish: 'beforeSerializeProgram',
+            afterPublish: 'afterSerializeProgram',
+            beforeProgramTranspile: 'beforeBuildProgram',
+            afterProgramTranspile: 'afterBuildProgram',
+            beforeFileParse: 'beforeProvideFile',
+            afterFileParse: 'afterProvideFile',
+            beforeFileTranspile: 'beforePrepareFile',
+            afterFileTranspile: 'afterPrepareFile',
+            beforeFileDispose: 'beforeFileRemove',
+            afterFileDispose: 'afterFileRemove'
+        };
+
+        for (const [oldEvent, newEvent] of Object.entries(upgradeWithWarn)) {
+            if (plugin[oldEvent]) {
+                if (!plugin[newEvent]) {
+                    plugin[newEvent] = plugin[oldEvent];
+                    this.logger?.warn(`Plugin '${plugin.name}': event '${oldEvent}' is no longer supported. It has been converted to '${newEvent}' but you may encounter issues as their signatures do not match.`);
+                } else {
+                    this.logger?.warn(`Plugin "${plugin.name}": event '${oldEvent}' is no longer supported and will never be called`);
+                }
+            }
+        }
     }
 
     public has(plugin: CompilerPlugin) {
@@ -83,7 +138,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
 
     public remove<T extends CompilerPlugin = CompilerPlugin>(plugin: T) {
         if (this.has(plugin)) {
-            this.plugins.splice(this.plugins.indexOf(plugin));
+            this.plugins.splice(this.plugins.indexOf(plugin), 1);
         }
         return plugin;
     }

@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import * as path from 'path';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
-import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, BscFile } from '../interfaces';
+import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, SerializedCodeFile } from '../interfaces';
 import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
@@ -21,46 +21,81 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isFieldStatement, isFunctionExpression } from '../astUtils/reflection';
+import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isFunctionExpression, isBrsFile } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
 import { type AstNode, type Expression, type Statement } from '../parser/AstNode';
 import { SymbolTypeFlag } from '../SymbolTable';
+import type { File } from './File';
+import { Editor } from '../astUtils/Editor';
+
 /**
  * Holds all details about this file within the scope of the whole program
  */
-export class BrsFile {
-    constructor(
-        public srcPath: string,
+export class BrsFile implements File {
+    constructor(options: {
         /**
-         * The full pkg path to this file
+         * The path to the file in its source location (where the source code lives in the file system)
          */
-        public pkgPath: string,
-        public program: Program
-    ) {
-        this.srcPath = s`${this.srcPath}`;
-        this.pkgPath = s`${this.pkgPath}`;
-        this.dependencyGraphKey = this.pkgPath.toLowerCase();
+        srcPath: string;
+        /**
+         * The path to the file where it should exist in the program. This is similar to pkgPath, but retains its original file extensions from srcPath
+         */
+        destPath: string;
+        /**
+         * The final path in the zip. This has the extensions changed. Typically this is the same as destPath, but with file extensions changed for transpiled files.
+         */
+        pkgPath?: string;
+        program: Program;
+    }) {
+        if (options) {
+            this.srcPath = s`${options.srcPath}`;
+            this.destPath = s`${options.destPath}`;
+            this.program = options.program;
 
-        this.extension = util.getExtension(this.srcPath);
+            this.extension = util.getExtension(this.srcPath);
+            if (options.pkgPath) {
+                this.pkgPath = options.pkgPath;
+            } else {
 
-        //all BrighterScript files need to be transpiled
-        if (this.extension?.endsWith('.bs') || program?.options?.allowBrighterScriptInBrightScript) {
-            this.needsTranspiled = true;
-            this.parseMode = ParseMode.BrighterScript;
-        }
-        this.isTypedef = this.extension === '.d.bs';
-        if (!this.isTypedef) {
-            this.typedefKey = util.getTypedefPath(this.srcPath);
-        }
+                //don't rename .d.bs files to .d.brs
+                if (this.extension === '.d.bs') {
+                    this.pkgPath = this.destPath;
+                } else {
+                    this.pkgPath = this.destPath.replace(/\.bs$/i, '.brs');
+                }
+            }
 
-        //global file doesn't have a program, so only resolve typedef info if we have a program
-        if (this.program) {
-            this.resolveTypedef();
+            //all BrighterScript files need to be transpiled
+            if (this.extension?.endsWith('.bs') || this.program?.options?.allowBrighterScriptInBrightScript) {
+                this.parseMode = ParseMode.BrighterScript;
+            }
+            this.isTypedef = this.extension === '.d.bs';
+            if (!this.isTypedef) {
+                this.typedefKey = util.getTypedefPath(this.srcPath);
+            }
+
+            //global file doesn't have a program, so only resolve typedef info if we have a program
+            if (this.program) {
+                this.resolveTypedef();
+            }
         }
     }
+
+    public type = 'BrsFile';
+
+    public srcPath: string;
+    public destPath: string;
+    public pkgPath: string;
+
+    public program: Program;
+
+    /**
+     * An editor assigned during the build flow that manages edits that will be undone once the build process is complete.
+     */
+    public editor?: Editor;
 
     /**
      * The parseMode used for the parser for this file
@@ -68,7 +103,7 @@ export class BrsFile {
     public parseMode = ParseMode.BrightScript;
 
     /**
-     * The key used to identify this file in the dependency graph
+     * The key used to identify this file in the dependency graph. This is set by the BrighterScript program and should not be set by plugins
      */
     public dependencyGraphKey: string;
 
@@ -88,11 +123,14 @@ export class BrsFile {
      */
     public diagnostics = [] as BsDiagnostic[];
 
+    /**
+     * @deprecated use `.diagnostics` instead
+     */
     public getDiagnostics() {
-        return [...this.diagnostics];
+        return this.diagnostics;
     }
 
-    public addDiagnostic(diagnostic: Diagnostic & { file?: BscFile }) {
+    public addDiagnostic(diagnostic: Diagnostic & { file?: File }) {
         if (!diagnostic.file) {
             diagnostic.file = this;
         }
@@ -134,7 +172,7 @@ export class BrsFile {
                 if (isImportStatement(statement) && statement.filePathToken) {
                     result.push({
                         filePathRange: statement.filePathToken.range,
-                        pkgPath: util.getPkgPathFromTarget(this.pkgPath, statement.filePath),
+                        destPath: util.getPkgPathFromTarget(this.destPath, statement.filePath),
                         sourceFile: this,
                         text: statement.filePathToken?.text
                     });
@@ -147,8 +185,18 @@ export class BrsFile {
 
     /**
      * Does this file need to be transpiled?
+     * @deprecated use the `.editor` property to push changes to the file, which will force transpilation
      */
-    public needsTranspiled = false;
+    public get needsTranspiled() {
+        if (this._needsTranspiled !== undefined) {
+            return this._needsTranspiled;
+        }
+        return !!(this.extension?.endsWith('.bs') || this.program?.options?.allowBrighterScriptInBrightScript || this.editor?.hasChanges);
+    }
+    public set needsTranspiled(value) {
+        this._needsTranspiled = value;
+    }
+    public _needsTranspiled: boolean;
 
     /**
      * The AST for this file
@@ -236,11 +284,6 @@ export class BrsFile {
     public typedefFile?: BrsFile;
 
     /**
-     * An unsubscribe function for the dependencyGraph subscription
-     */
-    private unsubscribeFromDependencyGraph: () => void;
-
-    /**
      * Find and set the typedef variables (if a matching typedef file exists)
      */
     private resolveTypedef() {
@@ -248,27 +291,30 @@ export class BrsFile {
         this.hasTypedef = !!this.typedefFile;
     }
 
+    public onDependenciesChanged() {
+        this.resolveTypedef();
+    }
+
     /**
      * Attach the file to the dependency graph so it can monitor changes.
      * Also notify the dependency graph of our current dependencies so other dependents can be notified.
+     * @deprecated this does nothing. This functionality is now handled by the file api and will be deleted in v1
      */
-    public attachDependencyGraph(dependencyGraph: DependencyGraph) {
-        this.unsubscribeFromDependencyGraph?.();
+    public attachDependencyGraph(dependencyGraph: DependencyGraph) { }
 
-        //event that fires anytime a dependency changes
-        this.unsubscribeFromDependencyGraph = dependencyGraph.onchange(this.dependencyGraphKey, () => {
-            this.resolveTypedef();
-        });
-
-        const dependencies = this.ownScriptImports.filter(x => !!x.pkgPath).map(x => x.pkgPath.toLowerCase());
+    /**
+     * The list of files that this file depends on
+     */
+    public get dependencies() {
+        const result = this.ownScriptImports.filter(x => !!x.destPath).map(x => x.destPath.toLowerCase());
 
         //if this is a .brs file, watch for typedef changes
         if (this.extension === '.brs') {
-            dependencies.push(
-                util.getTypedefPath(this.pkgPath)
+            result.push(
+                util.getTypedefPath(this.destPath)
             );
         }
-        dependencyGraph.addOrReplace(this.dependencyGraphKey, dependencies);
+        return result;
     }
 
     /**
@@ -1108,30 +1154,29 @@ export class BrsFile {
         //look through all files in scope for matches
         for (const scope of scopesForFile) {
             for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || filesSearched.has(file)) {
-                    continue;
-                }
-                filesSearched.add(file);
+                if (isBrsFile(file) && !filesSearched.has(file)) {
+                    filesSearched.add(file);
 
-                if (previousToken?.kind === TokenKind.Dot && file.parseMode === ParseMode.BrighterScript) {
-                    results.push(...this.getClassMemberDefinitions(textToSearchFor, file));
-                    const namespaceDefinition = this.getNamespaceDefinitions(token, file);
-                    if (namespaceDefinition) {
-                        results.push(namespaceDefinition);
+                    if (previousToken?.kind === TokenKind.Dot && file.parseMode === ParseMode.BrighterScript) {
+                        results.push(...this.getClassMemberDefinitions(textToSearchFor, file));
+                        const namespaceDefinition = this.getNamespaceDefinitions(token, file);
+                        if (namespaceDefinition) {
+                            results.push(namespaceDefinition);
+                        }
                     }
-                }
-                const statementHandler = (statement: FunctionStatement) => {
-                    if (statement.getName(this.parseMode).toLowerCase() === textToSearchFor) {
-                        const uri = util.pathToUri(file.srcPath);
-                        results.push(util.createLocation(uri, statement.range));
-                    }
-                };
+                    const statementHandler = (statement: FunctionStatement) => {
+                        if (statement.getName(this.parseMode).toLowerCase() === textToSearchFor) {
+                            const uri = util.pathToUri(file.srcPath);
+                            results.push(util.createLocation(uri, statement.range));
+                        }
+                    };
 
-                file.parser.ast.walk(createVisitor({
-                    FunctionStatement: statementHandler
-                }), {
-                    walkMode: WalkMode.visitStatements
-                });
+                    file.parser.ast.walk(createVisitor({
+                        FunctionStatement: statementHandler
+                    }), {
+                        walkMode: WalkMode.visitStatements
+                    });
+                }
             }
         }
         return results;
@@ -1201,22 +1246,41 @@ export class BrsFile {
         for (const scope of scopes) {
             const processedFiles = new Set<BrsFile>();
             for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || processedFiles.has(file)) {
-                    continue;
-                }
-                processedFiles.add(file);
-                file.ast.walk(createVisitor({
-                    VariableExpression: (e) => {
-                        if (e.name.text.toLowerCase() === searchFor) {
-                            locations.push(util.createLocation(util.pathToUri(file.srcPath), e.range));
+                if (isBrsFile(file) && !processedFiles.has(file)) {
+                    processedFiles.add(file);
+                    file.ast.walk(createVisitor({
+                        VariableExpression: (e) => {
+                            if (e.name.text.toLowerCase() === searchFor) {
+                                locations.push(util.createLocation(util.pathToUri(file.srcPath), e.range));
+                            }
                         }
-                    }
-                }), {
-                    walkMode: WalkMode.visitExpressionsRecursive
-                });
+                    }), {
+                        walkMode: WalkMode.visitExpressionsRecursive
+                    });
+                }
             }
         }
         return locations;
+    }
+
+    /**
+     * Generate the code, map, and typedef for this file
+     */
+    public serialize(): SerializedCodeFile {
+        const result: SerializedCodeFile = {};
+
+        const transpiled = this.transpile();
+        if (typeof transpiled.code === 'string') {
+            result.code = transpiled.code;
+        }
+        if (transpiled.map) {
+            result.map = transpiled.map.toString();
+        }
+        //generate the typedef (if this is not a typedef itself, and if enabled)
+        if (!this.isTypedef && this.program.options.emitDefinitions) {
+            result.typedef = this.getTypedef();
+        }
+        return result;
     }
 
     /**
@@ -1224,6 +1288,7 @@ export class BrsFile {
      */
     public transpile(): CodeWithSourceMap {
         const state = new BrsTranspileState(this);
+        state.editor = this.editor ?? new Editor();
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled) {
@@ -1235,8 +1300,12 @@ export class BrsFile {
             //simple SourceNode wrapping the entire file to simplify the logic below
             transpileResult = new SourceNode(null, null, state.srcPath, this.fileContents);
         }
-        //undo any AST edits that the transpile cycle has made
-        state.editor.undoAll();
+
+        //if we created an editor for this flow, undo the edits now
+        if (!this.editor) {
+            //undo any AST edits that the transpile cycle has made
+            state.editor.undoAll();
+        }
 
         if (this.program.options.sourceMap) {
             return new SourceNode(null, null, null, [
@@ -1261,8 +1330,6 @@ export class BrsFile {
 
     public dispose() {
         this._parser?.dispose();
-        //unsubscribe from any DependencyGraph subscriptions
-        this.unsubscribeFromDependencyGraph?.();
 
         //deleting these properties result in lower memory usage (garbage collection is magic!)
         delete this.fileContents;
@@ -1273,4 +1340,3 @@ export class BrsFile {
         delete this.scopesByFunc;
     }
 }
-

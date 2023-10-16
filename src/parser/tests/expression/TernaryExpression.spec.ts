@@ -265,9 +265,9 @@ describe('ternary expressions', () => {
             program.dispose();
         });
 
-        it('uses the proper prefix when aliased package is installed', () => {
+        it('uses the proper prefix when aliased package is installed', async () => {
             program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? "no user" : "logged in"
@@ -280,8 +280,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('simple consequents', () => {
-            testTranspile(`
+        it('simple consequents', async () => {
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? "no user" : "logged in"
@@ -293,7 +293,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? 1 : "logged in"
@@ -305,7 +305,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? 1.2 : "logged in"
@@ -317,7 +317,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? {} : "logged in"
@@ -329,7 +329,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? [] : "logged in"
@@ -342,8 +342,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('simple alternates', () => {
-            testTranspile(`
+        it('simple alternates', async () => {
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? "logged in" : "no user"
@@ -355,7 +355,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? "logged in" : 1
@@ -367,7 +367,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? "logged in" : 1.2
@@ -379,7 +379,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? "logged in" :  []
@@ -391,7 +391,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? "logged in" :  {}
@@ -404,8 +404,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('complex conditions do not cause scope capture', () => {
-            testTranspile(`
+        it('complex conditions do not cause scope capture', async () => {
+            await testTranspile(`
                 sub main()
                     a = str(123) = "123" ? true : false
                 end sub
@@ -415,7 +415,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     a = m.top.service.IsTrue() ? true : false
                 end sub
@@ -425,7 +425,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub test(param1)
                 end sub
 
@@ -442,8 +442,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('captures scope for function call conseqent', () => {
-            testTranspile(`
+        it('captures scope for function call conseqent', async () => {
+            await testTranspile(`
                 sub main()
                     zombie = {}
                     name = zombie.getName() <> invalid ? zombie.GetName() : "zombie"
@@ -462,8 +462,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('captures scope for function call alternate', () => {
-            testTranspile(`
+        it('captures scope for function call alternate', async () => {
+            await testTranspile(`
                 sub main()
                     zombie = {}
                     name = zombie.getName() = invalid ? "zombie" :  zombie.GetName()
@@ -482,8 +482,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('captures scope for complex consequent', () => {
-            testTranspile(`
+        it('captures scope for complex consequent', async () => {
+            await testTranspile(`
                 sub main()
                     settings = {}
                     name = {} ? m.defaults.getAccount(settings.name) : "no"
@@ -502,8 +502,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('supports scope-captured outer, and simple inner', () => {
-            testTranspile(
+        it('supports scope-captured outer, and simple inner', async () => {
+            await testTranspile(
                 `
                     sub main()
                         zombie = {}
@@ -527,8 +527,8 @@ describe('ternary expressions', () => {
             );
         });
 
-        it('uses scope capture for property access', () => {
-            testTranspile(
+        it('uses scope capture for property access', async () => {
+            await testTranspile(
                 `
                     sub main()
                         person = {}
@@ -550,22 +550,22 @@ describe('ternary expressions', () => {
             );
         });
 
-        it('uses `invalid` in place of missing consequent ', () => {
-            testTranspile(
+        it('uses `invalid` in place of missing consequent ', async () => {
+            await testTranspile(
                 `print name = "bob" ? :"zombie"`,
                 `print bslib_ternary(name = "bob", invalid, "zombie")`
                 , 'none', undefined, false);
         });
 
-        it('uses `invalid` in place of missing alternate ', () => {
-            testTranspile(
+        it('uses `invalid` in place of missing alternate ', async () => {
+            await testTranspile(
                 `print name = "bob" ? "human"`,
                 `print bslib_ternary(name = "bob", "human", invalid)`
                 , 'none', undefined, false);
         });
 
-        it('uses `invalid` in place of missing alternate and consequent ', () => {
-            testTranspile(
+        it('uses `invalid` in place of missing alternate and consequent ', async () => {
+            await testTranspile(
                 `print name = "bob" ?:`,
                 `print bslib_ternary(name = "bob", invalid, invalid)`
                 , 'none', undefined, false);

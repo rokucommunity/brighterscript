@@ -4,7 +4,7 @@ import * as path from 'path';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink, Callable } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, FileLink, Callable } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
@@ -20,6 +20,7 @@ import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph'
 import { isBrsFile, isClassStatement, isConstStatement, isEnumStatement, isFunctionStatement, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isCallableType } from './astUtils/reflection';
 import { SymbolTable, SymbolTypeFlag } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
+import type { File } from './files/File';
 import type { BscType } from './types/BscType';
 import { NamespaceType } from './types/NamespaceType';
 import { referenceTypeFactory } from './types/ReferenceType';
@@ -416,17 +417,17 @@ export class Scope {
 
     /**
      * Get the file from this scope with the given path.
-     * @param filePath can be a srcPath or pkgPath
+     * @param filePath can be a srcPath or destPath
      * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
-    public getFile<TFile extends BscFile>(filePath: string, normalizePath = true) {
+    public getFile<TFile extends File>(filePath: string, normalizePath = true) {
         if (typeof filePath !== 'string') {
             return undefined;
         }
 
-        const key = path.isAbsolute(filePath) ? 'srcPath' : 'pkgPath';
+        const key: keyof Pick<File, 'srcPath' | 'destPath'> = path.isAbsolute(filePath) ? 'srcPath' : 'destPath';
         let map = this.cache.getOrAdd('fileMaps-srcPath', () => {
-            const result = new Map<string, BscFile>();
+            const result = new Map<string, File>();
             for (const file of this.getAllFiles()) {
                 result.set(file[key].toLowerCase(), file);
             }
@@ -450,9 +451,9 @@ export class Scope {
      * Get the list of files referenced by this scope that are actually loaded in the program.
      * Includes files from this scope and all ancestor scopes
      */
-    public getAllFiles(): BscFile[] {
+    public getAllFiles(): File[] {
         return this.cache.getOrAdd('getAllFiles', () => {
-            let result = [] as BscFile[];
+            let result = [] as File[];
             let dependencies = this.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
             for (let dependency of dependencies) {
                 //load components by their name
@@ -468,31 +469,27 @@ export class Scope {
                     }
                 }
             }
-            this.logDebug('getAllFiles', () => result.map(x => x.pkgPath));
+            this.logDebug('getAllFiles', () => result.map(x => x.destPath));
             return result;
         });
     }
 
     /**
-     * Get the list of errors for this scope. It's calculated on the fly, so
-     * call this sparingly.
+     * Get the list of errors for this scope. It's calculated on the fly, so call this sparingly.
      */
     public getDiagnostics() {
-        let diagnosticLists = [this.diagnostics] as BsDiagnostic[][];
-
         //add diagnostics from every referenced file
-        this.enumerateOwnFiles((file) => {
-            diagnosticLists.push(file.getDiagnostics());
-        });
-        let allDiagnostics = Array.prototype.concat.apply([], diagnosticLists) as BsDiagnostic[];
-
-        let filteredDiagnostics = allDiagnostics.filter((x) => {
-            return !util.diagnosticIsSuppressed(x);
-        });
-
-        //filter out diangostics that match any of the comment flags
-
-        return filteredDiagnostics;
+        const diagnostics: BsDiagnostic[] = [
+            //diagnostics raised on this scope
+            ...this.diagnostics,
+            //get diagnostics from all files
+            ...this.getOwnFiles().map(x => x.diagnostics ?? []).flat()
+        ]
+            //exclude diangostics that match any of the comment flags
+            .filter((x) => {
+                return !util.diagnosticIsSuppressed(x);
+            });
+        return diagnostics;
     }
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
@@ -554,11 +551,11 @@ export class Scope {
     /**
      * Call a function for each file directly included in this scope (excluding files found only in parent scopes).
      */
-    public enumerateOwnFiles(callback: (file: BscFile) => void) {
+    public enumerateOwnFiles(callback: (file: File) => void) {
         const files = this.getOwnFiles();
         for (const file of files) {
             //either XML components or files without a typedef
-            if (isXmlFile(file) || !file.hasTypedef) {
+            if (isXmlFile(file) || (isBrsFile(file) && !file.hasTypedef)) {
                 callback(file);
             }
         }
@@ -570,15 +567,17 @@ export class Scope {
      */
     public getOwnCallables(): CallableContainer[] {
         let result = [] as CallableContainer[];
-        this.logDebug('getOwnCallables() files: ', () => this.getOwnFiles().map(x => x.pkgPath));
+        this.logDebug('getOwnCallables() files: ', () => this.getOwnFiles().map(x => x.destPath));
 
         //get callables from own files
         this.enumerateOwnFiles((file) => {
-            for (let callable of file.callables) {
-                result.push({
-                    callable: callable,
-                    scope: this
-                });
+            if (isBrsFile(file)) {
+                for (let callable of file.callables) {
+                    result.push({
+                        callable: callable,
+                        scope: this
+                    });
+                }
             }
         });
         return result;
@@ -934,7 +933,7 @@ export class Scope {
     /**
      * Find various function collisions
      */
-    private diagnosticDetectFunctionCollisions(file: BscFile) {
+    private diagnosticDetectFunctionCollisions(file: BrsFile) {
         for (let func of file.callables) {
             const funcName = func.getName(ParseMode.BrighterScript);
             const lowerFuncName = funcName?.toLowerCase();
@@ -983,7 +982,7 @@ export class Scope {
     /**
      * Detect local variables (function scope) that have the same name as scope calls
      */
-    private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: CallableContainerMap) {
+    private diagnosticDetectShadowedLocalVars(file: BrsFile, callableContainerMap: CallableContainerMap) {
         const classMap = this.getClassMap();
         //loop through every function scope
         for (let scope of file.functionScopes) {
@@ -1083,7 +1082,7 @@ export class Scope {
                             ...DiagnosticMessages.overridesAncestorFunction(
                                 container.callable.name,
                                 container.scope.name,
-                                shadowedCallable.callable.file.pkgPath,
+                                shadowedCallable.callable.file.destPath,
                                 //grab the last item in the list, which should be the closest ancestor's version
                                 shadowedCallable.scope.name
                             ),
@@ -1137,11 +1136,11 @@ export class Scope {
         let scriptImports = this.getOwnScriptImports();
         //verify every script import
         for (let scriptImport of scriptImports) {
-            let referencedFile = this.getFileByRelativePath(scriptImport.pkgPath);
+            let referencedFile = this.getFileByRelativePath(scriptImport.destPath);
             //if we can't find the file
             if (!referencedFile) {
                 //skip the default bslib file, it will exist at transpile time but should not show up in the program during validation cycle
-                if (scriptImport.pkgPath === `source${path.sep}bslib.brs`) {
+                if (scriptImport.destPath === this.program.bslibPkgPath) {
                     continue;
                 }
                 let dInfo: DiagnosticInfo;
@@ -1157,9 +1156,9 @@ export class Scope {
                     file: scriptImport.sourceFile
                 });
                 //if the character casing of the script import path does not match that of the actual path
-            } else if (scriptImport.pkgPath !== referencedFile.pkgPath) {
+            } else if (scriptImport.destPath !== referencedFile.destPath) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.pkgPath),
+                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.destPath),
                     range: scriptImport.filePathRange,
                     file: scriptImport.sourceFile
                 });
@@ -1176,7 +1175,7 @@ export class Scope {
         }
         let files = this.getAllFiles();
         for (let file of files) {
-            if (file.pkgPath.toLowerCase() === relativePath.toLowerCase()) {
+            if (file.destPath.toLowerCase() === relativePath.toLowerCase()) {
                 return file;
             }
         }
@@ -1185,7 +1184,7 @@ export class Scope {
     /**
      * Determine if this file is included in this scope (excluding parent scopes)
      */
-    public hasFile(file: BscFile) {
+    public hasFile(file: File) {
         let files = this.getOwnFiles();
         let hasFile = files.includes(file);
         return hasFile;
@@ -1194,7 +1193,7 @@ export class Scope {
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
      */
-    public getDefinition(file: BscFile, position: Position): Location[] {
+    public getDefinition(file: File, position: Position): Location[] {
         // Overridden in XMLScope. Brs files use implementation in BrsFile
         return [];
     }
@@ -1216,7 +1215,7 @@ export class Scope {
 }
 
 interface NamespaceContainer {
-    file: BscFile;
+    file: File;
     fullName: string;
     fullNameLower: string;
     parentNameLower: string;
@@ -1234,5 +1233,5 @@ interface NamespaceContainer {
 }
 
 interface AugmentedNewExpression extends NewExpression {
-    file: BscFile;
+    file: File;
 }

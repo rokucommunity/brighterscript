@@ -46,9 +46,15 @@ Full compiler lifecycle:
 - `beforeProgramCreate`
 - `afterProgramCreate`
     - `afterScopeCreate` ("source" scope)
-    - For each file:
-        - `beforeFileParse`
-        - `afterFileParse`
+    - For each physical file:
+        - `beforeProvideFile`
+        - `onProvideFile`
+        - `afterProvideFile`
+            - `beforeFileParse` (deprecated)
+            - `afterFileParse` (deprecated)
+    - For each physical and virtual file
+        - `beforeAddFile`
+        - `afterAddFile`
         - `afterScopeCreate` (component scope)
     - `beforeProgramValidate`
     - For each file:
@@ -150,17 +156,19 @@ export interface CompilerPlugin {
     name: string;
     //program events
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    afterProgramCreate?: (program: Program) => void;
+
     beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+
     beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterProgramCreate?: (program: Program) => void;
+
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
-    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
-    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
-    beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
-    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+
+    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: Editor) => void;
+    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: Editor) => void;
 
     /**
      * Emitted before the program starts collecting completions
@@ -188,17 +196,35 @@ export interface CompilerPlugin {
      */
     afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
 
-    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;
+
     beforeScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
+
     beforeScopeValidate?: ValidateHandler;
     onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
     afterScopeValidate?: ValidateHandler;
-    //file events
-    beforeFileParse?: (source: SourceObj) => void;
-    afterFileParse?: (file: BscFile) => void;
+
+    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
+
+    /**
+     * Called before a file is added to the program. This is triggered for every file (even virtual files emitted by other files)
+     */
+    beforeProvideFile?: PluginHandler<BeforeProvideFileEvent>;
+    /**
+     * Give plugins the opportunity to handle parsing/validating a file
+     */
+    provideFile?: PluginHandler<ProvideFileEvent>;
+    /**
+     * Called after a file was added to the program.
+     */
+    afterProvideFile?: PluginHandler<AfterProvideFileEvent>;
+
+    beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
+    afterFileParse?: (file: File) => void;
+
     /**
      * Called before each file is validated
      */
@@ -210,11 +236,13 @@ export interface CompilerPlugin {
     /**
      * Called after each file is validated
      */
-    afterFileValidate?: (file: BscFile) => void;
+    afterFileValidate?: (file: File) => void;
+
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
-    beforeFileDispose?: (file: BscFile) => void;
-    afterFileDispose?: (file: BscFile) => void;
+
+    beforeFileDispose?: (file: File) => void;
+    afterFileDispose?: (file: File) => void;
 }
 
 // related types:
@@ -223,17 +251,12 @@ interface FileObj {
     dest: string;
 }
 
-interface SourceObj {
-    pathAbsolute: string;
-    source: string;
-}
-
 interface TranspileObj {
-    file: (BscFile);
+    file: File;
     outputPath: string;
 }
 
-type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
+type ValidateHandler = (scope: Scope, files: File[], callables: CallableContainerMap) => void;
 interface CallableContainerMap {
     [name: string]: CallableContainer[];
 }
@@ -297,14 +320,14 @@ Note: in a language-server context, Scope validation happens every time a file c
 
 ```typescript
 // bsc-plugin-no-underscores.ts
-import { CompilerPlugin, BscFile, isBrsFile } from 'brighterscript';
+import { CompilerPlugin, File, isBrsFile } from 'brighterscript';
 
 // plugin factory
 export default function () {
     return {
         name: 'no-underscores',
         // post-parsing validation
-        afterFileValidate: (file: BscFile) => {
+        afterFileValidate: (file: File) => {
             if (isBrsFile(file)) {
                 // visit function statements and validate their name
                 file.parser.references.functionStatements.forEach((fun) => {
@@ -326,7 +349,7 @@ export default function () {
 ## Modifying code
 Sometimes plugins will want to modify code before the project is transpiled. While you can technically edit the AST directly at any point in the file's lifecycle, this is not recommended as those changes will remain changed as long as that file exists in memory and could cause issues with file validation if the plugin is used in a language-server context (i.e. inside vscode).
 
-Instead, we provide an instace of an `AstEditor` class in the `beforeFileTranspile` event that allows you to modify AST before the file is transpiled, and then those modifications are undone `afterFileTranspile`.
+Instead, we provide an instace of an `Editor` class in the `beforeFileTranspile` event that allows you to modify AST before the file is transpiled, and then those modifications are undone `afterFileTranspile`.
 
 For example, consider the following brightscript code:
 ```brightscript
@@ -392,5 +415,146 @@ export default function plugin() {
             }
         }
     } as CompilerPlugin;
+}
+```
+
+## File API
+By default, BrighterScript only parses files that it knows how to handle. Generally this includes `.xml` files in the compontents folder, `.brs`, `.bs` and `.d.bs` files. Other files may be handled in the future, such as `manifest`, `.ts` and possibly more. All other files are loaded into the program as `AssetFile` types and have no special handling or processing.
+
+Plugins can provide files by contributing a `provideFile` function. BrighterScript will perform all of its file providing (like for `.xml` or `.brs` files) at the end of `provideFile` once every plugin had a chance to provide their own files. If you need to handle files before brighterscript does (like if you wanted to parse the .brs file instead of letting BrighterScript do it), you should do this in the `provideFile` event.
+
+Your plugin may want to add enhanced features for file types (such as parsing javascript and converting it to BrightScript). BrighterScript supports this by asking plugins to "`provide`" file objects for a given file path.
+
+Here's a sample plugin showing how to handle this:
+
+```typescript
+import { ProvideFileEvent, CompilerPlugin, BrsFile } from 'brighterscript';
+
+export default function plugin() {
+    return {
+        name: 'removeCommentAndPrintStatements',
+        provideFile: (event: ProvideFileEvent) => {
+            //convert all javascript files into .brs files (magically!)
+            if (event.srcExtension === '.js') {
+                //get the file contents as a string
+                const jsCode = event.getFileData().toString();
+
+                //somehow magically convert javascript code to brightscript code
+                const brsCode = convertJsToBrsUsingMagic(jsCode);
+
+                //create a new BrsFile which will hold the final brs code after the js file was parsed
+                const file = event.fileFactory.BrsFile({
+                    srcPath: event.srcPath,
+                    //rename the .js extension to .brs
+                    destPath: event.destPath.replace(/\.js$/, '.brs')
+                });
+                //parse the generated brs code
+                file.parse(brsCode);
+
+                //add this brs file to the event, which is how you "provide" the file
+                event.files.push(file);
+            }
+        }
+    } as CompilerPlugin;
+}
+```
+
+### Multiple files
+Plugins can also provide _multiple_ files from a single physical file. Consider this example:
+```typescript
+
+
+import { BeforeProvideFileEvent, CompilerPlugin, BrsFile, XmlFile, trim } from 'brighterscript';
+
+export default function plugin() {
+    return {
+        name: 'componentPlugin',
+        beforeProvideFile: (event: BeforeProvideFileEvent) => {
+            // source/buttons.component.bs
+
+            event.files
+            //split a .component file into a .brs and a .xml file
+            if (event.srcExtension === '.component') {
+                //get the filename (we will use this as the component name)
+                const componentName = path.basename(event.srcPath);
+                //get the file contents as a string
+                const code = event.getFileData().toString();
+
+                //create a new BrsFile to act as the primary .brs script for this file
+                const brsFile = event.factory.BrsFile({
+                    srcPath: event.srcPath.replace(/\.component$/, '.brs'),
+                    destPath: event.destPath.replace(/\.component$/, '.brs')
+                });
+                //parse the generated brs code
+                brsFile.parse(code);
+                //add this brs file to the event, which is how you "provide" the file
+                event.files.push(brsFile);
+
+                //create an XmlFile which will serve as the SceneGraph component for this file
+                const xmlFile = event.fileFactory.XmlFile({
+                    srcPath: event.srcPath.replace(/\.component$/, '.xml'),
+                    destPath: event.destPath.replace(/\.component$/, '.xml')
+                });
+                xmlFile.parse(`
+                    <component name="${componentName}">
+                        <script uri="${event.destPath}" />
+                    </component>
+                `);
+                //add this file to the event, which is how you "provide" the file
+                event.files.push(xmlFile);
+            }
+        }
+    } as CompilerPlugin;
+}
+```
+
+### File Factory
+Your plugin will be written against a specific version of BrighterScript. However, your plugin may be loaded by a different version of brighterscript (either by the brighterscript cli or through an editor like vscode). Running different versions of BrighterScript could cause issues in the file api.
+
+To mitigate this, the `provideFile` events supply a `fileFactory`, which exposes the file classes from the runner's brighterscript version. When possible, use the file factories found in `event.fileFactory` instead of direct class constructors. (i.e. use `event.fileFactory.BrsFile` instead of `new BrsFile()`). By using the file factories, this ensures better interoperability between plugins and a wide range of brighterscript versions.
+
+You can see examples of this in the previous code snippets above.
+
+### Program changes
+Historically, only `.brs`, `.bs`, and `.xml` files would be present in the `Program`. As a result of the File API being introduced, now all files included as a result of the bsconfig.json `files` array will be present in the program. Unhandled files will be loaded as generic `AssetFile` instances. This may impact plugins that aren't properly guarding against specific file types. Consider this plugin code:
+```typescript
+onFileValidate(event){
+    if (isXmlFile(event.file)) {
+        // do XmlFile work
+    } else {
+        // assume it's a BrsFile (bad!)
+        // it could now be a .jpeg or .png
+    }
+}
+```
+
+If a plugin has code like this, it may start failing due to receiving an `AssetFile` or some plugin-contributed custom file type that it didn't expect. We recommend that plugin authors always guard their code with file-specific conditional checks.
+
+### srcPath, destPath, and pkgPath
+The file api introduces a breaking change related to file paths. Previously there were only `srcPath` and `pkgPath`. `pkgPath` historically contained the file path as you would reference it in your project, such as `source/main.bs`. However, there was no property to represent its final path on device (i.e. `source/main.brs`).
+
+To mitigate this, and since the file api is already causing a few breaking changes, we decided to change the way file paths work. `srcPath` remains the same. However, `pkgPath` has been renamed to `destPath` to represent the path to the file as it exists in your brighterscript project _before_ transpilation. `pkgPath` will now represent the final path where the file will reside on-device.
+
+Plugin authors need to refactor their plugins to use `file.destPath` instead of `file.pkgPath`. While `destPath` and `pkgPath` sometimes have the same value, plugin authors should always assume that the paths are different.
+
+Here's a description of each path property in BrighterScript now that the file api has been released.
+
+- **srcPath** - the absolute path to the source file. For example:<br/>
+`C:\projects\YourRokuApp\source\main.bs"` or `"/usr/projects/YourRokuApp/source/main.bs"`
+- **destPath** - the path where the file exists within the context of a brightscript project, relative to the root of the package/zip.
+ This the path that brightscript engineers will use in their channel code. This should _not_ containing a leading slash or `pkg:/` scheme. For example:<br/>
+ `"source/main.bs"`
+- **pkgPath** - the final path where the file will reside on-device. For example:<br/>
+ `"source/main.brs"`
+
+Here's an example file showing all three paths:
+```js
+{
+    //location in source project
+    srcPath: "C:/projects/YourRokuApp/source/main.bs",
+    //location in brighterscript program
+    destPath: "source/main.bs"
+    //location on device
+    pkgPath: "source/main.brs"
 }
 ```

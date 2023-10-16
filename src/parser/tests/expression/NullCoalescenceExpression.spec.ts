@@ -188,9 +188,9 @@ describe('NullCoalescingExpression', () => {
             program.dispose();
         });
 
-        it('uses the proper prefix when aliased package is installed', () => {
+        it('uses the proper prefix when aliased package is installed', async () => {
             program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     a = user ?? false
                 end sub
@@ -201,8 +201,8 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
-        it('properly transpiles null coalesence assignments - simple', () => {
-            testTranspile(`
+        it('properly transpiles null coalesence assignments - simple', async () => {
+            await testTranspile(`
                 sub main()
                     a = user ?? {"id": "default"}
                 end sub
@@ -215,8 +215,8 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
-        it('properly transpiles null coalesence assignments - complex consequent', () => {
-            testTranspile(`
+        it('properly transpiles null coalesence assignments - complex consequent', async () => {
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user.getAccount() ?? {"id": "default"}
@@ -238,8 +238,8 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
-        it('transpiles null coalesence assignment for variable alternate- complex consequent', () => {
-            testTranspile(`
+        it('transpiles null coalesence assignment for variable alternate- complex consequent', async () => {
+            await testTranspile(`
                 sub main()
                     a = obj.link ?? false
                 end sub
@@ -257,8 +257,8 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
-        it('properly transpiles null coalesence assignments - complex alternate', () => {
-            testTranspile(`
+        it('properly transpiles null coalesence assignments - complex alternate', async () => {
+            await testTranspile(`
                 sub main()
                     user = {}
                     settings = {}

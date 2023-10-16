@@ -195,7 +195,7 @@ describe('BrsFile BrighterScript classes', () => {
 
     describe('transpile', () => {
         it('does not mess with AST when injecting `super()` call', async () => {
-            const file = program.setFile('source/classes.bs', `
+            const file = program.setFile<BrsFile>('source/classes.bs', `
                 class Parent
                 end class
 
@@ -208,14 +208,14 @@ describe('BrsFile BrighterScript classes', () => {
             expect(
                 (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.name.text
             ).to.eql('super');
-            await program.transpile([], stagingDir);
+            await program.getTranspiledFileContents(file.srcPath);
             expect(
                 (file.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.name.text
             ).to.eql('super');
         });
 
-        it('follows correct sequence for property initializers', () => {
-            testTranspile(`
+        it('follows correct sequence for property initializers', async () => {
+            await testTranspile(`
                 class Animal
                     species1 = "Animal"
                     sub new()
@@ -261,8 +261,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('allows comments as first line of constructor', () => {
-            testTranspile(`
+        it('allows comments as first line of constructor', async () => {
+            await testTranspile(`
                 class Animal
                 end class
                 class Duck extends Animal
@@ -300,8 +300,8 @@ describe('BrsFile BrighterScript classes', () => {
             `);
         });
 
-        it('does not inject a call to super if one exists', () => {
-            testTranspile(`
+        it('does not inject a call to super if one exists', async () => {
+            await testTranspile(`
                 class Animal
                 end class
                 class Duck extends Animal
@@ -339,8 +339,8 @@ describe('BrsFile BrighterScript classes', () => {
             `);
         });
 
-        it('handles class inheritance inferred constructor calls', () => {
-            testTranspile(`
+        it('handles class inheritance inferred constructor calls', async () => {
+            await testTranspile(`
                 class Animal
                     className1 = "Animal"
                 end class
@@ -394,8 +394,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('works with namespaces', () => {
-            testTranspile(`
+        it('works with namespaces', async () => {
+            await testTranspile(`
                 namespace Birds.WaterFowl
                     class Duck
                     end class
@@ -430,8 +430,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('works for simple  class', () => {
-            testTranspile(`
+        it('works for simple  class', async () => {
+            await testTranspile(`
                 class Duck
                 end class
             `, `
@@ -449,8 +449,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('registers the constructor and properly handles its parameters', () => {
-            testTranspile(`
+        it('registers the constructor and properly handles its parameters', async () => {
+            await testTranspile(`
                 class Duck
                     sub new(name as string, age as integer)
                     end sub
@@ -470,8 +470,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('properly handles child class constructor override and super calls', () => {
-            testTranspile(`
+        it('properly handles child class constructor override and super calls', async () => {
+            await testTranspile(`
                 class Animal
                     sub new(name as string)
                     end sub
@@ -517,8 +517,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('transpiles super in nested blocks', () => {
-            testTranspile(`
+        it('transpiles super in nested blocks', async () => {
+            await testTranspile(`
                 class Creature
                     sub new(name as string)
                     end sub
@@ -574,7 +574,7 @@ describe('BrsFile BrighterScript classes', () => {
             );
         });
 
-        it('properly transpiles classes from outside current namespace', () => {
+        it('properly transpiles classes from outside current namespace', async () => {
             addFile('source/Animals.bs', `
                 namespace Animals
                     class Duck
@@ -583,7 +583,7 @@ describe('BrsFile BrighterScript classes', () => {
                 class Bird
                 end class
             `);
-            testTranspile(`
+            await testTranspile(`
                 namespace Animals
                     sub init()
                         donaldDuck = new Duck()
@@ -600,8 +600,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('properly transpiles new statement for missing class ', () => {
-            testTranspile(`
+        it('properly transpiles new statement for missing class ', async () => {
+            await testTranspile(`
                 sub main()
                     bob = new Human()
                 end sub
@@ -612,14 +612,14 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs', false);
         });
 
-        it('new keyword transpiles correctly', () => {
+        it('new keyword transpiles correctly', async () => {
             addFile('source/Animal.bs', `
                 class Animal
                     sub new(name as string)
                     end sub
                 end class
             `);
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     a = new Animal("donald")
                 end sub
@@ -630,8 +630,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('calls super ', () => {
-            const { file } = testTranspile(`
+        it('calls super ', async () => {
+            const { file } = await testTranspile(`
                 class Parent
                     sub new()
                     end sub
@@ -671,8 +671,8 @@ describe('BrsFile BrighterScript classes', () => {
             expect(constructor.func.body.statements).to.be.lengthOf(0);
         });
 
-        it('adds field initializers', () => {
-            const { file } = testTranspile(`
+        it('adds field initializers', async () => {
+            const { file } = await testTranspile(`
                 class Person
                     sub new()
                     end sub
@@ -697,8 +697,8 @@ describe('BrsFile BrighterScript classes', () => {
             expect(constructor.func.body.statements).to.be.lengthOf(0);
         });
 
-        it('does not screw up local variable references', () => {
-            testTranspile(`
+        it('does not screw up local variable references', async () => {
+            await testTranspile(`
                 class Animal
                     sub new(name as string)
                         m.name = name
@@ -806,8 +806,8 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('calculates the proper super index', () => {
-            testTranspile(`
+        it('calculates the proper super index', async () => {
+            await testTranspile(`
                 class Duck
                     public sub walk(meters as integer)
                         print "Walked " + meters.ToStr() + " meters"
@@ -956,9 +956,9 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
             end class
         `);
-        await program.transpile([], stagingDir);
+        await program.build({ stagingDir: stagingDir });
         fsExtra.emptyDirSync(stagingDir);
-        await program.transpile([], stagingDir);
+        await program.build({ stagingDir: stagingDir });
         expect(
             fsExtra.readFileSync(s`${stagingDir}/source/lib.brs`).toString().trimEnd()
         ).to.eql(trim`
@@ -1427,7 +1427,7 @@ describe('BrsFile BrighterScript classes', () => {
         expectZeroDiagnostics(program);
     });
 
-    it('computes correct super index for grandchild class', () => {
+    it('computes correct super index for grandchild class', async () => {
         program.setFile('source/main.bs', `
             sub Main()
                 c = new App.ClassC()
@@ -1442,7 +1442,7 @@ describe('BrsFile BrighterScript classes', () => {
             end namespace
         `);
 
-        testTranspile(`
+        await testTranspile(`
             namespace App
                 class ClassC extends ClassB
                     sub new()
@@ -1467,13 +1467,13 @@ describe('BrsFile BrighterScript classes', () => {
         `, 'trim', 'source/App.ClassC.bs');
     });
 
-    it('computes correct super index for namespaced child class and global parent class', () => {
+    it('computes correct super index for namespaced child class and global parent class', async () => {
         program.setFile('source/ClassA.bs', `
             class ClassA
             end class
         `);
 
-        testTranspile(`
+        await testTranspile(`
             namespace App
                 class ClassB extends ClassA
                 end class

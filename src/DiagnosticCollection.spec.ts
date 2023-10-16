@@ -2,7 +2,7 @@ import type { BsDiagnostic } from '.';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import type { Project } from './LanguageServer';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { BscFile } from './interfaces';
+import type { File } from './files/File';
 import util from './util';
 import { expect } from './chai-config.spec';
 
@@ -109,7 +109,7 @@ describe('DiagnosticCollection', () => {
             newDiagnostics.push({
                 file: {
                     srcPath: srcPath
-                } as BscFile,
+                } as File,
                 range: util.createRange(0, 0, 0, 0),
                 //the code doesn't matter as long as the messages are different, so just enforce unique messages for this test files
                 code: 123,

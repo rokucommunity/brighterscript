@@ -7,13 +7,14 @@ import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
 import { isCallExpression, isFieldStatement, isMethodStatement, isNamespaceStatement } from '../astUtils/reflection';
-import type { BscFile, BsDiagnostic } from '../interfaces';
+import type { BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer/TokenKind';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTypeFlag } from '../SymbolTable';
+import type { File } from '../files/File';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -407,6 +408,6 @@ export class BsClassValidator {
 }
 
 type AugmentedClassStatement = ClassStatement & {
-    file: BscFile;
+    file: File;
     parentClass: AugmentedClassStatement;
 };

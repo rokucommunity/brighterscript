@@ -51,13 +51,13 @@ describe('import statements', () => {
                 return true
             end function
         `);
-        let files = Object.keys(program.files).map(x => program.getFile(x)).filter(x => !!x).map(x => {
+        Object.keys(program.files).map(x => program.getFile(x)).filter(x => !!x).map(x => {
             return {
                 src: x.srcPath,
-                dest: x.pkgPath
+                dest: x.destPath
             };
         });
-        await program.transpile(files, stagingDir);
+        await program.build({ stagingDir: stagingDir });
         expect(
             trimMap(fsExtra.readFileSync(`${stagingDir}/components/ChildScene.xml`).toString())
         ).to.equal(trim`
@@ -173,7 +173,7 @@ describe('import statements', () => {
         expectZeroDiagnostics(program);
     });
 
-    it('adds brs imports to xml file during transpile', () => {
+    it('adds brs imports to xml file during transpile', async () => {
         program.setFile('source/lib.bs', `
             import "stringOps.brs"
             function toLower(strVal as string)
@@ -185,7 +185,7 @@ describe('import statements', () => {
                 return LCase(strVal)
             end function
         `);
-        testTranspile(trim`
+        await testTranspile(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brightscript" uri="pkg:/source/lib.bs" />
@@ -219,7 +219,7 @@ describe('import statements', () => {
         ]);
     });
 
-    it('complicated import graph adds correct script tags', () => {
+    it('complicated import graph adds correct script tags', async () => {
         program.setFile('source/maestro/ioc/IOCMixin.bs', `
             sub DoIocThings()
             end sub
@@ -231,7 +231,7 @@ describe('import statements', () => {
         program.setFile('components/AuthManager.bs', `
             import "pkg:/source/BaseClass.bs"
         `);
-        testTranspile(trim`
+        await testTranspile(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brighterscript" uri="AuthManager.bs" />
@@ -257,6 +257,20 @@ describe('import statements', () => {
             import "pkg:/"
         `);
         expect(brsFile.ownScriptImports.length).to.equal(5);
-        expect(brsFile.ownScriptImports.filter(p => !!p.pkgPath).length).to.equal(3);
+        expect(brsFile.ownScriptImports.filter(p => !!p.destPath).length).to.equal(3);
+    });
+
+    it('keeps the original import path when transpiled', async () => {
+        program.setFile('components/MainScene.xml', `
+            <component name="MainScene" extends="Scene">
+                <script uri="MainScene.bs" />
+            </component>
+        `);
+        program.setFile('components/Lib.bs', '');
+        await testTranspile(`
+            import "Lib.bs"
+        `, `
+            'import "Lib.bs"
+        `, undefined, 'components/MainScene.bs');
     });
 });

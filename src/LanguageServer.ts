@@ -1063,7 +1063,7 @@ export class LanguageServer {
                 //remove nulls
                 .filter(x => !!x)
                 //dedupe hovers across all projects
-                .reduce((set, content) => set.add(content), new Set<string>()).values()
+                .reduce((set, content) => set.add(content as any), new Set<string>()).values()
         ];
 
         if (contents.length > 0) {

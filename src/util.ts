@@ -92,12 +92,10 @@ export class Util {
      * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
      */
     public sanitizePkgPath(pkgPath: string) {
-        pkgPath = pkgPath.replace(/\\/g, '/');
-        //if there's no protocol, assume it's supposed to start with `pkg:/`
-        if (!this.startsWithProtocol(pkgPath)) {
-            pkgPath = 'pkg:/' + pkgPath;
-        }
-        return pkgPath;
+        //convert all slashes to forwardslash
+        pkgPath = pkgPath.replace(/[\/\\]+/g, '/');
+        //ensure every path has the leading pkg:/
+        return 'pkg:/' + pkgPath.replace(/^pkg:\//i, '');
     }
 
     /**
@@ -109,10 +107,10 @@ export class Util {
 
     /**
      * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
+     * @deprecated use `sanitizePkgPath instead. Will be removed in v1
      */
     public getRokuPkgPath(pkgPath: string) {
-        pkgPath = pkgPath.replace(/\\/g, '/');
-        return 'pkg:/' + pkgPath;
+        return this.sanitizePkgPath(pkgPath);
     }
 
     /**
@@ -798,6 +796,7 @@ export class Util {
                 }
             }
         }
+        return false;
     }
 
     /**
@@ -1378,16 +1377,14 @@ export class Util {
     /**
      * Get the extension for the given file path. Basically the part after the final dot, except for
      * `d.bs` which is treated as single extension
+     * @returns the file extension (i.e. ".d.bs", ".bs", ".brs", ".xml", ".jpg", etc...)
      */
     public getExtension(filePath: string) {
         filePath = filePath.toLowerCase();
         if (filePath.endsWith('.d.bs')) {
             return '.d.bs';
         } else {
-            const idx = filePath.lastIndexOf('.');
-            if (idx > -1) {
-                return filePath.substring(idx);
-            }
+            return path.extname(filePath).toLowerCase();
         }
     }
 
@@ -1491,32 +1488,6 @@ export class Util {
         return util.driveLetterToLower(
             rokuDeployStandardizePath(thePath)
         );
-    }
-
-    /**
-     * Copy the version of bslib from local node_modules to the staging folder
-     */
-    public async copyBslibToStaging(stagingDir: string) {
-        //copy bslib to the output directory
-        await fsExtra.ensureDir(standardizePath(`${stagingDir}/source`));
-        // eslint-disable-next-line
-        const bslib = require('@rokucommunity/bslib');
-        let source = bslib.source as string;
-
-        //apply the `bslib_` prefix to the functions
-        let match: RegExpExecArray;
-        const positions = [] as number[];
-        const regexp = /^(\s*(?:function|sub)\s+)([a-z0-9_]+)/mg;
-        // eslint-disable-next-line no-cond-assign
-        while (match = regexp.exec(source)) {
-            positions.push(match.index + match[1].length);
-        }
-
-        for (let i = positions.length - 1; i >= 0; i--) {
-            const position = positions[i];
-            source = source.slice(0, position) + 'bslib_' + source.slice(position);
-        }
-        await fsExtra.writeFile(`${stagingDir}/source/bslib.brs`, source);
     }
 
     /**
@@ -1797,8 +1768,8 @@ export class Util {
 
     public validateTooDeepFile(file: (BrsFile | XmlFile)) {
         //find any files nested too deep
-        let pkgPath = file.pkgPath ?? file.pkgPath.toString();
-        let rootFolder = pkgPath.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
+        let destPath = file?.destPath?.toString();
+        let rootFolder = destPath?.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
 
         if (isBrsFile(file) && rootFolder !== 'source') {
             return;
@@ -1808,7 +1779,7 @@ export class Util {
             return;
         }
 
-        let fileDepth = this.getParentDirectoryCount(pkgPath);
+        let fileDepth = this.getParentDirectoryCount(destPath);
         if (fileDepth >= 8) {
             file.addDiagnostics([{
                 ...DiagnosticMessages.detectedTooDeepFileSource(fileDepth),

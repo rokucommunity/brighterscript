@@ -472,13 +472,6 @@ describe('Scope', () => {
                     A_B_C_ga()
                 end sub
             `);
-            program.setFile('source/main.xml', `
-                <?xml version="1.0" encoding="UTF-8"?>
-                    <component name="MyComponent" extends="Group">
-                    <script type="text/brightscript" uri="main.brs"/>
-                    <script type="text/brightscript" uri="ns.bs"/>
-                </component>
-            `);
             program.validate();
             expectZeroDiagnostics(program);
         });
@@ -2216,7 +2209,7 @@ describe('Scope', () => {
         `;
 
         it('finds correct return type for class methods', () => {
-            const mainFile = program.setFile('source/main.bs', `
+            const mainFile = program.setFile<BrsFile>('source/main.bs', `
                 sub main()
                     fooInstance = new Foo()
                     myNum = fooInstance.getNum()
@@ -2243,7 +2236,7 @@ describe('Scope', () => {
         });
 
         it('finds correct parameter type with default value enums are used', () => {
-            const mainFile = program.setFile('source/main.bs', `
+            const mainFile = program.setFile<BrsFile>('source/main.bs', `
                 sub paint(colorChoice = Color.red)
                     paintColor = colorChoice
                     print paintColor
@@ -2265,7 +2258,7 @@ describe('Scope', () => {
         });
 
         it('finds correct class field type with default value enums are used', () => {
-            const mainFile = program.setFile('source/main.bs', `
+            const mainFile = program.setFile<BrsFile>('source/main.bs', `
                 sub main()
                     foo = new Paint()
                     paintColor = foo.colorType
@@ -2295,7 +2288,7 @@ describe('Scope', () => {
 
 
         it('finds correct type for namespaced lookups', () => {
-            const mainFile = program.setFile('source/main.bs', mainFileContents);
+            const mainFile = program.setFile<BrsFile>('source/main.bs', mainFileContents);
             program.setFile('source/animals.bs', animalFileContents);
             program.validate();
             expectZeroDiagnostics(program);
@@ -2316,7 +2309,7 @@ describe('Scope', () => {
         });
 
         it('finds correct type for members of classes with super classes', () => {
-            const mainFile = program.setFile('source/main.bs', mainFileContents);
+            const mainFile = program.setFile<BrsFile>('source/main.bs', mainFileContents);
             program.setFile('source/animals.bs', animalFileContents);
             program.validate();
             expectZeroDiagnostics(program);
@@ -2334,7 +2327,7 @@ describe('Scope', () => {
         });
 
         it('finds correct types for method calls', () => {
-            const mainFile = program.setFile('source/main.bs', `
+            const mainFile = program.setFile<BrsFile>('source/main.bs', `
                 sub main()
                     myVal = (new NameA.Klass()).getNumObj().num
                 end sub
@@ -2362,7 +2355,7 @@ describe('Scope', () => {
         });
 
         it('finds correct types for self-referencing variables', () => {
-            const mainFile = program.setFile('source/main.bs', `
+            const mainFile = program.setFile<BrsFile>('source/main.bs', `
                 sub main()
                     dt = CreateObject("roDateTime")
                     hours = dt.GetHours()
@@ -2386,7 +2379,7 @@ describe('Scope', () => {
         describe('union types', () => {
 
             it('should find actual members correctly', () => {
-                const mainFile = program.setFile('source/main.bs', `
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub printName(thing as Person or Pet)
                         name = thing.name
                         print name
@@ -2414,7 +2407,7 @@ describe('Scope', () => {
             });
 
             it('should have an error when a non union member is accessed', () => {
-                const mainFile = program.setFile('source/main.bs', `
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub printLegs(thing as Person or Pet)
                         print thing.legs
                     end sub
@@ -2444,7 +2437,7 @@ describe('Scope', () => {
 
         describe('type casts', () => {
             it('should use type casts to determine the types of symbols', () => {
-                const mainFile = program.setFile('source/main.bs', `
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub main(thing)
                         value = thing as float
                     end sub
@@ -2460,7 +2453,7 @@ describe('Scope', () => {
 
 
             it('should allow type casts in dotted get statements', () => {
-                const mainFile = program.setFile('source/main.bs', `
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub main(thing)
                         value = (thing as MyThing).name
                     end sub
@@ -2483,7 +2476,7 @@ describe('Scope', () => {
         describe('multiple nested namespaces', () => {
 
             it('should be able to define deep namespaces in any order', () => {
-                let utilFile = program.setFile('source/util.bs', `
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
                     function getData()
                         return alpha.beta.gamma.value1 + alpha.beta.gamma.delta.deltaValue +  alpha.beta.gamma.value2
                     end function
@@ -2665,7 +2658,7 @@ describe('Scope', () => {
 
         describe('binary and unary expressions', () => {
             it('should set symbols with correct types from binary expressions', () => {
-                let mainFile = program.setFile('source/main.bs', `
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub process()
                         s = "hello" + "world"
                         exp = 2^3
@@ -2687,7 +2680,7 @@ describe('Scope', () => {
             });
 
             it('should set symbols with correct types from unary expressions', () => {
-                let mainFile = program.setFile('source/main.bs', `
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub process(boolVal as boolean, intVal as integer)
                         a = not boolVal
                         b = not true
@@ -2719,7 +2712,7 @@ describe('Scope', () => {
 
         describe('assignment expressions', () => {
             it('should set correct type on simple equals', () => {
-                let mainFile = program.setFile('source/main.bs', `
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub process(intVal as integer, dblVal as double, strVal as string)
                         a = intVal
                         b = dblVal
@@ -2743,7 +2736,7 @@ describe('Scope', () => {
             });
 
             it('should set correct type for aa literals', () => {
-                let mainFile = program.setFile('source/main.bs', `
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub process(intVal as integer, dblVal as double, strVal as string)
                         myAA = {
                             a: intVal
@@ -2772,7 +2765,7 @@ describe('Scope', () => {
             });
 
             it('should set correct type on compound equals', () => {
-                let mainFile = program.setFile('source/main.bs', `
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub process(intVal as integer, dblVal as double, strVal as string)
                         a = intVal
                         a += 4
@@ -2799,7 +2792,7 @@ describe('Scope', () => {
             });
 
             it('should set correct type on compound equals with function call', () => {
-                let mainFile = program.setFile('source/main.bs', `
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     function check() as string
                         test = "hello"
                         test += lcase("WORLD")
@@ -2815,7 +2808,7 @@ describe('Scope', () => {
             });
 
             it('should work for a multiple binary expressions', () => {
-                let mainFile = program.setFile('source/main.bs', `
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     function process(intVal as integer)
                         x = (intVal * 2) + 1 + 3^8 + intVal + (3 - 9)  ' should be int
                         result = 3.5 ' float
@@ -2833,7 +2826,7 @@ describe('Scope', () => {
             });
 
             it('should recognize consistent type after function call in binary op', () => {
-                let mainFile = program.setFile('source/main.bs', `
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     function process(items) as string
                         myString = ""
                         for each item in items
@@ -2860,7 +2853,7 @@ describe('Scope', () => {
 
         describe('typed array expressions', () => {
             it('should set correct type on indexedGet', () => {
-                let mainFile = program.setFile('source/main.bs', `
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub first(nums as integer[]) as integer
                         num = nums[0]
                         return num
@@ -2876,7 +2869,7 @@ describe('Scope', () => {
             });
 
             it('should set correct type on indexedGet of multi-dimensional arrays', () => {
-                let mainFile = program.setFile('source/main.bs', `
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub first(numsArray as integer[][]) as integer
                         nums = numsArray[0]
                         num = nums[0]
@@ -2897,7 +2890,7 @@ describe('Scope', () => {
 
 
             it('should set correct type on for loops', () => {
-                let mainFile = program.setFile('source/main.bs', `
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub sum(nums as integer[]) as integer
                         total = 0
                         for each num in nums
@@ -2917,7 +2910,7 @@ describe('Scope', () => {
             });
 
             it('should set correct type on array literals', () => {
-                let mainFile = program.setFile('source/main.bs', `
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub process()
                         intArr = [1, 2, 3]
                         strArr = ["hello", "bronley"]
@@ -2944,7 +2937,7 @@ describe('Scope', () => {
             });
 
             it('should allow built in component types', () => {
-                let utilFile = program.setFile('source/util.bs', `
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
                     sub process(data as roAssociativeArray[])
                         for each datum in data
                             print datum
@@ -2961,7 +2954,7 @@ describe('Scope', () => {
             });
 
             it('should allow class types', () => {
-                let utilFile = program.setFile('source/util.bs', `
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
                     sub process(data as Klass[])
                         for each datum in data
                             print datum.name
@@ -2985,7 +2978,7 @@ describe('Scope', () => {
             });
 
             it('should allow component types', () => {
-                let utilFile = program.setFile('source/util.bs', `
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
                     sub process(labels as roSgNodeLabel[])
                         for each label in labels
                             print label.text
@@ -3023,7 +3016,7 @@ describe('Scope', () => {
                     end function
                 `);
 
-                let utilFile = program.setFile('source/util.bs', `
+                let utilFile = program.setFile<BrsFile>('source/util.bs', `
                     sub someFunc(widget as roSGNodeWidget)
                         pi = widget@.getFloatFromString("3.14")
                         print pi

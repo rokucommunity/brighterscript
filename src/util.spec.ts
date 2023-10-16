@@ -96,9 +96,9 @@ describe('util', () => {
         });
     });
 
-    describe('getRokuPkgPath', () => {
+    describe('sanitizePkgPath', () => {
         it('replaces more than one windows slash in a path', () => {
-            expect(util.getRokuPkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
+            expect(util.sanitizePkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
         });
     });
 
@@ -575,18 +575,6 @@ describe('util', () => {
             expect(plugins[0].name).to.eql('AwesomePlugin');
             //does not warn about factory pattern
             expect(stub.callCount).to.equal(0);
-        });
-    });
-
-    describe('copyBslibToStaging', () => {
-        it('copies from local bslib dependency', async () => {
-            await util.copyBslibToStaging(tempDir);
-            expect(fsExtra.pathExistsSync(`${tempDir}/source/bslib.brs`)).to.be.true;
-            expect(
-                /^function bslib_toString\(/mg.exec(
-                    fsExtra.readFileSync(`${tempDir}/source/bslib.brs`).toString()
-                )
-            ).not.to.be.null;
         });
     });
 

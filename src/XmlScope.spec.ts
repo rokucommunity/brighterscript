@@ -34,7 +34,7 @@ describe('XmlScope', () => {
                 <component name="Parent" extends="Scene">
                 </component>
             `);
-            let scope = program.getScopeByName(parentXmlFile.pkgPath);
+            let scope = program.getScopeByName(parentXmlFile.destPath);
 
             //should default to global scope
             expect(scope.getParentScope()).to.equal(program.globalScope);

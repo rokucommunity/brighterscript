@@ -12,7 +12,7 @@ import { VoidType } from './types/VoidType';
 import util from './util';
 import { UnionType } from './types/UnionType';
 
-export let globalFile = new BrsFile('global', 'global', null);
+export let globalFile = new BrsFile({ srcPath: 'global', destPath: 'global', program: null });
 globalFile.parse('');
 
 type GlobalCallable = Pick<Callable, 'name' | 'shortDescription' | 'type' | 'file' | 'params' | 'documentation' | 'isDeprecated' | 'nameRange'>;

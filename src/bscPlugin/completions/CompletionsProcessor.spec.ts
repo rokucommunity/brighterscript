@@ -1044,11 +1044,15 @@ describe('CompletionsProcessor', () => {
     describe('getCompletions - XmlFile.spec', () => {
         it('formats completion paths with proper slashes', () => {
             let scriptPath = s`C:/app/components/component1/component1.brs`;
-            program.files[scriptPath] = new BrsFile(scriptPath, s`components/component1/component1.brs`, program);
+            program.files[scriptPath] = new BrsFile({ srcPath: scriptPath, destPath: s`components/component1/component1.brs`, program: program });
 
-            let xmlFile = new XmlFile(s`${rootDir}/components/component1/component1.xml`, s`components/component1/component1.xml`, <any>program);
+            let xmlFile = new XmlFile({
+                srcPath: s`${rootDir}/components/component1/component1.xml`,
+                destPath: s`components/component1/component1.xml`,
+                program: program
+            });
             xmlFile.parser.references.scriptTagImports.push({
-                pkgPath: s`components/component1/component1.brs`,
+                destPath: s`components/component1/component1.brs`,
                 text: 'component1.brs',
                 filePathRange: Range.create(1, 1, 1, 1)
             });

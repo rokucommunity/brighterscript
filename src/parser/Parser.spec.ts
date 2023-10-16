@@ -56,7 +56,11 @@ describe('parser', () => {
 
         function expressionsToStrings(expressions: Set<Expression>) {
             return [...expressions.values()].map(x => {
-                const file = new BrsFile('', '', new Program({} as any));
+                const file = new BrsFile({
+                    srcPath: '',
+                    destPath: '',
+                    program: new Program({} as any)
+                });
                 const state = new BrsTranspileState(file);
                 return new SourceNode(null, null, null, x.transpile(state)).toString();
             });

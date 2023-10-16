@@ -714,7 +714,7 @@ class Runner {
     }
 
     private getMethod(text: string) {
-        // var state = new TranspileState(new BrsFile('', '', new Program({}));
+        // var state = new TranspileState(new BrsFile({ srcPath: '', destPath: '', program: new Program({})});
         const functionSignatureToParse = `function ${this.fixFunctionParams(this.sanitizeMarkdownSymbol(text))}\nend function`;
         const { statements } = Parser.parse(functionSignatureToParse);
         if (statements.length > 0) {

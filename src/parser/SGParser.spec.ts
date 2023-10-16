@@ -23,12 +23,12 @@ describe('SGParser', () => {
         program.dispose();
     });
 
-    it('Parses well formed SG component', () => {
+    it('Parses well formed SG component', async () => {
         program.setFile('components/Component1.brs', `
             sub load()
             end sub
         `);
-        const { file } = testTranspile<XmlFile>(trim`
+        const { file } = await testTranspile<XmlFile>(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ParentScene" extends="GrandparentScene">
                 <interface>

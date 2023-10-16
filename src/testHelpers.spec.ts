@@ -1,4 +1,4 @@
-import type { BscFile, BsDiagnostic } from './interfaces';
+import type { BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
 import type { CodeDescription, CompletionItem, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
@@ -9,10 +9,10 @@ import { codeActionUtil } from './CodeActionUtil';
 import type { BrsFile } from './files/BrsFile';
 import type { Program } from './Program';
 import { standardizePath as s } from './util';
-import type { CodeWithSourceMap } from 'source-map';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
+import type { File } from './files/File';
 import type { BscType } from './types/BscType';
 
 export const tempDir = s`${__dirname}/../.tmp`;
@@ -21,7 +21,7 @@ export const stagingDir = s`${tempDir}/stagingDir`;
 
 export const trim = undent;
 
-type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[];
+type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics?: Diagnostic[] } | Diagnostic[];
 
 function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
     if (Array.isArray(arg)) {
@@ -69,7 +69,7 @@ interface PartialDiagnostic {
     tags?: Partial<DiagnosticTag>[];
     relatedInformation?: Partial<DiagnosticRelatedInformation>[];
     data?: unknown;
-    file?: Partial<BscFile>;
+    file?: Partial<File>;
 }
 
 /**
@@ -96,7 +96,7 @@ function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic
         actualDiagnostic.file = cloneObject(
             actualDiagnostic.file,
             expectedDiagnostic?.file,
-            ['srcPath', 'pkgPath']
+            ['srcPath', 'destPath', 'pkgPath']
         ) as any;
     }
     return actualDiagnostic;
@@ -179,7 +179,7 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
             diagnostic.message = diagnostic.message.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
             message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file?.srcPath ?? ''}#(${diagnostic.range.start.line}:${diagnostic.range.start.character})-(${diagnostic.range.end.line}:${diagnostic.range.end.character})`;
             //print the line containing the error (if we can find it)srcPath
-            const line = diagnostic.file?.fileContents?.split(/\r?\n/g)?.[diagnostic.range.start.line];
+            const line = (diagnostic.file as BrsFile)?.fileContents?.split(/\r?\n/g)?.[diagnostic.range.start.line];
             if (line) {
                 message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
             }
@@ -238,32 +238,35 @@ export function expectInstanceOf<T>(items: any[], constructors: Array<new (...ar
 
 export function getTestTranspile(scopeGetter: () => [program: Program, rootDir: string]) {
     return getTestFileAction((file) => {
-        return file.program['_getTranspiledFileContents'](file);
+        return (file as BrsFile).program.getTranspiledFileContents(file.srcPath);
     }, scopeGetter);
 }
 
 export function getTestGetTypedef(scopeGetter: () => [program: Program, rootDir: string]) {
-    return getTestFileAction((file) => {
+    return getTestFileAction(async (file) => {
+        const program = (file as BrsFile).program;
+        program.options.emitDefinitions = true;
+        const result = await program.getTranspiledFileContents(file.srcPath);
         return {
-            code: (file as BrsFile).getTypedef(),
+            code: result.typedef,
             map: undefined
         };
     }, scopeGetter);
 }
 
 function getTestFileAction(
-    action: (file: BscFile) => CodeWithSourceMap,
+    action: (file: File) => Promise<{ code: string; map?: string }>,
     scopeGetter: () => [program: Program, rootDir: string]
 ) {
-    return function testFileAction<TFile extends BscFile = BrsFile>(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) {
+    return async function testFileAction<TFile extends File = File>(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
-        let file = program.setFile<TFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
+        let file = program.setFile<TFile>({ src: s`${rootDir}/${destPath}`, dest: destPath }, source);
         program.validate();
         if (failOnDiagnostic !== false) {
             expectZeroDiagnostics(program);
         }
-        let codeWithMap = action(file);
+        let codeWithMap = await action(file);
 
         let sources = [trimMap(codeWithMap.code), expected];
 

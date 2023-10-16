@@ -1,6 +1,5 @@
 import { assert, expect } from './chai-config.spec';
 import * as pick from 'object.pick';
-import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -9,23 +8,32 @@ import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { URI } from 'vscode-uri';
-import PluginInterface from './PluginInterface';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
-import { Logger } from './Logger';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
 import type { LiteralExpression } from './parser/Expression';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
+import { AssetFile } from './files/AssetFile';
+import * as path from 'path';
+import type { SinonSpy } from 'sinon';
+import { createSandbox } from 'sinon';
+import type { AfterFileAddEvent, AfterFileRemoveEvent, AfterProvideFileEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, BeforeProvideFileEvent, CompilerPlugin, ProvideFileEvent } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTable';
 import { StringType } from './types/StringType';
-import { ArrayType, BooleanType, DynamicType, FloatType, IntegerType, InterfaceType, TypedFunctionType } from './types';
+import { TypedFunctionType } from './types/TypedFunctionType';
+import { DynamicType } from './types/DynamicType';
+import { FloatType } from './types/FloatType';
+import { IntegerType } from './types/IntegerType';
+import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
+import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
+import { BooleanType } from './types/BooleanType';
 
-let sinon = sinonImport.createSandbox();
+const sinon = createSandbox();
 
 describe('Program', () => {
     let program: Program;
@@ -59,6 +67,21 @@ describe('Program', () => {
         await program.getTranspiledFileContents('tests/testFile.spec.bs');
     });
 
+    it('allows diagnostics to be set on AssetFile', () => {
+        const file = program.setFile<AssetFile>('manifest', ``);
+        file.diagnostics.push({
+            file: file,
+            message: 'Manifest is totally bogus',
+            range: util.createRange(0, 0, 0, 10),
+            code: 10
+        });
+        program.validate();
+        expectDiagnostics(program, [{
+            code: 10,
+            message: 'Manifest is totally bogus'
+        }]);
+    });
+
     describe('global scope', () => {
         it('returns all callables when asked', () => {
             expect(program.globalScope.getAllCallables().length).to.be.greaterThan(0);
@@ -71,13 +94,12 @@ describe('Program', () => {
     describe('addFile', () => {
         it('adds various files to `pkgMap`', () => {
             program.setFile('source/main.brs', '');
-            expect(program['pkgMap']).to.have.property(s`source/main.brs`);
-
-            program.setFile('source/main.bs', '');
-            expect(program['pkgMap']).to.have.property(s`source/main.bs`);
+            expect(program.getFile('source/main.brs')).to.exist;
+            expect(program.getFile('source\\main.brs')).to.exist;
 
             program.setFile('components/comp1.xml', '');
-            expect(program['pkgMap']).to.have.property(s`components/comp1.xml`);
+            expect(program.getFile(s`components/comp1.xml`)).to.exist;
+            expect(program.getFile(s`components\\comp1.xml`)).to.exist;
         });
 
         it('does not crash when given a totally bogus file', () => {
@@ -104,14 +126,14 @@ describe('Program', () => {
         it('only parses xml files as components when file is found within the "components" folder', () => {
             expect(Object.keys(program.files).length).to.equal(0);
 
-            program.setFile('components/comp1.xml', '');
-            expect(Object.keys(program.files).length).to.equal(1);
+            let file = program.setFile(`components/comp1.xml`, '');
+            expect(file.type).to.eql('XmlFile');
 
-            program.setFile('notComponents/comp1.xml', '');
-            expect(Object.keys(program.files).length).to.equal(1);
+            file = program.setFile(`notComponents/comp1.xml`, '');
+            expect(file.type).to.eql('AssetFile');
 
-            program.setFile('componentsExtra/comp1.xml', '');
-            expect(Object.keys(program.files).length).to.equal(1);
+            program.setFile(`componentsExtra/comp1.xml`, '');
+            expect(file.type).to.eql('AssetFile');
         });
 
         it('supports empty statements for transpile', async () => {
@@ -122,7 +144,10 @@ describe('Program', () => {
                 end sub
             `);
             (file.parser.ast.statements[0] as FunctionStatement).func.body.statements[0] = new EmptyStatement();
-            await program.transpile([{ src: file.srcPath, dest: file.pkgPath }], tempDir);
+            await program.build({
+                files: [file],
+                stagingDir: tempDir
+            });
         });
 
         it('works with different cwd', () => {
@@ -180,7 +205,7 @@ describe('Program', () => {
             const beforeFileParse = sinon.spy();
             const afterFileParse = sinon.spy();
             const afterFileValidate = sinon.spy();
-            program.plugins = new PluginInterface([{
+            program.plugins.add({
                 name: 'emits events for scope and file creation',
                 beforeProgramValidate: beforeProgramValidate,
                 afterProgramValidate: afterProgramValidate,
@@ -190,7 +215,7 @@ describe('Program', () => {
                 beforeFileParse: beforeFileParse,
                 afterFileParse: afterFileParse,
                 afterFileValidate: afterFileValidate
-            }], { logger: new Logger() });
+            });
 
             //add a new source file
             program.setFile('source/main.brs', '');
@@ -573,7 +598,7 @@ describe('Program', () => {
                 getPaths('source/main.brs', rootDir)
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
-                pkgPath: s`source/main.brs`
+                destPath: s`source/main.brs`
             });
         });
 
@@ -582,7 +607,7 @@ describe('Program', () => {
                 getPaths(`${rootDir}/source\\main.brs`, rootDir)
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
-                pkgPath: s`source/main.brs`
+                destPath: s`source/main.brs`
             });
         });
 
@@ -591,7 +616,7 @@ describe('Program', () => {
                 getPaths({ dest: 'source/main.brs' }, rootDir)
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
-                pkgPath: s`source/main.brs`
+                destPath: s`source/main.brs`
             });
         });
 
@@ -600,7 +625,7 @@ describe('Program', () => {
                 getPaths({ src: `${rootDir}/source/main.brs` }, rootDir)
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
-                pkgPath: s`source/main.brs`
+                destPath: s`source/main.brs`
             });
         });
 
@@ -609,30 +634,13 @@ describe('Program', () => {
                 getPaths('pkg:/source/main.brs', rootDir)
             ).to.eql({
                 srcPath: s`${rootDir}/source/main.brs`,
-                pkgPath: s`source/main.brs`
-            });
-        });
-
-        it('favors pkgPath over destPath', () => {
-            expect(
-                getPaths({ srcPath: `${rootDir}/source/main.brs`, destPath: 'source/DontUse.brs', pkgPath: `pkg:/source/main.brs` })
-            ).to.eql({
-                srcPath: s`${rootDir}/source/main.brs`,
-                pkgPath: s`source/main.brs`
-            });
-        });
-
-        it('works when given a file', () => {
-            expect(
-                getPaths({ srcPath: `${rootDir}/source/main.brs`, pkgPath: `source/main.brs` })
-            ).to.eql({
-                srcPath: s`${rootDir}/source/main.brs`,
-                pkgPath: s`source/main.brs`
+                destPath: s`source/main.brs`
             });
         });
     });
 
     describe('setFile', () => {
+
         it('links xml scopes based on xml parent-child relationships', () => {
             program.setFile('components/ParentScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -681,8 +689,8 @@ describe('Program', () => {
             program.setFile('components/component1.brs', '');
 
             let scope = program.getScopeByName(`components/component1.xml`);
-            expect(scope.getFile('components/component1.xml').pkgPath).to.equal(s`components/component1.xml`);
-            expect(scope.getFile('components/component1.brs').pkgPath).to.equal(s`components/component1.brs`);
+            expect(scope.getFile('components/component1.xml').destPath).to.equal(s`components/component1.xml`);
+            expect(scope.getFile('components/component1.brs').destPath).to.equal(s`components/component1.brs`);
         });
 
         it('adds xml file to files map', () => {
@@ -718,6 +726,48 @@ describe('Program', () => {
             expectDiagnostics(program, [
                 DiagnosticMessages.scriptImportCaseMismatch(s`components\\COMPONENT1.brs`)
             ]);
+        });
+
+        describe('multiple files', () => {
+            beforeEach(() => {
+                program.plugins.add({
+                    name: 'test',
+                    provideFile: (event: ProvideFileEvent) => {
+                        //every .component file also produces a secondary file
+                        if (event.srcPath.endsWith('.component')) {
+                            const fileName = path.parse(event.srcPath).name;
+                            event.files.push({
+                                type: 'XmlFile',
+                                srcPath: event.srcPath,
+                                destPath: `components/${fileName}.xml`
+                            }, {
+                                type: 'BrsFile',
+                                srcPath: `virtual:/${fileName}.brs`,
+                                destPath: `components/${fileName}.brs`
+                            });
+                        }
+                    }
+                });
+            });
+
+            it('allows finding files by `virtual:/` srcPath', () => {
+                program.setFile('components/ButtonPrimary.component', ``);
+                expect(program.hasFile('virtual:/ButtonPrimary.brs')).to.be.true;
+            });
+
+            it('supports virtual file contributions', () => {
+                //add the file
+                program.setFile('components/ButtonPrimary.component', ``);
+                //both virtual files should exist
+                expect(program.hasFile('components/ButtonPrimary.xml')).to.be.true;
+                expect(program.hasFile('components/ButtonPrimary.brs')).to.be.true;
+
+                //remove the file
+                program.removeFile('components/ButtonPrimary.component');
+                //the virtual files should be missing
+                expect(program.hasFile('components/ButtonPrimary.xml')).to.be.false;
+                expect(program.hasFile('components/ButtonPrimary.brs')).to.be.false;
+            });
         });
     });
 
@@ -765,7 +815,7 @@ describe('Program', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(program.getScopeByName(xmlFile.pkgPath).getFile(brsPath)).to.exist;
+            expect(program.getScopeByName(xmlFile.destPath).getFile(brsPath)).to.exist;
         });
 
         it('reloads referenced fles when xml file changes', () => {
@@ -780,7 +830,7 @@ describe('Program', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(program.getScopeByName(xmlFile.pkgPath).getFile('components/component1.brs')).not.to.exist;
+            expect(program.getScopeByName(xmlFile.destPath).getFile('components/component1.brs')).not.to.exist;
 
             //reload the xml file contents, adding a new script reference.
             xmlFile = program.setFile('components/component1.xml', trim`
@@ -790,7 +840,7 @@ describe('Program', () => {
                 </component>
             `);
 
-            expect(program.getScopeByName(xmlFile.pkgPath).getFile('components/component1.brs')).to.exist;
+            expect(program.getScopeByName(xmlFile.destPath).getFile('components/component1.brs')).to.exist;
         });
     });
 
@@ -926,7 +976,7 @@ describe('Program', () => {
             `);
 
             //the component scope should only have the xml file
-            expect(program.getScopeByName(xmlFile.pkgPath).getOwnFiles().length).to.equal(1);
+            expect(program.getScopeByName(xmlFile.destPath).getOwnFiles().length).to.equal(1);
 
             //create the lib file
             let libFile = program.setFile('source/lib.brs', `'comment`);
@@ -938,7 +988,7 @@ describe('Program', () => {
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
                 </component>
             `);
-            let scope = program.getScopeByName(xmlFile.pkgPath);
+            let scope = program.getScopeByName(xmlFile.destPath);
             //the component scope should have the xml file AND the lib file
             expect(scope.getOwnFiles().length).to.equal(2);
             expect(scope.getFile(xmlFile.srcPath)).to.exist;
@@ -952,8 +1002,8 @@ describe('Program', () => {
             `);
 
             //the scope should again only have the xml file loaded
-            expect(program.getScopeByName(xmlFile.pkgPath).getOwnFiles().length).to.equal(1);
-            expect(program.getScopeByName(xmlFile.pkgPath)).to.exist;
+            expect(program.getScopeByName(xmlFile.destPath).getOwnFiles().length).to.equal(1);
+            expect(program.getScopeByName(xmlFile.destPath)).to.exist;
         });
     });
 
@@ -1036,6 +1086,60 @@ describe('Program', () => {
             expect(completions).to.deep.include({ label: 'ActionA' });
             expect(completions).to.deep.include({ label: 'ActionB' });
         });
+
+        it('returns all variables in scope', () => {
+            program.setFile('source/main.brs', `
+                sub Main()
+                    name = "bob"
+                    age = 20
+                    shoeSize = 12.5
+                end sub
+                sub ActionA()
+                end sub
+            `);
+            program.setFile('source/lib.brs', `
+                sub ActionB()
+                end sub
+            `);
+
+            program.validate();
+
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, util.createPosition(3, 10));
+            let labels = completions.map(x => pick(x, 'label'));
+
+            expect(labels).to.deep.include({ label: 'Main' });
+            expect(labels).to.deep.include({ label: 'ActionA' });
+            expect(labels).to.deep.include({ label: 'ActionB' });
+            expect(labels).to.deep.include({ label: 'name' });
+            expect(labels).to.deep.include({ label: 'age' });
+            expect(labels).to.deep.include({ label: 'shoeSize' });
+        });
+
+        it.skip('returns empty set when out of range', () => {
+            // const position = util.createPosition(99, 99);
+            // program.setFile('source/main.brs', '');
+            // let completions = program.getCompletions(`${rootDir}/source/main.brs`, position);
+            // //get the name of all global completions
+            // const globalCompletions = program.globalScope.getAllFiles().flatMap(x => (x as BrsFile).getCompletions(position)).map(x => x.label);
+            // //filter out completions from global scope
+            // completions = completions.filter(x => !globalCompletions.includes(x.label));
+            // expect(completions).to.be.empty;
+        });
+
+        it('finds parameters', () => {
+            program.setFile('source/main.brs', `
+                sub Main(count = 1)
+                    firstName = "bob"
+                    age = 21
+                    shoeSize = 10
+                end sub
+            `);
+            program.validate();
+            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            let labels = completions.map(x => pick(x, 'label'));
+
+            expect(labels).to.deep.include({ label: 'count' });
+        });
     });
 
     it('does not create map by default', async () => {
@@ -1045,7 +1149,7 @@ describe('Program', () => {
             end sub
         `);
         program.validate();
-        await program.transpile([], program.options.stagingDir);
+        await program.build({ stagingDir: program.options.stagingDir });
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.false;
     });
@@ -1066,15 +1170,11 @@ describe('Program', () => {
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.false;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/components/comp1.xml.map`)).is.false;
 
-        let filePaths = [{
-            src: s`${rootDir}/source/main.brs`,
-            dest: s`source/main.brs`
-        }, {
-            src: s`${rootDir}/components/comp1.xml`,
-            dest: s`components/comp1.xml`
-        }];
         program.options.sourceMap = true;
-        await program.transpile(filePaths, program.options.stagingDir);
+        await program.build({
+            files: program.getFiles([s`${rootDir}/source/main.brs`, s`${rootDir}/components/comp1.xml`]),
+            stagingDir: program.options.stagingDir
+        });
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/components/comp1.xml.map`)).is.true;
@@ -1084,7 +1184,9 @@ describe('Program', () => {
         fsExtra.ensureDirSync(program.options.stagingDir);
         program.validate();
 
-        await program.transpile([], program.options.stagingDir);
+        await program.build({
+            stagingDir: program.options.stagingDir
+        });
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/bslib.brs`)).is.true;
     });
@@ -1098,37 +1200,47 @@ describe('Program', () => {
             `);
             const plugin = program.plugins.add({
                 name: 'TestPlugin',
-                beforeFileTranspile: (event) => {
+                beforePrepareFile: (event) => {
                     const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
                     event.editor.setProperty((stmt.expressions[0] as LiteralExpression).token, 'text', '"hello there"');
                 },
-                afterFileTranspile: sinon.spy()
+                afterPrepareFile: sinon.spy()
             });
+            const result = await program.getTranspiledFileContents(file.srcPath);
             expect(
-                (await program.getTranspiledFileContents(file.srcPath)).code
+                result.code
             ).to.eql(trim`
                 sub main()
                     print "hello there"
                 end sub`
             );
-            expect(plugin.afterFileTranspile.callCount).to.be.greaterThan(0);
+            expect(plugin.afterPrepareFile.callCount).to.be.greaterThan(0);
         });
 
         it('allows events to modify the file contents', async () => {
             program.options.emitDefinitions = true;
             program.plugins.add({
                 name: 'TestPlugin',
-                afterFileTranspile: (event) => {
-                    event.code = `'code comment\n${event.code}`;
-                    event.typedef = `'typedef comment\n${event.typedef}`;
+                afterSerializeFile: (event) => {
+                    if (event.file.pkgPath.endsWith('lib.brs')) {
+                        const fileResult = event.result.get(event.file);
+
+                        const brsFile = fileResult.find(x => x.pkgPath.endsWith('lib.brs'));
+                        brsFile.data = Buffer.from(`'code comment\n${brsFile.data.toString()}`);
+
+                        const dbsFile = fileResult.find(x => x.pkgPath.endsWith('lib.d.bs'));
+                        dbsFile.data = Buffer.from(`'typedef comment\n${dbsFile.data.toString()}`);
+                    }
                 }
-            });
+            } as CompilerPlugin);
             program.setFile('source/lib.bs', `
                 sub log(message)
                     print message
                 end sub
             `);
-            await program.transpile([], stagingDir);
+            await program.build({
+                stagingDir: stagingDir
+            });
             expect(
                 fsExtra.readFileSync(`${stagingDir}/source/lib.brs`).toString().trimEnd()
             ).to.eql(trim`
@@ -1147,7 +1259,14 @@ describe('Program', () => {
         });
     });
 
-    it('beforeProgramTranspile sends entries in alphabetical order', () => {
+    it('beforeProgramTranspile sends entries in alphabetical order', async () => {
+        const destPaths: string[] = [];
+        program.plugins.add({
+            name: 'test',
+            beforePrepareFile: (e) => {
+                destPaths.push(e.file.destPath);
+            }
+        });
         program.setFile('source/main.bs', trim`
             sub main()
                 print "hello world"
@@ -1160,70 +1279,18 @@ describe('Program', () => {
             end sub
         `);
 
-        //send the files out of order
-        const result = program['beforeProgramTranspile']([{
-            src: s`${rootDir}/source/main.bs`,
-            dest: 'source/main.bs'
-        }, {
-            src: s`${rootDir}/source/main.bs`,
-            dest: 'source/main.bs'
-        }], program.options.stagingDir);
+        await program['prepare'](Object.values(program.files));
 
         //entries should now be in alphabetic order
         expect(
-            result.entries.map(x => x.outputPath)
+            destPaths
         ).to.eql([
-            s`${stagingDir}/source/common.brs`,
-            s`${stagingDir}/source/main.brs`
+            s`source/common.bs`,
+            s`source/main.bs`
         ]);
     });
 
     describe('transpile', () => {
-        it('detects and transpiles files added between beforeProgramTranspile and afterProgramTranspile', async () => {
-            program.setFile('source/main.bs', trim`
-                sub main()
-                    print "hello world"
-                end sub
-            `);
-            program.plugins.add({
-                name: 'TestPlugin',
-                beforeFileTranspile: (event) => {
-                    if (isBrsFile(event.file)) {
-                        //add lib1
-                        if (event.outputPath.endsWith('main.brs')) {
-                            event.program.setFile('source/lib1.bs', `
-                                sub lib1()
-                                end sub
-                            `);
-                        }
-                        //add lib2 (this should happen during the next cycle of "catch missing files" cycle
-                        if (event.outputPath.endsWith('main.brs')) {
-                            //add another file
-                            event.program.setFile('source/lib2.bs', `
-                                sub lib2()
-                                end sub
-                            `);
-                        }
-                    }
-                }
-            });
-            await program.transpile([], stagingDir);
-            //our new files should exist
-            expect(
-                fsExtra.readFileSync(`${stagingDir}/source/lib1.brs`).toString()
-            ).to.eql(trim`
-                sub lib1()
-                end sub
-            `);
-            //our changes should be there
-            expect(
-                fsExtra.readFileSync(`${stagingDir}/source/lib2.brs`).toString()
-            ).to.eql(trim`
-                sub lib2()
-                end sub
-            `);
-        });
-
         it('sets needsTranspiled=true when there is at least one edit', async () => {
             program.setFile('source/main.brs', trim`
                 sub main()
@@ -1232,12 +1299,14 @@ describe('Program', () => {
             `);
             program.plugins.add({
                 name: 'TestPlugin',
-                beforeFileTranspile: (event) => {
+                beforePrepareFile: (event) => {
                     const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
                     event.editor.setProperty((stmt.expressions[0] as LiteralExpression).token, 'text', '"hello there"');
                 }
             });
-            await program.transpile([], stagingDir);
+            await program.build({
+                stagingDir: stagingDir
+            });
             //our changes should be there
             expect(
                 fsExtra.readFileSync(`${stagingDir}/source/main.brs`).toString()
@@ -1248,8 +1317,8 @@ describe('Program', () => {
             );
         });
 
-        it('handles AstEditor flow properly', async () => {
-            program.setFile('source/main.bs', `
+        it('handles Editor flow properly', async () => {
+            const file = program.setFile('source/main.bs', `
                 sub main()
                     print "hello world"
                 end sub
@@ -1258,8 +1327,8 @@ describe('Program', () => {
             //replace all strings with "goodbye world"
             program.plugins.add({
                 name: 'TestPlugin',
-                beforeFileTranspile: (event) => {
-                    if (isBrsFile(event.file)) {
+                beforePrepareFile: (event) => {
+                    if (event.file === file && isBrsFile(event.file)) {
                         event.file.ast.walk(createVisitor({
                             LiteralExpression: (literal) => {
                                 literalExpression = literal;
@@ -1272,7 +1341,9 @@ describe('Program', () => {
                 }
             });
             //transpile the file
-            await program.transpile([], stagingDir);
+            await program.build({
+                stagingDir: stagingDir
+            });
             //our changes should be there
             expect(
                 fsExtra.readFileSync(`${stagingDir}/source/main.brs`).toString()
@@ -1286,7 +1357,7 @@ describe('Program', () => {
             expect(literalExpression.token.text).to.eql('"hello world"');
         });
 
-        it('handles AstEditor for beforeProgramTranspile', async () => {
+        it('handles Editor for beforeProgramTranspile', async () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 sub main()
                     print "hello world"
@@ -1296,7 +1367,7 @@ describe('Program', () => {
             //replace all strings with "goodbye world"
             program.plugins.add({
                 name: 'TestPlugin',
-                beforeProgramTranspile: (event) => {
+                beforePrepareProgram: (event) => {
                     file.ast.walk(createVisitor({
                         LiteralExpression: (literal) => {
                             literalExpression = literal;
@@ -1308,7 +1379,9 @@ describe('Program', () => {
                 }
             });
             //transpile the file
-            await program.transpile([], stagingDir);
+            await program.build({
+                stagingDir: stagingDir
+            });
             //our changes should be there
             expect(
                 fsExtra.readFileSync(`${stagingDir}/source/main.brs`).toString()
@@ -1322,14 +1395,18 @@ describe('Program', () => {
             expect(literalExpression.token.text).to.eql('"hello world"');
         });
 
-        it('copies bslib.brs when no ropm version was found', async () => {
-            await program.transpile([], stagingDir);
+        it('copies the embedded version of bslib.brs when a version from ropm is not found', async () => {
+            await program.build({
+                stagingDir: stagingDir
+            });
             expect(fsExtra.pathExistsSync(`${stagingDir}/source/bslib.brs`)).to.be.true;
         });
 
         it('does not copy bslib.brs when found in roku_modules', async () => {
             program.setFile('source/roku_modules/bslib/bslib.brs', '');
-            await program.transpile([], stagingDir);
+            await program.build({
+                stagingDir: stagingDir
+            });
             expect(fsExtra.pathExistsSync(`${stagingDir}/source/bslib.brs`)).to.be.false;
             expect(fsExtra.pathExistsSync(`${stagingDir}/source/roku_modules/bslib/bslib.brs`)).to.be.true;
         });
@@ -1340,7 +1417,9 @@ describe('Program', () => {
                     print SOURCE_LINE_NUM
                 end sub
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.build({
+                stagingDir: program.options.stagingDir
+            });
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/source/logger.brs`).toString()
             )).to.eql(trim`
@@ -1356,7 +1435,9 @@ describe('Program', () => {
                     print "logInfo"
                 end sub
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.build({
+                stagingDir: program.options.stagingDir
+            });
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/source/logger.brs`).toString()
             )).to.eql(trim`
@@ -1372,7 +1453,9 @@ describe('Program', () => {
                 <component name="Component1" extends="Scene">
                 </component>
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.build({
+                stagingDir: program.options.stagingDir
+            });
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/components/Component1.xml`).toString()
             )).to.eql(trim`
@@ -1391,14 +1474,14 @@ describe('Program', () => {
                 sourceRoot: sourceRoot,
                 sourceMap: true
             });
-            program.setFile('source/main.brs', `
+            const main = program.setFile('source/main.brs', `
                 sub main()
                 end sub
             `);
-            await program.transpile([{
-                src: s`${rootDir}/source/main.brs`,
-                dest: s`source/main.brs`
-            }], stagingDir);
+            await program.build({
+                files: [main],
+                stagingDir: stagingDir
+            });
 
             let contents = fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`).toString();
             let map = JSON.parse(contents);
@@ -1421,10 +1504,10 @@ describe('Program', () => {
                 sub main()
                 end sub
             `);
-            await program.transpile([{
-                src: s`${rootDir}/source/main.bs`,
-                dest: s`source/main.bs`
-            }], stagingDir);
+            await program.build({
+                files: [program.getFile('source/main.bs')],
+                stagingDir: stagingDir
+            });
 
             let contents = fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`).toString();
             let map = JSON.parse(contents);
@@ -1445,7 +1528,9 @@ describe('Program', () => {
                 `);
                 program.options.emitDefinitions = true;
                 program.validate();
-                await program.transpile([], stagingDir);
+                await program.build({
+                    stagingDir: stagingDir
+                });
 
                 expect(fsExtra.pathExistsSync(s`${stagingDir}/source/Duck.brs`)).to.be.true;
                 expect(fsExtra.pathExistsSync(s`${stagingDir}/source/Duck.d.bs`)).to.be.true;
@@ -1459,7 +1544,9 @@ describe('Program', () => {
                 `);
                 program.options.emitDefinitions = true;
                 program.validate();
-                await program.transpile([], stagingDir);
+                await program.build({
+                    stagingDir: stagingDir
+                });
 
                 expect(fsExtra.pathExistsSync(s`${stagingDir}/source/Duck.d.brs`)).to.be.false;
                 expect(fsExtra.pathExistsSync(s`${stagingDir}/source/Duck.brs`)).to.be.false;
@@ -2180,6 +2267,146 @@ describe('Program', () => {
     });
 
     describe('plugins', () => {
+        it('emits provideFile events', () => {
+            const plugin = {
+                name: 'test',
+                beforeProvideFile: sinon.spy() as SinonSpy<[BeforeProvideFileEvent]>,
+                provideFile: sinon.spy() as SinonSpy<[BeforeProvideFileEvent]>,
+                afterProvideFile: sinon.spy() as SinonSpy<[BeforeProvideFileEvent]>
+            };
+            program.plugins.add(plugin);
+            program.setFile('source/main.brs', `'main`);
+            program.setFile('source/lib.brs', `'lib`);
+            program.validate();
+            function test(spy: SinonSpy<[BeforeProvideFileEvent]>) {
+                expect(
+                    spy.getCalls().map(x => ({
+                        srcPath: x.args[0].srcPath,
+                        destPath: x.args[0].destPath,
+                        fileData: x.args[0].data.value.toString()
+                    }))
+                ).to.eql([{
+                    srcPath: s`${rootDir}/source/main.brs`,
+                    destPath: s`source/main.brs`,
+                    fileData: `'main`
+                }, {
+                    srcPath: s`${rootDir}/source/lib.brs`,
+                    destPath: s`source/lib.brs`,
+                    fileData: `'lib`
+                }]);
+            }
+            test(plugin.beforeProvideFile);
+            test(plugin.provideFile);
+            test(plugin.afterProvideFile);
+        });
+
+        it('beforeProvideFile can override source contents', () => {
+            const plugin = {
+                name: 'test',
+                beforeProvideFile: (event: BeforeProvideFileEvent) => {
+                    event.data.value = `'override`;
+                }
+            };
+            program.plugins.add(plugin);
+            const file = program.setFile<BrsFile>('source/main.brs', `'original`);
+            expect(file.fileContents).to.eql(`'override`);
+        });
+
+        it('emits event for each virtual file', () => {
+            const events: string[] = [];
+            const plugin = {
+                name: 'test',
+                beforeProvideFile: (e: BeforeProvideFileEvent) => {
+                    events.push(`beforeProvideFile:${e.destPath}`);
+                    e.files.push(
+                        new AssetFile(e)
+                    );
+                    e.files.push(
+                        new AssetFile({
+                            srcPath: e.srcPath + '.two',
+                            destPath: e.destPath + '.two'
+                        })
+                    );
+                },
+                provideFile: (e: ProvideFileEvent) => {
+                    events.push(`provideFile:${e.destPath}`);
+                },
+                afterProvideFile: (e: AfterProvideFileEvent) => {
+                    events.push(`afterProvideFile:${e.destPath}`);
+                },
+                beforeFileAdd: (e: BeforeFileAddEvent) => {
+                    events.push(`beforeFileAdd:${e.file.destPath}`);
+                },
+                afterFileAdd: (e: AfterFileAddEvent) => {
+                    events.push(`afterFileAdd:${e.file.destPath}`);
+                },
+                beforeFileRemove: (e: BeforeFileRemoveEvent) => {
+                    events.push(`beforeFileRemove:${e.file.destPath}`);
+                },
+                afterFileRemove: (e: AfterFileRemoveEvent) => {
+                    events.push(`afterFileRemove:${e.file.destPath}`);
+                }
+            };
+            program.plugins.add(plugin);
+
+            program.setFile('source/buttons.component.bs', '');
+            program.removeFile('source/buttons.component.bs');
+
+            expect(events).to.eql([
+                'beforeProvideFile:' + s('source/buttons.component.bs'),
+                'provideFile:' + s('source/buttons.component.bs'),
+                'afterProvideFile:' + s('source/buttons.component.bs'),
+                'beforeFileAdd:' + s('source/buttons.component.bs'),
+                'afterFileAdd:' + s('source/buttons.component.bs'),
+                'beforeFileAdd:' + s('source/buttons.component.bs.two'),
+                'afterFileAdd:' + s('source/buttons.component.bs.two'),
+                'beforeFileRemove:' + s('source/buttons.component.bs'),
+                'afterFileRemove:' + s('source/buttons.component.bs'),
+                'beforeFileRemove:' + s('source/buttons.component.bs.two'),
+                'afterFileRemove:' + s('source/buttons.component.bs.two')
+            ]);
+        });
+
+        it('does not emit duplicate events for virtual files that get removed', () => {
+            const events: string[] = [];
+            const plugin = {
+                name: 'test',
+                beforeProvideFile: (e: BeforeProvideFileEvent) => {
+                    e.files.push(
+                        new AssetFile(e)
+                    );
+                    e.files.push(
+                        new AssetFile({
+                            srcPath: e.srcPath + '.two',
+                            destPath: e.destPath + '.two'
+                        })
+                    );
+                },
+                beforeFileRemove: (e: BeforeFileRemoveEvent) => {
+                    events.push(`beforeFileRemove:${e.file.destPath}`);
+                },
+                afterFileRemove: (e: AfterFileRemoveEvent) => {
+                    events.push(`afterFileRemove:${e.file.destPath}`);
+                }
+            };
+            program.plugins.add(plugin);
+
+            program.setFile('source/buttons.component.bs', '');
+
+            //remove the virtual file first
+            program.removeFile('source/buttons.component.bs.two');
+            //now remove the physical file
+            program.removeFile('source/buttons.component.bs');
+
+            //we should only have one set of events per file
+            expect(events).to.eql([
+                'beforeFileRemove:' + s('source/buttons.component.bs.two'),
+                'afterFileRemove:' + s('source/buttons.component.bs.two'),
+                'beforeFileRemove:' + s('source/buttons.component.bs'),
+                'afterFileRemove:' + s('source/buttons.component.bs')
+            ]);
+        });
+
         it('emits file validation events', () => {
             const plugin = {
                 name: 'test',
@@ -2240,6 +2467,67 @@ describe('Program', () => {
             ).to.eql([
                 file.srcPath
             ]);
+        });
+    });
+
+    describe('build', () => {
+        it('copies AssetFile contents', async () => {
+            const file = program.setFile('locale/en_US/translations.xml', Buffer.from(''));
+            program.validate();
+            await program.build();
+            expect(
+                fsExtra.pathExistsSync(
+                    s`${program.options.stagingDir}/${file.pkgPath}`
+                )
+            ).to.be.true;
+        });
+
+        it('writes to correct dir', async () => {
+            const cwd = process.cwd();
+            try {
+                fsExtra.ensureDirSync(`${tempDir}/alpha/beta`);
+                process.chdir(s`${tempDir}/alpha/beta`);
+
+                program.options.cwd = s`${tempDir}/rootDir`;
+                program.options.rootDir = s`${tempDir}/rootDir`;
+                program.options.stagingDir = s`../stagingDir`;
+                program.setFile('source/main.brs', '');
+                await program.build();
+            } finally {
+                process.chdir(cwd);
+            }
+            expect(fsExtra.pathExistsSync(`${tempDir}/stagingDir/source/main.brs`)).to.be.true;
+            expect(fsExtra.pathExistsSync(`${tempDir}/alpha/source/main.brs`)).to.be.false;
+        });
+
+        it('write binary files properly', async () => {
+            const data = Buffer.from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+            program.setFile('assets/logo.png', data);
+            await program.build();
+            const result = fsExtra.readFileSync(`${stagingDir}/assets/logo.png`);
+
+            //the buffers should be identical
+            expect(
+                data.compare(result)
+            ).to.equal(0);
+        });
+
+        it('includes bslib in the outDir', async () => {
+            program.options.autoImportComponentScript = true;
+            program.setFile('manifest', '');
+            program.setFile('components/MainScene.xml', trim`
+                <component name="MainScene" extends="Scene">
+                </component>
+            `);
+            program.setFile('components/MainScene.bs', `
+                sub init()
+                    print 1 > 0 ? 1 : 0
+                end sub
+            `);
+            await program.build();
+            expect(
+                fsExtra.pathExistsSync(`${stagingDir}/source/bslib.brs`)
+            ).to.be.true;
         });
     });
 

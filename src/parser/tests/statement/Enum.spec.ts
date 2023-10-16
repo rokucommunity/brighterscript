@@ -510,8 +510,8 @@ describe('EnumStatement', () => {
     });
 
     describe('transpile', () => {
-        it('transpiles negative number', () => {
-            testTranspile(`
+        it('transpiles negative number', async () => {
+            await testTranspile(`
                 sub main()
                     print Direction.up
                 end sub
@@ -525,8 +525,8 @@ describe('EnumStatement', () => {
             `, undefined, undefined, false);
         });
 
-        it('includes original value when no value could be computed', () => {
-            testTranspile(`
+        it('includes original value when no value could be computed', async () => {
+            await testTranspile(`
                 sub main()
                     print Direction.up
                 end sub
@@ -539,8 +539,8 @@ describe('EnumStatement', () => {
                 end sub
             `, undefined, undefined, false);
         });
-        it('writes all literal values as-is (even if there are errors)', () => {
-            testTranspile(`
+        it('writes all literal values as-is (even if there are errors)', async () => {
+            await testTranspile(`
                 sub main()
                     print Direction.up
                     print Direction.down
@@ -566,8 +566,8 @@ describe('EnumStatement', () => {
             `, 'trim', undefined, false);
         });
 
-        it('supports default-as-integer', () => {
-            testTranspile(`
+        it('supports default-as-integer', async () => {
+            await testTranspile(`
                 enum Direction
                     up
                     down
@@ -584,8 +584,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('supports string enums', () => {
-            testTranspile(`
+        it('supports string enums', async () => {
+            await testTranspile(`
                 enum Direction
                     up = "up"
                     down = "down"
@@ -619,7 +619,7 @@ describe('EnumStatement', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('replaces enum values from separate file with literals', () => {
+        it('replaces enum values from separate file with literals', async () => {
             program.setFile('source/enum.bs', `
                 enum CharacterType
                     Human = "Human"
@@ -632,7 +632,7 @@ describe('EnumStatement', () => {
                     end enum
                 end namespace
             `);
-            testTranspile(`
+            await testTranspile(`
                 sub test()
                     print CharacterType.Human
                     print CharacterType.Zombie
@@ -649,8 +649,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('replaces enums in if statements', () => {
-            testTranspile(`
+        it('replaces enums in if statements', async () => {
+            await testTranspile(`
                 enum CharacterType
                     zombie = "zombie"
                 end enum
@@ -668,8 +668,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('handles both sides of a logical expression', () => {
-            testTranspile(`
+        it('handles both sides of a logical expression', async () => {
+            await testTranspile(`
                 sub main()
                     dir = m.direction = Direction.up
                     dir = Direction.up = m.direction
@@ -686,8 +686,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('handles when found in boolean expressions', () => {
-            testTranspile(`
+        it('handles when found in boolean expressions', async () => {
+            await testTranspile(`
                 sub main()
                     result = Direction.up = "up" or Direction.down = "down" and Direction.up = Direction.down
                 end sub
@@ -702,8 +702,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('replaces enum values in if statements', () => {
-            testTranspile(`
+        it('replaces enum values in if statements', async () => {
+            await testTranspile(`
                 sub main()
                     if m.direction = Direction.up
                         print Direction.up
@@ -722,8 +722,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('replaces enum values in function default parameter value expressions', () => {
-            testTranspile(`
+        it('replaces enum values in function default parameter value expressions', async () => {
+            await testTranspile(`
                 sub speak(dir = Direction.up)
                 end sub
                 enum Direction
@@ -735,8 +735,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('replaces enum values in for loops', () => {
-            testTranspile(`
+        it('replaces enum values in for loops', async () => {
+            await testTranspile(`
                 sub main()
                     for i = Loop.start to Loop.end step Loop.step
                     end for
@@ -754,8 +754,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('transpiles enum values when used in complex expressions', () => {
-            testTranspile(`
+        it('transpiles enum values when used in complex expressions', async () => {
+            await testTranspile(`
                 sub main()
                     print Direction.up.toStr()
                 end sub
