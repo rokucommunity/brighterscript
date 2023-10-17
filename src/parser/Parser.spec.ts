@@ -1,14 +1,14 @@
 import { expect, assert } from '../chai-config.spec';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
-import type { AAMemberExpression, TypeCastExpression } from './Expression';
+import type { AAMemberExpression, BinaryExpression, TypeCastExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AssignmentStatement, ClassStatement } from './Statement';
+import type { AssignmentStatement, ClassStatement, ReturnStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAssignmentStatement, isBlock, isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isNamespaceStatement, isPrintStatement, isTypeCastExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import { expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
@@ -1799,6 +1799,79 @@ describe('parser', () => {
             let trivia = nameSpaceStatement.getLeadingTrivia();
             expect(trivia.length).to.be.greaterThan(0);
             expect(trivia.filter(t => t.kind === TokenKind.Comment).length).to.eq(1);
+        });
+    });
+
+    describe('unary/binary ordering', () => {
+        it('creates the correct operator order for `not x = x` code', () => {
+            let { diagnostics, statements } = parse(`
+                function isStrNotEmpty(myStr as string) as boolean
+                    return not myStr = ""
+                end function
+            `);
+            expectZeroDiagnostics(diagnostics);
+            expect(isFunctionStatement(statements[0])).to.be.true;
+            const insideReturn = ((statements[0] as FunctionStatement).func.body.statements[0] as ReturnStatement).value;
+            expect(isUnaryExpression(insideReturn)).to.be.true;
+            expect(isBinaryExpression((insideReturn as UnaryExpression).right)).to.be.true;
+        });
+
+        it('creates the correct operator order for `not x + x` code', () => {
+            let { diagnostics, statements } = parse(`
+                function tryStuff() as integer
+                    return not 1 + 3 ' same as "not (3)" ... eg. the "flipped bits" of 3 (0000 0011) -> 1111 1100, or -4
+                end function
+            `);
+            expectZeroDiagnostics(diagnostics);
+            expect(isFunctionStatement(statements[0])).to.be.true;
+            const insideReturn = ((statements[0] as FunctionStatement).func.body.statements[0] as ReturnStatement).value;
+            expect(isUnaryExpression(insideReturn)).to.be.true;
+            expect(isBinaryExpression((insideReturn as UnaryExpression).right)).to.be.true;
+        });
+
+        it('creates the correct operator order for `x = not x` code', () => {
+            let { diagnostics, statements } = parse(`
+                function tryStuff() as boolean
+                    return 4 = not -5 ' same as "4 = 4"
+                end function
+            `);
+            expectZeroDiagnostics(diagnostics);
+            expect(isFunctionStatement(statements[0])).to.be.true;
+            const insideReturn = ((statements[0] as FunctionStatement).func.body.statements[0] as ReturnStatement).value;
+            expect(isBinaryExpression(insideReturn)).to.be.true;
+            expect(isLiteralExpression((insideReturn as BinaryExpression).left)).to.be.true;
+
+            const right = (insideReturn as BinaryExpression).right as UnaryExpression;
+            expect(isUnaryExpression(right)).to.be.true;
+            expect(isUnaryExpression(right.right)).to.be.true; // not ( - ( 5))
+        });
+
+        it('allows multiple nots', () => {
+            let { diagnostics, statements } = parse(`
+                function tryStuff() as integer
+                    return not not not 4
+                end function
+            `);
+            expectZeroDiagnostics(diagnostics);
+            expect(isFunctionStatement(statements[0])).to.be.true;
+            const insideReturn = ((statements[0] as FunctionStatement).func.body.statements[0] as ReturnStatement).value;
+            expect(isUnaryExpression(insideReturn)).to.be.true;
+            expect(isUnaryExpression((insideReturn as UnaryExpression).right)).to.be.true;
+            expect(isUnaryExpression(((insideReturn as UnaryExpression).right as UnaryExpression).right)).to.be.true;
+        });
+
+        it('allows multiple -', () => {
+            let { diagnostics, statements } = parse(`
+                function tryStuff() as integer
+                    return - - - 4
+                end function
+            `);
+            expectZeroDiagnostics(diagnostics);
+            expect(isFunctionStatement(statements[0])).to.be.true;
+            const insideReturn = ((statements[0] as FunctionStatement).func.body.statements[0] as ReturnStatement).value;
+            expect(isUnaryExpression(insideReturn)).to.be.true;
+            expect(isUnaryExpression((insideReturn as UnaryExpression).right)).to.be.true;
+            expect(isUnaryExpression(((insideReturn as UnaryExpression).right as UnaryExpression).right)).to.be.true;
         });
     });
 });
