@@ -2373,7 +2373,9 @@ export class Parser {
         if (nextKind === TokenKind.Not || nextKind === TokenKind.Minus) {
             this.current++; //advance
             let operator = this.previous();
-            let right = this.prefixUnary();
+            let right = nextKind === TokenKind.Not
+                ? this.boolean()
+                : this.prefixUnary();
             return new UnaryExpression(operator, right);
         }
         return this.call();
