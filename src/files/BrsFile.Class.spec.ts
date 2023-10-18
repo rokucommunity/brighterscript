@@ -855,6 +855,44 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
             `, 'trim', 'source/main.bs');
         });
+
+
+        it('adds namespacing to constructors on field definitions', async () => {
+            await testTranspile(`
+                namespace MyNS
+                    class KlassOne
+                        other = new KlassTwo()
+                    end class
+
+                    class KlassTwo
+                    end class
+                end namespace
+            `, `
+                function __MyNS_KlassOne_builder()
+                    instance = {}
+                    instance.new = sub()
+                        m.other = MyNS_KlassTwo()
+                    end sub
+                    return instance
+                end function
+                function MyNS_KlassOne()
+                    instance = __MyNS_KlassOne_builder()
+                    instance.new()
+                    return instance
+                end function
+                function __MyNS_KlassTwo_builder()
+                    instance = {}
+                    instance.new = sub()
+                    end sub
+                    return instance
+                end function
+                function MyNS_KlassTwo()
+                    instance = __MyNS_KlassTwo_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
     });
 
     it('detects using `new` keyword on non-classes', () => {
