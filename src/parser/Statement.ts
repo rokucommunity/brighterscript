@@ -2305,20 +2305,17 @@ export class MethodStatement extends FunctionStatement {
         for (let field of state.classStatement.fields) {
             let thisQualifiedName = { ...field.name };
             thisQualifiedName.text = 'm.' + field.name.text;
-            if (field.initialValue) {
-                newStatements.push(
-                    new AssignmentStatement(field.equal, thisQualifiedName, field.initialValue)
+            const fieldAssignment = field.initialValue
+                ? new AssignmentStatement(field.equal, thisQualifiedName, field.initialValue)
+                : new AssignmentStatement(
+                    createToken(TokenKind.Equal, '=', field.name.range),
+                    thisQualifiedName,
+                    //if there is no initial value, set the initial value to `invalid`
+                    createInvalidLiteral('invalid', field.name.range)
                 );
-            } else {
-                //if there is no initial value, set the initial value to `invalid`
-                newStatements.push(
-                    new AssignmentStatement(
-                        createToken(TokenKind.Equal, '=', field.name.range),
-                        thisQualifiedName,
-                        createInvalidLiteral('invalid', field.name.range)
-                    )
-                );
-            }
+            // Add parent so namespace lookups work
+            fieldAssignment.parent = state.classStatement;
+            newStatements.push(fieldAssignment);
         }
         state.editor.arraySplice(this.func.body.statements, startingIndex, 0, ...newStatements);
     }
