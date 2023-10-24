@@ -1,5 +1,5 @@
 import { URI } from 'vscode-uri';
-import { isAssignmentStatement, isBinaryExpression, isBrsFile, isClassType, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isObjectType, isPrimitiveType, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBrsFile, isClassType, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isObjectType, isPrimitiveType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -11,11 +11,10 @@ import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
-import { type AstNode, type Expression } from '../../parser/AstNode';
+import { type Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import { TokenKind } from '../../lexer/TokenKind';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import type { BscType } from '../../types';
 import type { File } from '../../files/File';
@@ -39,6 +38,8 @@ export class ScopeValidator {
      */
     private event: OnScopeValidateEvent;
 
+    static checkedFiles = new Map<string, boolean>();
+
     public processEvent(event: OnScopeValidateEvent) {
         this.event = event;
         this.walkFiles();
@@ -49,55 +50,122 @@ export class ScopeValidator {
         this.event = undefined;
         this.onceCache.clear();
         this.multiScopeCache.clear();
+        ScopeValidator.checkedFiles.clear();
     }
 
     private walkFiles() {
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
-                this.iterateFileExpressions(file);
-                this.validateCreateObjectCalls(file);
-                file.ast.walk(createVisitor({
-                    CallExpression: (functionCall) => {
-                        this.validateFunctionCall(file, functionCall);
-                    },
-                    ReturnStatement: (returnStatement) => {
-                        this.validateReturnStatement(file, returnStatement);
-                    },
-                    DottedSetStatement: (dottedSetStmt) => {
-                        this.validateDottedSetStatement(file, dottedSetStmt);
-                    },
-                    BinaryExpression: (binaryExpr) => {
-                        this.validateBinaryExpression(file, binaryExpr);
-                    },
-                    UnaryExpression: (unaryExpr) => {
-                        this.validateUnaryExpression(file, unaryExpr);
+                // if (ScopeValidator.checkedFiles.has(file.srcPath)) {
+                //     return;
+                // }
+                //ScopeValidator.checkedFiles.set(file.srcPath, true);
+                //console.log('Validate File: ', file.srcPath);
+                //console.log('Statements with unresolved expressions:', file.unresolvedSubTrees.size);
+                const stmtsToWalkForValidation = [];
+
+                file.ast.walk((statement) => {
+                    const uns = file.unresolvedSubTrees.get(statement);
+                    let needToReValidateBasedOnScope = false;
+                    if (uns) {
+                        //console.log(statement.kind, uns.data.size);
+                        for (let [node] of uns.data) {
+                            const options = { flags: util.isInTypeExpression(node) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime };
+                            const type = node.getType(options);
+                            if (!type || !type.isResolvable()) {
+                                needToReValidateBasedOnScope = true;
+                                break;
+                            }
+                            if (uns.checkResolvedType(node, options, type)) {
+                                needToReValidateBasedOnScope = true;
+                            }
+                        }
+                        if (needToReValidateBasedOnScope) {
+                            stmtsToWalkForValidation.push(statement);
+                        }
                     }
 
-                }), {
-                    walkMode: WalkMode.visitAllRecursive
+                    if (!needToReValidateBasedOnScope && !file.validatedSubTrees.get(statement)) {
+                        stmtsToWalkForValidation.push(statement);
+                    }
+                }, {
+                    walkMode: WalkMode.visitStatements
                 });
+
+                let didValidation = false;
+
+                for (const statement of stmtsToWalkForValidation) {
+                    statement.walk(createVisitor({
+                        CallExpression: (functionCall) => {
+                            this.validateFunctionCall(file, functionCall);
+                        },
+                        ReturnStatement: (returnStatement) => {
+                            this.validateReturnStatement(file, returnStatement);
+                        },
+                        DottedSetStatement: (dottedSetStmt) => {
+                            this.validateDottedSetStatement(file, dottedSetStmt);
+                        },
+                        BinaryExpression: (binaryExpr) => {
+                            this.validateBinaryExpression(file, binaryExpr);
+
+                        },
+                        UnaryExpression: (unaryExpr) => {
+                            this.validateUnaryExpression(file, unaryExpr);
+                        }
+                    }
+                    ), {
+                        walkMode: WalkMode.visitAllRecursive
+                    });
+                    file.validatedSubTrees.set(statement, true);
+                    didValidation = true;
+                }
+
+                if (didValidation) {
+                    console.log('Doing extra validation for', file.srcPath);
+                    this.iterateFileExpressions(file);
+                    this.validateCreateObjectCalls(file);
+                }
+
+                if (!file) {
+                    file.ast.walk((stmt) => {
+                        const flag = util.isInTypeExpression(stmt) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
+                        stmt.getType({ flags: flag });//.isResolvable();
+
+                        //console.log(t.toString(), t.isResolvable());
+                    }, {
+                        walkMode: WalkMode.visitAllRecursive
+                    });
+
+
+                    this.iterateFileExpressions(file);
+
+                    this.validateCreateObjectCalls(file);
+                    file.ast.walk(createVisitor({
+                        CallExpression: (functionCall) => {
+                            this.validateFunctionCall(file, functionCall);
+                        },
+                        ReturnStatement: (returnStatement) => {
+                            this.validateReturnStatement(file, returnStatement);
+                        },
+                        DottedSetStatement: (dottedSetStmt) => {
+                            this.validateDottedSetStatement(file, dottedSetStmt);
+                        },
+                        BinaryExpression: (binaryExpr) => {
+                            this.validateBinaryExpression(file, binaryExpr);
+
+                        },
+                        UnaryExpression: (unaryExpr) => {
+                            this.validateUnaryExpression(file, unaryExpr);
+                        }
+                    }
+                    ), {
+                        walkMode: WalkMode.visitAllRecursive
+                    });
+                }
             }
         });
     }
 
-
-    private checkIfUsedAsTypeExpression(expression: AstNode): boolean {
-        //TODO: this is much faster than node.findAncestor(), but may need to be updated for "complicated" type expressions
-        if (isTypeExpression(expression) ||
-            isTypeExpression(expression.parent) ||
-            isTypedArrayExpression(expression) ||
-            isTypedArrayExpression(expression.parent)) {
-            return true;
-        }
-        if (isBinaryExpression(expression.parent)) {
-            let currentExpr: AstNode = expression.parent;
-            while (isBinaryExpression(currentExpr) && currentExpr.operator.kind === TokenKind.Or) {
-                currentExpr = currentExpr.parent;
-            }
-            return isTypeExpression(currentExpr) || isTypedArrayExpression(currentExpr);
-        }
-        return false;
-    }
 
     private isTypeKnown(exprType: BscType) {
         let isKnownType = exprType?.isResolvable();
@@ -134,7 +202,7 @@ export class ScopeValidator {
                     result.push({
                         parts: parts,
                         expression: expression,
-                        isUsedAsType: this.checkIfUsedAsTypeExpression(expression),
+                        isUsedAsType: util.isInTypeExpression(expression),
                         enclosingNamespaceNameLower: expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase()
                     });
                 }
@@ -531,7 +599,7 @@ export class ScopeValidator {
         const diagnostics: BsDiagnostic[] = [];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
-        if (this.checkIfUsedAsTypeExpression(binaryExpr)) {
+        if (util.isInTypeExpression(binaryExpr)) {
             return;
         }
 

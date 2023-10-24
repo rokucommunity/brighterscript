@@ -26,10 +26,12 @@ import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
-import { type AstNode, type Expression, type Statement } from '../parser/AstNode';
+import type { Statement, AstNode } from '../parser/AstNode';
+import { type Expression } from '../parser/AstNode';
 import { SymbolTypeFlag } from '../SymbolTable';
 import type { File } from './File';
 import { Editor } from '../astUtils/Editor';
+import { UnresolvedNodeSet } from '../UnresolvedNodeSet';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -118,6 +120,9 @@ export class BrsFile implements File {
      */
     public extension: string;
 
+
+    public unresolvedSubTrees = new Map<Statement, UnresolvedNodeSet>();
+    public validatedSubTrees = new Map<Statement, boolean>();
     /**
      * A collection of diagnostics related to this file
      */
@@ -1319,6 +1324,34 @@ export class BrsFile implements File {
                 map: undefined
             };
         }
+    }
+
+
+    public findUnresolvedSubTrees() {
+        this.unresolvedSubTrees.clear();
+        this.validatedSubTrees.clear();
+        this.ast.walk((statement) => {
+            this.validatedSubTrees.set(statement, false);
+            statement.walk((node) => {
+                const flag = util.isInTypeExpression(node) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
+                const options = { flags: flag };
+                const nodeType = node.getType(options);
+                if (!nodeType.isResolvable()) {
+                    let nodeSet: UnresolvedNodeSet;
+                    if (!this.unresolvedSubTrees.has(statement)) {
+                        nodeSet = new UnresolvedNodeSet(statement);
+                        this.unresolvedSubTrees.set(statement, nodeSet);
+                    } else {
+                        nodeSet = this.unresolvedSubTrees.get(statement);
+                    }
+                    nodeSet.addExpression(node, options);
+                }
+            }, {
+                walkMode: WalkMode.visitAllRecursive
+            });
+        }, {
+            walkMode: WalkMode.visitStatements
+        });
     }
 
     public getTypedef() {
