@@ -4,7 +4,7 @@ import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
 import { findTypeUnion, getUniqueType, isEnumTypeCompatible } from './helpers';
 import { BscTypeKind } from './BscTypeKind';
-import type { TypeCacheEntry } from '../SymbolTable';
+import type { TypeCacheEntry } from '../TypeCache';
 import { SymbolTable, SymbolTypeFlag } from '../SymbolTable';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 

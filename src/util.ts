@@ -36,12 +36,13 @@ import { createIdentifier, createToken } from './astUtils/creators';
 import type { BscType } from './types/BscType';
 import type { AssignmentStatement } from './parser/Statement';
 import { FunctionType } from './types/FunctionType';
-import { ArrayType, BinaryOperatorReferenceType } from './types';
+import { ArrayType } from './types/ArrayType';
 import type { SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTable';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
+import { BinaryOperatorReferenceType } from './types/ReferenceType';
 
 export class Util {
     public clearConsole() {

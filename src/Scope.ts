@@ -27,6 +27,7 @@ import { referenceTypeFactory } from './types/ReferenceType';
 import { unionTypeFactory } from './types/UnionType';
 import type { Identifier } from './lexer/Token';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
+import { TypeCache } from './TypeCache';
 
 /**
  * Assign some few factories to the SymbolTable to prevent cyclical imports. This file seems like the most intuitive place to do the linking
@@ -765,6 +766,7 @@ export class Scope {
         (this as any).isValidated = false;
         //clear out various lookups (they'll get regenerated on demand the next time they're requested)
         this.cache.clear();
+        TypeCache.cacheVerifier.generateToken(this.name);
     }
 
     public get symbolTable(): SymbolTable {
@@ -805,7 +807,7 @@ export class Scope {
      * ```
      */
     public linkSymbolTable() {
-        SymbolTable.cacheVerifier.generateToken();
+        TypeCache.cacheVerifier.activeScope = this;
         const allNamespaces: NamespaceStatement[] = [];
 
         for (const file of this.getAllFiles()) {
