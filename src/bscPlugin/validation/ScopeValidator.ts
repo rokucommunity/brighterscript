@@ -121,7 +121,6 @@ export class ScopeValidator {
                 }
 
                 if (didValidation) {
-                    console.log('Doing extra validation for', file.srcPath);
                     this.iterateFileExpressions(file);
                     this.validateCreateObjectCalls(file);
                 }
