@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2023-10-13T20:52:39.696Z",
+    "generatedDate": "2023-10-24T17:30:37.243Z",
     "nodes": {
         "animation": {
             "description": "Extends [**AnimationBase**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/animationbase.md\n\nThe Animation node class provides animations of renderable nodes, by applying interpolator functions to the values in specified renderable node fields. For an animation to take effect, an Animation node definition must include a child field interpolator node ([FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md\"FloatFieldInterpolator\"), [Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md\"Vector2DFieldInterpolator\"), [ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md\"ColorFieldInterpolator\")) definition for each renderable node field that is animated.\n\nThe Animation node class provides a simple linear interpolator function, where the animation takes place smoothly and simply from beginning to end. The Animation node class also provides several more complex interpolator functions to allow custom animation effects. For example, you can move a graphic image around the screen at differing speeds and curved trajectories at different times in the animation by specifying the appropriate function in the easeFunction field (quadratic and exponential are two examples of functions that can be specified). The interpolator functions are divided into two parts: the beginning of the animation (ease-in), and the end of the animation (ease-out). You can apply a specified interpolator function to either or both ease-in and ease-out, or specify no function for either or both (which is the linear function). You can also change the portion of the animation that is ease-in and ease-out to arbitrary fractional values for a quadratic interpolator function applied to both ease-in and ease-out.",
@@ -5814,7 +5814,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "[]",
-                    "description": "Component that shows the buttons and other specified UI elements on the pause screen at the start of playback. Each element in the array has following fields:\n\n| Field | Type | Default | Description |\n| --- | --- | --- | --- |\n| text | string | system default | Text for the button label |\n| icon | uri | \"\" | A 9-patch or PNG of the icon to be displayed when the button does not have. |\n| focusIcon | uri | \"\" | A 9-patch or PNG of the icon to be displayed when the button has focus. |\n| buttonIsDisabled | Boolean | false | Controls whether the button is disabled (true) or enabled (false). A disabled button is skipped and does not have focus while the user navigates the different playback action buttons with the directional pad on the Roku remote control. |\n| bottomRowButtons | array of strings | \\[ \\] | List of buttons to be displayed in the the bottom row the pause screen. Each string in the buttons array adds a new button to the bottom row. |\n| bottomRowButtonFocused | int | 0 | Indicates the index of the button that gained focus when the user moved the focus onto a button in the bottom row. |\n| bottomRowButtonSelected | int | 0 | Indicates the index of the selected button when the user selects one of the buttons in the bottom row. |",
+                    "description": "Component that shows the buttons and other specified UI elements on the pause screen at the start of playback. Each element in the array has following fields:\n\n| Field | Type | Default | Description |\n| --- | --- | --- | --- |\n| text | string | system default | Text for the button label |\n| icon | uri | \"\" | A 9-patch or PNG of the icon to be displayed when the button does not have. |\n| focusIcon | uri | \"\" | A 9-patch or PNG of the icon to be displayed when the button has focus. |\n| buttonIsDisabled | Boolean | false | Controls whether the button is disabled (true) or enabled (false). A disabled button is skipped and does not have focus while the user navigates the different playback action buttons with the directional pad on the Roku remote control. |",
                     "name": "playbackActionButtons      (_Available since Roku OS 11.5_)",
                     "type": "roArray of roAssociativeArrays"
                 },
@@ -8963,6 +8963,12 @@
                     "returnType": "Void"
                 },
                 {
+                    "description": "The **getAllPurchases** function is similar to the [**getPurchases** function](#getpurchases-as-void) except that it requests the historical list of all canceled, expired, and terminated subscriptions over the lifetime of the current user account—in addition to the active subscriptions. You can use this method to leverage purchase history in order to implement subscription renewal flows and more easily determine if subscriptions have expired.",
+                    "name": "GetAllPurchases",
+                    "params": [],
+                    "returnType": "Void"
+                },
+                {
                     "description": "Requests the list of In-Channel products that are linked to the running channel.",
                     "name": "GetCatalog",
                     "params": [],
@@ -10340,50 +10346,7 @@
                     "returnType": "Boolean"
                 },
                 {
-                    "description": "Draws the source object, where src is an [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object, at position x,y, scaled in the x direction by scaleX and in the y direction by scaleY. scaleX and scaleY should each be greater than zero and less than one to reduce the object size, or greater than one to increase the object size",
-                    "name": "DrawScaledObject",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The x-coordinate of the source object.",
-                            "isRequired": true,
-                            "name": "x",
-                            "type": "Integer"
-                        },
-                        {
-                            "default": null,
-                            "description": "The y-coordinate of the source object.",
-                            "isRequired": true,
-                            "name": "y",
-                            "type": "Integer"
-                        },
-                        {
-                            "default": null,
-                            "description": "The x direction in which the source object is to be scaled.",
-                            "isRequired": true,
-                            "name": "scaleX",
-                            "type": "Float"
-                        },
-                        {
-                            "default": null,
-                            "description": "The y direction in which the source object is to be scaled.",
-                            "isRequired": true,
-                            "name": "scaleY",
-                            "type": "Float"
-                        },
-                        {
-                            "default": null,
-                            "description": "The [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object to be drawn.",
-                            "isRequired": true,
-                            "name": "src",
-                            "type": "Object"
-                        }
-                    ],
-                    "returnDescription": "A flag indicating whether the object was successfully drawn.",
-                    "returnType": "Boolean"
-                },
-                {
-                    "description": "Draws the source object, where src is an [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object, at position x,y, scaled in the x direction by scaleX and in the y direction by scaleY. scaleX and scaleY should each be greater than zero and less than one to reduce the object size, or greater than one to increase the object size.",
+                    "description": "**OVERLOADED METHOD**\n\nDraws the source object, where src is an [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object, at position x,y, scaled in the x direction by scaleX and in the y direction by scaleY. scaleX and scaleY should each be greater than zero and less than one to reduce the object size, or greater than one to increase the object size\n\n or \n\nDraws the source object, where src is an [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object, at position x,y, scaled in the x direction by scaleX and in the y direction by scaleY. scaleX and scaleY should each be greater than zero and less than one to reduce the object size, or greater than one to increase the object size.",
                     "name": "DrawScaledObject",
                     "params": [
                         {
@@ -10424,7 +10387,7 @@
                         {
                             "default": null,
                             "description": "The RGBA color of the source object.",
-                            "isRequired": true,
+                            "isRequired": false,
                             "name": "rgba",
                             "type": "Integer"
                         }
