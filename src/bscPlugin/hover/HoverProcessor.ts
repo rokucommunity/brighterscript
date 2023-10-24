@@ -1,5 +1,5 @@
 import { SourceNode } from 'source-map';
-import { isBrsFile, isCallfuncExpression, isClassStatement, isEnumStatement, isEnumType, isInheritableType, isInterfaceStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypeExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
+import { isBrsFile, isCallfuncExpression, isClassStatement, isEnumStatement, isEnumType, isInheritableType, isInterfaceStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
