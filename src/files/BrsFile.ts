@@ -1350,7 +1350,7 @@ export class BrsFile implements File {
                 walkMode: WalkMode.visitAllRecursive
             });
         }, {
-            walkMode: WalkMode.visitStatements
+            walkMode: WalkMode.visitExpressions
         });
     }
 
