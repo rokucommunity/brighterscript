@@ -38,8 +38,6 @@ export class ScopeValidator {
      */
     private event: OnScopeValidateEvent;
 
-    static checkedFiles = new Map<string, boolean>();
-
     public processEvent(event: OnScopeValidateEvent) {
         this.event = event;
         this.walkFiles();
@@ -50,25 +48,17 @@ export class ScopeValidator {
         this.event = undefined;
         this.onceCache.clear();
         this.multiScopeCache.clear();
-        ScopeValidator.checkedFiles.clear();
     }
 
     private walkFiles() {
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
-                // if (ScopeValidator.checkedFiles.has(file.srcPath)) {
-                //     return;
-                // }
-                //ScopeValidator.checkedFiles.set(file.srcPath, true);
-                //console.log('Validate File: ', file.srcPath);
-                //console.log('Statements with unresolved expressions:', file.unresolvedSubTrees.size);
                 const stmtsToWalkForValidation = [];
 
                 file.ast.walk((statement) => {
                     const uns = file.unresolvedSubTrees.get(statement);
                     let needToReValidateBasedOnScope = false;
                     if (uns) {
-                        //console.log(statement.kind, uns.data.size);
                         for (let [node] of uns.data) {
                             const options = { flags: util.isInTypeExpression(node) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime };
                             const type = node.getType(options);
@@ -123,43 +113,6 @@ export class ScopeValidator {
                 if (didValidation) {
                     this.iterateFileExpressions(file);
                     this.validateCreateObjectCalls(file);
-                }
-
-                if (!file) {
-                    file.ast.walk((stmt) => {
-                        const flag = util.isInTypeExpression(stmt) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
-                        stmt.getType({ flags: flag });//.isResolvable();
-
-                        //console.log(t.toString(), t.isResolvable());
-                    }, {
-                        walkMode: WalkMode.visitAllRecursive
-                    });
-
-
-                    this.iterateFileExpressions(file);
-
-                    this.validateCreateObjectCalls(file);
-                    file.ast.walk(createVisitor({
-                        CallExpression: (functionCall) => {
-                            this.validateFunctionCall(file, functionCall);
-                        },
-                        ReturnStatement: (returnStatement) => {
-                            this.validateReturnStatement(file, returnStatement);
-                        },
-                        DottedSetStatement: (dottedSetStmt) => {
-                            this.validateDottedSetStatement(file, dottedSetStmt);
-                        },
-                        BinaryExpression: (binaryExpr) => {
-                            this.validateBinaryExpression(file, binaryExpr);
-
-                        },
-                        UnaryExpression: (unaryExpr) => {
-                            this.validateUnaryExpression(file, unaryExpr);
-                        }
-                    }
-                    ), {
-                        walkMode: WalkMode.visitAllRecursive
-                    });
                 }
             }
         });
