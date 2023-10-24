@@ -141,7 +141,7 @@ export class HoverProcessor {
                         continue;
                     }
                 }
-                const isInTypeExpression = expression?.findAncestor(isTypeExpression);
+                const isInTypeExpression = util.isInTypeExpression(expression);
                 const typeFlag = isInTypeExpression ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
                 const typeChain: TypeChainEntry[] = [];
                 const extraData = {} as ExtraSymbolData;

@@ -196,7 +196,7 @@ export class SymbolTable implements SymbolTypeGetter {
         let resolvedType = cacheEntry?.type;
         const doSetCache = !resolvedType;
         const originalIsReferenceType = isAnyReferenceType(resolvedType);
-        let data = {} as ExtraSymbolData;
+        let data = cacheEntry?.data ?? {} as ExtraSymbolData;
         if (!resolvedType || originalIsReferenceType) {
             const symbolTypes = this.getSymbolTypes(name, options);
             data = symbolTypes?.[0]?.data;
