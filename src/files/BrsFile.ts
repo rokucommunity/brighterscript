@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import * as path from 'path';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
-import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, SerializedCodeFile } from '../interfaces';
+import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer } from '../interfaces';
 import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
@@ -28,7 +28,7 @@ import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { URI } from 'vscode-uri';
 import type { Statement, AstNode } from '../parser/AstNode';
 import { type Expression } from '../parser/AstNode';
-import { SymbolTypeFlag } from '../SymbolTable';
+import { SymbolTable, SymbolTypeFlag } from '../SymbolTable';
 import type { File } from './File';
 import { Editor } from '../astUtils/Editor';
 import { UnresolvedNodeSet } from '../UnresolvedNodeSet';
@@ -1352,6 +1352,88 @@ export class BrsFile implements File {
         }, {
             walkMode: WalkMode.visitExpressions
         });
+    }
+
+
+    public getNamespaceLookupObject() {
+        return this.cache.getOrAdd(`namespaceLookup`, () => {
+            //const t0 = performance.now();
+            const nsl = this.buildNamespaceLookup();
+            //const t1 = performance.now();
+            //console.log(this.srcPath, 'buildNamespaceLookup()', t1 - t0);
+            return nsl;
+        });
+    }
+
+    private buildNamespaceLookup() {
+        const namespaceLookup = new Map<string, NamespaceContainer>();
+        for (let namespaceStatement of this.parser.references.namespaceStatements) {
+            let nameParts = namespaceStatement.getNameParts();
+
+            let loopName: string = null;
+            let lowerLoopName: string = null;
+            let parentNameLower: string = null;
+
+            //ensure each namespace section is represented in the results
+            //(so if the namespace name is A.B.C, this will make an entry for "A", an entry for "A.B", and an entry for "A.B.C"
+            for (let i = 0; i < nameParts.length; i++) {
+
+                let part = nameParts[i];
+                let lowerPartName = part.text.toLowerCase();
+
+                if (i === 0) {
+                    loopName = part.text;
+                    lowerLoopName = lowerPartName;
+                } else {
+                    parentNameLower = lowerLoopName;
+                    loopName += '.' + part.text;
+                    lowerLoopName += '.' + lowerPartName;
+                }
+                if (!namespaceLookup.has(lowerLoopName)) {
+                    namespaceLookup.set(lowerLoopName, {
+                        isTopLevel: i === 0,
+                        file: this,
+                        fullName: loopName,
+                        fullNameLower: lowerLoopName,
+                        parentNameLower: parentNameLower,
+                        nameParts: nameParts.slice(0, i),
+                        nameRange: namespaceStatement.nameExpression.range,
+                        lastPartName: part.text,
+                        lastPartNameLower: lowerPartName,
+                        functionStatements: new Map(),
+                        namespaceStatements: [],
+                        /* namespaces: new Map(),
+                        classStatements: new Map(),
+                        enumStatements: new Map(),
+                        constStatements: new Map(),
+                        statements: [],*/
+                        // the aggregate symbol table should have no parent. It should include just the symbols of the namespace.
+                        symbolTable: new SymbolTable(`Namespace Aggregate: '${loopName}'`)
+                    });
+                } else {
+
+                }
+            }
+            let ns = namespaceLookup.get(lowerLoopName);
+            ns.namespaceStatements.push(namespaceStatement);
+            //ns.statements.push(...namespaceStatement.body.statements);
+            for (let statement of namespaceStatement.body.statements) {
+                /* if (isClassStatement(statement) && statement.name) {
+                     ns.classStatements.set(statement.name.text.toLowerCase(), statement);
+                 } else*/
+                if (isFunctionStatement(statement) && statement.name) {
+                    ns.functionStatements.set(statement.name.text.toLowerCase(), statement);
+                }/* else if (isEnumStatement(statement) && statement.fullName) {
+                     ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
+                 } else if (isConstStatement(statement) && statement.fullName) {
+                     ns.constStatements.set(statement.fullName.toLowerCase(), statement);
+                 }*/
+            }
+            // Merges all the symbol tables of the namespace statements into the new symbol table created above.
+            // Set those symbol tables to have this new merged table as a parent
+            ns.symbolTable.mergeSymbolTable(namespaceStatement.body.getSymbolTable());
+        }
+        return namespaceLookup;
     }
 
     public getTypedef() {

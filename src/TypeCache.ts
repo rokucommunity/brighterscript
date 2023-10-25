@@ -43,6 +43,20 @@ export class TypeCache {
         return this.cache.get(lowerScopeName)?.get(options.flags)?.get(name.toLowerCase());
     }
 
+    clearCachedType(name: string, options: GetTypeOptions) {
+        if (!TypeCache.cacheVerifier) {
+            // no cache verifier
+            return;
+        }
+        const lowerScopeName = TypeCache.cacheVerifier.activeScope?.name?.toLowerCase();
+        if (!TypeCache.cacheVerifier?.checkToken(this.cacheTokens.get(lowerScopeName))) {
+            // we have a bad token
+            this.resetTypeCache();
+            return;
+        }
+        return this.cache.get(lowerScopeName)?.get(options?.flags)?.delete(name.toLowerCase());
+    }
+
     setCachedType(name: string, cacheEntry: TypeCacheEntry, options: GetTypeOptions) {
         if (!cacheEntry) {
             return;

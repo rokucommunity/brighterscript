@@ -2656,6 +2656,50 @@ describe('Scope', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('knows about items defined in different files in same namespace', () => {
+            program.options.autoImportComponentScript = true;
+            const constFileContents = `
+                import "pkg:/source/consts2.bs"
+
+                namespace a
+                    const PI = 3.14
+                    const PIX2 = PI * TWO
+                end namespace
+            `;
+            const const2FileContents = `
+                namespace a
+                    const TWO = 2
+                end namespace
+            `;
+            program.setFile('source/consts.bs', constFileContents);
+            program.setFile('source/consts2.bs', const2FileContents);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('knows about items defined in different files in same deeply nested namespace', () => {
+            program.options.autoImportComponentScript = true;
+            const constFileContents = `
+                import "pkg:/source/consts2.bs"
+
+                namespace a.b.c
+                    const PI = 3.14
+                    const PIX2 = PI * TWO
+                end namespace
+            `;
+            const const2FileContents = `
+                namespace a.b.c
+                    const TWO = 2
+                end namespace
+            `;
+            program.setFile('source/consts.bs', constFileContents);
+            program.setFile('source/consts2.bs', const2FileContents);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         describe('binary and unary expressions', () => {
             it('should set symbols with correct types from binary expressions', () => {
                 let mainFile = program.setFile<BrsFile>('source/main.bs', `
@@ -3054,23 +3098,142 @@ describe('Scope', () => {
             scope.linkSymbolTable();
 
             const opts = { flags: 3 as SymbolTypeFlag };
-            const symbolTables = [
-                file.ast.findChild(x => isFunctionStatement(x) && x.name.text === 'delta').findAncestor(x => isNamespaceStatement(x)).getSymbolTable(),
-                scope.symbolTable.getSymbolType('alpha', opts).memberTable,
-                scope.symbolTable.getSymbolType('alpha', opts).getMemberType('beta', opts).memberTable,
-                scope.symbolTable.getSymbolType('alpha', opts).getMemberType('beta', opts).getMemberType('charlie', opts).memberTable
-            ];
+
+            function getSymbolTableList() {
+                const namespaceContainingDelta = file.ast.findChild(x => isFunctionStatement(x) && x.name.text === 'delta').findAncestor(x => isNamespaceStatement(x));
+                return [
+                    (namespaceContainingDelta as NamespaceStatement).body.getSymbolTable(),
+                    scope.symbolTable.getSymbolType('alpha', opts).memberTable,
+                    scope.symbolTable.getSymbolType('alpha', opts).getMemberType('beta', opts).memberTable,
+                    scope.symbolTable.getSymbolType('alpha', opts).getMemberType('beta', opts).getMemberType('charlie', opts).memberTable
+                ];
+            }
+
+            let symbolTables = getSymbolTableList();
 
             symbolTables.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
+
             scope.unlinkSymbolTable();
             symbolTables.forEach(x => expect(x['siblings'].size).to.eql(0, `${x.name} has wrong number of siblings`));
+
+            // invalidate to reset the type cache
+            scope.invalidate();
 
             //do it again, make sure we don't end up with additional siblings
-
             scope.linkSymbolTable();
+
+            // get the member tables again, as the types were re-created
+            symbolTables = getSymbolTableList();
             symbolTables.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
             scope.unlinkSymbolTable();
             symbolTables.forEach(x => expect(x['siblings'].size).to.eql(0, `${x.name} has wrong number of siblings`));
+
         });
     });
+
+    describe('performance', () => {
+
+        // eslint-disable-next-line func-names, prefer-arrow-callback
+        it.skip('namespace linking performance', function () {
+            this.timeout(60000); // this test takes a long time!
+            program.options.autoImportComponentScript = true;
+            const constFileContents = `
+                import "pkg:/source/consts2.bs"
+
+                namespace a.b.c
+                    const PI = 3.14
+                end namespace
+
+                namespace d.e.f
+                    const EULER = 2.78
+                    const GOLDEN_EULER = EULER + GOLDEN
+                end namespace
+
+                namespace g.h.i
+                    const A = "A"
+                end namespace
+
+                namespace j.k.l
+                    const B = "B"
+                end namespace
+
+                namespace n.o.p
+                    const C = "C"
+                end namespace
+            `;
+
+            const const2FileContents = `
+               import "pkg:/source/consts3.bs"
+
+                namespace a.b.c
+                    const ROOT2 = 1.41
+                end namespace
+
+                namespace d.e.f
+                    const GOLDEN = 1.62
+                end namespace
+
+                namespace a.b.c.d
+                    const D = "D"
+                end namespace
+
+                namespace d.e.f.g
+                    const D = "D"
+                end namespace
+            `;
+
+            let const3FileContents = '';
+            const exponentBase = 7; // 7^4 = 2401 total namespaces
+            for (let i = 0; i < exponentBase; i++) {
+                for (let j = 0; j < exponentBase; j++) {
+                    for (let k = 0; k < exponentBase; k++) {
+                        for (let l = 0; l < exponentBase; l++) {
+                            const3FileContents += `
+                            namespace alpha_${i}.beta_${j}.charlie_${k}.delta_${l}
+                                const test = "TEST"
+                                function getNum() as integer
+                                    return 100
+                                end function
+                            end namespace
+                        `;
+                        }
+                    }
+                }
+
+            }
+
+            program.setFile('source/consts.bs', constFileContents);
+            program.setFile('source/consts2.bs', const2FileContents);
+            program.setFile('source/consts3.bs', const3FileContents);
+
+            const widgetBsFileContents = `
+                    import "pkg:/source/consts.bs"
+
+                    sub init()
+                        print a.b.c.PI + d.e.f.EULER
+                        print a.b.c.d.D + n.o.p.C
+                        print d.e.f.GOLDEN_EULER
+                        print alpha_0.beta_0.charlie_0.delta_0.getNum().toStr() +  alpha_0.beta_0.charlie_0.delta_0.TEST
+                    end sub
+                `;
+            for (let i = 0; i < 100; i++) {
+                const widgetXmlFileContents = trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget${i}" extends="Group">
+                    </component>
+                `;
+                program.setFile(`components/Widget${i}.bs`, widgetBsFileContents);
+                program.setFile(`components/Widget${i}.xml`, widgetXmlFileContents);
+            }
+            program.validate();
+            expectZeroDiagnostics(program);
+            program.setFile('source/consts.bs', constFileContents);
+            program.validate();
+            program.setFile('source/consts2.bs', const2FileContents);
+            program.validate();
+            program.setFile('source/consts3.bs', const3FileContents);
+            program.validate();
+        });
+    });
+
 });

@@ -3,7 +3,7 @@ import { isAssignmentStatement, isBrsFile, isClassType, isDynamicType, isEnumMem
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BsDiagnostic, OnScopeValidateEvent, TypeCompatibilityData } from '../../interfaces';
+import type { BsDiagnostic, ExtraSymbolData, GetTypeOptions, OnScopeValidateEvent, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTable';
 import type { AssignmentStatement, DottedSetStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
@@ -56,17 +56,18 @@ export class ScopeValidator {
                 const stmtsToWalkForValidation = [];
 
                 file.ast.walk((statement) => {
-                    const uns = file.unresolvedSubTrees.get(statement);
+                    const nodesWithUnresolvedBits = file.unresolvedSubTrees.get(statement);
                     let needToReValidateBasedOnScope = false;
-                    if (uns) {
-                        for (let [node] of uns.data) {
-                            const options = { flags: util.isInTypeExpression(node) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime };
+                    if (nodesWithUnresolvedBits) {
+                        for (let [node] of nodesWithUnresolvedBits.data) {
+                            const data: ExtraSymbolData = {};
+                            const options: GetTypeOptions = { flags: util.isInTypeExpression(node) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime, data: data };
                             const type = node.getType(options);
                             if (!type || !type.isResolvable()) {
                                 needToReValidateBasedOnScope = true;
                                 break;
                             }
-                            if (uns.checkResolvedType(node, options, type)) {
+                            if (nodesWithUnresolvedBits.checkResolvedType(node, options, type)) {
                                 needToReValidateBasedOnScope = true;
                             }
                         }

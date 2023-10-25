@@ -7,17 +7,17 @@ import type { TypedFunctionType } from './types/TypedFunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { FunctionStatement } from './parser/Statement';
-import type { AstNode, Expression } from './parser/AstNode';
+import type { ClassStatement, ConstStatement, EnumStatement, FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { AstNode, Expression, Statement } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { Editor } from './astUtils/Editor';
-import type { Token } from './lexer/Token';
+import type { Identifier, Token } from './lexer/Token';
 import type { File } from './files/File';
 import type { FileFactory } from './files/Factory';
 import type { LazyFileData } from './files/LazyFileData';
-import type { SymbolTypeFlag } from './SymbolTable';
+import type { SymbolTable, SymbolTypeFlag } from './SymbolTable';
 import type { CallExpression } from './parser/Expression';
 import { createToken } from './astUtils/creators';
 import { TokenKind } from './lexer/TokenKind';
@@ -782,4 +782,24 @@ export interface TypeChainProcessResult {
 export interface TypeCompatibilityData {
     missingFields?: { name: string; expectedType: BscType }[];
     fieldMismatches?: { name: string; expectedType: BscType; actualType: BscType }[];
+}
+
+export interface NamespaceContainer {
+    file: File;
+    fullName: string;
+    fullNameLower: string;
+    parentNameLower: string;
+    nameParts: Identifier[];
+    nameRange: Range;
+    lastPartName: string;
+    lastPartNameLower: string;
+    functionStatements: Map<string, FunctionStatement>;
+    isTopLevel: boolean;
+    namespaceStatements?: NamespaceStatement[];
+    statements?: Statement[];
+    classStatements?: Map<string, ClassStatement>;
+    enumStatements?: Map<string, EnumStatement>;
+    constStatements?: Map<string, ConstStatement>;
+    namespaces?: Map<string, NamespaceContainer>;
+    symbolTable: SymbolTable;
 }

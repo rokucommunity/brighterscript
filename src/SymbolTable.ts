@@ -175,12 +175,13 @@ export class SymbolTable implements SymbolTypeGetter {
     /**
      * Removes a new symbol from the table
      */
-    removeSymbol(name: string) {
+    removeSymbol(name: string, options?: GetSymbolTypeOptions) {
         const key = name.toLowerCase();
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);
         }
         this.symbolMap.delete(key);
+        this.typeCache.clearCachedType(key, options);
     }
 
     public getSymbolTypes(name: string, options: GetSymbolTypeOptions): TypeCacheEntry[] {
