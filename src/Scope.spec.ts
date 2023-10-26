@@ -2496,11 +2496,11 @@ describe('Scope', () => {
                 const symbolTable = getDataFnScope.symbolTable;
                 const getTypeOptions = { flags: SymbolTypeFlag.runtime };
                 let alphaType = symbolTable.getSymbolType('alpha', getTypeOptions);
-                let betaType = alphaType.getMemberType('beta', getTypeOptions);
-                let gammaType = betaType.getMemberType('gamma', getTypeOptions);
-                let value1Type = gammaType.getMemberType('value1', getTypeOptions);
-                let deltaType = gammaType.getMemberType('delta', getTypeOptions);
-                let deltaValueType = deltaType.getMemberType('deltaValue', getTypeOptions);
+                let betaType = alphaType?.getMemberType('beta', getTypeOptions);
+                let gammaType = betaType?.getMemberType('gamma', getTypeOptions);
+                let value1Type = gammaType?.getMemberType('value1', getTypeOptions);
+                let deltaType = gammaType?.getMemberType('delta', getTypeOptions);
+                let deltaValueType = deltaType?.getMemberType('deltaValue', getTypeOptions);
                 expectTypeToBe(alphaType, NamespaceType);
                 expectTypeToBe(betaType, NamespaceType);
                 expectTypeToBe(gammaType, NamespaceType);
@@ -3111,13 +3111,12 @@ describe('Scope', () => {
 
             let symbolTables = getSymbolTableList();
 
+            console.log(symbolTables.map(x => `${x.name} ${x['siblings'].size}`));
+
             symbolTables.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
 
             scope.unlinkSymbolTable();
             symbolTables.forEach(x => expect(x['siblings'].size).to.eql(0, `${x.name} has wrong number of siblings`));
-
-            // invalidate to reset the type cache
-            scope.invalidate();
 
             //do it again, make sure we don't end up with additional siblings
             scope.linkSymbolTable();
@@ -3199,7 +3198,6 @@ describe('Scope', () => {
                         }
                     }
                 }
-
             }
 
             program.setFile('source/consts.bs', constFileContents);

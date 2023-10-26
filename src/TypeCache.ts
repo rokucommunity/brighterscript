@@ -22,6 +22,9 @@ export class TypeCache {
 
     private resetTypeCache() {
         const lowerScopeName = TypeCache.cacheVerifier.activeScope?.name?.toLowerCase();
+        if (!lowerScopeName) {
+            return;
+        }
         this.cache.get(lowerScopeName)?.clear();
         const tokenForScope = TypeCache.cacheVerifier?.getToken();
         if (tokenForScope) {
@@ -35,6 +38,9 @@ export class TypeCache {
             return;
         }
         const lowerScopeName = TypeCache.cacheVerifier.activeScope?.name?.toLowerCase();
+        if (!lowerScopeName) {
+            return;
+        }
         if (!TypeCache.cacheVerifier?.checkToken(this.cacheTokens.get(lowerScopeName))) {
             // we have a bad token
             this.resetTypeCache();
@@ -49,6 +55,9 @@ export class TypeCache {
             return;
         }
         const lowerScopeName = TypeCache.cacheVerifier.activeScope?.name?.toLowerCase();
+        if (!lowerScopeName) {
+            return;
+        }
         if (!TypeCache.cacheVerifier?.checkToken(this.cacheTokens.get(lowerScopeName))) {
             // we have a bad token
             this.resetTypeCache();
@@ -58,7 +67,7 @@ export class TypeCache {
     }
 
     setCachedType(name: string, cacheEntry: TypeCacheEntry, options: GetTypeOptions) {
-        if (!cacheEntry) {
+        if (!cacheEntry || !cacheEntry.type) {
             return;
         }
         if (!TypeCache.cacheVerifier) {
@@ -67,6 +76,9 @@ export class TypeCache {
         }
         const lowerScopeName = TypeCache.cacheVerifier.activeScope?.name?.toLowerCase();
         const lowerSymbolName = name.toLowerCase();
+        if (!lowerScopeName || !lowerSymbolName) {
+            return;
+        }
         if (!TypeCache.cacheVerifier?.checkToken(this.cacheTokens.get(lowerScopeName))) {
             // we have a bad token - remove caches for current scope
             this.resetTypeCache();
@@ -76,14 +88,14 @@ export class TypeCache {
             // No need to overwrite a non-referenceType with a referenceType
             return;
         }
-        const typeMap = this.getCacheMapForScopeAndOptions(lowerScopeName, options);
+        const typeMap = this.getCacheMap(lowerScopeName, options);
         return typeMap?.set(name.toLowerCase(), cacheEntry);
     }
 
     /**
      * Gets the cache for a given scope and symbol type flags
      */
-    private getCacheMapForScopeAndOptions(lowerScopeName: string, options: GetTypeOptions) {
+    private getCacheMap(lowerScopeName: string, options: GetTypeOptions) {
         if (!this.cache.has(lowerScopeName)) {
             this.cache.set(lowerScopeName, new Map<number, Map<string, TypeCacheEntry>>());
         }

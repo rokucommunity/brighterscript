@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import * as path from 'path';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
-import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer } from '../interfaces';
+import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer, GetTypeOptions } from '../interfaces';
 import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
@@ -31,7 +31,7 @@ import { type Expression } from '../parser/AstNode';
 import { SymbolTable, SymbolTypeFlag } from '../SymbolTable';
 import type { File } from './File';
 import { Editor } from '../astUtils/Editor';
-import { UnresolvedNodeSet } from '../UnresolvedNodeSet';
+import { RecommendedFileSegmentationWalkMode, UnresolvedNodeSet } from '../UnresolvedNodeSet';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -123,6 +123,7 @@ export class BrsFile implements File {
 
     public unresolvedSubTrees = new Map<Statement, UnresolvedNodeSet>();
     public validatedSubTrees = new Map<Statement, boolean>();
+    public segmentsForValidation = new Array<Statement>();
     /**
      * A collection of diagnostics related to this file
      */
@@ -1326,15 +1327,16 @@ export class BrsFile implements File {
         }
     }
 
-
     public findUnresolvedSubTrees() {
         this.unresolvedSubTrees.clear();
         this.validatedSubTrees.clear();
+        this.segmentsForValidation = [];
         this.ast.walk((statement) => {
+            this.segmentsForValidation.push(statement);
             this.validatedSubTrees.set(statement, false);
             statement.walk((node) => {
                 const flag = util.isInTypeExpression(node) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
-                const options = { flags: flag };
+                const options: GetTypeOptions = { flags: flag, doNotCacheResult: true };
                 const nodeType = node.getType(options);
                 if (!nodeType.isResolvable()) {
                     let nodeSet: UnresolvedNodeSet;
@@ -1350,7 +1352,7 @@ export class BrsFile implements File {
                 walkMode: WalkMode.visitAllRecursive
             });
         }, {
-            walkMode: WalkMode.visitExpressions
+            walkMode: RecommendedFileSegmentationWalkMode
         });
     }
 

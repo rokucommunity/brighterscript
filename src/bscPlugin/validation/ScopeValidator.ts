@@ -55,7 +55,7 @@ export class ScopeValidator {
             if (isBrsFile(file)) {
                 const stmtsToWalkForValidation = [];
 
-                file.ast.walk((statement) => {
+                for (const statement of file.segmentsForValidation) {
                     const nodesWithUnresolvedBits = file.unresolvedSubTrees.get(statement);
                     let needToReValidateBasedOnScope = false;
                     if (nodesWithUnresolvedBits) {
@@ -79,9 +79,7 @@ export class ScopeValidator {
                     if (!needToReValidateBasedOnScope && !file.validatedSubTrees.get(statement)) {
                         stmtsToWalkForValidation.push(statement);
                     }
-                }, {
-                    walkMode: WalkMode.visitStatements
-                });
+                }
 
                 let didValidation = false;
 

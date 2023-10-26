@@ -207,7 +207,7 @@ export class SymbolTable implements SymbolTypeGetter {
             resolvedType = SymbolTable.referenceTypeFactory(name, options.fullName, options.flags, options.tableProvider);
         }
         const newNonReferenceType = originalIsReferenceType && !isAnyReferenceType(resolvedType);
-        if (doSetCache || newNonReferenceType) {
+        if (resolvedType && (doSetCache || newNonReferenceType) && !options.doNotCacheResult) {
             this.setCachedType(name, { type: resolvedType, data: data }, options);
         }
         if (options.data) {

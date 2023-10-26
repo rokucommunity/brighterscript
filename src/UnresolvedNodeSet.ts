@@ -1,6 +1,10 @@
 import type { GetSymbolTypeOptions } from './SymbolTable';
+import { WalkMode } from './astUtils/visitors';
 import type { AstNode } from './parser/AstNode';
 import type { BscType } from './types/BscType';
+
+
+export const RecommendedFileSegmentationWalkMode = WalkMode.visitStatements;
 
 export class UnresolvedNodeSet {
 
@@ -8,11 +12,9 @@ export class UnresolvedNodeSet {
 
     data = new Map<AstNode, Map<number, BscType[]>>();
 
-
     reset() {
         this.data.clear();
     }
-
 
     private getMap(node: AstNode) {
         if (!this.data.has(node)) {

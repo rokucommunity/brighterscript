@@ -584,7 +584,6 @@ export class Scope {
 
     static oldNamespaceLookup = false;
 
-
     /**
      * Builds a tree of namespace objects
      */
@@ -822,6 +821,8 @@ export class Scope {
      */
     private linkSymbolTableDisposables = [];
 
+    private symbolsAddedDuringLinking: { symbolTable: SymbolTable; name: string; flags: number }[] = [];
+
     /**
      * Builds the current symbol table for the scope, by merging the tables for all the files in this scope.
      * Also links all file symbols tables to this new table
@@ -920,6 +921,7 @@ export class Scope {
             }
         } else {
             const namespaceTypesKnown = new Map<string, BscType>();
+
             // eslint-disable-next-line no-bitwise
             let getTypeOptions = { flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime };
 
@@ -931,13 +933,15 @@ export class Scope {
                 const existingNsStmt = nsContainer.namespaceStatements?.[0];
 
                 if (!nsContainer.isTopLevel) {
-
                     parentNSType = namespaceTypesKnown.get(nsContainer.parentNameLower);
                     if (!parentNSType) {
                         // we don't know about the parent namespace... uh, oh!
                         break;
                     }
-                    currentNSType = namespaceTypesKnown.get(nsContainer.fullNameLower);
+                    currentNSType = parentNSType.getMemberType(nsContainer.fullNameLower, getTypeOptions);
+                } else {
+                    currentNSType = this.symbolTable.getSymbolType(nsContainer.fullNameLower, getTypeOptions);
+                    console.log(currentNSType);
                 }
                 if (!isNamespaceType(currentNSType)) {
                     if (!currentNSType || isReferenceType(currentNSType)) {
@@ -947,8 +951,10 @@ export class Scope {
                         if (parentNSType) {
                             // adding as a member of existing NS
                             parentNSType.addMember(nsContainer.lastPartName, { definingNode: existingNsStmt }, currentNSType, getTypeOptions.flags);
+                            this.symbolsAddedDuringLinking.push({ symbolTable: parentNSType.getMemberTable(), name: nsContainer.lastPartName, flags: getTypeOptions.flags });
                         } else {
                             this.symbolTable.addSymbol(nsContainer.lastPartName, { definingNode: existingNsStmt }, currentNSType, getTypeOptions.flags);
+                            this.symbolsAddedDuringLinking.push({ symbolTable: this.symbolTable, name: nsContainer.lastPartName, flags: getTypeOptions.flags });
                         }
                     } else {
                         break;
@@ -960,7 +966,7 @@ export class Scope {
 
                 for (let nsStmt of nsContainer.namespaceStatements) {
                     this.linkSymbolTableDisposables.push(
-                        nsStmt?.body?.getSymbolTable().addSibling(nsContainer.symbolTable)
+                        nsStmt?.getSymbolTable().addSibling(nsContainer.symbolTable)
                     );
                 }
 
@@ -972,10 +978,15 @@ export class Scope {
     }
 
     public unlinkSymbolTable() {
+        for (const symbolToRemove of this.symbolsAddedDuringLinking) {
+            this.symbolTable.removeSymbol(symbolToRemove.name, { flags: symbolToRemove.flags });
+        }
+        this.symbolsAddedDuringLinking = [];
         for (const dispose of this.linkSymbolTableDisposables) {
             dispose();
         }
         this.linkSymbolTableDisposables = [];
+        //TypeCache.cacheVerifier.activeScope = undefined;
     }
 
     private detectVariableNamespaceCollisions(file: BrsFile) {
