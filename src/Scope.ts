@@ -25,7 +25,6 @@ import { NamespaceType } from './types/NamespaceType';
 import { referenceTypeFactory } from './types/ReferenceType';
 import { unionTypeFactory } from './types/UnionType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
-import { TypeCache } from './TypeCache';
 
 /**
  * Assign some few factories to the SymbolTable to prevent cyclical imports. This file seems like the most intuitive place to do the linking
@@ -800,7 +799,6 @@ export class Scope {
         (this as any).isValidated = false;
         //clear out various lookups (they'll get regenerated on demand the next time they're requested)
         this.cache.clear();
-        TypeCache.cacheVerifier.generateToken(this.name);
     }
 
     public get symbolTable(): SymbolTable {
@@ -843,7 +841,7 @@ export class Scope {
      * ```
      */
     public linkSymbolTable() {
-        TypeCache.cacheVerifier.activeScope = this;
+        SymbolTable.cacheVerifier.generateToken();
         const allNamespaces: NamespaceStatement[] = [];
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
@@ -941,7 +939,6 @@ export class Scope {
                     currentNSType = parentNSType.getMemberType(nsContainer.fullNameLower, getTypeOptions);
                 } else {
                     currentNSType = this.symbolTable.getSymbolType(nsContainer.fullNameLower, getTypeOptions);
-                    console.log(currentNSType);
                 }
                 if (!isNamespaceType(currentNSType)) {
                     if (!currentNSType || isReferenceType(currentNSType)) {
@@ -979,7 +976,7 @@ export class Scope {
 
     public unlinkSymbolTable() {
         for (const symbolToRemove of this.symbolsAddedDuringLinking) {
-            this.symbolTable.removeSymbol(symbolToRemove.name, { flags: symbolToRemove.flags });
+            this.symbolTable.removeSymbol(symbolToRemove.name);
         }
         this.symbolsAddedDuringLinking = [];
         for (const dispose of this.linkSymbolTableDisposables) {

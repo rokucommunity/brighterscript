@@ -3102,7 +3102,7 @@ describe('Scope', () => {
             function getSymbolTableList() {
                 const namespaceContainingDelta = file.ast.findChild(x => isFunctionStatement(x) && x.name.text === 'delta').findAncestor(x => isNamespaceStatement(x));
                 return [
-                    (namespaceContainingDelta as NamespaceStatement).body.getSymbolTable(),
+                    (namespaceContainingDelta as NamespaceStatement).getSymbolTable(),
                     scope.symbolTable.getSymbolType('alpha', opts).memberTable,
                     scope.symbolTable.getSymbolType('alpha', opts).getMemberType('beta', opts).memberTable,
                     scope.symbolTable.getSymbolType('alpha', opts).getMemberType('beta', opts).getMemberType('charlie', opts).memberTable

@@ -197,7 +197,7 @@ export class ReferenceType extends BscType {
             return;
         }
         // Look for circular references
-        let resolvedType = symbolTable.getSymbolType(this.memberKey, { flags: this.flags, doNotCacheResult: true });
+        let resolvedType = symbolTable.getSymbolType(this.memberKey, { flags: this.flags });
         if (!resolvedType) {
             // could not find this member
             return;

@@ -12,7 +12,7 @@ import { BrsFile } from '../../files/BrsFile';
 import type { FileObj } from '../../interfaces';
 import * as fsExtra from 'fs-extra';
 
-describe.only('CompletionsProcessor', () => {
+describe('CompletionsProcessor', () => {
     let program: Program;
     let sinon = createSandbox();
 
@@ -106,7 +106,7 @@ describe.only('CompletionsProcessor', () => {
             expect(completions).not.to.include('NameA.NameB.NameC.DoSomething');
         });
 
-        it.only('finds namespace members for brighterscript file', () => {
+        it('finds namespace members for brighterscript file', () => {
             program.setFile('source/main.bs', `
                 sub main()
                     NameA.

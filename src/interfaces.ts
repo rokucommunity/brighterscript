@@ -760,7 +760,6 @@ export interface GetTypeOptions {
     typeChain?: TypeChainEntry[];
     data?: ExtraSymbolData;
     ignoreCall?: boolean; // get the type of this expression, NOT it's return type
-    doNotCacheResult?: boolean;
 }
 
 export class TypeChainEntry {

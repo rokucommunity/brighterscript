@@ -1,30 +1,22 @@
 import { v4 as uuid } from 'uuid';
-import type { Scope } from './Scope';
 
 export class CacheVerifier {
 
-    private currentTokens = new Map<string, string>();
+    private currentToken: string;
 
-    generateToken(scopeName?: string) {
-        const lowerScopeName = scopeName?.toLowerCase() ?? this.activeScope?.name.toLowerCase();
-        if (!lowerScopeName) {
-            return;
-        }
-        this.currentTokens.set(scopeName, uuid());
+    constructor() {
+        this.generateToken();
+    }
+
+    generateToken() {
+        this.currentToken = uuid();
     }
 
     getToken(): string {
-        const scopeName = this.activeScope?.name.toLowerCase();
-        if (!scopeName) {
-            return;
-        }
-        return this.currentTokens.get(scopeName);
+        return this.currentToken;
     }
 
     checkToken(token: string): boolean {
-        const scopeName = this.activeScope?.name.toLowerCase();
-        return token === this.currentTokens.get(scopeName);
+        return token === this.currentToken;
     }
-
-    activeScope: Scope;
 }

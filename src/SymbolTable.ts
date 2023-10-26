@@ -1,11 +1,10 @@
 import type { BscType } from './types/BscType';
 import type { ExtraSymbolData, GetTypeOptions } from './interfaces';
+import { CacheVerifier } from './CacheVerifier';
 import type { ReferenceType } from './types/ReferenceType';
 import type { UnionType } from './types/UnionType';
 import { getUniqueType } from './types/helpers';
-import { isAnyReferenceType } from './astUtils/reflection';
-import type { TypeCacheEntry } from './TypeCache';
-import { TypeCache } from './TypeCache';
+import { isAnyReferenceType, isReferenceType } from './astUtils/reflection';
 
 export enum SymbolTypeFlag {
     runtime = 1,
@@ -21,6 +20,7 @@ export class SymbolTable implements SymbolTypeGetter {
         public name: string,
         parentProvider?: SymbolTableProvider
     ) {
+        this.resetTypeCache();
         if (parentProvider) {
             this.pushParentProvider(parentProvider);
         }
@@ -34,7 +34,17 @@ export class SymbolTable implements SymbolTypeGetter {
 
     private parentProviders = [] as SymbolTableProvider[];
 
-    private typeCache = new TypeCache();
+    private cacheToken: string;
+
+    private typeCache: Array<Map<string, TypeCacheEntry>>;
+
+    /**
+     * Used to invalidate the cache for all symbol tables.
+     *
+     * This is not the most optimized solution as cache will be shared across all instances of SymbolTable across all programs,
+     * but this is the easiest way to handle nested/linked symbol table cache management so we can optimize this in the future some time...
+     */
+    static cacheVerifier = new CacheVerifier();
 
     static referenceTypeFactory: (memberKey: string, fullName, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) => ReferenceType;
     static unionTypeFactory: (types: BscType[]) => UnionType;
@@ -175,13 +185,12 @@ export class SymbolTable implements SymbolTypeGetter {
     /**
      * Removes a new symbol from the table
      */
-    removeSymbol(name: string, options?: GetSymbolTypeOptions) {
+    removeSymbol(name: string) {
         const key = name.toLowerCase();
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);
         }
         this.symbolMap.delete(key);
-        this.typeCache.clearCachedType(key, options);
     }
 
     public getSymbolTypes(name: string, options: GetSymbolTypeOptions): TypeCacheEntry[] {
@@ -197,7 +206,7 @@ export class SymbolTable implements SymbolTypeGetter {
         let resolvedType = cacheEntry?.type;
         const doSetCache = !resolvedType;
         const originalIsReferenceType = isAnyReferenceType(resolvedType);
-        let data = cacheEntry?.data ?? {} as ExtraSymbolData;
+        let data = {} as ExtraSymbolData;
         if (!resolvedType || originalIsReferenceType) {
             const symbolTypes = this.getSymbolTypes(name, options);
             data = symbolTypes?.[0]?.data;
@@ -207,7 +216,7 @@ export class SymbolTable implements SymbolTypeGetter {
             resolvedType = SymbolTable.referenceTypeFactory(name, options.fullName, options.flags, options.tableProvider);
         }
         const newNonReferenceType = originalIsReferenceType && !isAnyReferenceType(resolvedType);
-        if (resolvedType && (doSetCache || newNonReferenceType) && !options.doNotCacheResult) {
+        if (doSetCache || newNonReferenceType) {
             this.setCachedType(name, { type: resolvedType, data: data }, options);
         }
         if (options.data) {
@@ -263,13 +272,49 @@ export class SymbolTable implements SymbolTypeGetter {
         return symbols.filter(symbol => symbol.flags & bitFlags);
     }
 
+    private resetTypeCache() {
+        this.typeCache = [
+            undefined,
+            new Map<string, TypeCacheEntry>(), // SymbolTypeFlags.runtime
+            new Map<string, TypeCacheEntry>(), // SymbolTypeFlags.typetime
+            new Map<string, TypeCacheEntry>() // SymbolTypeFlags.runtime & SymbolTypeFlags.typetime
+        ];
+        this.cacheToken = SymbolTable.cacheVerifier?.getToken();
+    }
 
     getCachedType(name: string, options: GetTypeOptions): TypeCacheEntry {
-        return this.typeCache.getCachedType(name, options);
+        if (SymbolTable.cacheVerifier) {
+            if (!SymbolTable.cacheVerifier?.checkToken(this.cacheToken)) {
+                // we have a bad token
+                this.resetTypeCache();
+                return;
+            }
+        } else {
+            // no cache verifier
+            return;
+        }
+        return this.typeCache[options.flags]?.get(name.toLowerCase());
     }
 
     setCachedType(name: string, cacheEntry: TypeCacheEntry, options: GetTypeOptions) {
-        return this.typeCache.setCachedType(name, cacheEntry, options);
+        if (!cacheEntry) {
+            return;
+        }
+        if (SymbolTable.cacheVerifier) {
+            if (!SymbolTable.cacheVerifier?.checkToken(this.cacheToken)) {
+                // we have a bad token - remove all other caches
+                this.resetTypeCache();
+            }
+        } else {
+            // no cache verifier
+            return;
+        }
+        let existingCachedValue = this.typeCache[options.flags]?.get(name.toLowerCase());
+        if (isReferenceType(cacheEntry.type) && !isReferenceType(existingCachedValue)) {
+            // No need to overwrite a non-referenceType with a referenceType
+            return;
+        }
+        return this.typeCache[options.flags]?.set(name.toLowerCase(), cacheEntry);
     }
 
     /**
@@ -321,3 +366,7 @@ export interface GetSymbolTypeOptions extends GetTypeOptions {
     tableProvider?: SymbolTableProvider;
 }
 
+export interface TypeCacheEntry {
+    type: BscType;
+    data?: ExtraSymbolData;
+}

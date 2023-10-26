@@ -1336,7 +1336,7 @@ export class BrsFile implements File {
             this.validatedSubTrees.set(statement, false);
             statement.walk((node) => {
                 const flag = util.isInTypeExpression(node) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
-                const options: GetTypeOptions = { flags: flag, doNotCacheResult: true };
+                const options: GetTypeOptions = { flags: flag };
                 const nodeType = node.getType(options);
                 if (!nodeType.isResolvable()) {
                     let nodeSet: UnresolvedNodeSet;
