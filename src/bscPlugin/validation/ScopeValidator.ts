@@ -2,7 +2,7 @@ import { URI } from 'vscode-uri';
 import { isAssignmentStatement, isBrsFile, isClassType, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isObjectType, isPrimitiveType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
-import type { BrsFile } from '../../files/BrsFile';
+import { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, ExtraSymbolData, GetTypeOptions, OnScopeValidateEvent, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTable';
 import type { AssignmentStatement, DottedSetStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
@@ -11,6 +11,7 @@ import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
 import type { Scope } from '../../Scope';
+import type { AstNode } from '../../parser/AstNode';
 import { type Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
@@ -51,68 +52,84 @@ export class ScopeValidator {
     }
 
     private walkFiles() {
+        // DEBUG console.log('Validating Scope', this.event.scope.name);
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
-                const stmtsToWalkForValidation = [];
+                const validationVisitor = createVisitor({
+                    VariableExpression: (varExpr) => {
+                    },
+                    DottedGetExpression: (dottedGet) => {
+                    },
+                    CallExpression: (functionCall) => {
+                        this.validateFunctionCall(file, functionCall);
+                    },
+                    ReturnStatement: (returnStatement) => {
+                        this.validateReturnStatement(file, returnStatement);
+                    },
+                    DottedSetStatement: (dottedSetStmt) => {
+                        this.validateDottedSetStatement(file, dottedSetStmt);
+                    },
+                    BinaryExpression: (binaryExpr) => {
+                        this.validateBinaryExpression(file, binaryExpr);
 
-                for (const statement of file.segmentsForValidation) {
-                    const nodesWithUnresolvedBits = file.unresolvedSubTrees.get(statement);
-                    let needToReValidateBasedOnScope = false;
-                    if (nodesWithUnresolvedBits) {
-                        for (let [node] of nodesWithUnresolvedBits.data) {
-                            const data: ExtraSymbolData = {};
-                            const options: GetTypeOptions = { flags: util.isInTypeExpression(node) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime, data: data };
-                            const type = node.getType(options);
-                            if (!type || !type.isResolvable()) {
-                                needToReValidateBasedOnScope = true;
-                                break;
+                    },
+                    UnaryExpression: (unaryExpr) => {
+                        this.validateUnaryExpression(file, unaryExpr);
+                    }
+                });
+                if (BrsFile.reduceReValidation) {
+                    const segmentsToWalkForValidation = new Set<AstNode>();
+
+                    for (const segment of file.segmentsForValidation) {
+                        const unresolvedNodeSet = file.unresolvedSegments.get(segment);
+                        const isSingleValidationSegment = file.singleValidationSegments.has(segment);
+                        const singleValidationSegmentAlreadyValidated = isSingleValidationSegment ? file.validatedSegments.get(segment) : false;
+                        let segmentNeedsRevalidation = !singleValidationSegmentAlreadyValidated;
+                        if (unresolvedNodeSet) {
+                            for (let node of unresolvedNodeSet.nodes) {
+                                const data: ExtraSymbolData = {};
+                                const options: GetTypeOptions = { flags: util.isInTypeExpression(node) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime, data: data };
+                                const type = node.getType(options);
+                                if (!type || !type.isResolvable()) {
+                                    // the type that we're checking here is not found - force validation
+                                    segmentNeedsRevalidation = true;
+                                } else {
+                                    segmentNeedsRevalidation = unresolvedNodeSet.addTypeForExpression(node, options, type);
+                                }
                             }
-                            if (nodesWithUnresolvedBits.checkResolvedType(node, options, type)) {
-                                needToReValidateBasedOnScope = true;
+                            if (segmentNeedsRevalidation) {
+                                segmentsToWalkForValidation.add(segment);
+                                continue;
                             }
-                        }
-                        if (needToReValidateBasedOnScope) {
-                            stmtsToWalkForValidation.push(statement);
-                        }
-                    }
-
-                    if (!needToReValidateBasedOnScope && !file.validatedSubTrees.get(statement)) {
-                        stmtsToWalkForValidation.push(statement);
-                    }
-                }
-
-                let didValidation = false;
-
-                for (const statement of stmtsToWalkForValidation) {
-                    statement.walk(createVisitor({
-                        CallExpression: (functionCall) => {
-                            this.validateFunctionCall(file, functionCall);
-                        },
-                        ReturnStatement: (returnStatement) => {
-                            this.validateReturnStatement(file, returnStatement);
-                        },
-                        DottedSetStatement: (dottedSetStmt) => {
-                            this.validateDottedSetStatement(file, dottedSetStmt);
-                        },
-                        BinaryExpression: (binaryExpr) => {
-                            this.validateBinaryExpression(file, binaryExpr);
-
-                        },
-                        UnaryExpression: (unaryExpr) => {
-                            this.validateUnaryExpression(file, unaryExpr);
+                        } else if (segmentNeedsRevalidation) {
+                            segmentsToWalkForValidation.add(segment);
                         }
                     }
-                    ), {
+                    if (segmentsToWalkForValidation.size > 0) {
+                        // DEBUG console.log(' - validating file (reduced)', file.srcPath);
+                    }
+                    for (const segment of segmentsToWalkForValidation) {
+                        // DEBUG console.log(' - - Validating Segment ', segment.kind, segment.range.start.line, '-', segment.range.end.line);
+                        segment.walk(validationVisitor, {
+                            walkMode: WalkMode.visitAllRecursive
+                        });
+                        file.validatedSegments.set(segment, true);
+
+                    }
+
+                    if (segmentsToWalkForValidation.size > 0) {
+                        this.iterateFileExpressions(file);
+                        this.validateCreateObjectCalls(file);
+                    }
+                } else {
+                    file.ast.walk(validationVisitor, {
                         walkMode: WalkMode.visitAllRecursive
                     });
-                    file.validatedSubTrees.set(statement, true);
-                    didValidation = true;
-                }
-
-                if (didValidation) {
+                    //console.log('Scope', this.event.scope.name, ' - validating file ', file.srcPath);
                     this.iterateFileExpressions(file);
                     this.validateCreateObjectCalls(file);
                 }
+
             }
         });
     }

@@ -21,7 +21,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isFunctionExpression, isBrsFile } from '../astUtils/reflection';
+import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isFunctionExpression, isBrsFile, isBody, isInterfaceStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -31,7 +31,7 @@ import { type Expression } from '../parser/AstNode';
 import { SymbolTable, SymbolTypeFlag } from '../SymbolTable';
 import type { File } from './File';
 import { Editor } from '../astUtils/Editor';
-import { RecommendedFileSegmentationWalkMode, UnresolvedNodeSet } from '../UnresolvedNodeSet';
+import { UnresolvedNodeSet } from '../UnresolvedNodeSet';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -121,9 +121,10 @@ export class BrsFile implements File {
     public extension: string;
 
 
-    public unresolvedSubTrees = new Map<Statement, UnresolvedNodeSet>();
-    public validatedSubTrees = new Map<Statement, boolean>();
-    public segmentsForValidation = new Array<Statement>();
+    public unresolvedSegments = new Map<AstNode, UnresolvedNodeSet>();
+    public validatedSegments = new Map<AstNode, boolean>();
+    public segmentsForValidation = new Array<AstNode>();
+    public singleValidationSegments = new Set<AstNode>();
     /**
      * A collection of diagnostics related to this file
      */
@@ -1327,33 +1328,92 @@ export class BrsFile implements File {
         }
     }
 
+    static reduceReValidation = true;
+
     public findUnresolvedSubTrees() {
-        this.unresolvedSubTrees.clear();
-        this.validatedSubTrees.clear();
+
+        this.unresolvedSegments.clear();
+        this.validatedSegments.clear();
+        this.singleValidationSegments.clear();
         this.segmentsForValidation = [];
-        this.ast.walk((statement) => {
-            this.segmentsForValidation.push(statement);
-            this.validatedSubTrees.set(statement, false);
-            statement.walk((node) => {
-                const flag = util.isInTypeExpression(node) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
-                const options: GetTypeOptions = { flags: flag };
-                const nodeType = node.getType(options);
-                if (!nodeType.isResolvable()) {
-                    let nodeSet: UnresolvedNodeSet;
-                    if (!this.unresolvedSubTrees.has(statement)) {
-                        nodeSet = new UnresolvedNodeSet(statement);
-                        this.unresolvedSubTrees.set(statement, nodeSet);
-                    } else {
-                        nodeSet = this.unresolvedSubTrees.get(statement);
-                    }
-                    nodeSet.addExpression(node, options);
+
+
+        const checkExpressionForUnresolved = (segment: AstNode, expression: AstNode) => {
+            if (!expression) {
+                return false;
+            }
+            // DEBUG console.log(' -  - Walk', expression.kind, expression.range.start.line, '-', expression.range.end.line);
+            const flag = util.isInTypeExpression(expression) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
+            const options: GetTypeOptions = { flags: flag, onlyCacheResolvedTypes: true };
+            const nodeType = expression.getType(options);
+            if (!nodeType.isResolvable()) {
+                let nodeSet: UnresolvedNodeSet;
+                if (!this.unresolvedSegments.has(segment)) {
+                    nodeSet = new UnresolvedNodeSet(segment);
+                    this.unresolvedSegments.set(segment, nodeSet);
+                } else {
+                    nodeSet = this.unresolvedSegments.get(segment);
                 }
+                nodeSet.addExpression(expression, options);
+                return true;
+            }
+            return false;
+        };
+
+        const checkSegmentWalk = (segment: AstNode) => {
+            if (isNamespaceStatement(segment) || isBody(segment)) {
+                return;
+            }
+            let justWalkInside = false;
+            if (isClassStatement(segment)) {
+                if (segment.parentClassName) {
+                    this.segmentsForValidation.push(segment.parentClassName);
+                    this.validatedSegments.set(segment.parentClassName, false);
+                    let foundUnresolvedInSegment = checkExpressionForUnresolved(segment.parentClassName, segment.parentClassName);
+                    if (!foundUnresolvedInSegment) {
+                        this.singleValidationSegments.add(segment.parentClassName);
+                    }
+                }
+                justWalkInside = true;
+            }
+            if (isInterfaceStatement(segment)) {
+                if (segment.parentInterfaceName) {
+                    this.segmentsForValidation.push(segment.parentInterfaceName);
+                    this.validatedSegments.set(segment.parentInterfaceName, false);
+                    let foundUnresolvedInSegment = checkExpressionForUnresolved(segment.parentInterfaceName, segment.parentInterfaceName);
+                    if (!foundUnresolvedInSegment) {
+                        this.singleValidationSegments.add(segment.parentInterfaceName);
+                    }
+                }
+                justWalkInside = true;
+            }
+            if (justWalkInside) {
+                return;
+            }
+
+            this.segmentsForValidation.push(segment);
+            this.validatedSegments.set(segment, false);
+            let foundUnresolvedInSegment = false;
+            segment.walk((node) => {
+                const expressionIsUnresolved = checkExpressionForUnresolved(segment, node);
+                foundUnresolvedInSegment = expressionIsUnresolved || foundUnresolvedInSegment;
             }, {
-                walkMode: WalkMode.visitAllRecursive
+                // eslint-disable-next-line no-bitwise
+                walkMode: WalkMode.recurseChildFunctions | WalkMode.visitExpressions
             });
-        }, {
-            walkMode: RecommendedFileSegmentationWalkMode
-        });
+            if (!foundUnresolvedInSegment) {
+                this.singleValidationSegments.add(segment);
+            }
+        };
+
+        if (BrsFile.reduceReValidation) {
+
+            this.ast.walk((segment) => {
+                checkSegmentWalk(segment);
+            }, {
+                walkMode: WalkMode.visitStatements
+            });
+        }
     }
 
 

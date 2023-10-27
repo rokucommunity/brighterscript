@@ -1,20 +1,24 @@
 import type { GetSymbolTypeOptions } from './SymbolTable';
-import { WalkMode } from './astUtils/visitors';
 import type { AstNode } from './parser/AstNode';
 import type { BscType } from './types/BscType';
 
 
-export const RecommendedFileSegmentationWalkMode = WalkMode.visitStatements;
+//export const RecommendedFileSegmentationWalkMode = WalkMode.walkStatements;
 
 export class UnresolvedNodeSet {
 
     constructor(public root: AstNode) { }
 
-    data = new Map<AstNode, Map<number, BscType[]>>();
+    private data = new Map<AstNode, Map<number, BscType[]>>();
 
     reset() {
         this.data.clear();
     }
+
+    get nodes() {
+        return this.data.keys();
+    }
+
 
     private getMap(node: AstNode) {
         if (!this.data.has(node)) {
@@ -28,7 +32,7 @@ export class UnresolvedNodeSet {
         return listOfResolvedTypes;
     }
 
-    checkResolvedType(node: AstNode, options: GetSymbolTypeOptions, incomingType: BscType) {
+    addTypeForExpression(node: AstNode, options: GetSymbolTypeOptions, incomingType: BscType) {
         if (!incomingType.isResolvable()) {
             return true;
         }
