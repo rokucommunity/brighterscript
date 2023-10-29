@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import * as path from 'path';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
-import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer, GetTypeOptions } from '../interfaces';
+import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer } from '../interfaces';
 import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
@@ -21,7 +21,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isFunctionExpression, isBrsFile, isBody, isInterfaceStatement } from '../astUtils/reflection';
+import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isFunctionExpression, isBrsFile } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -31,7 +31,7 @@ import { type Expression } from '../parser/AstNode';
 import { SymbolTable, SymbolTypeFlag } from '../SymbolTable';
 import type { File } from './File';
 import { Editor } from '../astUtils/Editor';
-import { UnresolvedNodeSet } from '../UnresolvedNodeSet';
+import { AstValidationSegmenter } from '../AstValidationSegmenter';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -121,10 +121,6 @@ export class BrsFile implements File {
     public extension: string;
 
 
-    public unresolvedSegments = new Map<AstNode, UnresolvedNodeSet>();
-    public validatedSegments = new Map<AstNode, boolean>();
-    public segmentsForValidation = new Array<AstNode>();
-    public singleValidationSegments = new Set<AstNode>();
     /**
      * A collection of diagnostics related to this file
      */
@@ -209,7 +205,7 @@ export class BrsFile implements File {
      * The AST for this file
      */
     public get ast() {
-        return this.parser.ast;
+        return this.parser?.ast;
     }
 
     private documentSymbols: DocumentSymbol[];
@@ -1330,92 +1326,24 @@ export class BrsFile implements File {
 
     static reduceReValidation = true;
 
+    public validationSegmenter = new AstValidationSegmenter();
+
     public findUnresolvedSubTrees() {
-
-        this.unresolvedSegments.clear();
-        this.validatedSegments.clear();
-        this.singleValidationSegments.clear();
-        this.segmentsForValidation = [];
-
-
-        const checkExpressionForUnresolved = (segment: AstNode, expression: AstNode) => {
-            if (!expression) {
-                return false;
-            }
-            // DEBUG console.log(' -  - Walk', expression.kind, expression.range.start.line, '-', expression.range.end.line);
-            const flag = util.isInTypeExpression(expression) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
-            const options: GetTypeOptions = { flags: flag, onlyCacheResolvedTypes: true };
-            const nodeType = expression.getType(options);
-            if (!nodeType.isResolvable()) {
-                let nodeSet: UnresolvedNodeSet;
-                if (!this.unresolvedSegments.has(segment)) {
-                    nodeSet = new UnresolvedNodeSet(segment);
-                    this.unresolvedSegments.set(segment, nodeSet);
-                } else {
-                    nodeSet = this.unresolvedSegments.get(segment);
-                }
-                nodeSet.addExpression(expression, options);
-                return true;
-            }
-            return false;
-        };
-
-        const checkSegmentWalk = (segment: AstNode) => {
-            if (isNamespaceStatement(segment) || isBody(segment)) {
-                return;
-            }
-            let justWalkInside = false;
-            if (isClassStatement(segment)) {
-                if (segment.parentClassName) {
-                    this.segmentsForValidation.push(segment.parentClassName);
-                    this.validatedSegments.set(segment.parentClassName, false);
-                    let foundUnresolvedInSegment = checkExpressionForUnresolved(segment.parentClassName, segment.parentClassName);
-                    if (!foundUnresolvedInSegment) {
-                        this.singleValidationSegments.add(segment.parentClassName);
-                    }
-                }
-                justWalkInside = true;
-            }
-            if (isInterfaceStatement(segment)) {
-                if (segment.parentInterfaceName) {
-                    this.segmentsForValidation.push(segment.parentInterfaceName);
-                    this.validatedSegments.set(segment.parentInterfaceName, false);
-                    let foundUnresolvedInSegment = checkExpressionForUnresolved(segment.parentInterfaceName, segment.parentInterfaceName);
-                    if (!foundUnresolvedInSegment) {
-                        this.singleValidationSegments.add(segment.parentInterfaceName);
-                    }
-                }
-                justWalkInside = true;
-            }
-            if (justWalkInside) {
-                return;
-            }
-
-            this.segmentsForValidation.push(segment);
-            this.validatedSegments.set(segment, false);
-            let foundUnresolvedInSegment = false;
-            segment.walk((node) => {
-                const expressionIsUnresolved = checkExpressionForUnresolved(segment, node);
-                foundUnresolvedInSegment = expressionIsUnresolved || foundUnresolvedInSegment;
-            }, {
-                // eslint-disable-next-line no-bitwise
-                walkMode: WalkMode.recurseChildFunctions | WalkMode.visitExpressions
-            });
-            if (!foundUnresolvedInSegment) {
-                this.singleValidationSegments.add(segment);
-            }
-        };
-
         if (BrsFile.reduceReValidation) {
-
-            this.ast.walk((segment) => {
-                checkSegmentWalk(segment);
-            }, {
-                walkMode: WalkMode.visitStatements
-            });
+            this.validationSegmenter.processTree(this.ast);
         }
     }
 
+    public getValidationSegments() {
+        if (BrsFile.reduceReValidation) {
+            return this.validationSegmenter.getSegments();
+        }
+        return [this.ast];
+    }
+
+    public markSegmentAsValidated(node: AstNode) {
+        this.validationSegmenter.markSegmentAsValidated(node);
+    }
 
     public getNamespaceLookupObject() {
         return this.cache.getOrAdd(`namespaceLookup`, () => {
