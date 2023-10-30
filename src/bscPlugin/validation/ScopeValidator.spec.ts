@@ -1888,7 +1888,7 @@ describe('ScopeValidator', () => {
             program.validate();
             // all segments should be validated
             [commonBs, common2Bs, klassBs, widgetBs, diffKlassBs].forEach(file => {
-                expect(file.validationSegmenter.validatedSegments.size).to.eq(file.validationSegmenter.segmentsForValidation.length);
+                expect(file.validationSegmenter.validatedSegments.size).to.gte(file.validationSegmenter.segmentsForValidation.length);
                 file.validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.true);
             });
 

@@ -1,11 +1,14 @@
-import type { ExtraSymbolData } from '.';
+import type { DottedGetExpression, TypeExpression, VariableExpression } from '.';
 import { SymbolTypeFlag } from './SymbolTable';
 import { UnresolvedNodeSet } from './UnresolvedNodeSet';
-import { isBody, isClassStatement, isInterfaceStatement, isNamespaceStatement } from './astUtils/reflection';
-import { WalkMode } from './astUtils/visitors';
-import type { GetTypeOptions } from './interfaces';
+import { isBody, isClassStatement, isCommentStatement, isInterfaceStatement, isNamespaceStatement } from './astUtils/reflection';
+import { ChildrenSkipper, WalkMode, createVisitor } from './astUtils/visitors';
+import type { ExtraSymbolData, GetTypeOptions } from './interfaces';
 import type { AstNode } from './parser/AstNode';
 import { util } from './util';
+
+// eslint-disable-next-line no-bitwise
+export const InsideSegmentWalkMode = WalkMode.visitStatements | WalkMode.visitExpressions | WalkMode.recurseChildFunctions;
 
 export class AstValidationSegmenter {
 
@@ -34,8 +37,8 @@ export class AstValidationSegmenter {
     }
 
 
-    checkExpressionForUnresolved(segment: AstNode, expression: AstNode) {
-        if (!expression) {
+    checkExpressionForUnresolved(segment: AstNode, expression: VariableExpression | DottedGetExpression | TypeExpression) {
+        if (!expression || isCommentStatement(expression)) {
             return false;
         }
         const flag = util.isInTypeExpression(expression) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
@@ -85,12 +88,26 @@ export class AstValidationSegmenter {
         this.segmentsForValidation.push(segment);
         this.validatedSegments.set(segment, false);
         let foundUnresolvedInSegment = false;
-        segment.walk((node) => {
-            const expressionIsUnresolved = this.checkExpressionForUnresolved(segment, node);
-            foundUnresolvedInSegment = expressionIsUnresolved || foundUnresolvedInSegment;
-        }, {
-            // eslint-disable-next-line no-bitwise
-            walkMode: WalkMode.recurseChildFunctions | WalkMode.visitExpressions
+        const skipper = new ChildrenSkipper();
+        segment.walk(createVisitor({
+            VariableExpression: (expr) => {
+                const expressionIsUnresolved = this.checkExpressionForUnresolved(segment, expr);
+                foundUnresolvedInSegment = expressionIsUnresolved || foundUnresolvedInSegment;
+                skipper.skip();
+            },
+            DottedGetExpression: (expr) => {
+                const expressionIsUnresolved = this.checkExpressionForUnresolved(segment, expr);
+                foundUnresolvedInSegment = expressionIsUnresolved || foundUnresolvedInSegment;
+                skipper.skip();
+            },
+            TypeExpression: (expr) => {
+                const expressionIsUnresolved = this.checkExpressionForUnresolved(segment, expr);
+                foundUnresolvedInSegment = expressionIsUnresolved || foundUnresolvedInSegment;
+                skipper.skip();
+            }
+        }), {
+            walkMode: InsideSegmentWalkMode,
+            skipChildren: skipper
         });
         if (!foundUnresolvedInSegment) {
             this.singleValidationSegments.add(segment);
@@ -113,8 +130,10 @@ export class AstValidationSegmenter {
                     if (!type || !type.isResolvable()) {
                         // the type that we're checking here is not found - force validation
                         segmentNeedsRevalidation = true;
+                        break;
                     } else {
-                        segmentNeedsRevalidation = unresolvedNodeSet.addTypeForExpression(node, options, type);
+                        const newTypeToCheck = unresolvedNodeSet.addTypeForExpression(node, options, type);
+                        segmentNeedsRevalidation = segmentNeedsRevalidation || newTypeToCheck;
                     }
                 }
                 if (segmentNeedsRevalidation) {

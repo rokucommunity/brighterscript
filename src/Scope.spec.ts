@@ -162,10 +162,6 @@ describe('Scope', () => {
             {
                 ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA'),
                 range: util.createRange(5, 16, 5, 21)
-            },
-            {
-                ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
-                range: util.createRange(5, 16, 5, 21)
             }
         ]);
     });
@@ -3134,7 +3130,7 @@ describe('Scope', () => {
 
         // eslint-disable-next-line func-names, prefer-arrow-callback
         it.skip('namespace linking performance', function () {
-            this.timeout(60000); // this test takes a long time!
+            this.timeout(30000); // this test takes a long time!
             program.options.autoImportComponentScript = true;
             const constFileContents = `
                 import "pkg:/source/consts2.bs"

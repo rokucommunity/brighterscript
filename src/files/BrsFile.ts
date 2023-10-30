@@ -1347,11 +1347,8 @@ export class BrsFile implements File {
 
     public getNamespaceLookupObject() {
         return this.cache.getOrAdd(`namespaceLookup`, () => {
-            //const t0 = performance.now();
-            const nsl = this.buildNamespaceLookup();
-            //const t1 = performance.now();
-            //console.log(this.srcPath, 'buildNamespaceLookup()', t1 - t0);
-            return nsl;
+            const nsLookup = this.buildNamespaceLookup();
+            return nsLookup;
         });
     }
 

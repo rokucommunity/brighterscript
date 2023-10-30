@@ -1,23 +1,22 @@
 import { URI } from 'vscode-uri';
-import { isAssignmentStatement, isBrsFile, isClassType, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isObjectType, isPrimitiveType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBrsFile, isClassType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isObjectType, isPrimitiveType, isTypedFunctionType, isUnionType, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BsDiagnostic, OnScopeValidateEvent, TypeCompatibilityData } from '../../interfaces';
+import type { BsDiagnostic, OnScopeValidateEvent, TypeChainEntry, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTable';
-import type { AssignmentStatement, DottedSetStatement, EnumStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
+import type { AssignmentStatement, DottedSetStatement, EnumStatement, ReturnStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
-import type { Scope } from '../../Scope';
 import { type Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
-import { ParseMode } from '../../parser/Parser';
-import { WalkMode, createVisitor } from '../../astUtils/visitors';
+import { createVisitor } from '../../astUtils/visitors';
 import type { BscType } from '../../types';
 import type { File } from '../../files/File';
+import { InsideSegmentWalkMode } from '../../AstValidationSegmenter';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -40,6 +39,9 @@ export class ScopeValidator {
 
     public processEvent(event: OnScopeValidateEvent) {
         this.event = event;
+        if (this.event.program.globalScope === this.event.scope) {
+            return;
+        }
         this.walkFiles();
         this.detectDuplicateEnums();
     }
@@ -51,16 +53,18 @@ export class ScopeValidator {
     }
 
     private walkFiles() {
-        // DEBUG console.log('Validating Scope', this.event.scope.name);
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
                 const validationVisitor = createVisitor({
                     VariableExpression: (varExpr) => {
+                        this.validateVariableAndDottedGetExpressions(file, varExpr);
                     },
                     DottedGetExpression: (dottedGet) => {
+                        this.validateVariableAndDottedGetExpressions(file, dottedGet);
                     },
                     CallExpression: (functionCall) => {
                         this.validateFunctionCall(file, functionCall);
+                        this.validateCreateObjectCall(file, functionCall);
                     },
                     ReturnStatement: (returnStatement) => {
                         this.validateReturnStatement(file, returnStatement);
@@ -79,19 +83,11 @@ export class ScopeValidator {
 
                 const segmentsToWalkForValidation = file.getValidationSegments();
                 for (const segment of segmentsToWalkForValidation) {
-                    // DEBUG console.log(' - - Validating Segment ', segment.kind, segment.range.start.line, '-', segment.range.end.line);
                     segment.walk(validationVisitor, {
-                        walkMode: WalkMode.visitAllRecursive
+                        walkMode: InsideSegmentWalkMode
                     });
                     file.markSegmentAsValidated(segment);
                 }
-
-                if (segmentsToWalkForValidation.length > 0) {
-                    this.iterateFileExpressions(file);
-                    this.validateCreateObjectCalls(file);
-                }
-
-
             }
         });
     }
@@ -111,177 +107,6 @@ export class ScopeValidator {
         }
         const assignmentAncestor: AssignmentStatement = expression?.findAncestor(isAssignmentStatement);
         return assignmentAncestor?.name === expression?.name && isUnionType(exprType); // the left hand side is not a union, which means it was never assigned
-    }
-
-    private expressionsByFile = new Cache<BrsFile, Readonly<ExpressionInfo>[]>();
-    private iterateFileExpressions(file: BrsFile) {
-        const { scope } = this.event;
-        //build an expression collection ONCE per file
-        const expressionInfos = this.expressionsByFile.getOrAdd(file, () => {
-            const result: DeepWriteable<ExpressionInfo[]> = [];
-            const expressions = [...file.parser.references.expressions];
-            for (let expression of expressions) {
-                if (!expression) {
-                    continue;
-                }
-
-                //walk left-to-right on every expression, only keep the ones that start with VariableExpression, and then keep subsequent DottedGet parts
-                const parts = util.getDottedGetPath(expression);
-
-                if (parts.length > 0) {
-                    result.push({
-                        parts: parts,
-                        expression: expression,
-                        isUsedAsType: util.isInTypeExpression(expression),
-                        enclosingNamespaceNameLower: expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase()
-                    });
-                }
-            }
-            return result as unknown as Readonly<ExpressionInfo>[];
-        });
-
-        outer:
-        for (const info of expressionInfos) {
-            const firstNamespacePart = info.parts[0].name.text;
-            const firstNamespacePartLower = firstNamespacePart?.toLowerCase();
-            //get the namespace container (accounting for namespace-relative as well)
-            const namespaceContainer = scope.getNamespace(firstNamespacePartLower, info.enclosingNamespaceNameLower);
-
-            let symbolType = SymbolTypeFlag.runtime;
-            let oppositeSymbolType = SymbolTypeFlag.typetime;
-            if (info.isUsedAsType) {
-                // This is used in a TypeExpression - only look up types from SymbolTable
-                symbolType = SymbolTypeFlag.typetime;
-                oppositeSymbolType = SymbolTypeFlag.runtime;
-            }
-
-            // Do a complete type check on all DottedGet and Variable expressions
-            // this will create a diagnostic if an invalid member is accessed
-            const typeChain = [];
-            let exprType = info.expression.getType({
-                flags: symbolType,
-                typeChain: typeChain
-            });
-
-            if (!this.isTypeKnown(exprType) && !this.ignoreUnresolvedAssignmentLHS(info.expression, exprType)) {
-                if (info.expression.getType({ flags: oppositeSymbolType })?.isResolvable()) {
-                    const oppoSiteTypeChain = [];
-                    const invalidlyUsedResolvedType = info.expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain });
-                    const typeChainScan = util.processTypeChain(oppoSiteTypeChain);
-                    if (info.isUsedAsType) {
-                        this.addMultiScopeDiagnostic({
-                            ...DiagnosticMessages.itemCannotBeUsedAsType(typeChainScan.fullChainName),
-                            range: info.expression.range,
-                            file: file
-                        });
-                    } else {
-                        this.addMultiScopeDiagnostic({
-                            ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedType.toString()),
-                            range: info.expression.range,
-                            file: file
-                        });
-                    }
-                    continue;
-                }
-
-                const typeChainScan = util.processTypeChain(typeChain);
-                this.addMultiScopeDiagnostic({
-                    file: file as File,
-                    ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem),
-                    range: typeChainScan.range
-                });
-                //skip to the next expression
-                continue;
-            }
-            const enumStatement = scope.getEnum(firstNamespacePartLower, info.enclosingNamespaceNameLower);
-
-            //if this isn't a namespace, skip it
-            if (!namespaceContainer && !enumStatement) {
-                continue;
-            }
-
-            //catch unknown namespace items
-            let entityName = firstNamespacePart;
-            let entityNameLower = firstNamespacePart.toLowerCase();
-            for (let i = 1; i < info.parts.length; i++) {
-                const part = info.parts[i];
-                entityName += '.' + part.name.text;
-                entityNameLower += '.' + part.name.text.toLowerCase();
-
-                //if this is an enum member, stop validating here to prevent errors further down the chain
-                if (scope.getEnumMemberFileLink(entityName, info.enclosingNamespaceNameLower)) {
-                    break;
-                }
-
-                if (
-                    !scope.getEnumMap().has(entityNameLower) &&
-                    !scope.getClassMap().has(entityNameLower) &&
-                    !scope.getInterfaceMap().has(entityNameLower) &&
-                    !scope.getConstMap().has(entityNameLower) &&
-                    !scope.getCallableByName(entityNameLower) &&
-                    !scope.getNamespace(entityNameLower, info.enclosingNamespaceNameLower)
-                ) {
-                    //if this looks like an enum, provide a nicer error message
-                    const theEnum = this.getEnum(scope, entityNameLower)?.item;
-                    if (theEnum) {
-                        this.addMultiScopeDiagnostic({
-                            file: file,
-                            ...DiagnosticMessages.unknownEnumValue(part.name.text?.split('.').pop(), theEnum.fullName),
-                            range: part.name.range,
-                            relatedInformation: [{
-                                message: 'Enum declared here',
-                                location: util.createLocation(
-                                    URI.file(file.srcPath).toString(),
-                                    theEnum.tokens.name.range
-                                )
-                            }]
-                        });
-                    } else {
-                        this.addMultiScopeDiagnostic({
-                            ...DiagnosticMessages.cannotFindName(part.name.text, entityName),
-                            range: part.name.range,
-                            file: file
-                        });
-                    }
-                    //no need to add another diagnostic for future unknown items
-                    continue outer;
-                }
-            }
-            //if the full expression is just an enum name, this is an illegal statement because enums don't exist at runtime
-            if (!info.isUsedAsType && enumStatement && info.parts.length === 1) {
-                this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.itemCannotBeUsedAsVariable('enum'),
-                    range: info.expression.range,
-                    file: file
-                });
-            }
-
-            //if the full expression is a namespace path, this is an illegal statement because namespaces don't exist at runtme
-            if (scope.getNamespace(entityNameLower, info.enclosingNamespaceNameLower)) {
-                this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
-                    range: info.expression.range,
-                    file: file
-                });
-            }
-        }
-    }
-
-    /**
-     * Given a string optionally separated by dots, find an enum related to it.
-     * For example, all of these would return the enum: `SomeNamespace.SomeEnum.SomeMember`, SomeEnum.SomeMember, `SomeEnum`
-     */
-    private getEnum(scope: Scope, name: string) {
-        //look for the enum directly
-        let result = scope.getEnumMap().get(name);
-
-        //assume we've been given the enum.member syntax, so pop the member and try again
-        if (!result) {
-            const parts = name.split('.');
-            parts.pop();
-            result = scope.getEnumMap().get(parts.join('.'));
-        }
-        return result;
     }
 
     /**
@@ -342,82 +167,79 @@ export class ScopeValidator {
      * what these calls are supposed to look like, and this is a very common thing for brs devs to do, so just
      * do this manually for now.
      */
-    protected validateCreateObjectCalls(file: BrsFile) {
-        const diagnostics: BsDiagnostic[] = [];
+    protected validateCreateObjectCall(file: BrsFile, call: CallExpression) {
 
-        for (const call of file.functionCalls) {
-            //skip non CreateObject function calls
-            if (call.name?.toLowerCase() !== 'createobject' || !isLiteralExpression(call?.args[0]?.expression)) {
-                continue;
+        //skip non CreateObject function calls
+        const callName = util.getAllDottedGetPartsAsString(call.callee)?.toLowerCase();
+        if (callName !== 'createobject' || !isLiteralExpression(call?.args[0])) {
+            return;
+        }
+        const firstParamToken = (call?.args[0] as any)?.token;
+        const firstParamStringValue = firstParamToken?.text?.replace(/"/g, '');
+        //if this is a `createObject('roSGNode'` call, only support known sg node types
+        if (firstParamStringValue?.toLowerCase() === 'rosgnode' && isLiteralExpression(call?.args[1])) {
+            const componentName: Token = (call?.args[1] as any)?.token;
+            //don't validate any components with a colon in their name (probably component libraries, but regular components can have them too).
+            if (componentName?.text?.includes(':')) {
+                return;
             }
-            const firstParamToken = (call?.args[0]?.expression as any)?.token;
-            const firstParamStringValue = firstParamToken?.text?.replace(/"/g, '');
-            //if this is a `createObject('roSGNode'` call, only support known sg node types
-            if (firstParamStringValue?.toLowerCase() === 'rosgnode' && isLiteralExpression(call?.args[1]?.expression)) {
-                const componentName: Token = (call?.args[1]?.expression as any)?.token;
-                //don't validate any components with a colon in their name (probably component libraries, but regular components can have them too).
-                if (componentName?.text?.includes(':')) {
-                    continue;
-                }
-                //add diagnostic for unknown components
-                const unquotedComponentName = componentName?.text?.replace(/"/g, '');
-                if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !this.event.program.getComponent(unquotedComponentName)) {
-                    this.addDiagnosticOnce({
-                        file: file as File,
-                        ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
-                        range: componentName.range
-                    });
-                } else if (call?.args.length !== 2) {
-                    // roSgNode should only ever have 2 args in `createObject`
-                    this.addDiagnosticOnce({
-                        file: file as File,
-                        ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, [2], call?.args.length),
-                        range: call.range
-                    });
-                }
-            } else if (!platformComponentNames.has(firstParamStringValue.toLowerCase())) {
+            //add diagnostic for unknown components
+            const unquotedComponentName = componentName?.text?.replace(/"/g, '');
+            if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !this.event.program.getComponent(unquotedComponentName)) {
                 this.addDiagnosticOnce({
                     file: file as File,
-                    ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
-                    range: firstParamToken.range
+                    ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
+                    range: componentName.range
                 });
-            } else {
-                // This is valid brightscript component
-                // Test for invalid arg counts
-                const brightScriptComponent: BRSComponentData = components[firstParamStringValue.toLowerCase()];
-                // Valid arg counts for createObject are 1+ number of args for constructor
-                let validArgCounts = brightScriptComponent.constructors.map(cnstr => cnstr.params.length + 1);
-                if (validArgCounts.length === 0) {
-                    // no constructors for this component, so createObject only takes 1 arg
-                    validArgCounts = [1];
-                }
-                if (!validArgCounts.includes(call?.args.length)) {
-                    // Incorrect number of arguments included in `createObject()`
-                    this.addDiagnosticOnce({
-                        file: file as File,
-                        ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, validArgCounts, call?.args.length),
-                        range: call.range
-                    });
-                }
+            } else if (call?.args.length !== 2) {
+                // roSgNode should only ever have 2 args in `createObject`
+                this.addDiagnosticOnce({
+                    file: file as File,
+                    ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, [2], call?.args.length),
+                    range: call.range
+                });
+            }
+        } else if (!platformComponentNames.has(firstParamStringValue.toLowerCase())) {
+            this.addDiagnosticOnce({
+                file: file as File,
+                ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
+                range: firstParamToken.range
+            });
+        } else {
+            // This is valid brightscript component
+            // Test for invalid arg counts
+            const brightScriptComponent: BRSComponentData = components[firstParamStringValue.toLowerCase()];
+            // Valid arg counts for createObject are 1+ number of args for constructor
+            let validArgCounts = brightScriptComponent.constructors.map(cnstr => cnstr.params.length + 1);
+            if (validArgCounts.length === 0) {
+                // no constructors for this component, so createObject only takes 1 arg
+                validArgCounts = [1];
+            }
+            if (!validArgCounts.includes(call?.args.length)) {
+                // Incorrect number of arguments included in `createObject()`
+                this.addDiagnosticOnce({
+                    file: file as File,
+                    ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, validArgCounts, call?.args.length),
+                    range: call.range
+                });
+            }
 
-                // Test for deprecation
-                if (brightScriptComponent.isDeprecated) {
-                    this.addDiagnosticOnce({
-                        file: file as File,
-                        ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),
-                        range: call.range
-                    });
-                }
+            // Test for deprecation
+            if (brightScriptComponent.isDeprecated) {
+                this.addDiagnosticOnce({
+                    file: file as File,
+                    ...DiagnosticMessages.deprecatedBrightScriptComponent(firstParamStringValue, brightScriptComponent.deprecatedDescription),
+                    range: call.range
+                });
             }
         }
-        this.event.scope.addDiagnostics(diagnostics);
+
     }
 
     /**
      * Detect calls to functions with the incorrect number of parameters, or wrong types of arguments
      */
     private validateFunctionCall(file: BrsFile, expression: CallExpression) {
-        const diagnostics: BsDiagnostic[] = [];
         const getTypeOptions = { flags: SymbolTypeFlag.runtime };
         let funcType = expression?.callee?.getType(getTypeOptions);
         if (funcType?.isResolvable() && isClassType(funcType)) {
@@ -445,7 +267,7 @@ export class ScopeValidator {
             let expCallArgCount = expression.args.length;
             if (expCallArgCount > maxParams || expCallArgCount < minParams) {
                 let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
-                diagnostics.push({
+                this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
                     range: expression.callee.range,
                     //TODO detect end of expression call
@@ -474,7 +296,6 @@ export class ScopeValidator {
             }
 
         }
-        this.event.scope.addDiagnostics(diagnostics);
     }
 
 
@@ -482,7 +303,6 @@ export class ScopeValidator {
      * Detect return statements with incompatible types vs. declared return type
      */
     private validateReturnStatement(file: BrsFile, returnStmt: ReturnStatement) {
-        const diagnostics: BsDiagnostic[] = [];
         const getTypeOptions = { flags: SymbolTypeFlag.runtime };
         let funcType = returnStmt.findAncestor(isFunctionExpression).getType({ flags: SymbolTypeFlag.typetime });
         if (isTypedFunctionType(funcType)) {
@@ -498,14 +318,12 @@ export class ScopeValidator {
 
             }
         }
-        this.event.scope.addDiagnostics(diagnostics);
     }
 
     /**
      * Detect return statements with incompatible types vs. declared return type
      */
     private validateDottedSetStatement(file: BrsFile, dottedSetStmt: DottedSetStatement) {
-        const diagnostics: BsDiagnostic[] = [];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
         const expectedLHSType = dottedSetStmt?.obj?.getType(getTypeOpts)?.getMemberType(dottedSetStmt.name.text, getTypeOpts);
@@ -519,14 +337,12 @@ export class ScopeValidator {
                 file: file
             });
         }
-        this.event.scope.addDiagnostics(diagnostics);
     }
 
     /**
      * Detect invalid use of a binary operator
      */
     private validateBinaryExpression(file: BrsFile, binaryExpr: BinaryExpression) {
-        const diagnostics: BsDiagnostic[] = [];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
         if (util.isInTypeExpression(binaryExpr)) {
@@ -578,15 +394,12 @@ export class ScopeValidator {
                 file: file
             });
         }
-
-        this.event.scope.addDiagnostics(diagnostics);
     }
 
     /**
      * Detect invalid use of a Unary operator
      */
     private validateUnaryExpression(file: BrsFile, unaryExpr: UnaryExpression) {
-        const diagnostics: BsDiagnostic[] = [];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
         let rightType = unaryExpr.right.getType(getTypeOpts);
@@ -599,13 +412,15 @@ export class ScopeValidator {
         if (isEnumMemberType(rightType)) {
             rightTypeToTest = rightType.underlyingType;
         }
+
+
         if (isUnionType(rightTypeToTest)) {
             // TODO: it is possible to validate based on innerTypes, but more complicated
             // Because you need to verify each combination of types
-            return;
+
         } else if (isDynamicType(rightTypeToTest) || isObjectType(rightTypeToTest)) {
             // operand is basically "any" type... ignore;
-            return;
+
         } else if (isPrimitiveType(rightType)) {
             const opResult = util.unaryOperatorResultType(unaryExpr.operator, rightTypeToTest);
             if (isDynamicType(opResult)) {
@@ -623,7 +438,109 @@ export class ScopeValidator {
                 file: file
             });
         }
-        this.event.scope.addDiagnostics(diagnostics);
+    }
+
+
+    validateVariableAndDottedGetExpressions(file: BrsFile, expression: VariableExpression | DottedGetExpression) {
+        if (isDottedGetExpression(expression.parent)) {
+            // We validate dottedGetExpressions at the top-most level
+            return;
+        }
+        if (isVariableExpression(expression)) {
+            if (isAssignmentStatement(expression.parent) && expression.parent.name === expression.name) {
+                // Don't validate LHS of assignments
+                return;
+            } else if (isNamespaceStatement(expression.parent)) {
+                return;
+            }
+        }
+
+        let symbolType = SymbolTypeFlag.runtime;
+        let oppositeSymbolType = SymbolTypeFlag.typetime;
+        const isUsedAsType = util.isInTypeExpression(expression);
+        if (isUsedAsType) {
+            // This is used in a TypeExpression - only look up types from SymbolTable
+            symbolType = SymbolTypeFlag.typetime;
+            oppositeSymbolType = SymbolTypeFlag.runtime;
+        }
+
+        // Do a complete type check on all DottedGet and Variable expressions
+        // this will create a diagnostic if an invalid member is accessed
+        const typeChain: TypeChainEntry[] = [];
+        let exprType = expression.getType({
+            flags: symbolType,
+            typeChain: typeChain
+        });
+
+        const shouldIgnoreLHS = this.ignoreUnresolvedAssignmentLHS(expression, exprType);
+
+        if (!this.isTypeKnown(exprType) && !shouldIgnoreLHS) {
+            if (expression.getType({ flags: oppositeSymbolType })?.isResolvable()) {
+                const oppoSiteTypeChain = [];
+                const invalidlyUsedResolvedType = expression.getType({ flags: oppositeSymbolType, typeChain: oppoSiteTypeChain });
+                const typeChainScan = util.processTypeChain(oppoSiteTypeChain);
+                if (isUsedAsType) {
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.itemCannotBeUsedAsType(typeChainScan.fullChainName),
+                        range: expression.range,
+                        file: file
+                    });
+                } else {
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedType.toString()),
+                        range: expression.range,
+                        file: file
+                    });
+                }
+
+            } else {
+                const typeChainScan = util.processTypeChain(typeChain);
+                this.addMultiScopeDiagnostic({
+                    file: file as File,
+                    ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem),
+                    range: typeChainScan.range
+                });
+            }
+
+        }
+        if (isUsedAsType) {
+            return;
+        }
+        const lastTypeInfo = typeChain[typeChain.length - 1];
+        const parentTypeInfo = typeChain[typeChain.length - 2];
+
+        if (isNamespaceType(exprType)) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
+                range: expression.range,
+                file: file
+            });
+        } else if (isEnumType(exprType)) {
+            const enumStatement = this.event.scope.getEnum(util.getAllDottedGetPartsAsString(expression));
+            if (enumStatement) {
+                // there's an enum with this name
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.itemCannotBeUsedAsVariable('enum'),
+                    range: expression.range,
+                    file: file
+                });
+            }
+        } else if (isDynamicType(exprType) && isEnumType(parentTypeInfo?.type) && isDottedGetExpression(expression)) {
+            const enumFileLink = this.event.scope.getEnumFileLink(util.getAllDottedGetPartsAsString(expression.obj));
+            const typeChainScanForParent = util.processTypeChain(typeChain.slice(0, -1));
+            this.addMultiScopeDiagnostic({
+                file: file,
+                ...DiagnosticMessages.unknownEnumValue(lastTypeInfo?.name, typeChainScanForParent.fullChainName),
+                range: lastTypeInfo?.range,
+                relatedInformation: [{
+                    message: 'Enum declared here',
+                    location: util.createLocation(
+                        URI.file(enumFileLink?.file.srcPath).toString(),
+                        enumFileLink?.item?.tokens.name.range
+                    )
+                }]
+            });
+        }
     }
 
     /**
@@ -674,18 +591,3 @@ export class ScopeValidator {
 
     private multiScopeCache = new Cache<string, BsDiagnostic>();
 }
-
-interface ExpressionInfo {
-    parts: Readonly<[VariableExpression, ...DottedGetExpression[]]>;
-    expression: Readonly<Expression>;
-    /**
-     * The full namespace name that encloses this expression
-     */
-    enclosingNamespaceNameLower?: string;
-    /**
-     * Determine if this expression is used as a type. This can be cached as part of the expression info since it only depends on AST syntax,
-     * and does not depend on types from the scope
-     */
-    isUsedAsType: boolean;
-}
-type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };

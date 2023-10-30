@@ -8,7 +8,7 @@ import type { BrsFile } from '../files/BrsFile';
 import type { FunctionStatement } from '../parser/Statement';
 import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../parser/Statement';
 import { TokenKind } from '../lexer/TokenKind';
-import { createVisitor, WalkMode, walkStatements } from './visitors';
+import { ChildrenSkipper, createVisitor, WalkMode, walkStatements } from './visitors';
 import { isPrintStatement } from './reflection';
 import { createCall, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
@@ -1104,6 +1104,60 @@ describe('astUtils visitors', () => {
             expect(
                 (ast.statements[0] as FunctionStatement).func.body.statements
             ).to.be.lengthOf(9);
+        });
+
+        it('skips children when requested', () => {
+            const file: BrsFile = program.setFile('source/main.bs', `
+                sub test()
+                    print 1 + 1
+                    print "hello"
+                end sub
+
+                sub test2()
+                    i = 2
+                    while i > 0
+                        print createObject("roDateTime").ToISOString()
+                        i--
+                    end while
+                end sub
+            `);
+            const actual = new Array<string>();
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            // do not walk into print statements
+            const skipper = new ChildrenSkipper();
+            file.ast.walk((node) => {
+                actual.push(node.kind);
+                if (isPrintStatement(node)) {
+                    skipper.skip();
+                }
+            }, {
+                walkMode: WalkMode.visitAllRecursive,
+                skipChildren: skipper
+            });
+
+            // Does not walk into print statements
+            expect(actual).to.deep.equal([
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'PrintStatement',
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'AssignmentStatement',
+                'LiteralExpression',
+                'WhileStatement',
+                'BinaryExpression',
+                'VariableExpression',
+                'LiteralExpression',
+                'Block',
+                'PrintStatement',
+                'IncrementStatement',
+                'VariableExpression'
+            ]);
         });
     });
 });

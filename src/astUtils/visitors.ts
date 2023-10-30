@@ -62,6 +62,12 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
         return;
     }
 
+    //do not walk children if skipped
+    if (options.skipChildren?.shouldSkipChildren) {
+        options.skipChildren.reset();
+        return;
+    }
+
     if (!element.walk) {
         throw new Error(`${owner.constructor.name}["${String(key)}"]${parent ? ` for ${parent.constructor.name}` : ''} does not contain a "walk" method`);
     }
@@ -184,7 +190,29 @@ export interface WalkOptions {
      * If provided, any AST replacements will be done using this Editor instead of directly against the AST itself
      */
     editor?: Editor;
+    /**
+     * A token that can be used to stop the walk from going any deeper in the current node,
+     * but will continue walking sibling nodes
+     */
+    skipChildren?: ChildrenSkipper;
 }
+
+export class ChildrenSkipper {
+    private isSkipped = false;
+
+    public reset() {
+        this.isSkipped = false;
+    }
+
+    public skip() {
+        this.isSkipped = true;
+    }
+
+    get shouldSkipChildren() {
+        return this.isSkipped;
+    }
+}
+
 
 /**
  * An enum used to denote the specific WalkMode options (without
