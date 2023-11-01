@@ -829,9 +829,17 @@ export class UnaryExpression extends Expression {
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
+        let separatingWhitespace: string;
+        if (isVariableExpression(this.right)) {
+            separatingWhitespace = this.right.name.leadingWhitespace;
+        } else if (isLiteralExpression(this.right)) {
+            separatingWhitespace = this.right.token.leadingWhitespace;
+        } else {
+            separatingWhitespace = ' ';
+        }
         return [
             state.transpileToken(this.operator),
-            ' ',
+            separatingWhitespace,
             ...this.right.transpile(state)
         ];
     }
