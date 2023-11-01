@@ -2359,7 +2359,12 @@ export class Parser {
 
     private prefixUnary(): Expression {
         const nextKind = this.peek().kind;
-        if (nextKind === TokenKind.Not || nextKind === TokenKind.Minus) {
+        if (nextKind === TokenKind.Not) {
+            this.current++; //advance
+            let operator = this.previous();
+            let right = this.relational();
+            return new UnaryExpression(operator, right);
+        } else if (nextKind === TokenKind.Minus || nextKind === TokenKind.Plus) {
             this.current++; //advance
             let operator = this.previous();
             let right = this.prefixUnary();

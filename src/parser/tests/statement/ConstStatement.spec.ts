@@ -217,7 +217,7 @@ describe('ConstStatement', () => {
                 end sub
             `, `
                 sub main()
-                    bar = - 1
+                    bar = -1
                 end sub
             `, undefined, 'source/main.bs');
         });
