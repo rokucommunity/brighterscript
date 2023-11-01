@@ -21,7 +21,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isFunctionExpression, isBrsFile } from '../astUtils/reflection';
+import { isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isFunctionExpression, isBrsFile, isEnumStatement, isConstStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -1389,11 +1389,11 @@ export class BrsFile implements File {
                         lastPartNameLower: lowerPartName,
                         functionStatements: new Map(),
                         namespaceStatements: [],
-                        /* namespaces: new Map(),
+                        namespaces: new Map(),
                         classStatements: new Map(),
                         enumStatements: new Map(),
                         constStatements: new Map(),
-                        statements: [],*/
+                        statements: [],
                         // the aggregate symbol table should have no parent. It should include just the symbols of the namespace.
                         symbolTable: new SymbolTable(`Namespace Aggregate: '${loopName}'`)
                     });
@@ -1405,16 +1405,15 @@ export class BrsFile implements File {
             ns.namespaceStatements.push(namespaceStatement);
             //ns.statements.push(...namespaceStatement.body.statements);
             for (let statement of namespaceStatement.body.statements) {
-                /* if (isClassStatement(statement) && statement.name) {
-                     ns.classStatements.set(statement.name.text.toLowerCase(), statement);
-                 } else*/
-                if (isFunctionStatement(statement) && statement.name) {
+                if (isClassStatement(statement) && statement.name) {
+                    ns.classStatements.set(statement.name.text.toLowerCase(), statement);
+                } else if (isFunctionStatement(statement) && statement.name) {
                     ns.functionStatements.set(statement.name.text.toLowerCase(), statement);
-                }/* else if (isEnumStatement(statement) && statement.fullName) {
-                     ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
-                 } else if (isConstStatement(statement) && statement.fullName) {
-                     ns.constStatements.set(statement.fullName.toLowerCase(), statement);
-                 }*/
+                } else if (isEnumStatement(statement) && statement.fullName) {
+                    ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
+                } else if (isConstStatement(statement) && statement.fullName) {
+                    ns.constStatements.set(statement.fullName.toLowerCase(), statement);
+                }
             }
             // Merges all the symbol tables of the namespace statements into the new symbol table created above.
             // Set those symbol tables to have this new merged table as a parent

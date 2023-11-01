@@ -678,20 +678,17 @@ export class Scope {
                         namespaceLookup.set(lowerNamespaceName, clonedNsContainer);
                     } else {
                         const existingContainer = namespaceLookup.get(lowerNamespaceName);
-                        /*existingContainer.classStatements = new Map([...existingContainer.classStatements, ...nsContainer.classStatements]);
+                        existingContainer.classStatements = new Map([...existingContainer.classStatements, ...nsContainer.classStatements]);
                         existingContainer.constStatements = new Map([...existingContainer.constStatements, ...nsContainer.constStatements]);
                         existingContainer.enumStatements = new Map([...existingContainer.enumStatements, ...nsContainer.enumStatements]);
                         existingContainer.functionStatements = new Map([...existingContainer.functionStatements, ...nsContainer.functionStatements]);
                         existingContainer.namespaces = new Map([...existingContainer.namespaces, ...nsContainer.namespaces]);
-                        */
                         existingContainer.namespaceStatements.push(...nsContainer.namespaceStatements);
                         existingContainer.symbolTable.mergeSymbolTable(nsContainer.symbolTable);
                     }
                 }
             }
 
-            /*
-            */
         });
         return namespaceLookup;
     }
