@@ -8,7 +8,7 @@ import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerM
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
-import type { NewExpression } from './parser/Expression';
+import { type NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { util } from './util';
 import { globalCallableMap } from './globalCallables';
@@ -1083,59 +1083,50 @@ export class Scope {
     private diagnosticDetectShadowedLocalVars(file: BrsFile, callableContainerMap: CallableContainerMap) {
         const classMap = this.getClassMap();
         //loop through every function scope
-        for (let scope of file.functionScopes) {
+        for (let funcScope of file.functionScopes) {
             //every var declaration in this function scope
-            for (let varDeclaration of scope.variableDeclarations) {
+            for (let varDeclaration of funcScope.variableDeclarations) {
                 const varName = varDeclaration.name;
                 const lowerVarName = varName.toLowerCase();
 
-                //if the var is a function
-                if (isCallableType(varDeclaration.getType())) {
+                const varIsFunction = () => {
+                    return isCallableType(varDeclaration.getType());
+                };
+
+                if (
+                    //has same name as stdlib
+                    globalCallableMap.has(lowerVarName)
+                ) {
                     //local var function with same name as stdlib function
-                    if (
-                        //has same name as stdlib
-                        globalCallableMap.has(lowerVarName)
-                    ) {
+                    if (varIsFunction()) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
                             range: varDeclaration.nameRange,
                             file: file
                         });
-
-                        //this check needs to come after the stdlib one, because the stdlib functions are included
-                        //in the scope function list
-                    } else if (
-                        //has same name as scope function
-                        callableContainerMap.has(lowerVarName)
-                    ) {
+                    }
+                } else if (callableContainerMap.has(lowerVarName)) {
+                    //is same name as a callable
+                    if (varIsFunction()) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
                             range: varDeclaration.nameRange,
                             file: file
                         });
-                    }
-
-                    //var is not a function
-                } else if (
-                    //is NOT a callable from stdlib (because non-function local vars can have same name as stdlib names)
-                    !globalCallableMap.has(lowerVarName)
-                ) {
-
-                    //is same name as a callable
-                    if (callableContainerMap.has(lowerVarName)) {
+                    } else {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarShadowedByScopedFunction(),
                             range: varDeclaration.nameRange,
                             file: file
                         });
-                        //has the same name as an in-scope class
-                    } else if (classMap.has(lowerVarName)) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(lowerVarName)?.item.getName(ParseMode.BrighterScript)),
-                            range: varDeclaration.nameRange,
-                            file: file
-                        });
                     }
+                    //has the same name as an in-scope class
+                } else if (classMap.has(lowerVarName)) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(lowerVarName)?.item.getName(ParseMode.BrighterScript)),
+                        range: varDeclaration.nameRange,
+                        file: file
+                    });
                 }
             }
         }

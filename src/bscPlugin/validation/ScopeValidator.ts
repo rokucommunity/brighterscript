@@ -42,6 +42,7 @@ export class ScopeValidator {
         if (this.event.program.globalScope === this.event.scope) {
             return;
         }
+
         this.walkFiles();
         this.detectDuplicateEnums();
     }
@@ -53,6 +54,7 @@ export class ScopeValidator {
     }
 
     private walkFiles() {
+
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
                 const validationVisitor = createVisitor({
