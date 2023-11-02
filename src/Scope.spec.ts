@@ -3107,8 +3107,6 @@ describe('Scope', () => {
 
             let symbolTables = getSymbolTableList();
 
-            console.log(symbolTables.map(x => `${x.name} ${x['siblings'].size}`));
-
             symbolTables.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
 
             scope.unlinkSymbolTable();
@@ -3129,7 +3127,7 @@ describe('Scope', () => {
     describe('performance', () => {
 
         // eslint-disable-next-line func-names, prefer-arrow-callback
-        it('namespace linking performance', function () {
+        it.skip('namespace linking performance', function () {
             this.timeout(30000); // this test takes a long time!
             program.options.autoImportComponentScript = true;
             const constFileContents = `

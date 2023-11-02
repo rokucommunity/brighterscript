@@ -54,6 +54,8 @@ export class ScopeValidator {
 
     private walkFiles() {
 
+        //function signatures incompatible cross scopes
+
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
                 const validationVisitor = createVisitor({

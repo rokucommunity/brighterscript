@@ -753,21 +753,21 @@ export class Scope {
             let callableContainerMap = util.getCallableContainersByLowerName(callables);
 
             //Since statements from files are shared across multiple scopes, we need to link those statements to the current scope
-            const t0 = performance.now();
+            //const t0 = performance.now();
             this.linkSymbolTable();
-            const t1 = performance.now();
-            console.log('onScopeValidate() - linkSymbolTable', this.name, t1 - t0);
+            //const t1 = performance.now();
+            //console.log('onScopeValidate() - linkSymbolTable', this.name, t1 - t0);
             const scopeValidateEvent = {
                 program: this.program,
                 scope: this
             };
             this.program.plugins.emit('beforeScopeValidate', scopeValidateEvent);
             this.program.plugins.emit('onScopeValidate', scopeValidateEvent);
-            const t2 = performance.now();
-            console.log('onScopeValidate() - scopeValidateEvent', this.name, t2 - t1);
+            //const t2 = performance.now();
+            //console.log('onScopeValidate() - scopeValidateEvent', this.name, t2 - t1);
             this._validate(callableContainerMap);
-            const t3 = performance.now();
-            console.log('onScopeValidate() - _validate', this.name, t3 - t2);
+            //const t3 = performance.now();
+            //console.log('onScopeValidate() - _validate', this.name, t3 - t2);
             this.program.plugins.emit('afterScopeValidate', scopeValidateEvent);
             //unlink all symbol tables from this scope (so they don't accidentally stick around)
             this.unlinkSymbolTable();
