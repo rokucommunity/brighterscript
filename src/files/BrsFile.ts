@@ -1335,10 +1335,16 @@ export class BrsFile implements File {
     }
 
     public getValidationSegments() {
-        if (BrsFile.reduceReValidation) {
-            return this.validationSegmenter.getSegments();
-        }
-        return [this.ast];
+        return this.cache.getOrAdd(`validationSegments`, () => {
+            if (BrsFile.reduceReValidation) {
+                const t0 = performance.now();
+                const segments = this.validationSegmenter.getSegments();
+                const t1 = performance.now();
+                console.log('validationSegmenter.getSegments()', this.pkgPath, t1 - t0);
+                return segments;
+            }
+            return [this.ast];
+        });
     }
 
     public markSegmentAsValidated(node: AstNode) {
@@ -1347,7 +1353,10 @@ export class BrsFile implements File {
 
     public getNamespaceLookupObject() {
         return this.cache.getOrAdd(`namespaceLookup`, () => {
+            const t0 = performance.now();
             const nsLookup = this.buildNamespaceLookup();
+            const t1 = performance.now();
+            console.log('buildNamespaceLookup()', this.pkgPath, t1 - t0);
             return nsLookup;
         });
     }

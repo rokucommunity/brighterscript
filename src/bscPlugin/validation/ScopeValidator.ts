@@ -42,7 +42,6 @@ export class ScopeValidator {
         if (this.event.program.globalScope === this.event.scope) {
             return;
         }
-
         this.walkFiles();
         this.detectDuplicateEnums();
     }
@@ -76,7 +75,6 @@ export class ScopeValidator {
                     },
                     BinaryExpression: (binaryExpr) => {
                         this.validateBinaryExpression(file, binaryExpr);
-
                     },
                     UnaryExpression: (unaryExpr) => {
                         this.validateUnaryExpression(file, unaryExpr);

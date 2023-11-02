@@ -3129,7 +3129,7 @@ describe('Scope', () => {
     describe('performance', () => {
 
         // eslint-disable-next-line func-names, prefer-arrow-callback
-        it.skip('namespace linking performance', function () {
+        it('namespace linking performance', function () {
             this.timeout(30000); // this test takes a long time!
             program.options.autoImportComponentScript = true;
             const constFileContents = `
