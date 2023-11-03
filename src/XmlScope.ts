@@ -86,12 +86,14 @@ export class XmlScope extends Scope {
                     file: this.xmlFile
                 });
             }
-            if (!callableContainerMap.has(onChange.toLowerCase())) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.xmlFunctionNotFound(onChange),
-                    range: field.getAttribute('onchange').value.range,
-                    file: this.xmlFile
-                });
+            if (onChange) {
+                if (!callableContainerMap.has(onChange.toLowerCase())) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.xmlFunctionNotFound(onChange),
+                        range: field.getAttribute('onchange').value.range,
+                        file: this.xmlFile
+                    });
+                }
             }
         }
     }
