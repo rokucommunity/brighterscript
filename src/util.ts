@@ -999,35 +999,34 @@ export class Util {
     }
 
     /**
+     * A cache of `Range` objects. The key is a 52bit integer created from the 4 range integers and leveraging bitshifting.
+     * The whole point of this cache is to reduce garbage collection churn, so we didn't want to use string concatenation for the key
+     */
+    private rangeCache = new Map<number, Range>();
+
+    /**
      * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
-        return {
-            start: {
-                line: startLine,
-                character: startCharacter
-            },
-            end: {
-                line: endLine,
-                character: endCharacter
-            }
-        };
+        // eslint-disable-next-line no-bitwise
+        const key = (startLine << 39) + (startCharacter << 26) + (endLine << 13) + endCharacter;
+
+        let range = this.rangeCache.get(key);
+        if (!range) {
+            range = {
+                start: this.createPosition(startLine, startCharacter),
+                end: this.createPosition(endLine, endCharacter)
+            };
+            this.rangeCache.set(key, range);
+        }
+        return range;
     }
 
     /**
      * Create a `Range` from two `Position`s
      */
     public createRangeFromPositions(startPosition: Position, endPosition: Position): Range {
-        return {
-            start: {
-                line: startPosition.line,
-                character: startPosition.character
-            },
-            end: {
-                line: endPosition.line,
-                character: endPosition.character
-            }
-        };
+        return this.createRange(startPosition.line, startPosition.character, endPosition.line, endPosition.character);
     }
 
     /**
@@ -1068,13 +1067,26 @@ export class Util {
     }
 
     /**
+     * A cache of `Position` objects. The key is a 26bit integer created from line and character and leveraging bitshifting
+     * The whole point of this cache is to reduce garbage collection churn, so we didn't want to use string concatenation for the key
+     */
+    private positionCache = new Map<number, Position>();
+
+    /**
      * Create a `Position` object. Prefer this over `Position.create` for performance reasons
      */
     public createPosition(line: number, character: number) {
-        return {
-            line: line,
-            character: character
-        };
+        // eslint-disable-next-line no-bitwise
+        const key = (line << 13) + character;
+        let position = this.positionCache.get(key);
+        if (!position) {
+            position = {
+                line: line,
+                character: character
+            };
+            this.positionCache.set(key, position);
+        }
+        return position;
     }
 
     /**
