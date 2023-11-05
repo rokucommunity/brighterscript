@@ -1335,16 +1335,11 @@ export class BrsFile implements File {
     }
 
     public getValidationSegments() {
-        // return this.cache.getOrAdd(`validationSegments`, () => {
         if (BrsFile.reduceReValidation) {
-            //const t0 = performance.now();
             const segments = this.validationSegmenter.getSegments();
-            //const t1 = performance.now();
-            // console.log('validationSegmenter.getSegments()', this.pkgPath, t1 - t0);
             return segments;
         }
         return [this.ast];
-        // });
     }
 
     public markSegmentAsValidated(node: AstNode) {
@@ -1353,10 +1348,7 @@ export class BrsFile implements File {
 
     public getNamespaceLookupObject() {
         return this.cache.getOrAdd(`namespaceLookup`, () => {
-            //const t0 = performance.now();
             const nsLookup = this.buildNamespaceLookup();
-            // const t1 = performance.now();
-            //console.log('buildNamespaceLookup()', this.pkgPath, t1 - t0);
             return nsLookup;
         });
     }
@@ -1406,8 +1398,6 @@ export class BrsFile implements File {
                         // the aggregate symbol table should have no parent. It should include just the symbols of the namespace.
                         symbolTable: new SymbolTable(`Namespace Aggregate: '${loopName}'`)
                     });
-                } else {
-
                 }
             }
             let ns = namespaceLookup.get(lowerLoopName);
