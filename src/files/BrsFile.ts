@@ -1402,7 +1402,7 @@ export class BrsFile implements File {
             }
             let ns = namespaceLookup.get(lowerLoopName);
             ns.namespaceStatements.push(namespaceStatement);
-            //ns.statements.push(...namespaceStatement.body.statements);
+            ns.statements.push(...namespaceStatement.body.statements);
             for (let statement of namespaceStatement.body.statements) {
                 if (isClassStatement(statement) && statement.name) {
                     ns.classStatements.set(statement.name.text.toLowerCase(), statement);
